@@ -71,6 +71,7 @@ all: $(TARGET) $(RUNTIME) build/loader/entry.elf build/loader/image_entry.elf bu
 all: native-zso native-lzo native-cdda
 build/dc/src/apps/games_retail.o: src/apps/games_native_cache.inc include/kui/vmu_native_cache_seed.h include/kui/vmu_native_resolution_cache.h
 build/dc/src/core/repair_copy.o: src/core/repair_resume.inc include/kui/recovery_guard.h
+build/dc/src/core/salvage.o: src/core/salvage_files.inc
 build/dc/src/apps/games_retail.o: src/apps/games_vmu_card.inc include/kui/vmu_game_card_service.h include/kui/vmu_game_card.h
 build/dc/src/apps/games_retail.o build/dc/sd-runtime.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
 # These separately linked, opt-in music modules retain their tested CE layout

@@ -86,7 +86,7 @@ void kui_salvage_display_status(struct kui_app_status *out,
     else snprintf(out->lines[0],KUI_APP_LINE_CAP,"Checking disc identity.");
     if(status->collection_active)
         snprintf(out->lines[1],KUI_APP_LINE_CAP,"Need reread %" PRIu32 "; repair follows scan",status->remaining);
-    else snprintf(out->lines[1],KUI_APP_LINE_CAP,"Targets %" PRIu32 "  recovered %" PRIu32 "  remaining %" PRIu32,
+    else snprintf(out->lines[1],KUI_APP_LINE_CAP,"Original queue %" PRIu32 "  repaired %" PRIu32 "  left %" PRIu32,
         status->targets,status->recovered,status->remaining);
     if(status->complete)snprintf(out->lines[2],KUI_APP_LINE_CAP,"Optical acquisition complete.");
     else if(status->read_state==KUI_SALVAGE_READ_DEFERRED && status->read_count && !status->read_attempt && !status->read_limit)

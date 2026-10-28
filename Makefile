@@ -873,13 +873,17 @@ build/maintenance-image: tests/maintenance_image.c $(CORE) $(FATFS) src/core/sto
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) src/core/storage_probe.c src/core/destination.c src/core/files_path.c src/core/hash.c src/apps/maintenance.c tests/maintenance_image.c -o $@
 
-build/salvage-image: tests/salvage_image.c tests/salvage_legacy_narrow.inc tests/salvage_defer_fixture.inc tests/salvage_partial_fixture.inc $(CORE) $(FATFS) src/core/salvage.c src/core/recovery_guard.c src/core/destination.c src/core/recovery_crc.c src/core/recovery_sector.c src/core/hash.c src/core/storage_probe.c include/kui/salvage.h include/kui/capture.h
+build/salvage-image: tests/salvage_image.c tests/salvage_legacy_narrow.inc tests/salvage_defer_fixture.inc tests/salvage_partial_fixture.inc tests/salvage_burst_fixture.inc $(CORE) $(FATFS) src/core/salvage.c src/core/salvage_files.inc src/core/recovery_guard.c src/core/destination.c src/core/recovery_crc.c src/core/recovery_sector.c src/core/hash.c src/core/storage_probe.c include/kui/salvage.h include/kui/capture.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) src/core/salvage.c src/core/recovery_guard.c src/core/destination.c src/core/recovery_crc.c src/core/recovery_sector.c src/core/hash.c src/core/storage_probe.c tests/salvage_image.c -Wl,--wrap=f_write,--wrap=f_sync,--wrap=f_read,--wrap=f_rename -o $@
 
-build/salvage-completion-image: tests/salvage_completion_image.c $(CORE) $(FATFS) src/core/salvage.c src/core/recovery_guard.c src/core/destination.c src/core/salvage_completion.c src/core/known_dumps.c src/core/recovery_crc.c src/core/recovery_sector.c src/core/hash.c src/core/storage_probe.c include/kui/salvage.h include/kui/salvage_completion.h
+build/salvage-completion-image: tests/salvage_completion_image.c $(CORE) $(FATFS) src/core/salvage.c src/core/salvage_files.inc src/core/recovery_guard.c src/core/destination.c src/core/salvage_completion.c src/core/known_dumps.c src/core/recovery_crc.c src/core/recovery_sector.c src/core/hash.c src/core/storage_probe.c include/kui/salvage.h include/kui/salvage_completion.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) src/core/salvage.c src/core/recovery_guard.c src/core/destination.c src/core/salvage_completion.c src/core/known_dumps.c src/core/recovery_crc.c src/core/recovery_sector.c src/core/hash.c src/core/storage_probe.c tests/salvage_completion_image.c -Wl,--wrap=f_write,--wrap=f_sync,--wrap=f_rename,--wrap=f_read -o $@
+
+build/salvage-io-profile: tests/salvage_io_profile.c src/core/salvage_files.inc include/kui/capture.h $(FATFS) config/ffconf.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(FATFS) tests/salvage_io_profile.c -o $@
 
 .PHONY: test-ripper-integrity test-salvage-completion
 test-images: test-ripper-integrity test-salvage-completion

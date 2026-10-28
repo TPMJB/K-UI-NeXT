@@ -50,6 +50,7 @@
 #endif
 #include <kos.h>
 #include <dc/minifont.h>
+#include <inttypes.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -1557,6 +1558,8 @@ static void salvage_check_progress(void *ctx,const struct kui_salvage_check_stat
     mutex_lock(&lock);salvage_status=view;mutex_unlock(&lock);
 }
 static void salvage_operation(unsigned action) {
+    uint64_t operation_started=scan_now(NULL);
+    kui_disc_timing_reset();
     struct kui_salvage_status result={.result=KUI_SALVAGE_FAILED};
     struct kui_salvage_check_status checked={0};bool checks_started=false;
     snprintf(result.message,sizeof(result.message),"Could not prepare disc and SD for salvage.");
@@ -1573,6 +1576,8 @@ static void salvage_operation(unsigned action) {
             kui_salvage_run(&plan,&ops,&options,(enum kui_salvage_action)(action-46),&result);
         else snprintf(result.message,sizeof(result.message),"No matching salvage job found; see Diagnostics.");
         kui_disc_timing_phase(NULL,false);
+        kui_log("Salvage acquisition/repair wall_ms=%" PRIu64,scan_now(NULL)-operation_started);
+        kui_disc_timing_report();
         if(result.result==KUI_SALVAGE_RESOLVED && result.complete) {
             const struct kui_salvage_check_ops check_ops={.ctx=&result,.cancelled=scan_cancel,
                 .progress=salvage_check_progress,.log=kui_log};

@@ -23,7 +23,7 @@ int main(void) {
         .last_problem_state=KUI_SALVAGE_READ_DEFERRED};
     strcpy(status.job,"/KUI/salvage/job-0002");render(&status);
     assert(strstr(view.lines[0],"FAD 173622"));
-    assert(strstr(view.lines[1],"remaining 31"));
+    assert(!strcmp(view.lines[1],"Original queue 31  repaired 0  left 31"));
     assert(!strcmp(view.lines[2],"Sector attempt 2/2; reading"));
     assert(!strcmp(view.lines[3],"Last issue FAD 173599: 2/2; deferred"));
     for(unsigned i=0;i<view.line_count;++i)assert(!strstr(view.lines[i],"291"));

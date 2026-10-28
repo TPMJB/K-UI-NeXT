@@ -44,6 +44,11 @@ struct kui_salvage_status {
      * stops when collection returns; elapsed 0 means no usable rate yet.
      * Existing done includes resumed bytes and is not a rate numerator. */
     uint64_t collected_this_run, collection_elapsed_ms;
+    /* Repair profiling for this invocation only. Calls exclude identity/recovery
+     * anchor reads. singles counts actual callbacks (two for matching audio);
+     * accepted counts validated sector candidates, not durable repairs. */
+    uint32_t repair_batches, repair_singles, repair_batch_accepted, repair_single_accepted;
+    uint64_t repair_optical_ms;
     uint32_t final_crc[99]; /* Available only for a resolved complete job. */
     uint8_t identity[32]; /* SHA-256 of the exact immutable header, same receipt. */
     char job[KUI_DEST_JOB_CAP], message[128];
@@ -62,7 +67,13 @@ struct kui_salvage_options {
 /* NEW finds identity with one probe per prospective candidate (two matching
  * reads for audio), then collects readable sectors and records holes durably.
  * The stronger exact saved-anchor retry budget applies to Resume/latest.
- * It then automatically runs alternating targeted recovery sweeps. RESUME
+ * It then automatically runs alternating targeted recovery sweeps. Adjacent
+ * unresolved data targets use one range read for up to 16 sectors, retaining
+ * only independently checked slots. Each unverified slot gets at most one
+ * singleton fallback that pass. Isolated targets use one singleton attempt;
+ * audio retains its two successful matching reads without batching. Separate
+ * staging preserves checked batch slots across fallback/recovery/publication.
+ * RESUME
  * continues collection and recovery, including jobs with the legacy OFF flag.
  * RECOVER runs additional sweeps after a completed first pass. passes=0 keeps
  * trying until all targets resolve, cancellation or an operational failure.
