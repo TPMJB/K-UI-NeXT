@@ -41,6 +41,10 @@ RUNTIME_OBJECTS += build/dc/src/core/vmu_native_cache_seed.o build/dc/src/core/v
     build/dc/src/core/vmu_native_heap.o build/dc/src/core/vmu_native_exit.o build/dc/src/core/vmu_native_patch.o \
     build/dc/src/core/vmu_native_program.o build/dc/src/core/native_sdk_sci_family.o
 RUNTIME_OBJECTS += build/dc/src/core/game_image.o build/dc/src/core/game_metadata.o
+# Each game's own virtual card: pair selection, the ownership scan that builds
+# its P2 profile, and the read-only CID query used by that scan.
+RUNTIME_OBJECTS += build/dc/src/core/vmu_game_card.o build/dc/src/core/vmu_game_card_service.o \
+    build/dc/src/core/vmu_fs_admission.o build/dc/src/core/vmu_persist_profile.o build/dc/src/loader/vmu_backing.o
 RUNTIME_OBJECTS += build/dc/src/core/zso.o build/dc/src/core/lzo1x.o build/dc/src/core/retail_zso.o
 RUNTIME_OBJECTS += build/dc/src/core/game_cover.o build/dc/src/core/pvr_texture.o
 RUNTIME_OBJECTS += build/dc/src/core/files_path.o build/dc/src/core/vmu_save_format.o
@@ -66,6 +70,8 @@ BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
 all: $(TARGET) $(RUNTIME) build/loader/entry.elf build/loader/image_entry.elf build/retail/entry.elf build/retail-bench/entry.elf build/retail-ce/entry.elf wince-cdda
 all: native-zso native-lzo native-cdda
 build/dc/src/apps/games_retail.o: src/apps/games_native_cache.inc include/kui/vmu_native_cache_seed.h include/kui/vmu_native_resolution_cache.h
+build/dc/src/apps/games_retail.o: src/apps/games_vmu_card.inc include/kui/vmu_game_card_service.h include/kui/vmu_game_card.h
+build/dc/src/apps/games_retail.o build/dc/sd-runtime.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
 # These separately linked, opt-in music modules retain their tested CE layout
 # even when the ordinary native loader uses its lower firmware reservation.
 # Explicit arguments also isolate them from a requested native diagnostic.

@@ -461,6 +461,9 @@ static bool fill_ram_patches(struct kui_runtime_image *package,
         KUI_GAME_RAM_PATCH_SEED_BYTES,patches,exec_bytes);
 }
 #include "games_native_cache.inc"
+#if KUI_VMU_GAME_CARDS
+#include "games_vmu_card.inc"
+#endif
 
 static bool prepare_launch(const char *path,uint32_t reader,const struct kui_game_ram_patches *patches,
     bool reporting,struct kui_runtime_image *package,kui_log_fn log,kui_cancel_fn cancel) {
@@ -848,9 +851,10 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
         log("Virtual card: separate persistent A1 module selected; startup will show its card path");
     }
     struct native_cache_source_proof source_proof;bool standalone_candidate=false;
-    if(native_cache_prepare(image,map,!ce && metadata.native_gd,requested_options,patched,
-       package,files.root,log,cancel,defer_boot_crc?&source_proof:NULL,
-       native_dual?&standalone_candidate:NULL)==NATIVE_CACHE_CANCELLED) {
+    const enum native_cache_result cache=native_cache_prepare(image,map,!ce && metadata.native_gd,
+       requested_options,patched,package,files.root,log,cancel,defer_boot_crc?&source_proof:NULL,
+       native_dual?&standalone_candidate:NULL);
+    if(cache==NATIVE_CACHE_CANCELLED) {
         problem="cancelled during native executable mapping";goto done;
     }
     /* New only: the combined module would refuse this executable, which has
@@ -877,6 +881,16 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
             log("New reader: virtual-A2 module cannot admit this executable; using standalone New without virtual VMU");
         }
     }
+#if KUI_VMU_GAME_CARDS
+    /* The virtual-A2 module will run this game: hand it the game's own card.
+     * Its raw ownership scan unmounts FatFs, so no image file stays open. */
+    if(native_dual && !native_standalone && cache==NATIVE_CACHE_READY) {
+        if(!close_reader(&files)) {problem="cannot close image reader";goto done;}
+        if(!games_card_prepare(map,package,&fs,&problem,log,cancel)) goto done;
+    }
+#else
+    (void)cache;
+#endif
     if(defer_boot_crc) {
         if(source_proof.complete)map->boot_crc32=source_proof.crc32;
         else {

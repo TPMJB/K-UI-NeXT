@@ -30,11 +30,13 @@ void kui_sd_disconnect(void);
  * Contains no write/sync callbacks; invalid immediately after disconnect. */
 struct kui_media_ops;
 bool kui_sd_raw_read_ops(struct kui_media_ops *out);
-#if KUI_VMU_PROFILE_PREP
+#if KUI_VMU_PROFILE_PREP || KUI_VMU_GAME_CARDS
 struct kui_vmu_sd_identity;
-/* Experimental preparation tool only. Caller exclusively owns connected SCI
- * storage, with no filesystem request/optical read running. Read-only CMD10;
- * output is cleared on failure. Never initializes or changes the card. */
+/* Card preparation only: the import tool, and the Games launcher while it
+ * maps a game's own card with FatFs unmounted. Caller exclusively owns
+ * connected SCI storage, with no filesystem request/optical read running.
+ * Read-only CMD10; output is cleared on failure. Never initializes or
+ * changes the card. */
 bool kui_sd_vmu_profile_identity(struct kui_vmu_sd_identity *out);
 #endif
 #if KUI_VMU_PERSIST_PROOF

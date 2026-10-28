@@ -1126,9 +1126,11 @@ build/test-vmu-lcd: tests/test_vmu_lcd.c src/core/vmu_lcd.c src/dreamcast/vmu_lc
 
 # Experimental VMU components are kept outside the ordinary retail resident.
 .PHONY: test-vmu-prototype
-test-vmu-prototype: build/test-vmu-emulation build/test-vmu-image build/test-vmu-store build/test-vmu-maple-dma build/test-vmu-backing build/test-vmu-backing-read-only build/test-vmu-integration build/test-vmu-service build/test-vmu-sci-bus build/test-sci-sd-storage build/test-vmu-game-card build/vmu-template-profile.bin
+test-vmu-prototype: build/test-vmu-emulation build/test-vmu-image build/test-vmu-store build/test-vmu-maple-dma build/test-vmu-backing build/test-vmu-backing-read-only build/test-vmu-integration build/test-vmu-service build/test-vmu-sci-bus build/test-sci-sd-storage build/test-vmu-game-card build/test-games-vmu-card build/vmu-template-profile.bin
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-emulation
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-game-card build/vmu-template-profile.bin
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-games-vmu-card build/vmu-template-profile.bin
+	python3 tests/test_vmu_game_card_service.py
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-image
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-store
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-maple-dma
@@ -1152,6 +1154,9 @@ VMU_GAME_CARD_SOURCES = src/core/vmu_game_card.c src/core/vmu_persist_profile.c 
 build/test-vmu-game-card: tests/test_vmu_game_card.c $(VMU_GAME_CARD_SOURCES) include/kui/vmu_game_card.h include/kui/vmu_persist_profile.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) tests/test_vmu_game_card.c $(VMU_GAME_CARD_SOURCES) -o $@
+build/test-games-vmu-card: tests/test_games_vmu_card.c src/apps/games_vmu_card.inc $(VMU_GAME_CARD_SOURCES) include/kui/vmu_game_card_service.h include/kui/vmu_game_card.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) tests/test_games_vmu_card.c $(VMU_GAME_CARD_SOURCES) -o $@
 build/test-vmu-image: tests/test_vmu_image.c src/core/vmu_image.c include/kui/vmu_image.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) tests/test_vmu_image.c src/core/vmu_image.c -o $@

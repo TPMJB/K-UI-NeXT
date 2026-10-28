@@ -5,7 +5,7 @@
 #include "kui/storage_error.h"
 #include "kui/ata.h"
 #include "sci_sd_storage.h"
-#if KUI_VMU_PROFILE_PREP
+#if KUI_VMU_PROFILE_PREP || KUI_VMU_GAME_CARDS
 #include "kui/vmu_backing.h"
 #endif
 #include "../loader/sci_sd_bus.h"
@@ -82,7 +82,7 @@ static int sci_failed(enum kui_storage_error_operation operation,
     return failed(operation,reason,KUI_STORAGE_SCI,block,count,
                   result!=KUI_LOADER_SD_OK && sci.last_command!=0xff);
 }
-#if KUI_VMU_PROFILE_PREP
+#if KUI_VMU_PROFILE_PREP || KUI_VMU_GAME_CARDS
 bool kui_sd_vmu_profile_identity(struct kui_vmu_sd_identity *out) {
     if(!out) return false;
     *out=(struct kui_vmu_sd_identity){0};
