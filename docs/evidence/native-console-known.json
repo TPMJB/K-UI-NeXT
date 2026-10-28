@@ -1,0 +1,22 @@
+{
+  "schema": "kui.native.console-known.v1",
+  "note": "Owner console outcomes with New and the virtual A2 card, keyed by the boot file's SHA-256. Hashes and evidence names only; no game bytes. tools/native_library_sweep.py marks matching rows.",
+  "games": [
+    {
+      "title": "Crazy Taxi 2",
+      "release": "US MK-51136 V1.004",
+      "source_bytes": 1452148,
+      "source_sha256": "8057a8e37636ad78b1fc70ee590bd314686546b13ffe100623d86b572aec53c1",
+      "console": "saves and loads (f838aa8e699a)",
+      "evidence": "docs/evidence/native-ct2-card-diagnosis-2026-10-28.json"
+    },
+    {
+      "title": "Jet Grind Radio",
+      "release": "US MK-51058 V1.005",
+      "source_bytes": 3075648,
+      "source_sha256": "8b294765225fc32020dd59010464a730b710d0bd79f69c79f16218cc4feac6a6",
+      "console": "virtual A2 works (e4cc4914bc6a)",
+      "evidence": "docs/evidence/native-ct2-ram-map-jgr-console-2026-10-28.json"
+    }
+  ]
+}
