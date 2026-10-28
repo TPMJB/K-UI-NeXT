@@ -68,8 +68,6 @@ def explain(image):
             files.append(info)
             if entry[0] not in (0x33, 0xcc):
                 problems.append(where+': type %s is neither DATA 0x33 nor GAME 0xcc' % hex(entry[0]))
-            if entry[1] not in (0, 0xff):
-                problems.append(where+': copy-protect byte %s is neither 0 nor 0xff' % hex(entry[1]))
             if not 1 <= info['blocks'] <= 200:
                 problems.append(where+': size %d blocks' % info['blocks'])
             if info['header'] >= max(info['blocks'], 1):

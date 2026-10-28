@@ -66,8 +66,8 @@ static int prevalidate(const struct kui_vmu_image_file *files, size_t count,
         unsigned blocks = le16(entry + 24);
         uint8_t key[12];
         struct span payload;
-        if((entry[0] != 0x33 && entry[0] != 0xcc) ||
-           (entry[1] && entry[1] != 0xff) || !blocks ||
+        /* The copy-protect byte is copied as written, whatever its value. */
+        if((entry[0] != 0x33 && entry[0] != 0xcc) || !blocks ||
            blocks > KUI_VMU_IMAGE_USER_BLOCKS ||
            le16(entry + 26) >= blocks ||
            entry[28] || entry[29] || entry[30] || entry[31] ||

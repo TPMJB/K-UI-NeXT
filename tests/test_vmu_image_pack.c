@@ -143,6 +143,12 @@ static void preservation(void) {
     assert(get16(destination + 254u * BLOCK + 0u * 2u) == 1u);
     assert(get16(destination + 254u * BLOCK + 4u * 2u) == END);
     assert(get16(entry(destination, 2) + 2) == 197u);
+    /* A copy-protect byte other than 0x00/0xff (Crazy Taxi 2: 0x10) is kept. */
+    reset();
+    add(0, "C_TAXI02.SYS", 2, 0, 0, 0);
+    files[0].entry[1] = 0x10;
+    construct(1, 2, 0);
+    assert(entry(destination, 0)[1] == 0x10u);
 }
 static void capacity(void) {
     reset(); add(0, "FULL.DATA", 200, 0, 199, 0); construct(1, 200, 0);
@@ -166,7 +172,6 @@ static void invalid_files(void) {
     files[0].entry[0] = 0; reject(1, KUI_VMU_IMAGE_FILESYSTEM);
     files[0].entry[0] = 0x34; reject(1, KUI_VMU_IMAGE_FILESYSTEM);
     files[0].entry[0] = 0x33;
-    files[0].entry[1] = 1; reject(1, KUI_VMU_IMAGE_FILESYSTEM);
     files[0].entry[1] = 0xff;
     for(unsigned i = 28u; i < 32u; ++i) {
         files[0].entry[i] = 1; reject(1, KUI_VMU_IMAGE_FILESYSTEM);

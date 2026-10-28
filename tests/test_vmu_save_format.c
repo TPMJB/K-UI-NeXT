@@ -56,8 +56,12 @@ int main(void){
         assert(!kui_vmu_save_parse(KUI_VMU_SAVE_VMI,bytes,padded-1,&metadata,NULL,&info,error,sizeof(error)));
     }
     used=payload(bytes,1,0,false);size_t padded=(used+511)/512*512;
-    const unsigned bad_offsets[]={0,1,4,24,26,28,29,16,18,19,20,21,22,23};
-    const unsigned bad_values[]={0x34,1,0,0,1,1,1,0xfa,0x13,0x30,0x24,0x60,0x60,7};
+    const unsigned bad_offsets[]={0,4,24,26,28,29,16,18,19,20,21,22,23};
+    const unsigned bad_values[]={0x34,0,0,1,1,1,0xfa,0x13,0x30,0x24,0x60,0x60,7};
+    /* The copy-protect byte is kept as written (Crazy Taxi 2: 0x10). */
+    directory(copy,padded,false);memcpy(copy+32,bytes,padded);copy[1]=0x10;
+    for(size_t i=32;i<padded+32;i+=4){uint8_t a=copy[i],b=copy[i+1];copy[i]=copy[i+3];copy[i+1]=copy[i+2];copy[i+2]=b;copy[i+3]=a;}
+    assert(kui_vmu_save_parse(KUI_VMU_SAVE_DCI,copy,padded+32,NULL,NULL,&info,error,sizeof(error))&&info.entry[1]==0x10);
     for(unsigned i=0;i<sizeof(bad_offsets)/sizeof(bad_offsets[0]);i++){
         directory(copy,padded,false);memcpy(copy+32,bytes,padded);copy[bad_offsets[i]]=(uint8_t)bad_values[i];
         if(bad_offsets[i]==4)memset(copy+4,0,12);

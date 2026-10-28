@@ -213,7 +213,10 @@ static void filesystem_cases(void) {
     restore(); add_file(0,"A",a,3,0); memset(entry(0)+4,' ',12); invalid(KUI_VMU_IMAGE_FILESYSTEM);
     restore(); add_file(0,"AB",a,3,0); entry(0)[4]=0; invalid(KUI_VMU_IMAGE_FILESYSTEM);
     restore(); add_file(0,"A",a,3,0); entry(0)[0]=0x34; invalid(KUI_VMU_IMAGE_FILESYSTEM);
-    restore(); add_file(0,"A",a,3,0); entry(0)[1]=1; invalid(KUI_VMU_IMAGE_FILESYSTEM);
+    /* Any copy-protect byte is valid; Crazy Taxi 2 writes 0x10. */
+    for(unsigned copy = 1; copy < 0xffu; copy += 0x0fu) {
+        restore(); add_file(0,"A",a,3,0); entry(0)[1]=(uint8_t)copy; valid(1,3,0);
+    }
     restore(); add_file(0,"A",a,3,0); put16(entry(0)+26,3); invalid(KUI_VMU_IMAGE_FILESYSTEM);
     restore(); add_file(0,"A",a,3,0); put16(entry(0)+24,0); invalid(KUI_VMU_IMAGE_FILESYSTEM);
     restore(); add_file(0,"A",a,3,0); put16(entry(0)+24,201); invalid(KUI_VMU_IMAGE_FILESYSTEM);

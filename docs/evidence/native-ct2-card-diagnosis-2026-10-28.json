@@ -1,0 +1,40 @@
+{
+  "schema": "kui.native.ct2-card-diagnosis.v1",
+  "date": "2026-10-28",
+  "build_that_saved": "97959129b827",
+  "owner_upload": {
+    "card.vmd": "9a4469253fa869bc7d7cd5b71976c25d15db5b82c94748b6d1af35a874be0559",
+    "card.journal": "25c84d73e146b08cd97944652fa6f5a22613906a8ab3f61044ada1e77ec4f88d",
+    "identity.bin": "1b7ad299f2401673be39c2bf55b0892c179fbc0b6e6dac58e27c0455e22214cd",
+    "profile.bin": "45dabd313fcf60ddf8ee5f06719e89b5f7e456bf3e1e1cee2dcb9f1bfe86d872"
+  },
+  "note": "profile.bin is the owner's retail-persistent-profile-0005.bin; inputs were copied to an isolated folder and only read",
+  "replay": {
+    "tool": "tools/vmu_pair_inspect.c",
+    "store_open": 0,
+    "journal_sequence": 44,
+    "base_already_current": true,
+    "validate_before": -5,
+    "validate_after_fix": 0
+  },
+  "card": {
+    "files": 12,
+    "used_blocks": 147,
+    "free_blocks": 53,
+    "game_files": 0,
+    "crazy_taxi_2": {
+      "name": "C_TAXI02.SYS",
+      "type": "0x33",
+      "copy_protect": "0x10",
+      "blocks": 20,
+      "first_block": 76,
+      "header_block": 0,
+      "timestamp": "2026-10-27 23:38:47",
+      "description": "CT2 System Data / CRAZY TAXI 2 SYSTEM DATA",
+      "vms_crc": "valid under the production save parser (8104 payload bytes, 3 icons)"
+    }
+  },
+  "cause": "Crazy Taxi 2 writes 0x10 in the directory entry's copy-protect byte. kui_vmu_image_validate accepted only 0x00 or 0xff there, so session recovery refused the card (stage SESSION, session IMAGE). Every other rule passed; no orphan or shared block, chains and FAT consistent.",
+  "not_the_cause": "Memory corruption: the save's own CRC is valid and the filesystem is otherwise consistent.",
+  "fix": "The copy-protect byte is opaque: kui_vmu_image_validate, kui_vmu_image_pack and the DCI save parser accept and preserve any value."
+}

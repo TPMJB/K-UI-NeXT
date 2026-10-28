@@ -168,8 +168,10 @@ int kui_vmu_image_validate(const struct kui_vmu_image_io *io,
             if(!all_zero(entry + 28, 4)) return KUI_VMU_IMAGE_FILESYSTEM;
             if(!entry[0]) continue;
             unsigned blocks = le16(entry + 24), at = le16(entry + 2);
+            /* entry[1], the copy-protect byte, is opaque: games write
+             * values besides 0x00 and 0xff (Crazy Taxi 2 writes 0x10). */
             if((entry[0] != 0x33 && entry[0] != 0xcc) ||
-               (entry[1] && entry[1] != 0xff) || !blocks || blocks > 200 ||
+               !blocks || blocks > 200 ||
                le16(entry + 26) >= blocks ||
                !name_key(entry + 4, work->names[result.files]))
                 return KUI_VMU_IMAGE_FILESYSTEM;

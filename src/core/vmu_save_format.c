@@ -88,7 +88,8 @@ bool kui_vmu_save_parse(enum kui_vmu_save_format format,uint8_t *bytes,size_t le
         out->entry[0]=0x33;memcpy(out->entry+4,stem,n);put16(out->entry+24,(unsigned)((length+511)/512));out->name_from_filename=true;
     }
     uint8_t *entry=out->entry;unsigned blocks=get16(entry+24),offset=get16(entry+26);
-    if((entry[0]!=0x33&&entry[0]!=0xcc)||(entry[1]!=0&&entry[1]!=0xff)||!blocks||blocks>255||blocks!=(length+511)/512||offset!=(entry[0]==0xcc?1u:0u)||!zeros(entry+28,4)||!name(entry+4,12,false)||!timestamp(entry+16))return fail(error,cap,"VMU directory metadata is invalid or unsupported");
+    /* A DCI entry keeps its copy-protect byte as written (Crazy Taxi 2: 0x10). */
+    if((entry[0]!=0x33&&entry[0]!=0xcc)||!blocks||blocks>255||blocks!=(length+511)/512||offset!=(entry[0]==0xcc?1u:0u)||!zeros(entry+28,4)||!name(entry+4,12,false)||!timestamp(entry+16))return fail(error,cap,"VMU directory metadata is invalid or unsupported");
     if(format==KUI_VMU_SAVE_DCI)for(size_t i=32;i<length+32;i+=4){uint8_t a=bytes[i],b=bytes[i+1];bytes[i]=bytes[i+3];bytes[i+1]=bytes[i+2];bytes[i+2]=b;bytes[i+3]=a;}
     if(!header(bytes+out->payload_offset,length,offset,entry[0]==0xcc,error,cap))return false;
     out->timestamp_known=!zeros(entry+16,8);out->payload_bytes=length;out->padded_bytes=(size_t)blocks*512;return true;
