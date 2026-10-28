@@ -41,11 +41,14 @@ def checked(data, magic):
 def verify(directory):
     root = Path(directory)
     header = read_file(root / "header.bin", 4096, 4096)
-    checked(header, b"KUISALV1")
+    version=u32(header,8)
+    cd=version==3
+    packed=version in (2,3)
+    checked(header,b"KUISALV3" if cd else b"KUISALV2" if packed else b"KUISALV1")
     count = u32(header, 16)
-    require(u32(header, 8) == 1 and u32(header, 12) == 4096 and 1 <= count <= 99
+    require(version in (1,2,3) and u32(header, 12) == 4096 and 1 <= count <= 99
             and u32(header, 20) in (0, 1), "Invalid salvage header fields")
-    require(not any(header[96 + count * 24:-4]), "Unknown salvage header fields")
+    require((not cd or u32(header,4064)==1) and not any(header[96+count*24:4064] + header[4068:-4] if cd else header[96+count*24:-4]), "Unknown salvage header/profile fields")
     identity = hashlib.sha256(header).digest()
     plan = [struct.unpack_from("<6I", header, 96 + i * 24) for i in range(count)]
     for i, (number, control, session, start, end, toc_end) in enumerate(plan):
@@ -53,15 +56,27 @@ def verify(directory):
                 and 150 <= start < end <= toc_end <= 720000,
                 f"Invalid track {i + 1} bounds")
         require(not i or start >= plan[i - 1][4], "Overlapping tracks")
+        require(not cd or (session==0 and toc_end==end and (not i or start==plan[i-1][4])),"Invalid single-session CD layout")
     anchors = [u32(header, 24), u32(header, 28)]
+    require(not cd or header[32:64]!=header[64:96],"CD identity content anchors are not distinct")
     require(anchors[0] != anchors[1], "Duplicate identity anchors")
-    records = read_file(root / "journal.bin", 64 * 1024 * 1024)
-    require(records and len(records) % 512 == 0, "Incomplete salvage journal tail")
+    total_sectors = sum(end - start for _, _, _, start, end, _ in plan)
+    journal = root / "journal.bin"
+    require(journal.is_file() and not journal.is_symlink(), "Missing/unsafe journal.bin")
+    journal_length = journal.stat().st_size
+    require(0 < journal_length <= (total_sectors * 4 + count + 4) * 512 and journal_length % 512 == 0,
+            "Incomplete or oversized salvage journal")
+    def journal_records():
+        with journal.open("rb") as stream:
+            for _ in range(journal_length // 512):
+                data = stream.read(512)
+                require(len(data) == 512, "Truncated salvage journal")
+                yield data
+    packed_count = 0
     sectors, crc, baseline = [0] * count, [0] * count, [None] * count
     targets, pending = [], []
     ready = complete = False
-    for sequence, at in enumerate(range(0, len(records), 512), 1):
-        event = records[at:at + 512]
+    for sequence, event in enumerate(journal_records(), 1):
         checked(event, b"KUISJNL1")
         require(struct.unpack_from("<Q", event, 8)[0] == sequence
                 and event[40:72] == identity and not any(event[36:40])
@@ -70,9 +85,9 @@ def verify(directory):
         kind, track, sector, length, value = struct.unpack_from("<5I", event, 16)
         active = next((i for i, item in enumerate(baseline) if item is None), count)
         if kind == 1:
-            require(not ready and u32(header, 20) == 1 and track == active < count
+            require(not ready and track == active < count
                     and length == value == 0 and len(pending) < 32
-                    and len(targets) + len(pending) < 8192
+                    and len(targets) + len(pending) < total_sectors
                     and sectors[track] <= sector < min(sectors[track] + 32, plan[track][4] - plan[track][3])
                     and (not pending or sector > pending[-1]), "Invalid unresolved-target record")
             pending.append(sector)
@@ -80,7 +95,7 @@ def verify(directory):
             require(not ready and track == active < count and sector == sectors[track]
                     and 1 <= length <= 32 and sector + length <= plan[track][4] - plan[track][3]
                     and all(item < sector + length for item in pending), "Invalid first-pass commit")
-            targets.extend({"track": track, "sector": item, "crc": None} for item in pending)
+            targets.extend({"track": track, "sector": item, "crc": None, "slot": None, "candidate_crc": None} for item in pending)
             pending = []
             sectors[track] += length
             crc[track] = value
@@ -93,9 +108,17 @@ def verify(directory):
             require(not ready and not pending and active == count and track == sector == value == 0
                     and length == len(targets), "Invalid first-pass completion")
             ready = True
+        elif kind == 7:
+            require(packed and ready and track < len(targets) and sector == packed_count and length == 0
+                    and targets[track]["crc"] is None and targets[track]["slot"] is None,
+                    "Invalid packed-candidate publication")
+            targets[track]["slot"], targets[track]["candidate_crc"] = sector, value
+            packed_count += 1
         elif kind == 5:
             require(ready and track < len(targets) and sector == length == 0
-                    and targets[track]["crc"] is None, "Invalid repaired-target commit")
+                    and targets[track]["crc"] is None
+                    and (not packed or targets[track]["slot"] is not None
+                         and targets[track]["candidate_crc"] == value), "Invalid repaired-target commit")
             targets[track]["crc"] = value
         elif kind == 6:
             require(ready and track == sector == value == 0 and length == len(targets)
@@ -105,10 +128,24 @@ def verify(directory):
         else:
             raise ValueError("Unknown salvage journal event")
     require(complete and ready and not pending, "Salvage is incomplete; no verified result")
+    packed_path = root / "patches.bin"
+    if packed and packed_count:
+        require(packed_path.is_file() and not packed_path.is_symlink()
+                and packed_path.stat().st_size == packed_count * 5120,
+                "Missing/unsafe/incomplete packed candidates")
+    def load_patch(index, target):
+        if packed:
+            with packed_path.open("rb") as stream:
+                stream.seek(target["slot"] * 5120)
+                patch = stream.read(5120)
+            require(len(patch) == 5120, "Truncated packed candidate")
+        else:
+            patch = read_file(root / f"patch-{index:04}.bin", 8192, 8192)
+        checked(patch, b"KUISPAT2" if packed else b"KUISPAT1")
+        return patch
     replacements = [[] for _ in plan]
     for index, target in enumerate(targets):
-        patch = read_file(root / f"patch-{index:04}.bin", 8192, 8192)
-        checked(patch, b"KUISPAT1")
+        patch = load_patch(index, target)
         track, sector = target["track"], target["sector"]
         before, after = patch[64:64 + RAW], patch[64 + RAW:64 + 2 * RAW]
         require(u32(patch, 8) == index and u32(patch, 12) == track and u32(patch, 16) == sector
@@ -118,22 +155,32 @@ def verify(directory):
                 and u32(patch, 24) == zlib.crc32(before)
                 and u32(patch, 28) == zlib.crc32(after) == target["crc"],
                 f"Invalid immutable patch {index}")
-        replacements[track].append((sector * RAW, after))
+        replacements[track].append((sector * RAW, index))
     manifest = json.loads(read_file(root / "salvage.json", 32768))
     require(isinstance(manifest, dict), "Invalid salvage manifest")
-    require(manifest.get("salvage_schema") == 1 and manifest.get("identity") == identity.hex()
+    require(manifest.get("salvage_schema") == version and manifest.get("identity") == identity.hex()
             and manifest.get("requires_complete_journal") is True
             and manifest.get("full_saved_readback") is False
             and manifest.get("original_targets") == len(targets) and manifest.get("unresolved") == 0
             and isinstance(manifest.get("tracks"), list) and len(manifest["tracks"]) == count,
             "Final manifest disagrees with salvage journal")
-    expected_gdi, results = [str(count)], []
+    expected_gdi, results = (["REM CAPTURE_PROFILE cd-toc-index01-raw2352-v1", "REM TOC INDEX01 ONLY; INDEX00 AND SUBCHANNELS NOT CAPTURED"] if cd else [str(count)]), []
     for i, (_, control, _, start, end, _) in enumerate(plan):
         name = f"track{i + 1:02}.{'bin' if control == 4 else 'raw'}"
         path, wanted = root / name, (end - start) * RAW
         require(path.is_file() and not path.is_symlink() and path.stat().st_size == wanted,
                 f"Missing/unsafe/truncated {name}")
-        expected_gdi.append(f"{i + 1} {start - 150} {control} 2352 {name} 0")
+        if cd:
+            with path.open("rb") as first_sector:
+                mode=first_sector.read(16)[15] if control==4 else 0
+            require(control!=4 or mode in (1,2),"Unsupported completed CD data mode")
+            expected_gdi.extend((f'FILE "{name}" BINARY',f'  TRACK {i+1:02d} MODE{mode}/2352' if control==4 else f'  TRACK {i+1:02d} AUDIO'))
+            if i==0 and start>150:
+                gap=start-150
+                expected_gdi.append(f'    PREGAP {gap//4500:02d}:{gap//75%60:02d}:{gap%75:02d}')
+            expected_gdi.append('    INDEX 01 00:00:00')
+        else:
+            expected_gdi.append(f"{i + 1} {start - 150} {control} 2352 {name} 0")
         full_crc = original_crc = position = 0
         sha = hashlib.sha256()
         intervals = sorted(replacements[i])
@@ -147,7 +194,10 @@ def verify(directory):
                     target_index += 1
                 at = target_index
                 while at < len(intervals) and intervals[at][0] < position + len(chunk):
-                    offset, after = intervals[at]
+                    offset, target_id = intervals[at]
+                    patch = load_patch(target_id, targets[target_id])
+                    after = patch[64 + RAW:64 + 2 * RAW]
+                    require(zlib.crc32(after) == targets[target_id]["crc"], "Candidate changed during verification")
                     lo, hi = max(offset, position), min(offset + RAW, position + len(chunk))
                     require(chunk[lo - position:hi - position] == after[lo - offset:hi - offset],
                             f"{name}: repaired bytes differ from immutable patch at sector {offset // RAW}")
@@ -156,7 +206,7 @@ def verify(directory):
                 original_crc = zlib.crc32(original, original_crc)
                 position += len(chunk)
             for anchor_index, fad in enumerate(anchors):
-                if control == 4 and start <= fad < end:
+                if (cd or control == 4) and start <= fad < end:
                     source.seek((fad - start) * RAW)
                     require(hashlib.sha256(source.read(RAW)).digest() == header[32 + anchor_index * 32:64 + anchor_index * 32],
                             "Saved identity anchor does not match original disc binding")
@@ -166,9 +216,9 @@ def verify(directory):
                 f"{name}: complete saved-file CRC mismatch")
         results.append({"file": name, "bytes": wanted, "crc32": f"{full_crc:08x}", "sha256": sha.hexdigest()})
     for fad in anchors:
-        require(any(control == 4 and session == 1 and start <= fad < end for _, control, session, start, end, _ in plan),
+        require(any((cd or (control == 4 and session == 1)) and start <= fad < end for _, control, session, start, end, _ in plan),
                 "Identity anchor outside all data tracks")
-    descriptor = read_file(root / "salvage.gdi", 32768)
+    descriptor = read_file(root / ("salvage.cue" if cd else "salvage.gdi"), 32768)
     require(descriptor == ("\n".join(expected_gdi) + "\n").encode("ascii"), "Final GDI differs from original track plan")
     return {"complete": True, "saved_files_verified": True, "catalogue_match": False,
             "original_targets": len(targets), "unresolved": 0, "tracks": results}

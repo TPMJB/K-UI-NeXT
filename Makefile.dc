@@ -32,7 +32,7 @@ RUNTIME_OBJECTS += $(BENCH_OBJECTS)
 RUNTIME_OBJECTS += build/dc/src/core/storage_test_model.o build/dc/src/core/storage_test.o build/dc/src/core/storage_test_store.o
 RUNTIME_OBJECTS += build/dc/src/dreamcast/capture.o
 RUNTIME_OBJECTS += build/dc/src/dreamcast/memory.o
-RUNTIME_OBJECTS += build/dc/src/core/recovery_manifest.o build/dc/src/core/recovery_scan.o build/dc/src/core/repair_copy.o
+RUNTIME_OBJECTS += build/dc/src/core/recovery_manifest.o build/dc/src/core/recovery_scan.o build/dc/src/core/repair_copy.o build/dc/src/core/legacy_import.o build/dc/src/core/raw_cue.o build/dc/src/core/saved_identity.o build/dc/src/core/recovery_guard.o build/dc/src/core/salvage_completion.o
 RUNTIME_OBJECTS += build/dc/src/core/network_rip.o
 RUNTIME_OBJECTS += build/dc/src/core/games_selection.o build/dc/src/core/game_launch_settings.o build/dc/src/core/game_ram_patches.o
 RUNTIME_OBJECTS += build/dc/src/core/vmu_launch_package.o
@@ -61,7 +61,7 @@ RUNTIME_OBJECTS += build/dc/src/core/runtime_image.o build/dc/src/core/runtime_f
 RUNTIME_OBJECTS += build/dc/src/core/resident_image.o
 RUNTIME_OBJECTS += build/dc/src/core/retail_image.o
 RUNTIME_OBJECTS += build/dc/src/core/shell.o build/dc/src/dreamcast/shell_draw.o build/dc/src/dreamcast/shell_font.o
-RUNTIME_OBJECTS += build/dc/src/core/capture_display.o build/dc/src/core/viewport.o build/dc/src/core/salvage.o build/dc/src/core/recovery_crc.o
+RUNTIME_OBJECTS += build/dc/src/core/capture_display.o build/dc/src/core/viewport.o build/dc/src/core/salvage.o build/dc/src/core/salvage_display.o build/dc/src/core/recovery_crc.o
 APP_SOURCES := $(filter-out src/apps/boot_splash.c,$(wildcard src/apps/*.c))
 RUNTIME_OBJECTS += $(patsubst %.c,build/dc/%.o,$(APP_SOURCES))
 BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
@@ -70,6 +70,7 @@ BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
 all: $(TARGET) $(RUNTIME) build/loader/entry.elf build/loader/image_entry.elf build/retail/entry.elf build/retail-bench/entry.elf build/retail-ce/entry.elf wince-cdda
 all: native-zso native-lzo native-cdda
 build/dc/src/apps/games_retail.o: src/apps/games_native_cache.inc include/kui/vmu_native_cache_seed.h include/kui/vmu_native_resolution_cache.h
+build/dc/src/core/repair_copy.o: src/core/repair_resume.inc include/kui/recovery_guard.h
 build/dc/src/apps/games_retail.o: src/apps/games_vmu_card.inc include/kui/vmu_game_card_service.h include/kui/vmu_game_card.h
 build/dc/src/apps/games_retail.o build/dc/sd-runtime.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
 # These separately linked, opt-in music modules retain their tested CE layout

@@ -96,8 +96,9 @@ def main():
             data_bytes = sum(t["bytes"] for t in expected if t["file"].endswith(".bin"))
             stats = timings(output)
             assert "resume" not in stats
-            for bucket in ("disc", "write", "sha256", "crc32"):
+            for bucket in ("disc", "write", "sha256"):
                 assert stats["capture"]["buckets"][bucket]["bytes"] == total
+            assert stats["capture"]["buckets"]["crc32"]["bytes"] == total * 2  # pre/post write guard
             assert stats["capture"]["buckets"]["edc"]["bytes"] == data_bytes
             assert stats["capture"]["buckets"]["checkpoint"]["calls"] > 0
             for bucket in ("read", "sha256", "crc32"):

@@ -16,7 +16,8 @@ enum kui_recovery_sector_flags {
     KUI_RECOVERY_SECTOR_ECC = 8u,
     KUI_RECOVERY_SECTOR_UNSUPPORTED = 16u,
     KUI_RECOVERY_SECTOR_INPUT = 32u,
-    KUI_RECOVERY_SECTOR_RESERVED = 64u
+    KUI_RECOVERY_SECTOR_RESERVED = 64u,
+    KUI_RECOVERY_SECTOR_SUBHEADER = 128u
 };
 
 /* Replace an equal-length region's contribution to a finalized IEEE CRC32.
@@ -41,5 +42,10 @@ uint32_t kui_recovery_crc_replace(uint32_t whole,uint32_t before,uint32_t after,
  * The saved-file Advanced CRC app uses sector checks explicitly; healthy
  * acquisition still uses its existing fast checks and does not call these. */
 unsigned kui_recovery_sector_check(const void *raw,size_t size,uint32_t fad);
+
+/* CD data recovery additionally accepts Mode2 Form1 with matching duplicate
+ * subheaders, EDC and P/Q computed with its zeroed address/mode field. Form2
+ * remains unsupported; no ECC reconstruction is performed. */
+unsigned kui_recovery_cd_sector_check(const void *raw,size_t size,uint32_t fad);
 
 #endif

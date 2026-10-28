@@ -2,6 +2,8 @@
 #define _POSIX_C_SOURCE 200809L
 #include "kui/capture.h"
 #include "kui/media.h"
+#include "kui/recovery_guard.h"
+#include "kui/repair_copy.h"
 #include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -17,6 +19,7 @@ static struct {
     /* Split DMA. `pend` is a read in flight; the harness asserts it is always ended. */
     bool pend;uint32_t pend_fad;unsigned pend_n;uint8_t *pend_out;
     unsigned begins,ends,end_fails;
+    uint8_t *live_buffer;size_t live_bytes;
     struct kui_capture_plan plan;
 } test;
 static void log_line(const char *format,...) {
@@ -43,6 +46,17 @@ static int write_image(void *p,uint32_t sector,size_t count,const uint8_t *data)
         test.injected=true;return -1;
     }
     if(fault("write-fail") && test.phase==KUI_CAPTURING && test.ticks>24) return -1;
+    if((fault("buffer-mutate") || fault("buffer-mutate-writefail")) && test.phase==KUI_CAPTURING && !test.injected &&
+       test.ticks>24 && test.live_buffer && test.live_bytes>33) {
+        /* Mutate the actual optical source during FatFs's write call, rather
+         * than only corrupting the card copy. A post-write-only stream hash
+         * can otherwise bless these changed bytes in a no-readback job. */
+        test.injected=true;test.live_buffer[33]^=0x80;
+        if(fault("buffer-mutate-writefail")) {
+            assert(count && fseeko(test.image,(off_t)sector*512,SEEK_SET)==0);
+            assert(fwrite(data,1,257,test.image)==257);return -1;
+        }
+    }
     if(fault("corrupt-write") && test.phase==KUI_CAPTURING && !test.injected &&
        count && data[0]==0 && kui_guard_is(data+1,10,255) && data[15]==1) {
         test.injected=true;size_t bytes=count*512;uint8_t *changed=malloc(bytes);assert(changed);
@@ -72,7 +86,7 @@ static void progress(void *p,const struct kui_capture_progress *status) {
     if(fault("stop-identify") && status->phase==KUI_IDENTIFY && status->done) test.stop=true;
     if(fault("stop-prefix") && status->phase==KUI_PREFIX_CHECK && status->done>=KUI_RAW_BYTES) test.stop=true;
     if(status->phase==KUI_CAPTURING) {
-        if((fault("stop-early") && status->done>=128*2352) ||
+        if((fault("stop-small") && status->done>=16*2352) || (fault("stop-early") && status->done>=128*2352) ||
            (fault("stop-middle") && status->done>=5000*2352) ||
            (fault("stop-late") && status->done==status->total)) test.stop=true;
         if(fault("full-during") && !test.injected) {test.injected=true;exhaust_space();}
@@ -97,7 +111,9 @@ static void sector(uint32_t fad,bool data,uint8_t *out) {
         const char *setting=getenv("KUI_TEST_DATA_MODE");
         unsigned mode=(setting && !strcmp(setting,"2")) || (fault("mixed-mode") && fad==45250u)?2u:1u;
         unsigned offset=mode==2u?24u:16u;
-        out[0]=out[11]=0;memset(out+1,255,10);out[12]=0x10;out[13]=out[14]=0;out[15]=(uint8_t)mode;
+        out[0]=out[11]=0;memset(out+1,255,10);out[15]=(uint8_t)mode;
+        const unsigned address[3]={fad/4500u,(fad/75u)%60u,fad%75u};
+        for(unsigned i=0;i<3;i++)out[12+i]=(uint8_t)((address[i]/10u)*16u+address[i]%10u);
         if(mode==2u) memset(out+16,0,8);
         if(fad==45150) {
             memcpy(out+offset,"SEGA SEGAKATANA",14);memset(out+offset+128,' ',128);
@@ -125,8 +141,11 @@ static enum kui_read_result read_disc(void *p,uint32_t fad,unsigned count,uint8_
     }
     for(unsigned i=0;i<count;i++) {
         sector(fad+i,track->control==4,out+i*KUI_RAW_BYTES);
+        if(fault("wrong-address") && fad+i==test.bad_fad && track->control==4)
+            sector(fad+i+1,true,out+i*KUI_RAW_BYTES);
         if(fault("edc-fail") && fad+i==test.bad_fad) out[i*KUI_RAW_BYTES+40]^=1;
     }
+    test.live_buffer=out;test.live_bytes=count*KUI_RAW_BYTES;
     return KUI_READ_OK;
 }
 static bool read_begin_fake(void *p,uint32_t fad,unsigned sectors,uint8_t *out) {
@@ -240,6 +259,29 @@ static void mutate(const char *kind) {
     }
     else if(!strcmp(kind,"gdi-internal")) {snprintf(path,sizeof(path),"%s/%s",dir,KUI_CAPTURE_INTERNAL_GDI);flip_byte(path,12);}
     else if(!strcmp(kind,"gdi-cooked")) {snprintf(path,sizeof(path),"%s/disc.gdi",dir);flip_byte(path,12);}
+    else if(!strcmp(kind,"repair-cd-target")) {snprintf(path,sizeof(path),"%s/track01.bin",dir);flip_byte(path,2u*KUI_RAW_BYTES+37);}
+    else if(!strcmp(kind,"repair-target")) {snprintf(path,sizeof(path),"%s/track03.bin",dir);flip_byte(path,2u*KUI_RAW_BYTES+37);}
+    else if(!strcmp(kind,"repair-receipt")) {snprintf(path,sizeof(path),"%s/.kui-inplace-complete",dir);flip_byte(path,16);}
+    else if(!strcmp(kind,"repair-manifest")) {snprintf(path,sizeof(path),"%s/manifest.json",dir);flip_byte(path,22);}
+    else if(!strcmp(kind,"repair-receipt-path")) {
+        snprintf(path,sizeof(path),"%s/.kui-inplace-complete",dir);FIL f;UINT n;uint8_t receipt[512];
+        assert(f_open(&f,path,FA_READ|FA_WRITE)==FR_OK && f_read(&f,receipt,sizeof(receipt),&n)==FR_OK && n==sizeof(receipt));
+        receipt[80]^=1;put32(receipt+508,kui_crc32(0,receipt,508));
+        assert(f_lseek(&f,0)==FR_OK && f_write(&f,receipt,sizeof(receipt),&n)==FR_OK && n==sizeof(receipt) && f_close(&f)==FR_OK);
+    }
+    else if(!strcmp(kind,"repair-partial-checkpoint")) {
+        FIL f;UINT n;uint8_t record[KUI_CHECKPOINT_BYTES],raw[KUI_RAW_BYTES];struct kui_checkpoint checkpoint;
+        snprintf(path,sizeof(path),"%s/checkpoint-a.bin",dir);assert(f_open(&f,path,FA_READ)==FR_OK && f_read(&f,record,sizeof(record),&n)==FR_OK && n==sizeof(record) && f_close(&f)==FR_OK);
+        assert(kui_checkpoint_decode(record,&test.plan,record+24,&checkpoint));
+        snprintf(path,sizeof(path),"%s/track03.bin",dir);assert(f_open(&f,path,FA_READ)==FR_OK && f_read(&f,raw,sizeof(raw),&n)==FR_OK && n==sizeof(raw) && f_close(&f)==FR_OK);
+        checkpoint.track[2].sectors=1;checkpoint.track[2].crc32=kui_crc32(0,raw,sizeof(raw));struct kui_sha256 hash;kui_sha256_init(&hash);kui_sha256_update(&hash,raw,sizeof(raw));kui_sha256_digest(&hash,checkpoint.track[2].sha256);
+        kui_checkpoint_encode(&checkpoint,record);
+        for(unsigned i=0;i<2;i++) {snprintf(path,sizeof(path),"%s/checkpoint-%c.bin",dir,i?'b':'a');assert(f_open(&f,path,FA_WRITE)==FR_OK && f_write(&f,record,sizeof(record),&n)==FR_OK && n==sizeof(record) && f_close(&f)==FR_OK);}
+    }
+    else if(!strcmp(kind,"repair-checkpoints")) {
+        for(unsigned i=0;i<2;i++) {snprintf(path,sizeof(path),"%s/checkpoint-%c.bin",dir,i?'b':'a');flip_byte(path,130);}
+    }
+    else if(!strcmp(kind,"repair-receipt-delete")) {snprintf(path,sizeof(path),"%s/.kui-inplace-complete",dir);assert(f_unlink(path)==FR_OK);}
     else if(!strcmp(kind,"cooked-track")) {snprintf(path,sizeof(path),"%s/track03.iso",dir);flip_byte(path,12);}
     else if(!strcmp(kind,"output")) {
         DIR entries;FILINFO info;bool found=false;assert(f_opendir(&entries,dir)==FR_OK);
@@ -290,6 +332,7 @@ static struct kui_capture_options test_options(void) {
     else if(strstr(env,"cso")) {output.format=KUI_CAPTURE_FORMAT_CSO;o.output=&output;}
     else if(strstr(env,"zso")) {output.format=KUI_CAPTURE_FORMAT_ZSO;o.output=&output;}
     else if(strstr(env,"chd")) {output.format=KUI_CAPTURE_FORMAT_CHD;o.output=&output;}
+    else if(strstr(env,"direct2048")) {output.format=KUI_CAPTURE_FORMAT_GDI_DIRECT_2048;o.output=&output;}
     else if(strstr(env,"cooked")) {output.format=KUI_CAPTURE_FORMAT_GDI_2048;o.output=&output;}
     o.crc_only=strstr(env,"crc32")!=NULL;o.skip_end_readback=strstr(env,"noend")!=NULL;
     o.resume_size_only=strstr(env,"size")!=NULL;
@@ -321,6 +364,10 @@ int main(int argc,char **argv) {
     if(layout && !strcmp(layout,"single-data")) {
         sessions[1].count=1u;sessions[1].tracks[0].end=51813u;
     }
+    if(layout && !strcmp(layout,"repair-small")) {
+        sessions[0]=(struct kui_toc){.tracks={{1,4,150,340},{2,0,340,344}},.count=2};
+        sessions[1]=(struct kui_toc){.tracks={{3,4,45150,45190}},.count=1};
+    }
     if(layout && !strncmp(layout,"cd-",3u)) {
         struct kui_toc cd={.tracks={{1,4,150,790}},.count=1};
         if(!strcmp(layout,"cd-audio")) cd=(struct kui_toc){.tracks={{1,0,150,470},{2,0,470,790}},.count=2};
@@ -336,28 +383,46 @@ int main(int argc,char **argv) {
     if(!strcmp(argv[2],"bench")) {   /* bench new|resume <sectors>: the benchmark entry point, real engine */
         assert(argc==5);
         struct kui_capture_options opts=test_options();struct kui_capture_stats stats;
-        struct kui_capture_ops ops={NULL,read_disc,cancelled,now,progress,log_line,"0123456789ab",now_us,NULL,read_begin_fake,read_end_fake,&opts,&stats};
+        struct kui_capture_ops ops={NULL,read_disc,cancelled,now,progress,log_line,"0123456789ab",now_us,NULL,read_begin_fake,read_end_fake,&opts,&stats,NULL};
         enum kui_capture_result r=kui_capture_bench(&ops,45150,(unsigned)atoi(argv[4]),false,
             !strcmp(argv[3],"resume")?KUI_CAPTURE_RESUME:KUI_CAPTURE_NEW);
         printf("RESULT %u\n",r);print_stats(&stats);
         assert(fclose(test.image)==0);return r==KUI_CAPTURE_COMPLETE?0:1;
     }
-    if(!strcmp(argv[2],"export") || !strcmp(argv[2],"mutate") || !strcmp(argv[2],"seed") || !strcmp(argv[2],"put") || !strcmp(argv[2],"mkdir") || !strcmp(argv[2],"alias")) {
+    if(!strcmp(argv[2],"export") || !strcmp(argv[2],"mutate") || !strcmp(argv[2],"seed") || !strcmp(argv[2],"put") || !strcmp(argv[2],"mkdir") || !strcmp(argv[2],"alias") || !strcmp(argv[2],"quarantine")) {
         FATFS fs;assert(kui_mount(&fs,log_line));
         if(!strcmp(argv[2],"put")) {assert(argc==5);put_file(argv[3],argv[4]);}
         else if(!strcmp(argv[2],"export")) {assert(argc==4);export_all(argv[3]);}
         else if(!strcmp(argv[2],"mutate")) {assert(argc==4);mutate(argv[3]);}
         else if(!strcmp(argv[2],"mkdir")) {assert(argc==4);assert(f_mkdir(argv[3])==FR_OK);}
         else if(!strcmp(argv[2],"alias")) {assert(argc==3);job_alias();}
+        else if(!strcmp(argv[2],"quarantine")) {
+            char directory[512];
+            if(argc==4) {assert(strlen(argv[3])<sizeof(directory));strcpy(directory,argv[3]);}
+            else {assert(argc==3);assert(first_job(directory));}
+            assert(kui_recovery_guard_mark(directory,log_line));
+            assert(!kui_recovery_guard_check(directory,log_line));
+            puts("QUARANTINE_PUBLISHED 1");
+        }
         else assert(kui_write_new_file("0:/keep.txt","KEEP THIS FILE\n",15,log_line));
         assert(f_mount(NULL,"0:",0)==FR_OK);
+#ifndef KUI_CAPTURE_NO_REPAIR_FIXTURE
+    } else if(!strcmp(argv[2],"repair-inplace")) {
+        FATFS fs;assert(kui_mount(&fs,log_line));char directory[512];assert(first_job(directory));assert(f_mount(NULL,"0:",0)==FR_OK);
+        struct kui_capture_ops ops={.read=read_disc,.cancelled=cancelled,.now_ms=now,.log=log_line,.build="0123456789ab"};
+        struct kui_repair_options options={.attempts=5,.continuous=true,.in_place=true};struct kui_repair_status status;
+        enum kui_repair_result r=kui_repair_copy(directory,&test.plan,&ops,&options,&status);
+        printf("REPAIR_RESULT %u WRITES %u MESSAGE %s\n",r,test.writes,status.message);
+        result=r==KUI_REPAIR_COMPLETE?0:r==KUI_REPAIR_STOPPED?3:1;
+#endif
     } else {
         enum kui_capture_mode mode=!strcmp(argv[2],"new")?KUI_CAPTURE_NEW:
             !strcmp(argv[2],"resume")?KUI_CAPTURE_RESUME:KUI_CAPTURE_VERIFY;
         struct kui_capture_options opts=test_options();struct kui_capture_stats stats;
-        struct kui_capture_ops ops={NULL,read_disc,cancelled,now,progress,log_line,"0123456789ab",now_us,NULL,read_begin_fake,read_end_fake,&opts,&stats};
+        struct kui_capture_ops ops={NULL,read_disc,cancelled,now,progress,log_line,"0123456789ab",now_us,NULL,read_begin_fake,read_end_fake,&opts,&stats,NULL};
         enum kui_capture_result r=kui_capture(&test.plan,&ops,mode);
         printf("RESULT %u WRITES %u BAD_ATTEMPTS %u FATAL %u OPTICAL_READS %llu\n",r,test.writes,test.bad_attempts,test.failures,(unsigned long long)test.ticks);
+        printf("FAULT_INJECTED %u\n",test.injected?1u:0u);
         /* Every begun read must have been ended: an unfinished one still owns its buffer. */
         printf("DMA BEGINS %u ENDS %u PENDING %u\n",test.begins,test.ends,test.pend?1u:0u);
         print_stats(&stats);

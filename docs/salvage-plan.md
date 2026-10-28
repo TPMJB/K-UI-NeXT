@@ -1,5 +1,24 @@
 # Explicit damaged-disc recovery
 
+**2026-10-28 expansion:** the independent worker now scales target storage to
+the admitted disc layout using a bounded-RAM disk index and packed version-2
+candidate evidence. The old 8,192-target/64 MiB ceilings are removed; version-1
+jobs remain resumable. Anchor discovery searches healthy interior sectors,
+failed batches split into smaller reads, write-buffer CRC guards retain the
+expected values across storage yields, and quarantined saved-storage jobs are
+blocked before journal mutation. Resolved runs expose a trusted CRC/identity
+receipt for automatic catalogue comparison and optional saved-file readback.
+See [current worker behavior](salvage-worker.md) and the
+[version-2 format contract](salvage-format-v2.md). Console acceptance and
+hardware throughput of this assembled candidate remain pending.
+
+**2026-10-28 behavior correction:** salvage always commits unresolved holes and
+continues collection. New/Resume automatically run alternating targeted passes;
+the default is explicitly labeled **Until stopped**, with finite pass limits
+available. The old zero-fill OFF abort and requirement to manually launch repair
+are removed from this dedicated mode. See [salvage-worker.md](salvage-worker.md)
+for current behavior. The older legacy-control table below is historical.
+
 **2026-09-23 implementation update:** the independent first-pass/repair worker,
 FatFs durable journal, explicit UI actions and PC verifier are now implemented.
 See [salvage-worker.md](salvage-worker.md) for the shipped behavior, bounded
@@ -7,7 +26,8 @@ limits, host fault tests and pending hardware acceptance. The earlier design
 and provenance below remain the rationale; they are not a statement that the
 worker is still missing. Normal capture and its accepted reader remain unchanged.
 
-Status: backend port started. The [first helper gate](recovery-port.md) now
+**Historical initial helper-stage status (superseded by the updates above):**
+backend port started. The [first helper gate](recovery-port.md) now
 contains selectively adapted CRC replacement and Mode 1 address/EDC/PQ checks
 with host tests. The Mode 1 checks now power a separate
 [Advanced CRC saved-file scan](advanced-crc-scan.md) exposed in the app. It diagnoses
@@ -124,10 +144,8 @@ is added as part of this UI milestone.
 | UI/ownership | Stop works during every stage; entering/leaving Advanced does not start writes; later destination edits cannot retarget an active recovery; no ordinary capture or resume accepts placeholder completion. |
 | Hardware | First exercise a small reproducible damaged region, retain logs/maps/backups, and independently hash the saved result on PC. Use the same bootstrap disc and an SD runtime update. |
 
-The first implementation gate is now the pure helpers and host tests described
-in [recovery-port.md](recovery-port.md). Next are new salvage identity/state
-records and interruption tests, an isolated first-pass/targeted recovery worker,
-FatFs storage adapters and verifier support, then explicit UI wiring and a
-bounded hardware test. A full damaged-disc rip is not the first correctness
-test. No ordinary capture, optical adapter or command-state file changes are
-part of the helper gate.
+The original first implementation gate was the pure helpers and host tests in
+[recovery-port.md](recovery-port.md). The later identity/state, interruption,
+first-pass/recovery worker, FatFs, verifier and UI stages are implemented above.
+The retained gates describe their required checks. No optical adapter or command
+state implementation was imported as part of the helper gate.

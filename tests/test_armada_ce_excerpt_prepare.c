@@ -441,6 +441,25 @@ FRESULT f_stat(const TCHAR *path,FILINFO *info) {
     if(!bytes) return FR_NO_FILE;
     memset(info,0,sizeof(*info));info->fsize=bytes;return FR_OK;
 }
+/* The optional native-cache publisher is compiled into games_retail.c, but
+ * these legacy preparation fixtures must remain read-only. Keep the hooks
+ * linked and fail if any fixture accidentally reaches a mutation path. */
+FRESULT f_mkdir(const TCHAR *path) {
+    (void)path;CHECK(!"read-only preparation attempted to create a cache directory");return FR_DENIED;
+}
+FRESULT f_write(FIL *file,const void *data,UINT bytes,UINT *written) {
+    (void)file;(void)data;(void)bytes;*written=0;
+    CHECK(!"read-only preparation attempted to write a cache");return FR_DENIED;
+}
+FRESULT f_sync(FIL *file) {
+    (void)file;CHECK(!"read-only preparation attempted to sync a cache");return FR_DENIED;
+}
+FRESULT f_unlink(const TCHAR *path) {
+    (void)path;CHECK(!"read-only preparation attempted to remove a cache");return FR_DENIED;
+}
+FRESULT f_rename(const TCHAR *from,const TCHAR *to) {
+    (void)from;(void)to;CHECK(!"read-only preparation attempted to publish a cache");return FR_DENIED;
+}
 FRESULT f_open(FIL *file,const TCHAR *path,BYTE mode) {
     CHECK(launch.connected && launch.mounted && !launch.active && mode==FA_READ);
     const char *name=strrchr(path,'/');CHECK(name!=NULL);

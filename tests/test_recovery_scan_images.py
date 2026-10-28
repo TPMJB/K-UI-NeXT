@@ -31,7 +31,9 @@ def main():
                  "imported-catalogue-size-mismatch", "imported-catalogue-partial",
                  "imported-catalogue-unrelated", "imported-catalogue-invalid",
                  "imported-catalogue-cancel", "imported-catalogue-bad-sector",
-                 "catalogue-manifest-mismatch")
+                 "catalogue-manifest-mismatch", "unstable-data", "unstable-audio",
+                 "guard-seeded", "guard-torn", "guard-cancel", "guard-report-fail",
+                 "guard-foreign", "guard-foreign-part", "guard-corrupt")
         for kind in ("fat32", "exfat"):
             seed = base / f"{kind}-seed.img"
             with seed.open("wb") as stream:

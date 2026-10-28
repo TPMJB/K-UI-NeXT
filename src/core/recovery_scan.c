@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/recovery_scan.h"
 #include "kui/recovery_checks.h"
+#include "kui/recovery_guard.h"
 #include <inttypes.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -9,6 +10,8 @@
 
 #define SCAN_CHUNK_SECTORS 16u
 #define SCAN_REPORT_BAD_LIMIT 4096u
+#define SCAN_SAMPLE_LIMIT 64u
+#define SAMPLE_BYTES (64u+3u*KUI_RAW_BYTES)
 struct scan {
     struct kui_scan_manifest manifest;
     struct kui_scan_gdi gdi;
@@ -16,10 +19,13 @@ struct scan {
     struct kui_known_track known[99];
     uint8_t record[KUI_CHECKPOINT_BYTES];
     uint8_t data[SCAN_CHUNK_SECTORS*KUI_RAW_BYTES];
+    uint8_t repeat[4096], sample[SAMPLE_BYTES];
     char text[KUI_SCAN_MANIFEST_LIMIT+1u];
     char directory[KUI_DEST_JOB_CAP],path[KUI_DEST_PATH_CAP];
     FIL report;
-    bool report_open,failed;
+    FIL samples;
+    char sample_path[KUI_DEST_PATH_CAP];
+    bool report_open,samples_open,failed;
     unsigned reported_bad;
     const struct kui_scan_ops *ops;
     struct kui_scan_status *status;
@@ -232,9 +238,78 @@ static bool new_report(struct scan *s) {
             s->status->reference_hashes?"completed K-UI manifest":"STRUCTURAL ONLY, GDI file lengths",
             s->status->checkpoint_checked?"matched":s->status->reference_hashes?"absent; manifest only":"not used for GDI-only scan")) return false;
         if(f_sync(&s->report)!=FR_OK) return fail(s,"Initial report sync failed; scan not started");
+        snprintf(s->sample_path,sizeof(s->sample_path),"0:/KUI/recovery/scan-%04u.samples.part",i);
+        if(f_open(&s->samples,s->sample_path,FA_READ|FA_WRITE|FA_CREATE_NEW)!=FR_OK)
+            return fail(s,"Cannot create independent saved-read samples");
+        s->samples_open=true;
+        if(!line(s,"Every saved chunk is independently reopened and compared.\n"
+            "Up to %u structural suspects retain three samples in %s.\n"
+            "Saved-read disagreements quarantine this job until a full consistent scan.\n",SCAN_SAMPLE_LIMIT,s->sample_path+2))return false;
         return true;
     }
     s->status->report[0]=0;return fail(s,"All Advanced CRC report numbers are occupied");
+}
+static bool unstable(struct scan *s,unsigned track,uint32_t sector,const char *phase) {
+    s->status->storage_unstable=true;++s->status->unstable_chunks;
+    if(!kui_recovery_guard_mark(s->directory,s->ops->log))return fail(s,"Saved reads disagree; quarantine publication failed");
+    return line(s,"UNSTABLE track=%02u sector=%" PRIu32 " phase=%s; optical repair blocked\n",track+1,sector,phase);
+}
+/* The second handle is opened afresh for each chunk, not sought backwards in
+ * the original handle's cache. This checks all saved bytes, including audio. */
+static bool repeat_chunk(struct scan *s,unsigned ti,uint32_t position,unsigned bytes,const char *name) {
+    path(s,name);FIL f;if(f_open(&f,s->path,FA_READ)!=FR_OK)return fail(s,"Cannot reopen saved track for consistency check");
+    uint64_t offset=(uint64_t)position*KUI_RAW_BYTES;
+    bool ok=f_lseek(&f,(FSIZE_t)offset)==FR_OK && f_tell(&f)==offset,differs=false;
+    if(!ok)fail(s,"Cannot seek independent saved-track consistency read");
+    for(unsigned at=0;ok && at<bytes;) {
+        if(cancelled(s)) {ok=false;break;}
+        UINT n=bytes-at>sizeof(s->repeat)?sizeof(s->repeat):bytes-at,got=0;
+        if(f_read(&f,s->repeat,n,&got)!=FR_OK || got!=n) {ok=fail(s,"Independent saved-track read failed");break;}
+        if(memcmp(s->repeat,s->data+at,n))differs=true;
+        at+=n;
+    }
+    if(f_close(&f)!=FR_OK)ok=fail(s,"Independent saved-track close failed");
+    if(!ok)return false;
+    return !differs || unstable(s,ti,position,"whole-chunk repeat");
+}
+static void sample_put32(uint8_t *p,uint32_t n) {for(unsigned i=0;i<4;++i)p[i]=(uint8_t)(n>>(8*i));}
+static bool sample_suspect(struct scan *s,unsigned ti,uint32_t position,unsigned flags,const char *name,const uint8_t *raw) {
+    if(s->status->sampled>=SCAN_SAMPLE_LIMIT)return true;
+    uint8_t *record=s->sample;memset(record,0,SAMPLE_BYTES);memcpy(record,"KUIRDB1",8);
+    sample_put32(record+8,1);sample_put32(record+12,s->status->sampled+1);
+    sample_put32(record+16,ti+1);sample_put32(record+20,s->manifest.plan.tracks[ti].start+position);
+    sample_put32(record+24,position);sample_put32(record+28,flags);sample_put32(record+32,3);
+    memcpy(record+64,raw,KUI_RAW_BYTES);bool differs=false;
+    for(unsigned pass=1;pass<=2;++pass) {
+        if(cancelled(s))return false;
+        path(s,name);FIL f;if(f_open(&f,s->path,FA_READ)!=FR_OK)return fail(s,"Cannot reopen structural suspect");
+        uint64_t offset=(uint64_t)position*KUI_RAW_BYTES;UINT got=0;
+        uint8_t *out=record+64+pass*KUI_RAW_BYTES;
+        bool ok=f_lseek(&f,(FSIZE_t)offset)==FR_OK && f_tell(&f)==offset &&
+            f_read(&f,out,KUI_RAW_BYTES,&got)==FR_OK && got==KUI_RAW_BYTES;
+        if(f_close(&f)!=FR_OK)ok=false;
+        if(!ok)return fail(s,"Structural suspect repeat-read failed");
+        unsigned changed=0,first=KUI_RAW_BYTES;
+        for(unsigned n=0;n<KUI_RAW_BYTES;++n)if(out[n]!=record[64+n]) {if(!changed)first=n;++changed;}
+        differs|=changed!=0;
+        if(!line(s,"SAMPLE track=%02u sector=%" PRIu32 " pass=%u changed=%u first=%u\n",ti+1,position,pass,changed,first))return false;
+    }
+    for(unsigned pass=0;pass<3;++pass)sample_put32(record+36+pass*4,kui_crc32(0,record+64+pass*KUI_RAW_BYTES,KUI_RAW_BYTES));
+    sample_put32(record+48,kui_crc32(0,record+64,3*KUI_RAW_BYTES));sample_put32(record+60,kui_crc32(0,record,60));
+    FSIZE_t offset=f_tell(&s->samples);uint32_t before=kui_crc32(0,record,SAMPLE_BYTES);
+    UINT put=0;if(f_write(&s->samples,record,SAMPLE_BYTES,&put)!=FR_OK || put!=SAMPLE_BYTES || f_sync(&s->samples)!=FR_OK)
+        return fail(s,"Cannot retain saved-read evidence");
+    if(before!=kui_crc32(0,record,SAMPLE_BYTES)) {
+        (void)unstable(s,ti,position,"sample buffer changed during write");return fail(s,"Saved-read evidence buffer changed during write");
+    }
+    if(f_lseek(&s->samples,offset)!=FR_OK || f_tell(&s->samples)!=offset)return fail(s,"Cannot seek evidence readback");
+    for(unsigned at=0;at<SAMPLE_BYTES;) {
+        UINT n=SAMPLE_BYTES-at>sizeof(s->repeat)?sizeof(s->repeat):SAMPLE_BYTES-at,got=0;
+        if(f_read(&s->samples,s->repeat,n,&got)!=FR_OK || got!=n || memcmp(s->repeat,record+at,n))return fail(s,"Saved-read evidence readback differs");
+        at+=n;
+    }
+    ++s->status->sampled;
+    return !differs || unstable(s,ti,position,"structural suspect repeats");
 }
 static bool scan_track(struct scan *s,unsigned index) {
     const struct kui_capture_track *t=&s->manifest.plan.tracks[index];
@@ -258,6 +333,8 @@ static bool scan_track(struct scan *s,unsigned index) {
         UINT bytes=count*KUI_RAW_BYTES,got=0;
         r=f_read(&file,s->data,bytes,&got);
         if(r!=FR_OK || got!=bytes) {file_error(s,"Track read failed",name,r==FR_OK?FR_INT_ERR:r);ok=false;break;}
+        uint32_t before=kui_crc32(0,s->data,bytes);
+        if(!repeat_chunk(s,index,position,bytes,name)) {ok=false;break;}
         crc=kui_crc32(crc,s->data,bytes);
         if(!s->manifest.crc_only) kui_sha256_update(&sha,s->data,bytes);
         for(unsigned i=0;i<count;++i) {
@@ -267,6 +344,7 @@ static bool scan_track(struct scan *s,unsigned index) {
                 unsigned flags=kui_recovery_sector_check(s->data+i*KUI_RAW_BYTES,KUI_RAW_BYTES,fad);
                 ++s->status->data_sectors;
                 if(flags) {
+                    if(!sample_suspect(s,index,position+i,flags,name,s->data+i*KUI_RAW_BYTES)) {ok=false;break;}
                     if(flags&KUI_RECOVERY_SECTOR_UNSUPPORTED) ++s->status->unsupported_sectors;
                     else ++s->status->bad_sectors;
                     if(s->reported_bad<SCAN_REPORT_BAD_LIMIT) {
@@ -278,6 +356,7 @@ static bool scan_track(struct scan *s,unsigned index) {
             } else ++s->status->audio_sectors;
             s->status->done+=KUI_RAW_BYTES;
         }
+        if(before!=kui_crc32(0,s->data,bytes) && !unstable(s,index,position,"scan buffer changed")) {ok=false;break;}
         position+=count;update(s,false);
     }
     if(f_close(&file)!=FR_OK) {fail(s,"Track close failed; scan is incomplete");ok=false;}
@@ -341,9 +420,13 @@ enum kui_scan_result kui_recovery_scan(const char *directory,const struct kui_sc
     ops->log("Advanced CRC: saved files in %s; no optical rereads or repairs",normalized);
     for(unsigned i=0;i<s->manifest.plan.count;++i) if(!scan_track(s,i)) goto done;
     if(!check_catalogue(s)) goto done;
-    out->result=(out->bad_sectors || out->unsupported_sectors || out->crc_mismatches || out->sha_mismatches)?KUI_SCAN_ISSUES:
+    if(!out->storage_unstable && !kui_recovery_guard_validate(s->directory,ops->log)) {
+        fail(s,"Saved-read quarantine identity/CRC differs; scan cannot clear it");goto done;
+    }
+    out->result=(out->storage_unstable || out->bad_sectors || out->unsupported_sectors || out->crc_mismatches || out->sha_mismatches)?KUI_SCAN_ISSUES:
         (out->reference_hashes || out->catalogue.result==KUI_KNOWN_FULL_MATCH)?KUI_SCAN_CLEAN:KUI_SCAN_STRUCTURAL;
-    if(!line(s,"SUMMARY data=%" PRIu32 " audio=%" PRIu32 " bad=%" PRIu32 " unsupported=%" PRIu32
+    if(!line(s,"SUMMARY unstable_chunks=%" PRIu32 " samples=%" PRIu32 "\n",out->unstable_chunks,out->sampled) ||
+       !line(s,"SUMMARY data=%" PRIu32 " audio=%" PRIu32 " bad=%" PRIu32 " unsupported=%" PRIu32
         " crc_mismatches=%" PRIu32 " sha_mismatches=%" PRIu32 " bytes=%" PRIu64 "\n"
         "COMPLETE %s\n",out->data_sectors,out->audio_sectors,out->bad_sectors,out->unsupported_sectors,
         out->crc_mismatches,out->sha_mismatches,out->done,out->result==KUI_SCAN_CLEAN?"CLEAN":
@@ -361,6 +444,15 @@ done:
         }
     }
     if(s->report_open && f_close(&s->report)!=FR_OK) {fail(s,"Report close failed; scan result is incomplete");finished=false;out->result=KUI_SCAN_FAILED;}
+    if(s->samples_open) {
+        FRESULT sync=f_sync(&s->samples),closed=f_close(&s->samples);
+        if(sync!=FR_OK || closed!=FR_OK) {fail(s,"Sample evidence close failed");finished=false;out->result=KUI_SCAN_FAILED;}
+    }
+    if(finished) {
+        char sample_final[KUI_DEST_PATH_CAP];snprintf(sample_final,sizeof(sample_final),"%s",s->sample_path);
+        size_t sample_length=strlen(sample_final);memcpy(sample_final+sample_length-5,".bin",5);
+        if(f_rename(s->sample_path,sample_final)!=FR_OK) {fail(s,"Sample evidence publication failed");finished=false;out->result=KUI_SCAN_FAILED;}
+    }
     if(finished) {
         char final[KUI_DEST_PATH_CAP];snprintf(final,sizeof(final),"%s",out->report);
         size_t length=strlen(final);memcpy(final+length-5,".txt",5);
@@ -368,11 +460,16 @@ done:
             fail(s,"Report finalization failed; partial report retained");finished=false;out->result=KUI_SCAN_FAILED;
         } else snprintf(out->report,sizeof(out->report),"%s",final);
     }
+    if(finished && !out->storage_unstable) {
+        if(!kui_recovery_guard_clear(s->directory,ops->log)) {fail(s,"Full scan passed but saved-read quarantine could not be cleared");finished=false;out->result=KUI_SCAN_FAILED;}
+        else out->guard_cleared=true;
+    }
     if(mounted && f_mount(NULL,"0:",0)!=FR_OK) {fail(s,"Card unmount failed; scan result is incomplete");finished=false;out->result=KUI_SCAN_FAILED;}
     if(s->failed) {finished=false;out->result=KUI_SCAN_FAILED;}
     out->complete=finished;
     if(finished) {
-        if(out->result==KUI_SCAN_CLEAN && out->catalogue.result==KUI_KNOWN_FULL_MATCH)
+        if(out->storage_unstable)snprintf(out->message,sizeof(out->message),"Saved-file reads disagree; recovery blocked until a consistent full scan");
+        else if(out->result==KUI_SCAN_CLEAN && out->catalogue.result==KUI_KNOWN_FULL_MATCH)
             snprintf(out->message,sizeof(out->message),"%s full track match, including audio%s",out->catalogue.catalog,
                 out->data_sectors?"; Mode 1 checks passed":"");
         else snprintf(out->message,sizeof(out->message),"%s",out->result==KUI_SCAN_CLEAN?

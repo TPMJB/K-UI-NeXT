@@ -24,8 +24,10 @@
  * sci-async-failure, sci-async-dma-failure, sci-async-handoff-failure, sci-async-bus-failure,
  * sci-async-reset-failure, sci-async-stress-result, sci-async-stress-busy, sci-async-stress-failure,
  * sci-async-quiet-fault, ftp-wifi, wifi, wifi-online, wifi-joining,
- * wifi-password, wifi-name, wifi-forget, wifi-absent. */
+ * wifi-password, wifi-name, wifi-forget, wifi-absent, salvage-uncertain,
+ * salvage-resume, salvage-defer-confirm, salvage-deferred. */
 #include "kui/shell.h"
+#include "kui/salvage_display.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -599,17 +601,55 @@ int main(int argc,char **argv) {
         shell.page=KUI_SHELL_SYSTEM_TOOLS;shell.confirm_restart=!strcmp(argv[1],"restart");
         view.app_status=&status;strcpy(status.message,"Settings flash backup verified on SD.");
         status.line_count=1;strcpy(status.lines[0],"/KUI/backups/system/flash-0001.bin");
-    } else if(!strcmp(argv[1],"salvage") || !strcmp(argv[1],"salvage-confirm") || !strcmp(argv[1],"salvage-working")) {
-        shell.page=KUI_SHELL_SALVAGE;shell.salvage_selected=3;shell.salvage_zero_fill=true;
-        shell.confirm_salvage=!strcmp(argv[1],"salvage-confirm");
+    } else if(!strcmp(argv[1],"salvage") || !strcmp(argv[1],"salvage-confirm") || !strcmp(argv[1],"salvage-working") || !strcmp(argv[1],"salvage-collecting") || !strcmp(argv[1],"salvage-retrying") || !strcmp(argv[1],"salvage-audio") || !strcmp(argv[1],"salvage-uncertain") || !strcmp(argv[1],"salvage-resume") || !strcmp(argv[1],"salvage-defer-confirm") || !strcmp(argv[1],"salvage-deferred") || !strcmp(argv[1],"salvage-verified")) {
+        shell.page=KUI_SHELL_SALVAGE;shell.salvage_selected=3;
+        shell.confirm_salvage_defer=!strcmp(argv[1],"salvage-defer-confirm");
+        shell.confirm_salvage=!strcmp(argv[1],"salvage-confirm") || shell.confirm_salvage_defer;
+        if(!strcmp(argv[1],"salvage-resume") || shell.confirm_salvage_defer)shell.salvage_selected=1;
         view.app_status=&status;status.passed=false;strcpy(status.message,"Incomplete: 3 unresolved sectors remain.");
-        if(!strcmp(argv[1],"salvage-working")) {
-            view.busy=true;status.complete=false;status.line_count=6;status.done=5;status.total=12;
-            strcpy(status.message,"Retrying unresolved sectors");
-            const char *lines[]={"Track 3/31  FAD 45150  attempts 3","Targets 12  recovered 5  remaining 7",
-                "Recovery pass 2/5  First pass: complete","/KUI/salvage/job-0001",
-                "Unresolved zeros are NOT a verified game dump.","Separate recovery job; normal captures unchanged."};
-            for(unsigned i=0;i<6;i++) snprintf(status.lines[i],KUI_APP_LINE_CAP,"%s",lines[i]);
+        if(!strcmp(argv[1],"salvage-working") || !strcmp(argv[1],"salvage-collecting") || !strcmp(argv[1],"salvage-retrying") || !strcmp(argv[1],"salvage-audio") || !strcmp(argv[1],"salvage-uncertain") || !strcmp(argv[1],"salvage-deferred")) {
+            bool uncertain=!strcmp(argv[1],"salvage-uncertain");
+            bool deferred=!strcmp(argv[1],"salvage-deferred");
+            bool collecting=!strcmp(argv[1],"salvage-collecting") || uncertain || deferred;
+            bool retrying=!strcmp(argv[1],"salvage-retrying");
+            struct kui_salvage_status progress={.track=3,.tracks=3,.fad=173032,.attempts=291,
+                .targets=31,.remaining=31,.done=327680000,.total=1179648000,.first_pass_complete=!collecting && !retrying,
+                .collection_active=collecting || retrying,.collected_this_run=327680000,.collection_elapsed_ms=1000000,
+                .pass=collecting || retrying?0u:2u,.read_fad=173032,.read_count=collecting?32u:1u,
+                .read_attempt=retrying?2u:1u,.read_limit=retrying?2u:1u,.read_state=KUI_SALVAGE_READ_READING,
+                .last_problem_fad=173011,.last_problem_count=1,.last_problem_attempt=2,
+                .last_problem_limit=2,.last_problem_state=KUI_SALVAGE_READ_DEFERRED};
+            if(collecting)progress.read_limit=1;
+            if(!strcmp(argv[1],"salvage-audio")) {progress.read_confirm=2;progress.read_confirm_limit=2;
+                progress.read_attempt=progress.read_limit=1;}
+            if(uncertain) {
+                progress.targets=progress.remaining=185;
+                progress.done=1182585600;progress.total=1411200000;
+                progress.collected_this_run=75264;progress.collection_elapsed_ms=400000;
+                progress.fad=progress.read_fad=599000;progress.last_problem_fad=598968;
+                progress.last_problem_count=32;progress.last_problem_attempt=progress.last_problem_limit=1;
+            }
+            strcpy(progress.message,collecting?"Collecting good data; 31 unresolved sectors":retrying?"First-pass retry 2/2 at FAD 173032":"Retrying unresolved sectors");
+            if(uncertain)strcpy(progress.message,"Collecting ranges; deferred ranges repair later.");
+            if(deferred) {
+                progress.targets=progress.remaining=447;progress.done=1182585600;progress.total=1411200000;
+                progress.collected_this_run=0;progress.collection_elapsed_ms=2000;
+                progress.fad=progress.read_fad=progress.last_problem_fad=469694;
+                progress.read_count=progress.last_problem_count=32;
+                progress.read_attempt=progress.read_limit=progress.last_problem_attempt=progress.last_problem_limit=0;
+                progress.read_state=KUI_SALVAGE_READ_DEFERRED;
+                strcpy(progress.message,"Deferring next range by request; not recovered");
+            }
+            strcpy(progress.job,"/KUI/salvage/job-0002");
+            kui_salvage_display_status(&status,&progress);view.busy=true;
+        } else if(!strcmp(argv[1],"salvage-verified")) {
+            shell.salvage_verify_files=true;status.complete=true;status.passed=true;
+            status.line_count=7;status.done=status.total=12;
+            strcpy(status.message,"All targets resolved; every saved track byte verified");
+            const char *lines[]={"Track 3/3  FAD 45189","Targets 12000 recovered 12000 remaining 0",
+                "Optical acquisition complete.","Saved bytes: every track byte read back and verified.",
+                "TOSEC: FULL TRACK MATCH","SWORD OF THE BERSERK","/KUI/salvage/job-0001"};
+            for(unsigned i=0;i<7;i++)snprintf(status.lines[i],KUI_APP_LINE_CAP,"%s",lines[i]);
         }
     } else if(!strcmp(argv[1],"retry")) {
         shell.page=KUI_SHELL_RIPPER;view.busy=true;view.retries=11;view.retry_attempt=3;view.retry_limit=10;view.retry_fad=45150;
@@ -776,10 +816,14 @@ int main(int argc,char **argv) {
     else if(!strcmp(argv[1],"diagnostics")) shell.page=KUI_SHELL_DIAGNOSTICS;
     else if(!strcmp(argv[1],"advanced") || !strcmp(argv[1],"advanced-destination") ||
             !strcmp(argv[1],"advanced-saved-job") || !strcmp(argv[1],"advanced-label") ||
-            !strcmp(argv[1],"advanced-repair") || !strcmp(argv[1],"advanced-network") || !strcmp(argv[1],"advanced-cd")) {
+            !strcmp(argv[1],"advanced-repair") || !strcmp(argv[1],"advanced-new-copy") || !strcmp(argv[1],"new-copy") || !strcmp(argv[1],"advanced-inplace") || !strcmp(argv[1],"inplace-confirm") || !strcmp(argv[1],"advanced-network") || !strcmp(argv[1],"advanced-cd")) {
         shell.page=KUI_SHELL_ADVANCED;
         if(!strcmp(argv[1],"advanced-destination")) shell.advanced_selected=4;
         if(!strcmp(argv[1],"advanced-repair")) shell.advanced_selected=KUI_SHELL_RIPPER_TOOL_REPAIR;
+        if(!strcmp(argv[1],"advanced-new-copy")) shell.advanced_selected=KUI_SHELL_RIPPER_TOOL_REPAIR_NEW_COPY;
+        if(!strcmp(argv[1],"new-copy")) {shell.page=KUI_SHELL_CRC_SCAN;shell.recovery_operation=4;strcpy(shell.browse_path,"/Games/Changed source");}
+        if(!strcmp(argv[1],"advanced-inplace")) shell.advanced_selected=KUI_SHELL_RIPPER_TOOL_REPAIR_IN_PLACE;
+        if(!strcmp(argv[1],"inplace-confirm")) {shell.page=KUI_SHELL_CRC_SCAN;shell.recovery_operation=3;shell.confirm_repair_in_place=true;strcpy(shell.browse_path,"/Games/Recovered disc");}
         if(!strcmp(argv[1],"advanced-network")) {shell.advanced_selected=KUI_SHELL_RIPPER_TOOL_NETWORK;shell.capture_network=true;}
         if(!strcmp(argv[1],"advanced-cd")) {shell.advanced_selected=KUI_SHELL_RIPPER_TOOL_CD_SOURCE;shell.capture_cd_toc=true;}
         if(!strcmp(argv[1],"advanced-saved-job")) {

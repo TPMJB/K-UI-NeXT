@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/shell.h"
+#include "kui/salvage_display.h"
 #include "kui/version.h"
 #include "kui/games_retail.h"
 #include "kui/retail_image.h"
@@ -639,6 +640,34 @@ static void ripper_parity_controls(void) {
         assert(press(KUI_SHELL_A,false)==actions[i]);
         assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE);
     }
+    reset(KUI_SHELL_ADVANCED);s.advanced_selected=KUI_SHELL_RIPPER_TOOL_REPAIR_IN_PLACE;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_DEST_LIST && s.recovery_operation==3u);
+    strcpy(s.browse_path,"/Games/Saved dump");
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.confirm_repair_in_place && s.page==KUI_SHELL_CRC_SCAN);
+    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_B|KUI_SHELL_A,false)==KUI_SHELL_NONE && !s.confirm_repair_in_place);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.confirm_repair_in_place);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_REPAIR_IN_PLACE && !s.confirm_repair_in_place);
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE && s.salvage_passes==1);
+    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_NONE && s.salvage_passes==0);
+    assert(press(KUI_SHELL_RIGHT,true)==KUI_SHELL_NONE && s.salvage_passes==0);
+    assert(!s.repair_saved_identity);
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_NONE && !s.repair_saved_identity);
+    s.recovery_operation=1u;
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_NONE && s.repair_saved_identity);
+    assert(press(KUI_SHELL_X,true)==KUI_SHELL_NONE && s.repair_saved_identity);
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_NONE && !s.repair_saved_identity);
+    reset(KUI_SHELL_ADVANCED);s.advanced_selected=KUI_SHELL_RIPPER_TOOL_REPAIR_NEW_COPY;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_DEST_LIST && s.recovery_operation==4u && s.browse_for_scan);
+    strcpy(s.browse_path,"/Games/Changed source");
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_REPAIR_NEW_COPY && s.page==KUI_SHELL_CRC_SCAN);
+    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_REPAIR_NEW_COPY);
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE && s.salvage_passes==1u);
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_NONE && s.repair_saved_identity);
+    /* Native dispatch consumes New once; the retained page resumes that job. */
+    s.recovery_operation=1u;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_REPAIR_COPY);
     reset(KUI_SHELL_ADVANCED);strcpy(s.capture_job,"/Games/Local job");
     s.advanced_selected=KUI_SHELL_RIPPER_TOOL_NETWORK;
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.capture_network && !s.capture_job[0]);
@@ -664,7 +693,7 @@ static void open_capture_label(void) {
 }
 static void ripper_saved_job_controls(void) {
     reset(KUI_SHELL_RIPPER);
-    assert(KUI_SHELL_RIPPER_TOOL_JOB==7 && KUI_SHELL_RIPPER_TOOL_LABEL==8 && KUI_SHELL_RIPPER_TOOL_COUNT==13);
+    assert(KUI_SHELL_RIPPER_TOOL_JOB==7 && KUI_SHELL_RIPPER_TOOL_LABEL==8 && KUI_SHELL_RIPPER_TOOL_COUNT==15);
     assert(!s.capture_job[0] && !s.capture_folder_label[0] && !s.browse_for_capture_job && !s.capture_label_keyboard);
     open_capture_job();
     assert(!strcmp(s.browse_path,"/Games") && !s.capture_job[0]);
@@ -1141,8 +1170,9 @@ static uint16_t image_test_row_color;
 static uint16_t option_row_colors[KUI_SHELL_GAME_OPTION_COUNT];
 static const char *const ripper_tool_names[]={"Verify saved files","Resume interrupted dump","Capture settings",
     "Quick resume (sizes only)","Destination folder","Advanced CRC scan","Damaged disc salvage",
-    "Saved job for Resume/Verify","New dump folder label","Repair to a separate copy",
-    "Suspect-sector reread evidence","Rip destination: local / PC","Single-session CD source"};
+    "Saved job for Resume/Verify","New dump folder label","Repair / resume a separate copy",
+    "Suspect-sector reread evidence","Rip destination: local / PC","Single-session CD source",
+    "Repair / resume in place","Start a new repair copy"};
 static uint16_t ripper_tool_colors[KUI_SHELL_RIPPER_TOOL_COUNT];
 static void observe(void *ctx,unsigned x,unsigned y,uint16_t color,const char *value,bool large) {
     (void)ctx;
@@ -1308,7 +1338,7 @@ static void ripper_saved_job_rendering(void) {
     s.confirm_new=true;render(&v);
     assert(strstr(drawn,"START A NEW DUMP?") && strstr(drawn,"New folder label: Selected label"));
     s.confirm_new=false;s.confirm_quick_resume=true;s.page=KUI_SHELL_ADVANCED;render(&v);
-    assert(strstr(drawn,"QUICK RESUME WITHOUT REREADING?") && strstr(drawn,"/Games/Older dump"));
+    assert(strstr(drawn,"USE QUICK RESUME?") && strstr(drawn,"/Games/Older dump"));
     s.confirm_quick_resume=false;
     for(unsigned row=0;row<KUI_SHELL_RIPPER_TOOL_COUNT;row++) {
         s.advanced_selected=row;render(&v);const char *at=drawn;
@@ -1432,14 +1462,15 @@ static void music_and_boot_rendering(void) {
     assert(strstr(drawn,"Music change queued") && strstr(drawn,"Neon Circuit"));
     v.music_change_pending=false;
     reset(KUI_SHELL_ADVANCED);s.advanced_selected=3;render(&v);
-    assert(strstr(drawn,"Quick resume (sizes only)") && strstr(drawn,"Same-size corruption"));
+    assert(strstr(drawn,"Quick resume (sizes only)") && strstr(drawn,"Direct 2048 and repaired jobs retain full verification."));
     s.advanced_selected=4;render(&v);
     assert(strstr(drawn,"Destination folder") && strstr(drawn,"enter a destination path"));
     s.advanced_selected=3;
     s.confirm_quick_resume=true;render(&v);
-    assert(strstr(drawn,"QUICK RESUME WITHOUT REREADING?"));
-    assert(strstr(drawn,"Previously saved bytes will not be reread."));
-    assert(strstr(drawn,"Same-size damage is not detected"));
+    assert(strstr(drawn,"USE QUICK RESUME?"));
+    assert(strstr(drawn,"Raw jobs can skip saved-prefix hash checks."));
+    assert(strstr(drawn,"Direct 2048 and repaired jobs verify saved bytes."));
+    assert(strstr(drawn,"Use Verify to detect same-size raw-job damage."));
     reset(KUI_SHELL_GD_PLAY);render(&v);
     assert(strstr(drawn,"Inserted: MDK2") && strstr(drawn,"A Boot via console BIOS"));
     s.confirm_gd_boot=true;render(&v);
@@ -1547,15 +1578,53 @@ static void round_five_controls(void) {
     reset(KUI_SHELL_NETWORK);assert(press(KUI_SHELL_X,false)==KUI_SHELL_NETWORK_CONNECT);
     reset(KUI_SHELL_ADVANCED);s.advanced_selected=6;
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_SALVAGE);
-    assert(!s.salvage_zero_fill && s.salvage_passes==1);
+    assert(s.salvage_passes==0);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.confirm_salvage);
     assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && !s.confirm_salvage);
-    s.salvage_selected=3;press(KUI_SHELL_RIGHT,false);assert(s.salvage_zero_fill);
-    press(KUI_SHELL_DOWN,false);press(KUI_SHELL_LEFT,false);assert(s.salvage_passes==50);
-    press(KUI_SHELL_RIGHT,false);assert(s.salvage_passes==1);
+    s.salvage_selected=3;press(KUI_SHELL_RIGHT,false);assert(s.salvage_passes==1);
+    press(KUI_SHELL_RIGHT,false);assert(s.salvage_passes==5);
+    press(KUI_SHELL_RIGHT,false);assert(s.salvage_passes==10);
+    press(KUI_SHELL_RIGHT,false);assert(s.salvage_passes==20);
+    press(KUI_SHELL_RIGHT,false);assert(s.salvage_passes==50);
+    press(KUI_SHELL_RIGHT,false);assert(s.salvage_passes==0);
+    press(KUI_SHELL_LEFT,false);assert(s.salvage_passes==50);
+    press(KUI_SHELL_RIGHT,false);assert(s.salvage_passes==0);
+    assert(!s.salvage_verify_files);
+    press(KUI_SHELL_DOWN,false);assert(s.salvage_selected==4);
+    press(KUI_SHELL_RIGHT,false);assert(s.salvage_verify_files);
+    press(KUI_SHELL_LEFT,false);assert(!s.salvage_verify_files);
+    press(KUI_SHELL_A,false);assert(s.salvage_verify_files);
+    press(KUI_SHELL_DOWN,false);assert(s.salvage_selected==0);
+    press(KUI_SHELL_LEFT,false);assert(s.salvage_passes==0);
+    press(KUI_SHELL_UP,false);assert(s.salvage_selected==4);
     s.salvage_selected=0;press(KUI_SHELL_A,false);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_NEW && !s.confirm_salvage);
     s.salvage_selected=1;assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_RESUME);
+    assert(press(KUI_SHELL_Y,true)==KUI_SHELL_NONE && !s.confirm_salvage && !s.confirm_salvage_defer);
+    assert(press(KUI_SHELL_A|KUI_SHELL_Y,false)==KUI_SHELL_NONE && !s.confirm_salvage);
+    assert(press(KUI_SHELL_Y|KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && s.salvage_selected==1);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.confirm_salvage && s.confirm_salvage_defer);
+    assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && s.salvage_selected==1 && s.confirm_salvage_defer);
+    assert(press(KUI_SHELL_A|KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.confirm_salvage_defer);
+    assert(press(KUI_SHELL_A|KUI_SHELL_START,false)==KUI_SHELL_NONE && s.confirm_salvage_defer);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_RESUME_DEFER && !s.confirm_salvage && !s.confirm_salvage_defer);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_RESUME);
+    press(KUI_SHELL_Y,false);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && !s.confirm_salvage && !s.confirm_salvage_defer && s.page==KUI_SHELL_SALVAGE);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_RESUME);
+    press(KUI_SHELL_Y,false);
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && !s.confirm_salvage && !s.confirm_salvage_defer);
+    press(KUI_SHELL_Y,false);
+    assert(press(KUI_SHELL_B,true)==KUI_SHELL_STOP && !s.confirm_salvage && !s.confirm_salvage_defer);
+    for(unsigned row=0;row<5;++row)if(row!=1) {
+        s.salvage_selected=row;
+        assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && !s.confirm_salvage && !s.confirm_salvage_defer);
+    }
+    s.salvage_selected=1;press(KUI_SHELL_Y,false);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_RESUME_DEFER);
+    s.salvage_selected=0;press(KUI_SHELL_A,false);
+    assert(s.confirm_salvage && !s.confirm_salvage_defer);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_NEW);
     s.salvage_selected=2;assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_RECOVER);
     assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_ADVANCED);
     assert(kui_shell_progress_tenths(1,0)==0);
@@ -1588,17 +1657,41 @@ static void round_five_rendering(void) {
     s.cd_audio.tracks[1].number=4;s.cd_audio.tracks[1].seconds=61;
     s.cd_audio.playing=true;s.cd_audio.current=4;render(&v);
     assert(strstr(drawn,"Audio CD player") && strstr(drawn,"Track 04  <") && strstr(drawn,"3:05"));
-    reset(KUI_SHELL_SALVAGE);render(&v);assert(strstr(drawn,"Zero-fill unreadable sectors") && strstr(drawn,"OFF"));
-    s.confirm_salvage=true;render(&v);assert(strstr(drawn,"Zero-fill OFF") && strstr(drawn,"Placeholders are not repaired"));
-    s.salvage_zero_fill=true;render(&v);assert(strstr(drawn,"Zero-fill ON"));
+    reset(KUI_SHELL_SALVAGE);render(&v);
+    assert(strstr(drawn,"Recovery pass limit") && strstr(drawn,"Until stopped") && strstr(drawn,"retry holes automatically") && !strstr(drawn,"Zero-fill"));
+    assert(strstr(drawn,"Read back recovered files") && strstr(drawn,"Catalogue check follows every resolved job"));
+    s.salvage_selected=1;render(&v);
+    assert(strstr(drawn,"Y Resume past next range") && strstr(drawn,"32 next sectors as unresolved zeros"));
+    assert(strstr(drawn,"Restart first if drive reset is required"));
+    press(KUI_SHELL_Y,false);render(&v);
+    assert(strstr(drawn,"RESUME PAST THE NEXT RANGE?") && strstr(drawn,"committed prefix of the latest matching job"));
+    assert(strstr(drawn,"32 uncommitted sectors") && strstr(drawn,"as unresolved zeros"));
+    assert(strstr(drawn,"later optical repair") && strstr(drawn,"restart the console first"));
+    assert(strstr(drawn,"A Resume past range") && !strstr(drawn,"START A DAMAGED-DISC"));
+    press(KUI_SHELL_B,false);s.salvage_selected=0;
+    s.confirm_salvage=true;render(&v);
+    assert(strstr(drawn,"Skips bad sectors") && strstr(drawn,"until resolved or you press B") && strstr(drawn,"Unresolved holes stay incomplete"));
+    s.salvage_passes=50;render(&v);assert(strstr(drawn,"up to 50 recovery passes"));
     s.confirm_salvage=false;v.busy=true;
-    struct kui_app_status state={.line_count=3,.total=10,.done=5};
-    strcpy(state.message,"Retrying unresolved sectors");
-    strcpy(state.lines[0],"Track 3/31  FAD 45150  attempts 3");
-    strcpy(state.lines[1],"Targets 12  recovered 5  remaining 7");
-    strcpy(state.lines[2],"Recovery pass 2/5  First pass: complete");
+    struct kui_app_status state;
+    struct kui_salvage_status progress={.track=3,.tracks=31,.fad=45150,.attempts=291,
+        .read_fad=45150,.read_count=1,.read_attempt=1,.read_limit=1,
+        .read_state=KUI_SALVAGE_READ_READING,.last_problem_fad=45149,.last_problem_count=1,
+        .last_problem_attempt=2,.last_problem_limit=2,.last_problem_state=KUI_SALVAGE_READ_DEFERRED,
+        .targets=12,.recovered=5,.remaining=7,.done=5,.total=10,.first_pass_complete=true,.pass=2,.pass_limit=5};
+    strcpy(progress.message,"Retrying unresolved sectors");
+    kui_salvage_display_status(&state,&progress);
     v.app_status=&state;render(&v);
     assert(strstr(drawn,"remaining 7") && strstr(drawn,"pass 2/5") && !strstr(drawn,"New salvage job"));
+    assert(strstr(drawn,"Sector attempt 1/1") && strstr(drawn,"Last issue FAD 45149: 2/2; deferred") && !strstr(drawn,"291"));
+    state.line_count=7;state.complete=true;state.passed=true;state.done=state.total;v.busy=false;
+    strcpy(state.lines[1],"Targets 12  recovered 12  remaining 0");
+    strcpy(state.message,"All targets resolved; every saved track byte verified");
+    strcpy(state.lines[3],"Saved bytes: every track byte read back and verified.");
+    strcpy(state.lines[4],"TOSEC: FULL TRACK MATCH");
+    strcpy(state.lines[5],"SWORD OF THE BERSERK");
+    strcpy(state.lines[6],"/KUI/salvage/job-0001");
+    render(&v);assert(strstr(drawn,"remaining 0") && strstr(drawn,"Saved bytes: every track") && strstr(drawn,"FULL TRACK MATCH"));
 }
 static struct kui_games_detail launch_detail(bool ce, bool cd) {
     struct kui_games_detail detail={.valid=true,.format=cd?KUI_GAME_IMAGE_CUE:KUI_GAME_IMAGE_GDI,
@@ -2919,7 +3012,10 @@ static void ripper_export_rendering(void) {
     for(unsigned format=0;format<KUI_CAPTURE_FORMAT_COUNT;format++) {
         s.draft.capture_format=(enum kui_capture_format)format;render(&v);
         assert(strstr(drawn,"Output format") && strstr(drawn,kui_capture_format_name(s.draft.capture_format)));
-        if(format==KUI_CAPTURE_FORMAT_GDI_2048) {
+        if(format==KUI_CAPTURE_FORMAT_GDI_DIRECT_2048) {
+            assert(strstr(drawn,"Save data as 2048-byte") && strstr(drawn,"no full raw data tracks"));
+            assert(strstr(drawn,"ON (cooked required)"));
+        } else if(format==KUI_CAPTURE_FORMAT_GDI_2048) {
             assert(strstr(drawn,"Create verified 2048-byte") && strstr(drawn,"Original raw data and audio"));
             assert(strstr(drawn,"ON (export required)"));
         } else if(format>=KUI_CAPTURE_FORMAT_CSO) {

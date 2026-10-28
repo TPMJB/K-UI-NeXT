@@ -195,6 +195,7 @@ int main(int argc, char **argv) {
     assert(parse(&o,"capture_format=cso") && o.capture_format==KUI_CAPTURE_FORMAT_CSO);
     assert(parse(&o,"capture_format=zso") && o.capture_format==KUI_CAPTURE_FORMAT_ZSO);
     assert(parse(&o,"capture_format=chd") && o.capture_format==KUI_CAPTURE_FORMAT_CHD);
+    assert(parse(&o,"capture_format=gdi_direct_2048") && o.capture_format==KUI_CAPTURE_FORMAT_GDI_DIRECT_2048);
     o = d; assert(!parse(&o,"capture_format=") && !memcmp(&o,&d,sizeof(o)));
     o = d; assert(!parse(&o,"capture_format=unknown") && !memcmp(&o,&d,sizeof(o)));
     o = d; assert(!parse(&o,"capture_format=bin_cue,gdi") && !memcmp(&o,&d,sizeof(o)));

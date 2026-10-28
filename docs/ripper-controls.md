@@ -15,7 +15,7 @@ package described in [sd-bootstrap.md](sd-bootstrap.md).
 | --- | --- |
 | Launcher | D-pad or stick selects; A opens Disc Ripper, Settings or Diagnostics |
 | Disc Ripper | A opens New confirmation; release and press A again to begin. X resumes; Y verifies saved files. Left clears the exact saved-job selection and restores Automatic. L/R select bundled songs; Start opens Advanced. B returns home while idle |
-| Advanced | Up/Down selects one of 13 tools; A opens the tool or changes its session toggle. The list scrolls after eight visible rows. B returns to the ripper |
+| Advanced | Up/Down selects one of 15 tools; A opens the tool or changes its session toggle. The list scrolls after eight visible rows. B returns to the ripper |
 | Destination browser | Up/Down selects; A opens a subfolder; B goes to its parent. Left/Right changes page. Y saves the current destination; X opens path entry. Start cancels |
 | Saved-job browser | A opens a folder; Y selects the highlighted child; X selects the current folder. B goes to the parent, or leaves at the browser root. Start cancels and retains the previous selection |
 | Scan, repair or evidence browser | A opens a local folder; Y starts the chosen operation on the current folder. Start cancels |
@@ -35,16 +35,18 @@ The Advanced tools appear in this order:
 | Verify saved files | Reread the selected or latest matching completed job |
 | Resume interrupted dump | Check and continue the selected or latest matching partial job |
 | Capture settings | Open the five saved capture preferences |
-| Quick resume (sizes only) | Confirm the reduced prefix check; SHA jobs retain full prefix reads |
+| Quick resume (sizes only) | Confirm the reduced prefix check; SHA jobs retain full prefix reads, and direct 2048/repaired jobs retain complete saved-byte verification |
 | Destination folder | Browse or enter the local destination path |
 | Advanced CRC scan | Scan saved raw sectors/hashes and compare catalogues; no optical repair |
 | Damaged disc salvage | Open the separate tracked-hole recovery workflow |
 | Saved job for Resume/Verify | Select an exact local candidate folder |
 | New dump folder label | Set an optional label for the next New folder |
-| Repair to a separate copy | Choose a supported raw dump and insert its matching GD-ROM |
+| Repair / resume a separate copy | Choose a supported raw dump and its matching disc; continue its checked repair job |
 | Suspect-sector reread evidence | Save bounded repeat-read evidence from a local raw dump |
 | Rip destination: local / PC | A switches the destination for normal New/Resume/Verify |
 | Single-session CD source | A enables/disables the user-declared CD TOC profile |
+| Repair / resume in place | Choose a supported raw job; confirm targeted repair and continuation with retained sector backups |
+| Start a new repair copy | Create a fresh numbered transaction while retaining previous repairs and evidence |
 
 ## Choose a destination
 
@@ -179,19 +181,58 @@ On a PC destination, this search operates within the selected remote volume.
 **Advanced CRC scan** reads a supported completed raw job or imported raw GDI
 without an inserted disc. It writes a separate report, checks saved hashes when
 available, and scans Mode 1 sync/address/EDC/reserved/P/Q. It does not patch
-tracks. Audio needs saved hashes or an independent reference.
+tracks. Saved chunks, including audio, are independently reopened and compared
+to detect inconsistent storage reads. Structural suspects also receive bounded
+repeat-read evidence. Disagreement blocks repair and remains recorded until a
+complete consistent rescan clears the block. Audio content still needs saved
+hashes or an independent reference; repeat agreement alone does not prove it.
 
-**Repair to a separate copy** requires a matching prepared GD-ROM and a
-supported completed raw-track job or imported raw 2352-byte GDI folder. It can
+**Repair / resume a separate copy** requires a matching prepared disc and a
+supported raw-track job or imported raw 2352-byte GDI folder. It can
 localize supported Mode 1 structural damage. Stable saved-sector rereads,
 identity checks and two equal validated optical reads precede each replacement.
 Originals remain read-only. New output and durable original/candidate evidence
 go under `/KUI/repair/job-NNNN`; every copied byte receives full readback before
-a GDI is published. Mode 2 repair, unlocalizable audio/hash damage and generic
+a GDI is published. Unsupported sector forms, unlocalizable audio/hash damage and generic
 ECC reconstruction are outside this scope. Failed/unresolved/stopped copies
 remain partial. Imported audio can remain unverified even in a completed
-copy. A later attempt creates another copy; there is no automatic resume of
-partial repairs.
+copy. Selecting the same source again resumes its matching durable repair job
+from checked progress. Source identity and committed copied bytes are checked
+before continuation; unrelated sources and damaged state are refused. Originals
+remain read-only. See [repair copies](repair-copy.md) for supported partial jobs
+and exact restart behavior.
+
+**Start a new repair copy** creates a separate numbered transaction, including
+when a source at the same path has changed since its previous repair. It keeps
+the old jobs and their evidence. After starting, the page returns to repair/resume
+mode so A continues the new job if stopped. Use the explicit New action again to
+start another transaction. A failure before transaction creation keeps the New
+request selected for retry. Resume continues to refuse changed source bytes.
+
+**Repair / resume in place** is an explicit separate action. After choosing the
+folder, release and press A to confirm original-track changes. Normal capture
+Resume/Verify is blocked while its active marker exists. Repair retains original
+sectors and checked candidates, and updates normal source hashes only after
+full saved-byte verification. LEFT/RIGHT on either idle repair page selects
+recovery passes, including Until stopped; B stops with durable progress retained.
+Normal checkpointed partial jobs can append their missing tails in place. Legacy
+DS jobs first import through a separate repair copy; their original metadata is
+never rewritten as independent state.
+
+On the idle **separate-copy** repair page, X explicitly enables saved-content
+identity fallback if an original fixed identity sector cannot be read. This
+first verifies the complete saved prefixes against their recorded hashes, then
+binds two healthy matching source/disc anchors. It preserves the old identity
+as provenance and reports a new recovery binding, not a revalidation of that
+original optical digest. A readable identity mismatch still refuses the disc.
+Resume and drive recovery require the same recorded anchors. In-place repair
+continues to require the original identity.
+
+**GDI 2048 direct** saves data payloads as they are read and keeps raw audio.
+It does not store full raw data tracks. The existing GDI 2048 option still creates
+a verified derivative from retained raw tracks. Direct-mode hashes cover saved
+payloads and are not raw Redump/TOSEC hashes. See
+[direct capture](direct-cooked-capture.md).
 
 **Suspect-sector reread evidence** is storage-only. It independently reopens
 and rereads at most **64 structurally suspect sectors** twice, saving the
@@ -201,9 +242,49 @@ sample bound. No optical reads or original-track writes occur. Stable samples
 do not establish correct data or localize whole-track audio/hash mismatches.
 See [repair copies and evidence](repair-copy.md) for bounds and result meanings.
 
-**Damaged disc salvage** remains a separate journaled job format with explicit
-zero-fill consent and retry sweeps; it does not overwrite normal captures.
+**Damaged disc salvage** remains a separate journaled job format. It records
+unreadable holes, continues collection and automatically runs alternating
+targeted recovery passes; it does not overwrite normal captures. **Until stopped**
+is the default recovery-pass choice; 1/5/10/20/50 finite pass limits are also
+available. B stops and retains progress. The next Resume continues the saved job.
 See [salvage controls and limits](salvage-worker.md).
+
+## Salvage completion checks
+
+The salvage page has a fifth setting, **Read back recovered files**, Off by
+default. This session choice applies to New, Resume and Retry unresolved:
+
+- **Off:** after every target resolves, compare the final reconstructed track
+  CRCs automatically with Redump and TOSEC. No whole-track saved-byte readback
+  is claimed.
+- **On:** first reread every saved byte of every data/audio track and compare
+  its CRC with the completed recovery record, then run the same catalogue check.
+  This takes an additional full storage read.
+
+Both paths require a fresh successful salvage-engine check of the same job's
+journal, original target evidence, repairs and durable completion record. The
+completion check also binds the unchanged header SHA-256 and exact track plan.
+It does not substitute an arbitrary imported GDI or structural scan for that
+recovery evidence.
+
+Each run writes a unique `completion-check-NNNN.part` inside the salvage job.
+It records the header identity, track layout, expected CRCs, original/recovered
+target counts, requested readback and catalogue outcome. A completed result is
+synced, closed, read back exactly, renamed to `.txt`, and read back again.
+Only the published `.txt` with its COMPLETE footer is completed check evidence.
+Stopped or failed checks retain their `.part`; report write/sync/readback or
+publication failure does not report verification success. The recovered job
+and its original evidence remain intact, so checks can be retried.
+
+The screen distinguishes **all targets resolved**, **saved track bytes read back
+and verified**, and **FULL TRACK MATCH**. Missing databases, partial matches,
+mismatches and cancelled checks retain their separate meanings. A catalogue
+lookup error does not erase a successful saved-byte readback, and it never
+produces a full-match badge.
+
+To check a previously resolved salvage job, enable readback and choose **Resume
+latest salvage** with its matching disc. The engine validates the saved recovery
+state, then runs completion checks without recapturing its good tracks.
 
 ## Read the result lines separately
 

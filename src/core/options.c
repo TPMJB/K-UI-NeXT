@@ -258,6 +258,7 @@ static bool apply(struct kui_options *o, const char *key, size_t klen,
         else if(length==3u && !memcmp(v,"zso",3u)) o->capture_format=KUI_CAPTURE_FORMAT_ZSO;
         else if(length==3u && !memcmp(v,"chd",3u)) o->capture_format=KUI_CAPTURE_FORMAT_CHD;
         else if(length==8u && !memcmp(v,"gdi_2048",8u)) o->capture_format=KUI_CAPTURE_FORMAT_GDI_2048;
+        else if(length==15u && !memcmp(v,"gdi_direct_2048",15u)) o->capture_format=KUI_CAPTURE_FORMAT_GDI_DIRECT_2048;
         else return false;
         return true;
     }
@@ -439,7 +440,8 @@ void kui_options_log(const struct kui_options *o, kui_log_fn log) {
     log("OPTIONS capture_hash=%s end_readback=%s resume_check=%s capture_read=%s capture_format=%s",
         hashes, ends, checks, reads, o->capture_format==KUI_CAPTURE_FORMAT_BIN_CUE?"bin_cue":
         o->capture_format==KUI_CAPTURE_FORMAT_CSO?"cso":o->capture_format==KUI_CAPTURE_FORMAT_ZSO?"zso":
-        o->capture_format==KUI_CAPTURE_FORMAT_CHD?"chd":o->capture_format==KUI_CAPTURE_FORMAT_GDI_2048?"gdi_2048":"gdi");
+        o->capture_format==KUI_CAPTURE_FORMAT_CHD?"chd":o->capture_format==KUI_CAPTURE_FORMAT_GDI_2048?"gdi_2048":
+        o->capture_format==KUI_CAPTURE_FORMAT_GDI_DIRECT_2048?"gdi_direct_2048":"gdi");
     log("OPTIONS sample_readback=%s capture_sectors=%u capture_type=%s", samples, o->capture_sectors,
         o->capture_audio ? "audio" : "data");
     if(o->capture_fad) log("OPTIONS capture_fad=%u", o->capture_fad);

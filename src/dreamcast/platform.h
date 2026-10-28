@@ -73,7 +73,19 @@ enum kui_runtime_result kui_bootstrap_measure(unsigned transport_filter,
     kui_cancel_fn cancelled);
 bool kui_disc_prepare(struct kui_toc sessions[2]);
 bool kui_disc_prepare_capture(struct kui_toc sessions[2],bool *is_cd);
+/* Explicit salvage/repair only. Refuses poisoned, media-changed, cancelled or
+ * command-owned state; never clears poison or rearms disabled DMA. Reinitializes
+ * with bounded commands and checks the fresh profile/layout against expected.
+ * Content anchors remain the recovery worker's responsibility after success. */
+bool kui_disc_recover(void *ctx,const struct kui_capture_plan *expected);
 enum kui_read_result kui_disc_read_raw(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out);
+/* Explicit damaged-disc salvage only: same ownership checks as raw, with a
+ * 30-second read and 5-second abort-drain window. A released, guard-clean
+ * ordinary medium-error command may return KUI_READ_PARTIAL and tentative
+ * bytes; the core must validate every retained data sector and reject partial
+ * audio. Unconfirmed aborts remain fatal until restart. Normal capture/repair
+ * deadlines and full-transfer acceptance are unchanged. */
+enum kui_read_result kui_disc_read_salvage(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out);
 /* Normal capture uses a normalized card-root destination (for example /Games)
  * and game-named output. Invalid paths fail before preference or drive I/O. */
 enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char *build,

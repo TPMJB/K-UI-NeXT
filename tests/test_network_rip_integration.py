@@ -124,7 +124,7 @@ class NetworkRipIntegration(unittest.TestCase):
                  "-DMINIZ_NO_TIME", "-DMINIZ_NO_ZLIB_APIS", "-DMINIZ_NO_MALLOC", "-DLZO_CFG_NO_UNALIGNED=1"]
         sources = ["src/core/network_rip.c", "src/core/command.c", "src/core/data.c", "src/core/diskio.c", "src/core/clock.c",
                    "src/core/destination.c", "src/core/destination_file.c", "src/core/hash.c", "src/core/capture_plan.c",
-                   "src/core/capture.c", "src/core/recovery_sector.c", "src/core/known_dumps.c", "src/core/timing.c", "src/core/capture_export.c",
+                   "src/core/capture.c", "src/core/recovery_manifest.c", "src/core/recovery_guard.c", "src/core/recovery_sector.c", "src/core/known_dumps.c", "src/core/timing.c", "src/core/capture_export.c",
                    "src/core/capture_export_file.c", "src/core/capture_cooked.c", "src/core/capture_chd.c", "third_party/miniz/miniz.c",
                    "third_party/minilzo/minilzo.c", "src/core/storage_probe.c", str(fatfs / "ff.c"), str(fatfs / "ffunicode.c"),
                    "tests/network_rip_image.c"]

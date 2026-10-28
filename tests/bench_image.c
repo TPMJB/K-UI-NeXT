@@ -170,7 +170,7 @@ static enum kui_capture_result capture_run(void *p, uint32_t fad, unsigned secto
      * the link for the whole section, so it must already be open. */
     assert(t.linked);
     struct kui_capture_ops cops = {NULL, read_valid, cancelled, now_ms, NULL, quiet_log, "0123456789ab",
-                                   now_us, NULL, read_begin, read_end, opt, st};
+                                   now_us, NULL, read_begin, read_end, opt, st, NULL};
     return kui_capture_bench(&cops, fad, sectors, audio, mode);
 }
 /* Job directories still on the card: the bench must leave none behind. */

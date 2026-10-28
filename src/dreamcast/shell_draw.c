@@ -133,7 +133,8 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->confirm_vmu_copy_all ? "A Copy all saves   B Cancel" :
         s->confirm_music_clear ? "A Clear music cache   B Cancel" :
         s->confirm_restart ? "A Restart console   B Cancel" :
-        s->confirm_salvage ? "A Start salvage   B Cancel" :
+        s->confirm_repair_in_place ? "A Repair in place   B Cancel" :
+        s->confirm_salvage ? (s->confirm_salvage_defer?"A Resume past range   B Cancel":"A Start salvage   B Cancel") :
         s->confirm_storage_test ? "A Start test   B Cancel" :
         s->confirm_wifi_forget ? "A Forget the network   B Cancel" :
         s->confirm_wifi_update ? "A Update firmware   B Cancel" :
@@ -141,13 +142,16 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->page==KUI_SHELL_SETTINGS ? "A Save / Open   B Back / discard" :
         s->page==KUI_SHELL_RIPPER_SETTINGS ? "A Save   B Back / discard" :
         s->page==KUI_SHELL_CLOCK ? "A Set clock   X Reload   B Settings" :
-        s->page==KUI_SHELL_CRC_SCAN ? "A Scan again   B Advanced" :
+        s->page==KUI_SHELL_CRC_SCAN ? (s->recovery_operation==4u?"A Start new copy   B Advanced":s->recovery_operation==1u || s->recovery_operation==3u?
+            "A Repair / Resume   B Advanced":s->recovery_operation==2u?
+            "A Reread again   B Advanced":"A Scan again   B Advanced") :
         s->page==KUI_SHELL_VMU_ACTIONS ? "A Open   B VMU   LEFT/RIGHT Copy target" :
         s->page==KUI_SHELL_VMU_IMAGE ? (s->vmu_image_collection?"UP/DOWN Scroll   B Virtual cards   START Page":"UP/DOWN Scroll   B SD backups   START Page") :
         s->page==KUI_SHELL_VMU_COLLECTION ? "UP/DOWN Scroll   B Actions   START Page" :
         s->page==KUI_SHELL_VMU_IMPORT ? (s->confirm_vmu_import?"A Stage SD backup   B SD backups":
             s->vmu_import_staged?"B SD backups":"A Check again   B SD backups") :
-        s->page==KUI_SHELL_SALVAGE ? "A Start / Open   B Advanced" :
+        s->page==KUI_SHELL_SALVAGE ? (s->salvage_selected==1?
+            "A Resume   Y Resume past next range   B Advanced":"A Start / Open   B Advanced") :
         s->page==KUI_SHELL_SYSTEM_TOOLS ? "D-pad Select   A Open   B Settings" :
         s->page==KUI_SHELL_VMU_RESTORE ? "UP/DOWN Scroll   B VMU   LEFT/RIGHT Target   START Page" :
         s->page==KUI_SHELL_DESTINATION ? "B Parent   START Cancel   LEFT/RIGHT Page" :
@@ -463,8 +467,9 @@ static void keyboard(struct paint *p,const struct kui_shell *s) {
 static void advanced(struct paint *p,const struct kui_shell *s) {
     static const char *names[]={"Verify saved files","Resume interrupted dump","Capture settings",
         "Quick resume (sizes only)","Destination folder","Advanced CRC scan","Damaged disc salvage",
-        "Saved job for Resume/Verify","New dump folder label","Repair to a separate copy",
-        "Suspect-sector reread evidence","Rip destination: local / PC","Single-session CD source"};
+        "Saved job for Resume/Verify","New dump folder label","Repair / resume a separate copy",
+        "Suspect-sector reread evidence","Rip destination: local / PC","Single-session CD source",
+        "Repair / resume in place","Start a new repair copy"};
     static const char *details[KUI_SHELL_RIPPER_TOOL_COUNT][3]={
         {"Reread saved tracks and check their recorded hashes.",
          "This checks the card; the stream CRC badge compares",
@@ -476,8 +481,8 @@ static void advanced(struct paint *p,const struct kui_shell *s) {
          "New dumps use your saved choices.",
          "Existing jobs keep their recorded hash mode."},
         {"Check saved file sizes, then continue the dump.",
-         "Previously saved bytes are not reread.",
-         "Same-size corruption is not detected."},
+         "Raw jobs can skip hashes of previously saved bytes.",
+         "Direct 2048 and repaired jobs retain full verification."},
         {"Browse folders on SD or enter a destination path.",
          "A new dump uses a game-named folder there.",
          "Existing dumps are kept; new names get a number."},
@@ -485,8 +490,8 @@ static void advanced(struct paint *p,const struct kui_shell *s) {
          "Writes a report. No disc reads or track modifications.",
          "Audio needs recorded hashes to be verified."},
         {"Read damaged media into a separate salvage job.",
-         "Unreadable sectors can be recorded as unresolved holes.",
-         "Explicit retry passes revisit only the missing sectors."},
+         "Skips bad sectors and records their missing addresses.",
+         "Automatically retries holes after collecting good data."},
         {"Choose an exact saved job instead of the latest match.",
          "Resume and Verify check it against the inserted disc.",
          "LEFT on Disc Ripper restores Automatic latest."},
@@ -494,8 +499,8 @@ static void advanced(struct paint *p,const struct kui_shell *s) {
          "Auto uses the disc title; existing jobs keep their names.",
          "The label stays in memory until this launcher restarts."},
         {"Choose a raw saved dump and insert its matching disc.",
-         "Repair supported bad sectors into a separate copy.",
-         "Original files stay intact; unresolved copies stay partial."},
+         "Repair supported bad sectors; continue a matching copy.",
+         "Originals stay intact; stopped work resumes next time."},
         {"Reopen suspect saved sectors and compare repeat reads.",
          "Save byte differences and raw samples for diagnosis.",
          "No optical reads; original dump files stay intact."},
@@ -504,7 +509,13 @@ static void advanced(struct paint *p,const struct kui_shell *s) {
          "Resume and Verify use the same selected destination."},
         {"Enable only for a known single-session CD or audio CD.",
          "Captures firmware TOC INDEX01 intervals as BIN/CUE.",
-         "Session count, INDEX00 and subchannels are not measured."}};
+         "Session count, INDEX00 and subchannels are not measured."},
+        {"Repair the selected dump without copying every track.",
+         "Retains original sectors and checked repair candidates.",
+         "Matching disc required; confirm before changing files."},
+        {"Create a separate repair transaction from this source.",
+         "Use after the source changes or for a fresh attempt.",
+         "Keeps previous repair jobs; later use Resume copy."}};
     unsigned selected=s->advanced_selected<KUI_SHELL_RIPPER_TOOL_COUNT?s->advanced_selected:0;
     title(p,40,108,"Advanced disc tools");
     label(p,40,138,MUTED,"Choose an operation for your disc or saved dump.");
@@ -527,7 +538,7 @@ static void advanced(struct paint *p,const struct kui_shell *s) {
     } else if(selected==KUI_SHELL_RIPPER_TOOL_NETWORK) {
         label(p,40,401,CYAN,s->capture_network?"Selected: PC volume":"Selected: local storage");
     } else if(selected==KUI_SHELL_RIPPER_TOOL_CD_SOURCE) {
-        label(p,40,401,CYAN,s->capture_cd_toc?"CD source: enabled (declared single session)":"CD source: disabled");
+        label(p,40,401,CYAN,s->capture_cd_toc?"CD capture/recovery: enabled (single session)":"CD source: disabled");
     }
 }
 static void ripper_settings(struct paint *p, const struct kui_shell *s,
@@ -537,6 +548,7 @@ static void ripper_settings(struct paint *p, const struct kui_shell *s,
     const char *names[]={"Capture hashes","Read back saved files","Output format","Read retries","Strict sector checks"};
     char retries[16];snprintf(retries,sizeof(retries),"%u",s->draft.retry_limit?s->draft.retry_limit:10u);
     const char *values[]={s->draft.crc_only?"CRC32":"CRC32 + SHA-256",
+        s->draft.capture_format==KUI_CAPTURE_FORMAT_GDI_DIRECT_2048?"ON (cooked required)":
         s->draft.capture_format>=KUI_CAPTURE_FORMAT_CSO?"ON (export required)":
         !s->draft.crc_only?"ON (SHA required)":s->draft.end_readback?"ON":"OFF",
         kui_capture_format_name(s->draft.capture_format),retries,s->draft.strict_sectors?"ON":"OFF"};
@@ -552,9 +564,11 @@ static void ripper_settings(struct paint *p, const struct kui_shell *s,
         first="CRC32 is the faster capture option.";
         second="SHA-256 jobs always get a full readback.";
     } else if(s->setting_selected==1) {
-        first=s->draft.capture_format>=KUI_CAPTURE_FORMAT_CSO?
+        first=s->draft.capture_format==KUI_CAPTURE_FORMAT_GDI_DIRECT_2048?
+            "Direct 2048 jobs always check every saved byte.":s->draft.capture_format>=KUI_CAPTURE_FORMAT_CSO?
             "Compressed exports require a full raw readback.":"Full readback checks every saved byte; it takes time.";
-        second=s->draft.capture_format>=KUI_CAPTURE_FORMAT_CSO?
+        second=s->draft.capture_format==KUI_CAPTURE_FORMAT_GDI_DIRECT_2048?
+            "Payload hashes cannot match raw-track catalogues.":s->draft.capture_format>=KUI_CAPTURE_FORMAT_CSO?
             "Raw files are verified before the export starts.":"With it off, use Verify later or check on a PC.";
     } else if(s->setting_selected==3) {
         first="Additional attempts after an unreadable sector.";
@@ -562,6 +576,9 @@ static void ripper_settings(struct paint *p, const struct kui_shell *s,
     } else if(s->setting_selected==4) {
         first="Check Mode1 address, EDC and P/Q during capture.";
         second="Strict mode refuses unsupported sector layouts.";
+    } else if(s->draft.capture_format==KUI_CAPTURE_FORMAT_GDI_DIRECT_2048) {
+        first="Save data as 2048-byte sectors while reading the disc.";
+        second="Keeps raw audio; no full raw data tracks are stored.";
     } else if(s->draft.capture_format==KUI_CAPTURE_FORMAT_GDI_2048) {
         first="Create verified 2048-byte data tracks and a GDI.";
         second="Original raw data and audio tracks are retained.";
@@ -772,25 +789,35 @@ static void salvage(struct paint *p,const struct kui_shell *s,const struct kui_s
         panel(p,32,160,576,240,PANEL);
         app_status(p,status,true,170);
         unsigned count=status->line_count<KUI_APP_LINES?status->line_count:KUI_APP_LINES;
-        for(unsigned i=0;i<count && i<6;i++) label(p,40,224+i*27,MUTED,status->lines[i]);
+        for(unsigned i=0;i<count && i<7;i++) label(p,40,224+i*23,MUTED,status->lines[i]);
         return;
     }
-    const char *names[]={"New salvage job","Resume latest salvage","Retry unresolved sectors","Zero-fill unreadable sectors","Retry pass limit"};
+    const char *names[]={"New salvage job","Resume latest salvage","Retry unresolved sectors","Recovery pass limit","Read back recovered files"};
     for(unsigned i=0;i<5;i++) {
         unsigned y=160+i*30;panel(p,32,y,576,27,i==s->salvage_selected?SELECTED:PANEL);
         label(p,48,y+5,i==s->salvage_selected?WHITE:MUTED,names[i]);
-        if(i>=3) {
+        if(i==3) {
             char value[16];
-            if(i==3) snprintf(value,sizeof(value),"%s",s->salvage_zero_fill?"ON":"OFF");
-            else snprintf(value,sizeof(value),"%u",s->salvage_passes);
-            label(p,508,y+5,i==3&&s->salvage_zero_fill?AMBER:CYAN,value);
+            if(s->salvage_passes) snprintf(value,sizeof(value),"%u",s->salvage_passes);
+            else snprintf(value,sizeof(value),"Until stopped");
+            label(p,468,y+5,CYAN,value);
         }
+        if(i==4)label(p,548,y+5,CYAN,s->salvage_verify_files?"On":"Off");
     }
-    label(p,40,322,MUTED,status && status->line_count>1?status->lines[1]:
-        "LEFT/RIGHT changes zero-fill and retry limit.");
-    label(p,40,344,AMBER,status && status->line_count>2?status->lines[2]:
-        "Unresolved holes are never reported as verified recovery.");
-    app_status(p,v->app_status,v->busy,372);
+    if(s->salvage_selected==1) {
+        label(p,40,318,CYAN,"Y Resume past next range (confirmation)");
+        label(p,40,340,MUTED,"Marks up to 32 next sectors as unresolved zeros.");
+        label(p,40,362,MUTED,"Progress kept. Restart first if drive reset is required.");
+    } else if(status && status->complete && status->line_count>4) {
+        label(p,40,318,MUTED,status->lines[1]);
+        label(p,40,340,MUTED,status->lines[3]);
+        label(p,40,362,status->passed?CYAN:AMBER,status->lines[4]);
+    } else {
+        label(p,40,318,MUTED,"Collect good data, then retry holes automatically.");
+        label(p,40,340,MUTED,"Catalogue check follows every resolved job.");
+        label(p,40,362,MUTED,"Readback checks all saved bytes; it takes extra time.");
+    }
+    app_status(p,v->app_status,v->busy,390);
 }
 static void system_tools(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
     title(p,40,108,"System tools");
@@ -895,32 +922,65 @@ static void vmu_import(struct paint *p,const struct kui_shell *s,const struct ku
     label(p,40,396,MUTED,"Creates an SD backup only; restore separately from backups.");
 }
 static void crc_scan(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
-    title(p,40,108,s->recovery_operation==1u?"Repair to a separate copy":s->recovery_operation==2u?
+    title(p,40,108,s->recovery_operation==4u?"Start a new repair copy":s->recovery_operation==3u?"Repair / resume in place":s->recovery_operation==1u?"Repair / resume a separate copy":s->recovery_operation==2u?
         "Suspect-sector reread evidence":"Advanced CRC scan");
     words(p,40,138,608,CYAN,s->browse_path,false);
-    label(p,40,160,MUTED,s->recovery_operation==1u?"Matching disc required; original dump files are read-only.":
+    label(p,40,160,MUTED,s->recovery_operation==4u?"New transaction; source and previous repair jobs retained.":s->recovery_operation==3u?"Targeted original-track changes; durable backups retained.":s->recovery_operation==1u?"Matching disc required; original dump files are read-only.":
         s->recovery_operation==2u?"Repeat saved-sector reads; no optical reads or dump changes.":
         "Mode1 EDC/parity + saved hashes + catalogue; no disc reads.");
-    panel(p,32,190,576,214,PANEL);
+    bool repair_controls=(s->recovery_operation==1u || s->recovery_operation==3u || s->recovery_operation==4u) && !v->busy && !s->confirm_repair_in_place;
+    panel(p,32,repair_controls?216:190,576,repair_controls?198:214,PANEL);
     const struct kui_app_status *status=v->app_status;
-    app_status(p,status,v->busy,200);
+    app_status(p,status,v->busy,repair_controls?226:200);
     if(status) {
         unsigned count=status->line_count<KUI_APP_LINES?status->line_count:KUI_APP_LINES;
         unsigned first=count>7?count-7:0;
-        for(unsigned i=first;i<count;i++) label(p,40,250+(i-first)*20,MUTED,status->lines[i]);
-    } else label(p,40,204,MUTED,"Ready to scan this dump; missing hashes are not a match.");
+        for(unsigned i=first;i<count;i++) label(p,40,(repair_controls?276:250)+(i-first)*20,MUTED,status->lines[i]);
+    } else label(p,40,repair_controls?230:204,MUTED,repair_controls?
+        "A begins repair; B returns to Advanced.":"Ready to scan this dump; missing hashes are not a match.");
+    if(repair_controls) {
+        char passes[96];
+        if(s->salvage_passes)snprintf(passes,sizeof(passes),"Recovery passes: %u   LEFT/RIGHT changes",s->salvage_passes);
+        else snprintf(passes,sizeof(passes),"Recovery passes: Until stopped   LEFT/RIGHT changes");
+        label(p,40,180,CYAN,passes);
+        label(p,40,198,s->recovery_operation!=3u && s->repair_saved_identity?AMBER:MUTED,s->recovery_operation==3u?
+            "Original identity required; use Copy for saved anchors":s->repair_saved_identity?
+            "Identity fallback: saved anchors enabled   X disables":
+            "Identity: original samples   X allows saved anchors");
+    }
 }
 static void app_confirmation(struct paint *p,const struct kui_shell *s) {
     box(p,32,154,576,262,NAVY);panel(p,48,160,544,228,PANEL);box(p,52,164,536,4,PINK);
-    if(s->confirm_salvage) {
-        label(p,72,188,WHITE,"START A DAMAGED-DISC SALVAGE JOB?");
-        label(p,72,222,MUTED,"Writes a separate job under /KUI/salvage.");
-        label(p,72,248,s->salvage_zero_fill?AMBER:CYAN,s->salvage_zero_fill?
-            "Zero-fill ON: unreadable sectors become tracked holes.":
-            "Zero-fill OFF: stop before saving unreadable data.");
-        label(p,72,276,MUTED,"Placeholders are not repaired or verified sectors.");
-        label(p,72,302,MUTED,"Normal dumps and their checkpoints stay intact.");
-        label(p,72,334,CYAN,"A Start salvage");
+    if(s->confirm_repair_in_place) {
+        label(p,72,188,WHITE,"REPAIR THIS DUMP IN PLACE?");
+        path_words(p,72,220,560,CYAN,s->browse_path);
+        label(p,72,250,MUTED,"Changes only recorded damaged sectors in this dump.");
+        label(p,72,276,MUTED,"Original sectors and repair evidence are retained.");
+        label(p,72,302,AMBER,"B stops and keeps checked progress for Resume.");
+        label(p,72,334,CYAN,"A Repair in place");
+    } else if(s->confirm_salvage) {
+        char line[96];
+        if(s->confirm_salvage_defer) {
+            label(p,72,188,WHITE,"RESUME PAST THE NEXT RANGE?");
+            label(p,72,222,MUTED,"Keeps the committed prefix of the latest matching job.");
+            label(p,72,248,MUTED,"Marks its next range (up to 32 uncommitted sectors)");
+            label(p,72,274,MUTED,"as unresolved zeros, then continues collection.");
+            label(p,72,300,AMBER,"Missing sectors need later optical repair.");
+            label(p,72,328,MUTED,"If drive reset is required, restart the console first.");
+            label(p,72,356,CYAN,"A Resume past range");
+        } else {
+            label(p,72,188,WHITE,"START A DAMAGED-DISC SALVAGE JOB?");
+            label(p,72,222,MUTED,"Collects good data in /KUI/salvage.");
+            label(p,72,248,MUTED,"Skips bad sectors and records each missing address.");
+            if(s->salvage_passes) snprintf(line,sizeof(line),"Then retries holes for up to %u recovery passes.",s->salvage_passes);
+            else snprintf(line,sizeof(line),"Then retries holes until resolved or you press B.");
+            label(p,72,276,CYAN,line);
+            label(p,72,302,AMBER,"Unresolved holes stay incomplete; B stops safely.");
+            label(p,72,328,MUTED,s->salvage_verify_files?
+                "After recovery: full readback and catalogue check.":
+                "After recovery: catalogue check; saved readback off.");
+            label(p,72,356,CYAN,"A Start salvage");
+        }
     } else if(s->confirm_wifi_update) {
         char line[96],bytes[16];
         const struct kui_wifi_firmware *f=&s->wifi.firmware;
@@ -1013,7 +1073,7 @@ static void app_confirmation(struct paint *p,const struct kui_shell *s) {
         label(p,72,302,MUTED,"Existing saves are never overwritten.");
         label(p,72,346,CYAN,"A Restore save");
     }
-    label(p,384,s->confirm_vmu_restore?346:334,WHITE,"B Cancel");
+    label(p,384,s->confirm_salvage?356:s->confirm_vmu_restore?346:334,WHITE,"B Cancel");
 }
 static void video_trial(struct paint *p,const struct kui_shell_view *v) {
     box(p,32,132,576,284,NAVY);
@@ -1299,12 +1359,12 @@ static void confirmation(struct paint *p,const struct kui_shell *s,bool quick) {
     box(p,32,154,576,262,NAVY);
     box(p,48,160,544,180,EDGE); box(p,52,164,536,172,PANEL);
     box(p,52,164,536,4,PINK);
-    label(p,72,188,WHITE,quick?"QUICK RESUME WITHOUT REREADING?":"START A NEW DUMP?");
-    label(p,72,222,MUTED,quick?"Previously saved bytes will not be reread.":
+    label(p,72,188,WHITE,quick?"USE QUICK RESUME?":"START A NEW DUMP?");
+    label(p,72,222,MUTED,quick?"Raw jobs can skip saved-prefix hash checks.":
         "Insert the retail GD-ROM and close the lid.");
-    label(p,72,244,MUTED,quick?"Same-size damage is not detected by this check.":
+    label(p,72,244,MUTED,quick?"Direct 2048 and repaired jobs verify saved bytes.":
         "A new folder keeps existing dumps intact.");
-    if(quick) label(p,72,266,AMBER,"Use Verify later to check the saved data.");
+    if(quick) label(p,72,266,AMBER,"Use Verify to detect same-size raw-job damage.");
     else {
         char label[128];snprintf(label,sizeof(label),"New folder label: %s",
             s->capture_folder_label[0]?s->capture_folder_label:"Auto (disc title)");
@@ -2313,7 +2373,7 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     if(s->confirm_gd_boot) gd_boot_confirmation(&p);
     if(s->confirm_storage_test) storage_test_confirmation(&p,s,v);
     if(s->confirm_clock || s->confirm_defaults || s->confirm_vmu_restore || s->confirm_vmu_delete ||
-       s->confirm_vmu_copy || s->confirm_vmu_copy_all || s->confirm_music_clear || s->confirm_restart || s->confirm_salvage ||
+       s->confirm_vmu_copy || s->confirm_vmu_copy_all || s->confirm_music_clear || s->confirm_restart || s->confirm_salvage || s->confirm_repair_in_place ||
        s->confirm_wifi_forget || s->confirm_wifi_update) app_confirmation(&p,s);
     if(v->video_trial) video_trial(&p,v);
 }

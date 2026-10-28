@@ -62,6 +62,18 @@ def sector(fad, seed, reserved=0):
     return data
 
 
+def mode2_sector(fad,seed):
+    data=bytearray(2352);data[1:11]=b"\xff"*10
+    data[12:16]=bytes((bcd(fad//4500),bcd(fad//75%60),bcd(fad%75),2))
+    data[16:24]=bytes((1,2,8,4))*2
+    data[24:2072]=bytes((i*37+seed)&255 for i in range(2048))
+    data[2072:2076]=edc(data[16:2072]).to_bytes(4,"little")
+    header=data[12:16];data[12:16]=bytes(4)
+    parity(data,86,24,2,86,2076);parity(data,52,43,86,88,2248)
+    data[12:16]=header
+    return data
+
+
 def poly_mod(value):
     generator = 0x104c11db7
     while value.bit_length() > 32:
@@ -110,6 +122,9 @@ def main():
         print(f"    {{ {fad}u, {seed}u, {{"+",".join(f"0x{x:02x}" for x in data[12:16])+"}, {")
         print(byte_rows(data[2064:]))
         print(f"    }}, UINT32_C(0x{zlib.crc32(data):08x}), {64 if reserved else 0}u }},")
+    print("};")
+    print("static const uint8_t mode2_vector[2352]={")
+    print(byte_rows(mode2_sector(150,93)))
     print("};")
     print("static const struct { uint64_t suffix; uint32_t expected; } crc_vectors[] = {")
     whole, before, after = 0x12345678, 0xcbf43926, 0xe3069283

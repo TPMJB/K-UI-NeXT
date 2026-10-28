@@ -200,7 +200,7 @@ def main():
                     continue
                 image = fresh()
                 output = run(image, "new", disc=disc, opts="cue,strict,retry=1" + (",dma" if name == "pq" else ""), expected=1)
-                assert "Strict sync/address/EDC/P/Q" in output
+                assert ("requested address checked" if name == "address" else "Strict sync/address/EDC/P/Q") in output
                 partial = export(image, base / f"{filesystem}-strict-{name}")
                 raw = (partial / "track01.bin").read_bytes()
                 assert len(raw) <= 100*2352 and raw == source[:len(raw)]
@@ -208,7 +208,7 @@ def main():
                 run(image, "resume", disc=good, opts="cue,strict")
                 restored = export(image, base / f"{filesystem}-strict-{name}-resumed")
                 validate(restored, "cd-data", source)
-            # Default acquisition remains EDC-only; enabling strict does not
+            # Default acquisition checks EDC/address, without P/Q; strict does not
             # silently change existing output or make audio parity claims.
             image = fresh();run(image, "new", disc=variants["pq"])
             validate(export(image, base / f"{filesystem}-normal-pq"), "cd-data", variants["pq"].read_bytes())

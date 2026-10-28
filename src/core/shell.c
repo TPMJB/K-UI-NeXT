@@ -25,7 +25,7 @@ void kui_shell_set_preferences(struct kui_shell *s, const struct kui_settings *p
 void kui_shell_init(struct kui_shell *s, const struct kui_settings *p) {
     if(!s) return;
     memset(s, 0, sizeof(*s));
-    s->salvage_passes=1;
+    s->salvage_passes=0; /* Keep retrying unresolved sectors until complete or stopped. */
     kui_storage_test_defaults(&s->storage_test_request);
     const struct kui_settings initial = {true, false, true,KUI_CAPTURE_FORMAT_GDI,0,false};
     kui_shell_set_preferences(s, p ? p : &initial);
@@ -1544,7 +1544,8 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             s->confirm_clock=false;s->confirm_defaults=false;s->confirm_vmu_restore=false;
             s->confirm_vmu_delete=false;s->confirm_vmu_copy=false;s->confirm_vmu_copy_all=false;
             s->confirm_vmu_import=false;s->confirm_music_clear=false;s->confirm_restart=false;s->confirm_salvage=false;
-            s->confirm_wifi_forget=false;
+            s->confirm_salvage_defer=false;
+            s->confirm_repair_in_place=false;s->confirm_wifi_forget=false;
             s->confirm_wifi_update=false;
             return KUI_SHELL_STOP;
         }
@@ -1552,6 +1553,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             s->capture_label_keyboard=false;s->page=KUI_SHELL_ADVANCED;
             s->destination_notice[0]=0;return KUI_SHELL_NONE;
         }
+        if(s->confirm_repair_in_place) {s->confirm_repair_in_place=false;return KUI_SHELL_NONE;}
         if(s->confirm_storage_test) {s->confirm_storage_test=false;return KUI_SHELL_NONE;}
         if(s->storage_test_keyboard && s->page==KUI_SHELL_KEYBOARD) {
             s->storage_test_keyboard=false;s->page=KUI_SHELL_STORAGE_TESTS;
@@ -1571,8 +1573,8 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             s->page=KUI_SHELL_STORAGE_TESTS;s->storage_test_show_result=false;
             return KUI_SHELL_NONE;
         }
-        if(s->confirm_salvage) {s->confirm_salvage=false;return KUI_SHELL_NONE;}
-        if(s->page==KUI_SHELL_SALVAGE) {s->page=KUI_SHELL_ADVANCED;return KUI_SHELL_NONE;}
+        if(s->confirm_salvage) {s->confirm_salvage=false;s->confirm_salvage_defer=false;return KUI_SHELL_NONE;}
+        if(s->page==KUI_SHELL_SALVAGE) {s->confirm_salvage_defer=false;s->page=KUI_SHELL_ADVANCED;return KUI_SHELL_NONE;}
         if(s->confirm_restart) {s->confirm_restart=false;return KUI_SHELL_NONE;}
         if(s->page==KUI_SHELL_SYSTEM_TOOLS) {s->page=KUI_SHELL_SETTINGS;return KUI_SHELL_NONE;}
         if(s->page==KUI_SHELL_FTP) {s->page=KUI_SHELL_NETWORK;return KUI_SHELL_NONE;}
@@ -1751,7 +1753,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     bool confirming=s->confirm_new || s->confirm_quick_resume || s->confirm_gd_boot ||
         s->confirm_storage_test || s->confirm_clock || s->confirm_defaults || s->confirm_vmu_restore ||
         s->confirm_vmu_delete || s->confirm_vmu_copy || s->confirm_vmu_copy_all || s->confirm_vmu_import || s->confirm_music_clear || s->confirm_restart || s->confirm_salvage ||
-        s->confirm_wifi_forget || s->confirm_wifi_update || s->page==KUI_SHELL_GAMES_PROBE_CONFIRM || s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ||
+        s->confirm_repair_in_place || s->confirm_wifi_forget || s->confirm_wifi_update || s->page==KUI_SHELL_GAMES_PROBE_CONFIRM || s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ||
         s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM || s->page==KUI_SHELL_GAMES_LAUNCH_OPTIONS ||
         s->page==KUI_SHELL_GAMES_VARIANTS || s->page==KUI_SHELL_FILES_CONFIRM;
     if(song_page && !confirming && !(buttons & ~(KUI_SHELL_L|KUI_SHELL_R))) {
@@ -1772,8 +1774,16 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         }
         return KUI_SHELL_NONE;
     }
+    if(s->confirm_repair_in_place) {
+        if(buttons&KUI_SHELL_A) {s->confirm_repair_in_place=false;return KUI_SHELL_REPAIR_IN_PLACE;}
+        return KUI_SHELL_NONE;
+    }
     if(s->confirm_salvage) {
-        if(buttons&KUI_SHELL_A) {s->confirm_salvage=false;return KUI_SHELL_SALVAGE_NEW;}
+        if(buttons&KUI_SHELL_A) {
+            if(s->confirm_salvage_defer && buttons!=KUI_SHELL_A)return KUI_SHELL_NONE;
+            bool defer=s->confirm_salvage_defer;s->confirm_salvage=false;s->confirm_salvage_defer=false;
+            return defer?KUI_SHELL_SALVAGE_RESUME_DEFER:KUI_SHELL_SALVAGE_NEW;
+        }
         return KUI_SHELL_NONE;
     }
     if(s->confirm_restart) {
@@ -2172,8 +2182,11 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
                     "CD source disabled; retail GD-ROM capture remains available.");
                 break;
             }
-            if(s->advanced_selected==KUI_SHELL_RIPPER_TOOL_REPAIR || s->advanced_selected==KUI_SHELL_RIPPER_TOOL_FORENSIC) {
-                s->recovery_operation=s->advanced_selected==KUI_SHELL_RIPPER_TOOL_REPAIR?1u:2u;
+            if(s->advanced_selected==KUI_SHELL_RIPPER_TOOL_REPAIR || s->advanced_selected==KUI_SHELL_RIPPER_TOOL_FORENSIC ||
+               s->advanced_selected==KUI_SHELL_RIPPER_TOOL_REPAIR_IN_PLACE || s->advanced_selected==KUI_SHELL_RIPPER_TOOL_REPAIR_NEW_COPY) {
+                s->recovery_operation=s->advanced_selected==KUI_SHELL_RIPPER_TOOL_REPAIR?1u:
+                    s->advanced_selected==KUI_SHELL_RIPPER_TOOL_REPAIR_IN_PLACE?3u:
+                    s->advanced_selected==KUI_SHELL_RIPPER_TOOL_REPAIR_NEW_COPY?4u:2u;
                 s->browse_for_scan=true;s->browse_for_capture_job=false;s->page=KUI_SHELL_DESTINATION;
                 snprintf(s->browse_path,sizeof(s->browse_path),"%s",s->destination);
                 return list_destination(s,true);
@@ -2228,6 +2241,8 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             if(s->browse_for_capture_job) return select_capture_job(s,true);
             if(s->browse_for_scan) {
                 s->page=KUI_SHELL_CRC_SCAN;
+                if(s->recovery_operation==3u) {s->confirm_repair_in_place=true;return KUI_SHELL_NONE;}
+                if(s->recovery_operation==4u)return KUI_SHELL_REPAIR_NEW_COPY;
                 return s->recovery_operation==1u?KUI_SHELL_REPAIR_COPY:
                     s->recovery_operation==2u?KUI_SHELL_FORENSIC:KUI_SHELL_ADVANCED_CRC;
             }
@@ -2327,6 +2342,17 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if((buttons&KUI_SHELL_A) && s->clock_valid) s->confirm_clock=true;
         break;
     case KUI_SHELL_CRC_SCAN:
+        if((s->recovery_operation==1u || s->recovery_operation==4u) && buttons==KUI_SHELL_X) {
+            s->repair_saved_identity=!s->repair_saved_identity;return KUI_SHELL_NONE;
+        }
+        if((s->recovery_operation==1u || s->recovery_operation==3u || s->recovery_operation==4u) && (buttons==KUI_SHELL_LEFT || buttons==KUI_SHELL_RIGHT)) {
+            static const unsigned limits[]={0,1,5,10,20,50};unsigned selected=0;
+            for(unsigned i=0;i<sizeof(limits)/sizeof(limits[0]);++i)if(limits[i]==s->salvage_passes)selected=i;
+            selected=buttons==KUI_SHELL_LEFT?(selected?selected-1:5):(selected+1)%6;
+            s->salvage_passes=limits[selected];return KUI_SHELL_NONE;
+        }
+        if((buttons&KUI_SHELL_A) && s->recovery_operation==3u) {s->confirm_repair_in_place=true;return KUI_SHELL_NONE;}
+        if((buttons&KUI_SHELL_A) && s->recovery_operation==4u)return KUI_SHELL_REPAIR_NEW_COPY;
         if(buttons&KUI_SHELL_A)return s->recovery_operation==1u?KUI_SHELL_REPAIR_COPY:
             s->recovery_operation==2u?KUI_SHELL_FORENSIC:KUI_SHELL_ADVANCED_CRC;
         break;
@@ -2487,21 +2513,29 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     case KUI_SHELL_WIFI:
         return wifi_input(s,buttons);
     case KUI_SHELL_SALVAGE: {
+        if(buttons&KUI_SHELL_Y) {
+            if(buttons==KUI_SHELL_Y && s->salvage_selected==1) {
+                s->confirm_salvage=true;s->confirm_salvage_defer=true;
+            }
+            return KUI_SHELL_NONE;
+        }
         s->salvage_selected=move_count(s->salvage_selected,buttons,5);
         unsigned horizontal=buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT);
         if(horizontal==KUI_SHELL_LEFT || horizontal==KUI_SHELL_RIGHT) {
-            if(s->salvage_selected==3) s->salvage_zero_fill=!s->salvage_zero_fill;
-            if(s->salvage_selected==4) {
-                static const unsigned limits[]={1,5,10,20,50};unsigned index=0;
-                while(index<4 && limits[index]!=s->salvage_passes) ++index;
-                index=(index+(horizontal==KUI_SHELL_LEFT?4:1))%5;
+            if(s->salvage_selected==3) {
+                static const unsigned limits[]={0,1,5,10,20,50};unsigned index=0;
+                while(index<5 && limits[index]!=s->salvage_passes) ++index;
+                index=(index+(horizontal==KUI_SHELL_LEFT?5:1))%6;
                 s->salvage_passes=limits[index];
             }
+            if(s->salvage_selected==4)s->salvage_verify_files=!s->salvage_verify_files;
         }
         if(buttons&KUI_SHELL_A) {
+            s->confirm_salvage_defer=false;
             if(s->salvage_selected==0) s->confirm_salvage=true;
             if(s->salvage_selected==1) return KUI_SHELL_SALVAGE_RESUME;
             if(s->salvage_selected==2) return KUI_SHELL_SALVAGE_RECOVER;
+            if(s->salvage_selected==4)s->salvage_verify_files=!s->salvage_verify_files;
         }
         break;
     }

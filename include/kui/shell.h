@@ -69,7 +69,8 @@ enum kui_shell_ripper_tool {
     KUI_SHELL_RIPPER_TOOL_SALVAGE, KUI_SHELL_RIPPER_TOOL_JOB,
     KUI_SHELL_RIPPER_TOOL_LABEL, KUI_SHELL_RIPPER_TOOL_REPAIR,
     KUI_SHELL_RIPPER_TOOL_FORENSIC, KUI_SHELL_RIPPER_TOOL_NETWORK,
-    KUI_SHELL_RIPPER_TOOL_CD_SOURCE, KUI_SHELL_RIPPER_TOOL_COUNT
+    KUI_SHELL_RIPPER_TOOL_CD_SOURCE, KUI_SHELL_RIPPER_TOOL_REPAIR_IN_PLACE,
+    KUI_SHELL_RIPPER_TOOL_REPAIR_NEW_COPY, KUI_SHELL_RIPPER_TOOL_COUNT
 };
 enum kui_shell_action {
     KUI_SHELL_NONE, KUI_SHELL_STOP, KUI_SHELL_MSTATS,
@@ -108,7 +109,8 @@ enum kui_shell_action {
     KUI_SHELL_VMU_COPY_ALL_PREVIEW, KUI_SHELL_VMU_COPY_ALL_COMMIT,
     KUI_SHELL_VMU_IMPORT_PREVIEW, KUI_SHELL_VMU_IMPORT_COMMIT,
     KUI_SHELL_VMU_COLLECTION_LIST, KUI_SHELL_VMU_COLLECTION_COPY_PREVIEW,
-    KUI_SHELL_VMU_COLLECTION_COPY_COMMIT
+    KUI_SHELL_VMU_COLLECTION_COPY_COMMIT, KUI_SHELL_REPAIR_IN_PLACE, KUI_SHELL_REPAIR_NEW_COPY,
+    KUI_SHELL_SALVAGE_RESUME_DEFER
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
@@ -126,7 +128,8 @@ struct kui_shell {
     char vmu_import_path[KUI_FILES_PATH_CAP];
     unsigned vmu_import_generation;
     unsigned tools_selected;
-    bool confirm_salvage, salvage_zero_fill;
+    bool confirm_salvage, confirm_salvage_defer, confirm_repair_in_place;
+    bool salvage_verify_files;
     unsigned salvage_selected, salvage_passes;
     unsigned vmu_action_selected, vmu_copy_slot;
     bool clock_valid;
@@ -214,9 +217,10 @@ struct kui_shell {
      * an empty folder label means the disc title for NEW captures only. */
     char capture_job[KUI_DEST_JOB_CAP], capture_folder_label[KUI_DEST_TITLE_CAP];
     bool browse_for_capture_job, capture_label_keyboard;
-    unsigned recovery_operation; /* 0 scan, 1 explicit repair copy, 2 reread evidence. */
+    unsigned recovery_operation; /* 0 scan, 1 resume copy, 2 reread evidence, 3 in-place, 4 new copy. */
     bool capture_network;
     bool capture_cd_toc; /* Explicitly declared single-session CD source. */
+    bool repair_saved_identity; /* Explicit opt-in recovery binding when fixed samples cannot be read. */
     /* File Manager. files_request is the next listing main hands to the
      * worker: the browser's folder, or the picker's (folders_only). A job
      * is checked (FILES_CHECK) before it is confirmed and run (FILES_RUN);
