@@ -1,0 +1,41 @@
+{
+  "schema": "kui.native.ct2-fixed-arena-console.v1",
+  "date": "2026-10-28",
+  "build": "97959129b827",
+  "title": "Crazy Taxi 2",
+  "owner_report": "Played Crazy Taxi 2 and made a save; relaunching to load it stopped on the preparation screen (one photo).",
+  "first_session": "Crazy Taxi 2 booted with the virtual A2 card through the post-hardware-init route, played and saved.",
+  "screen": {
+    "title": "NATIVE VMU PREPARATION FAILED",
+    "prepare": "0xfffffffd (KUI_VMU_PERSIST_STAGE_SESSION)",
+    "session": "0xfffffff8 (KUI_VMU_PERSIST_SESSION_IMAGE)",
+    "fs": "0x00000000",
+    "detail": "0x00000000",
+    "phase": "0x00000002 (KUI_VMU_PERSIST_STAGE_RECOVER)",
+    "stop": "0x00000000",
+    "health": "0x00000001",
+    "reject": "0x00000000",
+    "flags": "0x00000000",
+    "valid": "0x00000001",
+    "zero": "0x00000000",
+    "revision": "0x00000100",
+    "sector_shift": "0x00000009",
+    "cluster_shift": "0x00000008",
+    "fats": "0x00000001",
+    "partition": "0x00000800 (expected 0x00000800)",
+    "volume_sectors": "0x0ee6a800 (expected 0x0ee6a800)"
+  },
+  "interpretation": {
+    "filesystem": "The SD card, its partition and the pair files were admitted; the stop happened inside session recovery.",
+    "refusal": "After journal recovery, kui_vmu_image_validate refused the 128 KiB card image (SESSION_IMAGE). The card that Crazy Taxi 2 had just saved to is not a consistent VMU filesystem under that check.",
+    "open_question": "Either Crazy Taxi 2 writes a shape the strict validator rejects, or a write was damaged. The RAM maps that chose the arena came from sessions in which the game could not save, so the save path's memory use was never observed.",
+    "effect": "Every game using this shared pair stops at preparation until the image is restored or explained."
+  },
+  "requested": [
+    "KUI/vmu-test/p0005 as it is now: card.vmd, card.journal, identity.bin and retail-persistent-profile-0005.bin"
+  ],
+  "tools": [
+    "tools/vmu_pair_inspect.c replays the journal with the production store into an in-memory copy and runs the production validator",
+    "tools/explain_vmu_image.py names every rule the effective image breaks and lists its files and FAT chains"
+  ]
+}
