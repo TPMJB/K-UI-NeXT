@@ -234,7 +234,7 @@ native-program-host-tests:
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-program $(if $(EVOLUTION2_STARTUP),'$(EVOLUTION2_STARTUP)',) \
 	 $(if $(EVOLUTION1_STARTUP),'$(EVOLUTION1_STARTUP)',) $(if $(STARTUP),'$(STARTUP)',) \
 	 $(if $(SKIES_STARTUP),'$(SKIES_STARTUP)',) $(if $(SA2_STARTUP),'$(SA2_STARTUP)',) \
-	 $(if $(GRANDIA2_STARTUP),'$(GRANDIA2_STARTUP)',)
+	 $(if $(GRANDIA2_STARTUP),'$(GRANDIA2_STARTUP)',) $(if $(RECV_STARTUP),'$(RECV_STARTUP)',)
 
 .PHONY: native-infile-buffers-host-tests
 native-infile-buffers-host-tests:

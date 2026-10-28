@@ -512,7 +512,7 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
 #if KUI_NATIVE_COLD_PROGRESS_STAGE
     retail_display_line("COLD 04 EXECUTABLE EXTENT VERIFIED");
 #endif
-    if(program_bytes!=exec_bytes) retail_display_line("VERIFIED RECLAIMED BOOTSTRAP SUFFIX");
+    if(program_bytes!=exec_bytes) retail_display_line("VERIFIED RECLAIMED EXECUTABLE SUFFIX");
     exec_bytes=(uint32_t)program_bytes;
 #if KUI_VMU_NATIVE_CACHE_PROBE
 #if KUI_NATIVE_STAGE_FAST_SCAN

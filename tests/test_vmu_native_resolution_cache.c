@@ -257,7 +257,8 @@ static void generic_actual_tests(const char *path) {
     struct kui_vmu_native_resolution fresh,out;size_t program_bytes=0u;
     digest(image,n,source_hash);
     CHECK(kui_vmu_native_program_extent(image,n,load,&program_bytes));
-    CHECK(program_bytes && program_bytes<=n && (program_bytes==n || n-program_bytes==0x8000u));
+    CHECK(program_bytes && program_bytes<=n && (program_bytes==n || n-program_bytes==0x8000u ||
+        (n-program_bytes<=8u && !((load+program_bytes)&31u))));
     digest(image,program_bytes,program_hash);
     CHECK(kui_vmu_native_resolution_cache_build(image,program_bytes,load,wire,sizeof(wire),&fresh));
     CHECK(fresh.driver.image_bytes==program_bytes && !memcmp(fresh.driver.image_sha256,program_hash,32u));
@@ -266,11 +267,17 @@ static void generic_actual_tests(const char *path) {
     CHECK(replay(image,program_bytes,load,wire,sizeof(wire),pin,&out));CHECK(!memcmp(&fresh,&out,sizeof(fresh)));
     CHECK(strict(image,program_bytes,load,wire,sizeof(wire),&out));CHECK(!memcmp(&fresh,&out,sizeof(fresh)));
     CHECK(kui_vmu_native_resolution_cache_build(image,program_bytes,load,again,sizeof(again),NULL));CHECK(!memcmp(wire,again,sizeof(wire)));
-    if(program_bytes!=n) {
+    if(n-program_bytes==0x8000u) {
         /* Live-image APIs retain their explicit extent contract: only the
          * source-boundary helper has authority to discard the proven IP. */
         CHECK(!replay(image,n,load,wire,sizeof(wire),pin,&out));
         CHECK(!kui_vmu_native_resolution_cache_build(image,n,load,again,sizeof(again),NULL));
+    } else if(program_bytes!=n) {
+        /* A reclaimed arena tail leaves a complete program either way: each
+         * extent binds its own record, and neither replays as the other. */
+        CHECK(!replay(image,n,load,wire,sizeof(wire),pin,&out));
+        CHECK(kui_vmu_native_resolution_cache_build(image,n,load,again,sizeof(again),NULL));
+        CHECK(memcmp(wire,again,sizeof(wire)) && get32(again+24u)==n);
     }
     CHECK((fresh.layout.rx_layout==KUI_VMU_NATIVE_RX_UNIFORM48 && fresh.layout.inputs==1u) ||
         (fresh.layout.rx_layout==KUI_VMU_NATIVE_RX_EXPLICIT48 && fresh.layout.inputs==12u));

@@ -282,11 +282,20 @@ static void actual_frontend(const char *path) {
     CHECK(prepare(true,0u,false,"/Games/PS2")==NATIVE_CACHE_READY);
     CHECK(io.replays==1u && !io.builds && !io.writes && !io.renames);
     size_t program_bytes;CHECK(kui_vmu_native_program_extent(boot,bytes,load,&program_bytes));
-    if(program_bytes!=bytes) {
+    if(bytes-program_bytes==0x8000u) {
         /* A cache cannot authorize a changed or malformed source footer. */
         uint8_t saved=boot[bytes-1u];boot[bytes-1u]^=1u;setup(boot,bytes);
         CHECK(prepare(true,0u,false,"/Games/PS2")==NATIVE_CACHE_SKIPPED);
         CHECK(!io.builds && !io.replays && !io.writes && !io.renames);
+        boot[bytes-1u]=saved;
+    } else if(program_bytes!=bytes) {
+        /* A reclaimed arena tail becomes heap once the game runs, but it is
+         * still source: a changed tail names another record, so the stored
+         * proof is never replayed and a fresh one is published. */
+        setup(boot,bytes);seed_cache(boot,bytes,true);
+        uint8_t saved=boot[bytes-1u];boot[bytes-1u]^=1u;
+        CHECK(prepare(true,0u,false,"/Games/PS2")==NATIVE_CACHE_READY);
+        CHECK(io.builds==1u && !io.replays && io.renames==1u);
         boot[bytes-1u]=saved;
     }
     /* Corrupt, truncated, old epoch and other-image records all rebuild and
