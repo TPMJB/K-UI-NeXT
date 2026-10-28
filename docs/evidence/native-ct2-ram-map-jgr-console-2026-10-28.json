@@ -1,0 +1,73 @@
+{
+  "schema": "kui.native.console-result.v1",
+  "date": "2026-10-28",
+  "build": "e4cc4914bc6a",
+  "package": "K-UI-Native-General-Prefetch-Auto-RamMap-e4cc4914bc6a.zip",
+  "owner_report_verbatim": [
+    "Hard to tell what is truly unused with crazy taxi 2 because when I hit the button combo it first went back to the main menu. Jet grind radio worked"
+  ],
+  "jet_grind_radio": {
+    "input": "US MK-51058 V1.005, sha256 8b294765225fc32020dd59010464a730b710d0bd79f69c79f16218cc4feac6a6",
+    "route": "combined module, leaf variable-root admission (fa54fdc3aa0f, carried unchanged into e4cc4914bc6a)",
+    "result": "Owner reports it worked; the test asked for a save, a relaunch and a load on the virtual A2 card."
+  },
+  "crazy_taxi_2": {
+    "input": "US MK-51136 V1.004, sha256 8057a8e37636ad78b1fc70ee590bd314686546b13ffe100623d86b572aec53c1",
+    "route": "standalone New reader, RAM-map test",
+    "exit": "A+B+X+Y+Start returned to the game menu first; a second press reached the RET screen, as the test sheet describes. Bits only ever clear during a session, so the menu round trip can only add used pages.",
+    "sessions": [
+      {
+        "photo": "1.jpg",
+        "fn_cmd": [
+          "00000004",
+          "00000011"
+        ],
+        "lba_count_dest": [
+          "0007A1BA",
+          "00000019",
+          "0C1EEEC0"
+        ],
+        "ram_unused": [
+          "00000000",
+          "00000000",
+          "00000000",
+          "7F8CE000"
+        ],
+        "unused": [
+          "0x8cda0000-0x8cdfffff (384 KiB)",
+          "0x8ce40000-0x8ce7ffff (256 KiB)",
+          "0x8cee0000-0x8cfdffff (1024 KiB)"
+        ]
+      },
+      {
+        "photo": "2.jpg",
+        "fn_cmd": [
+          "00000004",
+          "00000011"
+        ],
+        "lba_count_dest": [
+          "0007A1BA",
+          "00000019",
+          "0C1EEEC0"
+        ],
+        "ram_unused": [
+          "00000000",
+          "00000000",
+          "00000000",
+          "7F800000"
+        ],
+        "unused": [
+          "0x8cee0000-0x8cfdffff (1024 KiB)"
+        ]
+      }
+    ],
+    "common_unused": "0x8cee0000-0x8cfdffff, 1 MiB, in both sessions",
+    "not_measured": "0x8ce00000-0x8ce3ffff (the stage) and 0x8cfe0000-0x8cffffff (its stack page) were never marked; pages below 0x8c180000 hold the executable",
+    "static_cross_check": {
+      "used_pages_match_code": "Page 0x8ce80000-0x8cedffff is used in both sessions; the executable names fixed buffers at 0x8ce90000, 0x8ce98000, 0x8cea0000 and 0x8ceb8000.",
+      "free_interval": "No PC-relative load in the executable reads an aligned word inside 0x8cee0000-0x8cfdffff. The aligned values in that range sit in data tables (0x8c117b90-0x8c11b958, pairs of 16-bit identifiers such as 0x0cf3001f) or are odd, and no instruction loads them.",
+      "soft_reset": "No code reaches the entry, the C start or main except the startup itself; data tables name the entry address only."
+    }
+  },
+  "console_compatibility_verified": false
+}
