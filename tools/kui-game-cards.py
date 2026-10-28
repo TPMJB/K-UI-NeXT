@@ -148,6 +148,8 @@ def saves(image):
         first, blocks, header = le16(entry, 2), le16(entry, 24), le16(entry, 26)
         at = first
         for _ in range(header):
+            if at >= 200:
+                break
             at = le16(image, FAT * 512 + 2 * at)
         head = image[at * 512:at * 512 + 512] if at < 200 else bytes(512)
         rows.append(dict(slot=slot, name=text(entry[4:16]), blocks=blocks,
@@ -244,6 +246,9 @@ def suggest(save, catalog):
 
 def plan(root, shared, catalog):
     image, replayed = read_pair(root / shared)
+    problems = explain(image)['problems']
+    if problems:
+        raise ValueError(f'the shared card does not validate ({problems[0]}); nothing was changed')
     rows = saves(image)
     for row in rows:
         row['game'] = suggest(row, catalog)
@@ -304,8 +309,9 @@ def apply(root, shared, rows, write=print):
         try:
             if bound:
                 card, _ = read_pair(parent / bound[0])
-                if explain(card)['files']:
-                    write(f'{key}: its card {bound[0]} already holds saves; skipped')
+                report = explain(card)
+                if report['problems'] or report['files']:
+                    write(f'{key}: its card {bound[0]} already holds saves or does not validate; skipped')
                     continue
             content = subset(image, slots)
             if bound:

@@ -166,6 +166,17 @@ class GameCardsTool(unittest.TestCase):
             cards.effective_image((folder / 'card.vmd').read_bytes(), (folder / 'card.journal').read_bytes(),
                                   (folder / 'identity.bin').read_bytes(), bytes(moved))
 
+    def test_unformatted_shared_card_is_refused(self):
+        folder = self.sd / 'KUI' / 'vmu-test' / 'p0001'
+        before = self.shared_hashes()
+        (folder / 'card.journal').write_bytes(bytes(1024))
+        noise = bytes((i * 131 + 7) & 255 for i in range(131072))
+        (folder / 'card.vmd').write_bytes(noise)
+        self.assertIsInstance(cards.saves(noise), list)
+        with self.assertRaisesRegex(ValueError, 'does not validate'):
+            cards.plan(self.sd, Path('KUI/vmu-test/p0001'), {})
+        self.assertNotEqual(self.shared_hashes(), before)
+
     def test_keys_and_bindings_match_c(self):
         products = ['MK-51136', ' mk-51136 ', 'T-9504D-50', 'HDR-0076', '0000000', 'MK 51136', '', 'ABCDEFGHIJK']
         lines = subprocess.run([str(self.dir / 'keys'), *products], capture_output=True, text=True,
@@ -201,7 +212,7 @@ class GameCardsTool(unittest.TestCase):
         messages = []
         created = cards.apply(self.sd, Path('KUI/vmu-test/p0001'), proposal['saves'], write=messages.append)
         self.assertEqual(created, {'MK-51117': 'p0002', 'MK-51136': 'p0005'})
-        self.assertIn('T-15112N: its card p0004 already holds saves; skipped', messages)
+        self.assertIn('T-15112N: its card p0004 already holds saves or does not validate; skipped', messages)
         self.assertFalse((parent / 'p0003').exists())
         shared_image, _ = cards.read_pair(parent / 'p0001')
         for key, name, files in (('MK-51136', 'p0005', ['C_TAXI02.SYS']), ('MK-51117', 'p0002', ['SONICADV2_A'])):
