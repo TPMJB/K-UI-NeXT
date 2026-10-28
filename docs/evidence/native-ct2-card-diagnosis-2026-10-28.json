@@ -36,5 +36,10 @@
   },
   "cause": "Crazy Taxi 2 writes 0x10 in the directory entry's copy-protect byte. kui_vmu_image_validate accepted only 0x00 or 0xff there, so session recovery refused the card (stage SESSION, session IMAGE). Every other rule passed; no orphan or shared block, chains and FAT consistent.",
   "not_the_cause": "Memory corruption: the save's own CRC is valid and the filesystem is otherwise consistent.",
-  "fix": "The copy-protect byte is opaque: kui_vmu_image_validate, kui_vmu_image_pack and the DCI save parser accept and preserve any value."
+  "fix": "The copy-protect byte is opaque: kui_vmu_image_validate, kui_vmu_image_pack and the DCI save parser accept and preserve any value.",
+  "console_result": {
+    "build": "f838aa8e699a",
+    "owner_report": "That fixed it, Crazy Taxi 2 officially loads and works.",
+    "meaning": "Crazy Taxi 2 launches with New and the virtual A2 card through the reviewed fixed arena, and its save loads."
+  }
 }
