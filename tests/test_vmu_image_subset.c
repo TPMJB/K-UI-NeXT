@@ -198,8 +198,23 @@ static void strict_admission_and_selection(void) {
         size_t count = i == 2u || i >= 4u ? 2u : 1u;
         small_fixture(); failure(KUI_VMU_IMAGE_SUBSET_SELECTION, invalid[i], count);
     }
-    /* Malformed content outside the selected file still blocks admission. */
+    /* Names, copy-protect bytes and entry bytes 0x1c-0x1f are what games
+     * wrote: a card holding odd ones still admits, and its subset keeps them. */
+    for(unsigned mutation = 0; mutation < 4u; ++mutation) {
+        small_fixture(); uint8_t *e = entry(source, 207);
+        switch(mutation) {
+        case 0: memcpy(e + 4, entry(source, 0) + 4, 12u); break; /* duplicate name */
+        case 1: e[1] = 1; entry(source, 0)[1] = 0x10; break;
+        case 2: entry(source, 206)[31] = 1; entry(source, 0)[28] = 0xa5; break;
+        case 3: e[4] = 0x1f; entry(source, 0)[5] = 0x7f; break;
+        default: assert(0);
+        }
+        construct(selected, 1, 0);
+        assert(!memcmp(entry(destination, 0), entry(source, 0), 32u));
+    }
+    /* Malformed structure outside the selected file still blocks admission. */
     for(unsigned mutation = 0; mutation < 16u; ++mutation) {
+        if(mutation == 6u || mutation == 7u || mutation == 9u || mutation == 14u) continue;
         small_fixture(); uint8_t *e = entry(source, 207);
         uint8_t *fat = source + 254u * 512u;
         int result = KUI_VMU_IMAGE_FILESYSTEM;

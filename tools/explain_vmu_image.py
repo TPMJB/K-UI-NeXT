@@ -29,13 +29,12 @@ def explain(image):
                     fat_block=le16(root, 0x46), fat_blocks=le16(root, 0x48),
                     directory_block=le16(root, 0x4a), directory_blocks=le16(root, 0x4c),
                     icon=le16(root, 0x4e), user_blocks=le16(root, 0x50))
+    # The custom color flag and icon shape only describe the card.
     for label, ok in (('root not formatted (first 16 bytes 0x55)', geometry['formatted']),
-                      ('custom color flag above 1', geometry['custom_color'] <= 1),
                       ('FAT block is not 254', geometry['fat_block'] == FAT),
                       ('FAT size is not 1 block', geometry['fat_blocks'] == 1),
                       ('directory does not start at 253', geometry['directory_block'] == DIR_FIRST),
                       ('directory is not 13 blocks', geometry['directory_blocks'] == 13),
-                      ('icon shape above 123', geometry['icon'] <= 123),
                       ('user area is not 200 blocks', geometry['user_blocks'] == 200)):
         if not ok:
             problems.append('root: '+label)
@@ -50,14 +49,14 @@ def explain(image):
             free += 1
         elif nxt != END and nxt >= 200:
             problems.append('FAT[%d] links to %d, outside the user area' % (n, nxt))
-    used, files, names = {}, [], set()
+    # Names, copy-protect bytes, timestamps and bytes 0x1c-0x1f are what the
+    # game wrote: reported, never refused. Only blocks and sizes are checked.
+    used, files = {}, []
     for directory in range(DIR_FIRST, DIR_LAST-1, -1):
         data = block(directory)
         for slot in range(16):
             entry = data[32*slot:32*slot+32]
             where = 'directory %d slot %d' % (directory, slot)
-            if any(entry[28:32]):
-                problems.append(where+': bytes 0x1c-0x1f are %s, not zero' % entry[28:32].hex())
             if not entry[0]:
                 continue
             name = entry[4:16].rstrip(b'\0 ')
@@ -72,11 +71,6 @@ def explain(image):
                 problems.append(where+': size %d blocks' % info['blocks'])
             if info['header'] >= max(info['blocks'], 1):
                 problems.append(where+': header offset %d is not inside its %d blocks' % (info['header'], info['blocks']))
-            if not name or any(c < 32 or c == 127 for c in name):
-                problems.append(where+': name %r has no printable characters or a control byte' % name)
-            if name in names:
-                problems.append(where+': duplicate name %r' % name)
-            names.add(name)
             if entry[0] == 0xcc and info['first_block']:
                 problems.append(where+': GAME file does not start at block 0')
             chain, at = [], info['first_block']

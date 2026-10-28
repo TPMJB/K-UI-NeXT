@@ -188,7 +188,7 @@ class SubsetToolTests(unittest.TestCase):
                 self.assertEqual(bad.read_bytes(), contents)
 
     def test_whole_source_admission(self):
-        for mutation in ("geometry", "unselected-cycle", "orphan", "inactive-trailer"):
+        for mutation in ("geometry", "unselected-cycle", "orphan", "unknown-type"):
             with self.subTest(mutation=mutation):
                 contents = bytearray(self.original)
                 if mutation == "geometry":
@@ -198,7 +198,7 @@ class SubsetToolTests(unittest.TestCase):
                 elif mutation == "orphan":
                     struct.pack_into("<H", contents, 254 * 512 + 42 * 2, 0xfffa)
                 else:
-                    contents[directory_offset(206) + 31] = 1
+                    contents[directory_offset(206)] = 0x34
                 bad = self.base / f"{mutation}.image"
                 bad.write_bytes(contents)
                 result = self.run_tool(bad, self.output, "--slot", 0)
@@ -206,6 +206,15 @@ class SubsetToolTests(unittest.TestCase):
                 self.assertIn("admission failed", result.stderr)
                 self.assertFalse(self.output.exists())
                 self.assertEqual(bad.read_bytes(), contents)
+        # Entry bytes 0x1c-0x1f are opaque, even in a free slot.
+        contents = bytearray(self.original)
+        contents[directory_offset(206) + 31] = 1
+        odd = self.base / "inactive-trailer.image"
+        odd.write_bytes(contents)
+        result = self.run_tool(odd, self.output, "--slot", 0)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(self.output.exists())
+        self.output.unlink()
 
     @unittest.skipUnless(hasattr(os, "mkfifo"), "requires FIFO support")
     def test_nonregular_source_rejected_without_blocking(self):

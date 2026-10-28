@@ -29,19 +29,6 @@ static int overlap(struct span a, struct span b) {
     return a.begin < b.end && b.begin < a.end;
 }
 
-/* Keep name interpretation identical to production admission. The completed
- * card is also passed through that validator before success is returned. */
-static int name_key(const uint8_t *name, uint8_t key[12]) {
-    unsigned bytes = 12;
-    while(bytes && (!name[bytes - 1] || name[bytes - 1] == ' ')) --bytes;
-    if(!bytes) return 0;
-    for(unsigned i = 0; i < bytes; ++i)
-        if(name[i] < 32 || name[i] == 127) return 0;
-    memset(key, 0, 12);
-    memcpy(key, name, bytes);
-    return 1;
-}
-
 static int prevalidate(const struct kui_vmu_image_file *files, size_t count,
     void *destination, size_t bytes, struct kui_vmu_image_workspace *work,
     struct kui_vmu_image_summary *summary) {
@@ -59,20 +46,17 @@ static int prevalidate(const struct kui_vmu_image_file *files, size_t count,
         for(unsigned j = 0; j < i; ++j)
             if(overlap(outputs[i], outputs[j])) return KUI_VMU_IMAGE_ARGUMENT;
     }
-    /* This pass is entirely read-only, including all caller output buffers.
-     * Pairwise name checking keeps preparation off the caller's workspace. */
+    /* This pass is entirely read-only, including all caller output buffers. */
     for(size_t i = 0; i < count; ++i) {
         const uint8_t *entry = files[i].entry;
         unsigned blocks = le16(entry + 24);
-        uint8_t key[12];
         struct span payload;
-        /* The copy-protect byte is copied as written, whatever its value. */
+        /* As in production admission, the copy-protect byte, name and bytes
+         * 0x1c-0x1f are copied as written, whatever their values. */
         if((entry[0] != 0x33 && entry[0] != 0xcc) || !blocks ||
            blocks > KUI_VMU_IMAGE_USER_BLOCKS ||
            le16(entry + 26) >= blocks ||
-           entry[28] || entry[29] || entry[30] || entry[31] ||
-           files[i].bytes != (size_t)blocks * KUI_VMU_IMAGE_BLOCK_BYTES ||
-           !name_key(entry + 4, key))
+           files[i].bytes != (size_t)blocks * KUI_VMU_IMAGE_BLOCK_BYTES)
             return KUI_VMU_IMAGE_FILESYSTEM;
         if(entry[0] == 0xcc && ++games > 1)
             return KUI_VMU_IMAGE_FILESYSTEM;
@@ -84,12 +68,6 @@ static int prevalidate(const struct kui_vmu_image_file *files, size_t count,
         for(unsigned output = 0; output < 3; ++output)
             if(overlap(outputs[output], payload))
                 return KUI_VMU_IMAGE_ARGUMENT;
-        for(size_t j = 0; j < i; ++j) {
-            uint8_t previous[12];
-            if(!name_key(files[j].entry + 4, previous) ||
-               !memcmp(key, previous, sizeof(key)))
-                return KUI_VMU_IMAGE_FILESYSTEM;
-        }
     }
     return KUI_VMU_IMAGE_OK;
 }

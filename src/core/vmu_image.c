@@ -115,22 +115,11 @@ static int root_geometry(const uint8_t *root) {
         if(root[i] != 0x55) return 0;
     /* KOS vmu_root_t leaves 0x40..0x45 and 0x52 onward opaque. They are
      * preserved during import, rather than compared with formatter defaults.
-     * Only documented fields used to describe this layout constrain admission. */
-    return root[16] <= 1 &&
-        le16(root + 0x46) == FAT && le16(root + 0x48) == 1 &&
+     * Only the fields placing the FAT, directory and user area constrain
+     * admission; the custom-color flag and icon shape only describe the card. */
+    return le16(root + 0x46) == FAT && le16(root + 0x48) == 1 &&
         le16(root + 0x4a) == DIR_FIRST && le16(root + 0x4c) == 13 &&
-        le16(root + 0x4e) <= 123 && le16(root + 0x50) == 200;
-}
-
-static int name_key(const uint8_t *name, uint8_t *key) {
-    unsigned bytes = 12;
-    while(bytes && (!name[bytes - 1] || name[bytes - 1] == ' ')) --bytes;
-    if(!bytes) return 0;
-    for(unsigned i = 0; i < bytes; ++i)
-        if(name[i] < 32 || name[i] == 127) return 0;
-    memset(key, 0, 12);
-    memcpy(key, name, bytes);
-    return 1;
+        le16(root + 0x50) == 200;
 }
 
 int kui_vmu_image_validate(const struct kui_vmu_image_io *io,
@@ -165,19 +154,16 @@ int kui_vmu_image_validate(const struct kui_vmu_image_io *io,
             return KUI_VMU_IMAGE_IO;
         for(unsigned slot = 0; slot < 16; ++slot) {
             const uint8_t *entry = work->block + slot * 32;
-            if(!all_zero(entry + 28, 4)) return KUI_VMU_IMAGE_FILESYSTEM;
             if(!entry[0]) continue;
             unsigned blocks = le16(entry + 24), at = le16(entry + 2);
-            /* entry[1], the copy-protect byte, is opaque: games write
-             * values besides 0x00 and 0xff (Crazy Taxi 2 writes 0x10). */
+            /* Only fields that locate and size a file are structure. The
+             * copy-protect byte, name, timestamp and bytes 0x1c-0x1f are what
+             * the game wrote (Crazy Taxi 2's copy byte is 0x10): a game's own
+             * odd entry must never lock it, or another game, out of a card. */
             if((entry[0] != 0x33 && entry[0] != 0xcc) ||
                !blocks || blocks > 200 ||
-               le16(entry + 26) >= blocks ||
-               !name_key(entry + 4, work->names[result.files]))
+               le16(entry + 26) >= blocks)
                 return KUI_VMU_IMAGE_FILESYSTEM;
-            for(unsigned i = 0; i < result.files; ++i)
-                if(!memcmp(work->names[i], work->names[result.files], 12))
-                    return KUI_VMU_IMAGE_FILESYSTEM;
             if(entry[0] == 0xcc) {
                 if(result.game_files || at) return KUI_VMU_IMAGE_FILESYSTEM;
                 ++result.game_files;

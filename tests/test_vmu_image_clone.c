@@ -77,7 +77,6 @@ static void capture(void) {
     assert(!kui_vmu_image_clone_capture(&work,&source,KUI_VMU_IMAGE_BYTES));
     assert(work.captured && !work.failed && !work.active && !work.completed);
     assert(work.summary.files==1u && work.summary.used_blocks==2u && work.summary.free_blocks==198u);
-    assert(!memcmp(work.image.names[0],"PROTECTED",9u));
     assert(!media.reads && !media.writes && !media.syncs && !media.source_writes);
 }
 static void source_unchanged(void) {
@@ -109,7 +108,7 @@ static void invalid_source(void) {
         if(kind==0u) media.source[255][0]=0u;
         if(kind==1u) put16(media.source[255]+80u,201u);
         if(kind==2u) put16(media.source[254]+198u*2u,198u); /* Cycle. */
-        if(kind==3u) media.source[253][28]=1u;
+        if(kind==3u) put16(media.source[253]+26u,2u); /* Header past the file. */
         if(kind==4u) put16(media.source[254]+196u*2u,0xfffau); /* Orphan. */
         assert(kui_vmu_image_clone_capture(&work,&source,KUI_VMU_IMAGE_BYTES)<0);
         assert(!media.writes && !media.syncs);no_reuse();

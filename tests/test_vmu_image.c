@@ -172,14 +172,17 @@ static void filesystem_cases(void) {
     add_file(207,"FULL-CARD",chain,200,0); put16(entry(207) + 26,199); valid(1,200,0);
 
     /* Named geometry remains bounded even when opaque metadata varies. */
-    static const unsigned geometry_offsets[] = {0,16,70,72,74,76,78,80};
-    static const unsigned geometry_values[] = {0,2,253,2,252,12,124,241};
+    static const unsigned geometry_offsets[] = {0,70,72,74,76,80};
+    static const unsigned geometry_values[] = {0,253,2,252,12,241};
     for(unsigned i = 0; i < sizeof(geometry_offsets)/sizeof(geometry_offsets[0]); ++i) {
         restore(); put16(image.data[255] + geometry_offsets[i],geometry_values[i]);
         invalid(KUI_VMU_IMAGE_GEOMETRY);
     }
     restore(); image.data[255][16]=1; image.data[255][17]=255;
     put16(image.data[255]+78,123); valid(0,0,0);
+    /* The custom-color flag and icon shape only describe the card. */
+    restore(); image.data[255][16]=2; put16(image.data[255]+78,124); valid(0,0,0);
+    restore(); image.data[255][16]=0xff; put16(image.data[255]+78,0xffff); valid(0,0,0);
     /* Unknown root fields are not storage-protocol media-info fields. The
      * validator must neither reject their values nor rewrite original bytes. */
     for(unsigned offset=0x40u;offset<512u;offset++) {
@@ -208,10 +211,14 @@ static void filesystem_cases(void) {
     restore(); put16(image.data[254]+42*2,0xfffa); invalid(KUI_VMU_IMAGE_FILESYSTEM);
     restore(); put16(image.data[254]+42*2,0xfff7); invalid(KUI_VMU_IMAGE_FILESYSTEM);
     restore(); add_file(0,"A",a,3,0); add_file(1,"B",a,3,0); invalid(KUI_VMU_IMAGE_FILESYSTEM);
-    restore(); add_file(0,"SAME",a,3,0); add_file(1,"SAME",b,2,0); invalid(KUI_VMU_IMAGE_FILESYSTEM);
-    restore(); add_file(0,"SAME",a,3,0); add_file(1,"SAME    ",b,2,0); invalid(KUI_VMU_IMAGE_FILESYSTEM);
-    restore(); add_file(0,"A",a,3,0); memset(entry(0)+4,' ',12); invalid(KUI_VMU_IMAGE_FILESYSTEM);
-    restore(); add_file(0,"AB",a,3,0); entry(0)[4]=0; invalid(KUI_VMU_IMAGE_FILESYSTEM);
+    /* Names are what the game wrote: duplicates, blanks and control bytes
+     * never lock a card. Only the blocks each entry owns are checked. */
+    restore(); add_file(0,"SAME",a,3,0); add_file(1,"SAME",b,2,0); valid(2,5,0);
+    restore(); add_file(0,"SAME",a,3,0); add_file(1,"SAME    ",b,2,0); valid(2,5,0);
+    restore(); add_file(0,"A",a,3,0); memset(entry(0)+4,' ',12); valid(1,3,0);
+    restore(); add_file(0,"AB",a,3,0); entry(0)[4]=0; valid(1,3,0);
+    restore(); add_file(0,"A",a,3,0); memset(entry(0)+4,0,12); valid(1,3,0);
+    restore(); add_file(0,"BAD\x1fNAME\x7f",a,3,0); valid(1,3,0);
     restore(); add_file(0,"A",a,3,0); entry(0)[0]=0x34; invalid(KUI_VMU_IMAGE_FILESYSTEM);
     /* Any copy-protect byte is valid; Crazy Taxi 2 writes 0x10. */
     for(unsigned copy = 1; copy < 0xffu; copy += 0x0fu) {
@@ -221,7 +228,9 @@ static void filesystem_cases(void) {
     restore(); add_file(0,"A",a,3,0); put16(entry(0)+24,0); invalid(KUI_VMU_IMAGE_FILESYSTEM);
     restore(); add_file(0,"A",a,3,0); put16(entry(0)+24,201); invalid(KUI_VMU_IMAGE_FILESYSTEM);
     restore(); add_file(0,"A",a,3,0); put16(entry(0)+2,65535); invalid(KUI_VMU_IMAGE_FILESYSTEM);
-    restore(); entry(200)[28]=1; invalid(KUI_VMU_IMAGE_FILESYSTEM);
+    /* Entry bytes 0x1c-0x1f are opaque, in free and used slots alike. */
+    restore(); entry(200)[28]=1; valid(0,0,0);
+    restore(); add_file(0,"A",a,3,0); memset(entry(0)+28,0xa5,4); valid(1,3,0);
     restore(); add_file(0,"GAME",a,3,1); invalid(KUI_VMU_IMAGE_FILESYSTEM);
     const unsigned broken_game[] = {0,2,1};
     restore(); add_file(0,"GAME",broken_game,3,1); invalid(KUI_VMU_IMAGE_FILESYSTEM);

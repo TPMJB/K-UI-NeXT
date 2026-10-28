@@ -65,10 +65,12 @@ int kui_vmu_image_format_blank(const struct kui_vmu_image_io *io,
     struct kui_vmu_image_workspace *workspace);
 
 /* Read-only admission of standard 200-user-block geometry. Reads all blocks,
- * checks system allocation, directory entries, names and complete file chains,
- * rejects cycles/shared blocks/orphans and unsupported layouts. Free blocks
- * may contain stale/nonzero data. This validates the VMU filesystem, not each
- * game's opaque save payload/CRC. Summary is cleared on failure. */
+ * checks system allocation, each entry's type, size, header offset and complete
+ * file chain, and rejects cycles/shared blocks/orphans and unsupported layouts.
+ * Names, copy-protect bytes, timestamps, entry bytes 0x1c-0x1f, the root's
+ * color and icon are what games wrote, never refused. Free blocks may hold
+ * stale data. This validates the VMU filesystem, not each game's opaque save
+ * payload/CRC. Summary is cleared on failure. names[] is no longer used. */
 int kui_vmu_image_validate(const struct kui_vmu_image_io *io,
     size_t image_bytes, struct kui_vmu_image_workspace *workspace,
     struct kui_vmu_image_summary *summary);

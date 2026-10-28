@@ -149,6 +149,16 @@ static void preservation(void) {
     files[0].entry[1] = 0x10;
     construct(1, 2, 0);
     assert(entry(destination, 0)[1] == 0x10u);
+    /* Names, duplicates and entry bytes 0x1c-0x1f are copied as written. */
+    reset();
+    add(0, "SAME", 1, 0, 0, 0);
+    add(1, "SAME", 1, 0, 0, BLOCK);
+    add(2, "BAD\x1fNAME\x7f", 1, 0, 0, 2u * BLOCK);
+    add(3, "", 1, 0, 0, 3u * BLOCK);
+    memset(files[1].entry + 8, ' ', 8);
+    for(unsigned i = 28u; i < 32u; ++i) files[2].entry[i] = (uint8_t)(0xa0u + i);
+    construct(4, 4, 0);
+    assert(!memcmp(entry(destination, 2) + 28, files[2].entry + 28, 4u));
 }
 static void capacity(void) {
     reset(); add(0, "FULL.DATA", 200, 0, 199, 0); construct(1, 200, 0);
@@ -173,10 +183,6 @@ static void invalid_files(void) {
     files[0].entry[0] = 0x34; reject(1, KUI_VMU_IMAGE_FILESYSTEM);
     files[0].entry[0] = 0x33;
     files[0].entry[1] = 0xff;
-    for(unsigned i = 28u; i < 32u; ++i) {
-        files[0].entry[i] = 1; reject(1, KUI_VMU_IMAGE_FILESYSTEM);
-        files[0].entry[i] = 0;
-    }
     put16(files[0].entry + 26, 2); reject(1, KUI_VMU_IMAGE_FILESYSTEM);
     put16(files[0].entry + 26, 1);
     --files[0].bytes; reject(1, KUI_VMU_IMAGE_FILESYSTEM);
@@ -185,14 +191,6 @@ static void invalid_files(void) {
     put16(files[0].entry + 24, 0); reject(1, KUI_VMU_IMAGE_FILESYSTEM);
     put16(files[0].entry + 24, 201); reject(1, KUI_VMU_IMAGE_FILESYSTEM);
     put16(files[0].entry + 24, 2);
-    memset(files[0].entry + 4, ' ', 12); reject(1, KUI_VMU_IMAGE_FILESYSTEM);
-    memset(files[0].entry + 4, 0, 12); reject(1, KUI_VMU_IMAGE_FILESYSTEM);
-    memcpy(files[0].entry + 4, "BAD\x1fNAME", 8);
-    reject(1, KUI_VMU_IMAGE_FILESYSTEM);
-    files[0].entry[7] = 0x7f; reject(1, KUI_VMU_IMAGE_FILESYSTEM);
-    reset(); add(0, "SAME", 1, 0, 0, 0); add(1, "SAME", 1, 0, 0, BLOCK);
-    reject(2, KUI_VMU_IMAGE_FILESYSTEM);
-    memset(files[1].entry + 8, ' ', 8); reject(2, KUI_VMU_IMAGE_FILESYSTEM);
     reset(); add(0, "MINI.A", 1, 1, 0, 0); add(1, "MINI.B", 1, 1, 0, BLOCK);
     reject(2, KUI_VMU_IMAGE_FILESYSTEM);
     reset(); add(0, "CAPACITY.A", 200, 0, 0, 0); add(1, "CAPACITY.B", 1, 0, 0, 0);

@@ -80,8 +80,10 @@ class PairInspect(unittest.TestCase):
                          ['FAT[10]=0xfffa is allocated but no file owns block 10',
                           '2 owned + 197 free blocks is not 200'])
         image[entry+28] = 1
-        self.assertIn('directory 253 slot 0: bytes 0x1c-0x1f are 01000000, not zero',
-                      explain(bytes(image))['problems'])
+        image[entry+4:entry+16] = b'\x01' * 12
+        self.assertEqual(explain(bytes(image))['files'][0]['tail'], '01000000')
+        self.assertNotIn('bytes 0x1c', ' '.join(explain(bytes(image))['problems']))
+        self.assertEqual(len(explain(bytes(image))['problems']), 2)
 
     def test_template_maps_one_base_and_journal(self):
         profile = decode_profile(template_profile())

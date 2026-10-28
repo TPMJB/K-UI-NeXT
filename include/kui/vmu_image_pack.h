@@ -17,11 +17,12 @@ struct kui_vmu_image_file {
  * Directory order follows the input order. All inactive entries and unused
  * blocks are zero, with canonical blank-card system metadata.
  *
- * Entries must satisfy production admission rules for type, copy protection,
- * names (including uniqueness), nonzero length, header offset and reserved
- * bytes. Payload length must equal entry block count times 512. Original first
- * blocks are not interpreted: only entry bytes 2..3 are replaced. Payloads,
- * padding and internal checksums are copied without alteration.
+ * Entries must satisfy production admission rules for type, nonzero length
+ * and header offset; copy-protect bytes, names and bytes 0x1c-0x1f are copied
+ * as written, as admission accepts them. Payload length must equal entry
+ * block count times 512. Original first blocks are not interpreted: only
+ * entry bytes 2..3 are replaced. Payloads, padding and internal checksums
+ * are copied without alteration.
  *
  * All inputs are read-only and may overlap each other. destination, workspace
  * and summary must be mutually disjoint and must not overlap the descriptor

@@ -175,7 +175,7 @@ static void invalid_filesystems_are_not_filtered(void) {
     reset();add(0,"DUPLICATE",chain,2u,0u);add(207,"DUPLICATE",chain,2u,0u);
     capture_failure(KUI_VMU_SAVE_SNAPSHOT_IMAGE);
     reset();physical_image[255u*BLOCK+0x50u]=199;capture_failure(KUI_VMU_SAVE_SNAPSHOT_IMAGE);
-    reset();entry(207)[31]=1;capture_failure(KUI_VMU_SAVE_SNAPSHOT_IMAGE);
+    reset();entry(207)[0]=0x34;capture_failure(KUI_VMU_SAVE_SNAPSHOT_IMAGE);
     reset();add(0,"CYCLE",chain,2u,0u);put16(physical_image+254u*BLOCK+2u*2u,1u);
     capture_failure(KUI_VMU_SAVE_SNAPSHOT_IMAGE);
 }
