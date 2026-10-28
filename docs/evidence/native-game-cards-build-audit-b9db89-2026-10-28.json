@@ -1,0 +1,347 @@
+{
+  "schema": "kui.native.game-cards-build-audit.v1",
+  "status": "PASS",
+  "source_commit": "b9db89ba5fe4841697969f91eda0a05c86fe943f",
+  "toolchain": {
+    "kos": "fcfa7d8 (kos-chain)",
+    "gcc": "15.2.0",
+    "binutils": "2.45.1",
+    "newlib": "4.6.0.20260123",
+    "ui_kos_banner": "pinned to the accepted 8adf UI banner text so only K-UI sources differ"
+  },
+  "artifacts": {
+    "retail-native-dual.kui": "f25768cee7f85627e63fc5a9397adca2c3fc2fad962887fe42f6b5c9fb83e92f",
+    "retail-native-standalone.kui": "c86d14c191fdd7b7e69d580fa68747c242cd7aaf40a16783343410eca8f1200f",
+    "runtime.kui": "6c7a00524d860bbe8d6f2e6410294c7479b3dab37103d733f5de3a5366f8cfc1"
+  },
+  "components": {
+    "split/resident-sci.bin": "a56d92ae1ab0888ce1fbff356bec3174a9ac781809f9b2e956485734d4730820",
+    "split/resident-legacy.bin": "e0dd57a2813b121908b78ce7c44dc5df04bcadc38de255cb80bcc64ba1e815b7",
+    "split/native-worker.bin": "7c0058c8d0dd07865ae2e69815b6cbec860a46ae2a02670b3b76bf912d35f3ac",
+    "split/stage.bin": "04a289c726e9fbd3486ca6c18a92091a3b7b40f316e6b5240cd609d730828066",
+    "split/native-ra-aux.bin": "61ab1f513910fce19665d742ad872bea92ee69afe1af6030d09ecb04f96d0974",
+    "standalone/resident-sci.bin": "484c521c5193ace0bd93d37fbd7564c802a026b4cd559c5831ca8d9bbf32af1a",
+    "standalone/stage.bin": "e41eab979c9b4085dcd1af2cc4d18e9265b95cb19a2c5584944b2451be2b27a5"
+  },
+  "accepted_reproduction": {
+    "doa2_standalone_921318c3d9cb": {
+      "sha256": "a871670e929866a994b69f2772424b6163f4cd474a64c423f2cb70cfb4634e78",
+      "byte_identical": true,
+      "built_from": "921318c and this branch with BUILD_ID=921318c3d9cb"
+    },
+    "evolution1_split_6be76940ccc9": {
+      "sha256": "8ef15cb00eea24ae0e300be253dd40a516f84efafcaecd71fc7a82d533551f4b",
+      "byte_identical": true,
+      "built_from": "6be7694 and this branch with BUILD_ID=6be76940ccc9"
+    },
+    "games_ui_8adf1a039035": {
+      "sha256": "57b9584ba789b425c8924a63f955aeefa104b3bb0bf9a2fab74d02d320c91a22",
+      "byte_identical": true,
+      "built_from": "8adf1a0 with KOS banner pinned to the delivered text and games_retail.o compiled under BUILD_ID cd3318f0f457 (the delivered UI was an incremental build; games_retail.c is unchanged between cd3318f and 8adf1a0)"
+    }
+  },
+  "instruction_audit": {
+    "policy": "No illegal delay slots; no FPU use except the stage bootstrap FPSCR setup",
+    "decoded": {
+      "split": {
+        "resident-sci": 6401,
+        "native-worker": 23538,
+        "stage": 42049,
+        "entry": 16
+      },
+      "accepted_split": {
+        "resident-sci": 6401,
+        "native-worker": 23393,
+        "stage": 41226,
+        "entry": 16
+      },
+      "standalone": {
+        "resident-sci": 5181,
+        "stage": 9475,
+        "entry": 16
+      },
+      "accepted_standalone": {
+        "resident-sci": 5179,
+        "stage": 8649,
+        "entry": 16
+      }
+    }
+  },
+  "split_checkers": {
+    "check_native_dual_callbacks": {
+      "general": {
+        "returncode": 0,
+        "last_line": "}"
+      },
+      "accepted_6be7": {
+        "returncode": 0,
+        "last_line": "}"
+      }
+    },
+    "check_vmu_native_stage_stack": {
+      "general": {
+        "returncode": 0,
+        "last_line": "}"
+      },
+      "accepted_6be7": {
+        "returncode": 0,
+        "last_line": "}"
+      }
+    },
+    "check_native_dual_readers": {
+      "general": {
+        "returncode": 2,
+        "last_line": "Dual native reader audit refused: dual stage immutable instructions/targets changed: _select_resident"
+      },
+      "accepted_6be7": {
+        "returncode": 2,
+        "last_line": "Dual native reader audit refused: dual stage immutable instructions/targets changed: _select_resident"
+      }
+    },
+    "check_native_bottom_heap_worker": {
+      "general": {
+        "returncode": 2,
+        "last_line": "Bottom worker heap audit refused: Worker heap guard instruction/literal pin differs: _index@vmu_native_heap.c"
+      },
+      "accepted_6be7": {
+        "returncode": 2,
+        "last_line": "Bottom worker heap audit refused: Worker heap guard instruction/literal pin differs: _index@vmu_native_heap.c"
+      }
+    },
+    "check_native_fixed_arena": {
+      "general": {
+        "returncode": 0,
+        "last_line": "}"
+      },
+      "accepted_6be7": {
+        "returncode": 0,
+        "last_line": "}"
+      },
+      "general_self_test": {
+        "cases": {
+          "armed": 6,
+          "refused": 150,
+          "entered": 6
+        },
+        "relay_dispatch": [
+          "initializer",
+          "fixed"
+        ],
+        "mutants_rejected": 15,
+        "equivalent_forced_outcomes": [
+          {
+            "offset": "0x88",
+            "forced_t": 0
+          }
+        ],
+        "trampoline": {
+          "address": "0x8ce00060",
+          "return_address": "0x8ce00082",
+          "bytes": 48,
+          "sha256": "1aff10eac3cb1b11c88f354b77cc9e360d98cd6cb9740feab470111d050b8fd4"
+        }
+      }
+    }
+  },
+  "split_markers": {
+    "general_stage": true,
+    "general_worker": true,
+    "stage_strings": [
+      "PREFETCH AUTO / SPLIT CONTROLLER ALL",
+      "SPLIT CONTROLLER NEEDS NORMAL MODE"
+    ],
+    "accepted_stage_strings": [
+      "PREFETCH OFF / SPLIT CONTROLLER",
+      "SPLIT CONTROLLER NEEDS EVOLUTION 1",
+      "SPLIT CONTROLLER NEEDS NORMAL MODE"
+    ]
+  },
+  "personalization": {
+    "module_bytes": 269828,
+    "profile_module_offset": 104192,
+    "profile_bytes": 4096,
+    "runtime_mode_module_offset": 104160,
+    "runtime_mode_bytes": 32
+  },
+  "structural_private_stack": {
+    "structural": {
+      "worst_bytes": 220,
+      "margin": 64,
+      "available_bytes": 304,
+      "paths": {
+        "kui_retail_resident_dispatch": {
+          "bytes": 216,
+          "path": "kui_retail_resident_dispatch(48) -> deliver(80) -> kui_sci_stream_fetch.constprop.0(44) -> command(20) -> byte(0) -> transfer(24)"
+        },
+        "kui_retail_async_irq": {
+          "bytes": 220,
+          "path": "kui_retail_async_irq(8) -> deliver(80) -> kui_sci_stream_fetch.constprop.0(44) -> command(20) -> byte(0) -> transfer(24)"
+        },
+        "kui_retail_menu_return": {
+          "bytes": 156,
+          "path": "kui_retail_menu_return(8) -> native_reader_report(20) -> retail_display_values(76) -> retail_display_line(52)"
+        }
+      }
+    },
+    "accepted_doa2": {
+      "worst_bytes": 220,
+      "margin": 64,
+      "available_bytes": 304,
+      "paths": {
+        "kui_retail_resident_dispatch": {
+          "bytes": 216,
+          "path": "kui_retail_resident_dispatch(48) -> deliver(80) -> kui_sci_stream_fetch.constprop.0(44) -> command(20) -> byte(0) -> transfer(24)"
+        },
+        "kui_retail_async_irq": {
+          "bytes": 220,
+          "path": "kui_retail_async_irq(8) -> deliver(80) -> kui_sci_stream_fetch.constprop.0(44) -> command(20) -> byte(0) -> transfer(24)"
+        },
+        "kui_retail_menu_return": {
+          "bytes": 156,
+          "path": "kui_retail_menu_return(8) -> native_reader_report(20) -> retail_display_values(76) -> retail_display_line(52)"
+        }
+      }
+    }
+  },
+  "structural_geometry": {
+    "structural": {
+      "start": "0x8c004000",
+      "bss_end": "0x8c007b20",
+      "stack_bottom": "0x8c007ba0",
+      "spare_bytes": 128,
+      "resident_marker": true,
+      "region_bytes": 1888,
+      "manifest_bytes": 1020,
+      "vmu_or_readahead_symbols": [],
+      "stage_markers": [
+        "__kui_native_standalone_reader_stage",
+        "__kui_native_standalone_structural_stage"
+      ]
+    },
+    "accepted_doa2": {
+      "start": "0x8c004000",
+      "bss_end": "0x8c007b40",
+      "stack_bottom": "0x8c007ba0",
+      "spare_bytes": 96,
+      "resident_marker": true,
+      "region_bytes": 1888,
+      "manifest_bytes": 1020,
+      "vmu_or_readahead_symbols": [],
+      "stage_markers": [
+        "__kui_native_standalone_doa2_stage",
+        "__kui_native_standalone_reader_stage"
+      ]
+    }
+  },
+  "package_headers": {
+    "structural": {
+      "magic": "KUIRBT01",
+      "stage_bytes": 37640,
+      "resident": "0x8c004000",
+      "limit": "0x8c007800",
+      "rest": [
+        "0x1",
+        "0x40",
+        "0x1000",
+        "0x1000",
+        "0x8ce00000",
+        "0x8ce00000",
+        "0x8c010000",
+        "0xc00000",
+        "0x8cff0000",
+        "0x2000",
+        "0x8c004000",
+        "0x8c007800",
+        "0x0"
+      ]
+    },
+    "accepted_doa2": {
+      "magic": "KUIRBT01",
+      "stage_bytes": 35236,
+      "resident": "0x8c004000",
+      "limit": "0x8c007800",
+      "rest": [
+        "0x1",
+        "0x40",
+        "0x1000",
+        "0x1000",
+        "0x8ce00000",
+        "0x8ce00000",
+        "0x8c010000",
+        "0xc00000",
+        "0x8cff0000",
+        "0x2000",
+        "0x8c004000",
+        "0x8c007800",
+        "0x0"
+      ]
+    }
+  },
+  "launcher_descriptor_finders": {
+    "structural": {
+      "standalone": 1,
+      "standalone_offset": 32076,
+      "dual": 0
+    },
+    "general_split": {
+      "standalone": 0,
+      "standalone_offset": 0,
+      "dual": 1
+    },
+    "accepted_doa2": {
+      "standalone": 0,
+      "standalone_offset": 0,
+      "dual": 0
+    },
+    "accepted_6be7": {
+      "standalone": 0,
+      "standalone_offset": 0,
+      "dual": 1
+    }
+  },
+  "games_ui_compile_units": [
+    "sources 140 147 only old [] only new ['src/apps/games_storage.c', 'src/core/native_sdk_sci_family.c', 'src/core/vmu_fs_admission.c', 'src/core/vmu_game_card.c', 'src/core/vmu_game_card_service.c', 'src/core/vmu_persist_profile.c', 'src/loader/vmu_backing.c']",
+    "differing ['src/apps/games.c', 'src/apps/games_covers.c', 'src/apps/games_retail.c', 'src/core/shell.c', 'src/core/vmu_image.c', 'src/core/vmu_image_pack.c', 'src/core/vmu_native_cache_seed.c', 'src/core/vmu_native_exit.c', 'src/core/vmu_native_heap.c', 'src/core/vmu_native_layout.c', 'src/core/vmu_native_program.c', 'src/core/vmu_native_resolution_cache.c', 'src/core/vmu_save_format.c', 'src/dreamcast/main.c', 'src/dreamcast/sd.c', 'src/dreamcast/shell_draw.c']"
+  ],
+  "host_tests": {
+    "split_controller": "12974",
+    "structural_launch_capability_family": "69808",
+    "structural_demand_ubsan": "12187",
+    "structural_demand_asan_ubsan": "10468",
+    "native_cache": "39043",
+    "games_retail_pass": 346,
+    "games_retail_fail": 0,
+    "games_retail_standalone_cases": 10,
+    "installer": "8 tests OK",
+    "fixed_arena_artifact": "OK",
+    "game_cards": {
+      "core": true,
+      "glue": true,
+      "service_fat32_exfat": true,
+      "validator_subset_pack_collection_session_clone_snapshot": true
+    },
+    "pc_tools_at_this_build": {
+      "suites_ok": 3,
+      "suites": 3
+    }
+  },
+  "not_run": [
+    "check_native_split_controller.py and check_native_standalone_reader.py execute the linked code against original Evolution 1 and DOA2 startup RAM; no retail executable is available here.",
+    "tests/test_native_sdk_sci_route_discovery.c positive cases need the original executables."
+  ],
+  "console_compatibility_verified": false,
+  "hardware_executed": false,
+  "game_cards": {
+    "change": "Each game gets its own /KUI/vmu-test/pNNNN card bound by game.bin to its IP product number; the launcher selects or creates it and fills the virtual-A2 module profile slot. Card admission keeps only structural rules.",
+    "stage_unchanged_except": "kui_vmu_image_validate (descriptive checks removed)"
+  },
+  "modules_compared_with_f838aa8e699a": {
+    "dual": "every component identical apart from the build ID except the stage, where only kui_vmu_image_validate changed (1052 -> 788 bytes)",
+    "structural_standalone": "resident-sci.bin and stage.bin identical apart from the build ID",
+    "gui": "game-card selection and creation, the ownership scan and CMD10 identity query now built into the runtime, the loosened validator and packer"
+  },
+  "host_tested_commit": {
+    "commit": "1f9972a53b0648b564fa4071cb4bb11c9813a57a",
+    "difference_from_this_build": "tools/kui-game-cards.py and its test only; modules and GUI identical apart from the build ID, the stage-embedded native-worker SHA-256 with its descriptor checksum, and the GUI header checksums"
+  }
+}

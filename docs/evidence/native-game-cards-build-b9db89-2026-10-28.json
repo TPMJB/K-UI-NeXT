@@ -1,0 +1,73 @@
+{
+  "schema": "kui.native.game-cards-build.v1",
+  "date": "2026-10-28",
+  "build": "b9db89ba5fe4",
+  "source_commit": "b9db89ba5fe4841697969f91eda0a05c86fe943f",
+  "package": {
+    "name": "K-UI-Native-General-Prefetch-Auto-b9db89ba5fe4.zip",
+    "bytes": 31912648,
+    "sha256": "13101c49128a7db114f38e2b0381ddd7565747227207f55d315b4684485099e9"
+  },
+  "artifacts": {
+    "retail-native-dual.kui": "f25768cee7f85627e63fc5a9397adca2c3fc2fad962887fe42f6b5c9fb83e92f",
+    "retail-native-standalone.kui": "c86d14c191fdd7b7e69d580fa68747c242cd7aaf40a16783343410eca8f1200f",
+    "runtime.kui": "6c7a00524d860bbe8d6f2e6410294c7479b3dab37103d733f5de3a5366f8cfc1"
+  },
+  "changes": [
+    "Each game gets its own /KUI/vmu-test/pNNNN card, bound by game.bin to its IP product number, selected or created by the launcher, whose P2 profile fills the virtual-A2 module slot before handoff.",
+    "A new card is a verified blank image, zero journal, fresh identity and game.bin written last, made only after every existing pair's clusters still read as allocated; its profile comes from the import tool's raw ownership scan once and is reused while CID, partition, geometry and file clusters match.",
+    "Card admission no longer refuses names, duplicate names, entry bytes 0x1c-0x1f or the root colour and icon; the packer copies them as written.",
+    "PC tool kui-game-cards.py copies shared-card saves onto game cards; the shared pair is only read.",
+    "The package ships the PC game-card and library tools."
+  ],
+  "modules_compared_with_f838aa8e699a": {
+    "dual": "every component identical apart from the build ID except the stage, where only kui_vmu_image_validate changed (1052 -> 788 bytes)",
+    "structural_standalone": "resident-sci.bin and stage.bin identical apart from the build ID",
+    "gui": "game-card selection and creation, the ownership scan, the CMD10 identity query, the loosened validator and packer"
+  },
+  "final_build_vs_host_tested_build": {
+    "host_tested_commit": "1f9972a53b0648b564fa4071cb4bb11c9813a57a",
+    "difference": "tools/kui-game-cards.py and its test only; the modules and GUI are identical apart from the build ID, the embedded native-worker SHA-256 with its descriptor checksum, and the GUI header checksums",
+    "pc_tool_tests_at_final_commit": 3
+  },
+  "audit": {
+    "status": "PASS",
+    "split_checkers": {
+      "check_native_dual_callbacks": 0,
+      "check_vmu_native_stage_stack": 0,
+      "check_native_dual_readers": 2,
+      "check_native_bottom_heap_worker": 2,
+      "check_native_fixed_arena": 0
+    },
+    "games_ui_compile_units": [
+      "sources 140 147 only old [] only new ['src/apps/games_storage.c', 'src/core/native_sdk_sci_family.c', 'src/core/vmu_fs_admission.c', 'src/core/vmu_game_card.c', 'src/core/vmu_game_card_service.c', 'src/core/vmu_persist_profile.c', 'src/loader/vmu_backing.c']",
+      "differing ['src/apps/games.c', 'src/apps/games_covers.c', 'src/apps/games_retail.c', 'src/core/shell.c', 'src/core/vmu_image.c', 'src/core/vmu_image_pack.c', 'src/core/vmu_native_cache_seed.c', 'src/core/vmu_native_exit.c', 'src/core/vmu_native_heap.c', 'src/core/vmu_native_layout.c', 'src/core/vmu_native_program.c', 'src/core/vmu_native_resolution_cache.c', 'src/core/vmu_save_format.c', 'src/dreamcast/main.c', 'src/dreamcast/sd.c', 'src/dreamcast/shell_draw.c']"
+    ]
+  },
+  "host_tests": {
+    "host-fixed-arena.log": "OK",
+    "host-game-cards.log": "OK",
+    "host-games-covers.log": "PASS exfat Games covers: format-payloads",
+    "host-games-images.log": "PASS exfat Games: sort-overflow; whole-card SHA256 unchanged",
+    "host-games-retail.log": "PASS exfat superfloppy retail preparation: cooked-2048; whole-card SHA256 unchanged",
+    "host-guard.log": "Split controller stream guard host checks: 25783; 20 TICK visits, none after a refusal; 130 guarded-frame visits, paused while streaming",
+    "host-install.log": "OK",
+    "host-native-cache.log": "Native launcher cache: 39043 checks passed",
+    "host-shell.log": "PASS shell: Games browsing/inspection, stale result guards, Stop lock, system/ripper preferences, reversible video actions, VMU paging, phase ETA, destination keyboard, reference grades, safe rendering",
+    "host-split.log": "Split controller host checks: 12974",
+    "host-standalone.log": "PASS standalone demand models: {'ubsan': {'checks': 12187, 'byte_exact_requests': 17, 'modeled_sci_entries': 105, 'pio_bounded_entries': 256, 'route_loss_cases': 5, 'cancel_cases': 3, 'descriptor_fault_cases': 12, 'vbr_writes': 0, 'hardware_executed': False}, 'asan-ubsan': {'checks': 10468, 'byte_exact_requests': 15, 'modeled_sci_entries': 92, 'pio_bounded_entries': 256, 'route_loss_cases': 5, 'cancel_cases': 3, 'descriptor_fault_cases': 0, 'vbr_writes': 0, 'hardware_executed': False}}"
+  },
+  "install_rehearsal": {
+    "install_over_previous": "virtual card files untouched",
+    "switch_back": "previous package files restored exactly",
+    "restore": "original files exact",
+    "unformatted_shared_card": "Stopped: the shared card does not validate (root: root not formatted (first 16 bytes 0x55)); nothing was changed",
+    "packaged_tool": "1 saves listed; one copied to p0002",
+    "shared_pair": "byte-identical after the tool"
+  },
+  "not_verified": [
+    "Nothing here ran on a Dreamcast: card creation, the CMD10 query from the menu runtime, the first-launch ownership scan time and the stage admitting a launcher-made card are console tests.",
+    "The PC tool ran on synthetic cards only, not on the owner's p0005."
+  ],
+  "console_compatibility_verified": false
+}
