@@ -21,7 +21,7 @@ static FATFS fs;
 static struct kui_volume volume;
 static bool raw_open,cancel_flag;
 static unsigned raw_begins,salt_counter;
-static const uint8_t test_cid[16]={0x03,'S','D','K','U','I','-','T','E','S','T',0x10,1,2,3,0x41};
+static uint8_t test_cid[16]={0x03,'S','D','K','U','I','-','T','E','S','T',0x10,1,2,3,0x41};
 static struct kui_vmu_game_card_work work;
 
 static void log_line(const char *format,...) {
@@ -52,12 +52,16 @@ static int raw_read(void *context,uint32_t lba,uint8_t out[512]) {
     if(lba>=sectors) return -1;
     memcpy(out,disk+(size_t)lba*512u,512u);return 0;
 }
+static bool identity(void *context,struct kui_vmu_game_card_raw *out) {
+    CHECK(context==&volume && !raw_open);
+    memcpy(out->cid,test_cid,16u);out->card_sectors=sectors;out->high_capacity=true;
+    return true;
+}
 static bool raw_begin(void *context,struct kui_vmu_game_card_raw *out) {
     CHECK(context==&volume && !raw_open);
     if(f_mount(NULL,"0:",0)!=FR_OK) return false;
     raw_open=true;++raw_begins;
-    out->read_sector=raw_read;out->context=&disk;memcpy(out->cid,test_cid,16u);
-    out->card_sectors=sectors;out->high_capacity=true;
+    out->read_sector=raw_read;out->context=&disk;
     return true;
 }
 static bool raw_end(void *context) {
@@ -69,7 +73,7 @@ static void salt(void *context,uint8_t out[16]) {
     CHECK(context==&volume);memset(out,0x3c,16u);++salt_counter;
     memcpy(out,&salt_counter,sizeof(salt_counter));
 }
-static const struct kui_vmu_game_card_platform platform={&volume,raw_begin,raw_end,salt};
+static const struct kui_vmu_game_card_platform platform={&volume,identity,raw_begin,raw_end,salt};
 static int select_card(const char *product,const struct kui_vmu_fs_range *forbidden,size_t count,
     struct kui_vmu_game_card_choice *choice,uint8_t wire[4096]) {
     return kui_vmu_game_card_select(product,volume.start,(uint64_t)volume.start+volume.count,
@@ -320,6 +324,12 @@ int main(int argc,char **argv) {
     unmount();memcpy(disk,good,(size_t)sectors*512u);free(good);mount();
     CHECK(select_card("NEW-0001",NULL,0,&choice,wire)==KUI_VMU_GAME_CARD_READY && choice.pair==7u);
     admitted(wire,7u);
+
+    /* A clone of the SD card has another CID: re-mapped, not handed over. */
+    test_cid[15]^=0x5au;begins=raw_begins;
+    CHECK(select_card("MK-51136",NULL,0,&choice,wire)==KUI_VMU_GAME_CARD_READY && choice.collected);
+    CHECK(raw_begins==begins+1u);admitted(wire,2u);
+    CHECK(select_card("MK-51136",NULL,0,&choice,wire)==KUI_VMU_GAME_CARD_READY && !choice.collected);
 
     /* The unbound pair is byte-identical after every launch above. */
     CHECK(file_read(KUI_VMU_GAME_CARD_ROOT "/p0005/card.vmd",shared_check,sizeof(shared_check))==131072u);

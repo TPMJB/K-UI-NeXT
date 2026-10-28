@@ -104,7 +104,8 @@ static bool card_allocated(struct kui_vmu_game_card_work *w,FATFS *fs,unsigned r
     }
     return true;
 }
-/* Same files, same clusters, same volume geometry as a saved profile. */
+/* Same card, files, clusters and volume geometry as a saved profile. A copy
+ * of the SD card has another CID, which the stage would refuse. */
 static bool card_profile_current(struct kui_vmu_game_card_work *w,unsigned pair,
     uint64_t first,uint64_t end,const uint8_t identity[16]) {
     char expected[96]={0};
@@ -114,6 +115,8 @@ static bool card_profile_current(struct kui_vmu_game_card_work *w,unsigned pair,
        kui_vmu_persist_profile_decode(&w->cached,w->check,sizeof(w->check)) ||
        memcmp(w->cached.pair_path,expected,sizeof(expected)) ||
        memcmp(w->cached.image_id,identity,16u) || kui_vmu_game_card_template(w->cached.cid) ||
+       memcmp(w->cached.cid,w->raw.cid,16u) || w->cached.card_sectors!=w->raw.card_sectors ||
+       w->cached.high_capacity!=(w->raw.high_capacity?1u:0u) ||
        w->cached.partition_first!=first || w->cached.partition_end!=end) return false;
     const struct kui_vmu_persist_geometry *g=&w->cached.geometry;
     for(unsigned role=0;role<3u;role++) {
@@ -148,11 +151,11 @@ static int card_collect(struct kui_vmu_game_card_work *w,unsigned pair,uint64_t 
     char pair_path[20];
     snprintf(pair_path,sizeof(pair_path),"/KUI/vmu-test/p%04u",pair);
     log("Virtual card: checking p%04u ownership; keep power on",pair);
-    memset(&w->raw,0,sizeof(w->raw));
+    w->raw.read_sector=NULL;w->raw.context=NULL;
     if(!platform->raw_begin(platform->context,&w->raw) || !w->raw.read_sector) {
         bool remounted=platform->raw_end(platform->context);
-        return card_refuse(choice,remounted?"card identity or raw reads unavailable":
-            "card identity unavailable and the volume did not remount");
+        return card_refuse(choice,remounted?"raw card reads unavailable":
+            "raw card reads unavailable and the volume did not remount");
     }
     struct kui_vmu_fs_input input={.read_sector=w->raw.read_sector,.context=w->raw.context,
         .card_sectors=w->raw.card_sectors,.partition_first=first,.partition_end=end,
@@ -251,7 +254,8 @@ int kui_vmu_game_card_select(const char *product,uint64_t partition_first,uint64
     if(wire) memset(wire,0,KUI_VMU_PERSIST_PROFILE_WIRE_BYTES);
     if(!choice) return KUI_VMU_GAME_CARD_FAILED;
     memset(choice,0,sizeof(*choice));
-    if(!wire || !w || !platform || !platform->raw_begin || !platform->raw_end || !platform->salt || !log ||
+    if(!wire || !w || !platform || !platform->identity || !platform->raw_begin || !platform->raw_end ||
+       !platform->salt || !log ||
        (forbidden_count && !forbidden) || partition_first>=partition_end)
         return card_refuse(choice,"game card arguments");
     if(!kui_vmu_game_card_key(product,choice->key)) return KUI_VMU_GAME_CARD_UNBOUND;
@@ -280,6 +284,9 @@ int kui_vmu_game_card_select(const char *product,uint64_t partition_first,uint64
         pair=w->pairs[i];
     }
     if(card_stopped(cancel)) return KUI_VMU_GAME_CARD_CANCELLED;
+    memset(&w->raw,0,sizeof(w->raw));
+    if(!platform->identity(platform->context,&w->raw) || !w->raw.card_sectors)
+        return card_refuse(choice,"SD card identity unavailable");
     uint8_t identity[16];int result;
     if(pair) {
         choice->pair=pair;

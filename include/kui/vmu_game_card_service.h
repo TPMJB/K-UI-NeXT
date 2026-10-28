@@ -15,11 +15,12 @@
 #define KUI_VMU_GAME_CARD_ROOT "0:/KUI/vmu-test"
 #define KUI_VMU_GAME_CARD_PAIRS_MAX 9999u
 
-/* Raw access exists only between raw_begin and raw_end. raw_begin unmounts
- * FatFs, then supplies absolute single-sector reads of the same SCI card and
- * its freshly read CID, capacity and HC flag. raw_end remounts "0:" and must
- * fail unless the volume has the same start and length. salt fills 16 bytes
- * that differ between calls (clock and counter). */
+/* identity reads the SCI card's CID, capacity and HC flag afresh while the
+ * mounted volume is idle. Raw access exists only between raw_begin and
+ * raw_end: raw_begin unmounts FatFs and supplies absolute single-sector
+ * reads of the same card; raw_end remounts "0:" and must fail unless the
+ * volume has the same start and length. salt fills 16 bytes that differ
+ * between calls (clock and counter). */
 struct kui_vmu_game_card_raw {
     int (*read_sector)(void *context,uint32_t lba,uint8_t out[512]);
     void *context;
@@ -29,6 +30,7 @@ struct kui_vmu_game_card_raw {
 };
 struct kui_vmu_game_card_platform {
     void *context;
+    bool (*identity)(void *context,struct kui_vmu_game_card_raw *out);
     bool (*raw_begin)(void *context,struct kui_vmu_game_card_raw *out);
     bool (*raw_end)(void *context);
     void (*salt)(void *context,uint8_t out[16]);
@@ -60,7 +62,8 @@ struct kui_vmu_game_card_choice {
     char problem[96];
 };
 /* Selects, and when absent creates, the pair bound to product's key:
- * - READY: wire holds that pair's canonical profile. A new pair is a blank
+ * - READY: wire holds that pair's canonical profile for this very SD card
+ *   (CID, capacity, partition, geometry and file clusters). A new pair is a blank
  *   formatted card, zero journal, fresh identity and game.bin written last,
  *   created only after every existing pair's clusters read as allocated.
  *   A pair whose saved profile no longer matches its files is re-mapped by

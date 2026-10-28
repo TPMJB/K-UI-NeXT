@@ -11,12 +11,17 @@ static int games_card_read(void *context,uint32_t lba,uint8_t out[512]) {
     struct games_card_platform *p=context;
     return p->raw.read && !p->raw.read(p->raw.ctx,lba,1u,out)?0:-1;
 }
+/* CMD10 while the mounted volume is idle, as the import tool pins its card. */
+static bool games_card_identity(void *context,struct kui_vmu_game_card_raw *out) {
+    struct kui_vmu_sd_identity id;(void)context;
+    if(!kui_sd_vmu_profile_identity(&id)) return false;
+    memcpy(out->cid,id.cid,16u);out->card_sectors=id.sectors;out->high_capacity=id.high_capacity;
+    return true;
+}
 static bool games_card_raw_begin(void *context,struct kui_vmu_game_card_raw *out) {
-    struct games_card_platform *p=context;struct kui_vmu_sd_identity id;
-    if(f_mount(NULL,"0:",0)!=FR_OK || !kui_sd_raw_read_ops(&p->raw) || !p->raw.read ||
-       !kui_sd_vmu_profile_identity(&id)) return false;
-    out->read_sector=games_card_read;out->context=p;memcpy(out->cid,id.cid,16u);
-    out->card_sectors=id.sectors;out->high_capacity=id.high_capacity;
+    struct games_card_platform *p=context;
+    if(f_mount(NULL,"0:",0)!=FR_OK || !kui_sd_raw_read_ops(&p->raw) || !p->raw.read) return false;
+    out->read_sector=games_card_read;out->context=p;
     return true;
 }
 static bool games_card_raw_end(void *context) {
@@ -52,7 +57,8 @@ static bool games_card_prepare(const struct kui_retail_manifest *map,struct kui_
         forbidden[i]=(struct kui_vmu_fs_range){e->card_lba,e->blocks};
     }
     struct games_card_platform context={fs,*kui_media_volume(),{0}};
-    const struct kui_vmu_game_card_platform platform={&context,games_card_raw_begin,games_card_raw_end,games_card_salt};
+    const struct kui_vmu_game_card_platform platform={&context,games_card_identity,games_card_raw_begin,
+        games_card_raw_end,games_card_salt};
     struct kui_vmu_game_card_choice choice;
     int result=kui_vmu_game_card_select(map->product,map->partition_start,map->partition_end,
         forbidden,map->extent_count,&platform,work,wire,&choice,log,cancel);

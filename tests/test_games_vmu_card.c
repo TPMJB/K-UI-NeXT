@@ -63,16 +63,17 @@ int kui_vmu_game_card_select(const char *product,uint64_t partition_first,uint64
         const struct kui_retail_extent *e=&mock.map->slots[mock.map->track_count+i].extent;
         CHECK(forbidden[i].lba==e->card_lba && forbidden[i].blocks==e->blocks);
     }
-    /* The platform is exercised exactly as the service uses it. */
+    /* The platform is exercised exactly as the service uses it: identity
+     * while mounted, then raw reads between unmount and remount. */
     struct kui_vmu_game_card_raw raw={0};
-    bool began=platform->raw_begin(platform->context,&raw);
-    CHECK(began==!mock.identity_fails && mock.unmounts==1 && !mock.mounted);
-    if(began) {
-        uint8_t sector[512];
+    CHECK(platform->identity(platform->context,&raw)==!mock.identity_fails && mock.mounted && !mock.unmounts);
+    if(!mock.identity_fails) {
         CHECK(!memcmp(raw.cid,(uint8_t[16]){0x42,0x42,0x42,0x42,0x42,0x42,0x42,0x42,0x42,0x42,0x42,0x42,0x42,0x42,0x42,0x42},16u));
         CHECK(raw.card_sectors==4000000u && raw.high_capacity);
-        CHECK(!raw.read_sector(raw.context,0x1234u,sector) && sector[0]==0x34 && mock.raw_reads==1);
     }
+    uint8_t sector[512];
+    CHECK(platform->raw_begin(platform->context,&raw) && mock.unmounts==1 && !mock.mounted);
+    CHECK(!raw.read_sector(raw.context,0x1234u,sector) && sector[0]==0x34 && mock.raw_reads==1);
     CHECK(platform->raw_end(platform->context)==!mock.volume_moves && mock.mounted);
     uint8_t one[16],two[16];platform->salt(platform->context,one);platform->salt(platform->context,two);
     mock.salts_differ=memcmp(one,two,16u)!=0;
