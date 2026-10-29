@@ -19,9 +19,10 @@ enum kui_salvage_read_state { KUI_SALVAGE_READ_NONE, KUI_SALVAGE_READ_READING,
     KUI_SALVAGE_READ_ACCEPTED, KUI_SALVAGE_READ_RETRY, KUI_SALVAGE_READ_SPLIT,
     KUI_SALVAGE_READ_DEFERRED, KUI_SALVAGE_READ_FATAL };
 /* Transient saved-data work, never persisted in a job. Counts describe
- * processed journal records or checked targets, not optical repair attempts. */
+ * processed journal records, checked targets or visited directory entries,
+ * not optical repair attempts. DIRECTORY has no known total (sd_total=0). */
 enum kui_salvage_sd_phase { KUI_SALVAGE_SD_NONE, KUI_SALVAGE_SD_JOURNAL,
-    KUI_SALVAGE_SD_TARGETS };
+    KUI_SALVAGE_SD_TARGETS, KUI_SALVAGE_SD_DIRECTORY };
 struct kui_salvage_status {
     enum kui_salvage_result result;
     bool first_pass_complete, complete, collection_active;

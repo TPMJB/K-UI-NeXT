@@ -12,6 +12,7 @@ from make_recovery_vectors import sector, mode2_sector
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = (
+    "burst-legacy-index", "burst-legacy-pending", "burst-legacy-missing", "burst-legacy-corrupt", "burst-legacy-noise", "burst-legacy-candidate-dir", "burst-legacy-scan-stop", "burst-legacy-scan-open-error", "burst-legacy-scan-read-error", "burst-legacy-scan-close-error", "burst-legacy-scan-sync-error", "burst-legacy-scan-index-error", "burst-legacy-scan-duplicate",
     "burst-sd-media-error", "burst-sd-window",
     "burst-sd-batched", "burst-sd-placeholder", "burst-sd-candidate", "burst-sd-staged-mutation", "burst-sd-short-read", "burst-sd-read-error", "burst-sd-after-read-stop", "burst-sd-boundary-stop", "burst-sd-pending",
     "burst-sd-progress", "burst-sd-journal-stop", "burst-sd-check-start-stop", "burst-sd-check-mid-stop",
@@ -136,6 +137,9 @@ def main():
         for name in ("track01.bin","track02.raw"):shutil.copyfile(fixture/name,burst_fixture/name)
         (burst_fixture/"track03.bin").write_bytes(b"".join(sector(fad,fad) for fad in range(45150,45150+512)))
         (burst_fixture/"alternate-staged.raw").write_bytes(sector(45157,999))
+        legacy_fixture=base/"legacy-index";legacy_fixture.mkdir()
+        for name in ("track01.bin","track02.raw"):shutil.copyfile(fixture/name,legacy_fixture/name)
+        (legacy_fixture/"track03.bin").write_bytes(b"".join(sector(fad,fad) for fad in range(45150,45150+1024)))
         cd_fixtures={}
         for cd in ("cd-mixed","cd-mode2","cd-audio","cd-offset","cd-mode-switch","cd-audio-anchor-mismatch","cd-audio-silence","cd-profile-mismatch"):
             folder=base/cd;folder.mkdir();cd_fixtures[cd]=folder
@@ -159,7 +163,7 @@ def main():
                 if case.startswith("burst-") or (case.startswith("partial-") or (case.startswith("health-") and case!="health-manual-skip")) or (case.startswith("cd-") and case not in ("cd-mode-switch","cd-audio-anchor-mismatch","cd-audio-silence")) or case=="drive-pass" or case=="anchor-resume-retry" or case in ("repair", "legacy-repair", "anchor-interior", "large-map", "finish-stop", "fatal-committed-resume", "fast-dense", "fast-invalid", "legacy-narrow-v1-resume", "legacy-narrow-v2-resume") or case.startswith("auto-") or case in ("defer-range","defer-tail","defer-stop-before","defer-stop-after","defer-queue","defer-torn","defer-index","defer-boundary"):
                     exported.mkdir()
                     extra = [str(exported)]
-                selected_fixture = cd_fixtures.get(case,burst_fixture if case.startswith("burst-") else health_fixture if case.startswith("health-") else defer_fixture if case.startswith("defer-") and case!="defer-tail" else fast_fixture if case=="fast-dense" else large_fixture if case == "large-map" else fixture)
+                selected_fixture = cd_fixtures.get(case,legacy_fixture if case.startswith("burst-legacy-") else burst_fixture if case.startswith("burst-") else health_fixture if case.startswith("health-") else defer_fixture if case.startswith("defer-") and case!="defer-tail" else fast_fixture if case=="fast-dense" else large_fixture if case == "large-map" else fixture)
                 output = run(str(args.binary), str(image), str(selected_fixture), case, *extra)
                 if case in ("partial-prefix","partial-cd-mode1","partial-cd-mode2"):
                     assert "transport=partial accepted=11 unverified=21" in output
@@ -174,7 +178,7 @@ def main():
                 if case in ("health-partial-reset","health-manual-skip"):
                     assert "health check after " not in output
                 for line in output.splitlines():
-                    if line.startswith(("PASS bounded worker allocations:","PASS repair optical reduction:","PASS saved check batching:")):
+                    if line.startswith(("PASS bounded worker allocations:","PASS repair optical reduction:","PASS saved check batching:","PASS legacy candidate index:")):
                         print(f"{kind}: {line}", flush=True)
                 if extra:
                     targets = {"cd-mixed":32,"cd-mode2":32,"cd-audio":32,"cd-profile-mismatch":32,"cd-offset":0,"auto-legacy-resume": 4, "anchor-interior": 40, "large-map": 8208, "finish-stop": 0,"fast-dense":288,"fast-invalid":2,"legacy-narrow-v1-resume":2,"legacy-narrow-v2-resume":2,"defer-range":34,"defer-tail":10,"defer-stop-before":34,"defer-stop-after":34,"defer-queue":34,"defer-torn":34,"defer-index":34,"defer-boundary":5}.get(case, 36)
@@ -184,6 +188,7 @@ def main():
                         targets=2560 if case in ("health-region","health-invalid","health-one-anchor","health-partial-anchors") else 479 if case=="health-partial-reset" else 256
                     if case.startswith("burst-"):
                         targets={"burst-gaps":34,"burst-audio":4,"burst-boundaries":20,"burst-sd-window":508}.get(case,512)
+                    if case.startswith("burst-legacy-"):targets=1024
                     check_verifier(exported, targets=targets)
                 assert f"PASS salvage {case}" in output
                 run("fsck.fat" if kind == "fat32" else "fsck.exfat", "-n", str(image))

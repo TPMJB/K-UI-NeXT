@@ -3,7 +3,7 @@
  * Optical reads, persisted bytes and target order are checked independently. */
 #define BURST_SECTORS 512u
 static struct {
-    bool holes[3][BURST_SECTORS],stop_ready,mutated,committed[1024];
+    bool holes[3][1024u],stop_ready,mutated,committed[1024];
     unsigned phase,targets,batches,singles,events,first_reverse_fad,first_reverse_count;
     unsigned target_track[1024],target_sector[1024],order[2048];
     uint8_t *first_batch;
@@ -13,7 +13,11 @@ static bool burst_case(void) {return !strncmp(test.test,"burst-",6);}
 static void burst_plan(void) {
     plan.tracks[2].end=plan.tracks[2].toc_end=45150+BURST_SECTORS;
     plan.bytes=(44u+BURST_SECTORS)*KUI_RAW_BYTES;
-    if(!strcmp(test.test,"burst-sd-window")) {
+    if(legacy_index_case()) {
+        plan.tracks[2].end=plan.tracks[2].toc_end=45150+1024u;
+        plan.bytes=(44u+1024u)*KUI_RAW_BYTES;
+        for(unsigned n=0;n<1024u;++n)burst.holes[2][n]=true;
+    } else if(!strcmp(test.test,"burst-sd-window")) {
         plan.tracks[2].end=plan.tracks[2].toc_end=45150+BURST_SECTORS-1;
         plan.bytes-=KUI_RAW_BYTES;
         for(unsigned n=3;n<BURST_SECTORS-1;++n)burst.holes[2][n]=true;
@@ -118,6 +122,7 @@ static void saved_check_progress(const struct kui_salvage_status *status) {
     }
 }
 static void burst_progress(const struct kui_salvage_status *status) {
+    legacy_index_progress(status);
     saved_check_progress(status);
     if(burst.stop_ready && status->first_pass_complete && !status->pass) {test.cancelled=true;test.did_cancel=true;}
     if(burst.phase==1 && !strcmp(test.test,"burst-stop-before-read") && status->pass &&
@@ -309,6 +314,7 @@ static void run_burst_fixture(char **argv,struct kui_capture_ops *ops,struct kui
     assert(!burst_inspect(job,false));
     burst.stop_ready=false;burst.phase=1;test.cancelled=false;test.repairing=true;
     if(saved_check_case()) {run_saved_check_fixture(job,ops,options);return;}
+    if(legacy_index_case()) {run_legacy_index_fixture(job,ops,options);return;}
     if(!strcmp(test.test,"burst-reverse") || !strcmp(test.test,"burst-interior"))options->passes=5;
     if(!strcmp(test.test,"burst-held-recovery"))ops->recover=recover;
     if(!strcmp(test.test,"burst-stop-mid"))test.stop_after=5;

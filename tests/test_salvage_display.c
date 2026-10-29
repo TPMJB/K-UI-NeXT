@@ -11,6 +11,8 @@ static void render(const struct kui_salvage_status *status) {
     assert(view.line_count==7);
     if(status->sd_phase==KUI_SALVAGE_SD_NONE)
         assert(view.done==status->done && view.total==status->total);
+    else if(status->sd_phase==KUI_SALVAGE_SD_DIRECTORY)
+        assert(!view.done && !view.total);
     else assert(view.done==(status->sd_done<status->sd_total?status->sd_done:status->sd_total) && view.total==status->sd_total);
     for(unsigned i=0;i<view.line_count;++i) {
         assert(strlen(view.lines[i])<KUI_APP_LINE_CAP);
@@ -195,11 +197,38 @@ int main(void) {
     assert(!strcmp(view.lines[2],"Saved checks 0/0; nothing to check."));
     status.sd_done=4;status.sd_total=3;render(&status);
     assert(view.done==3 && strstr(view.lines[2],"3/3 (100.0%)"));
+    /* A one-pass legacy directory scan has no known total. Its counter is
+     * entries visited, independent of the original target queue or byte bar. */
+    status=(struct kui_salvage_status){.first_pass_complete=true,.targets=31075,
+        .recovered=573,.remaining=30502,.done=1411200000,.total=1411200000,
+        .track=3,.tracks=3,.fad=549299,.read_count=1,.read_attempt=1,.read_limit=11,
+        .read_state=KUI_SALVAGE_READ_ACCEPTED,.sd_phase=KUI_SALVAGE_SD_DIRECTORY};
+    strcpy(status.job,"/KUI/salvage/job-0002");
+    strcpy(status.message,"Indexing legacy repair candidates");render(&status);
+    assert(!strcmp(view.message,"Indexing legacy repair candidates"));
+    assert(!strcmp(view.lines[0],"Indexing saved repair files."));
+    assert(!strcmp(view.lines[1],"Queue 31075  saved repairs 573  left 30502"));
+    assert(!strcmp(view.lines[2],"Directory entries checked 0"));
+    assert(!strcmp(view.lines[3],"Checking saved repair filenames on SD."));
+    assert(!strcmp(view.lines[4],"Saved target checks follow this directory scan."));
+    for(unsigned i=0;i<view.line_count;++i)
+        assert(!strstr(view.lines[i],"0/0") && !strchr(view.lines[i],'%') && !strstr(view.lines[i],"attempt"));
+    status.sd_done=573;render(&status);
+    assert(!strcmp(view.lines[2],"Directory entries checked 573"));
+    status.sd_done=UINT64_MAX;status.sd_total=1;render(&status);
+    assert(!strcmp(view.lines[2],"Directory entries checked 18446744073709551615"));
+    status.result=KUI_SALVAGE_STOPPED;render(&status);
+    assert(view.stopped && !strcmp(view.lines[3],"Directory scan stopped; saved progress retained."));
+    assert(!strcmp(view.lines[4],"Resume rebuilds the saved repair index."));
+    status.result=KUI_SALVAGE_FAILED;status.sd_phase=KUI_SALVAGE_SD_TARGETS;
+    status.sd_done=1;status.sd_total=31075;render(&status);
+    assert(view.done==1 && view.total==31075 && strstr(view.lines[2],"Saved checks 1/31075"));
+    status.read_fad=549299;
     status.sd_phase=KUI_SALVAGE_SD_NONE;status.pass=1;render(&status);
     assert(view.done==status.done && view.total==status.total);
     assert(!strcmp(view.lines[2],"Sector attempt 1/11; checks passed"));
     assert(strstr(view.lines[4],"Recovery pass 1; until stopped"));
     status.pass=0;render(&status);
     assert(!strcmp(view.lines[4],"Preparing disc repair; B keeps progress"));
-    puts("PASS salvage display: attempts, collection percent/rate, uncertain ETA, explicit no-read deferral, saved-data checks, resume and text width");
+    puts("PASS salvage display: attempts, collection percent/rate, uncertain ETA, explicit no-read deferral, saved-data checks, directory scan, resume and text width");
 }

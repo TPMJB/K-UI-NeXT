@@ -71,10 +71,13 @@ static void collection_progress(struct kui_app_status *out,
 }
 static void saved_progress(struct kui_app_status *out,
     const struct kui_salvage_status *status) {
+    bool directory=status->sd_phase==KUI_SALVAGE_SD_DIRECTORY;
     uint64_t done=status->sd_done<status->sd_total?status->sd_done:status->sd_total;
-    unsigned percent=collection_percent(done,status->sd_total);
-    out->done=done;out->total=status->sd_total;
-    if(status->sd_phase==KUI_SALVAGE_SD_JOURNAL)
+    unsigned percent=directory?0:collection_percent(done,status->sd_total);
+    out->done=directory?0:done;out->total=directory?0:status->sd_total;
+    if(directory)
+        snprintf(out->lines[0],KUI_APP_LINE_CAP,"Indexing saved repair files.");
+    else if(status->sd_phase==KUI_SALVAGE_SD_JOURNAL)
         snprintf(out->lines[0],KUI_APP_LINE_CAP,"Rebuilding saved journal progress.");
     else if(status->track)
         snprintf(out->lines[0],KUI_APP_LINE_CAP,"Saved track %u/%u  FAD %" PRIu32,
@@ -83,17 +86,23 @@ static void saved_progress(struct kui_app_status *out,
     snprintf(out->lines[1],KUI_APP_LINE_CAP,"Queue %" PRIu32 "  saved repairs %" PRIu32 "  left %" PRIu32,
         status->targets,status->recovered,status->remaining);
     const char *kind=status->sd_phase==KUI_SALVAGE_SD_JOURNAL?"records":"checks";
-    if(status->sd_total)
+    if(directory)
+        snprintf(out->lines[2],KUI_APP_LINE_CAP,"Directory entries checked %" PRIu64,status->sd_done);
+    else if(status->sd_total)
         snprintf(out->lines[2],KUI_APP_LINE_CAP,"Saved %s %" PRIu64 "/%" PRIu64 " (%u.%u%%)",
             kind,done,status->sd_total,percent/10u,percent%10u);
     else snprintf(out->lines[2],KUI_APP_LINE_CAP,"Saved %s 0/0; nothing to check.",kind);
-    snprintf(out->lines[3],KUI_APP_LINE_CAP,"Checking saved data on SD.");
-    snprintf(out->lines[4],KUI_APP_LINE_CAP,"Disc repair follows these saved-data checks.");
+    snprintf(out->lines[3],KUI_APP_LINE_CAP,"%s",directory?
+        "Checking saved repair filenames on SD.":"Checking saved data on SD.");
+    snprintf(out->lines[4],KUI_APP_LINE_CAP,"%s",directory?
+        "Saved target checks follow this directory scan.":"Disc repair follows these saved-data checks.");
     snprintf(out->lines[5],KUI_APP_LINE_CAP,"%.76s",status->job);
     snprintf(out->lines[6],KUI_APP_LINE_CAP,"B stops safely; existing progress is retained.");
     if(out->stopped) {
-        snprintf(out->lines[3],KUI_APP_LINE_CAP,"SD check stopped; saved progress retained.");
-        snprintf(out->lines[4],KUI_APP_LINE_CAP,"Resume checks saved data before disc repair.");
+        snprintf(out->lines[3],KUI_APP_LINE_CAP,"%s",directory?
+            "Directory scan stopped; saved progress retained.":"SD check stopped; saved progress retained.");
+        snprintf(out->lines[4],KUI_APP_LINE_CAP,"%s",directory?
+            "Resume rebuilds the saved repair index.":"Resume checks saved data before disc repair.");
     }
 }
 void kui_salvage_display_status(struct kui_app_status *out,

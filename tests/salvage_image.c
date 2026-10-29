@@ -33,6 +33,17 @@ static struct {
     struct kui_salvage_status published,interrupted,last_callback;
 } test;
 static struct kui_salvage_status *active_status;
+static bool legacy_index_case(void);
+static void legacy_index_progress(const struct kui_salvage_status *status);
+static void legacy_index_media_read(size_t count);
+static FRESULT legacy_index_stat(const TCHAR *path,FILINFO *info);
+static FRESULT legacy_index_opendir(DIR *dir,const TCHAR *path);
+static FRESULT legacy_index_readdir(DIR *dir,FILINFO *info);
+static FRESULT legacy_index_closedir(DIR *dir);
+static bool legacy_index_sync_error(void);
+static bool legacy_index_write_error(const void *data,UINT bytes);
+static void run_legacy_index_fixture(const char *job,struct kui_capture_ops *ops,struct kui_salvage_options *options);
+
 static bool partial_case(void);
 static bool partial_optical(unsigned ti,uint32_t fad,unsigned count,uint8_t *data,enum kui_read_result *result);
 static bool partial_recover(bool *result);
@@ -97,7 +108,7 @@ static void log_line(const char *fmt,...) {va_list args;va_start(args,fmt);vprin
 static bool fault(const char *name) {return test.capturing && test.fault && !strcmp(test.fault,name) && !test.injected;}
 static uint64_t blocks(void *ctx) {(void)ctx;return test.blocks;}
 static int image_read(void *ctx,uint32_t block,size_t count,uint8_t *data) {
-    (void)ctx;if(burst_case() && saved_check_media_read(count))return -1;
+    (void)ctx;legacy_index_media_read(count);if(burst_case() && saved_check_media_read(count))return -1;
     return fseeko(test.image,(off_t)block*512,SEEK_SET) || fread(data,512,count,test.image)!=count?-1:0;
 }
 static int image_write(void *ctx,uint32_t block,size_t count,const uint8_t *data) {
@@ -105,8 +116,17 @@ static int image_write(void *ctx,uint32_t block,size_t count,const uint8_t *data
 }
 static int image_sync(void *ctx) {(void)ctx;return fflush(test.image) || fsync(fileno(test.image))?-1:0;}
 static const struct kui_media_ops media={NULL,blocks,image_read,image_write,image_sync};
+FRESULT __real_f_stat(const TCHAR *,FILINFO *);
+FRESULT __wrap_f_stat(const TCHAR *path,FILINFO *info) {return legacy_index_stat(path,info);}
+FRESULT __real_f_opendir(DIR *,const TCHAR *);
+FRESULT __wrap_f_opendir(DIR *dir,const TCHAR *path) {return legacy_index_opendir(dir,path);}
+FRESULT __real_f_readdir(DIR *,FILINFO *);
+FRESULT __wrap_f_readdir(DIR *dir,FILINFO *info) {return legacy_index_readdir(dir,info);}
+FRESULT __real_f_closedir(DIR *);
+FRESULT __wrap_f_closedir(DIR *dir) {return legacy_index_closedir(dir);}
 FRESULT __real_f_write(FIL *,const void *,UINT,UINT *);
 FRESULT __wrap_f_write(FIL *file,const void *data,UINT bytes,UINT *written) {
+    if(legacy_index_write_error(data,bytes)) {*written=0;return FR_DISK_ERR;}
     const uint8_t *p=data;
     if(fault("defer-index") && bytes==32 && test.last_event==2 && !memcmp(p,"KUITGT2",7)) {test.injected=true;*written=0;return FR_DISK_ERR;}
     if(test.capturing && bytes==512 && !memcmp(p,"KUISJNL1",8)) {
@@ -132,6 +152,7 @@ FRESULT __wrap_f_write(FIL *file,const void *data,UINT bytes,UINT *written) {
 }
 FRESULT __real_f_sync(FIL *);
 FRESULT __wrap_f_sync(FIL *file) {
+    if(legacy_index_sync_error())return FR_DISK_ERR;
     if((fault("queue-sync") && test.last_event==1) || (fault("baseline-sync") && test.last_event==3) ||
        (fault("backup-sync") && test.patch_started) || (fault("complete-sync") && test.last_event==6) || (fault("candidate-sync") && test.last_event==7)) {
         test.injected=true;return FR_DISK_ERR;
@@ -370,14 +391,21 @@ static void compare_unresolved(const char *job) {
 static void legacy_header(const char *job,bool holes) {
     /* Recreate an old OFF job stopped after healthy committed data.
      * Identity binds the exact immutable header into every journal record. */
-    remount();uint8_t header[4096],journal[131072],digest[32];char path[512];
+    remount();uint8_t header[4096],digest[32];char path[512];
     snprintf(path,sizeof(path),"0:%s/header.bin",job);assert(load(path,header,sizeof(header))==sizeof(header));
     memcpy(header,"KUISALV1",8);put32(header+8,1);put32(header+20,holes?1:0);put32(header+4092,kui_crc32(0,header,4092));
     struct kui_sha256 hash;kui_sha256_init(&hash);kui_sha256_update(&hash,header,sizeof(header));kui_sha256_digest(&hash,digest);
     write_file(path,header,sizeof(header));
-    snprintf(path,sizeof(path),"0:%s/journal.bin",job);size_t size=load(path,journal,sizeof(journal));assert(size && !(size%512));
-    for(size_t at=0;at<size;at+=512) {unsigned type=get32(journal+at+16);assert(type==2 || type==3 || (holes && (type==1 || type==4)));memcpy(journal+at+40,digest,32);put32(journal+at+508,kui_crc32(0,journal+at,508));}
-    write_file(path,journal,(UINT)size);assert(f_mount(NULL,"0:",0)==FR_OK);
+    snprintf(path,sizeof(path),"0:%s/journal.bin",job);FIL journal;UINT got,put;uint8_t event[512];
+    assert(f_open(&journal,path,FA_READ|FA_WRITE)==FR_OK && f_size(&journal) && !(f_size(&journal)%512));
+    FSIZE_t size=f_size(&journal);
+    for(FSIZE_t at=0;at<size;at+=512) {
+        assert(f_lseek(&journal,at)==FR_OK && f_read(&journal,event,sizeof(event),&got)==FR_OK && got==sizeof(event));
+        unsigned type=get32(event+16);assert(type==2 || type==3 || (holes && (type==1 || type==4)));
+        memcpy(event+40,digest,32);put32(event+508,kui_crc32(0,event,508));
+        assert(f_lseek(&journal,at)==FR_OK && f_write(&journal,event,sizeof(event),&put)==FR_OK && put==sizeof(event));
+    }
+    assert(f_sync(&journal)==FR_OK && f_close(&journal)==FR_OK && f_mount(NULL,"0:",0)==FR_OK);
 }
 static void check_legacy_header(const char *job) {
     remount();uint8_t header[4096];char path[512];snprintf(path,sizeof(path),"0:%s/header.bin",job);
@@ -410,6 +438,7 @@ static void compare_complete(const char *job) {
 #include "salvage_defer_fixture.inc"
 #include "salvage_partial_fixture.inc"
 #include "salvage_burst_fixture.inc"
+#include "salvage_legacy_index_fixture.inc"
 int main(int argc,char **argv) {
     if(argc!=4 && argc!=5)return 2;
     if(argc==5)export_dir=argv[4];

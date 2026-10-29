@@ -29,7 +29,7 @@ struct salvage {
     const struct kui_salvage_options *options;
     struct kui_salvage_status *status;
     uint32_t sectors[99], crc[99], baseline[99];
-    bool baselined[99], failed, journal_open, index_open, ready, completed, packed, identified, recovering;
+    bool baselined[99], failed, journal_open, index_open, ready, completed, packed, identified, recovering, legacy_indexed;
     unsigned read_failures,collection_bad_ranges,collection_health_at,collection_issue_ranges;
     unsigned target_count,recovered_count,patch_count,pending_count;
     uint32_t pending[CHUNK];
@@ -171,8 +171,79 @@ static bool target_get(struct salvage *s,unsigned index,struct target *t) {
        (track&0x7fffffffu)>=s->plan->count || get32(b+12)>=s->plan->tracks[track&0x7fffffffu].end-s->plan->tracks[track&0x7fffffffu].start)
         return fail(s,"Derived target index changed; resume rebuilds it from the journal");
     *t=(struct target){get32(b+12),get32(b+16),track&0x7fffffffu,get32(b+24),(track&0x80000000u)!=0};
-    if(t->patch_slot!=NO_PATCH && t->patch_slot>=s->patch_count)return fail(s,"Derived candidate index is invalid");
+    /* A v1 cache uses slot zero only as a presence marker from a completed
+     * directory scan; the original candidate file remains the authority. */
+    if(t->patch_slot!=NO_PATCH && (s->packed?t->patch_slot>=s->patch_count:t->patch_slot!=0u))
+        return fail(s,"Derived candidate index is invalid");
     return true;
+}
+/* Writers use a minimum of four digits, not arbitrary zero padding. The
+ * canonical name is too long for an SFN alias; compare its ASCII case variants
+ * just as FatFs does when opening that generated path. */
+static bool legacy_patch_number(const char *name,unsigned *index) {
+    char folded[32],canonical[32];unsigned length=0;
+    while(name[length]) {
+        if(length>=sizeof(folded)-1u)return false;
+        unsigned char c=(unsigned char)name[length];
+        if(c>=128u)return false;
+        folded[length]=(char)(c>='a' && c<='z'?c-'a'+'A':c);++length;
+    }
+    folded[length]=0;
+    if(strncmp(folded,"PATCH-",6))return false;
+    unsigned value=0,digits=0;const char *p=folded+6;
+    while(*p>='0' && *p<='9') {
+        unsigned digit=(unsigned)(*p++-'0');
+        if(value>(UINT_MAX-digit)/10u)return false;
+        value=value*10u+digit;++digits;
+    }
+    if(digits<4u || strcmp(p,".BIN"))return false;
+    snprintf(canonical,sizeof(canonical),"PATCH-%04u.BIN",value);
+    if(strcmp(folded,canonical))return false;
+    *index=value;return true;
+}
+/* Legacy candidates are individually published files and have no CANDIDATE
+ * journal event. Discover them once, then reuse a checksummed presence marker
+ * in the disposable target cache. No absence is trusted until the entire
+ * directory and close have succeeded and the derived index has synced. */
+static bool index_legacy_patches(struct salvage *s) {
+    if(s->packed || s->legacy_indexed)return true;
+    saved_check_start(s,KUI_SALVAGE_SD_DIRECTORY,0,"Indexing published legacy repair candidates");
+    if(stop(s))return false;
+    snprintf(s->path,sizeof(s->path),"0:%s",s->status->job);
+    DIR dir;FRESULT r=f_opendir(&dir,s->path);
+    if(r!=FR_OK)return fail(s,"Cannot list legacy repair candidates");
+    bool ok=true;unsigned candidates=0;
+    for(;;) {
+        if(stop(s)) {ok=false;break;}
+        FILINFO info;r=f_readdir(&dir,&info);
+        if(r!=FR_OK) {ok=fail(s,"Cannot finish legacy candidate directory scan");break;}
+        if(!info.fname[0])break;
+        ++s->status->sd_done;
+        unsigned index;
+        if(legacy_patch_number(info.fname,&index) && index<s->target_count) {
+            if((info.fattrib&AM_DIR) || info.fsize!=PATCH_BYTES) {
+                ok=fail(s,"Published legacy candidate has invalid type or length");break;
+            }
+            struct target t;
+            if(!target_get(s,index,&t)) {ok=false;break;}
+            if(t.patch_slot!=NO_PATCH) {
+                ok=fail(s,"Duplicate published legacy candidate name");break;
+            }
+            t.patch_slot=0;
+            if(!target_put(s,index,&t)) {ok=false;break;}
+            ++candidates;
+        }
+        snprintf(s->status->message,sizeof(s->status->message),
+            "Indexing legacy repair candidates; %u found",candidates);
+        update(s,false);
+    }
+    if(f_closedir(&dir)!=FR_OK)ok=fail(s,"Legacy candidate directory close failed");
+    if(!ok || stop(s))return false;
+    if(!sync_file(s,&s->index))return false;
+    s->legacy_indexed=true;
+    s->ops->log("Salvage legacy index: entries=%" PRIu64 " candidates=%u; one directory scan",
+        s->status->sd_done,candidates);
+    saved_check_end(s);return !stop(s);
 }
 static uint64_t journal_limit(struct salvage *s) {
     /* At most TARGET+CANDIDATE+REPAIRED per sector, one CHUNK per sector
@@ -674,6 +745,11 @@ static bool load_patch(struct salvage *s,unsigned index,bool *exists) {
         return ok;
     }
     char name[32];snprintf(name,sizeof(name),"patch-%04u.bin",index);path(s,name);
+    if(s->legacy_indexed) {
+        *exists=t.patch_slot!=NO_PATCH;
+        if(!*exists)return true;
+        return exact_file(s,name,s->patch,PATCH_BYTES) && patch_valid(s,index);
+    }
     FILINFO info;FRESULT r=f_stat(s->path,&info);*exists=r==FR_OK;
     if(r==FR_NO_FILE)return true;
     if(r!=FR_OK)return fail(s,"Cannot inspect repair candidate");
@@ -709,6 +785,7 @@ static bool publish_patch(struct salvage *s,unsigned index) {
     if(f_rename(oldpath,s->path)!=FR_OK)return fail(s,"Cannot publish verified repair candidate");
     if(!exact_file(s,name,s->patch,PATCH_BYTES) || !patch_valid(s,index))return false;
     if(memcmp(s->patch+64+KUI_RAW_BYTES,s->data,KUI_RAW_BYTES))return fail(s,"Published repair candidate changed");
+    if(s->legacy_indexed) {t->patch_slot=0;if(!target_put(s,index,t))return false;}
     return true;
 }
 static bool read_target(struct salvage *s,unsigned index) {
@@ -738,7 +815,7 @@ static bool reconcile(struct salvage *s) {
     if(!s->ready)return true;
     /* Commit the disposable index allocation before a read fault can poison
      * storage and prevent normal close from publishing its length. */
-    if(!sync_file(s,&s->index))return false;
+    if(!sync_file(s,&s->index) || !index_legacy_patches(s))return false;
     saved_check_start(s,KUI_SALVAGE_SD_TARGETS,s->target_count,
         "Checking durable targets and interrupted patches");
     for(unsigned i=0;i<s->target_count;) {
@@ -781,11 +858,10 @@ static bool reconcile(struct salvage *s) {
             s->status->track=t->track+1;s->status->fad=s->plan->tracks[t->track].start+t->sector;
             update(s,false);
             if(stop(s))return false;
-            /* A packed candidate exists only through a journaled slot. The
-             * group's verified index snapshot already proves its absence;
-             * legacy files still require their per-target directory lookup. */
+            /* Packed slots come from the journal; legacy presence comes from
+             * the completed directory scan. Both are checksummed snapshots. */
             exists=false;
-            if((!s->packed || t->patch_slot!=NO_PATCH) && !load_patch(s,index,&exists))return false;
+            if(t->patch_slot!=NO_PATCH && !load_patch(s,index,&exists))return false;
             if(kui_crc32_capture(0,saved,KUI_RAW_BYTES)!=staged_crc[n])
                 return fail(s,"Staged saved-target data changed during reconciliation");
             if(t->repaired) {
@@ -1023,6 +1099,7 @@ enum kui_salvage_result kui_salvage_run(const struct kui_capture_plan *plan,cons
     }
     if(!reconcile_patch_tail(s))goto done;
     ops->log("Salvage job: %s; unverified sectors are recorded as unresolved placeholders",status->job);
+    ops->log("Salvage format: version=%u; candidates=%s",header_version(s),s->packed?"packed":"legacy files");
     if(options->passes)ops->log("Salvage: automatic recovery, up to %u alternating passes",options->passes);
     else ops->log("Salvage: automatic alternating recovery passes until resolved or stopped");
     if(action==KUI_SALVAGE_RECOVER && !s->ready) {fail(s,"First pass is incomplete; Resume it before targeted recovery");goto done;}
