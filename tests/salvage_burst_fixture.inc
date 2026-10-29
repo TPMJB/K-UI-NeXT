@@ -29,7 +29,34 @@ static void burst_plan(void) {
             burst.target_sector[burst.targets++]=n;
         }
 }
+static struct {
+    bool active,journal_seen,targets_seen;
+    unsigned cancel_mode,reads;
+    uint64_t journal_done,target_done;
+} saved_check;
+static bool saved_check_case(void) {return !strncmp(test.test,"burst-sd-",9);}
+static void saved_check_progress(const struct kui_salvage_status *status) {
+    if(!saved_check.active || status->sd_phase==KUI_SALVAGE_SD_NONE)return;
+    assert(!status->pass && !status->collection_active && status->sd_done<=status->sd_total);
+    if(!saved_check.journal_seen) {saved_check.journal_seen=true;saved_check.reads=test.reads;}
+    assert(test.reads==saved_check.reads); /* SD checks cannot masquerade as new optical repairs. */
+    if(status->sd_phase==KUI_SALVAGE_SD_JOURNAL) {
+        assert(status->sd_total && status->sd_done>=saved_check.journal_done);
+        saved_check.journal_done=status->sd_done;
+        if(saved_check.cancel_mode==1 && status->sd_done>=10 && status->sd_done<status->sd_total)test.cancelled=true;
+    } else {
+        assert(status->sd_phase==KUI_SALVAGE_SD_TARGETS && status->sd_total==BURST_SECTORS);
+        assert(status->targets==BURST_SECTORS && status->recovered==5 && status->remaining==BURST_SECTORS-5);
+        assert(!status->read_count && status->read_state==KUI_SALVAGE_READ_NONE);
+        if(!saved_check.targets_seen) {assert(!status->sd_done);saved_check.targets_seen=true;}
+        assert(status->sd_done>=saved_check.target_done && status->sd_done<=saved_check.target_done+1);
+        if(status->track)assert(status->track==3 && status->fad>=45150 && status->fad<45150+BURST_SECTORS);
+        saved_check.target_done=status->sd_done;
+        if((saved_check.cancel_mode==2 && !status->sd_done) || (saved_check.cancel_mode==3 && status->sd_done==111))test.cancelled=true;
+    }
+}
 static void burst_progress(const struct kui_salvage_status *status) {
+    saved_check_progress(status);
     if(burst.stop_ready && status->first_pass_complete && !status->pass) {test.cancelled=true;test.did_cancel=true;}
     if(burst.phase==1 && !strcmp(test.test,"burst-stop-before-read") && status->pass &&
        status->read_state==KUI_SALVAGE_READ_READING && status->read_count>1) {
@@ -130,6 +157,30 @@ static unsigned burst_inspect(const char *job,bool provisional) {
     snprintf(path,sizeof(path),"0:%s/salvage.json",job);FILINFO info;assert(f_stat(path,&info)==FR_NO_FILE);
     assert(f_mount(NULL,"0:",0)==FR_OK);return done;
 }
+static void run_saved_check_fixture(const char *job,struct kui_capture_ops *ops,struct kui_salvage_options *options) {
+    struct kui_salvage_status status;
+    test.stop_after=5;
+    assert(run_salvage(&plan,ops,options,KUI_SALVAGE_RESUME,&status)==KUI_SALVAGE_STOPPED && status.recovered==5);
+    assert(burst_inspect(job,false)==5);
+    test.stop_after=0;test.cancelled=false;
+    saved_check.active=true;
+    saved_check.cancel_mode=!strcmp(test.test,"burst-sd-journal-stop")?1u:
+        !strcmp(test.test,"burst-sd-check-start-stop")?2u:!strcmp(test.test,"burst-sd-check-mid-stop")?3u:0u;
+    unsigned batches=burst.batches,singles=burst.singles;
+    enum kui_salvage_result result=run_salvage(&plan,ops,options,KUI_SALVAGE_RESUME,&status);
+    assert(saved_check.journal_seen && saved_check.journal_done);
+    if(saved_check.cancel_mode) {
+        assert(result==KUI_SALVAGE_STOPPED && !status.complete);
+        assert(saved_check.cancel_mode==1?status.recovered<=5:status.recovered==5);
+        assert(burst.batches==batches && burst.singles==singles && burst_inspect(job,false)==5);
+        if(saved_check.cancel_mode==1)assert(!saved_check.targets_seen && status.sd_phase==KUI_SALVAGE_SD_JOURNAL);
+        else assert(saved_check.targets_seen && status.sd_phase==KUI_SALVAGE_SD_TARGETS && saved_check.target_done==(saved_check.cancel_mode==2?0u:111u));
+        saved_check.active=false;test.cancelled=false;
+        result=run_salvage(&plan,ops,options,KUI_SALVAGE_RESUME,&status);
+    } else assert(saved_check.targets_seen && saved_check.target_done==BURST_SECTORS);
+    assert(result==KUI_SALVAGE_RESOLVED && status.complete && status.recovered==BURST_SECTORS && status.sd_phase==KUI_SALVAGE_SD_NONE);
+    test.capturing=false;compare_complete(job);
+}
 static void run_burst_fixture(char **argv,struct kui_capture_ops *ops,struct kui_salvage_options *options) {
     if(!strcmp(test.test,"burst-staged-mutation")) {
         char path[1024];snprintf(path,sizeof(path),"%s/alternate-staged.raw",argv[2]);FILE *f=fopen(path,"rb");
@@ -141,6 +192,7 @@ static void run_burst_fixture(char **argv,struct kui_capture_ops *ops,struct kui
     char job[KUI_DEST_JOB_CAP];strcpy(job,status.job);options->job=job;
     assert(!burst_inspect(job,false));
     burst.stop_ready=false;burst.phase=1;test.cancelled=false;test.repairing=true;
+    if(saved_check_case()) {run_saved_check_fixture(job,ops,options);return;}
     if(!strcmp(test.test,"burst-reverse") || !strcmp(test.test,"burst-interior"))options->passes=5;
     if(!strcmp(test.test,"burst-held-recovery"))ops->recover=recover;
     if(!strcmp(test.test,"burst-stop-mid"))test.stop_after=5;

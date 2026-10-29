@@ -26,7 +26,7 @@ static bool close_salvage_files(struct salvage *s) {
     return ok;
 }
 
-static bool salvage_track_map(struct salvage *s) {
+static bool build_salvage_track_map(struct salvage *s) {
     DWORD *map=s->track_map_small;
     unsigned words=sizeof(s->track_map_small)/sizeof(s->track_map_small[0]);
     map[0]=words;s->track_file.cltbl=map;
@@ -57,6 +57,18 @@ static bool salvage_track_map(struct salvage *s) {
     s->ops->log("Salvage I/O: track %u fast access map ready (%lu words)",
         s->open_track+1,(unsigned long)map[0]);
     return true;
+}
+
+static bool salvage_track_map(struct salvage *s) {
+    char previous[sizeof(s->status->message)];
+    memcpy(previous,s->status->message,sizeof(previous));
+    snprintf(s->status->message,sizeof(s->status->message),
+        "Preparing saved track %u/%u for fast access",s->open_track+1,s->plan->count);
+    update(s,true);
+    if(stop(s))return false;
+    bool ok=build_salvage_track_map(s);
+    if(ok) {memcpy(s->status->message,previous,sizeof(previous));update(s,true);}
+    return ok;
 }
 
 static FIL *cached_track(struct salvage *s,unsigned track,bool for_write) {

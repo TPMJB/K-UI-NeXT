@@ -71,6 +71,18 @@ static void update(struct salvage *s,bool force) {
         s->last_progress=now;s->options->progress(s->ops->ctx,o);
     }
 }
+static void saved_check_start(struct salvage *s,enum kui_salvage_sd_phase phase,
+    uint64_t total,const char *message) {
+    struct kui_salvage_status *o=s->status;
+    o->sd_phase=phase;o->sd_done=0;o->sd_total=total;
+    o->track=0;o->fad=0;o->read_fad=0;o->read_count=0;
+    o->read_attempt=0;o->read_limit=0;o->read_confirm=0;o->read_confirm_limit=0;
+    o->read_state=KUI_SALVAGE_READ_NONE;
+    snprintf(o->message,sizeof(o->message),"%s",message);update(s,true);
+}
+static void saved_check_end(struct salvage *s) {
+    update(s,true);s->status->sd_phase=KUI_SALVAGE_SD_NONE;
+}
 static void read_outcome(struct salvage *s,enum kui_salvage_read_state state) {
     struct kui_salvage_status *o=s->status;o->read_state=state;
     bool issue=state==KUI_SALVAGE_READ_RETRY || state==KUI_SALVAGE_READ_SPLIT ||
@@ -453,6 +465,8 @@ static bool replay_event(struct salvage *s) {
 static bool replay(struct salvage *s) {
     FSIZE_t length=f_size(&s->journal);
     if(length>journal_limit(s))return fail(s,"Salvage journal is oversized");
+    saved_check_start(s,KUI_SALVAGE_SD_JOURNAL,
+        (uint64_t)length/EVENT_BYTES+(length%EVENT_BYTES!=0),"Rebuilding saved progress from journal");
     uint64_t valid=0;
     while(length-valid>=EVENT_BYTES) {
         if(stop(s))return false;
@@ -463,13 +477,14 @@ static bool replay(struct salvage *s) {
             break;
         }
         if(!replay_event(s))return fail(s,"Salvage journal has invalid state transitions");
-        valid+=EVENT_BYTES;
+        valid+=EVENT_BYTES;s->status->sd_done=valid/EVENT_BYTES;update(s,false);
     }
     if(s->pending_count) {valid=s->pending_offset;s->sequence=valid/EVENT_BYTES;s->pending_count=0;}
     /* No committed progress depends on bytes after this boundary. All optical
      * anchors were checked before journal truncation or any track mutation. */
     if(!seek(s,&s->journal,valid))return false;
     if(valid!=length && (f_truncate(&s->journal)!=FR_OK || !sync_file(s,&s->journal)))return fail(s,"Cannot discard uncommitted journal tail");
+    s->status->sd_done=s->status->sd_total;saved_check_end(s);
     return true;
 }
 static bool open_journal(struct salvage *s,bool fresh) {
@@ -714,11 +729,15 @@ static bool apply_patch(struct salvage *s,unsigned index) {
 }
 static bool reconcile(struct salvage *s) {
     if(!s->ready)return true;
-    snprintf(s->status->message,sizeof(s->status->message),"Checking durable targets and interrupted patches");
+    saved_check_start(s,KUI_SALVAGE_SD_TARGETS,s->target_count,
+        "Checking durable targets and interrupted patches");
     for(unsigned i=0;i<s->target_count;++i) {
         if(stop(s))return false;
         struct target t;bool exists;
-        if(!target_get(s,i,&t) || !load_patch(s,i,&exists) || !read_target(s,i))return false;
+        if(!target_get(s,i,&t))return false;
+        s->status->track=t.track+1;s->status->fad=s->plan->tracks[t.track].start+t.sector;
+        update(s,false);
+        if(!load_patch(s,i,&exists) || !read_target(s,i))return false;
         if(t.repaired) {
             if(!exists || t.crc!=get32(s->patch+28) || memcmp(s->scratch,s->patch+64+KUI_RAW_BYTES,KUI_RAW_BYTES))return fail(s,"Previously repaired sector or its backup changed; no complete result");
         } else if(exists) {
@@ -726,8 +745,10 @@ static bool reconcile(struct salvage *s) {
         } else {
             for(unsigned n=0;n<KUI_RAW_BYTES;++n)if(s->scratch[n])return fail(s,"Unresolved placeholder changed without a durable repair candidate");
         }
-        update(s,false);
+        s->status->sd_done=i+1;update(s,false);
     }
+    saved_check_end(s);
+    snprintf(s->status->message,sizeof(s->status->message),"Saved-data checks complete; preparing disc repair");
     return true;
 }
 /* Publication remains one durable target at a time. A checked optical

@@ -3,6 +3,7 @@
  * counts real FAT-region reads, not calls to a mirrored filesystem helper. */
 #define _POSIX_C_SOURCE 200809L
 #include "kui/capture.h"
+#include "kui/salvage.h"
 #include "diskio.h"
 #include <assert.h>
 #include <stdarg.h>
@@ -52,6 +53,7 @@ DRESULT disk_ioctl(BYTE drive,BYTE command,void *data) {
 struct salvage {
     const struct kui_capture_plan *plan;
     const struct kui_capture_ops *ops;
+    struct kui_salvage_status *status;
     bool ready,failed,track_open,packed_open,track_write,packed_write;
     unsigned open_track;
     FIL track_file,packed_file;
@@ -59,6 +61,7 @@ struct salvage {
     char path[128];
 };
 static bool stop(struct salvage *s) {(void)s;return stopped;}
+static void update(struct salvage *s,bool force) {(void)s;(void)force;}
 static bool fail(struct salvage *s,const char *message) {
     s->failed=true;snprintf(last_error,sizeof(last_error),"%s",message);return false;
 }
@@ -104,7 +107,8 @@ int main(int argc,char **argv) {
     FATFS fs;assert(f_mount(&fs,"0:",1)==FR_OK && fs.fs_type==FS_FAT32);
     struct kui_capture_plan plan={.count=2,.tracks={{1,4,0,150,150+FILE_SECTORS,150+FILE_SECTORS},{2,4,0,150,151,151}}};
     const struct kui_capture_ops ops={.log=log_line};
-    struct salvage s={.plan=&plan,.ops=&ops,.ready=true};
+    struct kui_salvage_status status={0};
+    struct salvage s={.plan=&plan,.ops=&ops,.status=&status,.ready=true};
     uint64_t setup_fat=0;unsigned targets=0;
     if(!strncmp(mode,"readonly",8) || !strcmp(mode,"upgrade")) {
         FIL seed;UINT done;uint8_t data[5120]={0};

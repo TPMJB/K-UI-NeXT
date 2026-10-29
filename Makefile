@@ -881,7 +881,7 @@ build/salvage-completion-image: tests/salvage_completion_image.c $(CORE) $(FATFS
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) src/core/salvage.c src/core/recovery_guard.c src/core/destination.c src/core/salvage_completion.c src/core/known_dumps.c src/core/recovery_crc.c src/core/recovery_sector.c src/core/hash.c src/core/storage_probe.c tests/salvage_completion_image.c -Wl,--wrap=f_write,--wrap=f_sync,--wrap=f_rename,--wrap=f_read -o $@
 
-build/salvage-io-profile: tests/salvage_io_profile.c src/core/salvage_files.inc include/kui/capture.h $(FATFS) config/ffconf.h
+build/salvage-io-profile: tests/salvage_io_profile.c src/core/salvage_files.inc include/kui/capture.h include/kui/salvage.h $(FATFS) config/ffconf.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(FATFS) tests/salvage_io_profile.c -o $@
 

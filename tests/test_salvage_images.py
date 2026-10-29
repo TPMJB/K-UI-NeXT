@@ -12,6 +12,7 @@ from make_recovery_vectors import sector, mode2_sector
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = (
+    "burst-sd-progress", "burst-sd-journal-stop", "burst-sd-check-start-stop", "burst-sd-check-mid-stop",
     "burst-good", "burst-mixed", "burst-prefix", "burst-gaps", "burst-audio", "burst-boundaries", "burst-reverse", "burst-interior", "burst-all-bad", "burst-held-recovery", "burst-fatal", "burst-cancel-read", "burst-stop-before-read", "burst-stop-mid", "burst-stop-candidate", "burst-torn-repaired", "burst-staged-mutation",
     "partial-prefix", "partial-mixed", "partial-fill", "partial-audio", "partial-repair", "partial-repair-invalid", "partial-repair-streak", "partial-cd-mode1", "partial-cd-mode2",
     "health-recover", "health-recover-fail", "health-verify-fail", "health-no-recover", "health-fatal", "health-cancel", "health-different", "health-second-different", "health-one-anchor", "health-partial-anchors", "health-stop-before-probe", "health-region", "health-invalid", "health-partial-reset", "health-manual-skip",
