@@ -73,7 +73,7 @@ static void __attribute__((noipa)) native_readahead_bind(uint32_t payload) {
     uint32_t bytes=(uint32_t)(native_ra_aux_blob_end-native_ra_aux_blob_start);
     uint32_t reloc_bytes=(uint32_t)(native_ra_aux_reloc_end-native_ra_aux_reloc_start);
     const uint32_t *reloc=(const void *)native_ra_aux_reloc_start;
-    if(bytes<UINT32_C(0x1002) || bytes>UINT32_C(0x5000) ||
+    if(bytes<UINT32_C(0x1002) || bytes>KUI_NATIVE_RA_AUX_IMAGE_BYTES ||
        reloc_bytes<KUI_VMU_NATIVE_RELOCATE_HEADER_BYTES ||
        reloc[5]!=KUI_NATIVE_RA_AUX_SPAN || reloc[6]!=UINT32_C(0x8c421000))
         native_report(11u,7u);

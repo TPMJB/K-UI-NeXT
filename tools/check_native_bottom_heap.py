@@ -25,6 +25,9 @@ from check_vmu_native_worker_gateway import read_elf, symbol_bytes
 from profile_vmu_native_release_sh import ReleaseSH
 from test_vmu_native_heap_execution import SH, MASK, signed, verified_program_image
 from sh4_delay_slots import validate_delay_slot
+from native_runtime_layout import LEASE_BYTES, layout_for
+from check_native_general_lean_profile import stage_profile
+from check_native_general_lean_heap_pins import COLD_FUNCTIONS, COLD_OBJECTS
 
 SCHEMA = 'kui.native.bottom-heap.compiled-cold.v1'
 STAGE_MARKER = '__kui_native_bottom_heap_stage'
@@ -32,7 +35,6 @@ WORKER_MARKER = '__kui_native_bottom_heap_worker'
 BUDGET_MARKER = '__kui_native_private_pool_budget_stage'
 ABSOLUTE_ONE = (1, 0, 0, 0xfff1)
 RETURN = 0xdeadbeee
-LEASE_BYTES = 0x60000
 REFUSALS = ('status', 'entry-begin', 'entry-bytes', 'return-pr', 'owner-sp',
             'initial-mask', 'initial-digest', 'bad-allocate-callback',
             'bad-release-callback', 'cold-release-code', 'placeholder-header',
@@ -305,6 +307,13 @@ def budget_stage(stage):
 
 def pin_sets(stage):
     gate=stage[4].get('__kui_native_dispatch_read_gate_stage')
+    if stage_profile(stage):
+        require(gate==ABSOLUTE_ONE and budget_stage(stage),
+                'Lean heap stage requires its exact dispatch/budget profile')
+        require(set(COLD_FUNCTIONS)==set(DISPATCH_GATE_PIN_FUNCTIONS) and
+                set(COLD_OBJECTS)==set(DISPATCH_GATE_PIN_OBJECTS),
+                'Lean heap stage must retain the complete historical closure')
+        return COLD_FUNCTIONS,COLD_OBJECTS
     if gate is not None:
         require(gate==ABSOLUTE_ONE and budget_stage(stage), 'Dispatch gate stage lacks its exact budget capability')
         return DISPATCH_GATE_PIN_FUNCTIONS, DISPATCH_GATE_PIN_OBJECTS
@@ -421,6 +430,9 @@ def paired(stage, worker):
 
 def require_companion(stage, worker, proof, corpus=None):
     require(paired(stage, worker), 'Bottom companion requires both exact capabilities')
+    require(isinstance(proof,dict) and layout_for(stage[4])==layout_for(worker[4]) and
+            proof.get('lease_bytes')==layout_for(stage[4]).LEASE_BYTES,
+            'Bottom companion runtime geometry differs')
     require(isinstance(proof, dict) and proof.get('schema') == SCHEMA and
             proof.get('enabled') is True and proof.get('development') is False and
             proof.get('artifact_sha256') == dict(stage=sha(stage[0]), worker=sha(worker[0])),
@@ -470,7 +482,8 @@ def require_companion(stage, worker, proof, corpus=None):
     return True
 
 
-SOURCES = ('tools/check_native_bottom_heap.py', 'tools/check_native_bottom_heap_worker.py',
+SOURCES = ('tools/native_runtime_layout.py', 'tools/check_native_general_lean_profile.py',
+           'tools/check_native_general_lean_heap_pins.py', 'tools/check_native_bottom_heap.py', 'tools/check_native_bottom_heap_worker.py',
            'tools/profile_vmu_native_release_sh.py', 'tests/test_vmu_native_heap_execution.py',
            'src/loader/vmu_native_heap_probe_stage.c', 'src/core/vmu_native_heap.c',
            'src/core/vmu_native_heap_bottom_code.inc', 'src/core/vmu_native_stage_placement.c',
@@ -480,6 +493,7 @@ SOURCES = ('tools/check_native_bottom_heap.py', 'tools/check_native_bottom_heap_
 
 
 def require_private_pool_companion(stage, proof):
+    selected_layout=layout_for(stage[4])
     require(budget_stage(stage), 'Private-pool proof requires its exact stage marker')
     dispatch = proof.get('scalar_scan_dispatch_tests', [])
     require(len(dispatch) == 3 and {row.get('source_bytes') for row in dispatch} == {64, 512, 2048} and
@@ -511,8 +525,8 @@ def require_private_pool_companion(stage, proof):
     require(original.get('schema') == capacity_schema and original.get('status') == 'PASS' and
             original.get('input_sha256') == plans[0]['source_sha256'] and
             original.get('plan') == plans[0]['plan'] and
-            original.get('lease_payload_bytes') == LEASE_BYTES and
-            original.get('lease_physical_cost') == LEASE_BYTES + 32 and
+            original.get('lease_payload_bytes') == selected_layout.LEASE_BYTES and
+            original.get('lease_physical_cost') == selected_layout.LEASE_BYTES + 32 and
             original.get('source_files') ==
                 {name: sha((ROOT / name).read_bytes()) for name in SOURCE_FILES},
             'Private-pool original capacity proof is stale or detached from the compiled plan')
@@ -705,6 +719,7 @@ class Cold(ReleaseSH):
         self.budget_lease_at = None
         self.budget_scans = 0
         super().__init__(directory / 'stage.elf')
+        self.lease_bytes=layout_for(self.elf[4]).LEASE_BYTES
         self.has_budget = budget_stage(self.elf)
         self.directory, self.row = directory, row
         self.source, self.image, self.extent = verified_program_image(
@@ -847,7 +862,7 @@ class Cold(ReleaseSH):
                 self.write(dest, self.read(dest) ^ 1)
         if event == 'placeholder':
             if name == 'placeholder-header':
-                at = self.begin + LEASE_BYTES + 36
+                at = self.begin + self.lease_bytes + 36
                 self.write(at, self.read(at) ^ 1)
             elif name == 'placeholder-free-size':
                 self.write(self.begin + 4, self.read(self.begin + 4) ^ 1)
@@ -859,19 +874,19 @@ class Cold(ReleaseSH):
                 self.write(at & ~3, self.read(at & ~3) ^ (1 << ((at & 2) * 8)))
         if event == 'ready':
             if name == 'ready-free-size':
-                at = self.begin + LEASE_BYTES + 36
+                at = self.begin + self.lease_bytes + 36
                 self.write(at, self.read(at) ^ 1)
             elif name == 'ready-free-link':
-                at = self.begin + LEASE_BYTES + 32
+                at = self.begin + self.lease_bytes + 32
                 self.write(at, self.begin)
         if event == 'release-proof':
             if name == 'release-candidate': self.write(self.r[15], self.begin + 64)
             elif name == 'release-free-overlap': self.write(self.owner[13], self.begin)
             elif name == 'release-size-mismatch':
-                at = self.begin + LEASE_BYTES + 36
+                at = self.begin + self.lease_bytes + 36
                 self.write(at, self.read(at) - 1)
         if event == 'final-proof' and name == 'final-free-intrusion':
-            self.write(self.begin + LEASE_BYTES + 32, self.begin)
+            self.write(self.begin + self.lease_bytes + 32, self.begin)
 
         if event == 'budget-publish':
             if name == 'budget-old-reserve':
@@ -901,7 +916,7 @@ class Cold(ReleaseSH):
                 self.owner[10] <= self.pc < self.owner[10] + 0x9a)
             if original:
                 header = self.begin & 0x1fffffff
-                upper = header + LEASE_BYTES + 32
+                upper = header + self.lease_bytes + 32
                 sentinel = self.owner[13] & 0x1fffffff
                 stack = self.original_call_sp & 0x1fffffff
                 require((count == 4 and (
@@ -1051,7 +1066,7 @@ class Cold(ReleaseSH):
                         self.budget_core_calls += 1
                         require(self.r[4:8] == [0x8c010000, len(self.image), self.heap_at, self.call_at] and
                                 [self.read(self.r[15] + 4 * i) for i in range(4)] ==
-                                [self.symbols['_native_read'][0], 0, LEASE_BYTES + 32, self.budget_at],
+                                [self.symbols['_native_read'][0], 0, self.lease_bytes + 32, self.budget_at],
                                 'Compiled budget helper lost source/live-reader/physical-cost provenance')
                     elif event == '_native_budget_publish':
                         require(self.r[4:6] == [self.budget_lease_at, self.budget_at],
@@ -1064,7 +1079,7 @@ class Cold(ReleaseSH):
                                     0x8c010000 <= self.budget_slot <= 0x8c010000 + len(self.image) - 4 and
                                     self.budget_plan['reserve_after'] - self.budget_plan['reserve_before'] ==
                                     self.budget_plan['child_bytes_before'] - self.budget_plan['child_bytes_after'] ==
-                                    LEASE_BYTES + 32,
+                                    self.lease_bytes + 32,
                                     'Budget helper returned an invalid source slot or physical-capacity delta')
                             if not self.from_budget_checkpoint:
                                 checkpoint = copy.deepcopy(self)
@@ -1129,13 +1144,15 @@ def check(directory, *, self_test=False, corpus=None, development=False):
     directory = Path(directory).resolve()
     stage, worker = read_elf(directory / 'stage.elf'), read_elf(directory / 'native-worker.elf')
     if not paired(stage, worker): return dict(schema=SCHEMA, enabled=False)
+    selected_layout=layout_for(stage[4])
+    require(selected_layout==layout_for(worker[4]),'Stage/worker runtime layouts differ')
     if corpus is None:
         corpus = json.loads((directory / 'native-bottom-heap-corpus.json').read_text())
     if not development:
         require(corpus.get('schema') == 'kui.native.corpus-original-heap.v1' and
                 corpus.get('bottom_heap_schema') == 'kui.native.bottom-corpus-original-heap.v1' and
                 corpus.get('placement') == 'bottom' and corpus.get('full_structural_selection') is True and
-                corpus.get('enabled') is True and corpus.get('lease_bytes') == LEASE_BYTES,
+                corpus.get('enabled') is True and corpus.get('lease_bytes') == selected_layout.LEASE_BYTES,
                 'Bottom cold proof requires the complete original-corpus bottom proof')
         for name in ('stage.elf', 'native-worker.elf', 'native-worker.bin', 'native-ra-aux.bin'):
             require(corpus.get('artifacts', {}).get(name) == sha((directory / name).read_bytes()),
@@ -1163,9 +1180,9 @@ def check(directory, *, self_test=False, corpus=None, development=False):
             cpu = Cold(directory, row, reader=reader, seed=reader)
             cpu.scan_self_test = self_test and reader == 1
             require(cpu.run_cold(), f'Actual bottom installer refused {row["slug"]}: {cpu.refusal}')
-            require(cpu.owner_calls == [('allocate', cpu.count - LEASE_BYTES - 64),
-                                        ('allocate', LEASE_BYTES),
-                                        ('release', cpu.begin + LEASE_BYTES + 64)],
+            require(cpu.owner_calls == [('allocate', cpu.count - selected_layout.LEASE_BYTES - 64),
+                                        ('allocate', selected_layout.LEASE_BYTES),
+                                        ('release', cpu.begin + selected_layout.LEASE_BYTES + 64)],
                     'Compiled bottom installer changed original call order/arguments')
             require(cpu.unchanged_calls == 3 and cpu.code_calls == 2 and cpu.passive_calls == 1,
                     'Compiled bottom installer omitted a mandatory complete guard')
@@ -1247,12 +1264,12 @@ def check(directory, *, self_test=False, corpus=None, development=False):
                     detail=cpu.refusal[1], original_calls=cpu.owner_calls))
         first = 0x0ce00000
         end = stage[4]['__retail_stage_bss_end'][0] & 0x1fffffff
-        geometry = [(first - LEASE_BYTES - 64, LEASE_BYTES + 96, True),
-                    (first - LEASE_BYTES - 32, LEASE_BYTES + 96, False),
-                    (first - LEASE_BYTES, LEASE_BYTES + 96, False),
-                    ((end + 31) & ~31, LEASE_BYTES + 96, True),
-                    (0x0c008000, LEASE_BYTES + 96, False),
-                    (0x0cffffe0, LEASE_BYTES + 96, False)]
+        geometry = [(first - selected_layout.LEASE_BYTES - 64, selected_layout.LEASE_BYTES + 96, True),
+                    (first - selected_layout.LEASE_BYTES - 32, selected_layout.LEASE_BYTES + 96, False),
+                    (first - selected_layout.LEASE_BYTES, selected_layout.LEASE_BYTES + 96, False),
+                    ((end + 31) & ~31, selected_layout.LEASE_BYTES + 96, True),
+                    (0x0c008000, selected_layout.LEASE_BYTES + 96, False),
+                    (0x0cffffe0, selected_layout.LEASE_BYTES + 96, False)]
         for alias in (0, 0x80000000, 0xa0000000):
             for at, count, expected in geometry:
                 cpu = Cold(directory, rows[0])
@@ -1271,6 +1288,7 @@ def check(directory, *, self_test=False, corpus=None, development=False):
     from check_native_bottom_heap_worker import check as check_worker
     report = dict(schema=SCHEMA, enabled=True, development=development,
                 artifact_sha256=dict(stage=sha(stage[0]), worker=sha(worker[0])),
+                lease_bytes=selected_layout.LEASE_BYTES,
                 actual_linked_installer_executed=True, actual_c_ownership_predicates_executed=True,
                 actual_original_allocate_and_release_executed=True,
                 pure_leaf_models=['display', 'SHA-256 compression over exact actual bytes'],
@@ -1295,7 +1313,8 @@ def check(directory, *, self_test=False, corpus=None, development=False):
                       scalar_scan_dispatch_tests=scan_dispatch_tests,
                       scan_instruction_dispatch='Decoded scalar SH basic blocks; every opcode, memory effect, branch and delay slot executes; no source predicate folded',
                       private_pool_budget_refusals=budget_refusals,
-                      private_pool_capacity_original=prove(Path(source_row['startup'])))
+                      private_pool_capacity_original=prove(Path(source_row['startup']),
+                          lease_bytes=selected_layout.LEASE_BYTES))
     if self_test and not development:
         whole_mutants = 0
         available = records(stage)

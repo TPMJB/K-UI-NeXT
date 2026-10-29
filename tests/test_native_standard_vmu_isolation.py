@@ -28,8 +28,11 @@ def compile_source(source, flags=(), run=False):
 class StandardIsolation(unittest.TestCase):
     def test_geometry_preserves_the_current_reservation(self):
         for flags,bottom,length in (((),0,0x30000),
-            (('-DKUI_NATIVE_STANDARD_VMU_ISOLATION=1',),1,0x60000),
-            (('-DKUI_NATIVE_DUAL_READERS=1','-DKUI_NATIVE_READAHEAD=1'),1,0x60000)):
+            (('-DKUI_NATIVE_STANDARD_VMU_ISOLATION=1',),1,0x55000),
+            (('-DKUI_NATIVE_DUAL_READERS=1','-DKUI_NATIVE_READAHEAD=1'),1,0x55000),
+            (('-DKUI_NATIVE_DUAL_READERS=1','-DKUI_NATIVE_GENERAL_LEAN_LAYOUT=1'),1,0x51000),
+            (('-DKUI_NATIVE_DUAL_READERS=1','-DKUI_NATIVE_READAHEAD=1',
+              '-DKUI_NATIVE_GENERAL_LEAN_LAYOUT=1'),1,0x51000)):
             source = '#include "kui/vmu_native_background.h"\n'
             source += f'_Static_assert(KUI_NATIVE_CURRENT_BOTTOM_HEAP=={bottom},"placement");\n'
             source += f'_Static_assert(KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES=={length},"lease");\n'

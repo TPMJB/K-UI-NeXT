@@ -1,0 +1,175 @@
+{
+  "schema": "kui.native.spawn-ram-map-static-review.v1",
+  "build": "c2e6f07cb52e",
+  "production_changed": false,
+  "game_bytes_or_disassembly_committed": false,
+  "input": {
+    "bytes": 1220228,
+    "sha256": "8f085c28f6a579662f95b65b0611f1dc08dded35fd5c6e676821c72a5384ed5f"
+  },
+  "common_unused_words": [
+    "00000000",
+    "00000003",
+    "00000000",
+    "1FE00000"
+  ],
+  "common_unused": [
+    {
+      "begin": "0x8c400000",
+      "end_exclusive": "0x8c440000",
+      "kib": 256
+    },
+    {
+      "begin": "0x8cea0000",
+      "end_exclusive": "0x8cfa0000",
+      "kib": 1024
+    }
+  ],
+  "session_coverage": "Unknown: user supplied two return screens but has not specified cold boots, content, transitions or durations.",
+  "actual_combined_stage_bss_end": "0x8ce8dd08",
+  "stage_overlap_note": "The common 1 MiB interval begins at 0x8cea0000, above the actual combined stage. The extra 128 KiB page at 0x8ce80000 in photo 1 is absent from photo 2 and also partly overlaps that stage.",
+  "static_interval_scan": {
+    "interval": {
+      "begin": "0x8cea0000",
+      "end_exclusive": "0x8cfa0000"
+    },
+    "canonical_aliases": [
+      "U0",
+      "P1",
+      "P2"
+    ],
+    "aligned_apparent_pointer_words": 10,
+    "actual_pc_relative_movl_pointer_loads": 0,
+    "classifications": [
+      {
+        "address": "0x8c01ac74",
+        "classification": "instruction_pair_in_coherent_code",
+        "meaning": "FPU move and indexed byte load in a coherent byte-index/FPU sequence"
+      },
+      {
+        "address": "0x8c06a2c4",
+        "classification": "instruction_pair_in_coherent_code",
+        "meaning": "add immediate and indexed longword load"
+      },
+      {
+        "address": "0x8c076e9c",
+        "classification": "instruction_pair_in_coherent_code",
+        "meaning": "register move and tail branch, with return-frame restoration in its delay slot"
+      },
+      {
+        "address": "0x8c078b70",
+        "classification": "instruction_pair_in_coherent_code",
+        "meaning": "immediate constant and indexed word load"
+      },
+      {
+        "address": "0x8c07a658",
+        "classification": "instruction_pair_in_coherent_code",
+        "meaning": "conditional branch and indexed byte load"
+      },
+      {
+        "address": "0x8c0ce5c4",
+        "classification": "unclassified_data_region",
+        "meaning": "Surrounding halfwords do not form coherent instructions; semantic data type and possible indirect consumers are not proved. No encoded PC-relative MOV.L reads this word."
+      },
+      {
+        "address": "0x8c0ce634",
+        "classification": "unclassified_data_region",
+        "meaning": "Surrounding halfwords do not form coherent instructions; semantic data type and possible indirect consumers are not proved. No encoded PC-relative MOV.L reads this word."
+      },
+      {
+        "address": "0x8c0ce6cc",
+        "classification": "unclassified_data_region",
+        "meaning": "Surrounding halfwords do not form coherent instructions; semantic data type and possible indirect consumers are not proved. No encoded PC-relative MOV.L reads this word."
+      },
+      {
+        "address": "0x8c0eef3c",
+        "classification": "instruction_pair_in_coherent_code",
+        "meaning": "stack/object field load and indexed longword load before an indirect call"
+      },
+      {
+        "address": "0x8c0f258c",
+        "classification": "instruction_pair_in_coherent_code",
+        "meaning": "PC-relative word constant and indexed longword load in a null-check sequence"
+      }
+    ],
+    "limits": "No encoded PC-relative literal loads into this interval. This does not exclude synthesized pointers, indirect table reads, asset-transfer destinations or later modes."
+  },
+  "startup_game_init": {
+    "entry": "0x8c0116a0",
+    "target_literal": "0x8c0101c8",
+    "load": "0x8c010098",
+    "call": "0x8c01009a",
+    "note": "One encoded MOV.L/JSR/NOP use; dynamic invocation count not proved by a literal count."
+  },
+  "borrowed_call_candidates": [
+    {
+      "load": "0x8c0116be",
+      "call": "0x8c0116c0",
+      "return_pr": "0x8c0116c4",
+      "literal": "0x8c011708",
+      "target": "0xc0d3680",
+      "purpose": "hardware initialization, including copied vector/default callback setup",
+      "exact_shape": "MOV.L PC-relative; JSR same register; NOP",
+      "literal_consumers": [
+        "0x8c0116be"
+      ],
+      "aligned_slot_address_words": [],
+      "target_aligned_words": [
+        "0x8c011708"
+      ],
+      "encoded_direct_bsr_bra_to_target": [],
+      "admitted": false
+    },
+    {
+      "load": "0x8c011740",
+      "call": "0x8c011742",
+      "return_pr": "0x8c011746",
+      "literal": "0x8c011854",
+      "target": "0xc0d36aa",
+      "purpose": "later setup; calls 0x0c0e0e5c and 0x0c0e17cc",
+      "exact_shape": "MOV.L PC-relative; JSR same register; NOP",
+      "literal_consumers": [
+        "0x8c011740"
+      ],
+      "aligned_slot_address_words": [],
+      "target_aligned_words": [
+        "0x8c011854"
+      ],
+      "encoded_direct_bsr_bra_to_target": [],
+      "admitted": false
+    },
+    {
+      "load": "0x8c011746",
+      "call": "0x8c011748",
+      "return_pr": "0x8c01174c",
+      "literal": "0x8c011858",
+      "target": "0xc024100",
+      "purpose": "proved Maple-init tail thunk",
+      "exact_shape": "MOV.L PC-relative; JSR same register; NOP",
+      "literal_consumers": [
+        "0x8c011746"
+      ],
+      "aligned_slot_address_words": [],
+      "target_aligned_words": [
+        "0x8c011858"
+      ],
+      "encoded_direct_bsr_bra_to_target": [],
+      "admitted": false
+    }
+  ],
+  "current_ct2_reference": "docs/evidence/native-ct2-fixed-arena-syhwinit-2026-10-28.json (v2 supersedes the obsolete main-call plan). The fixed trampoline first calls the original target with original arguments, preserves R0/R1, then calls the original allocator through the low heap hook and returns.",
+  "remaining_proofs": [
+    "Confirm or expand gameplay coverage; two photographs alone do not establish separate cold boots or differing content.",
+    "Trace complete Spawn initialization ordering and all later VBR/SCI callback-slot writers. The first candidate returns before later setup and Maple init, so it is not admitted merely because hardware initialization copied a vector.",
+    "Bind any selected original call to exact source identity, unique literal, stable register/stack argument and result behavior, no overlapping hook windows, and no later reinitialization that destroys runtime ownership.",
+    "Classify the three data-region apparent addresses or establish no relevant indirect consumers. Absence of PC-relative literal loads alone does not establish permanent RAM ownership.",
+    "Before a fixed plan, model the original allocator initialization and 384 KiB lease/free-list/release paths within a reviewed arena, including child pools, actual stage exclusion and whole live geometry.",
+    "A future candidate still needs console game/card/save/power-cycle tests; no arena or VMU support is enabled by this report."
+  ],
+  "performance_control": {
+    "recommendation": "Matched structural standalone without RAM-map fill; retain other settings and collect existing reader timing statistics.",
+    "reason": "Spawn has no virtual VMU in this diagnostic route. RAM fill happens once before game entry; scan/report happens only on return, not each frame. Pattern reads are not observed, so a no-pattern control is still useful. No root cause of poor intro video/audio is established."
+  },
+  "date": "2026-10-28",
+  "photo_evidence": "docs/evidence/native-pso-spawn-console-c2e6f07-2026-10-28.json"
+}

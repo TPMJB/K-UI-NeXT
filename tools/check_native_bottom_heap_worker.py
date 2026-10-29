@@ -26,6 +26,9 @@ from check_vmu_native_worker_gateway import read_elf
 from check_vmu_native_persistent import prepared_symbol_records
 from check_native_followup_profile import bottom_worker_profile
 from sh4_delay_slots import validate_delay_slot
+from native_runtime_layout import LEASE_BYTES, layout_for
+from check_native_general_lean_profile import worker_profile
+from check_native_general_lean_heap_pins import WORKER_FUNCTIONS
 
 SCHEMA='kui.native.bottom-heap.compiled-worker.v1'
 RETURN=0xdeadbeee
@@ -54,7 +57,8 @@ DISPATCH_GATE_PINS = {'_span@vmu_native_heap.c': (76, '64d42c5ab08e5e0c1e43b9aa8
  '_kui_vmu_native_heap_lease_identity_valid': (76,
                                                '79a1ea16da8da8eeee75d90cbfc5159823a23ba3aa871de989554a606c6313cc'),
  '_kui_vmu_native_heap_lease_valid': (28, 'ec3c8bce81483e723c16ff9f4ba19b982ff81e3dde4701f2706817b52e3462b3')}
-SOURCES=('tools/check_native_bottom_heap_worker.py','tools/profile_vmu_native_release_sh.py',
+SOURCES=('tools/native_runtime_layout.py','tools/check_native_general_lean_profile.py',
+         'tools/check_native_general_lean_heap_pins.py','tools/check_native_bottom_heap_worker.py','tools/profile_vmu_native_release_sh.py',
          'tests/test_vmu_native_heap_execution.py','src/core/vmu_native_heap.c',
          'include/kui/vmu_native_heap.h')
 
@@ -84,7 +88,13 @@ def pinned(worker):
     gate=worker[4].get('__kui_native_dispatch_read_gate_worker')
     require(gate is None or gate==(1,0,0,0xfff1) and bottom_worker_profile(worker),
             'Dispatch-gated worker lacks exact bottom capability')
-    pins=DISPATCH_GATE_PINS if gate is not None else PINS
+    if worker_profile(worker):
+        require(gate==(1,0,0,0xfff1), 'Lean heap worker requires its exact dispatch gate')
+        require(set(WORKER_FUNCTIONS)==set(PINS)==set(DISPATCH_GATE_PINS),
+                'Lean heap worker must retain the complete historical closure')
+        pins=WORKER_FUNCTIONS
+    else:
+        pins=DISPATCH_GATE_PINS if gate is not None else PINS
     result={}
     for name,(address,body,_) in records(worker).items():
         require((len(body),sha(body))==pins[name],'Worker heap guard instruction/literal pin differs: '+name)
@@ -182,7 +192,7 @@ class Worker(ReleaseSH):
 def authored(path,anchor,alias,case):
     cpu=Worker(path);fixture(cpu,0,0)
     words=list(struct.unpack('<29I',cpu.block(LEASE,116)))
-    begin=0x0c600000|alias;count=0x100000;length=0x60000
+    begin=0x0c600000|alias;count=0x100000;length=layout_for(cpu.elf[4]).LEASE_BYTES
     if case=='minimum':count=length+64
     if case=='ram-end':begin=0x0cf00000|alias
     header=begin if anchor=='head' else begin+count-length-32
@@ -284,6 +294,8 @@ def execute_cases(path):
 
 
 def require_companion(worker,proof):
+    require(isinstance(proof,dict) and proof.get('lease_bytes')==layout_for(worker[4]).LEASE_BYTES,
+            'Bottom worker companion runtime geometry differs')
     require(bottom_worker_profile(worker),'Bottom worker companion needs exact worker capability')
     require(isinstance(proof,dict) and proof.get('schema')==SCHEMA and proof.get('enabled') is True and
             proof.get('artifact_sha256')==sha(worker[0]),'Bottom worker companion artifact/schema differs')
@@ -314,6 +326,7 @@ def check(directory,self_test=False):
     if not bottom_worker_profile(worker):return dict(schema=SCHEMA,enabled=False)
     pins=pinned(worker);abi=layout();rows=execute_cases(path)
     report=dict(schema=SCHEMA,enabled=True,artifact_sha256=sha(worker[0]),exact_code_pins=pins,
+      lease_bytes=layout_for(worker[4]).LEASE_BYTES,
       target_layout=abi,case_count=len(rows),anchors=['head','tail'],aliases=[0,0x80000000,0xa0000000],
       cases=rows,all_heap_predicates_executed=True,no_predicate_stubs=True,
       coherent_reader_only_fold=True,owner_and_lease_writes=0,
@@ -339,7 +352,7 @@ def check(directory,self_test=False):
             require(result['result']!=expected,'Worker semantic fixture missed changed endpoint geometry')
             semantic+=1
         refusals=0
-        for field,value in [('schema','bad'),('artifact_sha256','0'*64),('case_count',0),
+        for field,value in [('schema','bad'),('artifact_sha256','0'*64),('case_count',0),('lease_bytes',0),
                             ('all_heap_predicates_executed',False),('no_predicate_stubs',False),
                             ('exact_code_pins',{}),('source_sha256',{}),('target_layout',{}),
                             ('cases',[]),('owner_and_lease_writes',1),('coherent_reader_only_fold',False)]:

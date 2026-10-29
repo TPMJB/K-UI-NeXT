@@ -1,0 +1,106 @@
+{
+  "schema": "kui.native.code-veronica-build.v1",
+  "date": "2026-10-28",
+  "build": "2322fda6f92e",
+  "source_commit": "2322fda6f92e76e8df483063ae9c9b1cb52041c4",
+  "package": {
+    "name": "K-UI-Native-General-Prefetch-Auto-2322fda6f92e.zip",
+    "bytes": 31924939,
+    "sha256": "09e6dc0e095907c6d634b70fe48d6a79e8ca34e8be8c03fac3be8459f7cba98d"
+  },
+  "artifacts": {
+    "retail-native-dual.kui": "9a3d1ca539fa52aff2c3cbcd7a9a12e945881e7bcccff9430b9f720b1cba2a7c",
+    "retail-native-standalone.kui": "1285117b88cd379c300f12fe6396703df3e6ee3c953d1c4fd149619e23ddabc1",
+    "runtime.kui": "a683134529ae7260474d88d39da16e9e7578cc2468a111b9f0964b9e0860660e"
+  },
+  "change": "The program extent check drops a final tail of at most eight bytes past a 32-byte boundary when the unique startup allocator begins its arena exactly there. The initializer writes the first free block's two header words over the tail before any allocation, and the stage checks both words after the original initializer returns. The prefix may not reference the tail, and allocator, call and exit discovery must be identical without it; otherwise the whole file is kept as before.",
+  "code_veronica": {
+    "boot_sha256": "199b72af9bcd7fb80d401d4645c731e595970a0dcbcfd98e1bec187f4382fbbb",
+    "source_bytes": 3915142,
+    "program_bytes": 3915136,
+    "discarded_suffix_bytes": 6,
+    "arena_begin": "0x8c3cbd80",
+    "startup_end_word": "0x8c3cbd60 at 0x8c1f5ec8",
+    "tail": "the delay slot of an unreferenced rts and two nops",
+    "gates": {
+      "placement_384k": true,
+      "transport_execution": true,
+      "live_bind_384k": true,
+      "structural_384k_models_passed": true,
+      "first_refusal": null
+    }
+  },
+  "modules_compared_with_b9db89ba5fe4": {
+    "dual": "every component identical apart from the build ID except the stage: kui_vmu_native_program_extent 1360 -> 1064 bytes plus prefix_references (384) and reclaimed (228) as separate functions, the reclaimed-suffix display line, stage.bin 261572 -> 261896 bytes, stage BSS end 0x8ce8d288 -> 0x8ce8d3c8",
+    "structural_standalone": "resident-sci.bin and stage.bin identical apart from the build ID",
+    "gui": "the same program extent check in the launcher's native cache preparation"
+  },
+  "library_sweep": {
+    "before": {
+      "stage": "b9db89ba5fe4",
+      "stage_end": "0x8ce8d288",
+      "counts": {
+        "not_native": 145,
+        "blocked": 10,
+        "vmu_and_new": 8,
+        "new_only": 3
+      }
+    },
+    "after": {
+      "stage": "2322fda6f92e",
+      "stage_end": "0x8ce8d3c8",
+      "counts": {
+        "not_native": 145,
+        "blocked": 9,
+        "vmu_and_new": 9,
+        "new_only": 3
+      }
+    },
+    "changed_verdicts": {
+      "RESIDENT EVIL CODE VERONICA": [
+        "blocked",
+        "vmu_and_new"
+      ]
+    }
+  },
+  "audit": {
+    "status": "PASS",
+    "split_checkers": {
+      "check_native_dual_callbacks": 0,
+      "check_vmu_native_stage_stack": 0,
+      "check_native_dual_readers": 2,
+      "check_native_bottom_heap_worker": 2,
+      "check_native_fixed_arena": 0
+    },
+    "games_ui_compile_units": [
+      "sources 140 147 only old [] only new ['src/apps/games_storage.c', 'src/core/native_sdk_sci_family.c', 'src/core/vmu_fs_admission.c', 'src/core/vmu_game_card.c', 'src/core/vmu_game_card_service.c', 'src/core/vmu_persist_profile.c', 'src/loader/vmu_backing.c']",
+      "differing ['src/apps/games.c', 'src/apps/games_covers.c', 'src/apps/games_retail.c', 'src/core/shell.c', 'src/core/vmu_image.c', 'src/core/vmu_image_pack.c', 'src/core/vmu_native_cache_seed.c', 'src/core/vmu_native_exit.c', 'src/core/vmu_native_heap.c', 'src/core/vmu_native_layout.c', 'src/core/vmu_native_program.c', 'src/core/vmu_native_resolution_cache.c', 'src/core/vmu_save_format.c', 'src/dreamcast/main.c', 'src/dreamcast/sd.c', 'src/dreamcast/shell_draw.c']"
+    ]
+  },
+  "host_tests": {
+    "host-fixed-arena.log": "OK",
+    "host-game-cards.log": "OK",
+    "host-games-covers.log": "PASS exfat Games covers: format-payloads",
+    "host-games-images.log": "PASS exfat Games: sort-overflow; whole-card SHA256 unchanged",
+    "host-games-retail.log": "PASS exfat superfloppy retail preparation: cooked-2048; whole-card SHA256 unchanged",
+    "host-guard.log": "Split controller stream guard host checks: 25783; 20 TICK visits, none after a refusal; 130 guarded-frame visits, paused while streaming",
+    "host-install.log": "OK",
+    "host-native-cache.log": "Native launcher cache: 39043 checks passed",
+    "host-shell.log": "PASS shell: Games browsing/inspection, stale result guards, Stop lock, system/ripper preferences, reversible video actions, VMU paging, phase ETA, destination keyboard, reference grades, safe rendering",
+    "host-split.log": "Split controller host checks: 12974",
+    "host-standalone.log": "PASS standalone demand models: {'ubsan': {'checks': 12187, 'byte_exact_requests': 17, 'modeled_sci_entries': 105, 'pio_bounded_entries': 256, 'route_loss_cases': 5, 'cancel_cases': 3, 'descriptor_fault_cases': 12, 'vbr_writes': 0, 'hardware_executed': False}, 'asan-ubsan': {'checks': 10468, 'byte_exact_requests': 15, 'modeled_sci_entries': 92, 'pio_bounded_entries': 256, 'route_loss_cases': 5, 'cancel_cases': 3, 'descriptor_fault_cases': 0, 'vbr_writes': 0, 'hardware_executed': False}}"
+  },
+  "install_rehearsal": {
+    "install_over_previous": "virtual card files untouched",
+    "switch_back": "previous package files restored exactly",
+    "restore": "original files exact",
+    "unformatted_shared_card": "Stopped: the shared card does not validate (root: root not formatted (first 16 bytes 0x55)); nothing was changed",
+    "packaged_tool": "1 saves listed; one copied to p0002",
+    "shared_pair": "byte-identical after the tool"
+  },
+  "not_verified": [
+    "Code Veronica has not run with this build on a Dreamcast: launch, saving, loading, disc 2 and long play with the 384 KiB lease taken from its heap are console tests.",
+    "tests/test_vmu_native_lease_alias.c still expects detector epoch 2 records and fails on the epoch 4 fixtures, before and after this change."
+  ],
+  "console_compatibility_verified": false
+}

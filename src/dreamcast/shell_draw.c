@@ -127,6 +127,7 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->confirm_new ? "A Start capture   B Cancel" :
         s->confirm_clock ? "A Set clock   B Cancel" :
         s->confirm_defaults ? "A Use defaults   B Cancel" :
+        s->confirm_vmu_wizard_reset ? "A Start over   B Keep this session" :
         s->confirm_vmu_restore ? "A Restore save   B Cancel" :
         s->confirm_vmu_delete ? "A Delete after backup   B Cancel" :
         s->confirm_vmu_copy ? "A Copy save   B Cancel" :
@@ -139,27 +140,43 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->confirm_wifi_forget ? "A Forget the network   B Cancel" :
         s->confirm_wifi_update ? "A Update firmware   B Cancel" :
         s->page==KUI_SHELL_HOME ? "D-pad Select   A Open   Y Volume   L/R Songs" :
+        s->page==KUI_SHELL_DISC_TOOLS ? "D-pad Select   A Open   B Home" :
         s->page==KUI_SHELL_SETTINGS ? "A Save / Open   B Back / discard" :
         s->page==KUI_SHELL_RIPPER_SETTINGS ? "A Save   B Back / discard" :
         s->page==KUI_SHELL_CLOCK ? "A Set clock   X Reload   B Settings" :
         s->page==KUI_SHELL_CRC_SCAN ? (s->recovery_operation==4u?"A Start new copy   B Advanced":s->recovery_operation==1u || s->recovery_operation==3u?
             "A Repair / Resume   B Advanced":s->recovery_operation==2u?
             "A Reread again   B Advanced":"A Scan again   B Advanced") :
+        s->page==KUI_SHELL_VMU_TOOLS ? "D-pad Select   A Open / Toggle   X Reload   B Home" :
+        s->page==KUI_SHELL_VMU_WIZARD ? (s->vmu_wizard.view_only?
+            "UP/DOWN Scroll   LEFT/RIGHT Page   B Card":s->vmu_wizard.stage==KUI_VMU_WIZARD_GAMES_STAGE?
+            (s->vmu_wizard.publication_started?"L/R Card   LEFT/RIGHT Page   START Retry   B Saves":
+            "A Select   L/R Card   LEFT/RIGHT Page   START Review   B Saves"):
+            s->vmu_wizard.stage==KUI_VMU_WIZARD_REVIEW?(s->vmu_wizard.publication_started?
+            "A Retry saving these choices   B View games":"A Create and assign cards   B Games"):
+            s->vmu_wizard.stage==KUI_VMU_WIZARD_DONE?"A VMU tools   X Start over":
+            s->vmu_wizard.publication_started?"Y Card   START View games   X Start over   B Tools":
+            "A Import   L/R Slot   Y Card   START Games   X Reset   B Tools") :
         s->page==KUI_SHELL_VMU_ACTIONS ? "A Open   B VMU   LEFT/RIGHT Copy target" :
-        s->page==KUI_SHELL_VMU_IMAGE ? (s->vmu_image_collection?"UP/DOWN Scroll   B Virtual cards   START Page":"UP/DOWN Scroll   B SD backups   START Page") :
-        s->page==KUI_SHELL_VMU_COLLECTION ? "UP/DOWN Scroll   B Actions   START Page" :
+        s->page==KUI_SHELL_VMU_IMAGE ? (s->vmu_image_collection?"UP/DOWN Scroll   B Card   START Page":"UP/DOWN Scroll   B SD backups   START Page") :
+        s->page==KUI_SHELL_VMU_COLLECTION ? "A Open   X Actions   Y Refresh   B Back   START Page" :
+        s->page==KUI_SHELL_VMU_CARD ? (s->vmu_card_details?"B Card":"D-pad Select   A Open   Y Details   B Virtual VMUs") :
         s->page==KUI_SHELL_VMU_IMPORT ? (s->confirm_vmu_import?"A Stage SD backup   B SD backups":
             s->vmu_import_staged?"B SD backups":"A Check again   B SD backups") :
-        s->page==KUI_SHELL_SALVAGE ? (s->salvage_selected==1?
+        s->page==KUI_SHELL_SALVAGE ? (s->salvage_trial_result?
+            "A Drive controls   B Advanced":s->salvage_selected==1?
             "A Resume   Y Resume past next range   B Advanced":"A Start / Open   B Advanced") :
+        s->page==KUI_SHELL_SALVAGE_DRIVE ? (s->salvage_drive_selected==2?
+            "UP/DOWN Select   A Run trial   B Salvage":s->salvage_drive_selected==3?
+            "UP/DOWN Select   A Return   B Salvage":"UP/DOWN Select   LEFT/RIGHT or A Change   B Salvage") :
         s->page==KUI_SHELL_SYSTEM_TOOLS ? "D-pad Select   A Open   B Settings" :
-        s->page==KUI_SHELL_VMU_RESTORE ? "UP/DOWN Scroll   B VMU   LEFT/RIGHT Target   START Page" :
+        s->page==KUI_SHELL_VMU_RESTORE ? "UP/DOWN Scroll   B Back   LEFT/RIGHT Target   START Page" :
         s->page==KUI_SHELL_DESTINATION ? "B Parent   START Cancel   LEFT/RIGHT Page" :
         s->page==KUI_SHELL_KEYBOARD ? "A Key   X Backspace   Y Shift   B Cancel" :
         s->page==KUI_SHELL_ADVANCED ? "D-pad Select   A Open   B Ripper" :
-        s->page==KUI_SHELL_RIPPER ? (s->capture_job[0]?"LEFT Automatic job   START Advanced   L/R Songs   B Home":
-            "B Home   START Advanced   L/R Songs") :
-        s->page==KUI_SHELL_VMU ? "UP/DOWN Scroll   LEFT/RIGHT VMU   L Actions   R Backups   B Home" :
+        s->page==KUI_SHELL_RIPPER ? (s->capture_job[0]?"LEFT Automatic job   START Advanced   L/R Songs   B Disc tools":
+            "B Disc tools   START Advanced   L/R Songs") :
+        s->page==KUI_SHELL_VMU ? "A Open   X Actions   LEFT/RIGHT VMU   R Backups   B Tools" :
         s->page==KUI_SHELL_GAMES ? (kui_shell_games_view(s)==KUI_GAMES_VIEW_LIST?
             "A Open   Y View   LEFT/RIGHT Page   START More":"A Open   Y View   D-pad Move   START More") :
         s->page==KUI_SHELL_GAMES_VARIANTS ? "D-pad Select   A Inspect   B Games" :
@@ -207,26 +224,22 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->page==KUI_SHELL_GAMES_CODEC ? "D-pad Select   A Save and inspect   B Details" :
         s->page==KUI_SHELL_CD_AUDIO ? "B SD music   START Home   R Refresh" :
         s->page==KUI_SHELL_MUSIC ? "B Parent   START Home   L Audio CD   LEFT/RIGHT Page" : "B Home";
-    words(p,40,430,song_page||s->page==KUI_SHELL_MUSIC||s->page==KUI_SHELL_CD_AUDIO||s->page==KUI_SHELL_VMU_RESTORE||s->page==KUI_SHELL_VMU_COLLECTION||s->page==KUI_SHELL_VMU_IMAGE||s->page==KUI_SHELL_VMU_IMPORT||s->page==KUI_SHELL_VMU_ACTIONS||s->page==KUI_SHELL_VMU||s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM||s->page==KUI_SHELL_GAMES_LAUNCH_OPTIONS||s->page==KUI_SHELL_GAMES_EXTRA_OPTIONS||s->page==KUI_SHELL_GAMES_PATCHES||s->page==KUI_SHELL_GAMES_TESTS||s->page==KUI_SHELL_GAMES_INFO?608:500,MUTED,controls,false);
+    words(p,40,430,song_page||s->page==KUI_SHELL_MUSIC||s->page==KUI_SHELL_CD_AUDIO||s->page==KUI_SHELL_VMU_RESTORE||s->page==KUI_SHELL_VMU_COLLECTION||s->page==KUI_SHELL_VMU_CARD||s->page==KUI_SHELL_VMU_IMAGE||s->page==KUI_SHELL_VMU_IMPORT||s->page==KUI_SHELL_VMU_WIZARD||s->page==KUI_SHELL_VMU_ACTIONS||s->page==KUI_SHELL_VMU||s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM||s->page==KUI_SHELL_GAMES_LAUNCH_OPTIONS||s->page==KUI_SHELL_GAMES_EXTRA_OPTIONS||s->page==KUI_SHELL_GAMES_PATCHES||s->page==KUI_SHELL_GAMES_TESTS||s->page==KUI_SHELL_GAMES_INFO?608:500,MUTED,controls,false);
 }
 /* Each Home app by page, so its row can move without touching this table.
  * All icons are embedded RGB565 assets with separate list-sized artwork. */
 struct home_app {enum kui_shell_page page;const char *name,*category,*details[3];unsigned art;};
 static const struct home_app home_apps[KUI_SHELL_HOME_APPS]={
-    {KUI_SHELL_RIPPER,"Disc Ripper","Disc tools",
-        {"Capture discs, check CRCs and","resume interrupted dumps.","Verify saved files when needed."},KUI_ART_ICON_DISC_RIPPER},
-    {KUI_SHELL_VMU,"VMU Manager","Save files",
-        {"Browse, copy or delete saves.","Back up to SD, then restore","checked backups to a free name."},KUI_ART_ICON_VMU_MANAGER},
-    {KUI_SHELL_MEMORY,"Memory Test","System tools",
-        {"Check available application RAM","with data patterns and report","any mismatches found."},KUI_ART_ICON_MEMORY_TEST},
+    {KUI_SHELL_DISC_TOOLS,"Disc tools","Rip or play a disc",
+        {"Rip discs and recover damaged reads.","Resume and verify saved dumps.","Or boot the disc through the BIOS."},KUI_ART_ICON_DISC_RIPPER},
+    {KUI_SHELL_VMU_TOOLS,"VMU tools","Save files",
+        {"Browse virtual and physical cards.","Import saves and assign game cards.","Back up or restore your saves."},KUI_ART_ICON_VMU_MANAGER},
     {KUI_SHELL_NETWORK,"Network","Connectivity",
         {"Inspect your network adapter,","set up Wi-Fi and test it. Share","the SD card by FTP."},KUI_ART_ICON_NETWORK},
     {KUI_SHELL_SETTINGS,"Settings","System preferences",
         {"Choose video, memory display","and background music.","Save preferences to SD."},KUI_ART_ICON_SETTINGS},
     {KUI_SHELL_DIAGNOSTICS,"Diagnostics","Diagnostics",
-        {"Inspect the disc and SD card.","Run probes, review messages","and save a diagnostic report."},KUI_ART_ICON_DIAGNOSTICS},
-    {KUI_SHELL_GD_PLAY,"GD Play","Disc boot",
-        {"Exit K-UI and boot the disc","through the console BIOS.","Console region rules still apply."},KUI_ART_ICON_GD_PLAY},
+        {"Inspect the disc, SD card and RAM.","Run tests and review messages.","Save a diagnostic report."},KUI_ART_ICON_DIAGNOSTICS},
     {KUI_SHELL_MUSIC,"Music Player","Music",
         {"Play WAV or Ogg music from SD.","Listen to audio CD tracks","or keep music in the background."},KUI_ART_ICON_MUSIC_PLAYER},
     {KUI_SHELL_GAMES,"Games","SD game library",
@@ -243,7 +256,7 @@ static void home(struct paint *p, const struct kui_shell *s,const struct kui_she
     panel(p,32,112,208,296,PANEL);
     for(unsigned i=0;i<KUI_SHELL_HOME_APPS;i++) {
         const struct home_app *app=home_app(i);
-        unsigned y=116+i*27;
+        unsigned y=116+i*33;
         if(selected==i) {
             panel(p,32,y,208,26,SELECTED);
             box(p,32,y+4,3,18,PINK);
@@ -261,7 +274,7 @@ static void home(struct paint *p, const struct kui_shell *s,const struct kui_she
     }
     const struct home_app *chosen=home_app(selected);
     title(p,264,112,chosen->name);
-    if(chosen->page==KUI_SHELL_RIPPER || chosen->page==KUI_SHELL_GD_PLAY) {
+    if(chosen->page==KUI_SHELL_DISC_TOOLS) {
         char inserted[160];
         snprintf(inserted,sizeof(inserted),"Inserted: %s",
             v->inserted_title&&v->inserted_title[0]?v->inserted_title:"No disc detected");
@@ -272,6 +285,21 @@ static void home(struct paint *p, const struct kui_shell *s,const struct kui_she
     for(unsigned i=0;i<3;i++) label(p,264,326+i*19,MUTED,chosen->details[i]);
     panel(p,264,382,344,28,CYAN);
     label(p,382,388,NAVY,"A  Open app");
+}
+static void disc_tools(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
+    title(p,40,108,"Disc tools");
+    char inserted[160];snprintf(inserted,sizeof(inserted),"Inserted: %s",
+        v->inserted_title&&v->inserted_title[0]?v->inserted_title:"No disc detected");
+    label(p,40,140,CYAN,inserted);
+    const char *names[]={"Rip a disc","Play inserted disc"};
+    const char *details[]={"Capture, resume, verify and recover damaged reads.",
+        "Leave K-UI and boot the disc through the console BIOS."};
+    for(unsigned i=0;i<2;i++) {
+        unsigned y=184+i*86;panel(p,32,y,576,72,i==s->disc_tools_selected?SELECTED:PANEL);
+        label(p,48,y+12,i==s->disc_tools_selected?WHITE:CYAN,names[i]);
+        label(p,48,y+40,MUTED,details[i]);
+    }
+    label(p,40,382,MUTED,"Ripping options and recovery jobs are inside Rip a disc.");
 }
 static void memory(struct paint *p, unsigned y, const struct kui_shell_view *v) {
     char text[73];
@@ -428,8 +456,8 @@ static void keyboard(struct paint *p,const struct kui_shell *s) {
     char heading[80];
     if(wifi && s->wifi_typing_name) snprintf(heading,sizeof(heading),"Wi-Fi network name");
     else if(wifi) snprintf(heading,sizeof(heading),"Password for %.32s",s->wifi_request.ssid);
-    title(p,40,108,s->capture_label_keyboard?"New dump folder label":s->storage_test_keyboard?"Card nickname":wifi?heading:!naming?"Type destination":s->files_job.op==KUI_FILES_OP_RENAME?"Rename":"New folder");
-    label(p,40,136,MUTED,s->capture_label_keyboard?"START or DONE applies it. Empty uses Auto (disc title).":s->storage_test_keyboard?"Label for test reports; START or DONE applies it.":wifi?(s->wifi_typing_name?"As the router shows it; START or DONE goes on to its password.":
+    title(p,40,108,s->vmu_name_keyboard?"Name this virtual VMU":s->capture_label_keyboard?"New dump folder label":s->storage_test_keyboard?"Card nickname":wifi?heading:!naming?"Type destination":s->files_job.op==KUI_FILES_OP_RENAME?"Rename":"New folder");
+    label(p,40,136,MUTED,s->vmu_name_keyboard?"START or DONE saves its display name.":s->capture_label_keyboard?"START or DONE applies it. Empty uses Auto (disc title).":s->storage_test_keyboard?"Label for test reports; START or DONE applies it.":wifi?(s->wifi_typing_name?"As the router shows it; START or DONE goes on to its password.":
         "START or DONE joins; the board keeps the network for next time."):naming?
         "Name on the SD card; START or DONE applies it.":
         "Folder path on SD; START or DONE saves your choice.");
@@ -458,7 +486,7 @@ static void keyboard(struct paint *p,const struct kui_shell *s) {
     label(p,40,378,CYAN,s->keyboard_layer==KUI_SHELL_KEYS_UPPER?"Y Shift: UPPERCASE":
         s->keyboard_layer==KUI_SHELL_KEYS_SYMBOLS?"Y Shift: symbols":"Y Shift: lowercase");
     label(p,40,398,s->destination_notice[0]?AMBER:MUTED,
-        s->destination_notice[0]?s->destination_notice:s->capture_label_keyboard?"New folders only; disc identity and saved job names stay unchanged.":s->storage_test_keyboard?"Up to 23 characters, e.g. Samsung 128GB. Optional.":wifi?(s->wifi_typing_name?
+        s->destination_notice[0]?s->destination_notice:s->vmu_name_keyboard?"Up to 48 characters. Saves and game assignments stay intact.":s->capture_label_keyboard?"New folders only; disc identity and saved job names stay unchanged.":s->storage_test_keyboard?"Up to 23 characters, e.g. Samsung 128GB. Optional.":wifi?(s->wifi_typing_name?
         "Leave the password empty on the next screen for an open network.":
         "Letters, digits and symbols (Y); 8 to 63 characters."):naming?
         "A name cannot contain / or end with a space or dot.":
@@ -720,13 +748,13 @@ static void vmu_save_rows(struct paint *p,const struct kui_vmu_view *view,unsign
     }
 }
 static void vmu_page(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
-    title(p,40,108,"VMU Manager");
+    title(p,40,108,"Physical VMUs");
     char line[112],range[48];
     vmu_range(range,sizeof(range),"Saves",s->vmu_page,s->vmu.count,s->vmu.total);
     snprintf(line,sizeof(line),"VMU %c%u   %s   %u free blocks",
         'A'+s->vmu_slot/2,s->vmu_slot%2+1,range,s->vmu.free_blocks);
     label(p,40,138,CYAN,line);
-    label(p,40,160,v->busy?MUTED:WHITE,"A Refresh   X Back up selected   Y All   START Page");
+    label(p,40,160,v->busy?MUTED:WHITE,"UP/DOWN Scroll   START Page / refresh   Y Back up all");
     panel(p,32,190,576,178,PANEL);
     unsigned count=s->vmu.count<KUI_VMU_ROWS?s->vmu.count:KUI_VMU_ROWS;
     if(!count) label(p,48,206,MUTED,v->busy?"Reading VMU...":
@@ -736,6 +764,143 @@ static void vmu_page(struct paint *p,const struct kui_shell *s,const struct kui_
     label(p,40,396,status->complete&&!status->passed?AMBER:CYAN,status->message[0]?status->message:
         "UP/DOWN Scroll all saves   L Save / card actions");
 }
+static void vmu_tools(struct paint *p,const struct kui_shell *s) {
+    title(p,40,108,"VMU tools");
+    label(p,40,140,MUTED,"Virtual VMU is independent of reader and prefetch settings.");
+    char preference[64];
+    snprintf(preference,sizeof(preference),"Use virtual VMU: %s",s->vmu_emulation_known?
+        (s->vmu_emulation_enabled?"On":"Off"):s->vmu_emulation_loading?"Reading...":"Unavailable");
+    const char *names[]={"Virtual VMUs","Physical VMUs","Import saves","Backups & restore",preference};
+    const char *details[]={"Cards, saves, free blocks and assigned games.",
+        "Connected cards in controller ports A to D.",
+        "Combine physical saves and choose their game cards.",
+        "Browse saved backups and restore individual saves.",
+        "For supported native games. Applies on next launch."};
+    for(unsigned i=0;i<5;i++) {
+        unsigned y=168+i*42;
+        panel(p,32,y,576,38,i==s->vmu_tools_selected?SELECTED:PANEL);
+        label(p,48,y+3,i==s->vmu_tools_selected?WHITE:CYAN,names[i]);
+        label(p,48,y+20,MUTED,details[i]);
+    }
+    words(p,40,389,608,s->vmu_emulation_known?CYAN:AMBER,
+        s->vmu_emulation_notice[0]?s->vmu_emulation_notice:
+        "Reader and prefetch settings stay unchanged; cards are kept.",false);
+}
+static void vmu_wizard(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
+    const struct kui_vmu_wizard_view *w=&s->vmu_wizard;
+    bool working=v->busy || s->vmu_wizard_loading;
+    char line[160];
+    title(p,40,108,w->view_only?"Games using this card":w->stage==KUI_VMU_WIZARD_GAMES_STAGE?"Choose games for this card":
+        w->stage==KUI_VMU_WIZARD_REVIEW?"Review VMU import":
+        w->stage==KUI_VMU_WIZARD_DONE?"VMU import complete":"Import VMU saves");
+    label(p,440,111,s->vmu_emulation_known && s->vmu_emulation_enabled?CYAN:AMBER,
+        s->vmu_emulation_known?(s->vmu_emulation_enabled?"Virtual VMU On":"Virtual VMU Off"):"Virtual VMU ?");
+    if(w->stage==KUI_VMU_WIZARD_SOURCES) {
+        label(p,40,140,MUTED,"1 Import saves   /   2 Choose games   /   3 Create cards");
+        panel(p,32,173,576,68,PANEL);
+        snprintf(line,sizeof(line),"Source VMU %c%u",'A'+s->vmu_wizard_slot/2u,s->vmu_wizard_slot%2u+1u);
+        label(p,48,184,CYAN,line);
+        label(p,48,211,working?MUTED:WHITE,working?"Reading and checking the source...":w->publication_started?
+            "Import started; source capture is locked for this session.":"A Import all saves from this VMU");
+        snprintf(line,sizeof(line),"%u source VMU%s added  |  %u virtual card%s prepared",
+            w->sources,w->sources==1?"":"s",w->cards,w->cards==1?"":"s");
+        label(p,40,260,WHITE,line);
+        if(w->cards && w->card<w->cards) {
+            const struct kui_vmu_wizard_card *c=&w->summary[w->card];
+            snprintf(line,sizeof(line),"Current card %u: %u saves  |  %u / 200 blocks",w->card+1u,c->files,c->blocks);
+            label(p,40,286,CYAN,line);
+        }
+        label(p,40,318,MUTED,w->publication_started?"Resume the same import from its review, or start over.":"Insert another VMU to combine compatible saves.");
+        label(p,40,340,MUTED,s->vmu_emulation_known && !s->vmu_emulation_enabled?
+            "Virtual VMU is Off; enable it later in VMU tools.":w->publication_started?
+            "Prepared cards and published choices stay intact.":"Conflicting saves or full cards get another virtual card.");
+        label(p,40,370,w->cards?WHITE:MUTED,w->cards?
+            "START Choose the games that will use these cards.":"Add a VMU to begin. Nothing is saved until the final review.");
+    } else if(w->stage==KUI_VMU_WIZARD_GAMES_STAGE) {
+        if(w->view_only) {
+            snprintf(line,sizeof(line),"%u game%s in this library use this card",w->total,w->total==1?"":"s");
+            label(p,40,138,CYAN,line);
+        } else if(w->card<w->cards) {
+            const struct kui_vmu_wizard_card *c=&w->summary[w->card];
+            snprintf(line,sizeof(line),"Card %u / %u  |  %u saves  |  %u blocks  |  %u games selected",
+                w->card+1u,w->cards,c->files,c->blocks,c->games);
+            label(p,40,138,CYAN,line);
+        }
+        unsigned start=w->count?w->page*KUI_VMU_WIZARD_ROWS+1u:0;
+        unsigned end=start?w->page*KUI_VMU_WIZARD_ROWS+w->count:0;
+        snprintf(line,sizeof(line),"Games %u-%u of %u  |  %s",start,end,w->total,w->view_only?
+            "Read-only":w->publication_started?
+            "Choices locked while this import is saved":"Other game assignments stay unchanged");
+        label(p,40,160,MUTED,w->copy_on_commit && !w->view_only?
+            "Creates a new shared card; the original is kept.":line);
+        panel(p,32,188,576,177,PANEL);
+        unsigned count=w->count<KUI_VMU_WIZARD_ROWS?w->count:KUI_VMU_WIZARD_ROWS;
+        for(unsigned i=0;i<count;i++) {
+            const struct kui_vmu_wizard_game *g=&w->games[i];unsigned y=193+i*21;
+            if(i==s->vmu_wizard_selected) panel(p,40,y,544,21,SELECTED);
+            if(w->view_only) snprintf(line,sizeof(line),"%s",g->title[0]?g->title:"Game title unavailable");
+            else snprintf(line,sizeof(line),"[%c] %s",g->selected?'x':g->supported?' ':'-',g->title[0]?g->title:g->product);
+            words(p,48,y+1,w->view_only?584u:493u,i==s->vmu_wizard_selected?WHITE:MUTED,line,false);
+            if(!w->view_only) words(p,499,y+1,584,g->selected?GREEN:MUTED,g->selected?"Selected":g->supported?"":"No VMU",false);
+        }
+        if(!count) label(p,48,206,MUTED,working?"Reading the game library...":w->view_only?
+            "No matching games were found in this library.":"No game products found in /Games.");
+        vmu_scrollbar(p,w->page,s->vmu_wizard_selected,w->total);
+        if(w->view_only) label(p,40,374,MUTED,"Read-only. Game assignments stay unchanged.");
+        else if(s->vmu_wizard_selected<count) {
+            const struct kui_vmu_wizard_game *g=&w->games[s->vmu_wizard_selected];
+            snprintf(line,sizeof(line),"%s  |  %s",g->product,w->publication_started?
+                "START Return to review and retry":g->supported?
+                "A Select; compatibility checked at launch":"This loader cannot use this virtual card");
+            label(p,40,374,g->supported?MUTED:AMBER,line);
+        }
+    } else {
+        snprintf(line,sizeof(line),"%u source VMU%s  |  %u card%s  |  %u assigned game%s",
+            w->sources,w->sources==1?"":"s",w->cards,w->cards==1?"":"s",
+            w->selected_games,w->selected_games==1?"":"s");
+        label(p,40,140,CYAN,line);
+        panel(p,32,166,576,174,PANEL);
+        for(unsigned i=0;i<w->cards && i<KUI_VMU_WIZARD_CARDS;i++) {
+            const struct kui_vmu_wizard_card *c=&w->summary[i];
+            if(w->stage==KUI_VMU_WIZARD_DONE && c->pair)
+                snprintf(line,sizeof(line),"Card %u: %u saves, %u blocks, %u assigned game%s",i+1u,c->files,c->blocks,c->games,c->games==1?"":"s");
+            else snprintf(line,sizeof(line),"Card %u: %u saves, %u blocks, %u selected game%s",i+1u,c->files,c->blocks,c->games,c->games==1?"":"s");
+            label(p,48,174+i*20,c->games?WHITE:MUTED,line);
+        }
+        label(p,40,352,WHITE,w->stage==KUI_VMU_WIZARD_DONE?
+            (!s->vmu_emulation_known?"Cards saved; check virtual VMU status in VMU tools.":
+             !s->vmu_emulation_enabled?"Cards saved; virtual VMU remains Off.":
+             "Card choices saved; compatibility checked at game launch."):w->publication_started?
+            "Retry saving the same cards and game choices.":w->copy_on_commit?
+            "Creates a new shared card; the original is kept.":
+            w->existing_card?"Save game choices; the existing card stays intact.":
+            "All staged cards will be saved, including unassigned cards.");
+        label(p,40,374,MUTED,w->stage==KUI_VMU_WIZARD_DONE?
+            (s->vmu_emulation_known && s->vmu_emulation_enabled?
+             (s->vmu_wizard_return==KUI_SHELL_VMU_CARD?"A Virtual VMUs   X Begin another import":"A VMU tools   X Begin another import"):
+             "Enable virtual VMU in VMU tools to use these cards."):w->publication_started?
+            "View the frozen choices with B, or retry with A.":
+            !s->vmu_emulation_known?"Check virtual VMU status in VMU tools before launching.":
+            !s->vmu_emulation_enabled?
+            "Cards and game choices are kept while virtual VMU is Off.":
+            "Compatibility is checked when each selected game launches.");
+    }
+    const char *notice=w->status.message[0]?w->status.message:working?"Working...":"";
+    if(w->stage==KUI_VMU_WIZARD_DONE && w->status.complete && w->status.passed &&
+       (!s->vmu_emulation_known || !s->vmu_emulation_enabled))
+        notice="Cards and game assignments saved.";
+    label(p,40,396,w->status.complete&&!w->status.passed?AMBER:CYAN,
+        notice);
+    if(s->confirm_vmu_wizard_reset) {
+        box(p,32,166,576,218,NAVY);
+        panel(p,48,174,544,177,PANEL);box(p,52,178,536,4,PINK);
+        title(p,64,196,"Start a new import?");
+        label(p,64,234,MUTED,w->publication_started?"Leave this import and begin a fresh session.":
+            "Discard the saves and game choices staged in this session.");
+        label(p,64,259,MUTED,"Previously created cards and physical VMUs stay intact.");
+        label(p,64,309,WHITE,"A Start over   B Keep this session");
+    }
+}
 static void vmu_actions(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
     title(p,40,108,"VMU actions");
     const struct kui_vmu_entry *entry=s->vmu_selected<s->vmu.count?&s->vmu.entries[s->vmu_selected]:NULL;
@@ -743,13 +908,13 @@ static void vmu_actions(struct paint *p,const struct kui_shell *s,const struct k
         s->vmu_slot%2+1,entry?entry->name:"No selected save");
     label(p,40,138,CYAN,line);
     bool virtual_target=s->vmu_copy_slot==8;
-    for(unsigned i=0;i<5;i++) {
-        unsigned y=168+i*29;panel(p,32,y,576,26,i==s->vmu_action_selected?SELECTED:PANEL);
+    for(unsigned i=0;i<6;i++) {
+        unsigned y=168+i*25;panel(p,32,y,576,23,i==s->vmu_action_selected?SELECTED:PANEL);
         if(i==1 || i==3) {
             if(virtual_target) snprintf(line,sizeof(line),"%s: Virtual VMU (new card)",i==3?"Copy all saves":"Copy selected");
             else snprintf(line,sizeof(line),i==3?"Copy all saves to VMU %c%u":"Copy to VMU %c%u",
                 'A'+s->vmu_copy_slot/2,s->vmu_copy_slot%2+1);
-        } else snprintf(line,sizeof(line),"%s",i==4?"Browse virtual cards":i==2?"Backup card image":"Delete selected save");
+        } else snprintf(line,sizeof(line),"%s",i==5?"Back up selected save":i==4?"Virtual VMUs":i==2?"Back up card image":"Delete selected save");
         label(p,48,y+4,i==s->vmu_action_selected?WHITE:MUTED,line);
     }
     if(s->vmu_action_selected==3) {
@@ -761,14 +926,14 @@ static void vmu_actions(struct paint *p,const struct kui_shell *s,const struct k
             "All saves keep companion files together on a new card.":bulk->bulk_unverified?
             "Destination save unverified; inspect it before retry.":
             "Completed copies stay. A starts a fresh check before retry.");
-        label(p,40,366,MUTED,virtual_target?"New 200-block card on SD; game activation pending.":
+        label(p,40,366,MUTED,virtual_target?"New backup card; assign games from Virtual VMUs.":
             "All names and space are checked; existing saves are refused.");
     } else if((s->vmu_action_selected==1 && virtual_target) || s->vmu_action_selected==4) {
         label(p,40,320,MUTED,"Virtual cards are stored on SD; browse and extract saves.");
         label(p,40,344,MUTED,s->vmu_action_selected==1?
             "Selected copy keeps this file only; companions are not inferred.":
             "A opens the managed virtual card collection.");
-        label(p,40,366,MUTED,"Game activation pending.");
+        label(p,40,366,MUTED,"Use Virtual VMUs > Assign games when ready.");
     } else {
         label(p,40,320,MUTED,"Card image saves all 128 KiB as a verified VMD on SD.");
         label(p,40,344,MUTED,"Delete / copy checks the save and asks before writing.");
@@ -778,36 +943,49 @@ static void vmu_actions(struct paint *p,const struct kui_shell *s,const struct k
     if(virtual_target && (s->vmu_action_selected==1 || s->vmu_action_selected==3)) {
         if(!v->app_status) status=&s->vmu_collection_copy.status;
         label(p,40,386,status->complete&&!status->passed?AMBER:CYAN,s->vmu_collection_copy_stored?
-            "Stored; game activation pending":status->message);
+            "Backup card saved; assign games from Virtual VMUs.":status->message);
     } else label(p,40,386,status->complete&&!status->passed?AMBER:CYAN,status->message);
 }
 static void salvage(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
-    title(p,40,108,"Damaged disc salvage");
-    label(p,40,138,MUTED,"Separate recovery jobs; normal captures remain untouched.");
     const struct kui_app_status *status=v->app_status;
-    if(v->busy && status && status->line_count) {
+    bool trial_result=v->salvage_control_trial && s->salvage_trial_result && status && status->complete;
+    title(p,40,108,"Damaged disc salvage");
+    if((v->busy || trial_result) && v->salvage_control_trial) {
+        label(p,40,138,MUTED,"Bounded trial: up to 8 sectors; fixed comparison profiles");
+    } else if(v->busy && (s->salvage_drive_options.speed || s->salvage_drive_options.retries)) {
+        char requested[96];
+        snprintf(requested,sizeof(requested),"Requested speed: %s; drive retries: %s",
+            kui_drive_speed_name(s->salvage_drive_options.speed),
+            kui_drive_retry_name(s->salvage_drive_options.retries));
+        label(p,40,138,MUTED,requested);
+    } else label(p,40,138,MUTED,"Separate recovery jobs; normal captures remain untouched.");
+    if((v->busy || trial_result) && status && status->line_count) {
         panel(p,32,160,576,240,PANEL);
-        app_status(p,status,true,170);
+        app_status(p,status,v->busy,170);
         unsigned count=status->line_count<KUI_APP_LINES?status->line_count:KUI_APP_LINES;
         for(unsigned i=0;i<count && i<7;i++) label(p,40,224+i*23,MUTED,status->lines[i]);
         return;
     }
-    const char *names[]={"New salvage job","Resume latest salvage","Retry unresolved sectors","Recovery pass limit","Read back recovered files"};
-    for(unsigned i=0;i<5;i++) {
-        unsigned y=160+i*30;panel(p,32,y,576,27,i==s->salvage_selected?SELECTED:PANEL);
-        label(p,48,y+5,i==s->salvage_selected?WHITE:MUTED,names[i]);
+    const char *names[]={"New salvage job","Resume latest salvage","Retry unresolved sectors","Recovery pass limit","Read back recovered files","Damaged disc controls"};
+    for(unsigned i=0;i<6;i++) {
+        unsigned y=160+i*25;panel(p,32,y,576,23,i==s->salvage_selected?SELECTED:PANEL);
+        label(p,48,y+3,i==s->salvage_selected?WHITE:MUTED,names[i]);
         if(i==3) {
             char value[16];
             if(s->salvage_passes) snprintf(value,sizeof(value),"%u",s->salvage_passes);
             else snprintf(value,sizeof(value),"Until stopped");
-            label(p,468,y+5,CYAN,value);
+            label(p,468,y+3,CYAN,value);
         }
-        if(i==4)label(p,548,y+5,CYAN,s->salvage_verify_files?"On":"Off");
+        if(i==4)label(p,548,y+3,CYAN,s->salvage_verify_files?"On":"Off");
     }
     if(s->salvage_selected==1) {
         label(p,40,318,CYAN,"Y Resume past next range (confirmation)");
         label(p,40,340,MUTED,"Marks up to 32 next sectors as unresolved zeros.");
         label(p,40,362,MUTED,"Progress kept. Restart first if drive reset is required.");
+    } else if(s->salvage_selected==5) {
+        label(p,40,318,CYAN,"A opens read speed and drive retry settings.");
+        label(p,40,340,MUTED,"Applies to salvage only; choices reset on restart.");
+        label(p,40,362,MUTED,"Drive support for requested settings can vary.");
     } else if(status && status->complete && status->line_count>4) {
         label(p,40,318,MUTED,status->lines[1]);
         label(p,40,340,MUTED,status->lines[3]);
@@ -818,6 +996,37 @@ static void salvage(struct paint *p,const struct kui_shell *s,const struct kui_s
         label(p,40,362,MUTED,"Readback checks all saved bytes; it takes extra time.");
     }
     app_status(p,v->app_status,v->busy,390);
+}
+static void salvage_drive(struct paint *p,const struct kui_shell *s) {
+    title(p,40,108,"Damaged disc controls");
+    label(p,40,138,MUTED,"Salvage only; defaults leave drive settings unchanged.");
+    const char *names[]={"Read speed","Drive retries","Run bounded control trial","Return to salvage"};
+    for(unsigned i=0;i<4;++i) {
+        unsigned y=160+i*30;
+        panel(p,32,y,576,28,i==s->salvage_drive_selected?SELECTED:PANEL);
+        label(p,48,y+6,i==s->salvage_drive_selected?WHITE:MUTED,names[i]);
+        if(i==0)label(p,460,y+6,CYAN,kui_drive_speed_name(s->salvage_drive_options.speed));
+        if(i==1)label(p,460,y+6,CYAN,kui_drive_retry_name(s->salvage_drive_options.retries));
+    }
+    if(s->salvage_drive_selected==0) {
+        label(p,40,302,CYAN,"Speed settings are optional; drives may ignore them.");
+        label(p,40,326,MUTED,"Actual speed needs measurement on your drive.");
+    } else if(s->salvage_drive_selected==1) {
+        label(p,40,302,CYAN,"Firmware decoding retries per command.");
+        label(p,40,326,MUTED,"Recovery passes and application attempts are separate.");
+    } else if(s->salvage_drive_selected==2) {
+        label(p,40,302,CYAN,"Existing collected job; unresolved data sectors only.");
+        label(p,40,324,MUTED,"Up to 8 sectors, 4 profiles, 32 comparison reads.");
+        label(p,40,346,MUTED,"5 min soft limit; active command finishes first.");
+        label(p,40,368,MUTED,"Fixed profiles ignore the manual choices above.");
+        label(p,40,390,MUTED,"All validated repairs are saved immediately.");
+        return;
+    } else {
+        label(p,40,302,CYAN,"A returns with these choices ready for salvage.");
+        label(p,40,326,MUTED,"Changing a choice here does not start disc reads.");
+    }
+    label(p,40,366,MUTED,"Choices reset when the console restarts.");
+    label(p,40,390,MUTED,"Drive settings are restored when salvage stops safely.");
 }
 static void system_tools(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
     title(p,40,108,"System tools");
@@ -858,33 +1067,96 @@ static void vmu_restore(struct paint *p,const struct kui_shell *s,const struct k
     label(p,40,396,MUTED,"VMD: browse / extract. Existing names are refused on restore.");
 }
 static void vmu_collection(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
-    title(p,40,108,"Managed virtual cards");
+    title(p,40,108,"Virtual VMUs");
     char line[112],range[48];
     vmu_range(range,sizeof(range),"Cards",s->vmu_collection_page,s->vmu_collection.count,s->vmu_collection.total);
-    snprintf(line,sizeof(line),"%s   Stored; game activation pending",range);
+    snprintf(line,sizeof(line),"%s   Select a card to see games and saves",range);
     label(p,40,138,CYAN,line);
-    label(p,40,160,v->busy?MUTED:WHITE,"A Browse card   X Refresh");
+    label(p,40,160,v->busy?MUTED:WHITE,"A Open card   X Card actions   Y Refresh");
     panel(p,32,190,576,178,PANEL);
     unsigned count=s->vmu_collection.count<KUI_VMU_ROWS?s->vmu_collection.count:KUI_VMU_ROWS;
-    if(!count) label(p,48,206,MUTED,v->busy?"Reading virtual cards...":"No managed virtual cards on this page.");
+    if(!count) label(p,48,206,MUTED,v->busy?"Reading virtual cards...":"No virtual VMUs yet. Import saves to begin.");
     for(unsigned i=0;i<count;i++) {
         unsigned y=196+i*21;
         const struct kui_vmu_backup_entry *e=&s->vmu_collection.entries[i];
         if(i==s->vmu_collection_selected) panel(p,40,y,544,21,SELECTED);
-        words(p,52,y+1,352,i==s->vmu_collection_selected?WHITE:MUTED,e->name,false);
-        snprintf(line,sizeof(line),"%s   %lu blocks",e->folder,(unsigned long)((e->bytes+511u)/512u));
-        words(p,364,y+1,584,MUTED,line,false);
+        char card_name[160];
+        if(e->custom_label && e->titles[0]) snprintf(card_name,sizeof(card_name),"%s - %.100s",e->label,e->titles);
+        else snprintf(card_name,sizeof(card_name),"%s",e->label[0]?e->label:e->name);
+        words(p,52,y+1,424,i==s->vmu_collection_selected?WHITE:MUTED,card_name,false);
+        if(!e->readable) snprintf(line,sizeof(line),"Unavailable");
+        else snprintf(line,sizeof(line),"%s | %u free",e->folder,e->free_blocks);
+        words(p,432,y+1,584,e->readable?MUTED:AMBER,line,false);
     }
     vmu_scrollbar(p,s->vmu_collection_page,s->vmu_collection_selected,s->vmu_collection.total);
     const struct kui_app_status *status=v->app_status?v->app_status:&s->vmu_collection.status;
-    label(p,40,378,status->complete&&!status->passed?AMBER:CYAN,status->message);
-    label(p,40,396,MUTED,"Read-only card browsing; extracts verified SD backups.");
+    if(count && s->vmu_collection_selected<count) {
+        const struct kui_vmu_backup_entry *e=&s->vmu_collection.entries[s->vmu_collection_selected];
+        if(!e->readable) {label(p,40,378,AMBER,e->games);label(p,40,396,MUTED,"X Card actions / Details shows the storage path.");}
+        else {
+            char context[224];
+            snprintf(context,sizeof(context),e->users?"Used by: %s":"%s",e->users?e->titles:
+                e->active?"No game assignments":"Backup snapshot; assign games to create an active copy");
+            label(p,40,378,CYAN,context);
+            if(e->contents[0]) snprintf(context,sizeof(context),"Contains: %s",e->contents);
+            else snprintf(context,sizeof(context),"%s",e->free_blocks==200u?"Contains: Empty card":"Contains: Save files; open the card for filenames");
+            label(p,40,396,MUTED,context);
+        }
+    } else {
+        label(p,40,378,status->complete&&!status->passed?AMBER:CYAN,status->message);
+        label(p,40,396,MUTED,"Open a card to view saves, rename it or choose games.");
+    }
+}
+static void vmu_card(struct paint *p,const struct kui_shell *s) {
+    const struct kui_vmu_backup_entry *card=&s->vmu_card;
+    title(p,40,108,s->vmu_card_details?"Virtual VMU / Details":"Virtual VMU");
+    label(p,40,140,CYAN,card->label[0]?card->label:card->name);
+    char line[224];
+    if(s->vmu_card_details) {
+        label(p,40,178,MUTED,"Storage path");
+        path_words(p,40,200,608,WHITE,card->path);
+        snprintf(line,sizeof(line),"Storage ID: %s   Type: %s",card->folder,
+            card->active?"Active game card":"Saved backup card");
+        label(p,40,232,MUTED,line);
+        char identity[33];for(unsigned i=0;i<16;i++) snprintf(identity+2*i,3,"%02x",card->identity[i]);
+        snprintf(line,sizeof(line),"Card identity: %s",identity);label(p,40,256,MUTED,line);
+        label(p,40,286,MUTED,"Assigned game product numbers");
+        for(unsigned i=0;i<3;i++) {
+            size_t offset=i*64u,n=strlen(card->games);
+            if(offset>=n) break;
+            snprintf(line,sizeof(line),"%.64s",card->games+offset);label(p,40,310+i*20,MUTED,line);
+        }
+        label(p,40,390,MUTED,"These identifiers describe the card; browsing never changes saves.");
+        return;
+    }
+    if(!card->readable) {
+        label(p,40,180,AMBER,"This card is unavailable.");
+        label(p,40,208,MUTED,card->games[0]?card->games:"Refresh Virtual VMUs to check it again.");
+    } else {
+        snprintf(line,sizeof(line),"%u free blocks   |   %s",card->free_blocks,
+            card->active?"Game card":"Backup card");
+        label(p,40,172,WHITE,line);
+        if(card->users) snprintf(line,sizeof(line),"Used by %u game%s",card->users,card->users==1?"":"s");
+        else snprintf(line,sizeof(line),"%s",card->active?"No game assignments yet.":
+            "Assign games to create a shared card from this backup.");
+        label(p,40,198,MUTED,line);
+    }
+    const char *names[]={"View saves","Games using this card","Rename card","Assign games","Details"};
+    for(unsigned i=0;i<KUI_SHELL_VMU_CARD_ACTIONS;i++) {
+        unsigned y=240+i*28;bool available=card->readable || i==KUI_SHELL_VMU_CARD_DETAILS;
+        panel(p,32,y,576,25,s->vmu_card_selected==i?SELECTED:PANEL);
+        label(p,48,y+5,available?(s->vmu_card_selected==i?WHITE:CYAN):MUTED,names[i]);
+    }
+    label(p,40,390,MUTED,s->vmu_emulation_known && !s->vmu_emulation_enabled?
+        "Virtual VMU is Off; browsing, renaming and imports remain available.":
+        "Game compatibility is checked when the game launches.");
 }
 static void vmu_image(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
-    title(p,40,108,"VMU card image on SD");
+    title(p,40,108,s->vmu_image_collection?"Virtual VMU / Saves":"VMU backup / Saves");
     char range[48];vmu_range(range,sizeof(range),"Saves",s->vmu_image_page,s->vmu_image.count,s->vmu_image.total);
     words(p,40,138,258,CYAN,range,false);
-    words(p,270,138,608,MUTED,s->vmu_image_path,false);
+    words(p,270,138,608,MUTED,s->vmu_image_collection?
+        (s->vmu_card.label[0]?s->vmu_card.label:s->vmu_card.name):s->vmu_image_path,false);
     label(p,40,160,v->busy?MUTED:WHITE,"A Refresh   X Extract selected   Y Extract all");
     panel(p,32,190,576,178,PANEL);
     const struct kui_vmu_view *image=&s->vmu_image;
@@ -1027,7 +1299,7 @@ static void app_confirmation(struct paint *p,const struct kui_shell *s) {
             'A'+s->vmu_copy_slot/2,s->vmu_copy_slot%2+1);
         else snprintf(line,sizeof(line),"The selected VMU entry will be removed after backup.");
         label(p,72,248,MUTED,line);
-        label(p,72,276,MUTED,virtual_target?"Only this selected file is copied; game activation pending.":
+        label(p,72,276,MUTED,virtual_target?"Only this file is copied; assign games from Virtual VMUs.":
             "A verified SD backup is required before any write.");
         label(p,72,302,MUTED,virtual_target?"Keep the source VMU and SD connected.":copy?"Keep both VMUs connected until the result appears.":
             "Keep the VMU connected until the result appears.");
@@ -1042,7 +1314,7 @@ static void app_confirmation(struct paint *p,const struct kui_shell *s) {
                 'A'+s->vmu_slot/2,s->vmu_slot%2+1,'A'+s->vmu_copy_slot/2,s->vmu_copy_slot%2+1);
         label(p,72,222,CYAN,line);
         label(p,72,248,MUTED,virtual_target?"All saves and companion files stay together.":"Existing destination names are refused.");
-        label(p,72,276,MUTED,virtual_target?"New 200-block card on SD; game activation pending.":
+        label(p,72,276,MUTED,virtual_target?"New backup card; assign games from Virtual VMUs.":
             "Each save needs a verified SD backup before writing.");
         label(p,72,302,MUTED,virtual_target?"Keep the source VMU and SD connected.":"Keep both VMUs connected until the result appears.");
         label(p,72,334,CYAN,"A Copy all saves");
@@ -1088,7 +1360,7 @@ static void diagnostics(struct paint *p, const struct kui_shell *s,
         const struct kui_shell_view *v) {
     title(p,40,108,"Diagnostics");
     label(p,40,138,v->busy?MUTED:WHITE,"A Disc probe   X SD test   Y Save log");
-    label(p,40,160,MUTED,"R Storage tests   UP/DOWN Scroll   START Latest");
+    label(p,40,160,MUTED,"L Memory test   R Storage tests   UP/DOWN Scroll");
     panel(p,32,190,576,190,PANEL);
     unsigned count=v->log_count<KUI_SHELL_LOG_ROWS?v->log_count:KUI_SHELL_LOG_ROWS;
     if(!count) label(p,40,204,MUTED,"Diagnostic messages appear here.");
@@ -1730,13 +2002,21 @@ static void games_launch_options(struct paint *p,const struct kui_shell *s) {
     const char *values[]={game_background(s),
         kui_shell_games_cdda_ready(s)?(s->games_launch_cdda?"On":"Off"):"Unavailable","Open",s->games_launch_codec==KUI_ZSO_LZO1X?"LZO1X":"Standard LZ4"};
     for(unsigned i=0;i<(kui_shell_games_zso_selected(s)?KUI_SHELL_GAME_OPTION_COUNT:KUI_SHELL_GAME_OPTION_COUNT-1u);i++) {
-        unsigned y=178+i*44;bool ready=kui_shell_games_option_ready(s,i);
-        panel(p,32,y,576,42,s->games_launch_selected==i?SELECTED:PANEL);
-        label(p,48,y+12,ready?WHITE:MUTED,names[i]);
-        words(p,350,y+12,592,ready?CYAN:MUTED,values[i],false);
+        unsigned y=178+i*36;bool ready=kui_shell_games_option_ready(s,i);
+        panel(p,32,y,576,34,s->games_launch_selected==i?SELECTED:PANEL);
+        label(p,48,y+8,ready?WHITE:MUTED,names[i]);
+        words(p,350,y+8,592,ready?CYAN:MUTED,values[i],false);
     }
+    char saving[100];
+    const char *card=s->games_vmu_loading?"Checking card...":s->games_vmu_label[0]?
+        s->games_vmu_label:"Checked at launch";
+    if(s->vmu_emulation_known && !s->vmu_emulation_enabled && !s->games_detail.windows_ce)
+        card="Physical VMU (virtual VMU Off)";
+    snprintf(saving,sizeof(saving),"Saving: %s",card);label(p,40,328,CYAN,saving);
     if(kui_shell_games_cdda_ready(s))
         label(p,40,350,AMBER,kui_shell_games_cdda_status(s));
+    else label(p,40,350,MUTED,s->games_vmu_notice[0]?s->games_vmu_notice:
+        "Virtual VMU compatibility is checked at game launch.");
     const char *hint="Extra settings, image information and developer tests.";
     if(s->games_launch_selected==KUI_SHELL_GAME_OPTION_READER)
         hint=s->games_detail.format==KUI_GAME_IMAGE_ZSO?"ZSO uses the Standard reader; background loading is unavailable.":
@@ -2321,6 +2601,7 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     heading(&p,s,v);
     switch(s->page) {
     case KUI_SHELL_HOME: home(&p,s,v); break;
+    case KUI_SHELL_DISC_TOOLS: disc_tools(&p,s,v); break;
     case KUI_SHELL_RIPPER: ripper(&p,s,v); break;
     case KUI_SHELL_SETTINGS: system_settings(&p,s,v); break;
     case KUI_SHELL_RIPPER_SETTINGS: ripper_settings(&p,s,v); break;
@@ -2332,11 +2613,15 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     case KUI_SHELL_KEYBOARD: keyboard(&p,s); break;
     case KUI_SHELL_ADVANCED: advanced(&p,s); break;
     case KUI_SHELL_VMU: vmu_page(&p,s,v); break;
+    case KUI_SHELL_VMU_TOOLS: vmu_tools(&p,s); break;
+    case KUI_SHELL_VMU_WIZARD: vmu_wizard(&p,s,v); break;
     case KUI_SHELL_VMU_ACTIONS: vmu_actions(&p,s,v); break;
     case KUI_SHELL_SALVAGE: salvage(&p,s,v); break;
+    case KUI_SHELL_SALVAGE_DRIVE: salvage_drive(&p,s); break;
     case KUI_SHELL_SYSTEM_TOOLS: system_tools(&p,s,v); break;
     case KUI_SHELL_VMU_RESTORE: vmu_restore(&p,s,v); break;
     case KUI_SHELL_VMU_COLLECTION: vmu_collection(&p,s,v); break;
+    case KUI_SHELL_VMU_CARD: vmu_card(&p,s); break;
     case KUI_SHELL_VMU_IMAGE: vmu_image(&p,s,v); break;
     case KUI_SHELL_VMU_IMPORT: vmu_import(&p,s,v); break;
     case KUI_SHELL_CLOCK: clock_page(&p,s); break;

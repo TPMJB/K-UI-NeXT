@@ -17,6 +17,8 @@
 #include "kui/ftp.h"
 #include "kui/storage_test.h"
 #include "kui/network_wifi.h"
+#include "kui/vmu_wizard.h"
+#include "kui/drive_controls.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -52,10 +54,15 @@ enum kui_shell_page { KUI_SHELL_HOME, KUI_SHELL_RIPPER,
     KUI_SHELL_SCI_ASYNC_PROBE, KUI_SHELL_GAMES_VARIANTS, KUI_SHELL_WIFI,
     KUI_SHELL_GAMES_LAUNCH_OPTIONS, KUI_SHELL_GAMES_EXTRA_OPTIONS,
     KUI_SHELL_GAMES_TESTS, KUI_SHELL_GAMES_INFO, KUI_SHELL_GAMES_PATCHES, KUI_SHELL_GAMES_CODEC, KUI_SHELL_GAMES_CHECK, KUI_SHELL_VMU_IMAGE, KUI_SHELL_VMU_IMPORT,
-    KUI_SHELL_VMU_COLLECTION };
+    KUI_SHELL_VMU_COLLECTION, KUI_SHELL_VMU_TOOLS, KUI_SHELL_VMU_WIZARD,
+    KUI_SHELL_DISC_TOOLS, KUI_SHELL_VMU_CARD, KUI_SHELL_SALVAGE_DRIVE };
 enum kui_shell_game_option {
     KUI_SHELL_GAME_OPTION_READER, KUI_SHELL_GAME_OPTION_CDDA,
     KUI_SHELL_GAME_OPTION_ADVANCED, KUI_SHELL_GAME_OPTION_CODEC, KUI_SHELL_GAME_OPTION_COUNT
+};
+enum kui_shell_vmu_card_action {
+    KUI_SHELL_VMU_CARD_SAVES,KUI_SHELL_VMU_CARD_USERS,KUI_SHELL_VMU_CARD_RENAME,
+    KUI_SHELL_VMU_CARD_ASSIGN,KUI_SHELL_VMU_CARD_DETAILS,KUI_SHELL_VMU_CARD_ACTIONS
 };
 enum kui_shell_game_tool {
     KUI_SHELL_GAME_TOOL_ENCODING, KUI_SHELL_GAME_TOOL_SPEED,
@@ -110,7 +117,9 @@ enum kui_shell_action {
     KUI_SHELL_VMU_IMPORT_PREVIEW, KUI_SHELL_VMU_IMPORT_COMMIT,
     KUI_SHELL_VMU_COLLECTION_LIST, KUI_SHELL_VMU_COLLECTION_COPY_PREVIEW,
     KUI_SHELL_VMU_COLLECTION_COPY_COMMIT, KUI_SHELL_REPAIR_IN_PLACE, KUI_SHELL_REPAIR_NEW_COPY,
-    KUI_SHELL_SALVAGE_RESUME_DEFER
+    KUI_SHELL_SALVAGE_RESUME_DEFER, KUI_SHELL_VMU_WIZARD_RUN,
+    KUI_SHELL_VMU_EMULATION_LOAD, KUI_SHELL_VMU_EMULATION_SAVE,
+    KUI_SHELL_VMU_RENAME, KUI_SHELL_VMU_GAME_INFO
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
@@ -127,10 +136,24 @@ struct kui_shell {
     struct kui_vmu_view vmu_copy_all, vmu_import;
     char vmu_import_path[KUI_FILES_PATH_CAP];
     unsigned vmu_import_generation;
-    unsigned tools_selected;
+    unsigned tools_selected,disc_tools_selected;
+    unsigned vmu_tools_selected,vmu_wizard_generation,vmu_wizard_slot,vmu_wizard_selected;
+    bool vmu_wizard_loading,confirm_vmu_wizard_reset,vmu_wizard_select_last;
+    struct kui_vmu_wizard_request vmu_wizard_request;
+    struct kui_vmu_wizard_view vmu_wizard;
+    /* Confirmed SD preference, independent of reader selection and cards. */
+    bool vmu_emulation_enabled,vmu_emulation_known,vmu_emulation_loading,vmu_emulation_requested;
+    unsigned vmu_emulation_generation;
+    char vmu_emulation_notice[128];
     bool confirm_salvage, confirm_salvage_defer, confirm_repair_in_place;
     bool salvage_verify_files;
     unsigned salvage_selected, salvage_passes;
+    /* Salvage choices last for this boot only; they are never saved in jobs. */
+    struct kui_drive_options salvage_drive_options;
+    unsigned salvage_drive_selected;
+    /* One queued RECOVER action only; main copies and clears this request. */
+    bool salvage_trial_requested;
+    bool salvage_trial_result; /* Keep trial results visible until dismissed. */
     unsigned vmu_action_selected, vmu_copy_slot;
     bool clock_valid;
     unsigned clock_selected;
@@ -145,6 +168,13 @@ struct kui_shell {
     unsigned backup_page, backup_selected;
     struct kui_vmu_backup_view vmu_collection;
     unsigned vmu_collection_page,vmu_collection_selected,vmu_collection_generation;
+    /* Card details pin one validated catalog row, independent of pagination. */
+    struct kui_vmu_backup_entry vmu_card;
+    unsigned vmu_card_selected;
+    bool vmu_card_details,vmu_name_keyboard;
+    enum kui_shell_page vmu_collection_return,vmu_backups_return,vmu_wizard_return;
+    char vmu_name_path[KUI_VMU_BACKUP_PATH_CAP],vmu_name_label[49];
+    uint8_t vmu_name_identity[16];
     struct kui_vmu_view vmu_collection_copy;
     unsigned vmu_collection_copy_generation;
     bool vmu_collection_copy_all,vmu_collection_copy_stored;
@@ -194,6 +224,9 @@ struct kui_shell {
     bool games_baseline;
     struct kui_game_launch_settings games_baseline_previous;
     char games_launch_notice[128];
+    char games_vmu_label[64],games_vmu_notice[128],games_vmu_product[12];
+    unsigned games_vmu_generation;
+    bool games_vmu_loading;
     bool games_launch_cdda, games_retail_scrambled;
     struct kui_game_ram_patches games_launch_patches;
     unsigned games_patch_selected, games_patch_digit;
@@ -265,8 +298,10 @@ struct kui_shell {
 };
 /* Home's apps, top to bottom: A on row home_selected opens
  * kui_shell_home_pages[home_selected]. Drawing looks each app up by page. */
-#define KUI_SHELL_HOME_APPS 10u
+#define KUI_SHELL_HOME_APPS 8u
 extern const enum kui_shell_page kui_shell_home_pages[KUI_SHELL_HOME_APPS];
+/* Persisted KUI_STARTUP_* values are independent of Home's visible rows. */
+enum kui_shell_page kui_shell_startup_page(unsigned startup);
 void kui_shell_init(struct kui_shell *shell, const struct kui_settings *settings);
 /* Main owns the reducer. Pass new button edges; a held B must also be included
  * when another edge arrives, so Stop/cancel retains priority over a new action.
@@ -287,6 +322,15 @@ bool kui_shell_system_dirty(const struct kui_shell *shell);
 /* Main controls video_trial only while its reversible platform preview is
  * active. The reducer returns CONFIRM/CANCEL; it never commits a video mode. */
 void kui_shell_set_vmu(struct kui_shell *shell, const struct kui_vmu_view *view);
+/* Wizard publications belong to the current page and exact request generation. */
+void kui_shell_set_vmu_wizard(struct kui_shell *,const struct kui_vmu_wizard_view *);
+/* Global preference results echo the exact outstanding request generation.
+ * Failed/uncertain saves preserve the last confirmed value and require reload. */
+void kui_shell_set_vmu_emulation(struct kui_shell *,unsigned generation,bool enabled,
+    bool ok,bool stopped,const char *message);
+/* Read-only card-info results name the exact current request/product. */
+void kui_shell_set_game_vmu(struct kui_shell *,unsigned generation,const char *product,
+    const char *label,const char *notice);
 /* Worker publications are ignored unless their page/slot still matches. */
 /* A VMD result echoes its exact path and requested page; the returned page
  * can fall back to zero if the image has fewer saves after refresh. */
@@ -413,6 +457,7 @@ struct kui_shell_view {
     const char *music_title, *music_notice;
     const struct kui_app_status *app_status;
     bool busy, saving, cancel_requested, saved_verified, memory_valid;
+    bool salvage_control_trial; /* Busy salvage uses fixed trial profiles. */
     bool log_truncated, reference_checked, video_trial, drive_reset_required;
     bool dma_degraded;
     bool music_enabled, music_playing, music_paused, music_change_pending;

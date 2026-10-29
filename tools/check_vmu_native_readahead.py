@@ -10,6 +10,8 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+from native_runtime_layout import (AUX_LINK_BASE, AUX_SPAN, AUX_STACK_BOTTOM, AUX_STACK_TOP,
+    AUX_CODE_BEGIN, AUX_CODE_LIMIT, AUX_OFFSET, LEASE_BYTES, STACK_OFFSET, STACK_END, layout_for)
 import struct
 import sys
 
@@ -23,8 +25,8 @@ from vmu_native_relocations import generate,physical,validate_loads
 import check_retail_stack as graph
 
 LOW,GUARD=0x8c004000,0x8c007ba0
-AUX,SPAN=0x8c421000,0x7000
-STACK_BOTTOM,STACK_TOP=0xac427000,0xac428000
+AUX,SPAN=AUX_LINK_BASE,AUX_SPAN
+STACK_BOTTOM,STACK_TOP=AUX_STACK_BOTTOM,AUX_STACK_TOP
 CANARY=0x4b524147
 MARK='__kui_native_readahead_'
 # Reviewed pins are deliberately separate from the existing SCI1 profile.
@@ -33,7 +35,8 @@ CODE_PIN=(5120,'ad53f64817c9b65869bbe21e8d28a09ba98d75567709a6099bf51dd8551e2bd9
 DIAGNOSTIC_CODE_PIN=(6016,'d355c1383364a52f8f3d1b82dad6359ea695b0e15287b1c0cd9a4ecba231db92')
 REPAIR_DIAGNOSTIC_CODE_PIN=(6016,'46c8f355865297918df512b6053328fc88579d32fbb19b3576f9b5b9fc85d1e9')
 PIO_CODE_PIN=(5920,'e7973080e08364c228ef9ecade3ab09e9ab3fe5b6c2ce3ade2ef2879e4a218cd')
-PIO_PAIR_CODE_PIN=(6144,'13f3a6ee0841966d919723d68dff8909cc1326e450d63fe9d9a6f8e7f445f246')
+PIO_PAIR_CODE_PIN=(6144,'aca49f1f0dd52d239166b5eeb765364a670db2c6db7e1c7a34a2da71579ce501')
+GENERAL_LEAN_PAIR_CODE_PIN=(6144,'f347cd6cf3003fd81815b8d885e950257d1fa4127fd3b44e6e22e3e2599b756e')
 PIO_PAIR_MARK='__kui_native_readahead_pio_pair_'
 PIO_MARK='__kui_native_readahead_pio_'
 REPAIR_DIAGNOSTIC_MARKER='__kui_native_readahead_repair_diagnostic_auxiliary'
@@ -141,11 +144,11 @@ def pio_pair_profile(aux):
 def code_payload(aux):
     parts=[]
     for sec in aux[3]:
-        if sec[1]==1 and sec[2]&2 and not sec[2]&1 and 0x8c422000<=sec[3]<0x8c426000:
+        if sec[1]==1 and sec[2]&2 and not sec[2]&1 and AUX_CODE_BEGIN<=sec[3]<AUX_CODE_LIMIT:
             parts.append((sec[3],aux[0][sec[4]:sec[4]+sec[5]]))
     require(parts,'read-ahead code is missing')
     parts.sort();begin=parts[0][0];end=max(a+len(b) for a,b in parts)
-    require(0x8c422000<=begin<end<=0x8c426000,'read-ahead code escapes its16KiB budget')
+    require(AUX_CODE_BEGIN<=begin<end<=AUX_CODE_LIMIT,'read-ahead code escapes its8KiB budget')
     body=bytearray(end-begin)
     for at,data in parts:body[at-begin:at-begin+len(data)]=data
     return begin,bytes(body)
@@ -155,6 +158,10 @@ def pinned_code(aux):
     selected=PIO_PAIR_CODE_PIN if pio_pair_profile(aux) else PIO_CODE_PIN if pio_profile(aux) else \
         REPAIR_DIAGNOSTIC_CODE_PIN if repair_diagnostic_profile(aux) else \
         DIAGNOSTIC_CODE_PIN if diagnostic_profile(aux) else CODE_PIN
+    if layout_for(aux[4]).WORKER_BYTES==0x1c000:
+        require(aux[4].get('__kui_native_general_lean_auxiliary')==(1,0,0,0xfff1) and
+                pio_pair_profile(aux),'Lean auxiliary lacks its exact paired profile markers')
+        selected=GENERAL_LEAN_PAIR_CODE_PIN
     require(selected is not None and (len(body),sha(body))==selected,
             'read-ahead immutable code pin changed')
     return address,body
@@ -169,6 +176,8 @@ def pinned_loan_boundary(resident):
     # Pin the exact executable section and its complete symbol shape instead
     # of relaxing symbol_bytes for this or any earlier profile.
     selected=STRUCTURAL_LOAN_PIN if structural_profile(resident) else LOAN_PIN
+    from check_native_general_lean_profile import low_pins
+    selected=low_pins(resident,'loan_quiesce',selected)
     require(selected is not None,'structural QUIESCE boundary has no reviewed pin')
     at,count,kind,owner=resident[4]['_kui_vmu_observe_sd_lease']
     sec=resident[3][owner]
@@ -242,7 +251,7 @@ def image_contract(directory,aux,resident):
         relocation_records=(len(wire)-72)//8,link_base=hex(AUX),relocation_span=SPAN,
         context=hex(context[0]),context_bytes=context[1],public_bytes=public_bytes(aux),
         private_stack_bottom=hex(STACK_BOTTOM),
-        private_stack_top=hex(STACK_TOP),cache_data_bytes=0x30000,lease_bytes=0x60000,
+        private_stack_top=hex(STACK_TOP),cache_data_bytes=0x30000,lease_bytes=layout_for(aux[4]).LEASE_BYTES,
         worker_map_region_offsets_unchanged=True,typed_low_ops=ops,physical_loads=loads)
 
 class GatewayCPU(SDKCPU):
@@ -324,8 +333,8 @@ class WorkerCPU(SDKCPU):
             GATEWAY_MEMORY[key]=bytes(memory)
         self.memory=GATEWAY_MEMORY[key]
         lease=(payload&0x1fffffff)|0x80000000
-        self.region=lease+0x20400;self.aux_header=(lease+0x21000)|0x20000000
-        self.context=(lease+0x21040)|0x20000000;self.entry=lease+0x22000
+        g=layout_for(worker[4]);self.region=lease+g.REGION_OFFSET;self.aux_header=(lease+g.AUX_OFFSET)|0x20000000
+        self.context=(lease+g.AUX_OFFSET+64)|0x20000000;self.entry=lease+g.AUX_OFFSET+0x1000
         # The reviewed32-bit worker configuration places lease.payload at
         # offset220. The pinned getter binds this exact field and address.
         self.write(worker[4]['_config'][0]+220,payload)
@@ -333,22 +342,22 @@ class WorkerCPU(SDKCPU):
             # Actual SH console layout is independently compared for both
             # engines by test_native_dual_readers.py. The X getter requires
             # this exact retained map and completed SDK publication first.
-            self.write(self.region+0x27c,lease+0x20000)
-            self.write(lease+0x20000+48,1)
-            self.write(lease+0x20000+44,1)
+            self.write(self.region+0x27c,lease+g.MAP_OFFSET)
+            self.write(lease+g.MAP_OFFSET+48,1)
+            self.write(lease+g.MAP_OFFSET+44,1)
             self.write(self.region+0x530,0x53434931)
         values=(0x4b524131,1,64,self.entry,self.entry+2,self.context,
-                lease+0x24000,(lease+0x27000)|0x20000000,(lease+0x28000)|0x20000000,
-                (lease+0x28000)|0x20000000,0,0,0,0,0,0)
+                lease+g.STACK_OFFSET,(lease+g.STACK_OFFSET)|0x20000000,(lease+g.STACK_END)|0x20000000,
+                (lease+g.STACK_END)|0x20000000,0,0,0,0,0,0)
         for i,value in enumerate(values):self.write(self.aux_header+4*i,value)
         self.write(self.region+0x500,self.entry);self.write(self.region+0x504,self.context)
         if variant=='magic':self.write(self.aux_header,0)
         if variant=='version':self.write(self.aux_header+4,2)
         if variant=='bytes':self.write(self.aux_header+8,60)
-        if variant=='image_low':self.write(self.aux_header+24,lease+0x22000)
-        if variant=='image_high':self.write(self.aux_header+24,lease+0x26004)
-        if variant=='entry_low':self.write(self.aux_header+12,lease+0x21ffe)
-        if variant=='entry_high':self.write(self.aux_header+12,lease+0x24000)
+        if variant=='image_low':self.write(self.aux_header+24,lease+g.AUX_OFFSET+0x1000)
+        if variant=='image_high':self.write(self.aux_header+24,lease+g.STACK_OFFSET+4)
+        if variant=='entry_low':self.write(self.aux_header+12,lease+g.AUX_OFFSET+0xffe)
+        if variant=='entry_high':self.write(self.aux_header+12,lease+g.STACK_OFFSET)
         if variant=='bound_entry':self.write(self.region+0x500,0)
         if variant=='bound_context':self.write(self.region+0x504,0)
         if variant=='context_low':self.write(self.aux_header+20,self.aux_header+32)
@@ -394,6 +403,19 @@ def worker_bindings(resident,worker,*,diagnostic=False,pio=False,pio_pair=False,
         require((len(body),sha(body))==(count,digest) and section[2]&7==6,
                 'read-ahead worker binding instructions changed: '+name)
         pins[name]=(address,count,digest)
+    from check_native_general_lean_profile import worker_profile
+    if worker_profile(worker):
+        require(dual and diagnostic and pio and pio_pair,
+                'Lean General worker binding requires its complete dual PIO-pair profile')
+        from check_native_dual_readers import general_worker_cases
+        from test_native_dual_readers import console_layouts
+        proof=general_worker_cases(resident,worker,console_layouts(general=True)['layouts']['x'],
+                                   expected_pins=selected)
+        require(proof['immutable_function_pins']==pins,
+                'Lean General binding proof did not execute its complete selected pin map')
+        return dict(proof,all_three_payload_aliases=True,highest_owned_lease_checked=True,
+            malformed_headers_and_contexts_refused=True,complete_public_context_bytes=public,
+            exact_public_boundary_and_one_word_overflow_checked=True)
     cases=0
     variants=('valid','magic','version','bytes','image_low','image_high','entry_low','entry_high',
               'bound_entry','bound_context','context_low','context_at_public_limit','context_high')
@@ -421,6 +443,15 @@ def worker_bindings(resident,worker,*,diagnostic=False,pio=False,pio_pair=False,
         c_auxiliary_target='ABI substitute; complete auxiliary gateway proved separately')
 
 def worker_diagnostic_display(worker):
+    from check_native_general_lean_profile import worker_profile
+    if worker_profile(worker):
+        absent=('_reader_readahead_failure','_reader_readahead_report','_reader_readahead_diagnostics',
+                '_field.2','_count.1','_label.0')
+        require(all(name not in worker[4] for name in absent),
+                'Lean General retained the unreachable opt-in read-ahead display path')
+        return dict(enabled=False,general_profile_display_elided=True,
+            exact_opt_in_display_functions_and_tables_absent=True,
+            actual_display_execution_modelled=False)
     indices=bytes((0,1,2,3,4,5,8,9,10,11,12,13,14,15,16,17,18,6,7,
                    19,20,21,22,23,27,28,29,30,31,24,25,26,35,36,32,33,34))
     for name,expected in (('_field.2',indices),('_count.1',bytes((5,5,5,4,5,5,5,3)))):
@@ -895,11 +926,23 @@ def check(directory,*,self_test=False):
             DIAGNOSTIC_WORKER_PINS if diagnostic else WORKER_PINS
         from check_native_followup_profile import worker_pins as followup_worker_pins
         worker_pins=followup_worker_pins(worker,'read_ahead',worker_pins)
+        from check_native_general_lean_profile import worker_profile
         bindings_mutations+=byte_mutations(worker,[(n,2) for n in worker_pins],
             lambda image:pinned_functions(image,worker_pins,'read-ahead worker binding'))
         if diagnostic:
-            bindings_mutations+=byte_mutations(worker,[(n,1) for n in ('_field.2','_count.1','_label.0')],
-                worker_diagnostic_display)
+            if worker_profile(worker):
+                # General intentionally has no opt-in PROFILE display. The
+                # explicit absence contract rejects reintroduced function or
+                # table symbols instead of filtering unknown/missing names.
+                for name in ('_reader_readahead_failure','_reader_readahead_report',
+                             '_reader_readahead_diagnostics','_field.2','_count.1','_label.0'):
+                    symbols=dict(worker[4]);symbols[name]=worker[4]['_reader_cooperative_service']
+                    try:worker_diagnostic_display((*worker[:4],symbols))
+                    except ValueError:bindings_mutations+=1
+                    else:raise ValueError('General audit accepted a reintroduced PROFILE display symbol')
+            else:
+                bindings_mutations+=byte_mutations(worker,[(n,1) for n in ('_field.2','_count.1','_label.0')],
+                    worker_diagnostic_display)
         section=resident[3][resident[4]['_kui_vmu_observe_sd_lease'][3]]
         for i in range(section[5]):
             changed=bytearray(resident[0]);changed[section[4]+i]^=1

@@ -93,6 +93,7 @@ int kui_vmu_read_bounded(maple_device_t *device,uint16_t block,uint8_t out[512])
        (is("collection-capture-read-fail") && block==254 && reads>30u)) {injected=true;rejection_read_count=reads;return -1;}
     if(is("short-block")) {memcpy(out,storage[block],508);injected=true;return 0;}
     if(block==0 && is("card-image-changed") && ++raw_zero_reads==3) {storage[0][11]^=1;injected=true;}
+    if(block==0 && is("capture-payload-change") && ++raw_zero_reads==3) {storage[0][11]^=1;injected=true;}
     if(block==10 && is("card-image-removed")) {missing=true;injected=true;}
     memcpy(out,storage[block],512);
     if(is("oversize-block")) {out[512]=0;injected=true;}
@@ -899,7 +900,7 @@ static void test_collection_adapter(const char *mode) {
     }
     assert(out.bulk_completed==(all?10u:1u) && !out.bulk_remaining && out.status.done==out.status.total);
     assert(!strcmp(out.backup_path,"0:/KUI/vmu/cards/v0001/card.vmd"));
-    assert(strstr(out.status.message,"activation pending"));
+    assert(strstr(out.status.message,"Assign games"));
     unsigned before_writes=writes,before_reads=reads,before_enumerations=enumerations;
     if(!strcmp(mode,"collection-commit-twice")) {
         kui_vmu_collection_copy_run(0,page,selected,all,true,&out,log_line,cancelled,progress);
@@ -943,6 +944,47 @@ static void test_collection_adapter(const char *mode) {
     assert(reads==before_reads && enumerations==before_enumerations && writes==before_writes && !vmu_writes && !locks);
 }
 
+static void test_wizard_capture(const char *mode) {
+    struct kui_vmu_view out;struct kui_vmu_image_summary summary;
+    uint8_t *captured=malloc(KUI_VMU_IMAGE_BYTES);assert(captured);
+    collection_setup(10);collection_read_guard=true;
+    if(!strcmp(mode,"capture-opaque")) {card[253][1]=0x10;card[253][29]=0xa7;card[253][31]=0x91;}
+    if(!strcmp(mode,"capture-empty")) collection_setup(0);
+    if(!strcmp(mode,"capture-orphan")) put16(card[254]+100u*2u,0xfffa);
+    if(!strcmp(mode,"capture-duplicate")) memcpy(card[253]+36u,card[253]+4u,12u);
+    if(!strcmp(mode,"capture-dirty")) card[253][28]=1;
+    if(!strcmp(mode,"capture-missing")) missing=true;
+    if(!strcmp(mode,"capture-short")) fault="short-block";
+    if(!strcmp(mode,"capture-oversize")) fault="oversize-block";
+    if(!strcmp(mode,"capture-read-fail")) fault="vmu-read-fail";
+    if(!strcmp(mode,"capture-device-change")) fault="device-change";
+    if(!strcmp(mode,"capture-metadata-change")) fault="contents-change";
+    if(!strcmp(mode,"capture-payload-change")) fault="capture-payload-change";
+    if(!strcmp(mode,"capture-cancel")) fault="cancel-read";
+    memcpy(original_card,card,sizeof(card));
+    bool expected=!strcmp(mode,"capture-ok") || !strcmp(mode,"capture-opaque");
+    bool ok=kui_vmu_capture_run(!strcmp(mode,"capture-invalid-slot")?8u:0u,
+        captured,KUI_VMU_IMAGE_BYTES,&summary,&out,log_line,cancelled,progress);
+    assert(ok==expected && out.status.passed==expected && out.status.complete==expected);
+    assert(!connects && !disconnects && !writes && !vmu_writes && !source_vmu_writes && !locks && !free_user_reads && !collection_unowned_reads);
+    /* The metadata-change fault itself changes a source byte; capture has no
+     * physical write path, proven independently by transport write counters. */
+    if(strcmp(mode,"capture-metadata-change") && strcmp(mode,"capture-payload-change")) assert(!memcmp(original_card,card,sizeof(card)));
+    if(expected) {
+        assert(summary.files==10u && summary.used_blocks==20u && summary.free_blocks==180u);
+        for(unsigned i=0;i<10u;i++) {
+            const uint8_t *original=card[253u-i/16u]+i%16u*32u;
+            const uint8_t *copy=captured+(253u-i/16u)*512u+i%16u*32u;
+            assert(!memcmp(copy,original,2u) && !memcmp(copy+4u,original+4u,28u));
+            unsigned at=copy[2]|(unsigned)copy[3]<<8;
+            assert(!memcmp(captured+at*512u,card[i*2u],512u));
+            at=captured[254u*512u+at*2u]|(unsigned)captured[254u*512u+at*2u+1u]<<8;
+            assert(!memcmp(captured+at*512u,card[i*2u+1u],512u));
+        }
+    } else assert(!summary.files && !summary.used_blocks);
+    free(captured);
+}
+
 int main(int argc,char **argv) {
     assert(argc==3);image=fopen(argv[1],"r+b");assert(image);
     struct stat st;assert(!fstat(fileno(image),&st));image_blocks=(uint64_t)st.st_size/512;
@@ -955,6 +997,9 @@ int main(int argc,char **argv) {
     }
     if(!strncmp(mode,"description-",12)) {
         test_description_rows(mode);assert(!locks);fclose(image);printf("PASS VMU %s\n",mode);return 0;
+    }
+    if(!strncmp(mode,"capture-",8)) {
+        test_wizard_capture(mode);assert(!locks);fclose(image);printf("PASS VMU %s\n",mode);return 0;
     }
     if(!strncmp(mode,"collection-",11)) {
         test_collection_adapter(mode);assert(!locks);fclose(image);printf("PASS VMU %s\n",mode);return 0;

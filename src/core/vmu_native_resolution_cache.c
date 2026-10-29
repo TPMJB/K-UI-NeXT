@@ -4,13 +4,13 @@
 #include <string.h>
 
 #define CACHE_HEADER_BYTES 64u
-#define CACHE_PAYLOAD_END 748u
+#define CACHE_PAYLOAD_END 752u
 #define CACHE_DIGEST_OFFSET 992u
 _Static_assert(sizeof(struct kui_vmu_native_discovery)==104u,"Update cache codec/schema for driver changes");
 _Static_assert(sizeof(struct kui_vmu_native_layout)==440u,"Update cache codec/schema for layout changes");
 _Static_assert(sizeof(struct kui_vmu_native_heap)==72u,"Update cache codec/schema for heap changes");
 _Static_assert(sizeof(struct kui_vmu_native_heap_call)==20u,"Update cache codec/schema for call changes");
-_Static_assert(sizeof(struct kui_vmu_native_exit)==48u,"Update cache codec/schema for exit changes");
+_Static_assert(sizeof(struct kui_vmu_native_exit)==52u,"Update cache codec/schema for exit changes");
 static const uint8_t magic[8]={'K','U','I','N','V','R','0','1'};
 /* Header word 20 names the proof's kind. Kind 2, a reviewed fixed arena,
  * is new: older readers accept only kind 1 and treat it as a cache miss. */
@@ -104,14 +104,9 @@ static bool schema(const struct kui_vmu_native_resolution *r) {
         r->heap.load==d->load_address && r->heap.image_bytes==d->image_bytes &&
         (r->heap.initializer_slot || (!r->heap.initializer_target &&
          r->call.return_pr==r->call.call+4u && r->call.entry_bytes)) &&
-        r->exits.version==KUI_VMU_NATIVE_EXIT_VERSION && r->exits.bytes==sizeof(r->exits) &&
+        kui_vmu_native_exit_shape_valid(&r->exits) &&
         r->exits.load==d->load_address && r->exits.image_bytes==d->image_bytes &&
-        (((r->exits.family==KUI_VMU_NATIVE_EXIT_FAMILY || r->exits.family==KUI_VMU_NATIVE_EXIT_PVR_CLEAR ||
-           r->exits.family==KUI_VMU_NATIVE_EXIT_PVR_COMPACT) && r->exits.count==KUI_VMU_NATIVE_EXIT_ENTRIES) ||
-         (r->exits.family==KUI_VMU_NATIVE_EXIT_PAIR_ONLY && r->exits.count==2u &&
-          !r->exits.entries[2] && !r->exits.exec_thunk) ||
-         (r->exits.family==KUI_VMU_NATIVE_EXIT_TERMINAL_DISPATCH && r->exits.count==3u &&
-          r->exits.entries[2] && r->exits.terminal_dispatch.table));
+        r->exits.count<=KUI_VMU_NATIVE_EXIT_ENTRIES;
 }
 static bool decode(const void *wire,size_t n,struct kui_vmu_native_resolution *r,uint8_t digest[32]) {
     if(n!=KUI_VMU_NATIVE_RESOLUTION_CACHE_BYTES || !object(wire,n)) return false;

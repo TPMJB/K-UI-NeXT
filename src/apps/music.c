@@ -78,6 +78,13 @@ void kui_music_status_copy(struct kui_music_status *out) {
     if(!out) return;
     lock_audio();*out=music.status;unlock_audio();
 }
+bool kui_music_status_try_copy(struct kui_music_status *out) {
+    if(!out) return false;
+#ifdef KUI_ON_CONSOLE
+    if(mutex_trylock(&audio_lock)<0) return false;
+#endif
+    *out=music.status;unlock_audio();return true;
+}
 void kui_music_log_stats(const char *reason) {
     struct kui_music_status s;
     lock_audio();s=music.status;kui_log_fn log=music.log;unlock_audio();

@@ -8,7 +8,15 @@
 static struct kui_app_status view;
 static void render(const struct kui_salvage_status *status) {
     kui_salvage_display_status(&view,status);
-    assert(view.line_count==7 && view.done==status->done && view.total==status->total);
+    assert(view.line_count==7);
+    if(status->sd_phase==KUI_SALVAGE_SD_NONE &&
+       (status->trial_active || status->trial_complete || status->trial_sample_count || status->trial_budget_expired))
+        assert(view.done==status->trial_done && view.total==status->trial_total);
+    else if(status->sd_phase==KUI_SALVAGE_SD_NONE)
+        assert(view.done==status->done && view.total==status->total);
+    else if(status->sd_phase==KUI_SALVAGE_SD_DIRECTORY)
+        assert(!view.done && !view.total);
+    else assert(view.done==(status->sd_done<status->sd_total?status->sd_done:status->sd_total) && view.total==status->sd_total);
     for(unsigned i=0;i<view.line_count;++i) {
         assert(strlen(view.lines[i])<KUI_APP_LINE_CAP);
         assert(kui_shell_font_width(view.lines[i],false)<=568u);
@@ -23,7 +31,7 @@ int main(void) {
         .last_problem_state=KUI_SALVAGE_READ_DEFERRED};
     strcpy(status.job,"/KUI/salvage/job-0002");render(&status);
     assert(strstr(view.lines[0],"FAD 173622"));
-    assert(strstr(view.lines[1],"remaining 31"));
+    assert(!strcmp(view.lines[1],"Original queue 31  repaired 0  left 31"));
     assert(!strcmp(view.lines[2],"Sector attempt 2/2; reading"));
     assert(!strcmp(view.lines[3],"Last issue FAD 173599: 2/2; deferred"));
     for(unsigned i=0;i<view.line_count;++i)assert(!strstr(view.lines[i],"291"));
@@ -156,5 +164,103 @@ int main(void) {
     assert(strstr(view.lines[3],"469694-469725: deferred by request"));
     status.last_problem_count=1;render(&status);
     assert(!strcmp(view.lines[3],"Last issue FAD 469694: deferred by request"));
-    puts("PASS salvage display: attempts, collection percent/rate, uncertain ETA, explicit no-read deferral, resume and text width");
+    /* Saved-data replay/check progress replaces the completed collection bar
+     * and stale identity-read status from the reported resume screen. */
+    status=(struct kui_salvage_status){.track=3,.tracks=3,.fad=549299,
+        .first_pass_complete=true,.targets=31075,.recovered=573,.remaining=30502,
+        .read_fad=549299,.read_count=1,.read_attempt=1,.read_limit=11,
+        .read_confirm=1,.read_confirm_limit=1,.read_state=KUI_SALVAGE_READ_ACCEPTED,
+        .done=1411200000,.total=1411200000,.sd_phase=KUI_SALVAGE_SD_TARGETS,
+        .sd_done=574,.sd_total=31075};
+    render(&status);
+    assert(view.done==574 && view.total==31075);
+    assert(!strcmp(view.lines[0],"Saved track 3/3  FAD 549299"));
+    assert(!strcmp(view.lines[1],"Queue 31075  saved repairs 573  left 30502"));
+    assert(!strcmp(view.lines[2],"Saved checks 574/31075 (1.8%)"));
+    assert(!strcmp(view.lines[3],"Checking saved data on SD."));
+    for(unsigned i=0;i<view.line_count;++i) {
+        assert(!strstr(view.lines[i],"attempt") && !strstr(view.lines[i],"pass 0"));
+        assert(!strstr(view.lines[i],"checks passed"));
+    }
+    status.sd_done=0;render(&status);assert(strstr(view.lines[2],"0/31075 (0.0%)"));
+    status.sd_done=status.sd_total;render(&status);assert(strstr(view.lines[2],"31075/31075 (100.0%)"));
+    status.result=KUI_SALVAGE_STOPPED;render(&status);
+    assert(view.stopped && strstr(view.lines[3],"SD check stopped"));
+    assert(strstr(view.lines[4],"Resume checks saved data"));
+    status.result=KUI_SALVAGE_FAILED;status.track=99;status.tracks=99;status.fad=719999;
+    status.targets=status.recovered=status.remaining=719999;
+    status.sd_done=719998;status.sd_total=719999;render(&status);
+    assert(strstr(view.lines[2],"99.9%"));
+    status.sd_phase=KUI_SALVAGE_SD_JOURNAL;status.sd_done=3000000;status.sd_total=3000001;
+    render(&status);assert(!strcmp(view.lines[0],"Rebuilding saved journal progress."));
+    assert(strstr(view.lines[2],"Saved records 3000000/3000001 (99.9%)"));
+    status.sd_done=status.sd_total=0;render(&status);
+    assert(!strcmp(view.lines[2],"Saved records 0/0; nothing to check."));
+    status.sd_phase=KUI_SALVAGE_SD_TARGETS;render(&status);
+    assert(!strcmp(view.lines[2],"Saved checks 0/0; nothing to check."));
+    status.sd_done=4;status.sd_total=3;render(&status);
+    assert(view.done==3 && strstr(view.lines[2],"3/3 (100.0%)"));
+    /* A one-pass legacy directory scan has no known total. Its counter is
+     * entries visited, independent of the original target queue or byte bar. */
+    status=(struct kui_salvage_status){.first_pass_complete=true,.targets=31075,
+        .recovered=573,.remaining=30502,.done=1411200000,.total=1411200000,
+        .track=3,.tracks=3,.fad=549299,.read_count=1,.read_attempt=1,.read_limit=11,
+        .read_state=KUI_SALVAGE_READ_ACCEPTED,.sd_phase=KUI_SALVAGE_SD_DIRECTORY};
+    strcpy(status.job,"/KUI/salvage/job-0002");
+    strcpy(status.message,"Indexing legacy repair candidates");render(&status);
+    assert(!strcmp(view.message,"Indexing legacy repair candidates"));
+    assert(!strcmp(view.lines[0],"Indexing saved repair files."));
+    assert(!strcmp(view.lines[1],"Queue 31075  saved repairs 573  left 30502"));
+    assert(!strcmp(view.lines[2],"Directory entries checked 0"));
+    assert(!strcmp(view.lines[3],"Checking saved repair filenames on SD."));
+    assert(!strcmp(view.lines[4],"Saved target checks follow this directory scan."));
+    for(unsigned i=0;i<view.line_count;++i)
+        assert(!strstr(view.lines[i],"0/0") && !strchr(view.lines[i],'%') && !strstr(view.lines[i],"attempt"));
+    status.sd_done=573;render(&status);
+    assert(!strcmp(view.lines[2],"Directory entries checked 573"));
+    status.sd_done=UINT64_MAX;status.sd_total=1;render(&status);
+    assert(!strcmp(view.lines[2],"Directory entries checked 18446744073709551615"));
+    status.result=KUI_SALVAGE_STOPPED;render(&status);
+    assert(view.stopped && !strcmp(view.lines[3],"Directory scan stopped; saved progress retained."));
+    assert(!strcmp(view.lines[4],"Resume rebuilds the saved repair index."));
+    status.result=KUI_SALVAGE_FAILED;status.sd_phase=KUI_SALVAGE_SD_TARGETS;
+    status.sd_done=1;status.sd_total=31075;render(&status);
+    assert(view.done==1 && view.total==31075 && strstr(view.lines[2],"Saved checks 1/31075"));
+    status.read_fad=549299;
+    status.sd_phase=KUI_SALVAGE_SD_NONE;status.pass=1;render(&status);
+    assert(view.done==status.done && view.total==status.total);
+    assert(!strcmp(view.lines[2],"Sector attempt 1/11; checks passed"));
+    assert(strstr(view.lines[4],"Recovery pass 1; until stopped"));
+    status.pass=0;render(&status);
+    assert(!strcmp(view.lines[4],"Preparing disc repair; B keeps progress"));
+    status=(struct kui_salvage_status){.trial_active=true,.trial_sample_count=8,
+        .trial_profile=2,.trial_total=32,.remaining=837,.recovered=6180,.fad=299836};
+    strcpy(status.job,"/KUI/salvage/job-0002");render(&status);
+    assert(strstr(view.lines[0],"Qualifying profile 3/4"));
+    assert(strstr(view.lines[1],"remaining 837; trial running"));
+    assert(strstr(view.lines[4],"qualification pending"));
+    status.trial_qualification_done=true;status.trial_done=17;
+    for(unsigned p=0;p<4;++p) {
+        status.trial_qualified[p]=true;status.trial_profile_reads[p]=8;
+        status.trial_profile_valid[p]=p+1;status.trial_profile_repairs[p]=p;
+        status.trial_profile_ms[p]=12345;
+    }
+    render(&status);assert(strstr(view.lines[0],"Trial steps 17/32; 8 sampled sectors"));
+    assert(strstr(view.lines[2],"Original: valid 1/8  new 0  read 12.3s"));
+    assert(strstr(view.lines[5],"2x / 1 retry: valid 4/8  new 3"));
+    status.trial_qualified[2]=false;render(&status);
+    assert(strstr(view.lines[4],"not qualified / skipped"));
+    status.trial_active=false;status.trial_complete=true;render(&status);
+    assert(strstr(view.lines[1],"trial finished"));
+    status.trial_budget_expired=true;render(&status);
+    assert(strstr(view.lines[1],"budget reached"));
+    status.trial_sample_count=0;status.trial_complete=false;render(&status);
+    assert(strstr(view.lines[1],"budget reached"));
+    status.trial_sample_count=8;
+    status.trial_complete=false;status.trial_budget_expired=false;
+    status.result=KUI_SALVAGE_STOPPED;render(&status);
+    assert(strstr(view.lines[1],"trial stopped"));
+    status.sd_phase=KUI_SALVAGE_SD_TARGETS;status.sd_done=2;status.sd_total=32;render(&status);
+    assert(strstr(view.lines[2],"Saved checks 2/32"));
+    puts("PASS salvage display: attempts, collection percent/rate, saved-data checks, bounded trial results and text width");
 }

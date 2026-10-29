@@ -8,7 +8,8 @@
     .type C(kui_vmu_native_worker_exports),@object
 C(kui_vmu_native_worker_exports):
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
-    .long 0x4b4e5031,3,80,C(kui_vmu_native_passive_arm)
+    /* Keep the typed persistent exports version with vmu_native_passive.h. */
+    .long 0x4b4e5031,4,80,C(kui_vmu_native_passive_arm)
 #else
     .long 0x4b4e5031,1,64,C(kui_vmu_native_passive_arm)
 #endif

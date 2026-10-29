@@ -37,6 +37,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 from check_vmu_native_worker_gateway import read_elf, symbol_bytes
 from sh4_delay_slots import validate_delay_slot
+from native_runtime_layout import layout_for, GENERAL, DIAGNOSTIC
 
 MASK = 0xFFFFFFFF
 RAM_BEGIN, RAM_END = 0x0C000000, 0x0D000000
@@ -301,9 +302,11 @@ def stage_layout(build):
     assert loads and any(address <= stack and stack + size <= address + memory and flags & 2
                          for address, _, memory, flags in loads)
     worker = (build / "native-worker.bin").read_bytes()
-    assert 80 <= len(worker) < WORKER_SPAN - 0x1000
+    worker_image = read_elf(build / "native-worker.elf")
+    worker_span=layout_for(worker_image[4]).WORKER_BYTES
+    assert 80 <= len(worker) < worker_span - 0x1000
     export = struct.unpack_from("<20I", worker)
-    assert export[:3] == (0x4B4E5031, 3, 80)
+    assert export[:3] == (0x4B4E5031, 4, 80)
     origin = physical(export[7]) - len(worker)
     assert all(not pointer & 1 and
         pointer & 0xe0000000 == export[3] & 0xe0000000 and
@@ -315,7 +318,6 @@ def stage_layout(build):
     # The mixed-alias descriptor owns four ordinary P1 trace entries, two
     # exact P2 cold SDK entries and one48B private P2 scratch object. Read
     # their actual ELF types/owners instead of accepting any in-span address.
-    worker_image = read_elf(build / "native-worker.elf")
     address, body, section = symbol_bytes(worker_image, "_kui_vmu_native_trace_exports", 1)
     assert address == export[19] and section[2] & 7 == 2 and len(body) == 40
     assert address & 0xff000000 == 0x8c000000 and body == worker[table_at:table_at + 40]
@@ -336,8 +338,8 @@ def stage_layout(build):
     assert count == 48 and kind == 1 and not state & 3 and state & 0xff000000 == 0xac000000
     assert bss[1] == 8 and bss[2] & 7 == 3 and export[7] <= state < state + count <= export[8]
     assert bss[3] <= state < state + count <= bss[3] + bss[5] and trace[9] == state
-    assert physical(export[10]) == physical(export[11]) == origin + WORKER_SPAN
-    assert physical(export[9]) == origin + WORKER_SPAN - 0x1000
+    assert physical(export[10]) == physical(export[11]) == origin + worker_span
+    assert physical(export[9]) == origin + worker_span - 0x1000
     return begin, end, stack, size, loads, worker
 
 
@@ -490,7 +492,6 @@ class HeapExecutionTests(unittest.TestCase):
 
     def execute(self, slug):
         lease_bytes = getattr(OPTIONS, "lease_bytes", LEASE_BYTES)
-        self.assertIn(lease_bytes, (0x30000, 0x60000))
         path = getattr(OPTIONS, slug)
         if not path:
             self.skipTest(f"Supply --{slug} or KUI_NATIVE_{slug.upper()}_STARTUP")
@@ -509,7 +510,19 @@ class HeapExecutionTests(unittest.TestCase):
         heap = struct.unpack_from("<18I", wire, 608)
         _, _, _, begin, count = struct.unpack_from("<5I", wire, 680)
         initializer, allocate, dispatch, table, sentinel = heap[6], heap[9], heap[11], heap[12], heap[13]
-        stage_begin, stage_end, stack, stack_bytes, loads, worker = stage_layout(Path(OPTIONS.build))
+        build=Path(OPTIONS.build)
+        stage_begin, stage_end, stack, stack_bytes, loads, worker = stage_layout(build)
+        stage_image=read_elf(build / "stage.elf")
+        worker_image=read_elf(build / "native-worker.elf")
+        selected_layout=layout_for(worker_image[4])
+        self.assertEqual(selected_layout,layout_for(stage_image[4]))
+        worker_span=selected_layout.WORKER_BYTES
+        readahead=stage_image[4].get("__kui_native_readahead_stage")== (1,0,0,0xfff1)
+        if readahead:
+            self.assertEqual(worker_image[4].get("__kui_native_readahead_worker"),(1,0,0,0xfff1))
+            self.assertIn(lease_bytes,(LEASE_BYTES,selected_layout.LEASE_BYTES))
+        else:
+            self.assertEqual(lease_bytes,LEASE_BYTES)
         new_sp = stack + stack_bytes - 32
         model = SH(source)
         # Protect holes and BSS as well as file-backed stage text/rodata/data.
@@ -562,27 +575,25 @@ class HeapExecutionTests(unittest.TestCase):
             self.assertTrue(old == new or stack + 64 <= stage_begin + index < new_sp)
         stack_before_worker = model.block(stack, stack_bytes)
         model.store_block(payload, worker)
-        model.store_block(payload + len(worker), bytes(WORKER_SPAN - len(worker)))
+        model.store_block(payload + len(worker), bytes(worker_span - len(worker)))
         auxiliary_bytes = 0
-        if lease_bytes == 0x60000:
+        if readahead and lease_bytes == selected_layout.LEASE_BYTES:
             # Exercise the entire enlarged owned interval, including both
             # the unchanged worker and all auxiliary/cache destinations.
             # These writes model their maximum legal footprint, not an
             # execution or timing model of the cache producer.
-            build = Path(OPTIONS.build)
-            stage_image = read_elf(build / "stage.elf")
-            worker_image = read_elf(build / "native-worker.elf")
             for parsed, marker in ((stage_image, "__kui_native_readahead_stage"),
                                    (worker_image, "__kui_native_readahead_worker")):
                 self.assertEqual(parsed[4][marker], (1, 0, 0, 0xfff1))
             auxiliary = (build / "native-ra-aux.bin").read_bytes()
-            self.assertTrue(0x1002 <= len(auxiliary) <= 0x5000)
+            self.assertTrue(0x1002 <= len(auxiliary) <= selected_layout.AUX_SPAN-0x1000)
             auxiliary_bytes = len(auxiliary)
-            model.store_block(payload + WORKER_SPAN, bytes([0xC3]) * (lease_bytes - WORKER_SPAN))
-            model.store_block(payload + 0x21000, auxiliary)
-            model.store_block(payload + 0x21000 + len(auxiliary), bytes(0x7000 - len(auxiliary)))
-            model.store_block(payload + 0x30000, bytes([0x5A]) * 0x30000)
-            self.assertEqual(physical(payload + 0x60000), physical(begin + count))
+            model.store_block(payload + worker_span, bytes([0xC3]) * (lease_bytes - worker_span))
+            model.store_block(payload + selected_layout.AUX_OFFSET, auxiliary)
+            model.store_block(payload + selected_layout.AUX_OFFSET + len(auxiliary),
+                              bytes(selected_layout.AUX_SPAN - len(auxiliary)))
+            model.store_block(payload + selected_layout.DATA_OFFSET, bytes([0x5A]) * selected_layout.DATA_BYTES)
+            self.assertEqual(physical(payload + selected_layout.LEASE_BYTES), physical(begin + count))
             self.assertFalse(intersects(payload, lease_bytes, 0x8c010000, len(image)))
             self.assertFalse(intersects(payload, lease_bytes, stack, stack_bytes))
         self.assertEqual(model.block(stage_begin, stage_end - stage_begin), after_allocation)
@@ -594,16 +605,17 @@ class HeapExecutionTests(unittest.TestCase):
         # Reproduce the former overwrite, rather than merely comparing bounds.
         old_frame = OLD_INSTALLER_SP - 128
         model.store_block(old_frame, bytes([0x69]) * 160)
-        copied_span = lease_bytes if lease_bytes == 0x60000 else WORKER_SPAN
+        copied_span = lease_bytes if auxiliary_bytes else worker_span
         model.store_block(payload + len(worker), bytes(copied_span - len(worker)))
         old_corrupted = model.block(old_frame, 160) != bytes([0x69]) * 160
         expected_corruption = intersects(old_frame, 160, payload + len(worker), copied_span - len(worker))
         self.assertEqual(old_corrupted, expected_corruption)
-        if lease_bytes == LEASE_BYTES and slug in ("ps2", "skies", "sa2", "grandia2", "evolution1", "evolution2"):
+        if lease_bytes == LEASE_BYTES and worker_span == WORKER_SPAN and slug in ("ps2", "skies", "sa2", "grandia2", "evolution1", "evolution2"):
             self.assertEqual(old_corrupted, slug in ("skies", "sa2", "evolution1", "evolution2"))
         if slug in ("skies", "sa2", "evolution1", "evolution2"):
             self.assertEqual(physical(payload), RAM_END - lease_bytes)
-            self.assertTrue(intersects(old_frame, 160, payload, copied_span))
+            if auxiliary_bytes or worker_span==WORKER_SPAN:
+                self.assertTrue(intersects(old_frame, 160, payload, copied_span))
         result = dict(slug=slug, source_bytes=len(source), source_sha256=hashlib.sha256(source).hexdigest(),
             image_bytes=len(image), image_sha256=hashlib.sha256(image).hexdigest(),
             record_sha256=hashlib.sha256(wire).hexdigest(), lease_bytes=lease_bytes,
@@ -614,7 +626,7 @@ class HeapExecutionTests(unittest.TestCase):
             allocation_writes=len(alloc_writes), allocation_free_operations=operations,
             maximum_free_nodes=free_nodes, subsequent_allocator_instructions=evolution_steps,
             worker_bytes=len(worker), auxiliary_bytes=auxiliary_bytes,
-            protected_write_span=lease_bytes if auxiliary_bytes else WORKER_SPAN,
+            protected_write_span=lease_bytes if auxiliary_bytes else worker_span,
             stage_begin=stage_begin, stage_end=stage_end, installer_stack=stack,
             installer_stack_bytes=stack_bytes, installer_sp=new_sp,
             stage_preserved=True, installer_stack_preserved=True,
@@ -664,13 +676,15 @@ def bottom_cli(options, remaining):
     if any(argument not in allowed for argument in remaining):
         raise ValueError("Bottom placement selects owners by startup paths; unittest filters are unsupported")
     build = Path(options.build).resolve()
+    selected_layout=layout_for(read_elf(build / "stage.elf")[4])
     proof_path = build / "native-bottom-heap-corpus.json"
     if not proof_path.is_file():
-        raise ValueError("Missing bottom corpus input proof: run tools/prove_vmu_native_corpus_heap.py for this build first")
+        raise ValueError("Missing bottom corpus input proof: run tools/prove_vmu_native_bottom_corpus_heap.py for this build first")
     proof = json.loads(proof_path.read_text())
     if (proof.get("schema") != "kui.native.corpus-original-heap.v1" or
             proof.get("bottom_heap_schema") != SCHEMA or proof.get("placement") != "bottom" or
-            proof.get("enabled") is not True or proof.get("full_structural_selection") is not True):
+            proof.get("enabled") is not True or proof.get("full_structural_selection") is not True or
+            proof.get("lease_bytes") != selected_layout.LEASE_BYTES):
         raise ValueError("Bottom host execution requires a complete marked corpus input proof")
     for name in ARTIFACTS:
         if hashlib.sha256((build / name).read_bytes()).hexdigest() != proof.get("artifacts", {}).get(name):
@@ -690,8 +704,9 @@ def bottom_cli(options, remaining):
     if not provided:
         raise ValueError("Provide at least one original startup path for bottom placement execution")
     if any(argument == "--lease-bytes" or argument.startswith("--lease-bytes=")
-           for argument in sys.argv[1:]) and options.lease_bytes != 0x60000:
-        raise ValueError("The marked bottom candidate retains a 384 KiB lease")
+           for argument in sys.argv[1:]) and options.lease_bytes != selected_layout.LEASE_BYTES:
+        raise ValueError(f"The marked bottom candidate retains a {selected_layout.LEASE_BYTES//1024} KiB lease")
+    options.lease_bytes=selected_layout.LEASE_BYTES
     records = (Path(options.record_directory).resolve() if options.record_directory else
                Path(proof["records_directory"]).resolve())
     for slug, path in provided.items():
@@ -706,13 +721,13 @@ def bottom_cli(options, remaining):
     for row in report["results"]:
         print(f"Actual {row['slug']} bottom heap: payload={row['payload']:08x}, "
               f"{row['allocation_free_operations']} original allocation/free operations, "
-              f"{row['maximum_free_nodes']} maximum free nodes; original upper addresses and full384KiB lease preserved")
+              f"{row['maximum_free_nodes']} maximum free nodes; original upper addresses and full{selected_layout.LEASE_BYTES//1024}KiB lease preserved")
     print(f"Bottom placement execution: {len(report['results'])} supplied owners, "
           f"{report['case_count']} alias/SR cases, {report['minimum_case_count']} minimum-arena cases passed")
     if options.output:
         options.output.parent.mkdir(parents=True, exist_ok=True)
         options.output.write_text(json.dumps(dict(schema="kui.native.heap-execution.v2", placement="bottom",
-            lease_bytes=0x60000, case_count=report["case_count"], minimum_case_count=report["minimum_case_count"],
+            lease_bytes=selected_layout.LEASE_BYTES, case_count=report["case_count"], minimum_case_count=report["minimum_case_count"],
             source_proof_sha256=hashlib.sha256(proof_path.read_bytes()).hexdigest(), results=report["results"]),
             indent=2) + "\n")
 
@@ -723,8 +738,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, default=os.environ.get("KUI_NATIVE_HEAP_BUILD"))
     parser.add_argument("--lease-bytes", type=lambda value: int(value, 0),
-                        choices=(0x30000, 0x60000), default=LEASE_BYTES,
-                        help="Retain the historical192KiB proof or exercise the separately linked384KiB read-ahead geometry")
+                        choices=(LEASE_BYTES, GENERAL.LEASE_BYTES, DIAGNOSTIC.LEASE_BYTES), default=LEASE_BYTES,
+                        help="Retain the historical192KiB control or the exact separately linked General/diagnostic read-ahead geometry")
     parser.add_argument("--output", type=Path, help="Write successful original-code proof results as JSON")
     parser.add_argument("--record-directory", type=Path,
                         help="Fresh production-generated records for a separately audited corpus")

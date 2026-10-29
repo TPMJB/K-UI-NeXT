@@ -7,6 +7,7 @@
 #include "kui/bench.h"
 #include "kui/storage.h"
 #include "kui/boot_image.h"
+#include "kui/drive_controls.h"
 
 void kui_log(const char *format, ...);
 bool kui_cancelled(void);
@@ -73,6 +74,18 @@ enum kui_runtime_result kui_bootstrap_measure(unsigned transport_filter,
     kui_cancel_fn cancelled);
 bool kui_disc_prepare(struct kui_toc sessions[2]);
 bool kui_disc_prepare_capture(struct kui_toc sessions[2],bool *is_cd);
+/* Exclusive salvage owner, after successful preparation and before reads.
+ * Zero selections issue no mode commands. An active session is reapplied after
+ * INIT and restored on end, including a clean user Stop. Never call begin/end
+ * with a live read. A failed restore blocks optical use until console restart. */
+bool kui_disc_controls_begin(const struct kui_drive_options *options);
+bool kui_disc_controls_end(void);
+/* Bounded diagnostic session: capture the original tuple before identity reads.
+ * Profiles: 0 original; 1 original speed/retry 1; 2 requested 4x/retry 1;
+ * 3 requested 2x/retry 1. Selection returns 1 verified, 0 unsupported with the
+ * prior verified tuple restored, or -1 unavailable/fatal. */
+bool kui_disc_controls_trial_begin(void);
+int kui_disc_controls_trial_select(void *ctx,unsigned profile);
 /* Explicit salvage/repair only. Refuses poisoned, media-changed, cancelled or
  * command-owned state; never clears poison or rearms disabled DMA. Reinitializes
  * with bounded commands and checks the fresh profile/layout against expected.

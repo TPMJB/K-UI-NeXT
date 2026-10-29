@@ -60,16 +60,19 @@ static bool bootstrap(const uint8_t *p) {
     for(unsigned i=0x7000u;i<IP_BYTES;i++) if(p[i]) return false;
     return true;
 }
-static bool prefix_references(const uint8_t *p,size_t prefix,size_t total,uint32_t load) {
+/* No interior reference to [prefix,total) and at most one word naming the
+ * boundary itself; *boundaries receives that word count. */
+static bool prefix_references(const uint8_t *p,size_t prefix,size_t total,uint32_t load,
+    unsigned *boundaries) {
     uint32_t first=physical(load)+(uint32_t)prefix,last=physical(load)+(uint32_t)total;
-    unsigned boundaries=0u;
+    *boundaries=0u;
     for(size_t at=0;at+2u<=prefix;at+=2u) {
         if(!(at&3u) && prefix-at>=4u) {
             uint32_t value=u32(p+at);
             if(direct(value) && physical(value)>=first && physical(value)<last) {
                 /* The one linker end word may name the reclaimed boundary;
                  * no interior address, second boundary word or alias escapes. */
-                if(physical(value)!=first || ++boundaries>1u) return false;
+                if(physical(value)!=first || ++*boundaries>1u) return false;
             }
         }
         uint16_t op=u16(p+at);uint32_t target=0u;bool branch=false;
@@ -92,7 +95,45 @@ static bool prefix_references(const uint8_t *p,size_t prefix,size_t total,uint32
             if(target>=first && target<last) return false;
         }
     }
-    return boundaries==1u;
+    return true;
+}
+/* The unique supported startup allocator, discovered identically with and
+ * without the suffix, begins its arena at begin and spans the rest of RAM;
+ * the prefix alone keeps its complete firmware exits. */
+static bool reclaimed(const void *image,size_t n,size_t prefix,uint32_t load,uint32_t begin) {
+    struct kui_vmu_native_heap raw,program;struct kui_vmu_native_heap_call before,after;
+    if(kui_vmu_native_heap_discover(image,n,load,&raw)!=KUI_VMU_NATIVE_HEAP_FOUND ||
+       !kui_vmu_native_heap_call_discover(image,n,&raw,&before) ||
+       physical(before.entry_begin)!=begin ||
+       before.entry_bytes!=UINT32_C(0x0d000000)-begin ||
+       kui_vmu_native_heap_discover(image,prefix,load,&program)!=KUI_VMU_NATIVE_HEAP_FOUND ||
+       !kui_vmu_native_heap_call_discover(image,prefix,&program,&after)) return false;
+    raw.image_bytes=(uint32_t)prefix;
+    struct kui_vmu_native_exit exits;
+    return !memcmp(&raw,&program,sizeof(raw)) && !memcmp(&before,&after,sizeof(before)) &&
+        kui_vmu_native_exit_discover(image,prefix,load,&exits);
+}
+/* Code linked after the end word the startup sizes its arena from can run a
+ * few bytes past the granule the startup leaves above that word. The
+ * supported initializer writes the first free block's two header words at
+ * the arena's begin before any allocation, so such a tail is heap from then
+ * on in an ordinary boot too; the stage rechecks both words after the
+ * original initializer returns. Only an end word in the granule below the
+ * boundary starts this proof, so other images skip the allocator scan. */
+enum { ARENA_TAIL_MAX=8 };
+static size_t arena_tail(const void *image,size_t n,uint32_t load) {
+    const uint8_t *p=image;
+    size_t tail=(physical(load)+(uint32_t)n)&31u,prefix=n-tail;
+    uint32_t cut=physical(load)+(uint32_t)prefix;
+    if(!tail || tail>ARENA_TAIL_MAX) return n;
+    bool end_word=false;
+    for(size_t at=0;at+4u<=n && !end_word;at+=4u) {
+        uint32_t value=u32(p+at);
+        end_word=direct(value) && physical(value)<=cut && physical(value)+32u>=cut;
+    }
+    unsigned boundaries;
+    return end_word && reclaimed(image,n,prefix,load,cut) &&
+        prefix_references(p,prefix,n,load,&boundaries)?prefix:n;
 }
 bool kui_vmu_native_program_extent(const void *image,size_t n,uint32_t load,size_t *out) {
     if(!image || !out || n<0x300u || n>UINT32_C(0xc00000) || (load&3u) ||
@@ -100,20 +141,11 @@ bool kui_vmu_native_program_extent(const void *image,size_t n,uint32_t load,size
        n>UINT32_C(0x0d000000)-physical(load) ||
        overlap((uintptr_t)image,n,(uintptr_t)out,sizeof(*out))) return false;
     const uint8_t *p=image;
-    if(!bootstrap_hint(p,n)) {*out=n;return true;}
+    if(!bootstrap_hint(p,n)) {*out=arena_tail(image,n,load);return true;}
     if(n<IP_BYTES+0x300u) return false;
-    size_t prefix=n-IP_BYTES;
-    if((prefix&31u) || !bootstrap(p+prefix) || !prefix_references(p,prefix,n,load)) return false;
-    struct kui_vmu_native_heap raw,program;struct kui_vmu_native_heap_call before,after;
-    if(kui_vmu_native_heap_discover(image,n,load,&raw)!=KUI_VMU_NATIVE_HEAP_FOUND ||
-       !kui_vmu_native_heap_call_discover(image,n,&raw,&before) ||
-       kui_vmu_native_heap_discover(image,prefix,load,&program)!=KUI_VMU_NATIVE_HEAP_FOUND ||
-       !kui_vmu_native_heap_call_discover(image,prefix,&program,&after)) return false;
-    raw.image_bytes=(uint32_t)prefix;
-    if(memcmp(&raw,&program,sizeof(raw)) || memcmp(&before,&after,sizeof(before)) ||
-       physical(before.entry_begin)!=physical(load)+(uint32_t)prefix+32u ||
-       before.entry_bytes!=UINT32_C(0x0d000000)-physical(before.entry_begin)) return false;
-    struct kui_vmu_native_exit exits;
-    if(!kui_vmu_native_exit_discover(image,prefix,load,&exits)) return false;
+    size_t prefix=n-IP_BYTES;unsigned boundaries;
+    if((prefix&31u) || !bootstrap(p+prefix) || !prefix_references(p,prefix,n,load,&boundaries) ||
+       boundaries!=1u ||
+       !reclaimed(image,n,prefix,load,physical(load)+(uint32_t)prefix+32u)) return false;
     *out=prefix;return true;
 }

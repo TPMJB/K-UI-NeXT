@@ -17,6 +17,7 @@
 #include "kui/vmu_launch_package.h"
 #include "kui/native_dual_reader.h"
 #include "kui/native_standalone_capability.h"
+#include "kui/vmu_emulation_settings.h"
 #include "kui/media.h"
 #include "../core/games_cdda_profile.h"
 #include "platform.h"
@@ -516,6 +517,20 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     const char *vmu_package=NULL;
     enum kui_vmu_launch_route vmu_route=KUI_VMU_LAUNCH_ORDINARY;
     if(!kui_mount(&fs,log)) goto done;
+    bool emulation_enabled=true;
+    /* This preference controls native virtual cards. Separate WinCE modules
+     * neither consult it nor inherit a failure from damaged native settings. */
+    if(!ce && !ce_excerpt) {
+        if(!kui_vmu_emulation_settings_load(&emulation_enabled,log)) {
+            problem="cannot read the saved VMU emulation setting; check VMU tools";goto done;
+        }
+        log("Native VMU emulation: %s; background reader selection is unchanged",emulation_enabled?"On":"Off");
+    }
+#if !KUI_VMU_GAME_CARDS
+    if(native_dual && !emulation_enabled) {
+        problem="VMU Off needs the matching toggle-capable Games UI and native module";goto done;
+    }
+#endif
     enum kui_wince_cdda_profile music_profile=KUI_WINCE_CDDA_NONE;
     const char *launch_package=zso?(codec==KUI_ZSO_LZO1X?KUI_GAMES_RETAIL_LZO_PACKAGE:KUI_GAMES_RETAIL_ZSO_PACKAGE):ce?KUI_GAMES_RETAIL_CE_PACKAGE:KUI_GAMES_RETAIL_PACKAGE;
     if(native_dual)launch_package=KUI_GAMES_RETAIL_NATIVE_DUAL_PACKAGE;
@@ -529,6 +544,9 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
         if(native_dual && kui_native_dual_descriptor_find(package->data,package->info.payload_bytes,NULL)!=1) {
             problem="native X/Y module capability missing or ambiguous; install the matching candidate";goto done;
         }
+#if KUI_VMU_GAME_CARDS
+        if(native_dual && !games_card_emulation_mode(package,emulation_enabled,&problem)) goto done;
+#endif
     }
     uint64_t size=0;
     if(stat_file(&files,name,&size)!=KUI_GAME_OK || !size) {
@@ -644,7 +662,7 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     snprintf(map->product,sizeof(map->product),"%s",metadata.product);
     snprintf(map->region,sizeof(map->region),"%s",metadata.region);
     snprintf(map->bootfile,sizeof(map->bootfile),"%s",metadata.bootfile);
-    if(!native_dual && (kui_vmu_launch_silver_candidate(map) || kui_vmu_launch_toy_candidate(map))) {
+    if(emulation_enabled && !native_dual && (kui_vmu_launch_silver_candidate(map) || kui_vmu_launch_toy_candidate(map))) {
         bool silver=kui_vmu_launch_silver_candidate(map);
         const char *optional_path=silver?KUI_GAMES_RETAIL_VMU_SILVER_PACKAGE:KUI_GAMES_RETAIL_VMU_TOY_PACKAGE;
         FILINFO optional;
@@ -882,12 +900,16 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
         }
     }
 #if KUI_VMU_GAME_CARDS
+    const bool virtual_a2=emulation_enabled && native_dual && !native_standalone && cache==NATIVE_CACHE_READY;
+    if(!games_card_route(map,emulation_enabled,virtual_a2,native_standalone,&problem,cancel)) goto done;
     /* The virtual-A2 module will run this game: hand it the game's own card.
      * Its raw ownership scan unmounts FatFs, so no image file stays open. */
-    if(native_dual && !native_standalone && cache==NATIVE_CACHE_READY) {
+    if(virtual_a2) {
         if(!close_reader(&files)) {problem="cannot close image reader";goto done;}
         if(!games_card_prepare(map,package,&fs,&problem,log,cancel)) goto done;
     }
+    if(!emulation_enabled && native_dual && !native_standalone)
+        log("Virtual A2 Off: physical VMUs pass through; the full reader cache remains reserved");
 #else
     (void)cache;
 #endif

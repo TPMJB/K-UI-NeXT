@@ -83,10 +83,16 @@ int main(int argc,char **argv) {
             CHECK(kui_vmu_native_patch_no_interiors(data,sizeof(data),load,pair,2u)==!inside);
         }
     memset(data,0,sizeof(data));
-    struct kui_vmu_native_patch_window many[9];
-    for(unsigned i=0;i<9u;i++) many[i]=(struct kui_vmu_native_patch_window){load+16u+i*8u,4u};
+    struct kui_vmu_native_patch_window many[10];
+    for(unsigned i=0;i<10u;i++) many[i]=(struct kui_vmu_native_patch_window){load+16u+i*8u,4u};
     CHECK(kui_vmu_native_patch_no_interiors(data,sizeof(data),load,many,8u));
-    CHECK(!kui_vmu_native_patch_no_interiors(data,sizeof(data),load,many,9u));
+    CHECK(kui_vmu_native_patch_no_interiors(data,sizeof(data),load,many,9u));
+    CHECK(!kui_vmu_native_patch_no_interiors(data,sizeof(data),load,many,10u));
+    for(unsigned i=0;i<9u;i++) {
+        word(data,many[i].begin+2u);
+        CHECK(!kui_vmu_native_patch_no_interiors(data,sizeof(data),load,many,9u));
+        memset(data,0,4u);
+    }
     CHECK(!kui_vmu_native_patch_no_interiors(data,sizeof(data),load,many,0u));
     CHECK(!kui_vmu_native_patch_no_interiors(data,sizeof(data),load,NULL,1u));
     CHECK(!kui_vmu_native_patch_no_interiors(NULL,sizeof(data),load,pair,2u));

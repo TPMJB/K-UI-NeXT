@@ -177,7 +177,7 @@ def synthetic_package(ce=False, ram_seed=False, zso=False, lzo=False, dual=None)
 
 
 def dual_package(case):
-    cap = struct.pack("<8I", 0x3152444B, 0x4C415544, 1, 32, 1, 2, 0x60000, 0)
+    cap = struct.pack("<8I", 0x3152444B, 0x4C415544, 1, 32, 1, 2, 0x51000, 0)
     if case == "native-dual-cap-absent": cap = b""
     if case == "native-dual-cap-duplicate": cap += b"x" + cap
     if case == "native-dual-cap-malformed": cap = cap[:8] + struct.pack("<I", 2) + cap[12:]

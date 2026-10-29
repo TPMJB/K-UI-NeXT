@@ -35,10 +35,10 @@ int main(int argc,char **argv) {
     start=now();
     for(unsigned i=0;i<repeat;i++) REQUIRE(kui_vmu_native_exit_discover(image,bytes,load,&exits));
     double exit_only=now()-start;
-    const struct kui_vmu_native_patch_window all[]={additional[0],additional[1],additional[2],
-        {exits.entries[0],12u},{exits.entries[1],12u},{exits.entries[2],12u}};
+    struct kui_vmu_native_patch_window all[3u+KUI_VMU_NATIVE_EXIT_ENTRIES]={additional[0],additional[1],additional[2]};
+    for(unsigned i=0;i<exits.count;i++) all[3u+i]=(struct kui_vmu_native_patch_window){exits.entries[i],12u};
     start=now();
-    for(unsigned i=0;i<repeat;i++) REQUIRE(kui_vmu_native_patch_no_interiors(image,bytes,load,all,6u));
+    for(unsigned i=0;i<repeat;i++) REQUIRE(kui_vmu_native_patch_no_interiors(image,bytes,load,all,3u+exits.count));
     double extra_scan=now()-start;start=now();
     for(unsigned i=0;i<repeat;i++) REQUIRE(kui_vmu_native_exit_discover_guarded(image,bytes,load,additional,3u,&exits));
     double combined=now()-start;

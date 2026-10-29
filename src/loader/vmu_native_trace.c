@@ -1,7 +1,26 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* Exact-Evolution diagnostics. No SD access, timer programming or cache-mode
  * changes. The live strip is an observation aid, not an arbitrary-PC trace. */
+#define KUI_VMU_NATIVE_TRACE_IMPLEMENTATION 1
 #include "kui/vmu_native_trace.h"
+#if KUI_NATIVE_SPLIT_CONTROLLER_GENERAL
+/* The General arm refuses every opt-in diagnostic selector. Its exported
+ * table still carries the SDK coherence gates, so retain the table/gateway
+ * ABI while omitting the unreachable sampler and its private history. */
+__asm__(".global __kui_native_general_trace_elided_worker\n"
+        ".set __kui_native_general_trace_elided_worker,1\n");
+bool kui_vmu_native_trace_image(const struct kui_vmu_native_discovery *d) {(void)d;return false;}
+void kui_vmu_native_trace_init(const struct kui_vmu_native_passive_config *c) {(void)c;}
+int kui_vmu_native_trace_enabled(void) {return 0;}
+void kui_vmu_native_trace_failure(const struct kui_vmu_native_trace_failure *f) {(void)f;}
+void kui_vmu_native_trace_point(uint32_t c,const struct kui_vmu_native_passive_frame *f,
+ uint32_t s,uint32_t n) {(void)c;(void)f;(void)s;(void)n;}
+void kui_vmu_native_trace_game(uint32_t c,const struct kui_vmu_native_passive_frame *f) {(void)c;(void)f;}
+void kui_vmu_native_trace_report(uint32_t c,uint32_t v,uint32_t a,uint32_t b) {
+ /* An unexpected entry keeps the ordinary terminal report, never game I/O. */
+ kui_vmu_native_runtime_fault(c,v,a,b);
+}
+#else
 #include "retail_display.h"
 #include <string.h>
 static const uint8_t evolution_digest[32]={
@@ -258,3 +277,4 @@ void kui_vmu_native_trace_report(uint32_t reason,uint32_t value,uint32_t a,uint3
  }
 #endif
 }
+#endif

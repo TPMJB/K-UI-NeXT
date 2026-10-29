@@ -223,7 +223,7 @@ static void worker_getter(void) {
             owned->reader=bad_readers[i];
             /* Even forged ready cookie and pointer-looking vector opcodes
              * cannot authorize Y/Standard to inspect the auxiliary page. */
-            r.vector600[0]=(uint32_t)(uintptr_t)(lease+0x22000u);
+            r.vector600[0]=(uint32_t)(uintptr_t)(lease+KUI_NATIVE_RA_AUX_OFFSET+0x1000u);
             r.vector600[1]=(uint32_t)(aux+64u);
             CHECK(!reader_readahead_exports(&r));
         }
@@ -240,7 +240,11 @@ static void worker_getter(void) {
         a->bytes-=4u;CHECK(!reader_readahead_exports(&r));seed(&r,lease);
         a->image_end=(uint32_t)(lease+KUI_NATIVE_RA_AUX_OFFSET+0x1000u);
         CHECK(!reader_readahead_exports(&r));seed(&r,lease);
-        a->image_end=(uint32_t)(lease+KUI_NATIVE_RA_AUX_OFFSET+0x5004u);
+        a->image_end=(uint32_t)(lease+KUI_NATIVE_RA_AUX_OFFSET+KUI_NATIVE_RA_AUX_IMAGE_BYTES);
+        CHECK(reader_readahead_exports(&r)==a);
+        a->image_end+=4u;
+        CHECK(!reader_readahead_exports(&r));seed(&r,lease);
+        a->image_end=(uint32_t)(lease+KUI_NATIVE_RA_AUX_OFFSET+0x5000u);
         CHECK(!reader_readahead_exports(&r));seed(&r,lease);
         a->visit=(kui_native_ra_visit)(lease+KUI_NATIVE_RA_AUX_OFFSET+0xffeu);
         CHECK(!reader_readahead_exports(&r));seed(&r,lease);
@@ -258,7 +262,7 @@ static void worker_getter(void) {
     CHECK(munmap((void *)aux,4096u)==0);CHECK(munmap((void *)lease,KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES)==0);
 }
 int main(void) {
-    CHECK(KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES==0x60000u);
+    CHECK(KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES==(KUI_NATIVE_GENERAL_LEAN_LAYOUT?0x51000u:0x55000u));
     capability();selection();bindings();worker_getter();
     printf("dual readers: %u checks; actual selector, Standard/non-SCI refusal, distinct blobs, all3leasealiases, Y/Standard/foreign-map/cookie refusal before protected aux reads, exact public bounds passed\n",checks);
     return 0;
@@ -274,6 +278,8 @@ LAYOUT_FIELDS={
     'manifest_reader':'offsetof(struct kui_retail_manifest,reader)',
     'manifest_transport':'offsetof(struct kui_retail_manifest,storage_transport)',
     'config_payload':'offsetof(struct kui_vmu_native_passive_config,lease.payload)',
+    'durable.handling':'offsetof(struct kui_vmu_durable,handling)',
+    'durable.inflight':'offsetof(struct kui_vmu_durable,inflight)',
     'lease_bytes':'KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES',
     **{name:'offsetof(kui_retail_async_region_type,'+name+')' for name in
        ('vector100','area0','engine','vector400','shared','vector600','area1',
@@ -306,13 +312,13 @@ def object_section(path,wanted):
     return data[section[4]:section[4]+section[5]]
 
 
-def console_layouts():
+def console_layouts(general=False):
     compiler=shutil.which('sh-elf-gcc')
     if compiler is None:raise ValueError('sh-elf-gcc must be on PATH for the actual console layout proof')
     with tempfile.TemporaryDirectory(prefix='kui-dual-layout-') as temporary:
         directory=Path(temporary)
         make=directory/'flags.mk'
-        make.write_text('include '+str(ROOT/'Makefile.vmu-native-dual-readers')+'\n'+
+        make.write_text('include '+str(ROOT/('Makefile.vmu-native-split-controller-stream-guard' if general else 'Makefile.vmu-native-dual-readers'))+'\n'+
             'dump-dual-flags:\n\t$(file >'+str(directory/'x.flags')+',$(RESIDENT_FLAGS))\n'+
             '\t$(file >'+str(directory/'y.flags')+',$(LEGACY_FLAGS))\n\t@true\n')
         subprocess.run(['make','--no-print-directory','-s','-f',str(make),'dump-dual-flags'],
@@ -337,7 +343,7 @@ def console_layouts():
         differences=[name for name in LAYOUT_FIELDS if name!='engine_bytes' and reports['x'][name]!=reports['y'][name]]
         if differences:raise ValueError('X/Y worker-visible console offsets differ: '+', '.join(differences))
         x,y=reports['x'],reports['y']
-        if x['pointer_bytes']!=4 or x['region_bytes']!=0x760 or x['lease_bytes']!=0x60000 or x['manifest_bytes']!=1020:
+        if x['pointer_bytes']!=4 or x['region_bytes']!=0x760 or x['lease_bytes']!=(0x51000 if general else 0x55000) or x['manifest_bytes']!=1020:
             raise ValueError('dual console geometry differs from the existing lease/region/map ABI')
         if not (x['engine']+y['engine_bytes']<=x['engine.native_max_lba'] and
                 x['engine.native_max_count']+4<=x['vector400']):
@@ -353,8 +359,9 @@ def dual_lease_guards():
     with tempfile.TemporaryDirectory(prefix='kui-dual-lease-') as temporary:
         directory=Path(temporary)
         (directory/'vmu_native_background_guards.h').write_text(found.group(1))
-        for enabled in (0,1):
+        for enabled,lean in ((0,0),(1,0),(0,1),(1,1)):
             flags=['-DKUI_NATIVE_DUAL_READERS=1',f'-DKUI_NATIVE_READAHEAD={enabled}',
+                   f'-DKUI_NATIVE_GENERAL_LEAN_LAYOUT={lean}',
                    '-DKUI_VMU_NATIVE_PERSISTENT_PROBE=1','-DKUI_VMU_NATIVE_CACHED_CODE=1']
             common=[os.environ.get('HOST_CC','cc'),'-std=c11','-O1','-g','-Wall','-Wextra',
                     '-Werror','-Wpedantic','-fsanitize=address,undefined','-fno-omit-frame-pointer',
@@ -363,7 +370,7 @@ def dual_lease_guards():
                 ('lease',[ROOT/'tests/test_vmu_native_readahead_lease.c',ROOT/'src/core/vmu_native_stage_placement.c']),
                 ('map',[ROOT/'tests/test_vmu_native_background_map.c']),
             ):
-                binary=directory/f'{name}-{enabled}'
+                binary=directory/f'{name}-{enabled}-{lean}'
                 subprocess.run([*common,*map(str,inputs),'-o',str(binary)],check=True)
                 subprocess.run([str(binary)],check=True,env={**os.environ,'ASAN_OPTIONS':'detect_leaks=0'})
 
@@ -390,12 +397,17 @@ def main(reader_only=False):
                '-DKUI_RETAIL_NATIVE_DRIVE_STATE=1','-DKUI_RETAIL_NATIVE_DISC_CHECK=1',
                '-DKUI_NATIVE_LOADER_TIMELINE=1','-DKUI_NATIVE_IRQ_REARM=1',
                '-DKUI_NATIVE_SDK_SCI_ROUTE=1']
-        subprocess.run([os.environ.get('HOST_CC','cc'),'-std=c11','-O1','-g','-Wall','-Wextra',
-                        '-Werror','-Wpedantic','-Wno-clobbered','-fsanitize=undefined',
-                        '-fno-sanitize-recover=all','-I',str(ROOT/'include'),'-I',str(ROOT/'src/loader'),
-                        *flags,str(source),'-o',str(binary)],check=True)
-        subprocess.run([str(binary)],check=True)
+        for general in ((0,) if reader_only else (0,1)):
+            selected=flags+(['-DKUI_NATIVE_SPLIT_CONTROLLER_GENERAL=1','-DKUI_NATIVE_GENERAL_LEAN_LAYOUT=1',
+                '-DKUI_NATIVE_SPLIT_CONTROLLER_ISOLATION=1','-DKUI_NATIVE_SPLIT_CONTROLLER_PREFETCH=1',
+                '-DKUI_NATIVE_COOP_PUMP=1','-DKUI_VMU_NATIVE_CACHED_CODE=1'] if general else [])
+            subprocess.run([os.environ.get('HOST_CC','cc'),'-std=c11','-O1','-g','-Wall','-Wextra',
+                            '-Werror','-Wpedantic','-Wno-clobbered','-fsanitize=undefined',
+                            '-fno-sanitize-recover=all','-I',str(ROOT/'include'),'-I',str(ROOT/'src/loader'),
+                            *selected,str(source),'-o',str(binary)],check=True)
+            subprocess.run([str(binary)],check=True)
     print(json.dumps(console_layouts(),sort_keys=True))
+    print(json.dumps(console_layouts(general=True),sort_keys=True))
     dual_lease_guards()
 
 

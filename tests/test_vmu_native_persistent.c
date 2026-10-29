@@ -145,7 +145,7 @@ static void fixture(void) {
     input.exits=(struct kui_vmu_native_exit){.version=KUI_VMU_NATIVE_EXIT_VERSION,
         .bytes=sizeof(input.exits),.family=KUI_VMU_NATIVE_EXIT_FAMILY,
         .load=input.driver.load_address,.image_bytes=input.driver.image_bytes,
-        .count=KUI_VMU_NATIVE_EXIT_ENTRIES,.entries={0x8c013000u,0x8c013100u,0x8c013200u}};
+        .count=3u,.entries={0x8c013000u,0x8c013100u,0x8c013200u}};
     frame.r14=input.driver.manager_cell;frame.r12=1u;runtime_phase(0u);
 }
 static uint32_t packet_bank;
@@ -295,7 +295,7 @@ static void prepare_handoff(void) {
 }
 static void install_hooks(void) {
     const uint32_t entries[]={input.driver.submit,input.lease.owner.release,
-        input.lease.owner.initializer,input.exits.entries[0],input.exits.entries[1],input.exits.entries[2]};
+        input.lease.owner.initializer,input.exits.entries[0],input.exits.entries[1],input.exits.entries[2],input.exits.entries[3]};
     for(unsigned i=0;i<sizeof(entries)/sizeof(entries[0]);i++) {
         if(i>=3u+input.exits.count) break;
         uint32_t target=i==0u?kui_vmu_native_worker_exports.submit_hook:
@@ -306,7 +306,8 @@ static void install_hooks(void) {
     }
     put(input.lease.owner.initializer_slot,4u,input.low_heap_hook);
     put(input.driver.completion_slot,4u,kui_vmu_native_worker_exports.complete_hook);
-    CHECK(durable_card.ready && !durable_card.bound && !durable_card.store.io.context);
+    CHECK((reader_only()?!durable_card.ready:!!durable_card.ready) &&
+        !durable_card.bound && !durable_card.store.io.context);
 }
 static void cold_worker(void) {
     fixture();prepare_handoff();model_card.bus.transfer_block=block_transfer;
@@ -548,6 +549,37 @@ static void halfword_exit_hooks(void) {
         if(invalid==2u) input.exits.exec_thunk=0x8c013200u;
         CHECK(kui_vmu_native_passive_arm(&input,NULL)<0 && !state.armed);
     }
+    /* A separately proved CRT entry is a fourth ordinary terminal veneer.
+     * Its count/schema and full source-image span are not inferred from the
+     * capacity of the descriptor. A malformed fourth entry cannot arm. */
+    for(unsigned invalid=0u;invalid<9u;invalid++) {
+        fixture();prepare_handoff();
+        input.exits.family=KUI_VMU_NATIVE_EXIT_CRT_BOOTSTRAP;
+        input.exits.count=4u;input.exits.entries[3]=0x8c013300u;
+        if(invalid==0u) input.exits.count=3u;
+        else if(invalid==1u) input.exits.count=5u;
+        else if(invalid==2u) input.exits.entries[3]=0u;
+        else if(invalid==3u) input.exits.version=1u;
+        else if(invalid==4u) input.exits.bytes=48u;
+        else if(invalid==5u) input.exits.entries[3]=input.driver.load_address-2u;
+        else if(invalid==6u) input.exits.entries[3]=input.driver.load_address+input.driver.image_bytes-10u;
+        else if(invalid==7u) input.exits.entries[3]|=1u;
+        else {input.exits.family=KUI_VMU_NATIVE_EXIT_FAMILY;input.exits.count=3u;}
+        CHECK(kui_vmu_native_passive_arm(&input,NULL)<0 && !state.armed);
+    }
+    /* The fourth veneer is checked before accepting a completed transfer,
+     * including every halfword of its literal and its trailing no-ops. */
+    for(unsigned byte=0u;byte<12u;byte+=2u) {
+        model_reset();fixture();prepare_handoff();model_card.bus.transfer_block=block_transfer;
+        lease_calls=block_callbacks=0u;corrupt_before_loan=corrupt_after_loan=0u;
+        input.exits.family=KUI_VMU_NATIVE_EXIT_CRT_BOOTSTRAP;
+        input.exits.count=4u;input.exits.entries[3]=0x8c013300u;
+        arm();install_hooks();begin_batch(11u,42u,0u,NULL);physical_complete();
+        uint32_t address=input.exits.entries[3]+byte;
+        uint8_t old=memory[physical(address)-0x0c000000u];put(address,1u,old^1u);
+        reject_complete();
+        CHECK(!lease_calls && !sd.bytes && !sd.writes && !durable_card.commits);
+    }
 }
 /* Frozen pre-preparation witness scope. This independently rebuilds each
  * veneer and compares its original 16/32-bit reads, so the prepared masks
@@ -580,11 +612,15 @@ static bool legacy_installed_hooks_valid(void) {
 }
 static void prepared_hook_witnesses(void) {
     unsigned mutations=0u,neighbors=0u,reader_faults=0u;
-    for(unsigned family=KUI_VMU_NATIVE_EXIT_FAMILY;family<=KUI_VMU_NATIVE_EXIT_PAIR_ONLY;family++)
+    for(unsigned family=KUI_VMU_NATIVE_EXIT_FAMILY;family<=KUI_VMU_NATIVE_EXIT_CRT_BOOTSTRAP;family++)
         for(unsigned half=0u;half<2u;half++) {
+            if(family==KUI_VMU_NATIVE_EXIT_TERMINAL_DISPATCH) continue;
             model_reset();fixture();prepare_handoff();model_card.bus.transfer_block=block_transfer;
             lease_calls=block_callbacks=0u;corrupt_before_loan=corrupt_after_loan=0u;
             input.exits.family=family;
+            if(family==KUI_VMU_NATIVE_EXIT_CRT_BOOTSTRAP) {
+                input.exits.count=4u;input.exits.entries[3]=0x8c013300u;
+            }
             if(family==KUI_VMU_NATIVE_EXIT_PAIR_ONLY) {
                 input.exits.count=2u;input.exits.entries[2]=input.exits.exec_thunk=0u;
             }
@@ -598,7 +634,7 @@ static void prepared_hook_witnesses(void) {
                 CHECK(hook_witness[i].mask && !(hook_witness[i].value&~hook_witness[i].mask));
             }
             const uint32_t entries[]={input.driver.submit,input.lease.owner.release,
-                input.lease.owner.initializer,input.exits.entries[0],input.exits.entries[1],input.exits.entries[2]};
+                input.lease.owner.initializer,input.exits.entries[0],input.exits.entries[1],input.exits.entries[2],input.exits.entries[3]};
             /* Every bit of every instruction, literal and trailing NOP is
              * mandatory, including both bytes of all halfword-aligned exits. */
             for(unsigned i=0;i<3u+input.exits.count;i++) for(unsigned byte=0;byte<12u;byte++)
@@ -825,6 +861,16 @@ static void completion_context_failures(void) {
             state.fault_value==completion_frame.pr && state.fault_expect==config.driver.completion_call+4u);
     }
 }
+#if !KUI_NATIVE_SPLIT_CONTROLLER_GENERAL
+static void diagnostic_pair_budget(void) {
+    setup();state.submitted=state.completed=PAIR_LIMIT;stage_batch(1u,0u);
+    uint8_t before[1024];memcpy(before,rx_bytes(0),sizeof(before));
+    if(setjmp(terminal)==0) {kui_vmu_native_passive_submit(&frame);CHECK(false);}
+    CHECK(terminal_error==20u && !state.pending && state.submitted==PAIR_LIMIT);
+    CHECK(!lease_calls && !sd.bytes && !sd.writes);
+    CHECK(!memcmp(before,rx_bytes(0),sizeof(before)));
+}
+#endif
 int main(void) {
     uint8_t next[512],old[512],parent[1024],target[1024],other[1024];
     memset(next,0x73,sizeof(next));memset(old,0x59,sizeof(old));
@@ -849,7 +895,7 @@ int main(void) {
         else if(corruption==4u) issued_chain[8]^=1u;
         else if(corruption<17u) {
             const uint32_t entries[]={input.driver.submit,input.lease.owner.release,
-                input.lease.owner.initializer,input.exits.entries[0],input.exits.entries[1],input.exits.entries[2]};
+                input.lease.owner.initializer,input.exits.entries[0],input.exits.entries[1],input.exits.entries[2],input.exits.entries[3]};
             unsigned which=(corruption-5u)/2u,offset=((corruption-5u)&1u)?8u:0u;
             put(entries[which]+offset,4u,0u);
         } else if(corruption==17u) put(input.lease.owner.initializer_slot,4u,input.low_heap_hook+2u);
@@ -887,6 +933,9 @@ int main(void) {
     CHECK(!memcmp(sd.media[image_lba(42u)],next,512u));
     bounded_controller_work();external_boundary_mutations();halfword_exit_hooks();prepared_hook_witnesses();
     polling_ownership_scope();gameplay_diagnostics();hooks_only_has_no_virtual_card_or_io();raw_chain_preserves_original_dma();completion_context_failures();
+#if !KUI_NATIVE_SPLIT_CONTROLLER_GENERAL
+    diagnostic_pair_budget();
+#endif
     printf("Native persistent bridge: %u checks passed; filtered hardware chain, PIO save, reboot recovery and no false ACK\n",checks);
     return 0;
 }

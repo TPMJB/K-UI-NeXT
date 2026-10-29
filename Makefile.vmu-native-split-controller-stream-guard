@@ -13,8 +13,8 @@ split-controller-stream-guard-host-tests:
 	 -DKUI_VMU_NATIVE_PERSISTENT_PROBE=1 -DKUI_VMU_NATIVE_CACHED_CODE=1 \
 	 -DKUI_NATIVE_DUAL_READERS=1 -DKUI_NATIVE_SPLIT_CONTROLLER_ISOLATION=1 \
 	 -DKUI_NATIVE_SPLIT_CONTROLLER_GENERAL=1 -DKUI_NATIVE_SPLIT_CONTROLLER_PREFETCH=1 \
-	 -DKUI_NATIVE_SPLIT_CONTROLLER_STREAM_GUARD=1 \
+	 -DKUI_NATIVE_SPLIT_CONTROLLER_STREAM_GUARD=1 -DKUI_NATIVE_GENERAL_LEAN_LAYOUT=1 \
 	 tests/test_vmu_native_split_prefetch.c $(COMPAT_WORKER_HOST_SRC) \
-	 -Wl,--gc-sections -Wl,--section-start=.isolation_tick=0x8c722000 \
+	 -Wl,--gc-sections -Wl,--section-start=.isolation_tick=0x8c71e000 \
 	 -o $(BUILD)/test-split-controller-stream-guard
 	$(BUILD)/test-split-controller-stream-guard

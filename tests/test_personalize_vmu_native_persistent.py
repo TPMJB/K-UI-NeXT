@@ -183,7 +183,7 @@ def record_fixture(slug='ps2'):
     values={8:1,12:1024,16:cache.DETECTOR_EPOCH,20:1,24:1024,28:0x8c010000,
         64:1,68:104,72:1,76:1024,80:0x8c010000,84:7,132:12,
         168:1,172:440,192:1,404:12,608:1,612:72,616:1,620:1,
-        624:1024,628:0x8c010000,700:1,704:48,708:1,712:0x8c010000,716:1024,720:3}
+        624:1024,628:0x8c010000,700:2,704:52,708:1,712:0x8c010000,716:1024,720:3}
     for offset,value in values.items():struct.pack_into('<I',wire,offset,value)
     wire[32:64]=hashlib.sha256(('synthetic '+slug).encode()).digest();wire[136:168]=wire[32:64]
     wire[992:]=hashlib.sha256(wire[:992]).digest()
@@ -335,11 +335,29 @@ class NativeCacheCodecTests(unittest.TestCase):
         for index in range(1120):
             changed=bytearray(seed);changed[index]^=1
             with self.subTest(index=index),self.assertRaises(ValueError):cache.decode_seed(changed)
-        for index in (0,8,12,16,20,24,28,64,68,72,76,80,84,132,136,168,172,192,404,608,612,616,620,624,628,700,704,708,712,716,720,748):
+        for index in (0,8,12,16,20,24,28,64,68,72,76,80,84,132,136,168,172,192,404,608,612,616,620,624,628,700,704,708,712,716,720,736,752):
             changed=bytearray(wire);changed[index]^=0x80;changed[992:]=hashlib.sha256(changed[:992]).digest()
             with self.subTest(index=index),self.assertRaises(ValueError):cache.decode_record(changed)
         with self.assertRaises(ValueError):cache.fill_seed(cache.template_seed(),wire,None)
         with self.assertRaises(ValueError):cache.decode_record(wire,10**10)
+
+    def test_four_terminal_family_preserves_all_four_entries(self):
+        wire=bytearray(record_fixture())
+        struct.pack_into('<I',wire,708,6)
+        struct.pack_into('<I',wire,720,4)
+        entries=(0x8c010100,0x8c010200,0x8c010300,0x8c010400)
+        struct.pack_into('<4I',wire,724,*entries)
+        wire[992:]=hashlib.sha256(wire[:992]).digest()
+        metadata=cache.decode_record(wire)
+        seed=cache.fill_seed(cache.template_seed(),wire,metadata['record_digest'])
+        self.assertEqual(struct.unpack_from('<4I',seed,64+724),entries)
+        self.assertEqual(cache.decode_seed(seed),metadata)
+        for offset,value in ((700,1),(704,48),(708,1),(720,3),(736,0),(752,1)):
+            with self.subTest(offset=offset,value=value):
+                changed=bytearray(wire)
+                struct.pack_into('<I',changed,offset,value)
+                changed[992:]=hashlib.sha256(changed[:992]).digest()
+                with self.assertRaises(ValueError):cache.decode_record(changed)
 
 class NativeRuntimeModePersonalizationTests(NativeCachePersonalizationTests):
     def setUp(self):

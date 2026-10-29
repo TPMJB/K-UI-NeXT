@@ -47,7 +47,8 @@ static inline __attribute__((always_inline)) bool split_controller_word(uint32_t
 static inline __attribute__((always_inline)) bool split_controller_capture(
     const struct kui_vmu_native_passive_frame *f) {
     if(!f || !state.armed || state.pending || state.submitted!=state.completed ||
-       state.submitted>=PAIR_LIMIT || controller_pair.pending || overlay.pending || !overlay.admitted ||
+       (!KUI_NATIVE_SPLIT_CONTROLLER_GENERAL && state.submitted>=PAIR_LIMIT) ||
+       controller_pair.pending || overlay.pending || !overlay.admitted ||
        kui_vmu_native_passive_resume!=config.driver.resume)
         return false;
     uint32_t sp=current_sp(),low=active_stack_low();

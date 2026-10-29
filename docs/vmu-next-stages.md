@@ -65,13 +65,35 @@ The recovered corpus already identifies useful next targets:
 
 | Corpus case | Current gap | Useful next work |
 | --- | --- | --- |
-| Resident Evil Code: Veronica | Candidate RX/TX intervals overlap the startup image under the current proof | Determine the actual live ownership interval and lifetime; retain the overlap refusal until that proof is narrower and valid |
+| Resident Evil Code: Veronica | Its boot file ends 6 bytes inside its own heap: code linked after the startup's end word runs past the 32-byte granule the startup leaves above it, so the lease check saw the arena overlap the program | `2322fda6f92e` counts that tail as heap: the game's initializer writes the first free block's two header words over it before any allocation, and the stage checks both words. Every structural gate passes (`docs/evidence/native-code-veronica-build-2322fd-2026-10-28.json`). The owner reports flawless play, saving, power-cycle reload and Disc 2 working (`docs/evidence/native-code-veronica-console-2026-10-28.json`) |
 | Grandia II | Owner reports the generic build was just fine | A unique proved startup call now distinguishes its real initializer literal from an unused export-table copy; original allocator, layout and persistence models pass |
 | Evolution 1 | `5b653775af85` normal failed before first FMV; the same reservation with `--lease-only` worked | Compare `--hooks-only`: retain active lifetime/Maple hooks and filtered DMA chain, hide virtual A1 and perform no in-game VMU storage calls |
 | Crazy Taxi 2 | Layout resolves, but nothing in the image starts the SDK heap: no word, BSR or BRA names its initializer; the game uses fixed RAM buffers (`docs/evidence/native-ct2-heap-finding-2026-10-27.json`) | Two RAM-map sessions leave 0x8cee0000-0x8cfdffff (1 MiB) unused (`docs/evidence/native-ct2-ram-map-jgr-console-2026-10-28.json`). `d41f7d5717a3` started the game's own SDK heap over 0x8cf00000 + 512 KiB before main and got the bottom lease on the console, then refused at the SDK SCI route because the SDK vector was not yet installed (`docs/evidence/native-ct2-fixed-arena-console-2026-10-28.json`). `97959129b827` runs the same arena after the game's single SDK hardware-init call (`docs/evidence/native-ct2-fixed-arena-syhwinit-2026-10-28.json`): the owner played and saved on the console. The next launch refused the card because the save's copy-protect byte is 0x10 (`docs/evidence/native-ct2-card-diagnosis-2026-10-28.json`); `f838aa8e699a` accepts any value, and the owner reports Crazy Taxi 2 now saves and loads |
 | Phantasy Star Online | Layout root now resolves; allocator-call and fourth terminal-consumer proofs remain | Review the additional consumer and dispatch lifetime together |
+| Spawn: In the Demon's Hand | Its uniform Maple initializer is reached through a unique argument-loading tail thunk | The tail-thunk layout is now proved, but the SDK heap still has no admitted initializer slot/call. Keep the New-only route until the allocation lifetime is proved (`docs/evidence/native-spawn-tail-layout-2026-10-28.json`) |
 | Jet Grind Radio | Resolves: its variable root is a separate leaf called once from system initialisation with interrupts masked, admitted where no reviewed family resolves (`docs/evidence/native-jgr-leaf-root-admission-2026-10-27.json`) | Owner reports virtual A2 working on `e4cc4914bc6a` (`docs/evidence/native-ct2-ram-map-jgr-console-2026-10-28.json`) |
 | Evolution 2 / Soul Reaver | Different callback, timer or terminal-entry layouts | Model the layout explicitly; close terminal entries cannot accept overlapping veneers |
+
+The October 28 archive inventories approximately 39 different games, but
+contains only 21 unique startup executables: the collector lists CE and
+high-density CD-audio games without copying them, and deduplicates identical
+Disc 2 startups. Ten previously supplied CD-audio startup samples were
+recovered and matched by full executable hash to this inventory, expanding
+the actual corpus to 31. With CD music off, the structural routes are 11
+combined VMU + New candidates, 8 New-only and 12 blocked from these
+generalized routes. These counts are not new console passes. Tony Hawk 2
+and Toy Commander are the remaining native GDI sample gaps; CUE-only Power
+Stone and the CE titles use separate input paths. See
+`docs/evidence/native-library-inventory-2026-10-28.json` and
+`docs/evidence/native-expanded-library-review-2026-10-28.json`.
+
+The shared single-caller proof now refuses a caller that loads its target
+into R15, since that would replace the stack pointer before the initializer
+wrapper uses it. Detector epoch 5 invalidates earlier trusted records; all
+eight fixture records were rebuilt and strictly verified from the original
+executables. Their canonical metadata is unchanged except for the epoch
+and integrity digest. Save images, journals and card identities are separate
+from this discovery cache.
 
 There is a second compatibility axis after signature discovery. The present
 native DMA adapter expects a real port-A parent request and at least one

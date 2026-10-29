@@ -34,6 +34,11 @@ __asm__(".global __kui_maple_write_layout_resident\n"
 #include <stddef.h>
 #include <string.h>
 
+#if KUI_NATIVE_STREAM_REPORT && (!defined(KUI_RETAIL_ASYNC) || defined(KUI_RETAIL_CE) || \
+    !KUI_NATIVE_STANDALONE_READER || KUI_VMU_NATIVE_BACKGROUND || KUI_NATIVE_RAM_MAP)
+#error "Native stream reporting requires the standalone native reader without RAM marking"
+#endif
+
 #if KUI_RETAIL_RETURN_TRACE && (defined(KUI_RETAIL_ASYNC) || defined(KUI_RETAIL_CE) || KUI_RETAIL_TOY_PILOT || KUI_RETAIL_OBSERVE || KUI_RETAIL_TRANSPORT != 1 || !KUI_RETAIL_LOW_RESIDENT)
 #error "Return trace is restricted to the low standard native SCI reader"
 #endif
@@ -456,6 +461,20 @@ static void capture_native_fault(uint32_t function, uint32_t current_param) {
 #endif
 #endif
 #if KUI_VMU_NATIVE_BACKGROUND || KUI_NATIVE_STANDALONE_READER
+#if KUI_NATIVE_STREAM_REPORT
+__asm__(".global __kui_native_stream_report_resident\n"
+        ".set __kui_native_stream_report_resident,1\n");
+_Static_assert(sizeof(struct kui_sci_stream_stats)==11u*sizeof(uint32_t) &&
+    offsetof(struct kui_sci_stream_stats,overruns)==4u*sizeof(uint32_t) &&
+    offsetof(struct kui_sci_stream_stats,repaired)==8u*sizeof(uint32_t),
+    "Terminal stream rows require the original eleven native counters");
+static void __attribute__((noinline)) native_stream_report(void) {
+    const uint32_t *st=(const uint32_t *)kui_sci_stream_stats();
+    retail_display_values("SD DMA PIO CMD KEEP",st,4u);
+    retail_display_values("SD OVR CRC TOK FOR",st+4u,4u);
+    retail_display_values("SD FIX AHEAD DEFER",st+8u,3u);
+}
+#endif
 #if KUI_NATIVE_RAM_MAP
 #include "kui/native_ram_map.h"
 __asm__(".global __kui_native_ram_map_resident\n"
@@ -488,6 +507,11 @@ static void __attribute__((noinline)) native_reader_report(const char *label) {
     retail_display_line(label);
     retail_display_values("FN CMD",&service.diag.last_function,2u);
     retail_display_values("LBA COUNT DEST",&service.diag.last_lba,3u);
+#if KUI_NATIVE_STREAM_REPORT
+    /* Read existing totals only on terminal return or reader stop.
+     * No sampling, reset or transport work is added during play. */
+    native_stream_report();
+#endif
 #if KUI_NATIVE_RAM_MAP
     ram_map_report();
 #endif

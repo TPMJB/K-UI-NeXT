@@ -18,9 +18,18 @@ enum kui_salvage_result { KUI_SALVAGE_FAILED, KUI_SALVAGE_STOPPED,
 enum kui_salvage_read_state { KUI_SALVAGE_READ_NONE, KUI_SALVAGE_READ_READING,
     KUI_SALVAGE_READ_ACCEPTED, KUI_SALVAGE_READ_RETRY, KUI_SALVAGE_READ_SPLIT,
     KUI_SALVAGE_READ_DEFERRED, KUI_SALVAGE_READ_FATAL };
+/* Transient saved-data work, never persisted in a job. Counts describe
+ * processed journal records, checked targets or visited directory entries,
+ * not optical repair attempts. DIRECTORY has no known total (sd_total=0). */
+enum kui_salvage_sd_phase { KUI_SALVAGE_SD_NONE, KUI_SALVAGE_SD_JOURNAL,
+    KUI_SALVAGE_SD_TARGETS, KUI_SALVAGE_SD_DIRECTORY };
+#define KUI_SALVAGE_TRIAL_PROFILES 4u
+#define KUI_SALVAGE_TRIAL_TARGETS 8u
 struct kui_salvage_status {
     enum kui_salvage_result result;
     bool first_pass_complete, complete, collection_active;
+    enum kui_salvage_sd_phase sd_phase;
+    uint64_t sd_done, sd_total;
     unsigned track, tracks, pass, pass_limit;
     uint32_t fad, targets, recovered, remaining, attempts;
     /* attempts remains the cumulative number of optical callback invocations.
@@ -44,6 +53,22 @@ struct kui_salvage_status {
      * stops when collection returns; elapsed 0 means no usable rate yet.
      * Existing done includes resumed bytes and is not a rate numerator. */
     uint64_t collected_this_run, collection_elapsed_ms;
+    /* Repair profiling for this invocation only. Calls exclude identity/recovery
+     * anchor reads. singles counts actual callbacks (two for matching audio);
+     * accepted counts validated sector candidates, not durable repairs. */
+    uint32_t repair_batches, repair_singles, repair_batch_accepted, repair_single_accepted;
+    uint64_t repair_optical_ms;
+    /* Transient bounded data-sector comparison, never repair authority or a
+     * physical spindle-speed claim. Reads/valid/ms count comparison targets;
+     * qualifying identity reads are logged separately. */
+    bool trial_active, trial_complete, trial_budget_expired, trial_qualification_done;
+    unsigned trial_done, trial_total, trial_profile, trial_sample_count;
+    uint32_t trial_profile_reads[KUI_SALVAGE_TRIAL_PROFILES];
+    uint32_t trial_profile_valid[KUI_SALVAGE_TRIAL_PROFILES];
+    uint32_t trial_profile_repairs[KUI_SALVAGE_TRIAL_PROFILES];
+    uint64_t trial_profile_ms[KUI_SALVAGE_TRIAL_PROFILES];
+    uint64_t trial_switch_ms[KUI_SALVAGE_TRIAL_PROFILES];
+    bool trial_qualified[KUI_SALVAGE_TRIAL_PROFILES];
     uint32_t final_crc[99]; /* Available only for a resolved complete job. */
     uint8_t identity[32]; /* SHA-256 of the exact immutable header, same receipt. */
     char job[KUI_DEST_JOB_CAP], message[128];
@@ -58,11 +83,30 @@ struct kui_salvage_options {
      * continue collection. These bytes remain unresolved, never recovered.
      * False preserves normal Resume. Ready/no-remaining jobs are refused. */
     bool defer_next_range;
+    /* Explicit RECOVER-only trial on a collected job. Up to eight unresolved
+     * data targets are frozen and compared once under four fixed profiles,
+     * with rotating order and a five-minute soft budget after admission.
+     * Callback: 1 verified, 0 unsupported with previous policy restored,
+     * -1 fatal/unavailable. Every profile derives from the entry snapshot:
+     * original, original-speed/retry1, requested4x/retry1, requested2x/retry1.
+     * Invalid/fatal reads never authorize bytes. A good repair is committed
+     * immediately and comparison reads never replace it. */
+    bool control_trial;
+    int (*trial_select)(void *ctx,unsigned profile);
 };
 /* NEW finds identity with one probe per prospective candidate (two matching
  * reads for audio), then collects readable sectors and records holes durably.
  * The stronger exact saved-anchor retry budget applies to Resume/latest.
- * It then automatically runs alternating targeted recovery sweeps. RESUME
+ * It then automatically runs alternating targeted recovery sweeps. An invocation
+ * that begins with unfinished collection can first rescue adjacent unresolved
+ * data targets with one range read for up to 16 sectors, retaining only
+ * independently checked slots. Each unverified slot gets at most one singleton
+ * fallback that pass. Two consecutive batches with no validated sector disable
+ * batching for the rest of that invocation; a positive batch resets the count.
+ * RESUME/RECOVER of an already collected job use singleton targeted reads from
+ * the start. Isolated targets use one singleton attempt; audio retains its two
+ * successful matching reads without batching. Separate staging preserves
+ * checked batch slots across fallback/recovery/publication. RESUME
  * continues collection and recovery, including jobs with the legacy OFF flag.
  * RECOVER runs additional sweeps after a completed first pass. passes=0 keeps
  * trying until all targets resolve, cancellation or an operational failure.

@@ -9,6 +9,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+from native_runtime_layout import LEASE_BYTES, layout_for
 import re
 import random
 import shutil
@@ -41,7 +42,7 @@ from check_vmu_native_sdk_sci_route import check as check_sdk_sci_route,pio_comp
 from check_vmu_native_stage_stack import check as check_stage_stack
 from check_vmu_native_stage_stack import Machine
 from check_vmu_native_mode import audit as audit_runtime_mode
-from check_vmu_native_trace import check as audit_trace_gates, GATES as TRACE_GATES
+from check_vmu_native_trace import check as audit_trace_gates, GATES as TRACE_GATES, general_elision as audit_general_trace_elision
 from check_vmu_native_map_refusal import check as audit_map_refusal
 from check_vmu_native_fault_capture import audit as audit_fault_capture
 from check_vmu_native_fault_capture import GATEWAY as FAULT_GATEWAY, PUBLISH as FAULT_PUBLISH, STATE as FAULT_STATE
@@ -206,6 +207,7 @@ IRQ_REARM_PREPARED_PINS = {
 
 
 def prepared_symbol_records(worker):
+    span = layout_for(worker[4]).WORKER_BYTES
     data, _, _, sections, _ = worker
     records = []
     for section in sections:
@@ -247,8 +249,8 @@ def prepared_symbol_records(worker):
     stack = sections[owner]
     require(names[stack[0]:].split(b"\0", 1)[0] == b".stack" and
             stack[1] == 8 and stack[2] & 7 == 3 and
-            bottom[0] == stack[3] == P2 + SPAN - 4096 and
-            top[0] == bottom[0] + stack[5] == P2 + SPAN and stack[5] == 4096 and
+            bottom[0] == stack[3] == P2 + span - 4096 and
+            top[0] == bottom[0] + stack[5] == P2 + span and stack[5] == 4096 and
             not (bottom[0] & 31) and not (top[0] & 31),
             "prepared private stack lacks exact P2 NOBITS ownership")
     require(sum(names[s[0]:].split(b"\0", 1)[0] == b".stack" for s in sections) == 1,
@@ -356,18 +358,33 @@ class AbsentCompletion(Machine):
     closure = (helper, '_readonly_overlay_parent_response',
                '_readonly_overlay_le32', '_readonly_overlay_increment')
 
-    def __init__(self, worker, seed, command, count, targets, outcome, *, body=None):
-        super().__init__(worker, self.helper, seed, 15, 0xAC11FFE0, body=body)
+    def __init__(self, worker, seed, command, count, targets, outcome, *, body=None,
+                 parent_index=None):
+        from check_native_general_lean_profile import worker_profile
+        self.lean = worker_profile(worker)
+        # These are independently compiled SH32 object layouts, selected only
+        # by the complete reviewed worker profile. Never infer a new layout
+        # from the object being checked or widen the historical profile.
+        self.overlay_bytes = 17172 if self.lean else 17824
+        self.frame_stride = 24 if self.lean else 28
+        self.staging_offset = 928 if self.lean else 1056
+        self.reply_lengths_offset = 864 if self.lean else 992
+        self.parent_index = count - 1 if parent_index is None else parent_index
+        require(0 <= self.parent_index < count and 0 <= targets < count,
+                'overlay model has impossible parent/target geometry')
+        super().__init__(worker, self.helper, seed, 15,
+                         0xAC11BFE0 if self.lean else 0xAC11FFE0, body=body)
         self.functions = [symbol_bytes(worker, name, 2)[:2] for name in self.closure]
         if body is not None:
             self.functions[0] = self.functions[0][0], body
-        self.data, self.external_stores, self.outcome = {}, [], outcome
+        self.data, self.external_stores, self.rx_stores, self.outcome = {}, [], [], outcome
         self.overlay = worker[4]['_overlay'][0]
-        require(worker[4]['_overlay'][1:3] == (17824, 1), 'absent model needs exact private overlay object')
+        require(worker[4]['_overlay'][1:3] == (self.overlay_bytes, 1),
+                'absent model needs exact private overlay object')
         self.r[4] = 0 if outcome == 'null' else self.overlay
         self.before_regs = self.r.copy(), self.pr, self.sr, self.fpscr, self.fr.copy()
-        self.overlay_end = self.overlay + 17824
-        for i in range(17824):
+        self.overlay_end = self.overlay + self.overlay_bytes
+        for i in range(self.overlay_bytes):
             self.data[self.overlay + i] = (i * 13 + seed) & 255
         self.put(self.overlay + 4, MASK if seed & 1 else 17)
         self.put(self.overlay + 36, MASK if seed & 1 else 19)
@@ -375,17 +392,21 @@ class AbsentCompletion(Machine):
         self.put(self.overlay + 68, 0 if outcome == 'magic' else 0x56524F31)
         self.put(self.overlay + 72, int(outcome != 'admitted'))
         self.put(self.overlay + 76, int(outcome != 'pending'))
-        self.put(self.overlay + 80, 2); self.put(self.overlay + 84, count); self.put(self.overlay + 88, count - 1); self.put(self.overlay + 92, targets)
+        self.put(self.overlay + 80, 2); self.put(self.overlay + 84, count); self.put(self.overlay + 88, self.parent_index); self.put(self.overlay + 92, targets)
         self.rx = []
+        nonparent = 0
         for i in range(count):
             rx = 0xAC200000 + 1024 * i
-            destination = 32 if i == count - 1 else (2 if i < targets else 1 if i == targets else 96)
+            destination = 32 if i == self.parent_index else (
+                2 if nonparent < targets else 1 if nonparent == targets else 96)
+            if i != self.parent_index:
+                nonparent += 1
             header = (0x01000000 if command == 9 else 0) | destination << 8 | command
-            frame = self.overlay + 96 + 28 * i
+            frame = self.overlay + 96 + self.frame_stride * i
             self.put(frame, header); self.put(frame + 12, rx & 0x1FFFFFFF); self.put(frame + 20, rx)
             for j in range(1024): self.data[rx + j] = (i + j * 19 + seed) & 255
             self.rx.append((rx, destination))
-        parent = self.rx[-1][0]
+        parent = self.rx[self.parent_index][0]
         response = (28 if command == 1 else 48 if command == 2 else 3) << 24 | 33 << 16 | (5 if command == 1 else 6 if command == 2 else 8)
         if outcome == 'parent': response ^= 1
         if outcome == 'conflict': response |= 2 << 16
@@ -418,6 +439,8 @@ class AbsentCompletion(Machine):
                     any(rx <= address < address + width <= rx + 1024 for rx, _ in self.rx),
                     'absent publisher writes outside overlay and prepared RX')
             self.external_stores.append((address, width))
+            if not self.overlay <= address < address + width <= self.overlay_end:
+                self.rx_stores.append((address, width))
         for i in range(width): self.data[address + i] = value >> (8 * i) & 255
 
     def write(self, address, value):
@@ -461,8 +484,8 @@ class AbsentCompletion(Machine):
         def put(offset, value):
             for i in range(4): expected[self.overlay + offset + i] = value >> (8 * i) & 255
         if self.outcome in ('ok', 'parent', 'conflict'):
-            parent = self.rx[-1][0]
-            frame = self.overlay + 96 + 28 * (len(self.rx) - 1)
+            parent = self.rx[self.parent_index][0]
+            frame = self.overlay + 96 + self.frame_stride * self.parent_index
             for offset, value in ((44, self.read(frame)), (48, self.read(parent)), (52, parent & 0x1FFFFFFF)):
                 put(offset, value)
         if self.outcome == 'ok':
@@ -470,7 +493,7 @@ class AbsentCompletion(Machine):
             for index, (rx, destination) in enumerate(self.rx):
                 if destination == 2:
                     for j in range(4): expected[rx + j] = 255
-                    for offset, value in ((44, self.read(self.overlay + 96 + 28 * index)),
+                    for offset, value in ((44, self.read(self.overlay + 96 + self.frame_stride * index)),
                                           (48, MASK), (52, rx & 0x1FFFFFFF)):
                         put(offset, value)
         elif self.outcome != 'null':
@@ -496,27 +519,57 @@ def audit_absent_completion(worker, *, self_test=False):
             for count, targets in ((1, 0), (2, 1), (4, 0), (4, 2), (32, 31)):
                 for outcome in ('ok', 'null', 'magic', 'admitted', 'pending', 'backend', 'parent', 'conflict'):
                     AbsentCompletion(worker, seed, command, count, targets, outcome).run().check(); cases += 1
+    from check_native_general_lean_profile import worker_profile
+    lean = worker_profile(worker)
+    from check_native_vmu_toggle_profile import worker_profile as toggle_worker_profile
+    toggle = toggle_worker_profile(worker)
+    if lean:
+        for parent in range(32):
+            for command in (1, 2, 9):
+                for outcome in ('ok', 'parent', 'conflict'):
+                    AbsentCompletion(worker, parent & 1, command, 32, 31, outcome,
+                                     parent_index=parent).run().check(); cases += 1
     # Execute the actual linked selector, with the config's exact last word.
     base, body, _ = symbol_bytes(worker, '_kui_vmu_native_passive_complete', 2)
     words = struct.unpack('<' + 'H' * (len(body) // 2), body)
-    positions = [i for i in range(1,len(words)-10) if words[i]==0xe201 and words[i+2]&0xff0f==0x510f and
-                 words[i+4:i+7]==(0x71fe,0x3126,0x8b00) and words[i+8:i+10]==(0x400b,9)]
+    if toggle:
+        # The additional reader-only completion path makes GCC hoist this
+        # one config load before MOV #1,R2. Bind that complete new sequence
+        # to the explicit toggle profile; no historical sequence changes.
+        positions = [i for i in range(1, len(words)-10) if words[i] == 0xe201 and
+                     words[i-1]&0xff00 == 0xd100 and words[i+1]&0xff00 == 0xd400 and
+                     words[i+2] == 0x5110 and words[i+3]&0xff00 == 0xd000 and
+                     words[i+4:i+7] == (0x71fe, 0x3126, 0x8b00) and
+                     words[i+7]&0xff00 == 0xd000 and words[i+8:i+10] == (0x400b, 9)]
+    elif lean:
+        positions = [i for i in range(len(words)-11) if words[i]==0xe201 and
+                     words[i+1]&0xff00==0xd100 and words[i+2]&0xff00==0xd400 and
+                     words[i+3]==0x5110 and words[i+4]&0xff00==0xd000 and
+                     words[i+5:i+8]==(0x71fe,0x3126,0x8b00) and
+                     words[i+8]&0xff00==0xd000 and words[i+9:i+11]==(0x400b,9)]
+    else:
+        positions = [i for i in range(1,len(words)-10) if words[i]==0xe201 and words[i+2]&0xff0f==0x510f and
+                     words[i+4:i+7]==(0x71fe,0x3126,0x8b00) and words[i+8:i+10]==(0x400b,9)]
     require(len(positions) == 1, 'missing unique actual hooks-only completion selector')
     i = positions[0]; config, size, kind, _ = worker[4]['_config']
-    require((size, kind) == (2300, 1), 'hooks-only config word escaped its unchanged ABI')
-    config_register=(words[i+2]>>4)&15
-    require(words[i-1]&0xff00==0xd000|(config_register<<8),
+    require((size, kind) == (2304, 1), 'hooks-only config word escaped its versioned ABI')
+    config_register=1 if lean else (words[i+2]>>4)&15
+    config_load=i-1 if toggle else i+1 if lean else i-1
+    config_base=config+size-(4 if lean else 64)
+    selector_end=i+(11 if lean and not toggle else 10)
+    subtract=i+(5 if lean and not toggle else 4)
+    require(words[config_load]&0xff00==0xd000|(config_register<<8),
             'completion selector lacks its exact config-base load')
-    literal=((base+2*(i-1)+4)&~3)+4*(words[i-1]&255)
-    require(struct.unpack_from('<I',body,literal-base)[0]==config+size-64,
+    literal=((base+2*config_load+4)&~3)+4*(words[config_load]&255)
+    require(struct.unpack_from('<I',body,literal-base)[0]==config_base,
             'completion selector config-base literal escaped the exact final word')
     routes = 0
     for seed in range(16):
         for mode in (0, 1, 2, 3, 4):
             m = Machine(worker, '_kui_vmu_native_passive_complete', seed, 15, 0xAC11FFE0)
-            m.pc = base + 2 * i; m.r[config_register] = config + size - 64
+            m.pc = base + 2 * i; m.r[config_register] = config_base
             m.mem[(config & ~0x20000000) + size - 4] = mode
-            m.stop_pc = base + 2 * (i + 10)
+            m.stop_pc = base + 2 * selector_end
             def call(target, m=m, mode=mode):
                 name = '_kui_vmu_readonly_overlay_complete_absent' if mode in (2,3) else '_kui_vmu_readonly_overlay_complete'
                 require(target == worker[4][name][0] and m.r[4] == worker[4]['_overlay'][0],
@@ -538,10 +591,10 @@ def audit_absent_completion(worker, *, self_test=False):
             try: AbsentCompletion(worker, 0, 1, 2, 1, 'ok', body=changed).run().check()
             except (ValueError, AssertionError, KeyError): rejected += 1
             else: raise ValueError('absent model accepted changed no-response/header extent')
-        changed = bytearray(body); struct.pack_into('<H', changed, 2 * (i + 4), 0x71fd)
+        changed = bytearray(body); struct.pack_into('<H', changed, 2 * subtract, 0x71fd)
         m = Machine(worker, '_kui_vmu_native_passive_complete', 0, 15, 0xAC11FFE0, body=bytes(changed))
-        m.pc = base + 2 * i; m.r[config_register] = config + size - 64
-        m.mem[(config & ~0x20000000) + size - 4] = 2; m.stop_pc = base + 2 * (i + 10)
+        m.pc = base + 2 * i; m.r[config_register] = config_base
+        m.mem[(config & ~0x20000000) + size - 4] = 2; m.stop_pc = base + 2 * selector_end
         def reject_route(target):
             require(target == worker[4]['_kui_vmu_readonly_overlay_complete_absent'][0],
                     'wrong mode reached ordinary virtual publication')
@@ -569,25 +622,36 @@ class RetryCompletion(AbsentCompletion):
              '_readonly_overlay_increment','_readonly_overlay_put32',
              '_readonly_overlay_target_response_bytes')
 
-    def __init__(self,worker,seed,command,outcome,*,body=None):
-        super().__init__(worker,seed,9,3,1,'ok',body=body)
+    def __init__(self,worker,seed,command,outcome,*,body=None,count=3,targets=1,
+                 parent_index=None):
+        super().__init__(worker,seed,9,count,targets,'ok',body=body,parent_index=parent_index)
         self.command,self.outcome=command,outcome
         self.callback=worker[4]['_persistent_handler'][0]
         self.context=worker[4]['_durable_card'][0]
         self.put(self.overlay+56,self.callback);self.put(self.overlay+64,self.context)
         self.put(self.overlay+60,0 if outcome=='unfiltered' else worker[4]['_persistent_admit'][0])
-        self.target=self.rx[0][0];self.parent=self.rx[-1][0]
-        self.put(self.target,MASK)
+        self.targets=[(i,rx) for i,(rx,destination) in enumerate(self.rx) if destination==2]
+        require(self.targets, 'retry model requires at least one target')
+        self.target=self.targets[0][1];self.parent=self.rx[self.parent_index][0]
         self.phase=1 if outcome=='sync-phase-one' else 4
         words=34 if command==12 else 2
         self.header=(words<<24)|(2<<8)|command
-        self.location=0x2a000000|((self.phase<<8) if command==13 else 0)
-        self.put(self.overlay+96,self.header);self.put(self.overlay+100,0x02000000)
-        self.put(self.overlay+104,self.location)
-        if command==12:
-            request=self.overlay+1056+384
-            self.put(request,self.header);self.put(request+4,0x02000000);self.put(request+8,self.location)
-        for i in range(3):self.put(self.overlay+96+28*i+16,1024)
+        self.request_packets=[];self.staging_addresses=[];self.packets={}
+        for ordinal,(index,rx) in enumerate(self.targets):
+            self.put(rx,MASK)
+            location=((42+ordinal)<<24)|((self.phase<<8) if command==13 else 0)
+            frame=self.overlay+96+self.frame_stride*index
+            self.put(frame,self.header);self.put(frame+4,0x02000000);self.put(frame+8,location)
+            slot=index-int(index>self.parent_index) if self.lean else index
+            staging=self.overlay+self.staging_offset+524*slot
+            self.staging_addresses.append(staging)
+            packet=struct.pack('<III',self.header,0x02000000,location)
+            if command==12:
+                packet+=bytes((ordinal*17+i*5+seed)&255 for i in range(128))
+                for i,value in enumerate(packet):self.data[staging+384+i]=value
+            self.request_packets.append(packet)
+        self.location=struct.unpack_from('<I',self.request_packets[0],8)[0]
+        for i in range(count):self.put(self.overlay+96+self.frame_stride*i+16,1024)
         self.before_data=self.data.copy();self.calls=[]
 
     def call(self,target):
@@ -595,17 +659,20 @@ class RetryCompletion(AbsentCompletion):
         require(self.r[4]==self.context and self.r[6]==(140 if self.command==12 else 12),
                 'retry publisher changes authored handler context/request length')
         request,response=self.r[5],self.r[7]
-        require(self.read(request)==self.header and self.read(request+4)==0x02000000 and
-                self.read(request+8)==self.location and response==self.overlay+1056,
+        ordinal=len(self.calls)
+        require(ordinal<len(self.targets), 'retry publisher calls more handlers than admitted targets')
+        require(bytes(self.data[request+i] for i in range(self.r[6]))==self.request_packets[ordinal] and
+                response==self.staging_addresses[ordinal],
                 'retry publisher changes immutable request or private staging buffer')
-        require(all(self.data[rx+i]==self.before_data[rx+i] for rx,_ in self.rx for i in range(1024)),
+        require(not self.rx_stores,
                 'retry publisher stores external RX before handler completion')
         self.calls.append('authored-handler')
+        location=struct.unpack_from('<I',self.request_packets[ordinal],8)[0]
         packet=bytearray((0xfc,0,2,0))
         if self.outcome=='success':
-            packet=bytearray(struct.pack('<I',0x82020008)+struct.pack('<II',0x02000000,self.location)+
+            packet=bytearray(struct.pack('<I',0x82020008)+struct.pack('<II',0x02000000,location)+
                 bytes((i*7+3)&255 for i in range(512))) if self.command==11 else bytearray((7,0,2,0))
-        if self.outcome=='host':packet[1]=1
+        if self.outcome=='host' or (self.outcome=='late-host' and ordinal==len(self.targets)-1):packet[1]=1
         if self.outcome=='source':packet[2]=1
         if self.outcome=='words':packet[3]=1
         count=8 if self.outcome=='length' else 0 if self.outcome=='empty' else len(packet)
@@ -616,10 +683,14 @@ class RetryCompletion(AbsentCompletion):
                 'retry publisher moved its reply-length result outside its private C frame')
         for i,value in enumerate(packet):self.store(response+i,value,1)
         self.write(count_pointer,count)
-        self.packet=bytes(packet);self.abi_return(1);return True
+        self.packet=bytes(packet);self.packets[self.targets[ordinal][1]]=self.packet
+        self.abi_return(1);return True
 
     def plain(self,word,pc):
         n,m=word>>8&15,word>>4&15
+        if word&0xF00F==0x300A:
+            value=self.r[n]-self.r[m]-(self.sr&1)
+            self.r[n]=value&MASK;self.t(value<0);return
         if word&0xF0FF in (0x4019,0x4029):
             self.r[n]>>=8 if word&255==0x19 else 16;return
         if word&0xF00F==0x6001:
@@ -634,8 +705,9 @@ class RetryCompletion(AbsentCompletion):
 
     def run(self):
         # The successful524-byte response's actual byte loop exceeds the
-        # stack-wrapper interpreter's1200-step slice. Retain a finite8-slice bound.
-        for _ in range(8):
+        # stack-wrapper interpreter's1200-step slice. The authored finite
+        # bound scales only with the independently admitted target count.
+        for _ in range(8*len(self.targets)):
             try:return super().run()
             except AssertionError as error:
                 if str(error)!='unbounded native stack instruction path':raise
@@ -646,11 +718,12 @@ class RetryCompletion(AbsentCompletion):
         require(self.r[8:]==regs[8:] and self.pr==pr and self.sr&~1==sr&~1 and
                 self.fpscr==fpscr and self.fr==fr,'retry publisher changes owner ABI')
         ok=self.outcome in ('again','success')
-        require(self.calls==['authored-handler'] and self.r[0]==(0 if ok else -8)&MASK,
+        calls=len(self.targets) if ok or self.outcome=='late-host' else 1
+        require(self.calls==['authored-handler']*calls and self.r[0]==(0 if ok else -8)&MASK,
                 'retry publisher changes handler count or refusal meaning')
         for rx,_ in self.rx:
             expected=bytearray(self.before_data[rx+i] for i in range(1024))
-            if ok and rx==self.target:expected[:len(self.packet)]=self.packet
+            if ok and rx in self.packets:expected[:len(self.packets[rx])]=self.packets[rx]
             if ok and rx==self.parent:expected[2]|=2
             require(bytes(self.data[rx+i] for i in range(1024))==expected,
                     'retry publisher changes payload/physical A1 or publishes malformed reply')
@@ -664,7 +737,7 @@ class RetryCompletion(AbsentCompletion):
         self.put(self.parent,0x03210008)
         self.pc=self.base;self.r[4]=self.overlay;self.r[15]=self.start_sp;self.pr=self.stop_pc
         self.before_regs=self.r.copy(),self.pr,self.sr,self.fpscr,self.fr.copy()
-        self.before_data=self.data.copy();self.calls=[];self.external_stores=[]
+        self.before_data=self.data.copy();self.calls=[];self.external_stores=[];self.rx_stores=[];self.packets={}
         return self.run().check()
 
 
@@ -676,15 +749,34 @@ def audit_retry_completion(worker,*,self_test=False):
                 model=RetryCompletion(worker,seed,command,outcome).run().check();cases+=1
                 if outcome=='again':model.next_success();successes+=1
         RetryCompletion(worker,seed,13,'sync-phase-one').run().check();cases+=1
+    from check_native_general_lean_profile import worker_profile
+    full_batches=0
+    if worker_profile(worker):
+        for parent in range(32):
+            for command in (11,12,13):
+                for outcome in ('again','success','late-host'):
+                    RetryCompletion(worker,parent&1,command,outcome,count=32,targets=31,
+                                    parent_index=parent).run().check()
+                    cases+=1;full_batches+=1
     rejected=0
     if self_test:
         _,original,_=symbol_bytes(worker,RetryCompletion.helper,2)
-        mutations=[(struct.pack('<H',0x88fc),struct.pack('<H',0x8800),'again'),
-            (struct.pack('<4H',0x84c1,0x2008,0x8b07,0x84c2),
-             struct.pack('<4H',0x84c1,0x2008,0x0009,0x84c2),'host'),
-            (struct.pack('<6H',0x84c2,0x51f9,0x600c,0x3010,0x8b02,0x84c3),
-             struct.pack('<6H',0x84c2,0x51f9,0x600c,0x3010,0x0009,0x84c3),'source'),
-            (struct.pack('<2H',0x60b3,0x8804),struct.pack('<2H',0x60b3,0x8808),'length')]
+        if worker_profile(worker):
+            # Exact reviewed register allocation of the compact publisher.
+            # Historical opcode mutants below remain unchanged.
+            mutations=[(struct.pack('<H',0x88fc),struct.pack('<H',0x8800),'again'),
+                (struct.pack('<4H',0x84e1,0x2008,0x8b06,0x84e2),
+                 struct.pack('<4H',0x84e1,0x2008,0x0009,0x84e2),'host'),
+                (struct.pack('<5H',0x84e2,0x600c,0x3010,0x8b02,0x84e3),
+                 struct.pack('<5H',0x84e2,0x600c,0x3010,0x0009,0x84e3),'source'),
+                (struct.pack('<2H',0x60d3,0x8804),struct.pack('<2H',0x60d3,0x8808),'length')]
+        else:
+            mutations=[(struct.pack('<H',0x88fc),struct.pack('<H',0x8800),'again'),
+                (struct.pack('<4H',0x84c1,0x2008,0x8b07,0x84c2),
+                 struct.pack('<4H',0x84c1,0x2008,0x0009,0x84c2),'host'),
+                (struct.pack('<6H',0x84c2,0x51f9,0x600c,0x3010,0x8b02,0x84c3),
+                 struct.pack('<6H',0x84c2,0x51f9,0x600c,0x3010,0x0009,0x84c3),'source'),
+                (struct.pack('<2H',0x60b3,0x8804),struct.pack('<2H',0x60b3,0x8808),'length')]
         for old,new,outcome in mutations:
             require(original.count(old)==1,'missing unique compiled retry predicate: '+outcome)
             changed=original.replace(old,new)
@@ -692,6 +784,7 @@ def audit_retry_completion(worker,*,self_test=False):
             except (ValueError,AssertionError,KeyError):rejected+=1
             else:raise ValueError('retry model accepts changed predicate: '+outcome)
     return dict(linked_instruction_cases=cases,retry_then_success_cases=successes,
+        full_32_frame_batches=full_batches,all_parent_positions=full_batches!=0,
         mutation_rejections=rejected,virtual_address=2,physical_a1_unchanged=True,
         retry_header_only_publication=True,exact_endpoint_length_and_command_gates=True,
         authored_backend_handler=True,storage_or_sdk_retry_scheduling_proved=False)
@@ -884,16 +977,37 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
           **(OWNED_TIMER_PREPARED_PINS if owned_timers else {})}
     from check_native_followup_profile import worker_pins as followup_worker_pins
     pins=followup_worker_pins(worker,'prepared',pins)
+    from check_native_general_lean_profile import (worker_profile as lean_worker_profile,
+        prepared_objects as lean_prepared_objects, stage_profile as lean_stage_profile,
+        low_profile as lean_low_profile, profile_mutation_checks as lean_profile_mutations)
+    lean = lean_worker_profile(worker)
     objects=[("_lifetime_plan", 616), ("_hook_witness", 384),
                        ("_hook_witness_count", 4), ("_hook_witness_ready", 4),
                        ("_protected_ranges", 512), ("_protected_count", 4),
-                       ("_controller_pair", 188), ("_diagnostic_phase", 976), ("_diagnostic", 144)]
+                       ("_controller_pair", 188)]
+    # General's cold selector admits NORMAL only. Its independent linked
+    # elision audits prove these optional observations absent; historical
+    # diagnostic variants still require their full exact state below.
+    if not lean:
+        objects += [("_diagnostic_phase", 976), ("_diagnostic", 144)]
+    lean_inventory = lean_prepared_objects(worker) if lean else {"enabled":False}
+    lean_selection = {"enabled":False}
+    if lean:
+        stage, resident, legacy = (read_elf(directory / name) for name in
+            ('stage.elf', 'resident-sci.elf', 'resident-legacy.elf'))
+        require(lean_stage_profile(stage) and lean_low_profile(resident) and lean_low_profile(legacy),
+                'Lean prepared kernels lack their exact paired stage/New/Legacy profiles')
+        lean_selection = dict(enabled=True, complete_new_and_legacy_profile=True,
+            fixed_prepared_kernels=len(pins), mutable_objects=lean_inventory['objects'],
+            mutation_rejections=0)
+        if self_test:
+            lean_selection.update(lean_profile_mutations(stage, worker, resident, legacy))
     from check_native_followup_profile import raw_owner_profile
     if raw_owner_profile(worker):
         objects=[(name,908 if name=='_diagnostic_phase' else size) for name,size in objects]
     if FAULT_STATE in worker[4]:objects.append((FAULT_STATE,32))
-    if stall_marker:objects.append(('_reader_capture',508))
-    if cooperative:objects.append(('_reader_cooperative',40 if timed else 24))
+    if stall_marker and not lean:objects.append(('_reader_capture',508))
+    if cooperative and not lean:objects.append(('_reader_cooperative',40 if timed else 24))
     for name,size in objects:
         address, actual, kind, owner = worker[4][name]
         section = worker[3][owner]
@@ -993,6 +1107,8 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
     return {"prepared": True, "exact_linked_kernels": functions, "build_identity": build,
             "live_boundary_call_abi":live_boundary_abi,
             "raw_owner_terminal":raw_owner_terminal,
+            "lean_mutable_inventory":lean_inventory,
+            "lean_profile_selection":lean_selection,
             "read_ahead_diagnostic_companion_required":bool(read_ahead_diagnostic),
             "read_ahead_pio_companion_required":read_ahead_pio,
             "read_ahead_pio_pair_companion_required":read_ahead_pio_pair,
@@ -1006,8 +1122,9 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
             "controller_fastlane": {"source_word_limit": 32, "main_controller_limit": 4,
                 "private_pair_bytes": 188, "original_dma_unchanged": True,
                 "mixed_main_queries": "B-D INFO/ALLINFO; A controller GETCOND required",
-                "profile_uses_same_fast_lane": True,
-                "optional_phase_private_bytes": 908 if raw_owner_profile(worker) else 976, "phase_ring_records": 16,
+                "profile_uses_same_fast_lane": not lean,
+                "optional_phase_private_bytes": 0 if lean else 908 if raw_owner_profile(worker) else 976,
+                "phase_ring_records": 0 if lean else 16,
                 "publication": "one parent-A presence byte after whole-batch validation",
                 "full_storage_guards_unchanged": True,
                 "synthetic_read_count_is_not_hardware_time": True},
@@ -1206,6 +1323,9 @@ def check_resume_publication(stage, cached, self_test=False):
 def check_worker_publication(stage, cached, disassembly, self_test=False, *, background_tail=None,
                              worker=None,read_ahead_proof=None):
     """Pin the P2 publisher and witness initialization before its first arm."""
+    from check_native_general_lean_profile import stage_profile
+    lean_stage=stage_profile(stage)
+    span = layout_for(stage[4]).WORKER_BYTES
     image = inspect_elf(stage[0], HIGH, LIMIT)
     symbols = stage[4]
     address = symbols["_kui_native_passive_publish"][0]
@@ -1251,7 +1371,9 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
         require(callbacks is None or callbacks==(1,0,0,0xfff1),
                 'worker publication selected-callback marker differs')
         selected_callbacks=callbacks is not None
-        i=(0x464 if callbacks is not None else 0x46c)//2
+        require(not lean_stage or selected_callbacks,
+                'Lean General publication requires its selected low callbacks')
+        i=(0x480 if lean_stage else 0x464 if callbacks is not None else 0x46c)//2
         prior=words[i-4:i]
         # The selected low-reader accessors move this complete block by8B.
         # Keep its actual refusal branch tied to the original phase/detail
@@ -1261,9 +1383,9 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
         if displacement&0x800:displacement-=0x1000
         selected_prior=(prior[:2]==[0x8d02,0x6493] and prior[3]==0xe503 and
                         branch&0xf000==0xa000 and
-                        begin+2*(i-2)+4+2*displacement==begin+0x28)
+                        begin+2*(i-2)+4+2*displacement==begin+(0x3e if lean_stage else 0x28))
         if callbacks is not None:
-            configure=0x114//2
+            configure=(0x12a if lean_stage else 0x114)//2
             require(words[configure]&0xff00==0xd100 and
                     literal(configure)==symbols['_native_low_configure'][0] and
                     words[configure+1:configure+4]==[0x64f3,0x410b,0x7444],
@@ -1368,7 +1490,7 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
             j = i + extra
             if extra and words[i + 1] != 0x6593:
                 continue
-            if (words[j + 1] & 0xff00 == 0xd200 and literal(j + 1) == SPAN and
+            if (words[j + 1] & 0xff00 == 0xd200 and literal(j + 1) == span and
                 words[j + 2] == 0x67e3 and words[j + 3] & 0xff00 == 0xd600 and
                 literal(j + 3) == symbols["__native_worker_blob_end"][0] and
                 words[j + 4] == 0x37d8 and words[j + 5] & 0xff00 == 0xd400 and
@@ -1380,32 +1502,32 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
         # Pin the entire argument block; a new callback literal alone is not
         # an installation/publication witness.
         if (mode_config and words[i + 1] == 0x6593 and
-            words[i + 2] & 0xff00 == 0xdd00 and literal(i + 2) == SPAN and
+            words[i + 2] & 0xff00 == 0xdd00 and literal(i + 2) == span and
             words[i + 3] == 0x37e8 and words[i + 4] & 0xff00 == 0xd600 and
             literal(i + 4) == symbols["__native_worker_blob_end"][0] and
             words[i + 5] & 0xff00 == 0xd400 and literal(i + 5) == symbols["__native_worker_blob_begin"][0] and
             words[i + 6:i + 10] == [0x1f82, 0x1fd1, 0x400b, 0x2fa2]):
             relocations.append((i, i + 8, 1, True))
         if (mode_config and words[i + 1] == 0x65a3 and
-            words[i + 2] & 0xff00 == 0xdb00 and literal(i + 2) == SPAN and
+            words[i + 2] & 0xff00 == 0xdb00 and literal(i + 2) == span and
             words[i + 3] == 0x37e8 and words[i + 4] & 0xff00 == 0xd600 and
             literal(i + 4) == symbols["__native_worker_blob_end"][0] and
             words[i + 5] & 0xff00 == 0xd400 and literal(i + 5) == symbols["__native_worker_blob_begin"][0] and
             words[i + 6:i + 10] == [0x1f92, 0x1fb1, 0x400b, 0x2f82]):
             relocations.append((i, i + 8, 2, True))
-        if (mode_config and words[i+1]==0x6593 and words[i+2]&0xff00==0xdb00 and literal(i+2)==SPAN and
+        if (mode_config and words[i+1]==0x6593 and words[i+2]&0xff00==0xdb00 and literal(i+2)==span and
             words[i+3]==0x37e8 and words[i+4]&0xff00==0xd600 and literal(i+4)==symbols['__native_worker_blob_end'][0] and
             words[i+5]&0xff00==0xd400 and literal(i+5)==symbols['__native_worker_blob_begin'][0] and
             words[i+6:i+10]==[0x1fa2,0x1fb1,0x400b,0x2f82]):
             relocations.append((i,i+8,3,True))
-        if (background and words[i+1]==0x67e3 and words[i+2]&0xff00==0xda00 and literal(i+2)==SPAN and
+        if (background and words[i+1]==0x67e3 and words[i+2]&0xff00==0xda00 and literal(i+2)==span and
             words[i+3:i+5]==[0x37b8,0x55f7] and
             words[i+5]&0xff00==0xd600 and literal(i+5)==symbols['__native_worker_blob_end'][0] and
             words[i+6]&0xff00==0xd400 and literal(i+6)==symbols['__native_worker_blob_begin'][0] and
             words[i+7:i+11]==[0x1f92,0x1fa1,0x400b,0x2f82]):
             relocations.append((i,i+9,4,True))
-        if (witness and i==(0x26e if selected_callbacks else 0x272)//2 and words[i+1]==0x37b8 and
-            words[i+2]&0xff00==(0xde00 if selected_callbacks else 0xdd00) and literal(i+2)==SPAN and words[i+3]==0x55f7 and
+        if (witness and i==(0x28a if lean_stage else 0x26e if selected_callbacks else 0x272)//2 and words[i+1]==0x37b8 and
+            words[i+2]&0xff00==(0xde00 if selected_callbacks else 0xdd00) and literal(i+2)==span and words[i+3]==0x55f7 and
             words[i+4]&0xff00==0xd600 and literal(i+4)==symbols['__native_worker_blob_end'][0] and
             words[i+5]&0xff00==0xd400 and literal(i+5)==symbols['__native_worker_blob_begin'][0] and
             words[i+6:i+10]==[0x1f92,0x1fe1 if selected_callbacks else 0x1fd1,0x400b,0x2f82]):
@@ -1505,6 +1627,10 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
         # The store is the next call's delay slot, before that call may
         # clobber R0. Both getter and store must dominate the first arm.
         config_start, config_base = (0x48, 0x904) if register_family in (3,4) else (0x44, 0x900)
+        if lean_stage:
+            require(register_family==5 and selected_callbacks,
+                    'Lean General diagnostics requires its exact selected-callback installer')
+            config_base=0x940
         alias_add = 0x38AC if register_family == 3 else 0x389C
         choices = [j for j in range(len(words) - 9) if
             words[j] & 0xFF00 == 0xD000 and literal(j) == symbols['_native_runtime_diagnostics'][0] and
@@ -1520,10 +1646,10 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
                 words[j+1:j+7]==[0x400b,0x0009,0x51c8,0x31a0,0x8f09,0x1b0f]]
         elif register_family==5:
             if selected_callbacks:
-                choices=[j for j in (0x126//2,) if
+                choices=[j for j in ((0x13c if lean_stage else 0x126)//2,) if
                     words[j]&0xff00==0xd000 and literal(j)==symbols['_native_runtime_diagnostics'][0] and
                     words[j+1:j+3]==[0x400b,0x0009] and words[j+3]&0xff00==0x9100 and
-                    words[j+4:j+6]==[0x31fc,0x110f]]
+                    words[j+4:j+6]==[0x31fc,0x2102 if lean_stage else 0x110f]]
             else:
                 choices=[j for j in (0x12e//2,) if
                     words[j]&0xff00==0xd000 and literal(j)==symbols['_native_runtime_diagnostics'][0] and
@@ -1538,7 +1664,8 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
             at = begin + 2 * j + 4 + 2 * (words[j] & 255)
             if struct.unpack('<h', region(body, at - begin, 2, 'diagnostics config stack offset'))[0] == config_base:
                 bases.append(j)
-        require(len(bases) == 1 and config_base + 60 - config_start == 0x8F8,
+        require(len(bases) == 1 and
+                config_base+(0 if lean_stage else 60)-config_start==(0x8fc if lean_stage else 0x8f8),
                 'diagnostics store no longer names exact final config word')
         getter_pc = begin + 2 * (diagnostics_getter + (1 if register_family in (4,5) else 3))
         store_call_pc = begin + 2 * (diagnostics_getter + (5 if register_family in (4,5) else 7))
@@ -1575,7 +1702,7 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
             words[j+5]&0xff00==0xd100 and literal(j+5)==0x80000000 and
             words[j+6:j+11]==[0x7448,0x6683,0xeb01,0x4d0b,0x291b]]
         if witness:
-            normalizers=[j for j in (0x50//2,) if
+            normalizers=[j for j in ((0x66 if lean_stage else 0x50)//2,) if
                 words[j]&0xff00==0xd100 and literal(j)==0x1fffffff and
                 words[j+1]&0xff00==(0xdd00 if selected_callbacks else 0xde00) and literal(j+1)==symbols['_memset'][0] and
                 words[j+2]==0x64f3 and words[j+4]==0x2919 and
@@ -1592,7 +1719,7 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
                 'Background prefix does not bind the loaded payload to its admitted native lease')
         memcpy_loads=[j for j in range(normal,(tail_entry-begin)//2) if
             words[j]&0xff00==0xd800 and literal(j)==symbols['_memcpy'][0]]
-        selected_lease=0x60000 if '__kui_native_readahead_stage' in symbols else 0x30000
+        selected_lease=layout_for(symbols).LEASE_BYTES if '__kui_native_readahead_stage' in symbols else 0x30000
         require(background_tail.get('lease_bytes')==selected_lease,
                 'Background tail replay selected a different owned lease size')
         lease_constants=[j for j in range(normal,(tail_entry-begin)//2) if
@@ -1663,10 +1790,15 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
                 self.header=self.load+0x20000000
                 def moved(value):
                     at=value&0x1fffffff
-                    if 0x0c100000<=at<0x0c120000:
+                    if (0x0c100000<=at<0x0c100000+span or
+                        lean_stage and at==0x0c100000+span):
                         return (value&0xe0000000)+(self.load&0x1fffffff)+at-0x0c100000
                     return value
                 wire=struct.pack('<20I',*(moved(value) for value in struct.unpack('<20I',exports)))
+                if lean_stage:
+                    require(struct.unpack('<20I',wire)[9:12]==
+                            (self.header+span-4096,self.header+span,self.header+span),
+                            'Lean publication replay lost its relocated exact private-stack endpoints')
                 self.store_block(self.header,wire)
                 self.resume,self.consumer=struct.unpack_from('<2I',wire,48)
                 require(self.resume!=self.consumer and self.resume&0xff000000==self.consumer&0xff000000==0xac000000,
@@ -1791,7 +1923,8 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
                      ((relocations[0][0] + 1, 0x0009),)]
         mutations.extend(background_prefix_mutations)
         if selected_callbacks:
-            mutations.extend([((0x118//2,0x0009),),((0x11a//2,0x7448),)])
+            configure=(0x12a if lean_stage else 0x114)//2
+            mutations.extend([((configure+2,0x0009),),((configure+3,0x7448),)])
         if register_family==5:
             mutations.extend([((first+3,0x0009),),((first+6,0x35ac),),
                               ((first+10,0x0009),),((first-3,0x64a3),),((first-2,0x0009),),
@@ -1850,12 +1983,29 @@ class CachedGateway(ReadonlyGateway):
     def __init__(self, *args):
         super().__init__(*args)
         self.private_top -= 0x20000000
+        selected=cached_submit_callback(self.symbols,self.base-P2)
+        self.visit=self.symbols[selected]
 
     def code(self, address, size):
         assert address & 0xFF000000 == 0x8C000000, "gateway fetched uncached code/constant"
         offset = physical(address) - physical(self.base)
         assert 0 <= offset < offset + size <= len(self.blob)
         return self.blob[offset:offset + size]
+
+
+def cached_submit_callback(symbols,relocation_delta=0):
+    """Bind the General gateway to its actual, separately proved split API."""
+    marker='__kui_native_general_lean_worker_layout'
+    if marker not in symbols:
+        return '_kui_vmu_native_passive_submit'
+    required=(marker,'__kui_native_split_controller_general_worker',
+              '__kui_native_split_controller_isolation_worker',
+              '__kui_native_general_unbounded_pairs_worker')
+    require(all(symbols.get(name)==1+relocation_delta for name in required) and
+            symbols.get('__vmu_native_worker_stack_top')==P2+relocation_delta+0x1c000 and
+            '_kui_vmu_native_passive_split_submit' in symbols,
+            'General gateway requires its exact compact split-controller API profile')
+    return '_kui_vmu_native_passive_split_submit'
 
 
 class CachedStackGuard(Machine):
@@ -2188,8 +2338,9 @@ def model_cached_mutations(binary, symbols):
     # Change the referenced callback literal in situ. Its wrong target is a
     # real known callback, so rejection must come from the frame/control-flow
     # model, rather than merely an out-of-bounds instruction read.
+    submit_callback=cached_submit_callback(symbols)
     for mode, target_name, wrong_name in (
-            ("submit", "_kui_vmu_native_passive_submit", "_kui_vmu_native_passive_complete"),
+            ("submit", submit_callback, "_kui_vmu_native_passive_complete"),
             ("complete", "_kui_vmu_native_passive_complete", "_kui_vmu_native_passive_submit"),
             ("terminal", "_kui_vmu_native_passive_report", "_kui_vmu_native_passive_submit"),
             ("release", "_kui_vmu_native_readonly_release_check", "_kui_vmu_native_passive_complete")):
@@ -2265,7 +2416,7 @@ def model_cached_mutations(binary, symbols):
     # could be corrupted by later dirty cached-frame eviction, so exercise
     # the wrong-stack mutation at every returning and terminal gateway.
     for mode, hook, value, alias, delta in (
-            ("submit", "_kui_vmu_native_passive_submit_hook", "_kui_vmu_native_passive_submit", 0, 0x20000000),
+            ("submit", "_kui_vmu_native_passive_submit_hook", submit_callback, 0, 0x20000000),
             ("complete", "_kui_vmu_native_passive_complete_hook", "_kui_vmu_native_passive_complete", 0, 0x20000000),
             ("terminal", "_kui_vmu_native_passive_terminal", "_kui_vmu_native_passive_report", 0, 0x20000000),
             ("release", "_kui_vmu_native_readonly_release_hook", "_kui_vmu_native_readonly_release_check", 0, 0x20000000),
@@ -2385,11 +2536,12 @@ def check_runtime_fault_gateways(worker, binary, wire, self_test=False):
 
 
 def worker_load_policy(worker, binary):
+    span = layout_for(worker[4]).WORKER_BYTES
     data, _, segments, sections, _ = worker
-    loads = validate_loads(data, binary, P1, SPAN, sections)
+    loads = validate_loads(data, binary, P1, span, sections)
     if len(segments) == 1:
         kind, offset, va, pa, size, memory, flags, _ = segments[0]
-        require((kind, va, pa, size, memory, flags) == (1, P2, P1, len(binary), SPAN, 7),
+        require((kind, va, pa, size, memory, flags) == (1, P2, P1, len(binary), span, 7),
                 "uncached worker differs from its exact legacy P2 load")
         require(binary == region(data, offset, size, "worker load"), "legacy flat worker differs from ELF")
         return {"cached_code": False, "code_alias": P2, "loads": loads}
@@ -2404,7 +2556,7 @@ def worker_load_policy(worker, binary):
             "cached code/const load must own readonly P1 bytes through an aligned end")
     require(mutable["virtual"] == mutable["physical"] + 0x20000000 and mutable["flags"] == 6 and
             mutable["first"] == code["first"] + code["memory"] and not mutable["first"] & 31 and
-            mutable["first"] + mutable["memory"] == physical(P1) + SPAN,
+            mutable["first"] + mutable["memory"] == physical(P1) + span,
             "mutable worker load must be P2 and disjoint from cached code/constants")
     shstrings = sections[worker[1][13]]
     section_names = region(data, shstrings[4], shstrings[5], "section names")
@@ -2755,6 +2907,50 @@ def tick_off_capture_stack_profile(directory,worker,read_ahead_proof):
                 complete_typed_closures=signatures,auxiliary_binary_and_relocation_pins=True)
 
 
+def general_tick_stack_profile(worker,read_ahead_proof):
+    """Admit only the real General inlined getter/TICK call site.
+
+    The complete three-function bodies are pinned and executed by the dual
+    worker model, including stream/busy/header/ownership refusals. Only that
+    already-proved call may use the independently executed auxiliary switch.
+    """
+    from check_native_general_lean_profile import worker_profile,worker_pins
+    require(worker_profile(worker), 'General inlined TICK lacks its exact lean profile')
+    require(isinstance(read_ahead_proof,dict) and read_ahead_proof.get('enabled') is True and
+            read_ahead_proof.get('schema')=='kui.native.read-ahead.audit.v1' and
+            read_ahead_proof.get('paired_markers') is True and
+            read_ahead_proof.get('artifact_sha256',{}).get('worker')==hashlib.sha256(worker[0]).hexdigest() and
+            read_ahead_proof.get('gateway',{}).get('parked_owner_stack_bytes')==20,
+            'General inlined TICK lacks its matching executed read-ahead/stack proof')
+    binding=read_ahead_proof.get('worker_binding',{})
+    require(binding.get('modeled_worker_entry')=='_reader_cooperative_service' and
+            binding.get('actual_worker_binding_cases',0)>=446 and
+            binding.get('actual_stream_guard_cases',0)>=168 and
+            binding.get('actual_busy_refusal_cases',0)>=12 and
+            binding.get('actual_imask_and_bank_cases',0)>=128 and
+            all(binding.get(name) is True for name in
+                ('actual_tick_arguments_checked','capture_start_not_present_in_general_profile',
+                 'both_durable_writer_busy_fields_refused',
+                 'rolling_stream_threshold_saturation_reset_and_resume_checked',
+                 'only_private_stream_history_and_caller_stack_written','c_abi_preserved')),
+            'General inlined TICK omits its complete actual worker proof')
+    selected=worker_pins(worker,'read_ahead',{})
+    actual={}
+    for name,(count,digest) in selected.items():
+        address,body,section=symbol_bytes(worker,name,2)
+        require(section[2]&7==6 and (len(body),hashlib.sha256(body).hexdigest())==(count,digest),
+                'General inlined TICK whole-body pin changed: '+name)
+        actual[name]=(address,count,digest)
+    recorded=binding.get('immutable_function_pins',{})
+    require(set(recorded)==set(actual) and
+            all(tuple(recorded[name])==value for name,value in actual.items()),
+            'General inlined TICK companion does not bind its exact helper bodies')
+    return dict(enabled=True,event=2,parked_owner_stack_bytes=20,
+                source_site='vmu_native_reader_capture.inc:72:16',
+                complete_actual_worker_binding_cases=binding['actual_worker_binding_cases'],
+                complete_typed_closures=actual)
+
+
 def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_proof=None,
                        *, terminal_proof=None,terminal_gateway_cases=0,read_ahead_proof=None):
     """Walk source-qualified emitted graphs with finite authored callbacks."""
@@ -2830,13 +3026,21 @@ def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_
     memo, paths, visiting, indirect_sites, null_sites = {}, {}, set(), set(), set()
     terminal_escapes=set()
     inline_capture_profile=None
+    inline_general_tick_profile=None
     def indirect(name, label):
-        nonlocal inline_capture_profile
+        nonlocal inline_capture_profile,inline_general_tick_profile
         domain, function = name.split(":", 1)[0], _function_base(name)
         source = Path(label.split(":", 1)[0]).name
         if tick_off_capture_stack_site(worker,name,label):
             if inline_capture_profile is None:
                 inline_capture_profile=tick_off_capture_stack_profile(directory,worker,read_ahead_proof)
+            return ['worker:verified_read_ahead_stack_switch']
+        from check_native_general_lean_profile import worker_profile as lean_worker_profile
+        if (lean_worker_profile(worker) and
+            (domain,function,source)==('worker','reader_cooperative_service','vmu_native_reader_capture.inc') and
+            label=='vmu_native_reader_capture.inc:72:16'):
+            if inline_general_tick_profile is None:
+                inline_general_tick_profile=general_tick_stack_profile(worker,read_ahead_proof)
             return ['worker:verified_read_ahead_stack_switch']
         if read_ahead_proof and read_ahead_proof.get('enabled') and (
             (domain,function,source)==('worker','reader_readahead_visit','vmu_native_reader_capture.inc') or
@@ -2963,7 +3167,8 @@ def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_
             "verified_cold_owner_stack_gateways":cold_gates,
             "verified_stack_replacing_terminals": [list(site) for site in sorted(terminal_escapes)],
             "background_loan_descriptor":descriptor,
-            "verified_tick_off_inlined_capture_start":inline_capture_profile or {"enabled":False}}
+            "verified_tick_off_inlined_capture_start":inline_capture_profile or {"enabled":False},
+            "verified_general_inlined_tick":inline_general_tick_profile or {"enabled":False}}
 
 
 def check_stacks(directory, worker, fault_proof=None, coherence_proof=None, *, background_audit=None,
@@ -3021,6 +3226,7 @@ def check(directory, *, self_test=False, trace_startup=None):
     base = inspect_base(directory, self_test=self_test,
                         objdump=shutil.which("sh-elf-objdump") or str(ROOT / ".deps/sh-elf/bin/sh-elf-objdump"))
     worker = read_elf(directory / "native-worker.elf")
+    span = layout_for(worker[4]).WORKER_BYTES
     data, header, segments, sections, raw_symbols = worker
     symbols = {name: record[0] for name, record in raw_symbols.items()}
     binary = (directory / "native-worker.bin").read_bytes()
@@ -3041,13 +3247,13 @@ def check(directory, *, self_test=False, trace_startup=None):
              "_kui_vmu_native_readonly_release_hook", "_kui_vmu_native_readonly_release_resume",
              "_kui_vmu_native_persistent_sd_transaction", "_kui_vmu_native_runtime_fault_hook",
              "_kui_vmu_native_allocation_failure_hook")
-    require(fields[:3] == (0x4B4E5031, 3, 80) and
+    require(fields[:3] == (0x4B4E5031, 4, 80) and
             fields[3:19] == tuple(symbols[name] for name in names) and fields[19] == symbols['_kui_vmu_native_trace_exports'],
             "persistent v3 worker exports differ from exact typed symbols")
     require(fields[3] == header[4] and all(not p & 1 and code_base + 80 <= p < code_base + len(binary) for p in fields[3:7]),
             "worker entry/hook points outside initialized code")
     require(P2 + len(binary) == fields[7] <= fields[8] <= fields[9] and
-            fields[9:12] == (P2 + 0x1F000, P2 + SPAN, P2 + SPAN), "worker BSS/stack layout differs")
+            fields[9:12] == (P2 + span - 4096, P2 + span, P2 + span), "worker BSS/stack layout differs")
     address, exported, section = symbol_bytes(worker, "_kui_vmu_native_worker_exports", 1)
     require(address == P2 and exported == binary[:80] and section[2] & 7 == 2,
             "exports must be typed immutable header")
@@ -3064,6 +3270,8 @@ def check(directory, *, self_test=False, trace_startup=None):
         require(owner[2] & 7 == 6, 'trace gateway is not executable')
     trace_audit = dict(exact_typed_exports=True, exact_image_only=True,
                        arbitrary_stall_pc_capture=False, startup_equivalence_checked=False)
+    if '__kui_native_split_controller_general_worker' in worker[4]:
+        trace_audit['normal_only_trace_elision'] = audit_general_trace_elision(directory,self_test)
     if trace_startup is not None:
         trace_audit.update(audit_trace_gates(directory, trace_startup, self_test=self_test),
                            startup_equivalence_checked=True)
@@ -3077,11 +3285,11 @@ def check(directory, *, self_test=False, trace_startup=None):
                 "resume/consumer cells must be typed, zero-initialized worker-owned words")
     for section in sections:
         require(not section[2] & 2 or not section[5] or
-                physical(P1) <= physical(section[3]) < physical(section[3]) + section[5] <= physical(P1) + SPAN,
+                physical(P1) <= physical(section[3]) < physical(section[3]) + section[5] <= physical(P1) + span,
                 "allocated worker bytes escape physical lease span")
     for name, (value, _, symbol_kind, owner) in raw_symbols.items():
         require(symbol_kind not in (1, 2) or owner < len(sections) and
-                physical(P1) <= physical(value) < physical(P1) + SPAN,
+                physical(P1) <= physical(value) < physical(P1) + span,
                 "worker object/function escapes physical lease: " + name)
         if symbol_kind == 2:
             require(code_base <= value < code_base + len(binary), "function uses wrong cached/uncached alias: " + name)
@@ -3098,7 +3306,7 @@ def check(directory, *, self_test=False, trace_startup=None):
                  "_kui_vmu_native_readonly_release_check"):
         _, _, section = symbol_bytes(worker, name, 2)
         require(section[2] & 7 == 6, "missing bounded persistent bridge implementation: " + name)
-    require(generate(data, binary, P1, SPAN) == wire, "relocation table differs from exact ELF extraction")
+    require(generate(data, binary, P1, span) == wire, "relocation table differs from exact ELF extraction")
     runtime_fault = check_runtime_fault_gateways(worker, binary, wire, self_test)
     stack_guard = check_cached_stack_guard(worker, self_test) if cached else {"cached_runtime":False}
     compiled_reader = check_compiled_heap_reader(worker,self_test,
@@ -3214,19 +3422,23 @@ def check(directory, *, self_test=False, trace_startup=None):
                           terminal_proof=base.get('gd_map_refusal_terminal'),terminal_gateway_cases=hook_cases,
                           read_ahead_proof=read_ahead_proof)
     source = check_source(directory, base["runtime"])
+    general_tick=stacks['callgraph']['verified_general_inlined_tick'].get('enabled') is True
     report = {"schema": "kui.native.persistent.probe.artifact.v1", "allocator_bootstrap_audit": base,
               "module_sha256": base["module_sha256"], "runtime": base["runtime"],
-              "worker_bytes": len(binary), "worker_span": SPAN, "worker_stack_bytes": 4096,
+              "worker_bytes": len(binary), "worker_span": span, "worker_stack_bytes": 4096,
               "worker_load_policy": policy, "cached_code": cached,
               "prepared_lifetime_admission": prepared_lifetime,
               "bottom_heap_reservation": bottom_heap,
               "reader_stall_capture": {"enabled": bool(stall),
-                  "paired_resident_worker": bool(stall),"private_worker_state_bytes": 508 if stall else 0,
+                  "paired_resident_worker": bool(stall),
+                  "private_worker_state_bytes":worker[4].get('_reader_capture',(0,0,0,0))[1] if stall else 0,
                   "diagnostic_sd_log_writes": False,"console_root_cause_established": False},
               "cooperative_reader": {"enabled": bool(cooperative),
-                  "service_enabled":bool(cooperative and not paced and not irq_rearm),
-                  "pump_blocks_per_visit": 2 if cooperative and not paced and not irq_rearm else 0,
-                  "foreground_catchup_changed": bool(paced),"service_after_physical_controller_proof": bool(cooperative and not paced and not irq_rearm),
+                  "service_enabled":general_tick or bool(cooperative and not paced and not irq_rearm),
+                  "pump_blocks_per_visit":None if general_tick else 2 if cooperative and not paced and not irq_rearm else 0,
+                  "foreground_catchup_changed": bool(paced),
+                  "service_after_physical_controller_proof":general_tick or bool(cooperative and not paced and not irq_rearm),
+                  "actual_general_tick_companion":general_tick,
                   "completed_request_timing": bool(cooperative),"console_performance_verified": False},
               "paced_reader": {"enabled":bool(paced),"paired_resident_worker":bool(paced),
                   "tight_check_polls":16 if paced else 0,"near_scanline_delta_max":1 if paced else 0,
@@ -3236,7 +3448,7 @@ def check(directory, *, self_test=False, trace_startup=None):
                   "controller_reader_service_enabled":False if paced else None,
                   "console_performance_verified":False},
               "irq_rearm_reader":dict(irq_rearm_proof,paired_resident_worker=bool(irq_rearm),
-                  full_check_and_exec_catchup=bool(irq_rearm),controller_reader_service_enabled=False,
+                  full_check_and_exec_catchup=bool(irq_rearm),controller_reader_service_enabled=general_tick,
                   rearm_and_irq_entry_counters=bool(irq_rearm)),
               "loader_timeline":timeline_proof,
               "sdk_sci_route":sdk_sci_proof,

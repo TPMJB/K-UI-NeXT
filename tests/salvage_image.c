@@ -33,10 +33,32 @@ static struct {
     struct kui_salvage_status published,interrupted,last_callback;
 } test;
 static struct kui_salvage_status *active_status;
+static bool legacy_index_case(void);
+static void legacy_index_progress(const struct kui_salvage_status *status);
+static void legacy_index_media_read(size_t count);
+static FRESULT legacy_index_stat(const TCHAR *path,FILINFO *info);
+static FRESULT legacy_index_opendir(DIR *dir,const TCHAR *path);
+static FRESULT legacy_index_readdir(DIR *dir,FILINFO *info);
+static FRESULT legacy_index_closedir(DIR *dir);
+static bool legacy_index_sync_error(void);
+static bool legacy_index_write_error(const void *data,UINT bytes);
+static void run_legacy_index_fixture(const char *job,struct kui_capture_ops *ops,struct kui_salvage_options *options);
+
 static bool partial_case(void);
 static bool partial_optical(unsigned ti,uint32_t fad,unsigned count,uint8_t *data,enum kui_read_result *result);
 static bool partial_recover(bool *result);
 static void partial_progress(const struct kui_salvage_status *status);
+static bool burst_case(void);
+static void burst_plan(void);
+static bool burst_optical(unsigned ti,uint32_t fad,unsigned count,uint8_t *data,enum kui_read_result *result);
+static void burst_progress(const struct kui_salvage_status *status);
+static void burst_event(unsigned type,const uint8_t *event);
+static bool saved_check_media_read(size_t count);
+static bool trial_case(void);
+static void trial_progress(const struct kui_salvage_status *status);
+static bool trial_optical(unsigned ti,uint32_t fad,unsigned count,uint8_t *data,enum kui_read_result *result);
+static bool saved_check_read_error(FIL *file,void *data,UINT bytes,UINT *got,FRESULT *result);
+static void saved_check_read_result(FIL *file,void *data,UINT bytes,UINT *got,FRESULT result);
 static enum kui_salvage_result run_salvage(const struct kui_capture_plan *p,const struct kui_capture_ops *ops,
     const struct kui_salvage_options *options,enum kui_salvage_action action,struct kui_salvage_status *status) {
     unsigned before=test.reads;
@@ -89,19 +111,30 @@ static void log_line(const char *fmt,...) {va_list args;va_start(args,fmt);vprin
 static bool fault(const char *name) {return test.capturing && test.fault && !strcmp(test.fault,name) && !test.injected;}
 static uint64_t blocks(void *ctx) {(void)ctx;return test.blocks;}
 static int image_read(void *ctx,uint32_t block,size_t count,uint8_t *data) {
-    (void)ctx;return fseeko(test.image,(off_t)block*512,SEEK_SET) || fread(data,512,count,test.image)!=count?-1:0;
+    (void)ctx;legacy_index_media_read(count);if(burst_case() && saved_check_media_read(count))return -1;
+    return fseeko(test.image,(off_t)block*512,SEEK_SET) || fread(data,512,count,test.image)!=count?-1:0;
 }
 static int image_write(void *ctx,uint32_t block,size_t count,const uint8_t *data) {
     (void)ctx;++test.writes;return fseeko(test.image,(off_t)block*512,SEEK_SET) || fwrite(data,512,count,test.image)!=count?-1:0;
 }
 static int image_sync(void *ctx) {(void)ctx;return fflush(test.image) || fsync(fileno(test.image))?-1:0;}
 static const struct kui_media_ops media={NULL,blocks,image_read,image_write,image_sync};
+FRESULT __real_f_stat(const TCHAR *,FILINFO *);
+FRESULT __wrap_f_stat(const TCHAR *path,FILINFO *info) {return legacy_index_stat(path,info);}
+FRESULT __real_f_opendir(DIR *,const TCHAR *);
+FRESULT __wrap_f_opendir(DIR *dir,const TCHAR *path) {return legacy_index_opendir(dir,path);}
+FRESULT __real_f_readdir(DIR *,FILINFO *);
+FRESULT __wrap_f_readdir(DIR *dir,FILINFO *info) {return legacy_index_readdir(dir,info);}
+FRESULT __real_f_closedir(DIR *);
+FRESULT __wrap_f_closedir(DIR *dir) {return legacy_index_closedir(dir);}
 FRESULT __real_f_write(FIL *,const void *,UINT,UINT *);
 FRESULT __wrap_f_write(FIL *file,const void *data,UINT bytes,UINT *written) {
+    if(legacy_index_write_error(data,bytes)) {*written=0;return FR_DISK_ERR;}
     const uint8_t *p=data;
     if(fault("defer-index") && bytes==32 && test.last_event==2 && !memcmp(p,"KUITGT2",7)) {test.injected=true;*written=0;return FR_DISK_ERR;}
     if(test.capturing && bytes==512 && !memcmp(p,"KUISJNL1",8)) {
         unsigned type=get32(p+16);test.last_event=type;
+        if(burst_case())burst_event(type,p);
         if(fault("event-buffer-mutation") && type==1) {test.injected=true;((uint8_t *)data)[100]^=1;}
         const char *kind=type==1?"queue-write":type==2?"commit-write":type==3?"baseline-write":type==4?"ready-write":type==5?"repaired-write":type==7?"backup-publish":"complete-write";
         if(fault(kind) || (fault("queue-error-cancel") && type==1)) {test.injected=true;if(!strcmp(test.fault,"queue-error-cancel"))test.cancelled=true;*written=0;return FR_DISK_ERR;}
@@ -122,6 +155,7 @@ FRESULT __wrap_f_write(FIL *file,const void *data,UINT bytes,UINT *written) {
 }
 FRESULT __real_f_sync(FIL *);
 FRESULT __wrap_f_sync(FIL *file) {
+    if(legacy_index_sync_error())return FR_DISK_ERR;
     if((fault("queue-sync") && test.last_event==1) || (fault("baseline-sync") && test.last_event==3) ||
        (fault("backup-sync") && test.patch_started) || (fault("complete-sync") && test.last_event==6) || (fault("candidate-sync") && test.last_event==7)) {
         test.injected=true;return FR_DISK_ERR;
@@ -130,8 +164,10 @@ FRESULT __wrap_f_sync(FIL *file) {
 }
 FRESULT __real_f_read(FIL *,void *,UINT,UINT *);
 FRESULT __wrap_f_read(FIL *file,void *data,UINT bytes,UINT *got) {
+    FRESULT injected;if(burst_case() && saved_check_read_error(file,data,bytes,got,&injected))return injected;
     if(fault("readback-fail") && test.repairing && test.patch_started && bytes==KUI_RAW_BYTES) {test.injected=true;*got=0;return FR_DISK_ERR;}
     FRESULT result=__real_f_read(file,data,bytes,got);
+    if(burst_case())saved_check_read_result(file,data,bytes,got,result);
     if(fault("header-readback") && bytes==4096 && result==FR_OK) {test.injected=true;((uint8_t *)data)[42]^=1;}
     if(fault("journal-readback") && bytes==512 && result==FR_OK) {test.injected=true;((uint8_t *)data)[100]^=1;}
     if(fault("candidate-readback") && test.last_event==7 && bytes==512 && result==FR_OK) {test.injected=true;((uint8_t *)data)[100]^=1;}
@@ -196,6 +232,8 @@ static void progress(void *ctx,const struct kui_salvage_status *status) {
     }
     test.published=*status;
     if(partial_case())partial_progress(status);
+    if(burst_case())burst_progress(status);
+    if(trial_case())trial_progress(status);
     test.identifying=!status->job[0];
     test.pass=status->pass;if(test.automatic)test.repairing=status->pass!=0;
     bool first_stop=!strcmp(test.test,"cancel") || !strcmp(test.test,"auto-resume") || !strcmp(test.test,"auto-legacy-resume") || !strcmp(test.test,"status-collection-rate");
@@ -250,6 +288,8 @@ static enum kui_read_result optical(void *ctx,uint32_t fad,unsigned count,uint8_
         }
     }
     enum kui_read_result partial_result;
+    if(trial_case() && trial_optical(ti,fad,count,data,&partial_result))return partial_result;
+    if(burst_case() && burst_optical(ti,fad,count,data,&partial_result))return partial_result;
     if(partial_case() && partial_optical(ti,fad,count,data,&partial_result))return partial_result;
     if(!strcmp(test.test,"fatal-committed-resume") && !test.fatal_resume_injected && fad==45182) {
         /* A failed command may have modified its entire RAM destination. No
@@ -284,7 +324,7 @@ static enum kui_read_result optical(void *ctx,uint32_t fad,unsigned count,uint8_
     if(!test.repairing && !damaged && count==1 && fad<45150)++test.single_healthy;
     if(!large_case() && test.pass==0 && count==1 && (fad==152 || fad==342))++test.first_attempts[fad==342];
     if(test.automatic && test.repairing && damaged) {
-        assert(count==1 && test.repair_count<256);test.repair_order[test.repair_count++]=fad;
+        if(count==1) {assert(test.repair_count<256);test.repair_order[test.repair_count++]=fad;}
         unsigned resolves=!strcmp(test.test,"auto-late")?5:51;
         if(!test.healthy && ((!strcmp(test.test,"auto-late") || !strcmp(test.test,"auto-until-late"))?test.pass<resolves:
            (!strcmp(test.test,"auto-exhausted") || !strcmp(test.test,"auto-until-stop"))))return KUI_READ_RETRY;
@@ -356,14 +396,21 @@ static void compare_unresolved(const char *job) {
 static void legacy_header(const char *job,bool holes) {
     /* Recreate an old OFF job stopped after healthy committed data.
      * Identity binds the exact immutable header into every journal record. */
-    remount();uint8_t header[4096],journal[131072],digest[32];char path[512];
+    remount();uint8_t header[4096],digest[32];char path[512];
     snprintf(path,sizeof(path),"0:%s/header.bin",job);assert(load(path,header,sizeof(header))==sizeof(header));
     memcpy(header,"KUISALV1",8);put32(header+8,1);put32(header+20,holes?1:0);put32(header+4092,kui_crc32(0,header,4092));
     struct kui_sha256 hash;kui_sha256_init(&hash);kui_sha256_update(&hash,header,sizeof(header));kui_sha256_digest(&hash,digest);
     write_file(path,header,sizeof(header));
-    snprintf(path,sizeof(path),"0:%s/journal.bin",job);size_t size=load(path,journal,sizeof(journal));assert(size && !(size%512));
-    for(size_t at=0;at<size;at+=512) {unsigned type=get32(journal+at+16);assert(type==2 || type==3 || (holes && (type==1 || type==4)));memcpy(journal+at+40,digest,32);put32(journal+at+508,kui_crc32(0,journal+at,508));}
-    write_file(path,journal,(UINT)size);assert(f_mount(NULL,"0:",0)==FR_OK);
+    snprintf(path,sizeof(path),"0:%s/journal.bin",job);FIL journal;UINT got,put;uint8_t event[512];
+    assert(f_open(&journal,path,FA_READ|FA_WRITE)==FR_OK && f_size(&journal) && !(f_size(&journal)%512));
+    FSIZE_t size=f_size(&journal);
+    for(FSIZE_t at=0;at<size;at+=512) {
+        assert(f_lseek(&journal,at)==FR_OK && f_read(&journal,event,sizeof(event),&got)==FR_OK && got==sizeof(event));
+        unsigned type=get32(event+16);assert(type==2 || type==3 || (holes && (type==1 || type==4)));
+        memcpy(event+40,digest,32);put32(event+508,kui_crc32(0,event,508));
+        assert(f_lseek(&journal,at)==FR_OK && f_write(&journal,event,sizeof(event),&put)==FR_OK && put==sizeof(event));
+    }
+    assert(f_sync(&journal)==FR_OK && f_close(&journal)==FR_OK && f_mount(NULL,"0:",0)==FR_OK);
 }
 static void check_legacy_header(const char *job) {
     remount();uint8_t header[4096];char path[512];snprintf(path,sizeof(path),"0:%s/header.bin",job);
@@ -395,11 +442,15 @@ static void compare_complete(const char *job) {
 }
 #include "salvage_defer_fixture.inc"
 #include "salvage_partial_fixture.inc"
+#include "salvage_burst_fixture.inc"
+#include "salvage_legacy_index_fixture.inc"
+#include "salvage_trial_fixture.inc"
 int main(int argc,char **argv) {
     if(argc!=4 && argc!=5)return 2;
     if(argc==5)export_dir=argv[4];
     test.test=argv[3];
     if(partial_case())partial_plan();
+    if(burst_case())burst_plan();
     if(defer_case() && strcmp(test.test,"defer-tail")) {plan.tracks[2].end=plan.tracks[2].toc_end=45150+104;plan.bytes=(44u+104u)*KUI_RAW_BYTES;}
     if(!strcmp(test.test,"fast-dense")) {plan.tracks[2].end=plan.tracks[2].toc_end=45150+320;plan.bytes=(44u+320u)*KUI_RAW_BYTES;}
     if(cd_case()) {plan.profile=KUI_CAPTURE_PROFILE_CD_TOC;plan.tracks[0].toc_end=190;
@@ -436,6 +487,8 @@ int main(int argc,char **argv) {
     test.fault=first_fault?test.test:NULL;test.healthy=!strcmp(test.test,"healthy") || !strcmp(test.test,"auto-legacy-resume") || !strcmp(test.test,"finish-stop") || !strcmp(test.test,"status-collection-rate");test.capturing=true;
     if(!strcmp(test.test,"cd-offset") || !strcmp(test.test,"cd-mode-switch") || !strcmp(test.test,"drive-buffer"))test.healthy=true;
     enum kui_salvage_result result;
+    if(trial_case()) {run_trial_fixture(argv,&ops,&options);goto end;}
+    if(burst_case()) {run_burst_fixture(argv,&ops,&options);goto end;}
     if(partial_case()) {run_partial_fixture(argv,&ops,&options);goto end;}
     if(defer_case()) {run_defer_fixture(argv,&ops,&options);goto end;}
     if(!strncmp(test.test,"legacy-narrow-v",15)) {
@@ -728,6 +781,10 @@ int main(int argc,char **argv) {
     assert(run_salvage(&plan,&ops,&options,KUI_SALVAGE_RESUME,&status)==KUI_SALVAGE_RESOLVED && status.recovered==expected_targets());
     assert(test.reads==reads+2 && status.last_problem_state==KUI_SALVAGE_READ_NONE);test.capturing=false;compare_complete(job);
 end:
+#ifdef KUI_TEST_ALLOCATIONS
+    assert(!live_worker_bytes && peak_worker_bytes<=256u*1024u);
+    if(!large_case())printf("PASS bounded worker allocations: %u calls, largest %zu bytes, peak %zu bytes\n",worker_allocations,largest_worker_allocation,peak_worker_bytes);
+#endif
     test.capturing=false;assert(f_mount(NULL,"0:",0)==FR_OK && !fclose(test.image));
     for(unsigned i=0;i<3;++i)free(original[i]);
     printf("PASS salvage %s\n",argv[3]);return 0;

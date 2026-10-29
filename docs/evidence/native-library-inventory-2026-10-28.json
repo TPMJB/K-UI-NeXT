@@ -1,0 +1,49 @@
+{
+  "schema": "kui.native.library-inventory.v1",
+  "date": "2026-10-28",
+  "archive": "Library-startup-01.zip",
+  "archive_sha256": "2fecbcc205c9756bff5f1ddabd7a1d36e1135270a9020a43e45e15045c6d6d9f",
+  "parts": 1,
+  "missing_parts": [],
+  "inventory_rows": 166,
+  "gdi_paths": 77,
+  "raw_gdi_paths": 41,
+  "raw_product_ids": 38,
+  "copied_unique_native_startups": 21,
+  "native_cdda_listed_only": 12,
+  "windows_ce_paths_listed_only": 6,
+  "windows_ce_unique_titles": 5,
+  "duplicate_native_startups": 2,
+  "cooked_2048_gdi_copies_not_collected": 36,
+  "iso_track_rows": 86,
+  "cue_rows": 3,
+  "additional_cue_only_game": "Power Stone",
+  "approximate_distinct_games_represented": 39,
+  "reconciliation": [
+    "21 copied native startups + 12 native CD-audio entries + 6 Windows CE image paths + 2 duplicate Disc 2 startups = 41 raw GDI paths.",
+    "The raw paths name 38 product IDs: Code Veronica and Skies each have two discs, and World Party has a second copy.",
+    "Power Stone is listed only by its CUE, in addition to the 38 raw-GDI identities. The other CUE entries duplicate Quake III and World Party already listed as GDIs.",
+    "All 36 cooked-2048 GDI errors have recognized raw counterparts. Their track files account for the 86 ISO rows; these are not additional games.",
+    "The 21 executable ZIPs are every eligible unique startup in this one-part run. Other listed games were intentionally not collected."
+  ],
+  "native_cdda_titles_without_startup_samples": [
+    "Frogger 2", "Generator 2", "Grandia II", "MDK2", "Omikron",
+    "Quake III Arena", "Record of Lodoss War", "Rush 2049",
+    "Sega Smash Pack Volume 1", "Soul Reaver", "Tony Hawk's Pro Skater 2",
+    "Toy Commander"
+  ],
+  "windows_ce_titles_without_payload_samples": [
+    "Armada", "Bust-A-Move 4", "Nightmare Creatures II", "Worms Armageddon",
+    "Worms World Party"
+  ],
+  "checked": [
+    "Outer manifest/member correspondence and all 21 startup content hashes through native_library_sweep.py",
+    "Same Code Veronica executable hash and product for both discs",
+    "All 21 native structural verdicts reproduce the recorded 2322fda6f92e-stage sweep"
+  ],
+  "limits": [
+    "This inventories the supplied manifest, not files that may exist elsewhere on the owner's PC.",
+    "A listed game is not a collected startup sample or a compatibility result.",
+    "CDDA sample collection with --include-cdda does not prove CD music and virtual VMU coexistence."
+  ]
+}

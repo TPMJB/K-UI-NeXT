@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import struct
 import subprocess
 import tempfile
@@ -14,7 +15,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
-from vmu_native_cache_seed import record_metadata
+from vmu_native_cache_seed import DETECTOR_EPOCH, record_metadata
 SOURCES = (
     "tools/vmu_native_resolution_cache_tool.c",
     "src/core/vmu_native_program.c",
@@ -103,6 +104,14 @@ class CacheToolTests(unittest.TestCase):
         self.invoke("replay", "image", "cache", "abc", code=2)
         self.invoke("replay", "image", "cache", "z" * 64, code=2)
 
+    def test_detector_epoch_is_current_and_shared_by_c_and_python(self):
+        header = (ROOT / "include/kui/vmu_native_resolution_cache.h").read_text()
+        epoch = re.search(r"^#define KUI_VMU_NATIVE_RESOLUTION_DETECTOR_EPOCH (\d+)u$",
+                          header, re.MULTILINE)
+        self.assertIsNotNone(epoch)
+        self.assertEqual(DETECTOR_EPOCH, 6)
+        self.assertEqual(int(epoch.group(1)), DETECTOR_EPOCH)
+
     def test_unsupported_or_oversized_image_creates_nothing(self):
         image, cache = self.work / "image.bin", self.work / "cache.nvr"
         image.write_bytes(bytes(1024))
@@ -142,8 +151,8 @@ class CacheToolTests(unittest.TestCase):
 
     def test_actual_old_epochs_resealed_record_is_refused_without_deleting_it(self):
         cache, metadata = self.build_actual()
-        self.assertEqual(metadata["detector_epoch"], 4)
-        for epoch in (1, 2, 3):
+        self.assertEqual(metadata["detector_epoch"], DETECTOR_EPOCH)
+        for epoch in range(1, DETECTOR_EPOCH):
             wire = bytearray(cache.read_bytes())
             struct.pack_into("<I", wire, 16, epoch)
             wire[992:] = hashlib.sha256(wire[:992]).digest()
@@ -153,6 +162,8 @@ class CacheToolTests(unittest.TestCase):
             self.invoke("verify", self.actual, stale, code=1)
             self.invoke("replay", self.actual, stale, metadata["record_digest"], code=1)
             self.invoke("replay", self.actual, stale, wire[992:].hex(), code=1)
+            with self.assertRaisesRegex(ValueError, "version/epoch/schema"):
+                record_metadata(wire, wire[992:])
             self.assertEqual(stale.read_bytes(), wire)
 
     def test_terminal_dispatch_schema_is_typed_and_matches_c_codec(self):
@@ -167,20 +178,49 @@ class CacheToolTests(unittest.TestCase):
                 (6, 3, 0x8c010100, 0x8c010200, False)):
             with self.subTest(family=family, count=count, fatal=fatal, table=table):
                 wire = bytearray(original)
-                for offset, value in ((708, family), (720, count), (732, fatal), (740, table)):
+                for offset, value in ((708, family), (720, count), (732, fatal), (744, table)):
                     struct.pack_into("<I", wire, offset, value)
                 wire[992:] = hashlib.sha256(wire[:992]).digest()
                 changed = self.work / "typed terminal.nvr"
                 changed.write_bytes(wire)
                 self.invoke("inspect", changed, code=0 if accepted else 1)
                 if accepted:
-                    self.assertEqual(record_metadata(wire)["detector_epoch"], 4)
+                    self.assertEqual(record_metadata(wire)["detector_epoch"], DETECTOR_EPOCH)
                     # Schema integrity alone cannot confer a fresh image proof.
                     self.invoke("verify", self.actual, changed, code=1)
                     self.invoke("replay", self.actual, changed, metadata["record_digest"], code=1)
                 else:
                     with self.assertRaisesRegex(ValueError, "exit schema"):
                         record_metadata(wire)
+
+    def test_crt_bootstrap_schema_is_typed_and_matches_c_codec(self):
+        cache, metadata = self.build_actual()
+        original = cache.read_bytes()
+        for family,count,fourth,accepted in (
+                (6,4,0x8c010300,True),
+                (6,3,0x8c010300,False),
+                (6,5,0x8c010300,False),
+                (6,4,0,False),
+                (1,3,0x8c010300,False),
+                (1,4,0x8c010300,False),
+                (5,3,0x8c010300,False),
+                (7,4,0x8c010300,False)):
+            with self.subTest(family=family,count=count,fourth=fourth):
+                wire = bytearray(original)
+                for offset,value in ((708,family),(720,count),(736,fourth)):
+                    struct.pack_into('<I',wire,offset,value)
+                wire[992:] = hashlib.sha256(wire[:992]).digest()
+                changed = self.work / 'typed CRT terminal.nvr'
+                changed.write_bytes(wire)
+                self.invoke('inspect',changed,code=0 if accepted else 1)
+                if accepted:
+                    self.assertEqual(record_metadata(wire)['detector_epoch'],DETECTOR_EPOCH)
+                    self.invoke('verify',self.actual,changed,code=1)
+                    self.invoke('replay',self.actual,changed,metadata['record_digest'],code=1)
+                else:
+                    with self.assertRaisesRegex(ValueError,'exit schema'):
+                        record_metadata(wire)
+
     def test_evolution2_raw_source_and_program_prefix_share_cache_identity(self):
         source = self.evolution2_source()
         raw_cache = self.work / "source.nvr"

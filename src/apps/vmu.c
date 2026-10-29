@@ -9,6 +9,7 @@
 #include "kui/vmu_read_bounded.h"
 #include "kui/hash.h"
 #include "kui/vmu_collection.h"
+#include "kui/vmu_library.h"
 #include "kui/vmu_image_subset.h"
 #include "kui/vmu_save_snapshot.h"
 #include "kui/vmu_description.h"
@@ -461,7 +462,7 @@ static bool source_path(const char *path,char peer[KUI_VMU_BACKUP_PATH_CAP],cons
     return backup_path(path,peer,"vms",ext);
 }
 static bool collection_image_path(const char *path) {
-    return kui_vmu_collection_path_id(path)!=0u;
+    return kui_vmu_library_path(path);
 }
 static bool image_path(const char *path) {
     char peer[KUI_VMU_BACKUP_PATH_CAP];
@@ -806,6 +807,16 @@ done:
  * A full-image CRC pins the viewed file until the user explicitly refreshes. */
 static struct {char path[KUI_VMU_BACKUP_PATH_CAP];uint32_t crc;bool valid;} image_listed;
 static bool image_read(struct session *s,const char *path,uint8_t *data,bool compare) {
+    if(kui_vmu_library_path(path)) {
+        uint8_t *check=compare?malloc(IMAGE_BYTES):data;
+        if(!check) return fail(s,"Not enough RAM to check the virtual VMU");
+        bool ok=kui_vmu_library_read(path,check,s->log,s->cancel)==KUI_VMU_LIBRARY_OK;
+        if(!ok && !cancelled(s)) fail(s,"Virtual VMU changed or needs attention; refresh its listing");
+        if(ok && compare && memcmp(check,data,IMAGE_BYTES))
+            ok=fail(s,"Virtual VMU changed; refresh before extracting saves");
+        if(compare) free(check);
+        return ok;
+    }
     FIL file;FRESULT r=f_open(&file,path,FA_READ);
     if(r!=FR_OK) return fail(s,"Cannot open the read-only VMD image");
     bool ok=f_size(&file)==IMAGE_BYTES;
@@ -821,6 +832,7 @@ static bool image_read(struct session *s,const char *path,uint8_t *data,bool com
     return ok;
 }
 static bool image_proof(struct session *s,const char *path,const uint8_t *data) {
+    if(kui_vmu_library_path(path)) return true; /* The library admitted the complete image and journal. */
     char proof_path[KUI_VMU_BACKUP_PATH_CAP+4];
     int n=snprintf(proof_path,sizeof(proof_path),"%s.crc",path);
     if(n<0 || n>=(int)sizeof(proof_path)) return fail(s,"VMD checksum path is too long");
@@ -873,13 +885,6 @@ void kui_vmu_image_run(const char *path,unsigned page,unsigned selected,unsigned
     mounted=true;data=malloc(IMAGE_BYTES);snap=malloc(sizeof(*snap));
     if(!data || !snap) {fail(&s,"Not enough RAM for VMD image");goto done;}
     status(&s,"Reading and checking read-only VMD image...");
-    if(collection_image_path(path)) {
-        struct kui_vmu_collection_card card;
-        if(kui_vmu_collection_verify(path,&card,s.log,cancel)) {
-            if(!cancelled(&s)) fail(&s,"Virtual-card admission failed; refresh the collection");
-            goto done;
-        }
-    }
     if(!image_read(&s,path,data,false) || !image_read(&s,path,data,true) || !image_proof(&s,path,data) || !image_snapshot(&s,data,snap)) goto done;
     uint32_t crc=kui_crc32(0,data,IMAGE_BYTES);
     if(action && crc!=image_listed.crc) {
@@ -896,6 +901,10 @@ void kui_vmu_image_run(const char *path,unsigned page,unsigned selected,unsigned
     }
     unsigned first=action==1?page*KUI_VMU_ROWS+selected:0,end=action==1?first+1:snap->count;
     for(unsigned i=first;i<end;i++) out->status.total+=(uint64_t)le16(snap->directory+snap->entries[i]*32+24)*BLOCK_BYTES;
+    if(kui_vmu_library_path(path) && kui_vmu_library_check_allocation(cancel)!=KUI_VMU_LIBRARY_OK) {
+        if(!cancelled(&s)) fail(&s,"Virtual VMU allocation needs attention; no saves were extracted");
+        goto done;
+    }
     char folder[KUI_DEST_JOB_CAP];if(!new_folder(&s,folder)) goto done;
     for(unsigned i=first;i<end;i++) {
         const uint8_t *entry=snap->directory+snap->entries[i]*32;

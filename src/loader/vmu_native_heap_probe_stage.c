@@ -6,6 +6,7 @@
 #include "kui/vmu_native_mode.h"
 #include "kui/vmu_native_background.h"
 #include "kui/vmu_native_startup_stack.h"
+#include "kui/vmu_native_toggle.h"
 __asm__(".global __kui_native_owner_stack_ip_stage\n"
         ".set __kui_native_owner_stack_ip_stage,1\n");
 _Static_assert(KUI_VMU_NATIVE_OWNER_STACK_LOW-52u>
@@ -31,11 +32,30 @@ static enum kui_loader_sd_result native_persist_storage_init(struct kui_retail_s
 #define kui_retail_stage_relay kui_native_heap_base_relay
 #include "retail_stage.c"
 #undef kui_retail_stage_relay
+#if KUI_NATIVE_SPLIT_CONTROLLER_GENERAL && KUI_NATIVE_GENERAL_LEAN_LAYOUT
+__asm__(".global __kui_native_general_lean_stage_layout\n"
+        ".set __kui_native_general_lean_stage_layout,1\n");
+#if KUI_NATIVE_READAHEAD
+__asm__(".global __kui_native_vmu_toggle_stage\n"
+        ".set __kui_native_vmu_toggle_stage,1\n");
+const struct kui_vmu_native_toggle_capability kui_vmu_native_toggle_capability
+    __attribute__((used,section(".rodata.vmu_native_toggle")))={
+    KUI_VMU_NATIVE_TOGGLE_MAGIC0,KUI_VMU_NATIVE_TOGGLE_MAGIC1,1u,32u,7u,
+    UINT32_C(0x51000),UINT32_C(0x30000),1u};
+#endif
+#endif
 #if KUI_NATIVE_STANDARD_VMU_ISOLATION || KUI_NATIVE_READER_ONLY_ISOLATION || KUI_NATIVE_METADATA_CACHE_ISOLATION || KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION
-_Static_assert(KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES==UINT32_C(0x60000),
-    "Native isolation variants retain the complete current lease");
+#if KUI_NATIVE_GENERAL_LEAN_LAYOUT
+_Static_assert(KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES==UINT32_C(0x51000),
+    "General isolation owns its exact compact lease");
 __asm__(".global __kui_native_isolation_lease_bytes\n"
-        ".set __kui_native_isolation_lease_bytes,0x60000\n");
+        ".set __kui_native_isolation_lease_bytes,0x51000\n");
+#else
+_Static_assert(KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES==UINT32_C(0x55000),
+    "Diagnostic isolation retains its exact complete lease");
+__asm__(".global __kui_native_isolation_lease_bytes\n"
+        ".set __kui_native_isolation_lease_bytes,0x55000\n");
+#endif
 #endif
 #if KUI_NATIVE_STANDARD_VMU_ISOLATION
 __asm__(".global __kui_native_standard_vmu_isolation_stage\n"
@@ -104,6 +124,16 @@ __asm__(".global __kui_native_cold_progress_stage\n"
 static uint32_t native_runtime_mode(void) {
     int mode=kui_vmu_native_mode_decode(native_runtime_mode_wire,KUI_VMU_NATIVE_MODE_BYTES);
     if(mode<0) stopped("NATIVE VMU RUNTIME MODE REFUSED",(uint32_t)mode);
+#if !KUI_NATIVE_SPLIT_CONTROLLER_GENERAL || !KUI_NATIVE_GENERAL_LEAN_LAYOUT || !KUI_NATIVE_READAHEAD
+    if(mode==KUI_VMU_NATIVE_MODE_READER_ONLY)
+        stopped("VMU OFF NEEDS MATCHING GENERAL READER",(uint32_t)mode);
+#else
+    /* Retain the capability in the linked module; the launcher checks this
+     * exact record before it writes the immutable mode slot. */
+    if(mode==KUI_VMU_NATIVE_MODE_READER_ONLY &&
+       ((volatile const struct kui_vmu_native_toggle_capability *)&kui_vmu_native_toggle_capability)->off_mode!=7u)
+        stopped("VMU OFF CAPABILITY REFUSED",(uint32_t)mode);
+#endif
 #if KUI_VMU_NATIVE_BACKGROUND
     /* The Background manifest moves into the live worker reservation.
      * These diagnostics either skip that allocation or permit its reclaim. */
@@ -512,7 +542,7 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
 #if KUI_NATIVE_COLD_PROGRESS_STAGE
     retail_display_line("COLD 04 EXECUTABLE EXTENT VERIFIED");
 #endif
-    if(program_bytes!=exec_bytes) retail_display_line("VERIFIED RECLAIMED BOOTSTRAP SUFFIX");
+    if(program_bytes!=exec_bytes) retail_display_line("VERIFIED RECLAIMED EXECUTABLE SUFFIX");
     exec_bytes=(uint32_t)program_bytes;
 #if KUI_VMU_NATIVE_CACHE_PROBE
 #if KUI_NATIVE_STAGE_FAST_SCAN
@@ -594,5 +624,11 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     if(native_word(native_heap.initializer_slot|UINT32_C(0x20000000))!=KUI_VMU_OBSERVE_LOW_HEAP_HOOK)
         native_report(2u,native_heap.initializer_slot);
     ((uint32_t *)(uintptr_t)frame)[5]=KUI_VMU_OBSERVE_LOW_RETURN_HOOK;
+#endif
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    /* The fourth entry is already terminal before resuming the initial
+     * executable, including if that executable itself enters the extra CRT
+     * path before reaching the allocator hook. */
+    if(!native_crt_bootstrap_prearm()) native_report(2u,0x48u);
 #endif
 }

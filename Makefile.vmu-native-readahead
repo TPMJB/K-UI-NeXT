@@ -23,7 +23,7 @@ $(BUILD)/native-ra-aux.elf: $(RA_OBJ) src/loader/native_readahead_aux.ld
 $(BUILD)/native-ra-aux.bin: $(BUILD)/native-ra-aux.elf
 	$(OBJCOPY) -O binary $< $@
 $(BUILD)/native-ra-aux.reloc: $(BUILD)/native-ra-aux.elf $(BUILD)/native-ra-aux.bin
-	python3 tools/vmu_native_relocations.py $< $(BUILD)/native-ra-aux.bin $@ --link-base 0x8c421000 --span-bytes 0x7000
+	python3 tools/vmu_native_relocations.py $< $(BUILD)/native-ra-aux.bin $@ --link-base 0x8c421000 --span-bytes 0x4000
 $(BUILD)/stage/src/loader/vmu_native_heap_probe_stage.o: $(BUILD)/native-ra-aux.bin $(BUILD)/native-ra-aux.reloc
 -include $(RA_OBJ:.o=.d)
 .PHONY: readahead-cache-host-tests readahead-lease-host-tests readahead-aux-host-tests readahead-low-host-tests

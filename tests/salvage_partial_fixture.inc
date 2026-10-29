@@ -38,8 +38,10 @@ static bool partial_optical(unsigned ti,uint32_t fad,unsigned count,uint8_t *dat
         if(s->pass && !partial.healthy && !strcmp(test.test,"partial-audio") && ti==1) {*result=KUI_READ_PARTIAL;++partial.partial_reads;}
         if(s->pass && !partial.healthy && !strncmp(test.test,"partial-repair",14) && ti==0) {
             *result=KUI_READ_PARTIAL;++partial.partial_reads;
-            if(!strcmp(test.test,"partial-repair-invalid") && fad==152)data[2200]^=1;
-            if(!strcmp(test.test,"partial-repair-streak") && fad<158)data[2200]^=1;
+            for(unsigned n=0;n<count;++n) {
+                if(!strcmp(test.test,"partial-repair-invalid") && fad+n==152)data[n*KUI_RAW_BYTES+2200]^=1;
+                if(!strcmp(test.test,"partial-repair-streak") && fad+n<158)data[n*KUI_RAW_BYTES+2200]^=1;
+            }
         }
         return true;
     }
@@ -160,7 +162,7 @@ static void run_partial_fixture(char **argv,struct kui_capture_ops *ops,struct k
         assert(partial_saved(job,sectors)==258);return;
     }
     if(!strcmp(test.test,"partial-repair")) {
-        assert(result==KUI_SALVAGE_RESOLVED && status.targets==32 && status.recovered==32 && status.complete && partial.partial_reads==33 && !test.recoveries);
+        assert(result==KUI_SALVAGE_RESOLVED && status.targets==32 && status.recovered==32 && status.complete && partial.partial_reads==3 && !test.recoveries);
         test.capturing=false;compare_complete(job);return;
     }
     if(!strcmp(test.test,"partial-repair-invalid") || !strcmp(test.test,"partial-repair-streak")) {

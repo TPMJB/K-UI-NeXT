@@ -30,6 +30,7 @@ static uint16_t load(unsigned reg,size_t instruction,size_t slot) {
 static bool model(const uint8_t *p,size_t n,uint32_t *rx_slot,uint32_t *rx_value,
     uint32_t *tx_slot,uint32_t *tx_value) {
     uint32_t registers[16]={0};bool valid[16]={false};
+    registers[15]=UINT32_C(0x0cf00000);
     for(size_t pc=CALL-8u;pc<=CALL+2u;pc+=2u) {
         uint16_t op=u16(p+pc);unsigned reg=(op>>8)&15u;
         if(pc==CALL) {
@@ -47,11 +48,13 @@ static bool model(const uint8_t *p,size_t n,uint32_t *rx_slot,uint32_t *rx_value
         } else return false;
     }
     *rx_value=registers[5];*tx_value=registers[6];
-    return valid[4] && valid[5] && valid[6] && registers[4]==0u;
+    return valid[4] && valid[5] && valid[6] && registers[4]==0u &&
+        registers[15]==UINT32_C(0x0cf00000);
 }
-static bool decode(const uint8_t *p,size_t n) {
+static bool decode_kind(const uint8_t *p,size_t n,bool r1) {
     uint32_t rs=0,rv=0,ts=0,tv=0;
-    bool found=uniform_root(p,n,BASE,CALL,UPPER,&rs,&rv,&ts,&tv);
+    bool found=r1?uniform_r1_root(p,n,BASE,CALL,UPPER,&rs,&rv,&ts,&tv):
+        uniform_root(p,n,BASE,CALL,UPPER,&rs,&rv,&ts,&tv);
     if(found) {
         uint32_t model_rx=0,model_tx=0,model_rv=0,model_tv=0;++accepted;
         bool executed=model(p,n,&model_rx,&model_rv,&model_tx,&model_tv);
@@ -64,6 +67,7 @@ static bool decode(const uint8_t *p,size_t n) {
     }
     return found;
 }
+static bool decode(const uint8_t *p,size_t n) {return decode_kind(p,n,false);}
 static void fixture(uint8_t *p,unsigned target,const unsigned order[5]) {
     memset(p,0,0x200u);put32(p,0x100u,UPPER);put32(p,0x104u,RX);put32(p,0x108u,TX);
     static const unsigned positions[5]={CALL-8u,CALL-6u,CALL-4u,CALL-2u,CALL+2u};
@@ -94,6 +98,8 @@ static void permutations(unsigned *order,unsigned used,unsigned depth) {
         /* Target in the delay instruction is not known at JSR execution. */
         CHECK(decode(image,sizeof(image))==(order[4]!=0u));
     }
+    fixture(image,1u,order);
+    CHECK(decode_kind(image,sizeof(image),true)==(order[4]!=0u));
 }
 int main(void) {
     unsigned order[5]={0};permutations(order,0u,0u);
@@ -113,15 +119,27 @@ int main(void) {
             put16(image,pc,original);
         }
     }
+    fixture(image,1u,standard);
+    for(unsigned instruction=0;instruction<6u;instruction++) {
+        size_t pc=CALL-8u+2u*instruction;uint16_t original=u16(image+pc);
+        for(unsigned value=0;value<=UINT16_MAX;value++) {
+            put16(image,pc,(uint16_t)value);(void)decode_kind(image,sizeof(image),true);
+        }
+        put16(image,pc,original);
+    }
     /* All newly admitted target allocations retain rejection of unknown
      * targets, target/argument aliasing and untrusted control flow. */
     for(unsigned target=0;target<16u;target++) {
         fixture(image,target,standard);
         CHECK(decode(image,sizeof(image))==(target==0u || target==2u || target==3u));
+        CHECK(decode_kind(image,sizeof(image),true)==(target==1u));
     }
     fixture(image,0u,standard);
     for(unsigned n=0;n<CALL+4u;n++) CHECK(!decode(image,n));
     put32(image,0x100u,UPPER+2u);CHECK(!decode(image,sizeof(image)));
-    printf("Native uniform root: %u checks, %u semantically verified admissions; 360 permutations and 1179648 instruction mutations\n",checks,accepted);
+    fixture(image,1u,standard);
+    for(unsigned n=0;n<CALL+4u;n++) CHECK(!decode_kind(image,n,true));
+    put32(image,0x100u,UPPER+2u);CHECK(!decode_kind(image,sizeof(image),true));
+    printf("Native uniform root: %u checks, %u semantically verified admissions; 480 permutations and 1572864 instruction mutations\n",checks,accepted);
     return 0;
 }

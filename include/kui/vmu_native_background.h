@@ -9,19 +9,24 @@
 /* The ordinary native allocation owns 192 KiB. Its relocated worker and
  * stack occupy the first 128 KiB; the immutable 64-slot map and native
  * vector/receive/state region use the beginning of the remaining 64 KiB.
- * The isolated read-ahead profile owns 384 KiB with the same map/worker
- * geometry. The Standard-reader VMU isolation keeps that same complete
+ * The General read-ahead profile owns 324 KiB with a 112 KiB worker;
+ * diagnostic builds retain 340 KiB with their complete 128 KiB worker. The Standard-reader VMU isolation keeps that same complete
  * reservation while leaving reader/cache workspace unused. Auxiliary code,
  * stack and cache have disjoint owned spans.
  * Keep the region cache-line aligned. */
+#if KUI_NATIVE_GENERAL_LEAN_LAYOUT
+#define KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES UINT32_C(0x1c000)
+#define KUI_VMU_NATIVE_BACKGROUND_REGION_OFFSET UINT32_C(0x1c400)
+#else
 #define KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES UINT32_C(0x20000)
+#define KUI_VMU_NATIVE_BACKGROUND_REGION_OFFSET UINT32_C(0x20400)
+#endif
 #if KUI_NATIVE_READAHEAD || KUI_NATIVE_CURRENT_BOTTOM_HEAP
 #define KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES KUI_NATIVE_RA_LEASE_BYTES
 #else
 #define KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES UINT32_C(0x30000)
 #endif
 #define KUI_VMU_NATIVE_BACKGROUND_MAP_BYTES UINT32_C(1020)
-#define KUI_VMU_NATIVE_BACKGROUND_REGION_OFFSET UINT32_C(0x20400)
 #define KUI_VMU_NATIVE_BACKGROUND_REGION_BYTES UINT32_C(0x760)
 #if KUI_NATIVE_DUAL_READERS
 _Static_assert(KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES==KUI_NATIVE_DUAL_LEASE_BYTES,

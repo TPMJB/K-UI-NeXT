@@ -69,5 +69,12 @@
     "Nothing here ran on a Dreamcast: card creation, the CMD10 query from the menu runtime, the first-launch ownership scan time and the stage admitting a launcher-made card are console tests.",
     "The PC tool ran on synthetic cards only, not on the owner's p0005."
   ],
-  "console_compatibility_verified": false
+  "console_compatibility_verified": false,
+  "console_results": [
+    {
+      "date": "2026-10-28",
+      "reported_by": "owner",
+      "result": "Crazy Taxi 2 and the per-game virtual card tested on the console: works."
+    }
+  ]
 }

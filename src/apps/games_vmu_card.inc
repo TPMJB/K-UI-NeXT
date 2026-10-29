@@ -5,6 +5,8 @@
 #include "kui/vmu_game_card_service.h"
 #include "kui/vmu_backing.h"
 #include "kui/clock.h"
+#include "kui/vmu_native_toggle.h"
+#include "kui/vmu_native_mode.h"
 
 struct games_card_platform {FATFS *fs;struct kui_volume volume;struct kui_media_ops raw;};
 static int games_card_read(void *context,uint32_t lba,uint8_t out[512]) {
@@ -37,6 +39,71 @@ static void games_card_salt(void *context,uint8_t out[16]) {
     if(kui_clock_now(&now)) (void)kui_clock_to_seconds(&now,&seconds);
     uint32_t words[4]={(uint32_t)seconds,(uint32_t)((uint64_t)seconds>>32),++calls,p->fs->last_clst};
     memcpy(out,words,sizeof(words));
+}
+/* A game explicitly assigned to an imported card must never silently run
+ * through a loader that cannot expose virtual A2. Other games keep their
+ * existing Legacy/standalone behavior. This is mounted read-only file I/O;
+ * unlike profile preparation it never unmounts or opens raw storage. */
+static bool games_card_route(const struct kui_retail_manifest *map,bool emulation_enabled,bool virtual_a2,bool standalone,
+    const char **problem,kui_cancel_fn cancel) {
+    static char refusal[128];
+    /* The user's explicit Off choice keeps the assignment for a later On
+     * launch. Do not inspect card files or implicitly change that choice. */
+    if(!emulation_enabled) return true;
+    if(virtual_a2) return true; /* games_card_prepare validates the assignment. */
+    struct kui_vmu_game_card_work *work=malloc(sizeof(*work));
+    if(!work) {*problem="not enough memory to check the game's virtual card";return false;}
+    struct kui_vmu_game_card_choice choice;
+    int result=kui_vmu_game_card_assignment(map->product,work,&choice,cancel);
+    free(work);
+    if(result==KUI_VMU_GAME_CARD_UNBOUND) return true;
+    if(result==KUI_VMU_GAME_CARD_READY) {
+        *problem=standalone?"this game uses standalone New, which cannot use its assigned virtual A2 card":
+            "this game has an imported virtual A2 card; launch it with the combined New reader";
+    } else if(result==KUI_VMU_GAME_CARD_CANCELLED) *problem="cancelled while checking the assigned virtual card";
+    else {
+        snprintf(refusal,sizeof(refusal),"virtual card: %s",choice.problem);
+        *problem=refusal;
+    }
+    return false;
+}
+static uint32_t games_card_mode_u32(const uint8_t *p) {
+    return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24;
+}
+/* Change only the in-memory launch mode, after proving that this module
+ * implements physical-VMU passthrough with the unchanged General cache.
+ * Older modules retain their existing On behavior and refuse explicit Off. */
+static bool games_card_emulation_mode(struct kui_runtime_image *package,bool enabled,const char **problem) {
+    if(!package || !package->data) {*problem="native VMU module is unavailable";return false;}
+    uint8_t *payload=(uint8_t *)package->data;
+    size_t bytes=package->info.payload_bytes;
+    int capable=kui_vmu_native_toggle_find(payload,bytes,NULL);
+    if(!capable && enabled) return true;
+    if(capable!=1) {
+        *problem="VMU Off needs the matching toggle-capable native module; reinstall this update";
+        return false;
+    }
+    size_t slot=SIZE_MAX;
+    static const uint8_t magic[8]={'K','U','I','N','V','M','0','1'};
+    for(size_t at=0;bytes>=KUI_VMU_NATIVE_MODE_BYTES && at<=bytes-KUI_VMU_NATIVE_MODE_BYTES;at++) {
+        if(memcmp(payload+at,magic,sizeof(magic))) continue;
+        const uint8_t *wire=payload+at;
+        uint32_t mode=games_card_mode_u32(wire+16u);
+        bool reserved=false;
+        for(unsigned i=20u;i<KUI_VMU_NATIVE_MODE_BYTES;i++) reserved|=wire[i]!=0;
+        if(games_card_mode_u32(wire+8u)!=1u ||
+           games_card_mode_u32(wire+12u)!=KUI_VMU_NATIVE_MODE_BYTES || reserved ||
+           mode>KUI_VMU_NATIVE_MODE_READER_ONLY) continue;
+        if((mode!=KUI_VMU_NATIVE_MODE_NORMAL && mode!=KUI_VMU_NATIVE_MODE_READER_ONLY) || slot!=SIZE_MAX) {
+            *problem="native VMU toggle mode is damaged or ambiguous; reinstall this update";
+            return false;
+        }
+        slot=at;
+    }
+    if(slot==SIZE_MAX) {*problem="native VMU toggle mode is missing; reinstall this update";return false;}
+    uint32_t mode=enabled?KUI_VMU_NATIVE_MODE_NORMAL:KUI_VMU_NATIVE_MODE_READER_ONLY;
+    for(unsigned i=0;i<4u;i++) payload[slot+16u+i]=(uint8_t)(mode>>(8u*i));
+    return true;
 }
 /* Called once the virtual-A2 module will really run this game. UNBOUND
  * (no usable product number) keeps an installed card; the build template

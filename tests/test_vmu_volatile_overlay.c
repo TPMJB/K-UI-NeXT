@@ -58,7 +58,6 @@ static void immutable_write_snapshot_and_stale_rx(void) {
     volatile_fresh();parent_next();
     memset(writes[1],0x31,128u);volatile_request(1u,12u,0u,42u);
     capture();assert(!prepare(2u));
-    assert(!overlay.frames[1].write_payload);
     memset(writes[1],0xcc,128u);frames[1].payload1=0xffffffffu;
     assert(!kui_vmu_readonly_overlay_complete(&overlay));
     for(unsigned i=0;i<128u;i++) assert(ram_card.protocol.staged[i]==0x31u);

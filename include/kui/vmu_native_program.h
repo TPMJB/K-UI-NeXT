@@ -14,7 +14,14 @@
  * Recognizable but malformed/truncated bootstrap tails and contradictory
  * allocator/caller/control-flow evidence refuse. Output is unchanged on any
  * failure, including overlap. A shortened result must remain bound to the
- * verified full source independently of any cache of the effective prefix. */
+ * verified full source independently of any cache of the effective prefix.
+ *
+ * An ordinary image also drops a final tail of at most eight bytes past a
+ * 32-byte boundary when that same unique startup allocator begins its arena
+ * exactly at the boundary: its initializer writes the first free block's two
+ * header words over the tail before any allocation. The prefix must not
+ * reference the tail, and allocator, call and exit discovery must be
+ * identical without it; otherwise the whole file is kept, never refused. */
 bool kui_vmu_native_program_extent(const void *image,size_t source_bytes,
     uint32_t load,size_t *program_bytes);
 #endif

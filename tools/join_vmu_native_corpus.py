@@ -9,6 +9,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+from native_runtime_layout import LEASE_BYTES, GENERAL, DIAGNOSTIC
 
 
 def sha(path):return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -21,13 +22,16 @@ def main():
     parser.add_argument("--sci",type=Path,required=True)
     parser.add_argument("--output",type=Path,required=True)
     parser.add_argument("--expected-joint",type=int)
+    parser.add_argument("--diagnostic-layout",action="store_true",
+        help="Join the exact retained diagnostic runtime geometry")
     args=parser.parse_args()
+    selected_layout=DIAGNOSTIC if args.diagnostic_layout else GENERAL
     structural=json.loads(args.structural.read_text());heaps=json.loads(args.heap.read_text());sci=json.loads(args.sci.read_text())
     assert structural["schema"]=="kui.native.structural-corpus.v1"
     assert heaps["schema"]=="kui.native.corpus-original-heap.v1"
     assert sci["schema"]=="kui.native.sdk-sci.structural-source-matrix.v1"
     assert heaps["structural_matrix_sha256"]==sha(args.structural)
-    assert structural["lease_bytes"]==heaps["lease_bytes"]==0x60000
+    assert structural["lease_bytes"]==heaps["lease_bytes"]==selected_layout.LEASE_BYTES
     heap_by_slug={row["slug"]:row for row in heaps["results"]}
     sci_by_slug={row["slug"]:row for row in sci["inputs"]}
     assert len(sci_by_slug)==len(sci["inputs"])
@@ -42,7 +46,7 @@ def main():
         if allocator:
             assert allocation["source_sha256"]==row["source_sha256"]
             assert allocation["image_sha256"]==row["image_sha256"]
-            assert allocation["lease_bytes"]==0x60000
+            assert allocation["lease_bytes"]==selected_layout.LEASE_BYTES
             assert allocation["stage_begin"]==structural["stage_begin"] and allocation["stage_end"]==structural["stage_end"]
             assert allocation["retained_header_and_entire_lease_preserved_during_allocator_operations"] is True
         route=interrupt["source_family_result"]==1
@@ -56,7 +60,8 @@ def main():
             new_candidate_console_performance=False))
     admitted=[row["slug"] for row in rows if row["joint_host_candidate"]]
     if args.expected_joint is not None:assert len(admitted)==args.expected_joint,(admitted,args.expected_joint)
-    report=dict(schema="kui.native.joint-corpus.v1",inputs=len(rows),joint_host_candidates=len(admitted),
+    report=dict(schema="kui.native.joint-corpus.v1",inputs=len(rows),lease_bytes=selected_layout.LEASE_BYTES,
+        joint_host_candidates=len(admitted),
         joint_candidate_slugs=admitted,proof_sha256={"structural":sha(args.structural),"original_heap":sha(args.heap),"sci_source":sha(args.sci)},
         artifacts=heaps["artifacts"],results=rows,
         limits=["Joint admission combines independent source-family and modeled live-state proofs, not observed console execution.",

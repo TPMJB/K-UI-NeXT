@@ -37,7 +37,7 @@ class CachedMetadataProofTests(unittest.TestCase):
             (self.build/name).write_bytes(data)
             artifacts[name] = delivery.sha(data)
         layout={};address=0xac100000
-        for name,size in (('config',2300),('live',456),('lifetime',616),('hooks',384)):
+        for name,size in (('config',2304),('live',456),('lifetime',616),('hooks',384)):
             padded=(size+31)&~31
             layout[name]=dict(canonical_p2=hex(address),cached_p1=hex(address-0x20000000),
                 p2_begin=hex(address),p2_end=hex(address+padded),object_bytes=size,

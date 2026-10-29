@@ -68,7 +68,7 @@ attempt budget. Collection has one range attempt (`1/1`), without subdivision
 or individual retries; those reads belong to the later recovery phase.
 Audio agreement reads are shown separately (`1/2`, then `2/2`) within the same
 logical attempt. Failed collection ranges are marked **deferred**, and later
-recovery passes try those sectors individually. The most recent problem retains
+recovery passes group adjacent data targets and retry unverified slots individually. The most recent problem retains
 its range and final local try
 while healthy reads continue; a successful retry updates that history to
 **checks passed**, including the attempt that succeeded. The diagnostic `status.attempts` counter remains
@@ -111,8 +111,48 @@ Normal capture retains its existing all-or-nothing acceptance rules.
 Unverified bytes are cleared before the existing target/chunk commit protocol
 records their addresses. The target count
 therefore includes deferred healthy neighbours, not only proven bad sectors.
-Recovery after collection retries those targets with the existing acceptance
-and durable repair rules. This recovery path
+Recovery after collection first groups up to 16 adjacent unresolved **data**
+targets on the same track. One range read can recover readable neighbours in
+that group; every returned sector must independently pass its expected FAD,
+EDC, reserved-byte and P/Q checks. Reverse passes still request ascending
+physical ranges, then publish selected targets in reverse pass order. Groups
+stop at a repaired sector, a physical gap, another track, or an audio target.
+A lone target uses the existing singleton path directly. Each unverified slot
+from a group gets at most one singleton attempt in that pass. A completely
+readable 16-target run therefore needs one optical request; a wholly failed run
+needs at most one range request plus 16 singleton requests, apart from the
+separate saved-identity checks required by guarded drive recovery. Audio retains
+two successful matching singleton reads and is never grouped this way.
+
+A separate bounded 16-sector staging area keeps accepted range bytes intact
+while singleton fallbacks, saved-anchor checks and per-target publication use
+the ordinary acquisition buffers. Before a staged slot can become a published
+candidate, its original CRC and full sector checks must still match. A changed
+slot stops the operation. The target still passes the same placeholder check,
+immutable candidate publication, journal publication, track sync/readback and
+REPAIRED commit as an individually acquired sector. A fatal range read publishes
+none of that group's bytes; Stop is checked at helper and target boundaries,
+while an in-flight synchronous durable unit finishes safely.
+
+The worker keeps one track handle and the packed-candidate handle open while
+repair uses them. Read-only reconciliation remains read-only; the first actual
+mutation upgrades the relevant handle. Track allocation is fixed after
+collection, so a checked, bounded FatFs allocation map avoids repeatedly walking
+the FAT from the start of a large track. A fragmented map can use at most 32 KiB;
+allocation or capacity limits fall back to ordinary seeks. I/O or invalid map
+errors stop. Growing packed candidates never use a fixed allocation map. Every
+original sync, byte readback, checksum, and journal boundary remains in place.
+Cached handles are closed before final completion publication and on every exit;
+a close error prevents success.
+
+The diagnostic repair summary counts actual range/singleton optical callbacks,
+excluding saved-anchor checks. Matching audio contributes two singleton calls
+but at most one checked candidate. Checked candidates are not a count of
+committed repairs; the existing recovered count changes only after the durable
+REPAIRED event. Optical milliseconds time only the actual repair read callbacks.
+These counters are transient and do not change saved job formats.
+
+Recovery retains the existing acceptance and durable repair rules. This recovery path
 is deliberately distinct from the accepted normal
 DMA pipeline: its per-commit durability and parity checks are not a new capture
 performance setting. Use the normal ripper for healthy discs.
@@ -156,7 +196,7 @@ cannot replace accepted bytes awaiting a commit. They never run after FATAL.
 When the adapter offers safe recovery, the worker also requests reinitialization
 between recovery passes and after eight consecutive retryable failures outside
 collection. Invalid `PARTIAL` candidates enter that counter only after their
-sector checks fail; valid partial data resets it after acceptance. Collection
+sector checks fail; valid partial or batched data resets it after acceptance. Collection
 failures do not seed that separate recovery counter.
 The wider health-check spacing avoids repeated spin/identity cycles while
 scanning a damaged band whose saved anchors remain readable.
@@ -171,7 +211,10 @@ coverage but still needs console/damaged-media acceptance.
 
 Targets now scale to the admitted disc layout. The fixed 8,192-target array and
 64 MiB journal ceiling are removed. A disposable checksummed disk index keeps
-the worker's allocation below 256 KiB, plus temporary final metadata. Journal
+the worker's allocation bounded independently of the target count. The worker,
+repair staging, largest track map and temporary retained acquisition bytes
+together stay below 256 KiB; final metadata is allocated after cached handles
+and maps are closed. Journal
 capacity is derived from the disc's sector count, and new jobs pack candidate
 evidence into one file. Filesystem space and storage failures remain limits;
 memory does not grow with the number of damaged sectors. Version-1 jobs can

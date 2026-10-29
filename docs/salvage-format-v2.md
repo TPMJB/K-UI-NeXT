@@ -64,7 +64,7 @@ Version 2 adds event **7, CANDIDATE**, using the existing fields:
 | count at byte 28 | Zero |
 | CRC at byte 32 | Accepted candidate sector CRC32 |
 
-A packed candidate is written, synced, closed and validated on exact readback
+A packed candidate is written, synced and validated on exact readback
 before its CANDIDATE event is committed. Slot order is sequential; duplicate
 publication for a target or reused slots are invalid. The published record must
 bind the original target index, track, sector and header identity. Only then may
@@ -100,17 +100,45 @@ Version-1 `KUISPAT1` records remain 8,192 bytes and retain their original paths.
 
 The cache is an accelerator, never recovery authority. Each 32-byte record has
 `KUITGT2` plus NUL, original target index, sector, candidate CRC, track/repaired
-state, packed slot and a CRC32 over the preceding 28 bytes. Every read checks
+state, candidate slot/presence word and a CRC32 over the preceding 28 bytes. Every read checks
 the checksum, requested index and layout bounds. Missing/corrupt cache data
 stops the current operation; Resume recreates it from the journal.
 
+For version-1 jobs, one directory scan discovers canonical `patch-%04u.bin`
+files, including ASCII case variants. The derived slot word is zero when a
+published file is present and `UINT32_MAX` when absent. The snapshot is used
+only after the complete directory scan, checked directory close and index
+sync succeed. Duplicate names, directories or wrong lengths at an admitted
+candidate path fail closed. Temporary `.part` files and noncanonical or
+out-of-range names do not publish candidates. Resume rebuilds these markers
+from the journal and directory every time; interrupted scans are disposable.
+
+A positive marker only identifies a file to validate: its complete record,
+header identity, sector checks and exact saved bytes still receive the existing
+checks. Newly published version-1 candidates update the marker after verified
+publication. The immutable version-1 header, journal and patch files retain
+their original formats. Packed jobs keep their original candidate-slot meaning.
+
 ## Acquisition and completion
 
-A failed first-pass batch splits into smaller batches until readable runs and
-failed single sectors are isolated. A failed singleton receives two individual
-attempts total. A successful batch's invalid data sectors receive two individual
-retries. Healthy neighbours stay in their successful sub-batches. Every failed
-sector is still durably declared before its zero placeholder is committed.
+The collection pass probes each range of up to 32 sectors once. Valid returned
+data sectors retain their full address, EDC and parity checks; unverified slots
+are deferred to recovery without collection subdivision or singleton retries.
+Every unresolved sector is durably declared before its zero placeholder is
+committed. Later recovery uses checked data batches and bounded singleton
+fallbacks; audio candidates retain their matching-read requirement.
+
+The initial recovery after collection can read up to 16 adjacent unresolved data
+sectors together. Two consecutive batches yielding no validated sectors disable
+further batch reads for that invocation, including later sweeps. A batch with at
+least one validated sector resets that consecutive count until batching has been
+disabled. Each unverified slot still receives its bounded singleton fallback.
+Resuming or explicitly recovering an already-collected job uses singleton reads
+throughout. This avoids repeatedly probing known trouble spots as large ranges;
+it also applies to a job stopped immediately after collection. Resuming an
+unfinished collection retains the initial adaptive recovery policy when its
+collection finishes. These choices are transient: the header, journal and
+candidate formats and all sector-validation and publication rules are unchanged.
 
 Completion reconstructs each track CRC from the immutable baseline and repaired
 target CRCs. This loop remains cancellable. Only after all targets resolve and

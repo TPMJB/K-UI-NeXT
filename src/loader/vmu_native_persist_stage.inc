@@ -53,7 +53,8 @@ static enum kui_loader_sd_result __attribute__((noipa)) native_persist_storage_i
     /* Control never decodes or acquires the prepared pair, recovers a journal,
      * writes a checkpoint or publishes a durable handoff. Only ordinary game
      * storage is initialized. A malformed mode stops before this decision. */
-    if(native_runtime_mode()==KUI_VMU_NATIVE_MODE_CONTROL)
+    if(native_runtime_mode()==KUI_VMU_NATIVE_MODE_CONTROL ||
+       native_runtime_mode()==KUI_VMU_NATIVE_MODE_READER_ONLY)
         return kui_retail_storage_init(storage,selected);
     size_t bytes=(size_t)(native_persist_wire_end-native_persist_wire);
     if(native_persist_ready || bytes!=KUI_VMU_PERSIST_PROFILE_WIRE_BYTES ||

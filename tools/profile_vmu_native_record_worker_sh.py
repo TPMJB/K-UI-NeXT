@@ -23,6 +23,7 @@ from test_vmu_native_heap_execution import SH, MASK, signed, verified_program_im
 from test_vmu_native_sdk_poll_execution import PollSH
 from sh4_delay_slots import validate_delay_slot
 from check_vmu_native_worker_gateway import read_elf, symbol_bytes
+from vmu_native_cache_seed import DETECTOR_EPOCH, RECORD_PAYLOAD_BYTES, exit_schema
 
 OWNER_STACK = 0x8c00e000
 RETURN = 0xdeadbeee
@@ -40,11 +41,12 @@ class Record:
     def __init__(self, wire, image, source_image=None):
         assert len(wire) == 1024 and wire[:8] == b'KUINVR01', 'NVR format'
         header = struct.unpack_from('<4I',wire,8)
-        assert header[:2] == (1,1024) and header[2] >= 1 and header[3] == 1, 'NVR schema'
+        assert header == (1,1024,DETECTOR_EPOCH,1), 'NVR schema'
         assert hashlib.sha256(wire[:992]).digest() == wire[992:], 'NVR integrity'
-        assert not any(wire[748:992]), 'NVR reserved bytes'
+        assert not any(wire[RECORD_PAYLOAD_BYTES:992]), 'NVR reserved bytes'
         self.image_bytes, self.load = struct.unpack_from('<2I', wire, 24)
         assert self.load == 0x8c010000, 'Shared RAM loader requires conventional executable load'
+        assert exit_schema(wire,self.load,self.image_bytes), 'NVR exit schema'
         assert len(image) == self.image_bytes, 'Original image length'
         self.digest = hashlib.sha256(image).digest()
         assert self.digest == wire[32:64] == wire[136:168], 'Original image SHA256'
@@ -56,7 +58,7 @@ class Record:
         self.layout = struct.unpack_from('<110I', wire, 168)
         self.heap = struct.unpack_from('<18I', wire, 608)
         self.heap_call = struct.unpack_from('<5I', wire, 680)
-        self.exits = struct.unpack_from('<12I', wire, 700)
+        self.exits = struct.unpack_from('<13I', wire, 700)
         d, l = self.driver, self.layout
         assert d[:6] == (1, 104, 1, self.image_bytes, self.load, 7)
         assert (l[0] in (1,2) and l[1] == 440 and l[6] in (0,1) and
@@ -265,7 +267,10 @@ class RecordWorker(WorkerSH):
         self.pc, self.pr = self.symbols[name][0], RETURN
         stack = self.symbols['__vmu_native_worker_stack_top'][0] - 32
         if name in ('_kui_vmu_native_passive_submit', '_kui_vmu_native_passive_complete',
-                    '_kui_vmu_native_passive_split_submit'):
+                    '_kui_vmu_native_passive_split_submit',
+                    '_persistent_storage_guard', '_persistent_context_guard'):
+            # Direct guard probes use the same private P1 C stack as their
+            # real caller; these guards deliberately refuse a P2 stack.
             stack = stack & 0x1fffffff | 0x80000000
         saved = self.r[8:15]
         self.r[15] = stack
@@ -333,11 +338,11 @@ class RecordWorker(WorkerSH):
                  units, count//32-units]
         runtime = [1,236,payload,self.lease_bytes,32,0x20000,0,0,0,0,0] + [0]*48
         wire = r.wire
-        blob = (struct.pack('<3I',1,2300,r.layout[5]) + wire[64:168] +
+        blob = (struct.pack('<3I',1,2304,r.layout[5]) + wire[64:168] +
                 struct.pack('<29I',*lease) + wire[168:608] + struct.pack('<59I',*runtime) +
                 bytes(56) + self.handoff + struct.pack('<3I',0x8c004100,0x8c004200,0x8c004300) +
-                wire[700:748] + bytes(4))
-        assert len(blob) == 2300
+                wire[700:752] + bytes(4))
+        assert len(blob) == 2304
         self.store_block(CFG, blob)
         for name, value in [('_kui_vmu_native_passive_resume', r.driver[7]),
                             ('_kui_vmu_native_passive_consumer', r.consumer),

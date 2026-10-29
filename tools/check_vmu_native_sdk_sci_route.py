@@ -11,6 +11,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+from native_runtime_layout import layout_for
 import random
 import struct
 import sys
@@ -611,7 +612,7 @@ class ColdBinderCPU(SDKCPU):
         self.targets=set(self.api);self.apis=[];self.flushes=[];self.readbacks=[]
         self.admit_result=1;self.ready=False;self.writes=[]
         self.r[15]=0x8cfeffe0;self.pr=RETURN;self.r[4]=payload
-        self.payload=payload;self.region=((payload&0x1fffffff)|0x80000000)+0x20400
+        self.payload=payload;self.region=((payload&0x1fffffff)|0x80000000)+layout_for(stage[4]).REGION_OFFSET
         self.control['vbr']=SDK_VBR
         self.descriptor=resident[4]['_kui_native_sdk_sci_route_exports'][0]
         self.cell=resident[4]['_kui_retail_async_region_storage'][0]

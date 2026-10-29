@@ -9,6 +9,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+from native_runtime_layout import layout_for
 
 from check_native_bottom_heap import (ABSOLUTE_ONE, Cold, LEASE_BYTES,
     REFUSALS, ROOT, require)
@@ -62,6 +63,7 @@ def actual_low(build):
 
 def check(build, variant, row):
     build = Path(build).resolve()
+    selected_lease=layout_for(read_elf(build/'stage.elf')[4]).LEASE_BYTES
     artifacts = {p.name: sha(p) for p in sorted(build.iterdir())
                  if p.suffix in ('.elf', '.bin', '.reloc') and p.is_file()}
     marker = '__kui_native_' + variant + '_isolation_'
@@ -71,7 +73,7 @@ def check(build, variant, row):
                 'Wrong compiled isolation variant: ' + file)
         require(symbols.get('__kui_native_bottom_heap_' + role) == ABSOLUTE_ONE and
                 symbols.get('__kui_native_isolation_lease_bytes') ==
-                (LEASE_BYTES, 0, 0, 0xfff1), 'Wrong compiled bottom lease geometry')
+                (selected_lease, 0, 0, 0xfff1), 'Wrong compiled bottom lease geometry')
         require(all('__kui_native_'+other+'_isolation_'+role not in symbols
                     for other in {'reader_only','standard_vmu','metadata_cache','split_controller'}-{variant}),
                 'Conflicting compiled isolation mode')
@@ -88,8 +90,8 @@ def check(build, variant, row):
             cpu = Cold(build, row, reader=reader, alias=alias, seed=seed,
                        standard_low=standard_low)
             require(cpu.run_cold(), 'Cold installer refused: ' + str(cpu.refusal))
-            require(cpu.owner_calls == [('allocate', cpu.count - LEASE_BYTES - 64),
-                    ('allocate', LEASE_BYTES), ('release', cpu.begin + LEASE_BYTES + 64)],
+            require(cpu.owner_calls == [('allocate', cpu.count - selected_lease - 64),
+                    ('allocate', selected_lease), ('release', cpu.begin + selected_lease + 64)],
                     'Original allocator call order or arguments differ')
             require(cpu.unchanged_calls == 3 and cpu.code_calls == 2 and cpu.passive_calls == 1,
                     'Mandatory cold guards or validated handoff omitted')
@@ -147,7 +149,7 @@ def main():
                record=str(args.record.resolve()))
     report = dict(schema=SCHEMA, scope='Targeted original Evolution 1 cold installer execution',
         boundary='Validated _native_passive_run handoff; worker arming and SDK publication are separate',
-        lease_bytes=LEASE_BYTES, inputs={name: dict(path=row[name], sha256=sha(row[name]))
+        lease_bytes=selected_lease, inputs={name: dict(path=row[name], sha256=sha(row[name]))
             for name in ('startup', 'record')},
         source_sha256={name: sha(ROOT / name) for name in SOURCES},
         results=[check(args.reader_build, 'split_controller' if args.split_controller else

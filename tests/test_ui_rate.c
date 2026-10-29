@@ -64,8 +64,94 @@ static void games_idle_cadence(void) {
     assert(polls==125 && draws==25); /* Controls poll independently of redraws. */
 }
 
+static void all_menu_input_latency(void) {
+    assert(kui_ui_menu_poll_delay(false)==8u);
+    assert(kui_ui_menu_poll_delay(true)==33u);
+    assert(kui_ui_menu_wait_ms(false,false)==8u);
+    assert(kui_ui_menu_wait_ms(false,true)==0u);
+    assert(kui_ui_menu_wait_ms(true,false)==33u);
+    assert(kui_ui_menu_wait_ms(true,true)==33u);
+    /* The first press, a direction change, and a completed list all repaint
+     * immediately, even one millisecond after the preceding frame. */
+    assert(kui_ui_menu_redraw_due(false,false,0,true,5001,5000));
+    assert(kui_ui_menu_redraw_due(false,false,2,true,5001,5000));
+    assert(kui_ui_menu_redraw_due(false,true,0,false,5001,5000));
+    assert(kui_ui_menu_redraw_due(false,false,0,false,5000,0));
+    assert(!kui_ui_menu_redraw_due(false,false,0,false,5032,5000));
+    assert(kui_ui_menu_redraw_due(false,false,0,false,5033,5000));
+    /* Interactive polling is not permission to defeat a running benchmark's
+     * quiet screen or a disc operation's capped redraw rate. */
+    assert(!kui_ui_menu_redraw_due(true,true,0,true,6000,5000));
+    assert(!kui_ui_menu_redraw_due(true,true,2,true,5499,5000));
+    assert(kui_ui_menu_redraw_due(true,true,2,true,5500,5000));
+    assert(kui_ui_menu_redraw_due(true,false,0,false,5001,5000));
+    unsigned slowest_poll=0;
+    /* Place a short new press at every possible millisecond in a polling
+     * window. Its first observed edge must schedule a draw without waiting
+     * for either the 33 ms idle cadence or the 400 ms hold-repeat deadline. */
+    for(unsigned press_at=1;press_at<=1000u;press_at++) {
+        unsigned next_poll=((press_at+7u)/8u)*8u;
+        unsigned elapsed=next_poll-press_at;
+        if(elapsed>slowest_poll) slowest_poll=elapsed;
+        assert(elapsed<8u);
+        assert(kui_ui_menu_redraw_due(false,false,2,true,5000u+next_poll,
+            5000u+next_poll-1u));
+    }
+    assert(slowest_poll==7u);
+    uint64_t last=0;unsigned polls=0,draws=0;
+    for(uint64_t t=1000;t<2000;t+=kui_ui_menu_poll_delay(false)) {
+        ++polls;
+        if(kui_ui_menu_redraw_due(false,false,2,false,t,last)) {
+            if(last) assert(t-last>=33u);
+            last=t;++draws;
+        }
+    }
+    assert(polls==125u && draws==25u);
+    /* A slow repaint finishing after the 33 ms cadence still leaves input
+     * polls before the next background repaint. Its completed timestamp is
+     * authoritative; a fresh edge can always force the next frame sooner. */
+    for(unsigned cost=1u;cost<=250u;cost++) {
+        uint64_t start=5000u,completed=start+cost;
+        assert(!kui_ui_menu_wait_ms(false,true));
+        assert(!kui_ui_menu_redraw_due(false,false,2,false,completed,completed));
+        assert(!kui_ui_menu_redraw_due(false,false,2,false,completed+32u,completed));
+        assert(kui_ui_menu_redraw_due(false,false,2,false,completed+33u,completed));
+        assert(kui_ui_menu_redraw_due(false,false,2,true,completed,completed));
+    }
+}
+
+static void menu_navigation_edges(void) {
+    enum { UP=1u, DOWN=2u, ACTION=4u };
+    unsigned held=0;
+    uint64_t repeat_at=0;
+    assert(kui_ui_navigation_repeat(DOWN,DOWN,&held,&repeat_at,1000)==DOWN);
+    assert(held==DOWN && repeat_at==1250u);
+    assert(!kui_ui_navigation_repeat(DOWN,0,&held,&repeat_at,1249));
+    assert(kui_ui_navigation_repeat(DOWN,0,&held,&repeat_at,1250)==DOWN);
+    assert(repeat_at==1330u);
+    assert(!kui_ui_navigation_repeat(DOWN,0,&held,&repeat_at,1329));
+    assert(kui_ui_navigation_repeat(DOWN,0,&held,&repeat_at,1330)==DOWN);
+    /* Opposite direction takes effect on its first edge, without waiting for
+     * the previous direction's repeat timer. */
+    assert(kui_ui_navigation_repeat(UP,UP,&held,&repeat_at,1331)==UP);
+    assert(repeat_at==1581u);
+    assert(!kui_ui_navigation_repeat(0,0,&held,&repeat_at,1332));
+    assert(kui_ui_navigation_repeat(UP,UP,&held,&repeat_at,1333)==UP);
+    assert(repeat_at==1583u);
+    /* An action can arrive during a held direction but never enters repeat. */
+    assert(kui_ui_navigation_repeat(UP,ACTION,&held,&repeat_at,1334)==ACTION);
+    assert(!kui_ui_navigation_repeat(UP,0,&held,&repeat_at,1582));
+    assert(kui_ui_navigation_repeat(UP,0,&held,&repeat_at,1583)==UP);
+    assert(kui_ui_navigation_repeat(UP,0,&held,&repeat_at,9000)==UP);
+    assert(repeat_at==9080u); /* One step, no burst after a slow operation. */
+    assert(!kui_ui_navigation_repeat(0,0,&held,&repeat_at,9001));
+    assert(!kui_ui_navigation_repeat(0,0,&held,&repeat_at,9999));
+}
+
 int main(void) {
     games_idle_cadence();
+    all_menu_input_latency();
+    menu_navigation_edges();
     /* Idle always redraws, whatever the cap says. */
     assert(kui_ui_redraw_due(false, false, 0, 5000, 5000));
     assert(kui_ui_redraw_due(false, false, 4, 5001, 5000));
@@ -110,6 +196,6 @@ int main(void) {
     assert(draws_in(30, 40) == 0);                              /* 0 Hz: silent, by design */
     assert(draws_in(40, 50) == 250);                            /* restored to full */
 
-    puts("PASS ui rate: Games input/redraw cadence, busy caps, idle/full/edges/zero, period, mid-operation rate change, bench sweep");
+    puts("PASS ui rate: modeled all-menu input scheduling <8ms, Games input/redraw cadence, busy caps, idle/full/edges/zero, period, mid-operation rate change, bench sweep");
     return 0;
 }

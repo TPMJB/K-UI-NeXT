@@ -69,6 +69,9 @@ static void prefetch_suite(void) {
     tick_case(split_deferred_refusals,0u);    /* Refused completions publish nothing. */
     tick_case(split_full_fallback,0u);
     tick_case(split_warm_tag_refusals,2u);    /* Only each first, proved completion. */
+#if KUI_NATIVE_SPLIT_CONTROLLER_GENERAL
+    tick_case(split_long_sessions,30u);      /* Old cap and uint32 wrap keep TICK usable. */
+#endif
 }
 #if KUI_NATIVE_SPLIT_CONTROLLER_STREAM_GUARD
 /* One proved split completion after the game received `blocks` more blocks. */
@@ -101,9 +104,13 @@ static unsigned stream_guard_suite(void) {
     return 1u;
 }
 #endif
-int main(void) {
-    map_exact(UINT32_C(0x8c720000),4096u);
-    map_exact(UINT32_C(0xac721000),4096u);
+#ifndef KUI_SPLIT_PREFETCH_TEST_MAIN
+#define KUI_SPLIT_PREFETCH_TEST_MAIN main
+#endif
+int KUI_SPLIT_PREFETCH_TEST_MAIN(void) {
+    const uintptr_t lease=UINT32_C(0x8c700000);
+    map_exact(lease+KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES,4096u);
+    map_exact((lease+KUI_NATIVE_RA_AUX_OFFSET)|UINT32_C(0x20000000),4096u);
 #if KUI_NATIVE_SPLIT_CONTROLLER_STREAM_GUARD
     const unsigned guard_before=tick_visits;
     CHECK(stream_guard_suite());
@@ -117,7 +124,7 @@ int main(void) {
         split_prepare();input.diagnostics=mode;
         CHECK(kui_vmu_native_passive_arm(&input,NULL)==-2 && !state.armed);
     }
-    CHECK(tick_visits==20u);
+    CHECK(tick_visits==80u);
 #if KUI_NATIVE_SPLIT_CONTROLLER_STREAM_GUARD
     printf("Split controller stream guard host checks: %u; %u TICK visits, none after a refusal; "
         "%u guarded-frame visits, paused while streaming\n",checks,tick_visits,guard_visits);

@@ -21,6 +21,9 @@ static FATFS fs;
 static struct kui_volume volume;
 static bool raw_open,cancel_flag;
 static unsigned raw_begins,salt_counter;
+static int write_fail_after=-1;
+static unsigned writes_attempted;
+static unsigned cancel_after,cancel_checks;
 static uint8_t test_cid[16]={0x03,'S','D','K','U','I','-','T','E','S','T',0x10,1,2,3,0x41};
 static struct kui_vmu_game_card_work work;
 
@@ -28,14 +31,17 @@ static void log_line(const char *format,...) {
     va_list args;va_start(args,format);vsnprintf(last_log,sizeof(last_log),format,args);va_end(args);
     if(getenv("KUI_TEST_VERBOSE")) fprintf(stderr,"%s\n",last_log);
 }
-static bool cancelled(void) {return cancel_flag;}
+static bool cancelled(void) {return cancel_flag || (cancel_after && ++cancel_checks>=cancel_after);}
 static uint64_t media_blocks(void *context) {(void)context;return sectors;}
 static int media_read(void *context,uint32_t block,size_t count,uint8_t *data) {
     (void)context;if((uint64_t)block+count>sectors) return -1;
     memcpy(data,disk+(size_t)block*512u,count*512u);return 0;
 }
 static int media_write(void *context,uint32_t block,size_t count,const uint8_t *data) {
-    (void)context;CHECK(!raw_open);if((uint64_t)block+count>sectors) return -1;
+    (void)context;CHECK(!raw_open);
+    unsigned attempt=writes_attempted++;
+    if(write_fail_after>=0 && attempt>=(unsigned)write_fail_after) return -1;
+    if((uint64_t)block+count>sectors) return -1;
     memcpy(disk+(size_t)block*512u,data,count*512u);return 0;
 }
 static int media_sync(void *context) {(void)context;return 0;}
@@ -192,6 +198,153 @@ static uint8_t *snapshot(void) {
 }
 static bool unchanged(const uint8_t *copy) {return !memcmp(copy,disk,(size_t)sectors*512u);}
 
+static void restore_disk(const uint8_t *saved) {
+    unmount();memcpy(disk,saved,(size_t)sectors*512u);mount();
+}
+static void imported_assignments(void) {
+    struct kui_vmu_game_card_choice choice;static uint8_t image[131072],verify[131072],wire[4096];
+    uint8_t imported_id[16],second_id[16],fresh_salt[16]={0x41};
+    for(unsigned block=0;block<256u;block++) CHECK(!kui_vmu_image_blank_block((uint16_t)block,image+block*512u));
+    /* Existing free-block bytes are opaque and preserved, not synthesized. */
+    image[10u*512u]=0x82;
+    unsigned dirs=pair_dirs();uint8_t *before=snapshot();
+    CHECK(kui_vmu_game_card_import_publish(image,sizeof(image)-1u,fresh_salt,&work,&choice,imported_id,log_line,cancelled)==KUI_VMU_GAME_CARD_FAILED);
+    CHECK(unchanged(before) && pair_dirs()==dirs);free(before);
+    /* A cancelled new folder is reserved forever; no partial card is assigned. */
+    cancel_after=2u;cancel_checks=0;
+    CHECK(kui_vmu_game_card_import_publish(image,sizeof(image),fresh_salt,&work,&choice,imported_id,log_line,cancelled)==KUI_VMU_GAME_CARD_CANCELLED);
+    unsigned cancelled_pair=choice.pair;cancel_after=0;
+    CHECK(cancelled_pair && pair_dirs()==dirs+1u);
+    CHECK(kui_vmu_game_card_import_publish(image,sizeof(image),fresh_salt,&work,&choice,imported_id,log_line,cancelled)==KUI_VMU_GAME_CARD_READY);
+    unsigned imported=choice.pair;CHECK(imported!=cancelled_pair && choice.created);
+    char path[96];snprintf(path,sizeof(path),KUI_VMU_GAME_CARD_ROOT "/p%04u/card.vmd",imported);
+    CHECK(file_read(path,verify,sizeof(verify))==sizeof(image) && !memcmp(image,verify,sizeof(image)));
+    snprintf(path,sizeof(path),KUI_VMU_GAME_CARD_ROOT "/p%04u/game.bin",imported);CHECK(!exists(path));
+    ++fresh_salt[0];
+    CHECK(kui_vmu_game_card_import_publish(image,sizeof(image),fresh_salt,&work,&choice,second_id,log_line,cancelled)==KUI_VMU_GAME_CARD_READY);
+    unsigned second=choice.pair;CHECK(second!=imported && memcmp(imported_id,second_id,16u));
+    struct kui_vmu_game_assignment entries[3]={0};
+    CHECK(kui_vmu_game_card_key("MK-51136",entries[0].key));
+    CHECK(kui_vmu_game_card_key("MK-51058",entries[1].key));
+    CHECK(kui_vmu_game_card_key("IMPORT-TWO",entries[2].key));
+    for(unsigned i=0;i<3u;i++) {
+        entries[i].pair=i==2u?second:imported;memcpy(entries[i].identity,i==2u?second_id:imported_id,16u);
+    }
+    CHECK(kui_vmu_game_card_assignments_apply(entries,3u,&work,&choice,log_line,cancelled)==KUI_VMU_GAME_CARD_READY);
+    /* The route guard can inspect an assignment without allocating,
+     * collecting a profile, or changing any mounted file. */
+    before=snapshot();
+    CHECK(kui_vmu_game_card_assignment("mk-51136",&work,&choice,cancelled)==KUI_VMU_GAME_CARD_READY && choice.pair==imported);
+    CHECK(kui_vmu_game_card_assignment("OTHER-GAME",&work,&choice,cancelled)==KUI_VMU_GAME_CARD_UNBOUND);
+    CHECK(kui_vmu_game_card_assignment("",&work,&choice,cancelled)==KUI_VMU_GAME_CARD_UNBOUND && unchanged(before));free(before);
+    /* Explicit assignment overrides old default game.bin, shares one card,
+     * and prepares its admitted profile automatically on first launch. */
+    CHECK(select_card("MK-51136",NULL,0,&choice,wire)==KUI_VMU_GAME_CARD_READY && choice.pair==imported && choice.collected);
+    admitted(wire,imported);unsigned begins=raw_begins;
+    CHECK(select_card("MK-51058",NULL,0,&choice,wire)==KUI_VMU_GAME_CARD_READY && choice.pair==imported && !choice.collected);
+    CHECK(raw_begins==begins);admitted(wire,imported);
+    CHECK(select_card("IMPORT-TWO",NULL,0,&choice,wire)==KUI_VMU_GAME_CARD_READY && choice.pair==second);
+    admitted(wire,second);
+    /* Give both slots a complete valid generation. */
+    CHECK(kui_vmu_game_card_assignments_apply(entries,3u,&work,&choice,log_line,cancelled)==KUI_VMU_GAME_CARD_READY);
+    uint8_t *stable=snapshot();
+    for(unsigned i=0;i<2u;i++) {entries[i].pair=second;memcpy(entries[i].identity,second_id,16u);}
+    writes_attempted=0;
+    CHECK(kui_vmu_game_card_assignments_apply(entries,2u,&work,&choice,log_line,cancelled)==KUI_VMU_GAME_CARD_READY);
+    unsigned writes=writes_attempted;CHECK(writes>0 && writes<100u);
+    for(unsigned cut=0;cut<=writes;cut++) {
+        restore_disk(stable);writes_attempted=0;write_fail_after=(int)cut;
+        int result=kui_vmu_game_card_assignments_apply(entries,2u,&work,&choice,log_line,cancelled);
+        CHECK(result==KUI_VMU_GAME_CARD_READY || result==KUI_VMU_GAME_CARD_FAILED);
+        write_fail_after=-1;unmount();mount();
+        CHECK(select_card("MK-51136",NULL,0,&choice,wire)==KUI_VMU_GAME_CARD_READY);
+        unsigned selected=choice.pair;CHECK(selected==imported || selected==second);
+        CHECK(select_card("MK-51058",NULL,0,&choice,wire)==KUI_VMU_GAME_CARD_READY && choice.pair==selected);
+        if(result==KUI_VMU_GAME_CARD_READY) CHECK(selected==second);
+    }
+    restore_disk(stable);
+    /* A torn newer slot chooses the previous complete generation. Both bad
+     * slots fail closed without creating any replacement blank card. */
+    uint8_t torn[64]={0};file_write(KUI_VMU_GAME_CARD_ROOT "/assign-b.bin",torn,sizeof(torn));
+    CHECK(select_card("MK-51136",NULL,0,&choice,wire)==KUI_VMU_GAME_CARD_READY && choice.pair==imported);
+    file_write(KUI_VMU_GAME_CARD_ROOT "/assign-a.bin",torn,sizeof(torn));
+    before=snapshot();
+    CHECK(select_card("MK-51136",NULL,0,&choice,wire)==KUI_VMU_GAME_CARD_FAILED);
+    CHECK(strstr(choice.problem,"assignments are damaged") && unchanged(before));free(before);
+    restore_disk(stable);
+    /* Two separately valid records at the same sequence may not disagree. */
+    CHECK(file_read(KUI_VMU_GAME_CARD_ROOT "/assign-b.bin",work.assignment_wire,sizeof(work.assignment_wire))==sizeof(work.assignment_wire));
+    CHECK(kui_vmu_game_assign_decode(work.assignment_wire,sizeof(work.assignment_wire),&work.assignments));
+    work.assignments.entries[0].pair=second;memcpy(work.assignments.entries[0].identity,second_id,16u);
+    CHECK(kui_vmu_game_assign_encode(&work.assignments,work.assignment_wire));
+    file_write(KUI_VMU_GAME_CARD_ROOT "/assign-a.bin",work.assignment_wire,sizeof(work.assignment_wire));
+    before=snapshot();
+    CHECK(select_card("MK-51136",NULL,0,&choice,wire)==KUI_VMU_GAME_CARD_FAILED);
+    CHECK(strstr(choice.problem,"slots disagree") && unchanged(before));free(before);
+    restore_disk(stable);
+    /* Identity pins prevent an unrelated replacement at the same p number
+     * from inheriting an old game's assignment, even with the same clusters. */
+    snprintf(path,sizeof(path),KUI_VMU_GAME_CARD_ROOT "/p%04u/identity.bin",imported);
+    uint8_t changed[16];memcpy(changed,imported_id,16u);changed[0]^=0x5a;file_write(path,changed,sizeof(changed));
+    before=snapshot();
+    CHECK(select_card("MK-51136",NULL,0,&choice,wire)==KUI_VMU_GAME_CARD_FAILED);
+    CHECK(strstr(choice.problem,"identity changed") && unchanged(before));free(before);
+    restore_disk(stable);
+    /* Completed marker and journal are also required; damaged targets
+     * refuse both launch and publication instead of silently changing cards. */
+    snprintf(path,sizeof(path),KUI_VMU_GAME_CARD_ROOT "/p%04u/import.bin",imported);CHECK(f_unlink(path)==FR_OK);
+    before=snapshot();
+    CHECK(select_card("MK-51136",NULL,0,&choice,wire)==KUI_VMU_GAME_CARD_FAILED && unchanged(before));free(before);
+    restore_disk(stable);
+    snprintf(path,sizeof(path),KUI_VMU_GAME_CARD_ROOT "/p%04u/card.journal",imported);file_write(path,torn,sizeof(torn));
+    before=snapshot();
+    CHECK(select_card("MK-51136",NULL,0,&choice,wire)==KUI_VMU_GAME_CARD_FAILED && unchanged(before));free(before);
+    restore_disk(stable);
+    /* Reset/dead RTC + reset counter may repeat the exact creation salt.
+     * Deleting/recreating a p number must never satisfy its retained pin. */
+    static const char *const imported_leaves[]={"card.vmd","card.journal","identity.bin","import.bin"};
+    for(unsigned i=0;i<4u;i++) {
+        snprintf(path,sizeof(path),KUI_VMU_GAME_CARD_ROOT "/p%04u/%s",imported,imported_leaves[i]);CHECK(f_unlink(path)==FR_OK);
+    }
+    snprintf(path,sizeof(path),KUI_VMU_GAME_CARD_ROOT "/p%04u/retail-persistent-profile-%04u.bin",imported,imported);CHECK(f_unlink(path)==FR_OK);
+    snprintf(path,sizeof(path),KUI_VMU_GAME_CARD_ROOT "/p%04u",imported);CHECK(f_unlink(path)==FR_OK);
+    --fresh_salt[0];before=snapshot();
+    CHECK(kui_vmu_game_card_import_publish(image,sizeof(image),fresh_salt,&work,&choice,changed,log_line,cancelled)==KUI_VMU_GAME_CARD_FAILED);
+    CHECK(strstr(choice.problem,"identity would repeat") && unchanged(before));free(before);
+    CHECK(select_card("MK-51136",NULL,0,&choice,wire)==KUI_VMU_GAME_CARD_FAILED);
+    restore_disk(stable);
+    /* Keep the old pin only in the older slot; it is still a possible
+     * recovery generation, so its identity must remain reserved too. */
+    CHECK(kui_vmu_game_card_assignments_apply(entries,2u,&work,&choice,log_line,cancelled)==KUI_VMU_GAME_CARD_READY);
+    for(unsigned i=0;i<4u;i++) {
+        snprintf(path,sizeof(path),KUI_VMU_GAME_CARD_ROOT "/p%04u/%s",imported,imported_leaves[i]);CHECK(f_unlink(path)==FR_OK);
+    }
+    snprintf(path,sizeof(path),KUI_VMU_GAME_CARD_ROOT "/p%04u/retail-persistent-profile-%04u.bin",imported,imported);CHECK(f_unlink(path)==FR_OK);
+    snprintf(path,sizeof(path),KUI_VMU_GAME_CARD_ROOT "/p%04u",imported);CHECK(f_unlink(path)==FR_OK);
+    before=snapshot();
+    CHECK(kui_vmu_game_card_import_publish(image,sizeof(image),fresh_salt,&work,&choice,changed,log_line,cancelled)==KUI_VMU_GAME_CARD_FAILED);
+    CHECK(strstr(choice.problem,"identity would repeat") && unchanged(before));free(before);
+    restore_disk(stable);
+    /* A journal pending replay survives assignment changes. Remapping a
+     * moved imported image refuses until that journal can be recovered. */
+    static uint8_t pending[1024],saved_profile[4096],profile_check[4096];
+    memset(pending,0,sizeof(pending));memset(pending+512u,0x11,512u);
+    snprintf(path,sizeof(path),KUI_VMU_GAME_CARD_ROOT "/p%04u/card.journal",imported);file_write(path,pending,sizeof(pending));
+    snprintf(path,sizeof(path),KUI_VMU_GAME_CARD_ROOT "/p%04u/retail-persistent-profile-%04u.bin",imported,imported);
+    CHECK(file_read(path,saved_profile,sizeof(saved_profile))==sizeof(saved_profile));
+    CHECK(select_card("MK-51136",NULL,0,&choice,wire)==KUI_VMU_GAME_CARD_READY && choice.pair==imported && !choice.collected);
+    move_file(imported,"card.vmd",88u);
+    CHECK(select_card("MK-51136",NULL,0,&choice,wire)==KUI_VMU_GAME_CARD_FAILED);
+    CHECK(strstr(choice.problem,"journal holds a save"));
+    CHECK(file_read(path,profile_check,sizeof(profile_check))==sizeof(profile_check) && !memcmp(saved_profile,profile_check,sizeof(saved_profile)));
+    snprintf(path,sizeof(path),KUI_VMU_GAME_CARD_ROOT "/p%04u/card.journal",imported);
+    CHECK(file_read(path,verify,sizeof(verify))==sizeof(pending) && !memcmp(verify,pending,sizeof(pending)));
+    restore_disk(stable);free(stable);
+    /* Import preserves existing live card bytes too. */
+    snprintf(path,sizeof(path),KUI_VMU_GAME_CARD_ROOT "/p%04u/card.vmd",imported);
+    CHECK(file_read(path,verify,sizeof(verify))==sizeof(image) && !memcmp(image,verify,sizeof(image)));
+}
+
 int main(int argc,char **argv) {
     if(argc!=2) {fprintf(stderr,"Usage: %s IMAGE\n",argv[0]);return 2;}
     FILE *file=fopen(argv[1],"rb");CHECK(file);
@@ -335,6 +488,7 @@ int main(int argc,char **argv) {
     CHECK(file_read(KUI_VMU_GAME_CARD_ROOT "/p0005/card.vmd",shared_check,sizeof(shared_check))==131072u);
     CHECK(!memcmp(shared_check,shared_card,sizeof(shared_card)));
     CHECK(!exists(KUI_VMU_GAME_CARD_ROOT "/p0005/game.bin"));
+    imported_assignments();
     printf("vmu game card service (%s): %u checks\n",fs.fs_type==FS_EXFAT?"exFAT":"FAT32",checks);
     unmount();free(disk);
     return 0;

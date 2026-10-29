@@ -1,0 +1,73 @@
+{
+  "schema": "kui.native.r1-startup-discovery.v1",
+  "date": "2026-10-28",
+  "baseline": "b9f67aef2b80",
+  "input": {
+    "title": "Tony Hawk's Pro Skater 2",
+    "product": "T13006N",
+    "release": "US V1.001",
+    "source_bytes": 3510532,
+    "source_sha256": "5f56ecf0e681fa1e8c3d07cfd84c14984a0a23cecfd629a61286a80f1c9d63fc"
+  },
+  "layout_change": {
+    "finding": "The uniform initializer, constructor, wrappers, gun flag and registered timer dispatchers already match. The self-contained startup root uses R1 for its indirect target, with immutable RX/TX literals and mode zero.",
+    "method": "Use the same bounded known-register decoder with a separately selected R1 target mask, tried only after all earlier complete layout families, including the tail thunk. Existing complete roots retain their metadata and ambiguity checks.",
+    "requirements_preserved": [
+      "The target is known when JSR samples it, before the delay slot executes.",
+      "Both buffers and mode come from the admitted instructions; no inherited register supplies them.",
+      "Target/argument aliasing and R15 target allocations remain refused.",
+      "The complete initializer, constructor, wrappers, timers, gun flag, source rings and live bind are still proved."
+    ]
+  },
+  "heap_change": {
+    "finding": "The existing bounded allocator argument expression also uses R1 for the initializer target. The target-register set now includes R0 through R3; argument registers and SP remain outside it.",
+    "requirements_preserved": "Immutable reads, exact slot ownership and sole consumer, argument-expression bounds, no inherited state, sampled target, unchanged replacement-hook transport and unique startup call remain required.",
+    "integration_requirement": "Adding a target allocation can change call/slot uniqueness in a previously admitted image. Integrate with detector epoch 6 before packaging; do not replay older trusted authority under the tightened discovery rule."
+  },
+  "tests": {
+    "synthetic_root": {
+      "sanitizers": "ASan/UBSan",
+      "checks": 4812,
+      "independently_executed_admissions": 1352,
+      "argument_permutations": 480,
+      "instruction_mutations": 1572864,
+      "also_checks": "All 16 coordinated target-load/JSR register pairs, sampled-target timing, truncation, wrong target and preserved SP"
+    },
+    "synthetic_heap": {
+      "sanitizers": "ASan/UBSan",
+      "checks": 11167,
+      "also_checks": "All 16 coordinated target-load/JSR register pairs; R0-R3 admit, argument-register and SP targets refuse without changing output"
+    },
+    "original_ps2_and_tony_layout": {
+      "sanitizers": "ASan/UBSan",
+      "checks": 2680,
+      "scope": "Original argument transport, RX constructor, live binding and fresh-discovery mutation refusals"
+    },
+    "earlier_tail_root_checks": 1020,
+    "earlier_variable_leaf_checks": 1840,
+    "corpus": {
+      "unique_original_startups": 33,
+      "comparison_stage_bss_end": "0x8ce8d508",
+      "changed_game": "Tony Hawk 2: layout and allocator call now resolve; first refusal changes from layout to exits.",
+      "other_row_changes": "None: every other structural metadata/result field remains identical."
+    }
+  },
+  "runtime_span_review": {
+    "physical_rx": ["0x0c189a00", "0x0c195a00"],
+    "physical_tx": ["0x0c195a20", "0x0c19ba20"],
+    "allocator_arena": ["0x8c349120", "0x8d000000"],
+    "bottom_384k_payload": ["0x8c349140", "0x8c3a9140"],
+    "tail_384k_payload": ["0x8cfa0000", "0x8d000000"],
+    "rings_disjoint_from_arena_and_both_candidate_payloads": true,
+    "original_transport_and_layout_bind_pass_for_both_candidates": true,
+    "note": "Layout binding does not grant executable or allocation ownership. The independent stage placement and heap identity gates must still admit the full source extent."
+  },
+  "remaining": [
+    "Terminal-exit discovery still refuses this executable. It has five encoded BIOS-vector loads, including two outside the known exit pair, and one encoded bootstrap load; this is a separate review from PSO's extra CRT-style bootstrap path.",
+    "The complete source ends at 0x8c369104, beyond the arena start at 0x8c349120. Production placement refuses that overlap.",
+    "The final 128 KiB after 0x8c349104 are zero apart from the final 0xdeaddead scalar. That observation is not an extent or lifetime proof; no truncation or guessed arena is admitted here.",
+    "No virtual-saving eligibility or new console package is claimed by this discovery change."
+  ],
+  "console_compatibility_verified": false,
+  "game_bytes_or_disassembly_committed": false
+}

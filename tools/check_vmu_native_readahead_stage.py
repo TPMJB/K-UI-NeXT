@@ -11,6 +11,8 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+from native_runtime_layout import (AUX_SPAN, LEASE_BYTES, STACK_OFFSET, STACK_END,
+    DATA_OFFSET as LAYOUT_DATA_OFFSET, DATA_BYTES as LAYOUT_DATA_BYTES, layout_for)
 import struct
 import sys
 
@@ -23,10 +25,10 @@ from sh4_delay_slots import validate_delay_slot
 from vmu_native_relocations import generate
 
 BASE=0x8c421000
-SPAN=0x7000
-LEASE=0x60000
-DATA_OFFSET=0x30000
-DATA_BYTES=0x30000
+SPAN=AUX_SPAN
+LEASE=LEASE_BYTES
+DATA_OFFSET=LAYOUT_DATA_OFFSET
+DATA_BYTES=LAYOUT_DATA_BYTES
 CANARY=0x4b524147
 PUBLIC_BYTES=76
 DIAGNOSTIC_PUBLIC_BYTES=656
@@ -95,7 +97,7 @@ def physical(address):return address&0x1fffffff
 
 def worker_binding(stage,worker):
     """Bind an explicitly supplied worker to both immutable stage inputs."""
-    base=0x8c100000;span=0x20000
+    base=0x8c100000;span=layout_for(worker[4]).WORKER_BYTES
     loads=[p for p in worker[2] if p[0]==1 and p[4]]
     require(loads,'cold worker selection has no initialized module')
     count=max(physical(p[3])+p[4] for p in loads)-physical(base)
@@ -161,7 +163,7 @@ def auxiliary_layout(aux):
 def flat_aux(aux):
     loads=[p for p in aux[2] if p[0]==1 and p[4]]
     length=max(physical(p[3])+p[4] for p in loads)-physical(BASE)
-    require(0x1002<=length<=0x5000,'read-ahead initialized auxiliary span differs')
+    require(0x1002<=length<=0x3000,'read-ahead initialized auxiliary span differs')
     output=bytearray(length)
     for _,offset,_,pa,count,_,_,_ in loads:
         at=physical(pa)-physical(BASE)
@@ -190,11 +192,12 @@ class ReadAheadBinderCPU(ColdBinderCPU):
         require(self.wire_end-self.wire_start==len(self.aux_wire),'stage embeds a different relocation length')
         require(bytes(self.read(self.wire_start+i,1) for i in range(len(self.aux_wire)))==self.aux_wire,
                 'stage embeds a different relocation table')
-        self.load=((payload&0x1fffffff)|0x80000000)+0x21000
+        self.geometry=layout_for(stage[4])
+        self.load=((payload&0x1fffffff)|0x80000000)+self.geometry.AUX_OFFSET
         self.dest=self.load|0x20000000
-        self.data=((payload&0x1fffffff)|0xa0000000)+DATA_OFFSET
-        self.stack_bottom=((payload&0x1fffffff)|0xa0000000)+0x27000
-        self.stack_top=((payload&0x1fffffff)|0xa0000000)+0x28000
+        self.data=((payload&0x1fffffff)|0xa0000000)+self.geometry.DATA_OFFSET
+        self.stack_bottom=((payload&0x1fffffff)|0xa0000000)+self.geometry.STACK_OFFSET
+        self.stack_top=((payload&0x1fffffff)|0xa0000000)+self.geometry.STACK_END
         self.put32(self.region+0x500,0);self.put32(self.region+0x504,0)
         self.put32(self.region+0x530,COOKIE)
         # Read-ahead follows successful SDK publication. Seed that installed
@@ -285,7 +288,7 @@ class ReadAheadBinderCPU(ColdBinderCPU):
         assert self.r[15]<=unused<=self.r[15]+256-4
         config=[self.read(cfg+4*i) for i in range(8)]
         assert config==[1,32,self.region,self.descriptor,self.data,DATA_BYTES,
-                        self.payload&0x1fffffff,LEASE],list(map(hex,config))
+                        self.payload&0x1fffffff,self.geometry.LEASE_BYTES],list(map(hex,config))
         assert header[5]&0xe0000000==0xa0000000
         assert self.dest+64<=header[5]<=self.dest+0x1000-self.layout['public_bytes']
         actual_context=self.dest+physical(self.aux[4]['_kui_native_readahead_aux_context'][0])-physical(BASE)

@@ -6,6 +6,9 @@
 
 #define KUI_VMU_READONLY_OVERLAY_FRAMES 32u
 #define KUI_VMU_READONLY_OVERLAY_REPLY 524u
+/* Every admitted batch contains one physical parent, which never needs a
+ * virtual reply. All remaining frames may still be maximum-size READs. */
+#define KUI_VMU_READONLY_OVERLAY_STAGED_FRAMES (KUI_VMU_READONLY_OVERLAY_FRAMES - 1u)
 
 /* A snapshot of one real DMA packet, excluding one-word SDK padding. The
  * caller proves the pointer maps to this physical RX address, the capacity is
@@ -55,6 +58,14 @@ struct kui_vmu_readonly_overlay_stats {
     uint32_t last_request, last_reply, last_rx;
 };
 
+/* Prepared metadata owns only the fields completion uses. WRITE payloads
+ * have already been copied to private staging; no caller pointer survives. */
+struct kui_vmu_readonly_overlay_pending_frame {
+    uint32_t header, payload0, payload1;
+    uint32_t rx_physical, rx_capacity;
+    uint8_t *rx_bytes;
+};
+
 /* Private owned state: allocate in the proved worker BSS, never its stack or
  * guest/source/RX memory. Callers may inspect admitted/pending and stats only.
  * The handler must write solely its supplied staging buffer and private state;
@@ -66,9 +77,9 @@ struct kui_vmu_readonly_overlay {
     void *context;
     uint32_t magic, admitted, pending, address;
     uint32_t frame_count, parent_index, target_count;
-    struct kui_vmu_readonly_overlay_frame frames[KUI_VMU_READONLY_OVERLAY_FRAMES];
+    struct kui_vmu_readonly_overlay_pending_frame frames[KUI_VMU_READONLY_OVERLAY_FRAMES];
     uint16_t reply_bytes[KUI_VMU_READONLY_OVERLAY_FRAMES];
-    uint32_t staged[KUI_VMU_READONLY_OVERLAY_FRAMES][KUI_VMU_READONLY_OVERLAY_REPLY / 4u];
+    uint32_t staged[KUI_VMU_READONLY_OVERLAY_STAGED_FRAMES][KUI_VMU_READONLY_OVERLAY_REPLY / 4u];
 };
 
 _Static_assert(sizeof(struct kui_vmu_readonly_overlay) <= 20u * 1024u,

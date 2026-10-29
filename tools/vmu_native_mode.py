@@ -11,7 +11,8 @@ LEASE_ONLY=3
 HOOKS_ONLY=4
 RAW_CHAIN=5
 EVOLUTION_TRACE=6
-MODE_NAMES={NORMAL:'normal',CONTROL:'control',PROFILE:'profile',LEASE_ONLY:'lease-only',HOOKS_ONLY:'hooks-only',RAW_CHAIN:'raw-chain',EVOLUTION_TRACE:'evolution-trace'}
+READER_ONLY=7
+MODE_NAMES={NORMAL:'normal',CONTROL:'control',PROFILE:'profile',LEASE_ONLY:'lease-only',HOOKS_ONLY:'hooks-only',RAW_CHAIN:'raw-chain',EVOLUTION_TRACE:'evolution-trace',READER_ONLY:'reader-only'}
 
 def require(condition,message):
     if not condition:raise ValueError(message)

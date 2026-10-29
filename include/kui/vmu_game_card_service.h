@@ -3,6 +3,7 @@
 #define KUI_VMU_GAME_CARD_SERVICE_H
 #include "kui/probe.h"
 #include "kui/vmu_game_card.h"
+#include "kui/vmu_game_assign.h"
 #include "kui/vmu_fs_admission.h"
 #include "kui/vmu_image.h"
 
@@ -35,7 +36,7 @@ struct kui_vmu_game_card_platform {
     bool (*raw_end)(void *context);
     void (*salt)(void *context,uint8_t out[16]);
 };
-/* Caller-owned scratch, about 90 KiB; never retained after return. */
+/* Caller-owned launcher/GUI scratch; never retained during game execution. */
 struct kui_vmu_game_card_work {
     struct kui_vmu_persist_profile profile,cached;
     struct kui_vmu_fs_workspace filesystem;
@@ -48,6 +49,9 @@ struct kui_vmu_game_card_work {
     uint16_t pairs[KUI_VMU_GAME_CARD_PAIRS_MAX];
     unsigned pair_count;
     uint8_t used[KUI_VMU_GAME_CARD_PAIRS_MAX/8u+1u];
+    struct kui_vmu_game_assign_table assignments,assignment_candidate;
+    uint8_t assignment_wire[KUI_VMU_GAME_ASSIGN_WIRE_BYTES];
+    uint8_t assignment_valid_slots;
 };
 enum kui_vmu_game_card_result {
     KUI_VMU_GAME_CARD_READY=0,
@@ -76,5 +80,30 @@ int kui_vmu_game_card_select(const char *product,uint64_t partition_first,uint64
     const struct kui_vmu_fs_range *forbidden,size_t forbidden_count,
     const struct kui_vmu_game_card_platform *platform,struct kui_vmu_game_card_work *work,
     uint8_t wire[KUI_VMU_PERSIST_PROFILE_WIRE_BYTES],struct kui_vmu_game_card_choice *choice,
+    kui_log_fn log,kui_cancel_fn cancel);
+/* Read-only explicit-assignment lookup on mounted FatFs. READY means a
+ * complete identity-pinned target exists (choice->pair); UNBOUND means no
+ * explicit assignment. FAILED/CANCELLED must refuse launch. This does not
+ * choose/create a legacy default or prepare a profile. */
+int kui_vmu_game_card_assignment(const char *product,struct kui_vmu_game_card_work *work,
+    struct kui_vmu_game_card_choice *choice,kui_cancel_fn cancel);
+/* Publish a fresh imported playable card, with no game assignment yet. The
+ * caller owns mounted FatFs and supplies a fresh 16-byte clock/counter salt.
+ * image must be an admitted standard 128 KiB image. Old cards are never
+ * changed. The new folder may remain incomplete on failure and is never
+ * reused. identity receives the pinned identity only on READY. No profile is
+ * required here: ordinary launch prepares it after the game is assigned. */
+int kui_vmu_game_card_import_publish(const void *image,size_t bytes,const uint8_t salt[16],
+    struct kui_vmu_game_card_work *work,struct kui_vmu_game_card_choice *choice,
+    uint8_t identity[16],kui_log_fn log,kui_cancel_fn cancel);
+/* Atomically add/replace this entire batch of explicit game assignments,
+ * retaining unrelated assignments. Every target must be a completed imported
+ * card with this exact identity. Two alternating sequence/CRC files preserve
+ * the preceding complete assignment set across an interrupted publication.
+ * A corrupted table with no valid predecessor refuses all automatic selection.
+ * Several keys may name one card. Existing card data/journals are untouched.
+ * Caller owns mounted FatFs; READY is the only successful publication result. */
+int kui_vmu_game_card_assignments_apply(const struct kui_vmu_game_assignment *entries,size_t count,
+    struct kui_vmu_game_card_work *work,struct kui_vmu_game_card_choice *choice,
     kui_log_fn log,kui_cancel_fn cancel);
 #endif

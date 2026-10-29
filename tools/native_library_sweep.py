@@ -220,7 +220,7 @@ def sweep(parts, work, stage_end, output, markdown, known=KNOWN):
             {'slug': row['slug'], 'startup': str(startups[row['slug']]), 'source_bytes': row['boot_bytes'],
              'source_sha256': row['boot_sha256'], 'title': row['title'],
              'boot_filename': row['boot_filename'], 'windows_ce': False}
-            for row in rows if row['slug'] in startups]}
+            for row in rows if row.get('slug') in startups]}
         (work / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
         subprocess.run([sys.executable, str(ROOT / 'tools/audit_vmu_native_corpus.py'),
                         '--manifest', str(work / 'manifest.json'), '--stage-end', hex(stage_end),

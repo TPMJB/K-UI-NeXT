@@ -171,15 +171,17 @@ static bool gun(const uint8_t *p,size_t n,uint32_t base,const struct kui_vmu_nat
 }
 
 /* The leaf is reached exactly once: one aligned image word holds its
- * address, one PC-relative load reads it, and the very next instruction
- * calls through that register with a no-op delay slot. */
+ * address, one PC-relative load reads it without replacing SP, and the
+ * very next instruction calls through that register with a no-op delay
+ * slot. A coordinated MOV.L/JSR through R15 would destroy the caller's
+ * stack before either reviewed wrapper saves its context. */
 static bool called_once(const uint8_t *p,size_t n,uint32_t base,uint32_t function) {
     unsigned words=0,loads=0;bool called=false;
     for(size_t i=0;i<n && n-i>=4u;i+=4u) if(phys(u32(p+i))==phys(function)) ++words;
     for(size_t s=0;s<n && n-s>=6u;s+=2u) {
         uint16_t code=u16(p+s);unsigned reg=(code>>8)&15u;uint32_t value;
         if((code&0xf000u)!=0xd000u || !literal(p,n,base,s,reg,&value) || phys(value)!=phys(function)) continue;
-        ++loads;called=u16(p+s+2u)==(0x400bu|reg<<8) && u16(p+s+4u)==0x0009u;
+        ++loads;called=reg!=15u && u16(p+s+2u)==(0x400bu|reg<<8) && u16(p+s+4u)==0x0009u;
     }
     return words==1u && loads==1u && called;
 }
@@ -314,14 +316,15 @@ static bool uniform_initializer(const uint8_t *p,size_t n,uint32_t base,
         word_literal(p,n,base,c+104u,0u,0xfc4u) && word_literal(p,n,base,c+108u,1u,0x3000u) &&
         word_literal(p,n,base,c+112u,0u,0x10acu) && word_literal(p,n,base,c+126u,0u,0xfccu);
 }
-static bool uniform_root(const uint8_t *p,size_t n,uint32_t base,size_t call,
-    uint32_t upper,uint32_t *rx_slot,uint32_t *rx,uint32_t *tx_slot,uint32_t *tx) {
+static bool uniform_root_registers(const uint8_t *p,size_t n,uint32_t base,size_t call,
+    uint32_t upper,uint32_t *rx_slot,uint32_t *rx,uint32_t *tx_slot,uint32_t *tx,
+    unsigned targets) {
     if(call<8u || call>n || n-call<4u || (u16(p+call)&0xf0ffu)!=0x400bu) return false;
     unsigned target_reg=(u16(p+call)>>8)&15u;
-    /* Equivalent reviewed caller allocations use R0, R2 or R3 for the
-     * indirect target. RX/TX/mode remain R5/R6/R4; no inherited register or
-     * value inferred after the call may authorize its sampled target. */
-    if(target_reg!=0u && target_reg!=2u && target_reg!=3u) return false;
+    /* RX/TX/mode remain R5/R6/R4. The caller selects reviewed target
+     * allocations; no inherited register or value inferred after the call
+     * may authorize its sampled target. In particular R15 is never a target. */
+    if(!(targets&(1u<<target_reg))) return false;
     /* Two complete caller continuations supply the sampled target and both
      * buffer arguments in three literal loads, then mode zero in the JSR
      * delay. The first follows an actual prior JSR/R4-stack-reload pair;
@@ -362,8 +365,34 @@ static bool uniform_root(const uint8_t *p,size_t n,uint32_t base,size_t call,
     }
     return known==(0x70u|(1u<<target_reg));
 }
+static bool uniform_root(const uint8_t *p,size_t n,uint32_t base,size_t call,
+    uint32_t upper,uint32_t *rx_slot,uint32_t *rx,uint32_t *tx_slot,uint32_t *tx) {
+    return uniform_root_registers(p,n,base,call,upper,rx_slot,rx,tx_slot,tx,0xdu);
+}
+/* Same self-contained argument transport with the independently reviewed R1
+ * target allocation. Keep it as a final fallback so previous complete roots
+ * retain their exact metadata and ambiguity checks. */
+static bool uniform_r1_root(const uint8_t *p,size_t n,uint32_t base,size_t call,
+    uint32_t upper,uint32_t *rx_slot,uint32_t *rx,uint32_t *tx_slot,uint32_t *tx) {
+    return uniform_root_registers(p,n,base,call,upper,rx_slot,rx,tx_slot,tx,2u);
+}
+/* A reviewed uniform entry is a pure tail thunk: its three literal loads
+ * supply the upper wrapper, RX and TX; JMP samples R3 before the zero-mode
+ * delay slot and preserves the startup caller's PR. The thunk is named by
+ * one image word, loaded by one immediate JSR/no-op caller, just as the
+ * variable leaf above. It inherits no argument or target register. */
+static bool uniform_tail_root(const uint8_t *p,size_t n,uint32_t base,size_t call,
+    uint32_t upper,uint32_t *rx_slot,uint32_t *rx,uint32_t *tx_slot,uint32_t *tx) {
+    if(call<6u || call>n || n-call<4u || u16(p+call)!=0x432bu ||
+       u16(p+call+2u)!=0xe400u || !target(p,n,base,call-6u,3u,upper) ||
+       !literal(p,n,base,call-4u,5u,rx) || !literal(p,n,base,call-2u,6u,tx) ||
+       !called_once(p,n,base,base+(uint32_t)call-6u)) return false;
+    *rx_slot=((base+(uint32_t)call)&~3u)+4u*(u16(p+call-4u)&255u);
+    *tx_slot=((base+(uint32_t)call+2u)&~3u)+4u*(u16(p+call-2u)&255u);
+    return true;
+}
 static bool uniform_from_bound(const void *image,size_t n,
-    const struct kui_vmu_native_discovery *d,struct kui_vmu_native_layout *out) {
+    const struct kui_vmu_native_discovery *d,struct kui_vmu_native_layout *out,bool tail,bool r1) {
     const uint8_t *p=image;uint32_t base=d->load_address;
     if(!uniform_initializer(p,n,base,d)) return false;
     static const struct witness wrap[]={
@@ -400,6 +429,22 @@ static bool uniform_from_bound(const void *image,size_t n,
         uint32_t rx_at=0,raw_rx=0,tx_at=0,raw_tx=0;
         if((u16(p+s)&0xf0ffu)!=0x400bu ||
            !uniform_root(p,n,base,s,base+(uint32_t)upper_site,&rx_at,&raw_rx,&tx_at,&raw_tx)) continue;
+        r.input_array=rx_at;rx=raw_rx;r.index_array=tx_at;tx=raw_tx;
+        r.initializer_call=base+(uint32_t)s;if(++found>1u) return false;
+    }
+    /* Existing complete roots keep their exact metadata. Only an image
+     * without one may use the separately proved single-caller tail thunk. */
+    if(!found && tail) for(size_t s=6u;s<n && n-s>=4u;s+=2u) {
+        uint32_t rx_at=0,raw_rx=0,tx_at=0,raw_tx=0;
+        if(!uniform_tail_root(p,n,base,s,base+(uint32_t)upper_site,
+           &rx_at,&raw_rx,&tx_at,&raw_tx)) continue;
+        r.input_array=rx_at;rx=raw_rx;r.index_array=tx_at;tx=raw_tx;
+        r.initializer_call=base+(uint32_t)s;if(++found>1u) return false;
+    }
+    if(!found && r1) for(size_t s=8u;s<n && n-s>=4u;s+=2u) {
+        uint32_t rx_at=0,raw_rx=0,tx_at=0,raw_tx=0;
+        if(!uniform_r1_root(p,n,base,s,base+(uint32_t)upper_site,
+           &rx_at,&raw_rx,&tx_at,&raw_tx)) continue;
         r.input_array=rx_at;rx=raw_rx;r.index_array=tx_at;tx=raw_tx;
         r.initializer_call=base+(uint32_t)s;if(++found>1u) return false;
     }
@@ -465,12 +510,16 @@ static bool layout_from_bound(const void *image,size_t n,
     const struct kui_vmu_native_discovery *d,struct kui_vmu_native_layout *out) {
     struct kui_vmu_native_layout variable_layout,uniform_layout;
     bool variable_found=variable_from_bound(image,n,d,&variable_layout,false);
-    bool uniform_found=uniform_from_bound(image,n,d,&uniform_layout);
+    bool uniform_found=uniform_from_bound(image,n,d,&uniform_layout,false,false);
     /* The leaf root is tried only where no reviewed family resolves. Every
      * image with an earlier proof keeps exactly that proof, so cached
      * records stay current without a detector-epoch change. */
     if(!variable_found && !uniform_found)
         variable_found=variable_from_bound(image,n,d,&variable_layout,true);
+    if(!variable_found && !uniform_found)
+        uniform_found=uniform_from_bound(image,n,d,&uniform_layout,true,false);
+    if(!variable_found && !uniform_found)
+        uniform_found=uniform_from_bound(image,n,d,&uniform_layout,false,true);
     if(variable_found==uniform_found) return false;
     struct kui_vmu_native_layout chosen=variable_found?variable_layout:uniform_layout;bool infile;
     if(!source_buffers(image,n,d,&chosen,&infile)) return false;

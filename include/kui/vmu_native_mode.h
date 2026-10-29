@@ -13,7 +13,8 @@ enum kui_vmu_native_mode {
     KUI_VMU_NATIVE_MODE_LEASE_ONLY=3,
     KUI_VMU_NATIVE_MODE_HOOKS_ONLY=4,
     KUI_VMU_NATIVE_MODE_RAW_CHAIN=5,
-    KUI_VMU_NATIVE_MODE_EVOLUTION_TRACE=6
+    KUI_VMU_NATIVE_MODE_EVOLUTION_TRACE=6,
+    KUI_VMU_NATIVE_MODE_READER_ONLY=7
 };
 /* Canonical immutable launch mode. No pointer, storage authority or live
  * lifetime is serialized here. Invalid versions, lengths and reserved bytes

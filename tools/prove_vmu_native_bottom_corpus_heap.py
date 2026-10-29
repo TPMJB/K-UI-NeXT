@@ -20,12 +20,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / "tests"), str(ROOT / "tools")]
 import test_vmu_native_heap_execution as heap
 from prove_vmu_native_evolution1_readahead_lease import LiveAllocatorProof
+from native_runtime_layout import LEASE_BYTES, AUX_OFFSET, layout_for
 
 SCHEMA = "kui.native.bottom-corpus-original-heap.v1"
 MARKER = "__kui_native_bottom_heap_stage"
 WORKER_MARKER = "__kui_native_bottom_heap_worker"
 ABSOLUTE_ONE = (1, 0, 0, 0xfff1)
-LEASE_BYTES = 0x60000
 ARTIFACTS = ("stage.elf", "native-worker.elf", "native-worker.bin", "native-ra-aux.bin")
 
 
@@ -55,8 +55,8 @@ class Trace(heap.SH):
 
 class BottomObserver(LiveAllocatorProof):
     """Use production C proofs without replacing the original SH allocator."""
-    def __init__(self, directory):
-        super().__init__(directory, True)
+    def __init__(self, directory, selected_layout):
+        super().__init__(directory, True, selected_layout=selected_layout)
         ptr, word = ctypes.c_void_p, ctypes.c_uint32
         library = self.library
         self.bottom_fresh = library.kui_vmu_native_heap_bottom_fresh
@@ -164,32 +164,33 @@ def _stage_unchanged(model, original, begin, end, sp):
 
 def _cold(model, owner, begin, count, sp, stage_begin, stage_end, original_stage,
           program_bytes, observer):
+    lease_bytes=observer.selected_layout.LEASE_BYTES
     allocate, release, sentinel, cursor = owner[9], owner[10], owner[13], owner[14]
-    upper_header = begin + LEASE_BYTES + 32
-    request = count - LEASE_BYTES - 64
+    upper_header = begin + lease_bytes + 32
+    request = count - lease_bytes - 64
     assert request >= 0 and not request & 31
-    assert not heap.intersects(begin, LEASE_BYTES + 64, stage_begin, stage_end - stage_begin)
-    assert not heap.intersects(begin, LEASE_BYTES + 32, 0x8c010000, program_bytes)
+    assert not heap.intersects(begin, lease_bytes + 64, stage_begin, stage_end - stage_begin)
+    assert not heap.intersects(begin, lease_bytes + 32, 0x8c010000, program_bytes)
     calls = []
     placeholder, writes, steps = model.run(allocate, [request], sp)
     calls.append(("upper_placeholder_allocate", writes, steps, list(model.reads)))
     assert placeholder == upper_header + 32
-    assert model.read(begin + 4) == LEASE_BYTES // 32 + 1
+    assert model.read(begin + 4) == lease_bytes // 32 + 1
     assert model.read(sentinel) == begin and model.read(begin) == sentinel
     assert model.read(cursor) == sentinel
     _stage_unchanged(model, original_stage, stage_begin, stage_end, sp)
     observer.placeholder(placeholder)
-    lower, writes, steps = model.run(allocate, [LEASE_BYTES], sp)
+    lower, writes, steps = model.run(allocate, [lease_bytes], sp)
     calls.append(("lower_exact_allocate", writes, steps, list(model.reads)))
     assert lower == begin + 32
     assert model.read(sentinel) == sentinel and model.read(cursor) == sentinel
-    assert model.read(lower - 28) == LEASE_BYTES // 32 + 1
+    assert model.read(lower - 28) == lease_bytes // 32 + 1
     _stage_unchanged(model, original_stage, stage_begin, stage_end, sp)
     observer.allocated(lower, placeholder)
     _, writes, steps = model.run(release, [placeholder], sp)
     calls.append(("upper_placeholder_release", writes, steps, list(model.reads)))
     assert model.read(sentinel) == upper_header and model.read(upper_header) == sentinel
-    assert model.read(upper_header + 4) == (count - LEASE_BYTES - 32) // 32
+    assert model.read(upper_header + 4) == (count - lease_bytes - 32) // 32
     assert model.read(cursor) == sentinel
     _stage_unchanged(model, original_stage, stage_begin, stage_end, sp)
     observer.ready()
@@ -220,10 +221,13 @@ def prove(build, manifest_path, matrix_path, records, *, selected_slugs=None):
     matrix_path, records = Path(matrix_path).resolve(), Path(records).resolve()
     stage = heap.read_elf(build / "stage.elf")
     worker_image = heap.read_elf(build / "native-worker.elf")
+    selected_layout=layout_for(stage[4])
+    assert selected_layout==layout_for(worker_image[4]),"Stage/worker layouts differ"
+    lease_bytes=selected_layout.LEASE_BYTES
     assert stage[4].get(MARKER) == worker_image[4].get(WORKER_MARKER) == ABSOLUTE_ONE
     manifest, matrix = json.loads(manifest_path.read_text()), json.loads(matrix_path.read_text())
     assert manifest["schema"] == "kui.private.native-startup-inputs.v1"
-    assert matrix["schema"] == "kui.native.structural-corpus.v1" and matrix["lease_bytes"] == LEASE_BYTES
+    assert matrix["schema"] == "kui.native.structural-corpus.v1" and matrix["lease_bytes"] == lease_bytes
     assert matrix["input_manifest_sha256"] == sha(manifest_path)
     entries = {entry["slug"]: entry for entry in manifest["files"]}
     selected = [row for row in matrix["results"] if row["structural_384k_models_passed"]]
@@ -242,13 +246,13 @@ def prove(build, manifest_path, matrix_path, records, *, selected_slugs=None):
     auxiliary = (build / "native-ra-aux.bin").read_bytes()
     assert 0x1002 <= len(auxiliary) <= 0x5000
     stage_pattern = bytes([0xa5]) * (end - first)
-    payload_pattern = bytearray([0xa7]) * LEASE_BYTES
+    payload_pattern = bytearray([0xa7]) * lease_bytes
     payload_pattern[:len(worker)] = worker
-    payload_pattern[0x21000:0x21000 + len(auxiliary)] = auxiliary
+    payload_pattern[selected_layout.AUX_OFFSET:selected_layout.AUX_OFFSET + len(auxiliary)] = auxiliary
     inputs, results, cases, minimum_cases = [], [], [], []
     total_operations = 0
     with tempfile.TemporaryDirectory(prefix="kui-original-bottom-heap-") as temporary:
-        observer = BottomObserver(Path(temporary))
+        observer = BottomObserver(Path(temporary),selected_layout)
         for row in selected:
             slug = row["slug"]
             entry, record = entries[slug], records / (slug + ".nvr")
@@ -273,13 +277,13 @@ def prove(build, manifest_path, matrix_path, records, *, selected_slugs=None):
                     for machine in (baseline, model):
                         _value, init_writes, init_steps = machine.run(initializer, [begin, count], 0x8c00efc0)
                     assert model.block(first, end - first) == stage_pattern
-                    observer.fresh(model, owner, begin, count, LEASE_BYTES, len(program), first, end)
+                    observer.fresh(model, owner, begin, count, lease_bytes, len(program), first, end)
                     payload, placeholder, upper, cold = _cold(model, owner, begin, count, sp,
                         first, end, stage_pattern, len(program), observer)
                     after_cold = model.block(first, end - first)
                     model.store_block(payload, payload_pattern)
                     assert model.block(first, end - first) == after_cold
-                    retained = model.block(begin, LEASE_BYTES + 32)
+                    retained = model.block(begin, lease_bytes + 32)
                     identity = {at: model.read(at) for at in (owner[11], owner[12], owner[12] + 4,
                                                             owner[15], owner[16], owner[17])}
                     live, matching = [], []
@@ -288,26 +292,26 @@ def prove(build, manifest_path, matrix_path, records, *, selected_slugs=None):
                         a, _wa, _ia = baseline.run(allocate, [size], sp)
                         b, writes, instructions = model.run(allocate, [size], sp)
                         assert a == b and a, (slug, size, hex(a), hex(b))
-                        assert all(not heap.intersects(at, width, begin, LEASE_BYTES + 32)
+                        assert all(not heap.intersects(at, width, begin, lease_bytes + 32)
                                    for _pc, at, _value, width in writes)
                         live.append(a)
                         matching.append(dict(request=size, payload=b))
                         operations += 1
                         future_steps += instructions
                         observer.valid()
-                        assert model.block(begin, LEASE_BYTES + 32) == retained
+                        assert model.block(begin, lease_bytes + 32) == retained
                     for pointer in live[1::2] + live[::2]:
                         baseline.run(release, [pointer], sp)
                         observer.release(pointer)
                         _value, writes, instructions = model.run(release, [pointer], sp)
                         operations += 1
                         future_steps += instructions
-                        assert all(not heap.intersects(at, width, begin, LEASE_BYTES + 32)
+                        assert all(not heap.intersects(at, width, begin, lease_bytes + 32)
                                    for _pc, at, _value, width in writes)
                         observer.valid()
-                        assert model.block(begin, LEASE_BYTES + 32) == retained
+                        assert model.block(begin, lease_bytes + 32) == retained
                     assert baseline.read(sentinel) == begin and baseline.read(begin + 4) == count // 32
-                    assert model.read(sentinel) == upper and model.read(upper + 4) == (count - LEASE_BYTES - 32) // 32
+                    assert model.read(sentinel) == upper and model.read(upper + 4) == (count - lease_bytes - 32) // 32
                     assert all(model.read(at) == value for at, value in identity.items())
                     # Keep the historical fragmentation/exact-fit/coalescing
                     # stress for one actual alias/SR per owner. All72 cases
@@ -317,19 +321,19 @@ def prove(build, manifest_path, matrix_path, records, *, selected_slugs=None):
                     if primary:
                         test = heap.HeapExecutionTests("test_evolution1")
                         stress_operations, maximum_nodes, stress_steps = test.allocator_evolution(
-                            model, owner, begin, count, payload, sp, LEASE_BYTES, observer)
+                            model, owner, begin, count, payload, sp, lease_bytes, observer)
                         operations += stress_operations
                         future_steps += stress_steps
-                    failed, writes, _instructions = model.run(allocate, [count - LEASE_BYTES], sp)
+                    failed, writes, _instructions = model.run(allocate, [count - lease_bytes], sp)
                     assert not failed and model.read(sentinel) == upper
-                    assert all(not heap.intersects(at, width, begin, LEASE_BYTES + 32)
+                    assert all(not heap.intersects(at, width, begin, lease_bytes + 32)
                                for _pc, at, _value, width in writes)
-                    assert model.block(begin, LEASE_BYTES + 32) == retained
+                    assert model.block(begin, lease_bytes + 32) == retained
                     observer.valid()
                     case = dict(slug=slug, alias=alias, caller_sr=sr,
-                        arena_begin=begin, arena_bytes=count, placeholder_request=count - LEASE_BYTES - 64,
+                        arena_begin=begin, arena_bytes=count, placeholder_request=count - lease_bytes - 64,
                         placeholder_payload=placeholder, payload=payload, header=begin,
-                        lease_bytes=LEASE_BYTES, original_upper_end=begin + count,
+                        lease_bytes=lease_bytes, original_upper_end=begin + count,
                         upper_free_header=upper, remaining_units=model.read(upper + 4),
                         cold_original_instruction_counts=[step[2] for step in cold],
                         cold_original_write_counts=[len(step[1]) for step in cold],
@@ -347,16 +351,16 @@ def prove(build, manifest_path, matrix_path, records, *, selected_slugs=None):
                     if primary:
                         results.append(dict(slug=slug, source_bytes=len(raw), source_sha256=sha(startup),
                             image_bytes=len(program), image_sha256=hashlib.sha256(program).hexdigest(),
-                            record_sha256=sha(record), lease_bytes=LEASE_BYTES,
+                            record_sha256=sha(record), lease_bytes=lease_bytes,
                             arena_begin=begin, arena_bytes=count, payload=payload, header=begin,
-                            lease_end=payload + LEASE_BYTES, header_units=LEASE_BYTES // 32 + 1,
+                            lease_end=payload + lease_bytes, header_units=lease_bytes // 32 + 1,
                             remaining_units=model.read(upper + 4),
                             initializer_instructions=init_steps, initializer_writes=len(init_writes),
                             allocation_instructions=sum(step[2] for step in cold),
                             allocation_writes=sum(len(step[1]) for step in cold),
                             allocation_free_operations=operations, maximum_free_nodes=maximum_nodes,
                             subsequent_allocator_instructions=future_steps, worker_bytes=len(worker),
-                            auxiliary_bytes=len(auxiliary), protected_write_span=LEASE_BYTES,
+                            auxiliary_bytes=len(auxiliary), protected_write_span=lease_bytes,
                             stage_begin=first, stage_end=end, installer_stack=stack,
                             installer_stack_bytes=stack_bytes, installer_sp=sp,
                             stage_preserved=True, installer_stack_preserved=True,
@@ -366,12 +370,12 @@ def prove(build, manifest_path, matrix_path, records, *, selected_slugs=None):
                 # Include the exact minimum where allocate(0) returns the
                 # arena endpoint: its payload must never be dereferenced.
                 for extra in (64, 96, 128, 160):
-                    minimum = LEASE_BYTES + extra
+                    minimum = lease_bytes + extra
                     model = Trace(raw)
                     model.sr = 0x600000f0
                     model.store_block(first, stage_pattern)
                     model.run(initializer, [begin, minimum], 0x8c00efc0)
-                    observer.fresh(model, owner, begin, minimum, LEASE_BYTES, len(program), first, end,
+                    observer.fresh(model, owner, begin, minimum, lease_bytes, len(program), first, end,
                                    placement_expected=extra >= 96)
                     payload, placeholder, _upper, _cold_calls = _cold(model, owner, begin, minimum,
                         sp, first, end, stage_pattern, len(program), observer)
@@ -388,7 +392,7 @@ def prove(build, manifest_path, matrix_path, records, *, selected_slugs=None):
     assert len(minimum_cases) == len(selected) * 12
     assert artifact_hashes == {name: sha(build / name) for name in ARTIFACTS}
     return dict(schema="kui.native.corpus-original-heap.v1", placement="bottom",
-        bottom_heap_schema=SCHEMA, enabled=True, lease_bytes=LEASE_BYTES,
+        bottom_heap_schema=SCHEMA, enabled=True, lease_bytes=lease_bytes,
         input_manifest_path=str(manifest_path), input_manifest_sha256=sha(manifest_path),
         structural_matrix_path=str(matrix_path), structural_matrix_sha256=sha(matrix_path),
         records_directory=str(records), artifacts=artifact_hashes, inputs=inputs,
@@ -399,7 +403,7 @@ def prove(build, manifest_path, matrix_path, records, *, selected_slugs=None):
         future_original_operations=total_operations, cases=cases, minimum_cases=minimum_cases,
         results=results,
         source_sha256={name: sha(ROOT / name) for name in (
-            "tools/prove_vmu_native_bottom_corpus_heap.py", "tools/prove_vmu_native_corpus_heap.py",
+            "tools/native_runtime_layout.py", "tools/prove_vmu_native_bottom_corpus_heap.py", "tools/prove_vmu_native_corpus_heap.py",
             "tests/test_vmu_native_heap_execution.py", "tools/prove_vmu_native_evolution1_readahead_lease.py",
             "src/core/vmu_native_heap.c", "src/core/vmu_native_heap_bottom_code.inc",
             "src/core/vmu_native_lifetime.c", "src/core/vmu_native_stage_placement.c")},

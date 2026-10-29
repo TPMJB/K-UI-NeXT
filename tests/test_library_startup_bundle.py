@@ -149,6 +149,23 @@ class LibraryStartupBundleTests(unittest.TestCase):
         with self.assertRaisesRegex(sweep.SweepError, 'differ from its hashes'):
             sweep.open_game(changed.getvalue(), row)
 
+    def test_sweep_classifies_every_row_of_a_mixed_library(self):
+        rows, created = self.build()
+        known = self.folder / 'known.json'
+        known.write_text(json.dumps({'games': []}))
+        output, markdown = self.folder / 'sweep.json', self.folder / 'sweep.md'
+        report = sweep.sweep(created, self.folder / 'work', 0x8ce8d288, output, markdown, known=known)
+        self.assertEqual(json.loads(output.read_text()), report)
+        self.assertEqual([row['source'] for row in report['results']], [row['source'] for row in rows])
+        for row in report['results']:
+            if row['status'] == 'bundled':
+                self.assertEqual(row['class'], 'blocked', 'synthetic boot files resolve no launch record')
+                self.assertIn(row['first_refusal'], sweep.GATE_NOTES)
+            else:
+                self.assertEqual(row['class'], 'not_native', row['source'])
+        self.assertEqual(report['counts'], {'blocked': 2, 'not_native': 5})
+        self.assertEqual(len(markdown.read_text().splitlines()), len(rows) + 2)
+
     def test_verdicts_follow_launcher_order(self):
         base = dict(status='bundled')
         cases = [

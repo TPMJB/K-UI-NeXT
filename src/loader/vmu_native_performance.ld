@@ -1,10 +1,12 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* Same physical 128KiB lease. Immutable instructions/constants use P1;
+/* Immutable instructions/constants use P1;
  * exports, persistent mutable data and DMA state retain P2. The owned stack
  * is reserved/exported in P2 for cold arm; runtime ephemeral frames use P1. */
 OUTPUT_FORMAT("elf32-shl")
 OUTPUT_ARCH(sh)
 ENTRY(_kui_vmu_native_passive_arm)
+__kui_native_worker_span = DEFINED(__kui_native_general_lean_worker_layout) ? 0x1c000 : 0x20000;
+__kui_native_worker_stack_limit = 0xac100000 + __kui_native_worker_span - 0x1000;
 PHDRS {
     exports PT_LOAD FLAGS(4);
     code PT_LOAD FLAGS(5);
@@ -35,14 +37,15 @@ SECTIONS {
         . = ALIGN(32);
         __vmu_native_worker_bss_end = .;
     } :state
-    ASSERT(.<=0xac11f000,"Native persistent state overlaps its owned4KiB stack")
-    . = 0xac11f000;
+    ASSERT(.<=__kui_native_worker_stack_limit,"Native persistent state overlaps its owned4KiB stack")
+    . = __kui_native_worker_stack_limit;
     .stack (NOLOAD) : AT(ADDR(.stack) - 0x20000000) {
         __vmu_native_worker_stack_bottom = .;
         . += 4096;
         __vmu_native_worker_stack_top = .;
     } :state
     __vmu_native_worker_end = .;
-    ASSERT(__vmu_native_worker_end==0xac120000,"Native persistent worker span must be128KiB")
+    ASSERT(__vmu_native_worker_end==0xac100000+__kui_native_worker_span,
+           "Native persistent worker span differs from its selected layout")
     /DISCARD/ : { *(.comment) *(.note*) *(.eh_frame*) }
 }

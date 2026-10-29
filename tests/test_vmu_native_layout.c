@@ -169,7 +169,8 @@ static void transport_model(const uint8_t *image,size_t bytes,const struct kui_v
     bool uniform=l->rx_layout==KUI_VMU_NATIVE_RX_UNIFORM48;
     uint32_t constructor=0u;
     if(uniform) {uint32_t pc=l->initializer+108u;constructor=sh_long(((pc+4u)&~3u)+4u*(sh_word(pc)&255u));}
-    struct sh_model m={0};m.pc=l->initializer_call-(uniform?8u:12u);m.sr=0x600000e0u;m.r[15]=0x0c900000u;m.r[10]=0x12345678u;
+    bool tail=uniform && (sh_word(l->initializer_call)&0xf0ffu)==0x402bu;
+    struct sh_model m={0};m.pc=l->initializer_call-(uniform?(tail?6u:8u):12u);m.sr=0x600000e0u;m.r[15]=0x0c900000u;m.r[10]=0x12345678u;
     for(unsigned step=0;step<10000u;step++) {
         if(physical(m.pc)==(uniform?physical(constructor)+86u:physical(l->initializer)+238u)) {
             CHECK(m.calls==(uniform?4u:3u));
@@ -179,11 +180,12 @@ static void transport_model(const uint8_t *image,size_t bytes,const struct kui_v
             return;
         }
         uint16_t op=sh_word(m.pc);uint32_t next=m.pc+2u;
-        if((op&0xf0ffu)==0x400bu || (op&0xf000u)==0xb000u) {
+        if((op&0xf0ffu)==0x400bu || (op&0xf0ffu)==0x402bu || (op&0xf000u)==0xb000u) {
             uint32_t target;
             if((op&0xf000u)==0xb000u) {int32_t delta=(int32_t)((op&4095u)^2048u)-2048;target=m.pc+4u+(uint32_t)(2*delta);}
             else target=m.r[(op>>8)&15u];
-            m.pr=m.pc+4u;sh_simple(&m,sh_word(m.pc+2u),m.pc+2u);next=m.pc+4u;
+            if((op&0xf0ffu)!=0x402bu) m.pr=m.pc+4u;
+            sh_simple(&m,sh_word(m.pc+2u),m.pc+2u);next=m.pc+4u;
             bool enter=m.calls==0u || physical(target)==physical(l->initializer_wrapper) || physical(target)==physical(l->initializer) ||
                 (uniform && physical(target)==physical(constructor));
             if(enter) {++m.calls;next=target;} else {
