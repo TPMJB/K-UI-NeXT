@@ -1574,6 +1574,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             return KUI_SHELL_NONE;
         }
         if(s->confirm_salvage) {s->confirm_salvage=false;s->confirm_salvage_defer=false;return KUI_SHELL_NONE;}
+        if(s->page==KUI_SHELL_SALVAGE_DRIVE) {s->page=KUI_SHELL_SALVAGE;return KUI_SHELL_NONE;}
         if(s->page==KUI_SHELL_SALVAGE) {s->confirm_salvage_defer=false;s->page=KUI_SHELL_ADVANCED;return KUI_SHELL_NONE;}
         if(s->confirm_restart) {s->confirm_restart=false;return KUI_SHELL_NONE;}
         if(s->page==KUI_SHELL_SYSTEM_TOOLS) {s->page=KUI_SHELL_SETTINGS;return KUI_SHELL_NONE;}
@@ -2519,7 +2520,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             }
             return KUI_SHELL_NONE;
         }
-        s->salvage_selected=move_count(s->salvage_selected,buttons,5);
+        s->salvage_selected=move_count(s->salvage_selected,buttons,6);
         unsigned horizontal=buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT);
         if(horizontal==KUI_SHELL_LEFT || horizontal==KUI_SHELL_RIGHT) {
             if(s->salvage_selected==3) {
@@ -2536,6 +2537,22 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             if(s->salvage_selected==1) return KUI_SHELL_SALVAGE_RESUME;
             if(s->salvage_selected==2) return KUI_SHELL_SALVAGE_RECOVER;
             if(s->salvage_selected==4)s->salvage_verify_files=!s->salvage_verify_files;
+            if(s->salvage_selected==5)s->page=KUI_SHELL_SALVAGE_DRIVE;
+        }
+        break;
+    }
+    case KUI_SHELL_SALVAGE_DRIVE: {
+        s->salvage_drive_selected=move_count(s->salvage_drive_selected,buttons,3);
+        unsigned horizontal=buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT);
+        bool previous=horizontal==KUI_SHELL_LEFT;
+        if(previous || horizontal==KUI_SHELL_RIGHT || (buttons&KUI_SHELL_A)) {
+            if(s->salvage_drive_selected==0) {
+                unsigned value=s->salvage_drive_options.speed%KUI_DRIVE_SPEED_CHOICES;
+                s->salvage_drive_options.speed=(value+(previous?KUI_DRIVE_SPEED_CHOICES-1:1))%KUI_DRIVE_SPEED_CHOICES;
+            } else if(s->salvage_drive_selected==1) {
+                unsigned value=s->salvage_drive_options.retries%KUI_DRIVE_RETRY_CHOICES;
+                s->salvage_drive_options.retries=(value+(previous?KUI_DRIVE_RETRY_CHOICES-1:1))%KUI_DRIVE_RETRY_CHOICES;
+            } else if(buttons&KUI_SHELL_A)s->page=KUI_SHELL_SALVAGE;
         }
         break;
     }

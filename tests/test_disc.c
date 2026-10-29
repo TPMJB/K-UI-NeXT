@@ -30,6 +30,12 @@ static struct {
     int drive_result;
     unsigned drive_queries,toc_reads[2],toc_order[2],toc_count;
     bool cd_toc,toc_bad,toc_guard,recovery_during_command;
+    struct kui_drive_mode hardware_mode,set_mode;
+    struct kui_drive_mode *mode_destination;
+    unsigned mode_queries,mode_sets,mode_guard,mode_short,mode_fail_command;
+    unsigned mode_ignore_sets,mode_timeout_command,mode_fail_on_set;
+    unsigned mode_format_change;
+    bool mode_init_reset,controls_during_command;
     char log[32768];size_t used;
 } fake;
 char test_cache_log[64];unsigned test_cache_n;uintptr_t test_cache_start[16];size_t test_cache_bytes[16];
@@ -54,7 +60,12 @@ void kui_log(const char *format,...) {
     fake.used+=(size_t)n;fake.log[fake.used++]='\n';fake.log[fake.used]=0;
 }
 int syscall_gdrom_sector_mode(cd_sec_mode_params_t *p) {
-    assert(p->size==2352 && p->track_type==0);fake.us+=7;++fake.modes;return fake.mode_fail?-1:0;
+    assert(p->size==2352 && p->track_type==0);fake.us+=7;++fake.modes;
+    if(fake.mode_format_change==1)fake.hardware_mode.speed=(fake.hardware_mode.speed+1u)%8u;
+    if(fake.mode_format_change==2)fake.hardware_mode.standby^=1u;
+    if(fake.mode_format_change==3)fake.hardware_mode.read_flags^=8u;
+    if(fake.mode_format_change==4)fake.hardware_mode.read_retry^=1u;
+    return fake.mode_fail?-1:0;
 }
 int syscall_gdrom_check_drive(cd_check_drive_status_t *out) {
     assert(out);++fake.drive_queries;
@@ -65,7 +76,7 @@ int syscall_gdrom_check_drive(cd_check_drive_status_t *out) {
 }
 int syscall_gdrom_send_command(cd_cmd_code_t code,void *params) {
     assert(code==CD_CMD_PIOREAD || code==CD_CMD_DMAREAD || code==CD_CMD_INIT ||
-           code==CD_CMD_STOP || code==CD_CMD_GETTOC2);
+           code==CD_CMD_STOP || code==CD_CMD_GETTOC2 || code==CD_CMD_REQ_MODE || code==CD_CMD_SET_MODE);
     fake.command=code;fake.us+=13;++fake.sends;
     if(fake.submit_fail)return -1;
     if(fake.recovery_during_command) {
@@ -73,9 +84,24 @@ int syscall_gdrom_send_command(cd_cmd_code_t code,void *params) {
         assert(!kui_disc_recover(NULL,&expected) && fake.sends==sends);
         fake.recovery_during_command=false;
     }
+    if(fake.controls_during_command) {
+        const struct kui_drive_options options={.speed=1};unsigned sends=fake.sends;
+        assert(!kui_disc_controls_begin(&options) && fake.sends==sends);
+        fake.controls_during_command=false;
+    }
     if(fake.submit_busy || fake.submit_always_busy) {fake.submit_busy=false;return 0;}
     fake.polls=0;fake.abort_started=false;fake.command_started=fake.us;
     if(code==CD_CMD_PIOREAD || code==CD_CMD_DMAREAD) {fake.params=*(cd_read_params_t *)params;++fake.reads;}
+    if(code==CD_CMD_REQ_MODE) {
+        /* The first parameter is a pointer, not the mode tuple itself. */
+        assert(params);fake.mode_destination=*(struct kui_drive_mode **)params;
+        assert(fake.mode_destination && ((uintptr_t)fake.mode_destination&3u)==0);++fake.mode_queries;
+    }
+    if(code==CD_CMD_SET_MODE) {
+        assert(params);fake.set_mode=*(struct kui_drive_mode *)params;++fake.mode_sets;
+        assert(fake.set_mode.speed<=7 && fake.set_mode.standby<=65535 &&
+               fake.set_mode.read_flags<=255 && fake.set_mode.read_retry<=255);
+    }
     if(code==CD_CMD_GETTOC2) {
         assert(params);fake.toc_params=*(cd_cmd_toc_params_t *)params;
         assert(fake.toc_params.toc && fake.toc_params.area>=0 && fake.toc_params.area<2);
@@ -118,6 +144,15 @@ int syscall_gdrom_check_command(int handle,cd_cmd_chk_status_t *detail) {
         return fake.abort_fail || fake.us-fake.abort_started_at<fake.abort_after_us?1:0;
     }
     if(fake.us-fake.command_started<fake.complete_after_us)return 1;
+    if(fake.command==CD_CMD_REQ_MODE || fake.command==CD_CMD_SET_MODE) {
+        if(fake.mode_timeout_command==(unsigned)fake.command)return 1;
+        if(fake.mode_fail_command==(unsigned)fake.command ||
+           (fake.command==CD_CMD_SET_MODE && fake.mode_fail_on_set==fake.mode_sets)) {
+            /* SET can change the hardware and still report failure. */
+            if(fake.command==CD_CMD_SET_MODE)fake.hardware_mode=fake.set_mode;
+            detail->err1=5;return -1;
+        }
+    }
     if(fake.streaming_failure)return 3;
     if(fake.fail || fake.changed || fake.terminal_not_found) {
         if(fake.command==CD_CMD_PIOREAD || fake.command==CD_CMD_DMAREAD) {
@@ -134,7 +169,21 @@ int syscall_gdrom_check_command(int handle,cd_cmd_chk_status_t *detail) {
     if(fake.timeout || fake.cancel) return 1;
     unsigned needed=fake.target_polls?fake.target_polls:((fake.reads&1)?2u:4u);
     if(fake.polls<needed) return 1;
-    if(fake.command==CD_CMD_STOP || fake.command==CD_CMD_INIT) {detail->size=0;return 2;}
+    if(fake.command==CD_CMD_STOP || fake.command==CD_CMD_INIT) {
+        if(fake.command==CD_CMD_INIT && fake.mode_init_reset)
+            fake.hardware_mode=(struct kui_drive_mode){0,45000,0x19,8};
+        detail->size=0;return 2;
+    }
+    if(fake.command==CD_CMD_REQ_MODE) {
+        *fake.mode_destination=fake.hardware_mode;
+        if(fake.mode_guard==1)((uint8_t *)fake.mode_destination)[sizeof(*fake.mode_destination)]=0;
+        if(fake.mode_guard==2)((uint8_t *)fake.mode_destination)[-1]=0;
+        detail->size=fake.mode_short==(unsigned)fake.command?9u:10u;return 2;
+    }
+    if(fake.command==CD_CMD_SET_MODE) {
+        if(!fake.mode_ignore_sets || fake.mode_sets>fake.mode_ignore_sets)fake.hardware_mode=fake.set_mode;
+        detail->size=fake.mode_short==(unsigned)fake.command?9u:10u;return 2;
+    }
     if(fake.command==CD_CMD_GETTOC2) {return_toc();detail->size=sizeof(cd_toc_t);return 2;}
     assert(fake.command==CD_CMD_PIOREAD || fake.command==CD_CMD_DMAREAD);
     if(fake.command==CD_CMD_DMAREAD) test_cache_note('C',0,0);   /* the transfer is done */
@@ -149,6 +198,7 @@ void syscall_gdrom_abort_command(int handle) {
 static void reset(void) {
     memset(&fake,0,sizeof(fake));fake.poll_us=23;kui_disc_timing_reset();
     fake.drive=(cd_check_drive_status_t){CD_STATUS_PAUSED,CD_GDROM};
+    fake.hardware_mode=(struct kui_drive_mode){0,45000,0x19,8};
 }
 static void expect(const char *line) {
     if(!strstr(fake.log,line)) {fprintf(stderr,"Missing %s\n%s",line,fake.log);assert(false);}
@@ -607,13 +657,176 @@ static void recovery_subprocesses(void) {
         int status;assert(waitpid(child,&status,0)==child && WIFEXITED(status) && WEXITSTATUS(status)==0);
     }
 }
+static bool same_mode(const struct kui_drive_mode *a,const struct kui_drive_mode *b) {
+    return a->speed==b->speed && a->standby==b->standby &&
+        a->read_flags==b->read_flags && a->read_retry==b->read_retry;
+}
+static int run_controls(const char *mode) {
+    static _Alignas(32) uint8_t out[32*KUI_RAW_BYTES];
+    struct kui_toc sessions[2];struct kui_drive_options options={.speed=4,.retries=3};
+    const struct kui_drive_mode original={6,12345,0xd9,4};
+    reset();assert(kui_disc_prepare(sessions));fake.toc_count=0;
+    fake.hardware_mode=original;unsigned sends=fake.sends;
+    if(!strcmp(mode,"controls-default")) {
+        options=(struct kui_drive_options){0};
+        assert(kui_disc_controls_begin(&options) && fake.sends==sends);
+        assert(kui_disc_prepare(sessions));
+        assert(kui_disc_read_raw(NULL,45150,2,out)==KUI_READ_OK);
+        assert(kui_disc_controls_end() && !fake.mode_queries && !fake.mode_sets);
+        assert(same_mode(&fake.hardware_mode,&original));
+    } else if(!strncmp(mode,"controls-format-",16)) {
+        assert(kui_disc_controls_begin(&options) && fake.mode_queries==2 && fake.mode_sets==1);
+        capture_phase();memset(out,0xd3,sizeof(out));
+        bool success=!strcmp(mode,"controls-format-retained");
+        bool fatal=!strcmp(mode,"controls-format-guard") || !strcmp(mode,"controls-format-abort-fail");
+        if(!strcmp(mode,"controls-format-speed"))fake.mode_format_change=1;
+        else if(!strcmp(mode,"controls-format-standby"))fake.mode_format_change=2;
+        else if(!strcmp(mode,"controls-format-flags"))fake.mode_format_change=3;
+        else if(!strcmp(mode,"controls-format-retries"))fake.mode_format_change=4;
+        else if(!strcmp(mode,"controls-format-query-fail"))fake.mode_fail_command=CD_CMD_REQ_MODE;
+        else if(!strcmp(mode,"controls-format-guard"))fake.mode_guard=1;
+        else if(!strcmp(mode,"controls-format-abort-fail")) {fake.mode_timeout_command=CD_CMD_REQ_MODE;fake.abort_fail=true;}
+        else assert(success);
+        assert(kui_disc_read_raw(NULL,45150,2,out)==(success?KUI_READ_OK:KUI_READ_FATAL));
+        assert(fake.mode_queries==3 && fake.reads==(success?1u:0u));
+        sends=fake.sends;unsigned queries=fake.mode_queries,modes=fake.modes;
+        fake.mode_format_change=fake.mode_fail_command=fake.mode_guard=fake.mode_timeout_command=0;fake.abort_fail=false;
+        if(success) {
+            expect("after sector format: firmware tuple retained");
+            assert(kui_disc_read_raw(NULL,45152,2,out)==KUI_READ_OK && fake.mode_queries==queries);
+            struct kui_capture_plan plan=recovery_plan(false,false);fake.mode_init_reset=true;
+            assert(kui_disc_recover(NULL,&plan));assert(fake.mode_queries==queries+1);
+            queries=fake.mode_queries;
+            assert(kui_disc_read_raw(NULL,45154,2,out)==KUI_READ_OK && fake.mode_queries==queries+1);
+            assert(kui_disc_read_raw(NULL,45156,2,out)==KUI_READ_OK && fake.mode_queries==queries+1);
+        } else {
+            unchanged(out,sizeof(out));
+            assert(kui_disc_read_raw(NULL,45152,2,out)==KUI_READ_FATAL);
+            assert(fake.sends==sends && fake.mode_queries==queries && fake.modes==modes);
+        }
+        assert(kui_disc_controls_end()==!fatal);
+        if(fatal) {
+            assert(fake.sends==sends && !kui_disc_prepare(sessions));
+            assert(kui_disc_read_raw(NULL,45152,2,out)==KUI_READ_FATAL && fake.sends==sends);
+        } else {
+            assert(same_mode(&fake.hardware_mode,&original));
+            queries=fake.mode_queries;
+            assert(kui_disc_read_raw(NULL,45158,2,out)==KUI_READ_OK && fake.mode_queries==queries);
+        }
+    } else if(!strcmp(mode,"controls-cancel")) {
+        fake.stop=true;assert(!kui_disc_controls_begin(&options));
+        assert(kui_disc_controls_end() && fake.sends==sends);
+    } else if(!strcmp(mode,"controls-live")) {
+        fake.controls_during_command=true;
+        assert(kui_disc_read_raw(NULL,45150,2,out)==KUI_READ_OK);
+        assert(!fake.controls_during_command && !fake.mode_queries && !fake.mode_sets);
+        assert(kui_disc_read_begin(NULL,45150,32,out));sends=fake.sends;
+        assert(!kui_disc_controls_begin(&options) && fake.sends==sends);
+        assert(kui_disc_read_end(NULL)==KUI_READ_OK && kui_disc_controls_end());
+    } else if(!strcmp(mode,"controls-query-fail") || !strcmp(mode,"controls-query-short") ||
+              !strncmp(mode,"controls-width-",15)) {
+        if(!strcmp(mode,"controls-query-fail"))fake.mode_fail_command=CD_CMD_REQ_MODE;
+        else if(!strcmp(mode,"controls-query-short"))fake.mode_short=CD_CMD_REQ_MODE;
+        else if(!strcmp(mode,"controls-width-speed"))fake.hardware_mode.speed=8;
+        else if(!strcmp(mode,"controls-width-standby"))fake.hardware_mode.standby=65536;
+        else if(!strcmp(mode,"controls-width-flags"))fake.hardware_mode.read_flags=256;
+        else {assert(!strcmp(mode,"controls-width-retries"));fake.hardware_mode.read_retry=256;}
+        assert(!kui_disc_controls_begin(&options) && fake.mode_queries==1 && !fake.mode_sets);
+        fake.mode_fail_command=fake.mode_short=0;fake.hardware_mode=original;
+        assert(kui_disc_controls_end());
+        assert(kui_disc_read_raw(NULL,45150,2,out)==KUI_READ_OK);
+    } else if(!strcmp(mode,"controls-query-timeout") || !strcmp(mode,"controls-set-timeout")) {
+        fake.mode_timeout_command=!strcmp(mode,"controls-query-timeout")?CD_CMD_REQ_MODE:CD_CMD_SET_MODE;
+        uint64_t start=fake.us;
+        assert(!kui_disc_controls_begin(&options) && fake.aborts==1);
+        assert(fake.us-start>=5000000 && fake.us-start<5100000);
+        fake.mode_timeout_command=0;assert(kui_disc_controls_end());
+        assert(same_mode(&fake.hardware_mode,&original));
+        assert(kui_disc_read_raw(NULL,45150,2,out)==KUI_READ_OK);
+    } else if(!strcmp(mode,"controls-query-abort-fail") || !strcmp(mode,"controls-set-abort-fail") ||
+              !strcmp(mode,"controls-guard-before") || !strcmp(mode,"controls-guard-after")) {
+        bool guard=!strncmp(mode,"controls-guard-",15);
+        if(guard)fake.mode_guard=!strcmp(mode,"controls-guard-before")?2:1;
+        else {fake.mode_timeout_command=!strcmp(mode,"controls-query-abort-fail")?CD_CMD_REQ_MODE:CD_CMD_SET_MODE;fake.abort_fail=true;}
+        uint64_t start=fake.us;assert(!kui_disc_controls_begin(&options));
+        if(!guard)assert(fake.us-start>=10000000 && fake.us-start<10100000 && fake.aborts==1);
+        sends=fake.sends;fake.mode_timeout_command=fake.mode_guard=0;fake.abort_fail=false;
+        assert(!kui_disc_controls_end() && !kui_disc_controls_begin(&options));
+        assert(!kui_disc_controls_end() && !kui_disc_prepare(sessions) && !kui_disc_stop());
+        assert(kui_disc_read_raw(NULL,45150,2,out)==KUI_READ_FATAL && fake.sends==sends);
+        if(guard)expect("DRIVE MODE GUARD CORRUPTION: RESET REQUIRED");
+    } else if(!strcmp(mode,"controls-rejected") || !strcmp(mode,"controls-ignored") ||
+              !strcmp(mode,"controls-set-short")) {
+        if(!strcmp(mode,"controls-rejected"))fake.mode_fail_on_set=1;
+        else if(!strcmp(mode,"controls-ignored"))fake.mode_ignore_sets=1;
+        else fake.mode_short=CD_CMD_SET_MODE;
+        assert(!kui_disc_controls_begin(&options) && fake.mode_sets==1);
+        fake.mode_short=0;assert(kui_disc_controls_end());
+        assert(fake.mode_sets==2 && same_mode(&fake.hardware_mode,&original));
+        assert(kui_disc_read_raw(NULL,45150,2,out)==KUI_READ_OK);
+    } else {
+        if(!strcmp(mode,"controls-speed-only"))options.retries=0;
+        else if(!strcmp(mode,"controls-retry-only"))options.speed=0;
+        assert(kui_disc_controls_begin(&options));
+        struct kui_drive_mode requested=original;
+        if(options.speed)requested.speed=3;
+        if(options.retries)requested.read_retry=2;
+        assert(fake.mode_queries==2 && fake.mode_sets==1 && same_mode(&fake.hardware_mode,&requested));
+        expect("physical speed not measured");expect("flags=d9");
+        sends=fake.sends;assert(!kui_disc_controls_begin(&options) && fake.sends==sends);
+        if(!strcmp(mode,"controls-reapply") || !strcmp(mode,"controls-reapply-ignored")) {
+            fake.mode_init_reset=true;
+            if(!strcmp(mode,"controls-reapply-ignored"))fake.mode_ignore_sets=2;
+            struct kui_capture_plan plan=recovery_plan(false,false);
+            bool ok=kui_disc_recover(NULL,&plan);
+            assert(ok==!strcmp(mode,"controls-reapply"));
+            assert(fake.mode_sets==2 && fake.mode_queries==3);
+            if(ok) {
+                assert(same_mode(&fake.hardware_mode,&requested));
+                assert(fake.toc_reads[0]==2 && fake.toc_reads[1]==2);
+            } else assert(fake.toc_reads[0]==1 && fake.toc_reads[1]==1);
+        }
+        if(!strcmp(mode,"controls-restore-fail")) {
+            fake.mode_fail_on_set=fake.mode_sets+1;
+            assert(!kui_disc_controls_end());sends=fake.sends;fake.mode_fail_on_set=0;
+            assert(!kui_disc_prepare(sessions) && !kui_disc_stop());
+            assert(!kui_disc_controls_begin(&options) && !kui_disc_controls_end() && fake.sends==sends);
+        } else if(!strcmp(mode,"controls-media-change")) {
+            fake.changed=true;assert(kui_disc_read_raw(NULL,45150,2,out)==KUI_READ_FATAL);
+            sends=fake.sends;fake.changed=false;
+            assert(!kui_disc_controls_end() && fake.sends==sends);
+            assert(!kui_disc_prepare(sessions) && !kui_disc_stop() && fake.sends==sends);
+        } else {
+            fake.stop=true;assert(kui_disc_controls_end()); /* latched B cannot skip restore */
+            assert(same_mode(&fake.hardware_mode,&original));
+            sends=fake.sends;assert(kui_disc_controls_end() && fake.sends==sends);
+        }
+    }
+    printf("PASS native drive controls: %s\n",mode);return 0;
+}
+static void controls_subprocesses(void) {
+    const char *cases[]={"controls-default","controls-apply","controls-speed-only","controls-retry-only",
+        "controls-cancel","controls-live","controls-query-fail","controls-query-short","controls-width-speed",
+        "controls-width-standby","controls-width-flags","controls-width-retries","controls-query-timeout",
+        "controls-set-timeout","controls-query-abort-fail","controls-set-abort-fail","controls-guard-before",
+        "controls-guard-after","controls-rejected","controls-ignored","controls-set-short","controls-reapply",
+        "controls-reapply-ignored","controls-restore-fail","controls-media-change",
+        "controls-format-retained","controls-format-speed","controls-format-standby","controls-format-flags",
+        "controls-format-retries","controls-format-query-fail","controls-format-guard","controls-format-abort-fail"};
+    for(unsigned i=0;i<sizeof(cases)/sizeof(*cases);++i) {
+        pid_t child=fork();assert(child>=0);
+        if(!child) {int result=run_controls(cases[i]);assert(fflush(stdout)==0);_exit(result);}
+        int status;assert(waitpid(child,&status,0)==child && WIFEXITED(status) && WEXITSTATUS(status)==0);
+    }
+}
 int main(int argc,char **argv) {
     uint8_t out[KUI_CAPTURE_CHUNK*KUI_RAW_BYTES],expected[sizeof(out)];
     if(argc==2 && !strcmp(argv[1],"prepare"))return run_prepare();
     if(argc==2 && !strncmp(argv[1],"recover-",8))return run_recovery(argv[1]);
     if(argc==2 && !strncmp(argv[1],"salvage-",8))return run_salvage_policy(argv[1]);
     if(argc==2 && !strncmp(argv[1],"dma",3)) return run_dma(argv[1]);
-    if(argc==1) {prepare_subprocess();recovery_subprocesses();salvage_policy_subprocesses();}
+    if(argc==2 && !strncmp(argv[1],"controls-",9))return run_controls(argv[1]);
+    if(argc==1) {prepare_subprocess();recovery_subprocesses();salvage_policy_subprocesses();controls_subprocesses();}
     memset(out,0xd3,sizeof(out));reset();
     if(argc==2) {
         capture_phase();

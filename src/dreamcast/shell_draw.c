@@ -152,6 +152,7 @@ static void footer(struct paint *p, const struct kui_shell *s,
             s->vmu_import_staged?"B SD backups":"A Check again   B SD backups") :
         s->page==KUI_SHELL_SALVAGE ? (s->salvage_selected==1?
             "A Resume   Y Resume past next range   B Advanced":"A Start / Open   B Advanced") :
+        s->page==KUI_SHELL_SALVAGE_DRIVE ? "UP/DOWN Select   LEFT/RIGHT or A Change   B Salvage" :
         s->page==KUI_SHELL_SYSTEM_TOOLS ? "D-pad Select   A Open   B Settings" :
         s->page==KUI_SHELL_VMU_RESTORE ? "UP/DOWN Scroll   B VMU   LEFT/RIGHT Target   START Page" :
         s->page==KUI_SHELL_DESTINATION ? "B Parent   START Cancel   LEFT/RIGHT Page" :
@@ -783,7 +784,13 @@ static void vmu_actions(struct paint *p,const struct kui_shell *s,const struct k
 }
 static void salvage(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
     title(p,40,108,"Damaged disc salvage");
-    label(p,40,138,MUTED,"Separate recovery jobs; normal captures remain untouched.");
+    if(v->busy && (s->salvage_drive_options.speed || s->salvage_drive_options.retries)) {
+        char requested[96];
+        snprintf(requested,sizeof(requested),"Requested speed: %s; drive retries: %s",
+            kui_drive_speed_name(s->salvage_drive_options.speed),
+            kui_drive_retry_name(s->salvage_drive_options.retries));
+        label(p,40,138,MUTED,requested);
+    } else label(p,40,138,MUTED,"Separate recovery jobs; normal captures remain untouched.");
     const struct kui_app_status *status=v->app_status;
     if(v->busy && status && status->line_count) {
         panel(p,32,160,576,240,PANEL);
@@ -792,22 +799,26 @@ static void salvage(struct paint *p,const struct kui_shell *s,const struct kui_s
         for(unsigned i=0;i<count && i<7;i++) label(p,40,224+i*23,MUTED,status->lines[i]);
         return;
     }
-    const char *names[]={"New salvage job","Resume latest salvage","Retry unresolved sectors","Recovery pass limit","Read back recovered files"};
-    for(unsigned i=0;i<5;i++) {
-        unsigned y=160+i*30;panel(p,32,y,576,27,i==s->salvage_selected?SELECTED:PANEL);
-        label(p,48,y+5,i==s->salvage_selected?WHITE:MUTED,names[i]);
+    const char *names[]={"New salvage job","Resume latest salvage","Retry unresolved sectors","Recovery pass limit","Read back recovered files","Damaged disc controls"};
+    for(unsigned i=0;i<6;i++) {
+        unsigned y=160+i*25;panel(p,32,y,576,23,i==s->salvage_selected?SELECTED:PANEL);
+        label(p,48,y+3,i==s->salvage_selected?WHITE:MUTED,names[i]);
         if(i==3) {
             char value[16];
             if(s->salvage_passes) snprintf(value,sizeof(value),"%u",s->salvage_passes);
             else snprintf(value,sizeof(value),"Until stopped");
-            label(p,468,y+5,CYAN,value);
+            label(p,468,y+3,CYAN,value);
         }
-        if(i==4)label(p,548,y+5,CYAN,s->salvage_verify_files?"On":"Off");
+        if(i==4)label(p,548,y+3,CYAN,s->salvage_verify_files?"On":"Off");
     }
     if(s->salvage_selected==1) {
         label(p,40,318,CYAN,"Y Resume past next range (confirmation)");
         label(p,40,340,MUTED,"Marks up to 32 next sectors as unresolved zeros.");
         label(p,40,362,MUTED,"Progress kept. Restart first if drive reset is required.");
+    } else if(s->salvage_selected==5) {
+        label(p,40,318,CYAN,"A opens read speed and drive retry settings.");
+        label(p,40,340,MUTED,"Applies to salvage only; choices reset on restart.");
+        label(p,40,362,MUTED,"Drive support for requested settings can vary.");
     } else if(status && status->complete && status->line_count>4) {
         label(p,40,318,MUTED,status->lines[1]);
         label(p,40,340,MUTED,status->lines[3]);
@@ -818,6 +829,30 @@ static void salvage(struct paint *p,const struct kui_shell *s,const struct kui_s
         label(p,40,362,MUTED,"Readback checks all saved bytes; it takes extra time.");
     }
     app_status(p,v->app_status,v->busy,390);
+}
+static void salvage_drive(struct paint *p,const struct kui_shell *s) {
+    title(p,40,108,"Damaged disc controls");
+    label(p,40,138,MUTED,"Salvage only; defaults leave drive settings unchanged.");
+    const char *names[]={"Read speed","Drive retries","Return to salvage"};
+    for(unsigned i=0;i<3;++i) {
+        unsigned y=174+i*36;
+        panel(p,32,y,576,30,i==s->salvage_drive_selected?SELECTED:PANEL);
+        label(p,48,y+6,i==s->salvage_drive_selected?WHITE:MUTED,names[i]);
+        if(i==0)label(p,460,y+6,CYAN,kui_drive_speed_name(s->salvage_drive_options.speed));
+        if(i==1)label(p,460,y+6,CYAN,kui_drive_retry_name(s->salvage_drive_options.retries));
+    }
+    if(s->salvage_drive_selected==0) {
+        label(p,40,302,CYAN,"Speed settings are optional; drives may ignore them.");
+        label(p,40,326,MUTED,"Actual speed needs measurement on your drive.");
+    } else if(s->salvage_drive_selected==1) {
+        label(p,40,302,CYAN,"Firmware decoding retries per command.");
+        label(p,40,326,MUTED,"Recovery passes and application attempts are separate.");
+    } else {
+        label(p,40,302,CYAN,"A returns with these choices ready for salvage.");
+        label(p,40,326,MUTED,"Changing a choice here does not start disc reads.");
+    }
+    label(p,40,366,MUTED,"Choices reset when the console restarts.");
+    label(p,40,390,MUTED,"Drive settings are restored when salvage stops safely.");
 }
 static void system_tools(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
     title(p,40,108,"System tools");
@@ -2334,6 +2369,7 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     case KUI_SHELL_VMU: vmu_page(&p,s,v); break;
     case KUI_SHELL_VMU_ACTIONS: vmu_actions(&p,s,v); break;
     case KUI_SHELL_SALVAGE: salvage(&p,s,v); break;
+    case KUI_SHELL_SALVAGE_DRIVE: salvage_drive(&p,s); break;
     case KUI_SHELL_SYSTEM_TOOLS: system_tools(&p,s,v); break;
     case KUI_SHELL_VMU_RESTORE: vmu_restore(&p,s,v); break;
     case KUI_SHELL_VMU_COLLECTION: vmu_collection(&p,s,v); break;

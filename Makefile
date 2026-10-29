@@ -6,6 +6,7 @@ SANITIZERS ?= -fsanitize=address,undefined -fno-omit-frame-pointer
 # shared with its firmware.
 KWLINK = firmware/kui-wifi/components/kwlink
 INCLUDES = -Iinclude -I.deps/fatfs/source -I$(KWLINK)/include
+DRIVE_CONTROLS = src/core/drive_controls.c include/kui/drive_controls.h
 SALVAGE_DISPLAY = src/core/salvage_display.c include/kui/salvage_display.h include/kui/salvage.h
 CORE = src/core/command.c src/core/data.c src/core/diskio.c src/core/clock.c
 STORAGE_TEST_MODEL = src/core/storage_test_model.c src/core/storage_error.c
@@ -149,7 +150,7 @@ build/test-armada-ce-excerpt-entry: tests/test_armada_ce_excerpt_entry.c src/loa
 build/test-armada-ce-excerpt: tests/test_armada_ce_excerpt.c src/loader/armada_ce_excerpt.c include/kui/armada_ce_excerpt.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -fno-pie -no-pie $< -o $@
-test: build/test-salvage-display
+test: build/test-drive-controls build/test-salvage-display
 test: build/test-vmu-lcd build/test-vmu-save-format
 test: build/test-recovery-manifest build/scan-fixtures/.stamp build/test-music-ogg-seek build/music-asset-check
 test: build/test-games-selection build/test-zso build/test-lzo1x build/test-retail-zso build/test-retail-lzo build/test-game-launch-settings build/test-game-launch-settings-file build/test-game-ram-patches build/test-game-launch-report build/test-retail-relay-patches
@@ -241,6 +242,7 @@ test: build/test-storage-errors build/test-cd-audio build/test-network-probe bui
 	./build/test-music-ogg
 	./build/test-music-ogg-seek
 	./build/test-capture-display
+	./build/test-drive-controls
 	./build/test-salvage-display
 	./build/test-viewport
 	./build/test-clock
@@ -608,17 +610,17 @@ build/test-settings: tests/test_settings.c src/core/settings.c src/core/data.c i
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/settings.c src/core/data.c tests/test_settings.c -o $@
 
-build/test-shell: $(SALVAGE_DISPLAY) include/kui/games_selection.h include/kui/zso.h include/kui/game_launch_settings.h src/core/wifi_text.c include/kui/network_wifi.h $(STORAGE_TEST_MODEL) include/kui/storage_test.h include/kui/storage_error.h src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c include/kui/destination.h tests/test_shell.c src/core/games_selection.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc src/dreamcast/shell_art.inc include/kui/shell_font.h src/core/settings.c src/core/data.c include/kui/shell.h include/kui/settings.h .deps/fatfs/source/ff.h include/kui/game_ram_patches.h
+build/test-shell: $(DRIVE_CONTROLS) $(SALVAGE_DISPLAY) include/kui/games_selection.h include/kui/zso.h include/kui/game_launch_settings.h src/core/wifi_text.c include/kui/network_wifi.h $(STORAGE_TEST_MODEL) include/kui/storage_test.h include/kui/storage_error.h src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c include/kui/destination.h tests/test_shell.c src/core/games_selection.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc src/dreamcast/shell_art.inc include/kui/shell_font.h src/core/settings.c src/core/data.c include/kui/shell.h include/kui/settings.h .deps/fatfs/source/ff.h include/kui/game_ram_patches.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(STORAGE_TEST_MODEL) src/core/wifi_text.c src/core/destination.c src/core/files_path.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/games_selection.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c src/core/settings.c src/core/data.c src/core/salvage_display.c tests/test_shell.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(STORAGE_TEST_MODEL) src/core/wifi_text.c src/core/destination.c src/core/files_path.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/games_selection.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c src/core/settings.c src/core/data.c src/core/salvage_display.c src/core/drive_controls.c tests/test_shell.c -o $@
 
 build/test-shell-font: tests/test_shell_font.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc include/kui/shell_font.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/dreamcast/shell_font.c tests/test_shell_font.c -o $@
 
-build/render-shell: $(SALVAGE_DISPLAY) include/kui/games_selection.h include/kui/zso.h include/kui/game_launch_settings.h src/core/wifi_text.c include/kui/network_wifi.h $(STORAGE_TEST_MODEL) include/kui/storage_test.h include/kui/storage_error.h src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c src/core/data.c include/kui/destination.h tests/render_shell.c src/core/games_selection.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_art.inc src/dreamcast/shell_font_data.inc include/kui/shell.h include/kui/shell_font.h include/kui/game_ram_patches.h
+build/render-shell: $(DRIVE_CONTROLS) $(SALVAGE_DISPLAY) include/kui/games_selection.h include/kui/zso.h include/kui/game_launch_settings.h src/core/wifi_text.c include/kui/network_wifi.h $(STORAGE_TEST_MODEL) include/kui/storage_test.h include/kui/storage_error.h src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c src/core/data.c include/kui/destination.h tests/render_shell.c src/core/games_selection.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_art.inc src/dreamcast/shell_font_data.inc include/kui/shell.h include/kui/shell_font.h include/kui/game_ram_patches.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(INCLUDES) $(STORAGE_TEST_MODEL) src/core/wifi_text.c src/core/destination.c src/core/files_path.c src/core/data.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/games_selection.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c src/core/salvage_display.c tests/render_shell.c -o $@
+	$(CC) $(HOST_FLAGS) $(INCLUDES) $(STORAGE_TEST_MODEL) src/core/wifi_text.c src/core/destination.c src/core/files_path.c src/core/data.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/games_selection.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c src/core/salvage_display.c src/core/drive_controls.c tests/render_shell.c -o $@
 
 build/test-capture-adapter: src/core/destination.c src/core/data.c include/kui/destination.h tests/test_capture_adapter.c src/dreamcast/capture.c src/dreamcast/platform.h include/kui/capture.h .deps/fatfs/source/ff.h
 	@mkdir -p $(@D)
@@ -636,9 +638,9 @@ build/test-timing: tests/test_timing.c src/core/timing.c include/kui/timing.h
 	@mkdir -p build
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/timing.c tests/test_timing.c -o $@
 
-build/test-disc: tests/test_disc.c src/dreamcast/disc.c src/dreamcast/platform.h src/core/command.c src/core/data.c src/core/capture_plan.c $(wildcard tests/stubs/dc/*.h tests/stubs/kos/*.h tests/stubs/arch/*.h) .deps/fatfs/source/ff.h
+build/test-disc: $(DRIVE_CONTROLS) tests/test_disc.c src/dreamcast/disc.c src/dreamcast/platform.h src/core/command.c src/core/data.c src/core/capture_plan.c $(wildcard tests/stubs/dc/*.h tests/stubs/kos/*.h tests/stubs/arch/*.h) .deps/fatfs/source/ff.h
 	@mkdir -p build
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -DKUI_EXPERIMENTAL_DMA=1 -Itests/stubs -Isrc/dreamcast src/dreamcast/disc.c src/core/command.c src/core/data.c src/core/capture_plan.c tests/test_disc.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -DKUI_EXPERIMENTAL_DMA=1 -Itests/stubs -Isrc/dreamcast src/dreamcast/disc.c src/core/command.c src/core/data.c src/core/capture_plan.c src/core/drive_controls.c tests/test_disc.c -o $@
 
 build/capture-image: src/core/repair_baseline.inc tests/capture_image.c src/core/repair_resume.inc src/core/repair_identity.inc src/core/repair_saved_identity.inc src/core/repair_catalogue.inc src/core/repair_catalogue_report.inc src/core/repair_inplace.inc src/core/repair_holes.inc include/kui/saved_identity.h include/kui/raw_cue.h include/kui/legacy_import.h $(CORE) $(CAPTURE) $(filter-out $(CAPTURE) src/core/storage_probe.c,$(REPAIR_COPY)) src/core/storage_probe.c $(FATFS) include/kui/capture.h include/kui/timing.h
 	@mkdir -p build
@@ -1240,3 +1242,12 @@ test-saved-identity: build/saved-identity-image
 build/saved-identity-image: tests/saved_identity_image.c include/kui/saved_identity.h $(CORE) $(FATFS) src/core/saved_identity.c src/core/capture_plan.c src/core/recovery_sector.c src/core/hash.c src/core/destination.c src/core/storage_probe.c
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) src/core/saved_identity.c src/core/capture_plan.c src/core/recovery_sector.c src/core/hash.c src/core/destination.c src/core/storage_probe.c tests/saved_identity_image.c -Wl,--wrap=f_read -o $@
+
+.PHONY: test-drive-controls
+test-drive-controls: build/test-drive-controls build/test-disc
+	./build/test-drive-controls
+	./build/test-disc
+
+build/test-drive-controls: tests/test_drive_controls.c $(DRIVE_CONTROLS)
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/drive_controls.c tests/test_drive_controls.c -o $@

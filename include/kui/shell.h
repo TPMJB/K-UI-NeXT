@@ -17,6 +17,7 @@
 #include "kui/ftp.h"
 #include "kui/storage_test.h"
 #include "kui/network_wifi.h"
+#include "kui/drive_controls.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -52,7 +53,7 @@ enum kui_shell_page { KUI_SHELL_HOME, KUI_SHELL_RIPPER,
     KUI_SHELL_SCI_ASYNC_PROBE, KUI_SHELL_GAMES_VARIANTS, KUI_SHELL_WIFI,
     KUI_SHELL_GAMES_LAUNCH_OPTIONS, KUI_SHELL_GAMES_EXTRA_OPTIONS,
     KUI_SHELL_GAMES_TESTS, KUI_SHELL_GAMES_INFO, KUI_SHELL_GAMES_PATCHES, KUI_SHELL_GAMES_CODEC, KUI_SHELL_GAMES_CHECK, KUI_SHELL_VMU_IMAGE, KUI_SHELL_VMU_IMPORT,
-    KUI_SHELL_VMU_COLLECTION };
+    KUI_SHELL_VMU_COLLECTION, KUI_SHELL_SALVAGE_DRIVE };
 enum kui_shell_game_option {
     KUI_SHELL_GAME_OPTION_READER, KUI_SHELL_GAME_OPTION_CDDA,
     KUI_SHELL_GAME_OPTION_ADVANCED, KUI_SHELL_GAME_OPTION_CODEC, KUI_SHELL_GAME_OPTION_COUNT
@@ -131,6 +132,9 @@ struct kui_shell {
     bool confirm_salvage, confirm_salvage_defer, confirm_repair_in_place;
     bool salvage_verify_files;
     unsigned salvage_selected, salvage_passes;
+    /* Salvage choices last for this boot only; they are never saved in jobs. */
+    struct kui_drive_options salvage_drive_options;
+    unsigned salvage_drive_selected;
     unsigned vmu_action_selected, vmu_copy_slot;
     bool clock_valid;
     unsigned clock_selected;

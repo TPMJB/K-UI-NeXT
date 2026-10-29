@@ -1594,9 +1594,10 @@ static void round_five_controls(void) {
     press(KUI_SHELL_RIGHT,false);assert(s.salvage_verify_files);
     press(KUI_SHELL_LEFT,false);assert(!s.salvage_verify_files);
     press(KUI_SHELL_A,false);assert(s.salvage_verify_files);
+    press(KUI_SHELL_DOWN,false);assert(s.salvage_selected==5);
     press(KUI_SHELL_DOWN,false);assert(s.salvage_selected==0);
     press(KUI_SHELL_LEFT,false);assert(s.salvage_passes==0);
-    press(KUI_SHELL_UP,false);assert(s.salvage_selected==4);
+    press(KUI_SHELL_UP,false);assert(s.salvage_selected==5);
     s.salvage_selected=0;press(KUI_SHELL_A,false);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_NEW && !s.confirm_salvage);
     s.salvage_selected=1;assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_RESUME);
@@ -1616,7 +1617,7 @@ static void round_five_controls(void) {
     assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && !s.confirm_salvage && !s.confirm_salvage_defer);
     press(KUI_SHELL_Y,false);
     assert(press(KUI_SHELL_B,true)==KUI_SHELL_STOP && !s.confirm_salvage && !s.confirm_salvage_defer);
-    for(unsigned row=0;row<5;++row)if(row!=1) {
+    for(unsigned row=0;row<6;++row)if(row!=1) {
         s.salvage_selected=row;
         assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && !s.confirm_salvage && !s.confirm_salvage_defer);
     }
@@ -1633,6 +1634,42 @@ static void round_five_controls(void) {
     assert(kui_shell_progress_tenths(UINT64_MAX-1,UINT64_MAX)==999);
     assert(kui_shell_progress_tenths(UINT64_MAX,UINT64_MAX)==1000);
     assert(kui_shell_progress_tenths(100,99)==1000);
+}
+static void salvage_drive_controls(void) {
+    reset(KUI_SHELL_SALVAGE);
+    assert(s.salvage_drive_options.speed==0 && s.salvage_drive_options.retries==0);
+    s.salvage_selected=5;
+    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_SALVAGE);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_SALVAGE_DRIVE);
+    assert(!s.confirm_salvage && s.salvage_drive_selected==0);
+    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_NONE && s.salvage_drive_options.speed==8);
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE && s.salvage_drive_options.speed==0);
+    for(unsigned i=1;i<KUI_DRIVE_SPEED_CHOICES;++i) {
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.salvage_drive_options.speed==i);
+    }
+    press(KUI_SHELL_RIGHT,false);assert(s.salvage_drive_options.speed==0);
+    press(KUI_SHELL_LEFT|KUI_SHELL_RIGHT,false);assert(s.salvage_drive_options.speed==0);
+    press(KUI_SHELL_RIGHT,true);assert(s.salvage_drive_options.speed==0);
+    press(KUI_SHELL_DOWN,false);assert(s.salvage_drive_selected==1);
+    press(KUI_SHELL_LEFT,false);assert(s.salvage_drive_options.retries==5);
+    press(KUI_SHELL_RIGHT,false);assert(s.salvage_drive_options.retries==0);
+    for(unsigned i=1;i<KUI_DRIVE_RETRY_CHOICES;++i) {
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.salvage_drive_options.retries==i);
+    }
+    press(KUI_SHELL_RIGHT,false);assert(s.salvage_drive_options.retries==0);
+    press(KUI_SHELL_RIGHT,false);assert(s.salvage_drive_options.retries==1);
+    press(KUI_SHELL_UP,false);press(KUI_SHELL_RIGHT,false);
+    assert(s.salvage_drive_options.speed==1 && s.salvage_drive_options.retries==1);
+    press(KUI_SHELL_UP,false);assert(s.salvage_drive_selected==2);
+    press(KUI_SHELL_RIGHT,false);assert(s.page==KUI_SHELL_SALVAGE_DRIVE);
+    press(KUI_SHELL_A,false);assert(s.page==KUI_SHELL_SALVAGE && s.salvage_selected==5);
+    press(KUI_SHELL_A,false);assert(s.page==KUI_SHELL_SALVAGE_DRIVE);
+    assert(press(KUI_SHELL_B|KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_SALVAGE);
+    assert(s.salvage_drive_options.speed==1 && s.salvage_drive_options.retries==1);
+    press(KUI_SHELL_A,false);assert(press(KUI_SHELL_B,true)==KUI_SHELL_STOP);
+    assert(s.page==KUI_SHELL_SALVAGE_DRIVE);
+    reset(KUI_SHELL_SALVAGE);
+    assert(s.salvage_drive_options.speed==0 && s.salvage_drive_options.retries==0);
 }
 static void round_five_rendering(void) {
     struct kui_shell_view v={.busy=true,.inserted_title="Dead or Alive 2",.done=7,.total=10,
@@ -1660,6 +1697,21 @@ static void round_five_rendering(void) {
     reset(KUI_SHELL_SALVAGE);render(&v);
     assert(strstr(drawn,"Recovery pass limit") && strstr(drawn,"Until stopped") && strstr(drawn,"retry holes automatically") && !strstr(drawn,"Zero-fill"));
     assert(strstr(drawn,"Read back recovered files") && strstr(drawn,"Catalogue check follows every resolved job"));
+    assert(strstr(drawn,"Damaged disc controls"));
+    s.salvage_selected=5;render(&v);
+    assert(strstr(drawn,"read speed and drive retry settings") && strstr(drawn,"choices reset on restart"));
+    press(KUI_SHELL_A,false);render(&v);
+    assert(strstr(drawn,"Read speed") && strstr(drawn,"Drive retries") && strstr(drawn,"Return to salvage"));
+    assert(strstr(drawn,kui_drive_speed_name(0)) && strstr(drawn,kui_drive_retry_name(0)));
+    assert(strstr(drawn,"Speed settings are optional") && strstr(drawn,"Actual speed needs measurement"));
+    s.salvage_drive_options.speed=8;s.salvage_drive_options.retries=1;
+    s.salvage_drive_selected=1;render(&v);
+    assert(strstr(drawn,kui_drive_speed_name(8)) && strstr(drawn,kui_drive_retry_name(1)));
+    assert(strstr(drawn,"Firmware decoding retries per command") && strstr(drawn,"Recovery passes and application attempts are separate"));
+    assert(strstr(drawn,"Choices reset when the console restarts"));
+    s.salvage_drive_selected=2;render(&v);
+    assert(strstr(drawn,"does not start disc reads"));
+    press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_SALVAGE);
     s.salvage_selected=1;render(&v);
     assert(strstr(drawn,"Y Resume past next range") && strstr(drawn,"32 next sectors as unresolved zeros"));
     assert(strstr(drawn,"Restart first if drive reset is required"));
@@ -1681,9 +1733,22 @@ static void round_five_rendering(void) {
         .targets=12,.recovered=5,.remaining=7,.done=5,.total=10,.first_pass_complete=true,.pass=2,.pass_limit=5};
     strcpy(progress.message,"Retrying unresolved sectors");
     kui_salvage_display_status(&state,&progress);
+    s.salvage_drive_options=(struct kui_drive_options){0,0};
     v.app_status=&state;render(&v);
-    assert(strstr(drawn,"remaining 7") && strstr(drawn,"pass 2/5") && !strstr(drawn,"New salvage job"));
+    assert(strstr(drawn,"Separate recovery jobs; normal captures remain untouched.") && !strstr(drawn,"Requested speed:"));
+    assert(strstr(drawn,"Original queue 12  repaired 5  left 7") && strstr(drawn,"pass 2/5") && !strstr(drawn,"New salvage job"));
     assert(strstr(drawn,"Sector attempt 1/1") && strstr(drawn,"Last issue FAD 45149: 2/2; deferred") && !strstr(drawn,"291"));
+    s.salvage_drive_options=(struct kui_drive_options){8,0};render(&v);
+    assert(strstr(drawn,"Requested speed: 12x requested; drive retries: Unchanged"));
+    assert(!strstr(drawn,"Separate recovery jobs;") && strstr(drawn,"pass 2/5"));
+    s.salvage_drive_options=(struct kui_drive_options){0,5};render(&v);
+    assert(strstr(drawn,"Requested speed: Unchanged; drive retries: 8"));
+    for(unsigned i=0;i<KUI_DRIVE_SPEED_CHOICES;++i) {
+        s.salvage_drive_options.speed=i;
+        for(unsigned j=0;j<KUI_DRIVE_RETRY_CHOICES;++j) {
+            s.salvage_drive_options.retries=j;render(&v); /* observe() checks exact rendered text width. */
+        }
+    }
     state.line_count=7;state.complete=true;state.passed=true;state.done=state.total;v.busy=false;
     strcpy(state.lines[1],"Targets 12  recovered 12  remaining 0");
     strcpy(state.message,"All targets resolved; every saved track byte verified");
@@ -4357,6 +4422,10 @@ static void vmu_collection_rendering(void) {
 }
 
 int main(int argc,char **argv) {
+    if(argc==2 && !strcmp(argv[1],"--salvage-drive")) {
+        round_five_controls();salvage_drive_controls();round_five_rendering();
+        puts("PASS salvage drive settings: default, navigation, wrap, busy guard, boot reset and rendering");return 0;
+    }
     if(argc==2 && !strcmp(argv[1],"--virtual-vmu")) {
         vmu_continuous_scrolling();vmu_catalog_scrolling();vmu_scroll_rendering();
         vmu_collection_copy_controls();vmu_collection_controls();vmu_collection_rendering();return 0;
@@ -4386,7 +4455,7 @@ int main(int argc,char **argv) {
     ripper_saved_job_controls();ripper_folder_label_controls();ripper_label_keyboard_purpose_controls();
     ripper_saved_job_rendering();
     rendering_semantics(); reference_and_destination_rendering(); new_pages_rendering();
-    music_and_boot_controls(); music_and_boot_rendering(); round_four_rendering(); round_five_controls(); round_five_rendering();
+    music_and_boot_controls(); music_and_boot_rendering(); round_four_rendering(); round_five_controls(); salvage_drive_controls(); round_five_rendering();
     files_controls(); files_rendering();
     ftp_controls(); ftp_rendering();
     wifi_controls(); wifi_rendering(); wifi_update_controls(); wifi_update_rendering();

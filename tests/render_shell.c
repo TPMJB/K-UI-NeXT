@@ -25,7 +25,8 @@
  * sci-async-reset-failure, sci-async-stress-result, sci-async-stress-busy, sci-async-stress-failure,
  * sci-async-quiet-fault, ftp-wifi, wifi, wifi-online, wifi-joining,
  * wifi-password, wifi-name, wifi-forget, wifi-absent, salvage-uncertain,
- * salvage-resume, salvage-defer-confirm, salvage-deferred. */
+ * salvage-resume, salvage-defer-confirm, salvage-deferred,
+ * salvage-drive, salvage-drive-retries, salvage-drive-return, salvage-profile. */
 #include "kui/shell.h"
 #include "kui/salvage_display.h"
 #include <stdio.h>
@@ -601,13 +602,21 @@ int main(int argc,char **argv) {
         shell.page=KUI_SHELL_SYSTEM_TOOLS;shell.confirm_restart=!strcmp(argv[1],"restart");
         view.app_status=&status;strcpy(status.message,"Settings flash backup verified on SD.");
         status.line_count=1;strcpy(status.lines[0],"/KUI/backups/system/flash-0001.bin");
-    } else if(!strcmp(argv[1],"salvage") || !strcmp(argv[1],"salvage-confirm") || !strcmp(argv[1],"salvage-working") || !strcmp(argv[1],"salvage-collecting") || !strcmp(argv[1],"salvage-retrying") || !strcmp(argv[1],"salvage-audio") || !strcmp(argv[1],"salvage-uncertain") || !strcmp(argv[1],"salvage-resume") || !strcmp(argv[1],"salvage-defer-confirm") || !strcmp(argv[1],"salvage-deferred") || !strcmp(argv[1],"salvage-verified")) {
+    } else if(!strcmp(argv[1],"salvage-drive") || !strcmp(argv[1],"salvage-drive-retries") || !strcmp(argv[1],"salvage-drive-return")) {
+        shell.page=KUI_SHELL_SALVAGE_DRIVE;
+        if(!strcmp(argv[1],"salvage-drive-retries")) {
+            shell.salvage_drive_selected=1;
+            shell.salvage_drive_options=(struct kui_drive_options){8,1};
+        }
+        if(!strcmp(argv[1],"salvage-drive-return"))shell.salvage_drive_selected=2;
+    } else if(!strcmp(argv[1],"salvage") || !strcmp(argv[1],"salvage-confirm") || !strcmp(argv[1],"salvage-working") || !strcmp(argv[1],"salvage-collecting") || !strcmp(argv[1],"salvage-retrying") || !strcmp(argv[1],"salvage-audio") || !strcmp(argv[1],"salvage-uncertain") || !strcmp(argv[1],"salvage-resume") || !strcmp(argv[1],"salvage-defer-confirm") || !strcmp(argv[1],"salvage-deferred") || !strcmp(argv[1],"salvage-verified") || !strcmp(argv[1],"salvage-profile")) {
         shell.page=KUI_SHELL_SALVAGE;shell.salvage_selected=3;
         shell.confirm_salvage_defer=!strcmp(argv[1],"salvage-defer-confirm");
         shell.confirm_salvage=!strcmp(argv[1],"salvage-confirm") || shell.confirm_salvage_defer;
         if(!strcmp(argv[1],"salvage-resume") || shell.confirm_salvage_defer)shell.salvage_selected=1;
         view.app_status=&status;status.passed=false;strcpy(status.message,"Incomplete: 3 unresolved sectors remain.");
-        if(!strcmp(argv[1],"salvage-working") || !strcmp(argv[1],"salvage-collecting") || !strcmp(argv[1],"salvage-retrying") || !strcmp(argv[1],"salvage-audio") || !strcmp(argv[1],"salvage-uncertain") || !strcmp(argv[1],"salvage-deferred")) {
+        if(!strcmp(argv[1],"salvage-working") || !strcmp(argv[1],"salvage-collecting") || !strcmp(argv[1],"salvage-retrying") || !strcmp(argv[1],"salvage-audio") || !strcmp(argv[1],"salvage-uncertain") || !strcmp(argv[1],"salvage-deferred") || !strcmp(argv[1],"salvage-profile")) {
+            if(!strcmp(argv[1],"salvage-profile"))shell.salvage_drive_options=(struct kui_drive_options){8,0};
             bool uncertain=!strcmp(argv[1],"salvage-uncertain");
             bool deferred=!strcmp(argv[1],"salvage-deferred");
             bool collecting=!strcmp(argv[1],"salvage-collecting") || uncertain || deferred;

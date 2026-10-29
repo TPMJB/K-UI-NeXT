@@ -144,6 +144,7 @@ static struct kui_sci_video_quiet sci_video_quiet;
 static struct kui_app_status scan_status,salvage_status;
 static char salvage_path_pending[KUI_DEST_JOB_CAP];
 static unsigned salvage_passes_pending;
+static struct kui_drive_options salvage_drive_pending;
 static bool salvage_verify_pending,salvage_defer_pending;
 static char scan_path_pending[KUI_DEST_JOB_CAP];
 static unsigned repair_attempts_pending=10u;
@@ -1570,7 +1571,13 @@ static void salvage_operation(unsigned action) {
     const struct kui_capture_ops ops={.read=salvage_read,.cancelled=scan_cancel,
         .now_ms=scan_now,.log=kui_log,.build=KUI_BUILD_ID,.recover=kui_disc_recover};
     kui_sd_set_params(KUI_STORAGE_AUTO,true);
-    if(prepare_recovery_disc(&plan) && !kui_cancelled() && kui_sd_connect()) {
+    bool controls_ok=false;
+    if(prepare_recovery_disc(&plan) && !kui_cancelled()) {
+        controls_ok=kui_disc_controls_begin(&salvage_drive_pending);
+        if(!controls_ok)snprintf(result.message,sizeof(result.message),
+            "Drive controls could not be verified; salvage not started. See Diagnostics.");
+    }
+    if(controls_ok && !kui_cancelled() && kui_sd_connect()) {
         kui_disc_timing_phase(NULL,true);
         if(action==46 || kui_salvage_latest(&plan,&ops,salvage_path_pending))
             kui_salvage_run(&plan,&ops,&options,(enum kui_salvage_action)(action-46),&result);
@@ -1586,6 +1593,14 @@ static void salvage_operation(unsigned action) {
         }
         kui_sd_disconnect();
     }
+    /* Restore even after Stop, SD failure, failed mode application or completion
+     * checks. The adapter refuses cleanup commands after uncertain ownership. */
+    bool controls_restored=kui_disc_controls_end();
+    if(!controls_restored) {
+        snprintf(result.message,sizeof(result.message),
+            "Drive unavailable. Restart console; saved progress retained.");
+        mutex_lock(&lock);drive_reset_required=true;mutex_unlock(&lock);
+    }
     mutex_lock(&lock);bool reset=drive_reset_required;mutex_unlock(&lock);
     if(reset && result.result==KUI_SALVAGE_FAILED) {
         snprintf(result.message,sizeof(result.message),"%s",result.job[0]?
@@ -1598,9 +1613,16 @@ static void salvage_operation(unsigned action) {
     mutex_lock(&lock);
     salvage_status.complete=true;
     if(result.result==KUI_SALVAGE_FAILED || (checks_started && checked.result==KUI_SALVAGE_CHECK_FAILED)) salvage_status.errors=1;
+    if(!controls_restored) {
+        salvage_status.errors=1;
+        salvage_status.passed=false;
+        snprintf(salvage_status.message,sizeof(salvage_status.message),
+            "Drive unavailable. Restart console; saved progress retained.");
+    }
     mutex_unlock(&lock);
     kui_ui_set_hz(KUI_OPT_UI_FULL);
-    const char *outcome=checks_started && checked.result==KUI_SALVAGE_CHECK_STOPPED?"resolved; recovery checks stopped":
+    const char *outcome=!controls_restored?"drive unavailable; restart required":
+        checks_started && checked.result==KUI_SALVAGE_CHECK_STOPPED?"resolved; recovery checks stopped":
         checks_started && checked.result==KUI_SALVAGE_CHECK_FAILED?"resolved; recovery checks failed":
         checks_started && checked.catalogue.result==KUI_KNOWN_FULL_MATCH?
             (checked.saved_verified?"resolved; saved bytes verified; full catalogue match":"resolved; recovery CRC full catalogue match"):
@@ -3532,6 +3554,7 @@ int main(void) {
             if(action>=46 && action<=48) {
                 recovery_cd_pending=shell.capture_cd_toc;
                 salvage_passes_pending=shell.salvage_passes;
+                salvage_drive_pending=shell.salvage_drive_options;
                 salvage_verify_pending=shell.salvage_verify_files;
                 salvage_defer_pending=requested==KUI_SHELL_SALVAGE_RESUME_DEFER;
                 salvage_path_pending[0]=0;

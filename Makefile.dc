@@ -5,7 +5,7 @@ endif
 
 TARGET := build/kui-diagnostic.elf
 RUNTIME := build/kui-runtime.elf
-SOURCES := src/core/command.c src/core/data.c src/core/diskio.c src/core/clock.c src/core/storage_error.c src/core/storage_probe.c \
+SOURCES := src/core/drive_controls.c src/core/command.c src/core/data.c src/core/diskio.c src/core/clock.c src/core/storage_error.c src/core/storage_probe.c \
            src/core/storage_policy.c src/core/ata.c src/dreamcast/ata_bus.c \
            src/loader/sd_reader.c src/loader/sci_sd_bus.c src/dreamcast/sci_sd_storage.c \
            src/core/report.c src/core/vmu_lcd.c src/dreamcast/vmu_lcd.c \
