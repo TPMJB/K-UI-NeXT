@@ -13,7 +13,11 @@ static bool burst_case(void) {return !strncmp(test.test,"burst-",6);}
 static void burst_plan(void) {
     plan.tracks[2].end=plan.tracks[2].toc_end=45150+BURST_SECTORS;
     plan.bytes=(44u+BURST_SECTORS)*KUI_RAW_BYTES;
-    if(!strcmp(test.test,"burst-audio")) {
+    if(!strcmp(test.test,"burst-sd-window")) {
+        plan.tracks[2].end=plan.tracks[2].toc_end=45150+BURST_SECTORS-1;
+        plan.bytes-=KUI_RAW_BYTES;
+        for(unsigned n=3;n<BURST_SECTORS-1;++n)burst.holes[2][n]=true;
+    } else if(!strcmp(test.test,"burst-audio")) {
         for(unsigned n=0;n<4;++n)burst.holes[1][n]=true;
     } else if(!strcmp(test.test,"burst-boundaries")) {
         for(unsigned n=32;n<40;++n)burst.holes[0][n]=true;
@@ -30,11 +34,59 @@ static void burst_plan(void) {
         }
 }
 static struct {
-    bool active,journal_seen,targets_seen;
-    unsigned cancel_mode,reads;
-    uint64_t journal_done,target_done;
+    bool active,journal_seen,targets_seen,seed_candidate,pending_applied,injected,stage_mutated,clipped_tail,track_io;
+    unsigned cancel_mode,reads,track_reads,largest_read;
+    uint64_t journal_done,target_done,media_calls,media_blocks;
+    uint8_t *stage;
+    unsigned stage_bytes;
 } saved_check;
 static bool saved_check_case(void) {return !strncmp(test.test,"burst-sd-",9);}
+static bool saved_check_targets(void) {
+    return saved_check.active && active_status && active_status->sd_phase==KUI_SALVAGE_SD_TARGETS;
+}
+static bool saved_check_media_read(size_t count) {
+    if(!saved_check_targets())return false;
+    ++saved_check.media_calls;saved_check.media_blocks+=count;
+    if(!saved_check.injected && !strcmp(test.test,"burst-sd-media-error") && active_status->sd_done>=64) {
+        saved_check.injected=true;return true;
+    }
+    return false;
+}
+static bool saved_check_track_file(FIL *file,UINT bytes) {
+    return saved_check_targets() && bytes>=KUI_RAW_BYTES &&
+        f_size(file)==(uint64_t)(plan.tracks[2].end-plan.tracks[2].start)*KUI_RAW_BYTES;
+}
+static bool saved_check_read_error(FIL *file,void *data,UINT bytes,UINT *got,FRESULT *result) {
+    saved_check.track_io=saved_check_track_file(file,bytes);
+    if(!saved_check.track_io)return false;
+    ++saved_check.track_reads;if(bytes>saved_check.largest_read)saved_check.largest_read=bytes;
+    if(bytes>KUI_RAW_BYTES) {
+        assert(!((uintptr_t)data%32u) && !(f_tell(file)%512u));
+        assert(bytes<=75776u);
+        assert(!(bytes%512u) || f_tell(file)+bytes==f_size(file));
+    }
+    if(!saved_check.injected && !strcmp(test.test,"burst-sd-read-error") && active_status->sd_done>=32) {
+        saved_check.injected=true;*got=0;*result=FR_DISK_ERR;return true;
+    }
+    return false;
+}
+static void saved_check_read_result(FIL *file,void *data,UINT bytes,UINT *got,FRESULT result) {
+    saved_check.track_io=false;
+    if(!saved_check_track_file(file,bytes) || result!=FR_OK || *got!=bytes)return;
+    if(bytes>KUI_RAW_BYTES) {
+        if(bytes%512u) {assert(f_tell(file)==f_size(file));saved_check.clipped_tail=true;}
+        if(!saved_check.stage) {
+            unsigned first_sector=!strcmp(test.test,"burst-sd-window")?3u:0u;
+            unsigned head=(first_sector*KUI_RAW_BYTES)%512u;
+            saved_check.stage=(uint8_t *)data+head;saved_check.stage_bytes=bytes-head;
+            if(!strcmp(test.test,"burst-sd-window"))assert(head==400u && (uintptr_t)saved_check.stage%32u==16u);
+        }
+    }
+    if(!saved_check.injected && !strcmp(test.test,"burst-sd-short-read") && active_status->sd_done>=32) {
+        saved_check.injected=true;--*got;
+    }
+    if(saved_check.cancel_mode==4 && !active_status->sd_done)test.cancelled=true;
+}
 static void saved_check_progress(const struct kui_salvage_status *status) {
     if(!saved_check.active || status->sd_phase==KUI_SALVAGE_SD_NONE)return;
     assert(!status->pass && !status->collection_active && status->sd_done<=status->sd_total);
@@ -45,14 +97,24 @@ static void saved_check_progress(const struct kui_salvage_status *status) {
         saved_check.journal_done=status->sd_done;
         if(saved_check.cancel_mode==1 && status->sd_done>=10 && status->sd_done<status->sd_total)test.cancelled=true;
     } else {
-        assert(status->sd_phase==KUI_SALVAGE_SD_TARGETS && status->sd_total==BURST_SECTORS);
-        assert(status->targets==BURST_SECTORS && status->recovered==5 && status->remaining==BURST_SECTORS-5);
+        assert(status->sd_phase==KUI_SALVAGE_SD_TARGETS && status->sd_total==burst.targets);
+        assert(status->targets==burst.targets);
+        if(!strcmp(test.test,"burst-sd-pending")) {
+            assert(status->recovered==5 || status->recovered==6);
+            if(status->recovered==6)saved_check.pending_applied=true;
+        } else assert(status->recovered==5);
+        assert(status->remaining==burst.targets-status->recovered);
         assert(!status->read_count && status->read_state==KUI_SALVAGE_READ_NONE);
         if(!saved_check.targets_seen) {assert(!status->sd_done);saved_check.targets_seen=true;}
         assert(status->sd_done>=saved_check.target_done && status->sd_done<=saved_check.target_done+1);
-        if(status->track)assert(status->track==3 && status->fad>=45150 && status->fad<45150+BURST_SECTORS);
+        if(status->track)assert(status->track==3 && status->fad>=45150 && status->fad<plan.tracks[2].end);
         saved_check.target_done=status->sd_done;
-        if((saved_check.cancel_mode==2 && !status->sd_done) || (saved_check.cancel_mode==3 && status->sd_done==111))test.cancelled=true;
+        if(!strcmp(test.test,"burst-sd-staged-mutation") && !saved_check.stage_mutated && status->sd_done==1 && saved_check.stage) {
+            assert(saved_check.stage_bytes>=32u*KUI_RAW_BYTES);
+            saved_check.stage[31u*KUI_RAW_BYTES+17]^=1;saved_check.stage_mutated=true;
+        }
+        if((saved_check.cancel_mode==2 && !status->sd_done) || (saved_check.cancel_mode==3 && status->sd_done==111) ||
+           (saved_check.cancel_mode==5 && status->sd_done==32))test.cancelled=true;
     }
 }
 static void burst_progress(const struct kui_salvage_status *status) {
@@ -65,6 +127,7 @@ static void burst_progress(const struct kui_salvage_status *status) {
 }
 static void burst_event(unsigned type,const uint8_t *event) {
     if(burst.phase!=1)return;
+    if(type==7 && saved_check.seed_candidate) {assert(get32(event+20)==5);test.cancelled=true;}
     if(type==7 && !strcmp(test.test,"burst-stop-candidate"))test.cancelled=true;
     if(type!=5)return;
     assert(burst.events<2048);unsigned index=get32(event+20);assert(index<burst.targets);
@@ -157,28 +220,81 @@ static unsigned burst_inspect(const char *job,bool provisional) {
     snprintf(path,sizeof(path),"0:%s/salvage.json",job);FILINFO info;assert(f_stat(path,&info)==FR_NO_FILE);
     assert(f_mount(NULL,"0:",0)==FR_OK);return done;
 }
+/* Deliberately corrupt persisted evidence between invocations, preserving a
+ * complete copy so rejection can be followed by an ordinary valid Resume. */
+static void saved_check_edit(const char *job,const char *name,uint64_t offset,uint8_t *bytes,unsigned size,bool writing) {
+    remount();char path[512];FIL file;UINT count;
+    snprintf(path,sizeof(path),"0:%s/%s",job,name);
+    assert(f_open(&file,path,FA_READ|(writing?FA_WRITE:0))==FR_OK && f_lseek(&file,offset)==FR_OK && f_tell(&file)==offset);
+    if(writing)assert(f_write(&file,bytes,size,&count)==FR_OK && count==size && f_sync(&file)==FR_OK);
+    else assert(f_read(&file,bytes,size,&count)==FR_OK && count==size);
+    assert(f_close(&file)==FR_OK && f_mount(NULL,"0:",0)==FR_OK);
+}
 static void run_saved_check_fixture(const char *job,struct kui_capture_ops *ops,struct kui_salvage_options *options) {
     struct kui_salvage_status status;
     test.stop_after=5;
     assert(run_salvage(&plan,ops,options,KUI_SALVAGE_RESUME,&status)==KUI_SALVAGE_STOPPED && status.recovered==5);
     assert(burst_inspect(job,false)==5);
     test.stop_after=0;test.cancelled=false;
+    if(!strcmp(test.test,"burst-sd-pending")) {
+        saved_check.seed_candidate=true;
+        assert(run_salvage(&plan,ops,options,KUI_SALVAGE_RESUME,&status)==KUI_SALVAGE_STOPPED && status.recovered==5);
+        saved_check.seed_candidate=false;test.cancelled=false;assert(burst_inspect(job,false)==5);
+    }
+    bool changed_placeholder=!strcmp(test.test,"burst-sd-placeholder");
+    bool changed_candidate=!strcmp(test.test,"burst-sd-candidate");
+    uint8_t saved[5120],damaged[5120];
+    if(changed_placeholder) {
+        saved_check_edit(job,"track03.bin",511u*KUI_RAW_BYTES+17,saved,1,false);
+        assert(!saved[0]);damaged[0]=0x7a;
+        saved_check_edit(job,"track03.bin",511u*KUI_RAW_BYTES+17,damaged,1,true);
+    }
+    if(changed_candidate) {
+        saved_check_edit(job,"patches.bin",4u*5120u,saved,sizeof(saved),false);
+        memcpy(damaged,saved,sizeof(damaged));damaged[64+17]^=1;
+        put32(damaged+24,kui_crc32(0,damaged+64,KUI_RAW_BYTES));
+        put32(damaged+sizeof(damaged)-4,kui_crc32(0,damaged,sizeof(damaged)-4));
+        saved_check_edit(job,"patches.bin",4u*5120u,damaged,sizeof(damaged),true);
+    }
     saved_check.active=true;
     saved_check.cancel_mode=!strcmp(test.test,"burst-sd-journal-stop")?1u:
-        !strcmp(test.test,"burst-sd-check-start-stop")?2u:!strcmp(test.test,"burst-sd-check-mid-stop")?3u:0u;
+        !strcmp(test.test,"burst-sd-check-start-stop")?2u:!strcmp(test.test,"burst-sd-check-mid-stop")?3u:
+        !strcmp(test.test,"burst-sd-after-read-stop")?4u:!strcmp(test.test,"burst-sd-boundary-stop")?5u:0u;
+    bool failed=changed_placeholder || changed_candidate || !strcmp(test.test,"burst-sd-staged-mutation") ||
+        !strcmp(test.test,"burst-sd-short-read") || !strcmp(test.test,"burst-sd-read-error") || !strcmp(test.test,"burst-sd-media-error");
     unsigned batches=burst.batches,singles=burst.singles;
     enum kui_salvage_result result=run_salvage(&plan,ops,options,KUI_SALVAGE_RESUME,&status);
     assert(saved_check.journal_seen && saved_check.journal_done);
-    if(saved_check.cancel_mode) {
-        assert(result==KUI_SALVAGE_STOPPED && !status.complete);
+    if(saved_check.cancel_mode || failed) {
+        assert(result==(failed?KUI_SALVAGE_FAILED:KUI_SALVAGE_STOPPED) && !status.complete);
         assert(saved_check.cancel_mode==1?status.recovered<=5:status.recovered==5);
+        if(changed_placeholder)saved_check_edit(job,"track03.bin",511u*KUI_RAW_BYTES+17,saved,1,true);
+        if(changed_candidate)saved_check_edit(job,"patches.bin",4u*5120u,saved,sizeof(saved),true);
         assert(burst.batches==batches && burst.singles==singles && burst_inspect(job,false)==5);
         if(saved_check.cancel_mode==1)assert(!saved_check.targets_seen && status.sd_phase==KUI_SALVAGE_SD_JOURNAL);
-        else assert(saved_check.targets_seen && status.sd_phase==KUI_SALVAGE_SD_TARGETS && saved_check.target_done==(saved_check.cancel_mode==2?0u:111u));
+        else {
+            assert(saved_check.targets_seen && status.sd_phase==KUI_SALVAGE_SD_TARGETS);
+            if(saved_check.cancel_mode==2 || saved_check.cancel_mode==4)assert(!saved_check.target_done);
+            if(saved_check.cancel_mode==3)assert(saved_check.target_done==111);
+            if(saved_check.cancel_mode==5)assert(saved_check.target_done==32 && saved_check.track_reads==1);
+        }
+        if(changed_placeholder)assert(saved_check.target_done==511);
+        if(changed_candidate)assert(saved_check.target_done==4);
+        if(!strcmp(test.test,"burst-sd-staged-mutation"))assert(saved_check.stage_mutated && saved_check.target_done==31);
+        if(!strcmp(test.test,"burst-sd-short-read") || !strcmp(test.test,"burst-sd-read-error"))assert(saved_check.injected && saved_check.target_done==32);
+        if(!strcmp(test.test,"burst-sd-media-error"))assert(saved_check.injected && saved_check.target_done==64);
         saved_check.active=false;test.cancelled=false;
         result=run_salvage(&plan,ops,options,KUI_SALVAGE_RESUME,&status);
-    } else assert(saved_check.targets_seen && saved_check.target_done==BURST_SECTORS);
-    assert(result==KUI_SALVAGE_RESOLVED && status.complete && status.recovered==BURST_SECTORS && status.sd_phase==KUI_SALVAGE_SD_NONE);
+    } else {
+        assert(saved_check.targets_seen && saved_check.target_done==burst.targets);
+        assert(saved_check.track_reads==(burst.targets+31u)/32u+!strcmp(test.test,"burst-sd-pending"));
+        assert(saved_check.largest_read==(!strcmp(test.test,"burst-sd-window")?75776u:32u*KUI_RAW_BYTES));
+        if(!strcmp(test.test,"burst-sd-window"))assert(saved_check.clipped_tail);
+        if(!strcmp(test.test,"burst-sd-pending"))assert(saved_check.pending_applied);
+        printf("PASS saved check batching: %u targets, %u grouped track reads, %llu SD requests / %llu blocks\n",
+            burst.targets,(burst.targets+31u)/32u,(unsigned long long)saved_check.media_calls,(unsigned long long)saved_check.media_blocks);
+    }
+    assert(result==KUI_SALVAGE_RESOLVED && status.complete && status.recovered==burst.targets && status.sd_phase==KUI_SALVAGE_SD_NONE);
     test.capturing=false;compare_complete(job);
 }
 static void run_burst_fixture(char **argv,struct kui_capture_ops *ops,struct kui_salvage_options *options) {

@@ -39,7 +39,10 @@ struct salvage {
     unsigned open_track;
     DWORD track_map_small[32],*track_map_heap;
     uint8_t header[HEADER_BYTES], event[EVENT_BYTES], patch[PATCH_BYTES];
-    uint8_t data[CHUNK*KUI_RAW_BYTES], scratch[KUI_RAW_BYTES], identity[32];
+    /* Reconciliation stages a sector-aligned SD window into a 32-byte-aligned
+     * address inside data; leading/trailing SD bytes and pointer rounding fit
+     * in this bounded padding without a separate allocation. */
+    uint8_t data[CHUNK*KUI_RAW_BYTES+512u+32u], scratch[KUI_RAW_BYTES], identity[32];
     uint8_t repair_data[REPAIR_CHUNK*KUI_RAW_BYTES];
     char path[KUI_DEST_PATH_CAP];
 };
@@ -727,30 +730,82 @@ static bool apply_patch(struct salvage *s,unsigned index) {
     if(!target_put(s,index,&t))return false;
     update(s,true);return true;
 }
+/* Adjacent saved targets share one bounded track read. The existing acquisition
+ * buffer is idle until reconciliation finishes; patch loading/application uses
+ * separate patch/scratch storage. Per-slot checksums detect later callbacks or
+ * candidate replay changing a still-unchecked saved slot in that buffer. */
 static bool reconcile(struct salvage *s) {
     if(!s->ready)return true;
+    /* Commit the disposable index allocation before a read fault can poison
+     * storage and prevent normal close from publishing its length. */
+    if(!sync_file(s,&s->index))return false;
     saved_check_start(s,KUI_SALVAGE_SD_TARGETS,s->target_count,
         "Checking durable targets and interrupted patches");
-    for(unsigned i=0;i<s->target_count;++i) {
+    for(unsigned i=0;i<s->target_count;) {
         if(stop(s))return false;
-        struct target t;bool exists;
-        if(!target_get(s,i,&t))return false;
-        s->status->track=t.track+1;s->status->fad=s->plan->tracks[t.track].start+t.sector;
-        update(s,false);
-        if(!load_patch(s,i,&exists) || !read_target(s,i))return false;
-        if(t.repaired) {
-            if(!exists || t.crc!=get32(s->patch+28) || memcmp(s->scratch,s->patch+64+KUI_RAW_BYTES,KUI_RAW_BYTES))return fail(s,"Previously repaired sector or its backup changed; no complete result");
-        } else if(exists) {
-            if(!apply_patch(s,i))return false;
-        } else {
-            for(unsigned n=0;n<KUI_RAW_BYTES;++n)if(s->scratch[n])return fail(s,"Unresolved placeholder changed without a durable repair candidate");
+        struct target targets[CHUNK];uint32_t staged_crc[CHUNK];unsigned count=1;
+        if(!target_get(s,i,&targets[0]))return false;
+        while(count<CHUNK && count<s->target_count-i) {
+            if(stop(s))return false;
+            struct target next;
+            if(!target_get(s,i+count,&next))return false;
+            const struct target *previous=&targets[count-1];
+            if(next.track!=previous->track || next.sector!=previous->sector+1u)break;
+            targets[count++]=next;
         }
-        s->status->sd_done=i+1;update(s,false);
+        s->status->track=targets[0].track+1;
+        s->status->fad=s->plan->tracks[targets[0].track].start+targets[0].sector;
+        update(s,false);
+        if(stop(s))return false;
+        FIL *file=cached_track(s,targets[0].track,false);if(!file)return false;
+        uint8_t *window=(uint8_t *)(((uintptr_t)s->data+31u)&~(uintptr_t)31u);
+        uint64_t offset=(uint64_t)targets[0].sector*KUI_RAW_BYTES;
+        uint64_t begin=offset&~(uint64_t)511u,length=f_size(file);
+        unsigned head=(unsigned)(offset-begin),raw_bytes=count*KUI_RAW_BYTES;
+        unsigned bytes=(head+raw_bytes+511u)&~511u;
+        if(begin>length || length-begin<(uint64_t)head+raw_bytes)
+            return fail(s,"Saved target window exceeds the committed track");
+        if(length-begin<bytes)bytes=(unsigned)(length-begin);
+        /* Starting at a physical SD boundary keeps FatFs' large direct reads
+         * aligned for SCI DMA even when the raw 2352-byte slot starts midway
+         * through a 512-byte sector. The final partial file tail is bounded. */
+        if(!seek(s,file,begin) || !read_exact(s,file,window,bytes))return false;
+        if(stop(s))return false;
+        const uint8_t *saved_data=window+head;
+        for(unsigned n=0;n<count;++n)
+            staged_crc[n]=kui_crc32_capture(0,saved_data+n*KUI_RAW_BYTES,KUI_RAW_BYTES);
+        for(unsigned n=0;n<count;++n) {
+            if(stop(s))return false;
+            unsigned index=i+n;const struct target *t=&targets[n];bool exists;
+            const uint8_t *saved=saved_data+n*KUI_RAW_BYTES;
+            s->status->track=t->track+1;s->status->fad=s->plan->tracks[t->track].start+t->sector;
+            update(s,false);
+            if(stop(s))return false;
+            /* A packed candidate exists only through a journaled slot. The
+             * group's verified index snapshot already proves its absence;
+             * legacy files still require their per-target directory lookup. */
+            exists=false;
+            if((!s->packed || t->patch_slot!=NO_PATCH) && !load_patch(s,index,&exists))return false;
+            if(kui_crc32_capture(0,saved,KUI_RAW_BYTES)!=staged_crc[n])
+                return fail(s,"Staged saved-target data changed during reconciliation");
+            if(t->repaired) {
+                if(!exists || t->crc!=get32(s->patch+28) || memcmp(saved,s->patch+64+KUI_RAW_BYTES,KUI_RAW_BYTES))
+                    return fail(s,"Previously repaired sector or its backup changed; no complete result");
+            } else if(exists) {
+                if(stop(s) || !apply_patch(s,index))return false;
+            } else {
+                for(unsigned b=0;b<KUI_RAW_BYTES;++b)if(saved[b])
+                    return fail(s,"Unresolved placeholder changed without a durable repair candidate");
+            }
+            s->status->sd_done=index+1;update(s,false);
+        }
+        i+=count;
     }
     saved_check_end(s);
     snprintf(s->status->message,sizeof(s->status->message),"Saved-data checks complete; preparing disc repair");
     return true;
 }
+
 /* Publication remains one durable target at a time. A checked optical
  * candidate must survive the placeholder read before it becomes evidence. */
 static bool store_repair(struct salvage *s,unsigned index,const struct target *t,uint32_t expected) {
@@ -977,7 +1032,7 @@ enum kui_salvage_result kui_salvage_run(const struct kui_capture_plan *plan,cons
         s->collection_started=ops->now_ms?ops->now_ms(ops->ctx):0;status->collection_active=true;
         bool collected=first_pass(s);update(s,false);status->collection_active=false;
         s->read_failures=0; /* Collection failures do not seed repair reinitialization. */
-        if(!collected)goto done;
+        if(!collected || !sync_file(s,&s->index))goto done;
     }
     if(!repair(s) || !close_salvage_files(s))goto done;
     if(stop(s) || !finish(s))goto done;

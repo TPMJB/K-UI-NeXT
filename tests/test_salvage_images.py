@@ -12,6 +12,8 @@ from make_recovery_vectors import sector, mode2_sector
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = (
+    "burst-sd-media-error", "burst-sd-window",
+    "burst-sd-batched", "burst-sd-placeholder", "burst-sd-candidate", "burst-sd-staged-mutation", "burst-sd-short-read", "burst-sd-read-error", "burst-sd-after-read-stop", "burst-sd-boundary-stop", "burst-sd-pending",
     "burst-sd-progress", "burst-sd-journal-stop", "burst-sd-check-start-stop", "burst-sd-check-mid-stop",
     "burst-good", "burst-mixed", "burst-prefix", "burst-gaps", "burst-audio", "burst-boundaries", "burst-reverse", "burst-interior", "burst-all-bad", "burst-held-recovery", "burst-fatal", "burst-cancel-read", "burst-stop-before-read", "burst-stop-mid", "burst-stop-candidate", "burst-torn-repaired", "burst-staged-mutation",
     "partial-prefix", "partial-mixed", "partial-fill", "partial-audio", "partial-repair", "partial-repair-invalid", "partial-repair-streak", "partial-cd-mode1", "partial-cd-mode2",
@@ -172,7 +174,7 @@ def main():
                 if case in ("health-partial-reset","health-manual-skip"):
                     assert "health check after " not in output
                 for line in output.splitlines():
-                    if line.startswith(("PASS bounded worker allocations:","PASS repair optical reduction:")):
+                    if line.startswith(("PASS bounded worker allocations:","PASS repair optical reduction:","PASS saved check batching:")):
                         print(f"{kind}: {line}", flush=True)
                 if extra:
                     targets = {"cd-mixed":32,"cd-mode2":32,"cd-audio":32,"cd-profile-mismatch":32,"cd-offset":0,"auto-legacy-resume": 4, "anchor-interior": 40, "large-map": 8208, "finish-stop": 0,"fast-dense":288,"fast-invalid":2,"legacy-narrow-v1-resume":2,"legacy-narrow-v2-resume":2,"defer-range":34,"defer-tail":10,"defer-stop-before":34,"defer-stop-after":34,"defer-queue":34,"defer-torn":34,"defer-index":34,"defer-boundary":5}.get(case, 36)
@@ -181,7 +183,7 @@ def main():
                     if case.startswith("health-"):
                         targets=2560 if case in ("health-region","health-invalid","health-one-anchor","health-partial-anchors") else 479 if case=="health-partial-reset" else 256
                     if case.startswith("burst-"):
-                        targets={"burst-gaps":34,"burst-audio":4,"burst-boundaries":20}.get(case,512)
+                        targets={"burst-gaps":34,"burst-audio":4,"burst-boundaries":20,"burst-sd-window":508}.get(case,512)
                     check_verifier(exported, targets=targets)
                 assert f"PASS salvage {case}" in output
                 run("fsck.fat" if kind == "fat32" else "fsck.exfat", "-n", str(image))

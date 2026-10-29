@@ -42,6 +42,9 @@ static void burst_plan(void);
 static bool burst_optical(unsigned ti,uint32_t fad,unsigned count,uint8_t *data,enum kui_read_result *result);
 static void burst_progress(const struct kui_salvage_status *status);
 static void burst_event(unsigned type,const uint8_t *event);
+static bool saved_check_media_read(size_t count);
+static bool saved_check_read_error(FIL *file,void *data,UINT bytes,UINT *got,FRESULT *result);
+static void saved_check_read_result(FIL *file,void *data,UINT bytes,UINT *got,FRESULT result);
 static enum kui_salvage_result run_salvage(const struct kui_capture_plan *p,const struct kui_capture_ops *ops,
     const struct kui_salvage_options *options,enum kui_salvage_action action,struct kui_salvage_status *status) {
     unsigned before=test.reads;
@@ -94,7 +97,8 @@ static void log_line(const char *fmt,...) {va_list args;va_start(args,fmt);vprin
 static bool fault(const char *name) {return test.capturing && test.fault && !strcmp(test.fault,name) && !test.injected;}
 static uint64_t blocks(void *ctx) {(void)ctx;return test.blocks;}
 static int image_read(void *ctx,uint32_t block,size_t count,uint8_t *data) {
-    (void)ctx;return fseeko(test.image,(off_t)block*512,SEEK_SET) || fread(data,512,count,test.image)!=count?-1:0;
+    (void)ctx;if(burst_case() && saved_check_media_read(count))return -1;
+    return fseeko(test.image,(off_t)block*512,SEEK_SET) || fread(data,512,count,test.image)!=count?-1:0;
 }
 static int image_write(void *ctx,uint32_t block,size_t count,const uint8_t *data) {
     (void)ctx;++test.writes;return fseeko(test.image,(off_t)block*512,SEEK_SET) || fwrite(data,512,count,test.image)!=count?-1:0;
@@ -136,8 +140,10 @@ FRESULT __wrap_f_sync(FIL *file) {
 }
 FRESULT __real_f_read(FIL *,void *,UINT,UINT *);
 FRESULT __wrap_f_read(FIL *file,void *data,UINT bytes,UINT *got) {
+    FRESULT injected;if(burst_case() && saved_check_read_error(file,data,bytes,got,&injected))return injected;
     if(fault("readback-fail") && test.repairing && test.patch_started && bytes==KUI_RAW_BYTES) {test.injected=true;*got=0;return FR_DISK_ERR;}
     FRESULT result=__real_f_read(file,data,bytes,got);
+    if(burst_case())saved_check_read_result(file,data,bytes,got,result);
     if(fault("header-readback") && bytes==4096 && result==FR_OK) {test.injected=true;((uint8_t *)data)[42]^=1;}
     if(fault("journal-readback") && bytes==512 && result==FR_OK) {test.injected=true;((uint8_t *)data)[100]^=1;}
     if(fault("candidate-readback") && test.last_event==7 && bytes==512 && result==FR_OK) {test.injected=true;((uint8_t *)data)[100]^=1;}
