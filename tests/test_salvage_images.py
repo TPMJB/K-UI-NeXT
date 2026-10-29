@@ -12,6 +12,7 @@ from make_recovery_vectors import sector, mode2_sector
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = (
+    "burst-policy-yield-reset", "burst-policy-incomplete-resume", "burst-policy-ready-resume", "burst-policy-ready-recover", "burst-policy-ready-hard", "burst-policy-ready-stop", "burst-policy-ready-fatal",
     "burst-legacy-index", "burst-legacy-pending", "burst-legacy-missing", "burst-legacy-corrupt", "burst-legacy-noise", "burst-legacy-candidate-dir", "burst-legacy-scan-stop", "burst-legacy-scan-open-error", "burst-legacy-scan-read-error", "burst-legacy-scan-close-error", "burst-legacy-scan-sync-error", "burst-legacy-scan-index-error", "burst-legacy-scan-duplicate",
     "burst-sd-media-error", "burst-sd-window",
     "burst-sd-batched", "burst-sd-placeholder", "burst-sd-candidate", "burst-sd-staged-mutation", "burst-sd-short-read", "burst-sd-read-error", "burst-sd-after-read-stop", "burst-sd-boundary-stop", "burst-sd-pending",

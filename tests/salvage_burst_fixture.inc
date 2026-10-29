@@ -3,7 +3,7 @@
  * Optical reads, persisted bytes and target order are checked independently. */
 #define BURST_SECTORS 512u
 static struct {
-    bool holes[3][1024u],stop_ready,mutated,committed[1024];
+    bool holes[3][1024u],stop_ready,stop_collection,mutated,committed[1024];
     unsigned phase,targets,batches,singles,events,first_reverse_fad,first_reverse_count;
     unsigned target_track[1024],target_sector[1024],order[2048];
     uint8_t *first_batch;
@@ -125,6 +125,9 @@ static void burst_progress(const struct kui_salvage_status *status) {
     legacy_index_progress(status);
     saved_check_progress(status);
     if(burst.stop_ready && status->first_pass_complete && !status->pass) {test.cancelled=true;test.did_cancel=true;}
+    if(burst.stop_collection && status->collection_active && status->done>=76u*KUI_RAW_BYTES) {
+        test.cancelled=true;test.did_cancel=true;
+    }
     if(burst.phase==1 && !strcmp(test.test,"burst-stop-before-read") && status->pass &&
        status->read_state==KUI_SALVAGE_READ_READING && status->read_count>1) {
         test.cancelled=true;test.did_cancel=true;
@@ -167,6 +170,22 @@ static bool burst_optical(unsigned ti,uint32_t fad,unsigned count,uint8_t *data,
         if(s->pass==2 && !burst.first_reverse_count) {burst.first_reverse_fad=fad;burst.first_reverse_count=count;}
     } else ++burst.singles;
     if(burst.phase==2)return true;
+    /* A resumed ready queue must never submit the multi-sector command that
+     * failed to release firmware ownership in the hardware report. */
+    if(!strncmp(test.test,"burst-policy-ready-",19) && count>1) {
+        *result=KUI_READ_FATAL;return true;
+    }
+    if(!strcmp(test.test,"burst-policy-ready-hard")) {
+        memset(data,0xcc,(size_t)count*KUI_RAW_BYTES);*result=KUI_READ_RETRY;return true;
+    }
+    if(!strcmp(test.test,"burst-policy-ready-fatal") && at==5) {
+        *result=KUI_READ_FATAL;return true;
+    }
+    /* One yielding batch separates the first miss from the next two misses.
+     * Successful singleton fallbacks must not hide zero-yield batch history. */
+    if(!strcmp(test.test,"burst-policy-yield-reset") && count>1 && (at==0 || at==32 || at==48)) {
+        memset(data,0xcc,(size_t)count*KUI_RAW_BYTES);*result=KUI_READ_RETRY;return true;
+    }
     if(!strcmp(test.test,"burst-interior") && s->pass==1) {
         for(unsigned n=0;n<count;++n)if((at+n)%16u!=7u)memset(data+n*KUI_RAW_BYTES,0xa5,KUI_RAW_BYTES);
         *result=count>1?KUI_READ_PARTIAL:KUI_READ_RETRY;return true;
@@ -307,19 +326,33 @@ static void run_burst_fixture(char **argv,struct kui_capture_ops *ops,struct kui
         char path[1024];snprintf(path,sizeof(path),"%s/alternate-staged.raw",argv[2]);FILE *f=fopen(path,"rb");
         assert(f && fread(burst.alternate,1,KUI_RAW_BYTES,f)==KUI_RAW_BYTES && !fclose(f));
     }
-    burst.stop_ready=true;test.healthy=true;ops->now_ms=NULL;
-    struct kui_salvage_status status;assert(run_salvage(&plan,ops,options,KUI_SALVAGE_NEW,&status)==KUI_SALVAGE_STOPPED);
-    assert(status.first_pass_complete && !status.recovered && status.targets==burst.targets);
-    char job[KUI_DEST_JOB_CAP];strcpy(job,status.job);options->job=job;
-    assert(!burst_inspect(job,false));
-    burst.stop_ready=false;burst.phase=1;test.cancelled=false;test.repairing=true;
+    test.healthy=true;ops->now_ms=NULL;
+    bool ready_policy=!strncmp(test.test,"burst-policy-ready-",19);
+    bool incomplete_resume=!strcmp(test.test,"burst-policy-incomplete-resume");
+    bool seed_ready=saved_check_case() || legacy_index_case() || ready_policy;
+    struct kui_salvage_status status;char job[KUI_DEST_JOB_CAP];
+    enum kui_salvage_action action=KUI_SALVAGE_NEW;
+    if(seed_ready || incomplete_resume) {
+        burst.stop_ready=seed_ready;burst.stop_collection=incomplete_resume;
+        assert(run_salvage(&plan,ops,options,KUI_SALVAGE_NEW,&status)==KUI_SALVAGE_STOPPED);
+        assert(!status.recovered && status.targets==(incomplete_resume?32u:burst.targets));
+        assert(status.first_pass_complete==seed_ready);
+        strcpy(job,status.job);options->job=job;
+        if(seed_ready)assert(!burst_inspect(job,false));
+        burst.stop_ready=burst.stop_collection=false;test.cancelled=false;
+        action=!strcmp(test.test,"burst-policy-ready-recover")?KUI_SALVAGE_RECOVER:KUI_SALVAGE_RESUME;
+    }
+    burst.phase=1;test.repairing=true;
     if(saved_check_case()) {run_saved_check_fixture(job,ops,options);return;}
     if(legacy_index_case()) {run_legacy_index_fixture(job,ops,options);return;}
     if(!strcmp(test.test,"burst-reverse") || !strcmp(test.test,"burst-interior"))options->passes=5;
     if(!strcmp(test.test,"burst-held-recovery"))ops->recover=recover;
-    if(!strcmp(test.test,"burst-stop-mid"))test.stop_after=5;
+    if(!strcmp(test.test,"burst-stop-mid") || !strcmp(test.test,"burst-policy-ready-stop"))test.stop_after=5;
     if(!strcmp(test.test,"burst-torn-repaired"))test.fault="torn-repaired";
-    enum kui_salvage_result result=run_salvage(&plan,ops,options,KUI_SALVAGE_RESUME,&status);
+    /* Fresh/incomplete-collection cases retain batch validator and mutation
+     * coverage; ready Resume/Recover cases exercise the singleton policy. */
+    enum kui_salvage_result result=run_salvage(&plan,ops,options,action,&status);
+    if(action==KUI_SALVAGE_NEW) {strcpy(job,status.job);options->job=job;}
     if(!strcmp(test.test,"burst-good")) {
         assert(result==KUI_SALVAGE_RESOLVED && burst.batches==32 && !burst.singles);
         assert(status.repair_batches==32 && !status.repair_singles && status.repair_batch_accepted==512 && !status.repair_single_accepted);
@@ -337,9 +370,18 @@ static void run_burst_fixture(char **argv,struct kui_capture_ops *ops,struct kui
         assert(!status.repair_batches && status.repair_singles==8 && status.repair_single_accepted==4);
     } else if(!strcmp(test.test,"burst-boundaries")) {
         assert(result==KUI_SALVAGE_RESOLVED && burst.targets==20 && burst.batches==2 && burst.singles==8);
+    } else if(!strcmp(test.test,"burst-policy-yield-reset")) {
+        assert(result==KUI_SALVAGE_RESOLVED && burst.batches==4 && burst.singles==496);
+        assert(status.repair_batch_accepted==16 && status.repair_single_accepted==496);
+    } else if(!strcmp(test.test,"burst-policy-incomplete-resume")) {
+        assert(result==KUI_SALVAGE_RESOLVED && burst.batches==32 && !burst.singles);
+        assert(status.collected_this_run==(BURST_SECTORS-32u)*KUI_RAW_BYTES);
+    } else if(!strcmp(test.test,"burst-policy-ready-resume") || !strcmp(test.test,"burst-policy-ready-recover")) {
+        assert(result==KUI_SALVAGE_RESOLVED && !burst.batches && burst.singles==BURST_SECTORS);
+        assert(!status.repair_batches && status.repair_singles==BURST_SECTORS && !status.repair_batch_accepted);
     } else if(!strcmp(test.test,"burst-reverse")) {
-        assert(result==KUI_SALVAGE_RESOLVED && status.pass==2 && burst.batches==62 && burst.singles==480 && burst.events==512);
-        assert(burst.first_reverse_fad==45150+496 && burst.first_reverse_count==16);
+        assert(result==KUI_SALVAGE_RESOLVED && status.pass==2 && burst.batches==4 && burst.singles==960 && burst.events==512);
+        assert(!burst.first_reverse_fad && !burst.first_reverse_count);
         for(unsigned i=0;i<512;++i)assert(burst.order[i]==(i<32?i:543-i));
     } else if(!strcmp(test.test,"burst-interior")) {
         assert(result==KUI_SALVAGE_RESOLVED && status.pass==2 && burst.batches==65 && burst.singles==480 && burst.events==512);
@@ -348,10 +390,13 @@ static void run_burst_fixture(char **argv,struct kui_capture_ops *ops,struct kui
         unsigned at=32;for(unsigned n=512;n--;)if(n%16u!=7u)assert(burst.order[at++]==n);
         assert(at==512);
     } else {
-        bool unresolved=!strcmp(test.test,"burst-all-bad") || !strcmp(test.test,"burst-held-recovery");
-        bool failed=!strcmp(test.test,"burst-fatal") || !strcmp(test.test,"burst-torn-repaired") || !strcmp(test.test,"burst-staged-mutation");
+        bool unresolved=!strcmp(test.test,"burst-all-bad") || !strcmp(test.test,"burst-held-recovery") || !strcmp(test.test,"burst-policy-ready-hard");
+        bool failed=!strcmp(test.test,"burst-fatal") || !strcmp(test.test,"burst-torn-repaired") || !strcmp(test.test,"burst-staged-mutation") || !strcmp(test.test,"burst-policy-ready-fatal");
         assert(result==(unresolved?KUI_SALVAGE_UNRESOLVED:failed?KUI_SALVAGE_FAILED:KUI_SALVAGE_STOPPED) && !status.complete);
-        if(!strcmp(test.test,"burst-all-bad"))assert(!status.recovered && burst.batches==32 && burst.singles==512);
+        if(!strcmp(test.test,"burst-all-bad"))assert(!status.recovered && status.remaining==512 && burst.batches==2 && burst.singles==512);
+        if(!strcmp(test.test,"burst-policy-ready-hard"))assert(!status.recovered && status.remaining==512 && !burst.batches && burst.singles==512);
+        if(!strcmp(test.test,"burst-policy-ready-stop"))assert(status.recovered==5 && !burst.batches && burst.singles==5);
+        if(!strcmp(test.test,"burst-policy-ready-fatal"))assert(status.recovered==5 && !burst.batches && burst.singles==6);
         if(!strcmp(test.test,"burst-held-recovery"))assert(status.recovered==504 && status.remaining==8 && burst.batches==32 && burst.singles==8 && test.recoveries==1);
         if(!strcmp(test.test,"burst-fatal") || !strcmp(test.test,"burst-cancel-read"))assert(!status.recovered && burst.batches==1 && !burst.singles);
         if(!strcmp(test.test,"burst-stop-before-read"))assert(!status.recovered && !burst.batches && !burst.singles);
@@ -363,6 +408,7 @@ static void run_burst_fixture(char **argv,struct kui_capture_ops *ops,struct kui
         burst.phase=2;burst.batches=burst.singles=0;burst.first_batch=NULL;
         test.cancelled=false;test.stop_after=0;test.fault=NULL;options->passes=1;
         result=run_salvage(&plan,ops,options,KUI_SALVAGE_RESUME,&status);
+        assert(!burst.batches && !status.repair_batches); /* Resume does not restart burst probing. */
     }
     assert(result==KUI_SALVAGE_RESOLVED && status.complete && status.targets==burst.targets && status.recovered==burst.targets && !status.remaining);
     test.capturing=false;compare_complete(job);

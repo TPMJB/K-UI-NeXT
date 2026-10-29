@@ -30,7 +30,8 @@ struct salvage {
     struct kui_salvage_status *status;
     uint32_t sectors[99], crc[99], baseline[99];
     bool baselined[99], failed, journal_open, index_open, ready, completed, packed, identified, recovering, legacy_indexed;
-    unsigned read_failures,collection_bad_ranges,collection_health_at,collection_issue_ranges;
+    bool repair_batching;
+    unsigned read_failures,collection_bad_ranges,collection_health_at,collection_issue_ranges,zero_yield_batches;
     unsigned target_count,recovered_count,patch_count,pending_count;
     uint32_t pending[CHUNK];
     uint64_t sequence,started,last_progress,pending_offset,collection_base,collection_started;
@@ -924,9 +925,13 @@ static bool repair_group(struct salvage *s,const unsigned *indices,const struct 
             if(!sector_check(s,raw,fad+slot)) {valid[slot]=true;crc[slot]=kui_crc32(0,raw,KUI_RAW_BYTES);++accepted;}
         }
         s->status->repair_batch_accepted+=accepted;
-        if(accepted)s->read_failures=0;
+        if(accepted) {s->read_failures=0;s->zero_yield_batches=0;}
         else if(r==KUI_READ_PARTIAL && !retry_recovery(s))return false;
         if(s->failed || stop(s))return false;
+        if(!accepted && s->repair_batching && ++s->zero_yield_batches>=2u) {
+            s->repair_batching=false;
+            s->ops->log("Salvage repair policy: 2 zero-yield batches; singles for rest of run");
+        }
         read_outcome(s,accepted==count?KUI_SALVAGE_READ_ACCEPTED:KUI_SALVAGE_READ_DEFERRED);
     }
     for(unsigned j=0;j<count;++j) {
@@ -952,6 +957,9 @@ static bool repair_group(struct salvage *s,const unsigned *indices,const struct 
 }
 static bool repair(struct salvage *s) {
     bool ok=false;update(s,true);
+    s->ops->log("Salvage repair policy: %s",s->repair_batching?
+        "initial batches; stop after 2 zero-yield batches":
+        "singleton targets (saved collection complete)");
     if(!s->status->remaining) {ok=true;goto done;}
     for(unsigned pass=1;;++pass) {
         s->status->pass=pass;unsigned unresolved=0;bool forward=(pass&1)!=0;
@@ -963,7 +971,7 @@ static bool repair(struct salvage *s) {
             if(!target_get(s,indices[0],&targets[0]))goto done;
             if(targets[0].repaired) {++n;continue;}
             if(stop(s))goto done;
-            if(s->plan->tracks[targets[0].track].control==4) {
+            if(s->repair_batching && s->plan->tracks[targets[0].track].control==4) {
                 while(count<REPAIR_CHUNK && n+count<s->target_count) {
                     unsigned next=forward?n+count:s->target_count-1-(n+count);struct target t;
                     if(!target_get(s,next,&t))goto done;
@@ -1082,7 +1090,7 @@ enum kui_salvage_result kui_salvage_run(const struct kui_capture_plan *plan,cons
     struct salvage *s=calloc(1,sizeof(*s));if(!s) {snprintf(status->message,sizeof(status->message),"Not enough memory for bounded salvage state");return status->result;}
     s->plan=plan;s->ops=ops;s->options=options;s->status=status;status->tracks=plan->count;status->total=plan->bytes;status->pass_limit=options->passes;
     s->started=ops->now_ms?ops->now_ms(ops->ctx):0;
-    FATFS fs;bool mounted=false,ok=false;
+    FATFS fs;bool mounted=false,ok=false,ready_at_admission=false;
     if(stop(s))goto done;
     if(action==KUI_SALVAGE_NEW && !make_header(s))goto done;
     if(!kui_mount(&fs,ops->log)) {fail(s,"Cannot mount SD card for salvage");goto done;}mounted=true;
@@ -1092,6 +1100,10 @@ enum kui_salvage_result kui_salvage_run(const struct kui_capture_plan *plan,cons
         fail(s,"Saved storage reads were unstable; complete reread evidence before salvage resumes");goto done;
     }
     if(stop(s) || !open_journal(s,action==KUI_SALVAGE_NEW) || !check_lengths(s))goto done;
+    /* An already collected job resumes with targeted singleton reads. An
+     * invocation that still needs collection keeps the initial opportunity to
+     * rescue neighboring sectors together before harder singleton work. */
+    ready_at_admission=s->ready;s->repair_batching=!ready_at_admission;
     if(options->defer_next_range) {
         bool remaining=false;
         for(unsigned i=0;i<plan->count;++i)if(s->sectors[i]<plan->tracks[i].end-plan->tracks[i].start)remaining=true;

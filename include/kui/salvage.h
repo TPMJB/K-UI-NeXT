@@ -74,13 +74,16 @@ struct kui_salvage_options {
 /* NEW finds identity with one probe per prospective candidate (two matching
  * reads for audio), then collects readable sectors and records holes durably.
  * The stronger exact saved-anchor retry budget applies to Resume/latest.
- * It then automatically runs alternating targeted recovery sweeps. Adjacent
- * unresolved data targets use one range read for up to 16 sectors, retaining
- * only independently checked slots. Each unverified slot gets at most one
- * singleton fallback that pass. Isolated targets use one singleton attempt;
- * audio retains its two successful matching reads without batching. Separate
- * staging preserves checked batch slots across fallback/recovery/publication.
- * RESUME
+ * It then automatically runs alternating targeted recovery sweeps. An invocation
+ * that begins with unfinished collection can first rescue adjacent unresolved
+ * data targets with one range read for up to 16 sectors, retaining only
+ * independently checked slots. Each unverified slot gets at most one singleton
+ * fallback that pass. Two consecutive batches with no validated sector disable
+ * batching for the rest of that invocation; a positive batch resets the count.
+ * RESUME/RECOVER of an already collected job use singleton targeted reads from
+ * the start. Isolated targets use one singleton attempt; audio retains its two
+ * successful matching reads without batching. Separate staging preserves
+ * checked batch slots across fallback/recovery/publication. RESUME
  * continues collection and recovery, including jobs with the legacy OFF flag.
  * RECOVER runs additional sweeps after a completed first pass. passes=0 keeps
  * trying until all targets resolve, cancellation or an operational failure.

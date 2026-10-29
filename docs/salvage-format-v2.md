@@ -128,6 +128,18 @@ Every unresolved sector is durably declared before its zero placeholder is
 committed. Later recovery uses checked data batches and bounded singleton
 fallbacks; audio candidates retain their matching-read requirement.
 
+The initial recovery after collection can read up to 16 adjacent unresolved data
+sectors together. Two consecutive batches yielding no validated sectors disable
+further batch reads for that invocation, including later sweeps. A batch with at
+least one validated sector resets that consecutive count until batching has been
+disabled. Each unverified slot still receives its bounded singleton fallback.
+Resuming or explicitly recovering an already-collected job uses singleton reads
+throughout. This avoids repeatedly probing known trouble spots as large ranges;
+it also applies to a job stopped immediately after collection. Resuming an
+unfinished collection retains the initial adaptive recovery policy when its
+collection finishes. These choices are transient: the header, journal and
+candidate formats and all sector-validation and publication rules are unchanged.
+
 Completion reconstructs each track CRC from the immutable baseline and repaired
 target CRCs. This loop remains cancellable. Only after all targets resolve and
 the COMPLETE journal event succeeds does the engine expose `final_crc[99]` and
