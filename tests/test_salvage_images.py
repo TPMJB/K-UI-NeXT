@@ -12,6 +12,9 @@ from make_recovery_vectors import sector, mode2_sector
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = (
+    "burst-sd-patch-transient", "burst-sd-patch-index", "burst-sd-patch-repeat",
+    "burst-sd-patch-primary-error", "burst-sd-patch-reopen-error", "burst-sd-patch-fresh-error",
+    "burst-sd-patch-fresh-short", "burst-sd-patch-fresh-cancel",
     "trial-balanced", "trial-single", "trial-invalid-selection", "trial-partial", "trial-all-bad", "trial-invalid-partial", "trial-unsupported", "trial-two-profiles", "trial-profile-lost",
     "trial-qualify-fail", "trial-qualify-skip", "trial-identity-mismatch", "trial-select-fatal", "trial-fatal", "trial-conflict",
     "trial-stop-read", "trial-stop-qualification", "trial-select-stop", "trial-stop-before-read", "trial-budget",
@@ -173,6 +176,8 @@ def main():
                     exported.mkdir()
                     extra = [str(exported)]
                 selected_fixture = cd_fixtures.get(case,trial_fixture if case.startswith("trial-") else legacy_fixture if case.startswith("burst-legacy-") else burst_fixture if case.startswith("burst-") else health_fixture if case.startswith("health-") else defer_fixture if case.startswith("defer-") and case!="defer-tail" else fast_fixture if case=="fast-dense" else large_fixture if case == "large-map" else fixture)
+                if case.startswith("burst-sd-patch-"):
+                    extra = []  # These failed diagnostic runs intentionally retain an incomplete job.
                 output = run(str(args.binary), str(image), str(selected_fixture), case, *extra)
                 if case in ("partial-prefix","partial-cd-mode1","partial-cd-mode2"):
                     assert "transport=partial accepted=11 unverified=21" in output
@@ -187,7 +192,7 @@ def main():
                 if case in ("health-partial-reset","health-manual-skip"):
                     assert "health check after " not in output
                 for line in output.splitlines():
-                    if line.startswith(("PASS bounded worker allocations:","PASS repair optical reduction:","PASS saved check batching:","PASS legacy candidate index:")):
+                    if line.startswith(("PASS bounded worker allocations:","PASS repair optical reduction:","PASS saved check batching:","PASS legacy candidate index:","PASS saved candidate diagnostics:")):
                         print(f"{kind}: {line}", flush=True)
                 if extra:
                     targets = {"cd-mixed":32,"cd-mode2":32,"cd-audio":32,"cd-profile-mismatch":32,"cd-offset":0,"auto-legacy-resume": 4, "anchor-interior": 40, "large-map": 8208, "finish-stop": 0,"fast-dense":288,"fast-invalid":2,"legacy-narrow-v1-resume":2,"legacy-narrow-v2-resume":2,"defer-range":34,"defer-tail":10,"defer-stop-before":34,"defer-stop-after":34,"defer-queue":34,"defer-torn":34,"defer-index":34,"defer-boundary":5}.get(case, 36)

@@ -39,7 +39,10 @@ struct salvage {
     bool track_open,packed_open,track_write,packed_write;
     unsigned open_track;
     DWORD track_map_small[32],*track_map_heap;
-    uint8_t header[HEADER_BYTES], event[EVENT_BYTES], patch[PATCH_BYTES];
+    uint8_t header[HEADER_BYTES], event[EVENT_BYTES];
+    /* calloc need not return a 32-byte-aligned object. Align the candidate
+     * buffer inside owned padding, including when heap placement changes. */
+    uint8_t patch_storage[PATCH_BYTES+31u], *patch;
     /* Reconciliation stages a sector-aligned SD window into a 32-byte-aligned
      * address inside data; leading/trailing SD bytes and pointer rounding fit
      * in this bounded padding without a separate allocation. */
@@ -712,17 +715,75 @@ static bool first_pass(struct salvage *s) {
     s->ready=true;update(s,true);return true;
 }
 static unsigned patch_bytes(struct salvage *s) {return s->packed?PACKED_PATCH_BYTES:PATCH_BYTES;}
+static const char *patch_problem(struct salvage *s,unsigned index,const struct target *t) {
+    const uint8_t *p=s->patch;unsigned bytes=patch_bytes(s);
+    if(memcmp(p,s->packed?"KUISPAT2":"KUISPAT1",8))return "magic/version";
+    if(get32(p+8)!=index)return "target index";
+    if(get32(p+12)!=t->track)return "track";
+    if(get32(p+16)!=t->sector)return "sector";
+    if(get32(p+20)!=(s->plan->tracks[t->track].control==4?1u:2u))return "evidence type";
+    if(memcmp(p+32,s->identity,32))return "job identity";
+    if(get32(p+bytes-4)!=kui_crc32(0,p,bytes-4))return "record CRC";
+    for(unsigned i=64;i<64+KUI_RAW_BYTES;++i)if(p[i])return "nonzero baseline";
+    if(get32(p+24)!=kui_crc32(0,p+64,KUI_RAW_BYTES))return "baseline CRC";
+    if(get32(p+28)!=kui_crc32(0,p+64+KUI_RAW_BYTES,KUI_RAW_BYTES))return "payload CRC";
+    for(unsigned i=64+2*KUI_RAW_BYTES;i<bytes-4;++i)if(p[i])return "reserved bytes";
+    if(s->plan->tracks[t->track].control==4 && sector_check(s,p+64+KUI_RAW_BYTES,s->plan->tracks[t->track].start+t->sector))return "sector validation";
+    return NULL;
+}
+static void patch_report(struct salvage *s,unsigned index,const struct target *t,const char *phase,const char *problem) {
+    const uint8_t *p=s->patch;unsigned bytes=patch_bytes(s);char expected[65],observed[65];
+    kui_hex(s->identity,32,expected);kui_hex(p+32,32,observed);
+    s->ops->log("Salvage candidate %s: target=%u slot=%" PRIu32 " offset=%" PRIu64 " FAD=%" PRIu32 " problem=%s",
+        phase,index,t->patch_slot,(uint64_t)t->patch_slot*PACKED_PATCH_BYTES,
+        s->plan->tracks[t->track].start+t->sector,problem?problem:"none");
+    s->ops->log("Candidate fields expected index/track/sector/type=%u/%" PRIu32 "/%" PRIu32 "/%u got=%" PRIu32 "/%" PRIu32 "/%" PRIu32 "/%" PRIu32,
+        index,t->track,t->sector,s->plan->tracks[t->track].control==4?1u:2u,
+        get32(p+8),get32(p+12),get32(p+16),get32(p+20));
+    s->ops->log("Candidate CRC record stored=%08" PRIx32 " read=%08" PRIx32 " payload stored=%08" PRIx32 " read=%08" PRIx32 " journal=%08" PRIx32,
+        get32(p+bytes-4),kui_crc32(0,p,bytes-4),get32(p+28),kui_crc32(0,p+64+KUI_RAW_BYTES,KUI_RAW_BYTES),t->crc);
+    s->ops->log("Candidate identity expected=%s got=%s; buffer alignment=%u",
+        expected,observed,(unsigned)((uintptr_t)p&31u));
+}
 static bool patch_valid(struct salvage *s,unsigned index) {
     struct target target;if(!target_get(s,index,&target))return false;
-    const struct target *t=&target;const uint8_t *p=s->patch;unsigned bytes=patch_bytes(s);
-    if(memcmp(p,s->packed?"KUISPAT2":"KUISPAT1",8) || get32(p+8)!=index || get32(p+12)!=t->track || get32(p+16)!=t->sector ||
-       get32(p+20)!=(s->plan->tracks[t->track].control==4?1u:2u) || memcmp(p+32,s->identity,32) ||
-       get32(p+bytes-4)!=kui_crc32(0,p,bytes-4))return fail(s,"Invalid published sector backup/candidate; refusing repair");
-    for(unsigned i=64;i<64+KUI_RAW_BYTES;++i)if(p[i])return fail(s,"Sector backup disagrees with the immutable zero baseline");
-    if(get32(p+24)!=kui_crc32(0,p+64,KUI_RAW_BYTES) || get32(p+28)!=kui_crc32(0,p+64+KUI_RAW_BYTES,KUI_RAW_BYTES))return fail(s,"Sector backup CRC mismatch");
-    for(unsigned i=64+2*KUI_RAW_BYTES;i<bytes-4;++i)if(p[i])return fail(s,"Unknown sector backup fields");
-    if(s->plan->tracks[t->track].control==4 && sector_check(s,p+64+KUI_RAW_BYTES,s->plan->tracks[t->track].start+t->sector))return fail(s,"Stored repair candidate no longer passes Mode 1 checks");
+    const char *problem=patch_problem(s,index,&target);
+    if(problem) {
+        patch_report(s,index,&target,"validation",problem);
+        return fail(s,"Invalid published sector backup/candidate; refusing repair");
+    }
     return true;
+}
+/* A successful I/O with invalid evidence is diagnosed once through a fresh
+ * read-only handle and sector-sized, aligned reads. This is never an alternate
+ * admission route: even a fully valid reread stops this invocation. Differing
+ * saved bytes retain the existing full-repeat-scan quarantine requirement. */
+static bool diagnose_packed_candidate(struct salvage *s,unsigned index,const struct target *t,const char *problem) {
+    patch_report(s,index,t,"initial",problem);
+    memcpy(s->repair_data,s->patch,PACKED_PATCH_BYTES);
+    s->packed_open=false;s->packed_write=false;
+    if(!io_close(s,&s->packed_file,true) || stop(s))return false;
+    FIL *f=cached_packed(s,false);if(!f)return false;
+    uint64_t offset=(uint64_t)t->patch_slot*PACKED_PATCH_BYTES;
+    if(f_size(f)<offset+PACKED_PATCH_BYTES)return fail(s,"Published candidate file shortened during diagnostic reread");
+    if(!seek(s,f,offset))return false;
+    for(unsigned at=0;at<PACKED_PATCH_BYTES;at+=512u) {
+        if(stop(s) || !read_exact(s,f,s->patch+at,512u))return false;
+    }
+    if(stop(s))return false;
+    const char *again=patch_problem(s,index,t);
+    if(!again && get32(s->patch+28)!=t->crc)again="journal candidate CRC";
+    patch_report(s,index,t,"fresh sector reread",again);
+    unsigned changed=0;
+    while(changed<PACKED_PATCH_BYTES && s->patch[changed]==s->repair_data[changed])++changed;
+    if(changed<PACKED_PATCH_BYTES) {
+        s->ops->log("Saved candidate reads differ at record byte=%u first=%02x reread=%02x; repair remains stopped",
+            changed,(unsigned)s->repair_data[changed],(unsigned)s->patch[changed]);
+        if(!kui_recovery_guard_mark(s->status->job,s->ops->log))
+            return fail(s,"Saved candidate reads differ; cannot save quarantine; preserve this job");
+        return fail(s,"Saved candidate reads differ; full CRC repeat-read scan required");
+    }
+    return fail(s,"Invalid published sector backup/candidate; fresh reread agrees; refusing repair");
 }
 static bool reconcile_patch_tail(struct salvage *s) {
     if(!s->packed)return true;
@@ -742,7 +803,15 @@ static bool load_patch(struct salvage *s,unsigned index,bool *exists) {
         *exists=t.patch_slot!=NO_PATCH;if(!*exists)return true;
         FIL *f=cached_packed(s,false);if(!f)return false;
         bool ok=seek(s,f,(uint64_t)t.patch_slot*PACKED_PATCH_BYTES) && read_exact(s,f,s->patch,PACKED_PATCH_BYTES);
-        if(ok)ok=patch_valid(s,index) && get32(s->patch+28)==t.crc;
+        if(ok) {
+            struct target checked;if(!target_get(s,index,&checked))return false;
+            if(checked.track!=t.track || checked.sector!=t.sector || checked.patch_slot!=t.patch_slot ||
+               checked.crc!=t.crc || checked.repaired!=t.repaired)
+                return fail(s,"Derived candidate target changed during saved read");
+            const char *problem=patch_problem(s,index,&checked);
+            if(!problem && get32(s->patch+28)!=checked.crc)problem="journal candidate CRC";
+            if(problem)return diagnose_packed_candidate(s,index,&checked,problem);
+        }
         if(!ok && !s->failed)fail(s,"Packed candidate differs from its durable publication");
         return ok;
     }
@@ -1091,6 +1160,7 @@ enum kui_salvage_result kui_salvage_run(const struct kui_capture_plan *plan,cons
         snprintf(status->message,sizeof(status->message),"Invalid salvage request or pass limit");return status->result;
     }
     struct salvage *s=calloc(1,sizeof(*s));if(!s) {snprintf(status->message,sizeof(status->message),"Not enough memory for bounded salvage state");return status->result;}
+    s->patch=(uint8_t *)(((uintptr_t)s->patch_storage+31u)&~(uintptr_t)31u);
     s->plan=plan;s->ops=ops;s->options=options;s->status=status;status->tracks=plan->count;status->total=plan->bytes;status->pass_limit=options->passes;
     s->started=ops->now_ms?ops->now_ms(ops->ctx):0;
     FATFS fs;bool mounted=false,ok=false,ready_at_admission=false;

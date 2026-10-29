@@ -40,6 +40,8 @@ static void burst_plan(void) {
 static struct {
     bool active,journal_seen,targets_seen,seed_candidate,pending_applied,injected,stage_mutated,clipped_tail,track_io;
     unsigned cancel_mode,reads,track_reads,largest_read;
+    unsigned patch_reads,patch_reopens,patch_fresh_reads;
+    bool patch_fault;
     uint64_t journal_done,target_done,media_calls,media_blocks;
     uint8_t *stage;
     unsigned stage_bytes;
@@ -47,6 +49,21 @@ static struct {
 static bool saved_check_case(void) {return !strncmp(test.test,"burst-sd-",9);}
 static bool saved_check_targets(void) {
     return saved_check.active && active_status && active_status->sd_phase==KUI_SALVAGE_SD_TARGETS;
+}
+static bool saved_patch_case(void) {return !strncmp(test.test,"burst-sd-patch-",15);}
+FRESULT __real_f_open(FIL *,const TCHAR *,BYTE);
+FRESULT __wrap_f_open(FIL *file,const TCHAR *name,BYTE mode) {
+    if(saved_check_targets() && saved_patch_case() && saved_check.injected &&
+       strstr(name,"/patches.bin") && !(mode&FA_WRITE)) {
+        ++saved_check.patch_reopens;
+        if(!strcmp(test.test,"burst-sd-patch-reopen-error")) {
+            saved_check.patch_fault=true;return FR_DISK_ERR;
+        }
+    }
+    return __real_f_open(file,name,mode);
+}
+static bool saved_patch_file(FIL *file) {
+    return saved_check_targets() && saved_patch_case() && active_status->sd_done==4 && f_size(file)==5u*5120u;
 }
 static bool saved_check_media_read(size_t count) {
     if(!saved_check_targets())return false;
@@ -61,6 +78,12 @@ static bool saved_check_track_file(FIL *file,UINT bytes) {
         f_size(file)==(uint64_t)(plan.tracks[2].end-plan.tracks[2].start)*KUI_RAW_BYTES;
 }
 static bool saved_check_read_error(FIL *file,void *data,UINT bytes,UINT *got,FRESULT *result) {
+    if(saved_patch_file(file) &&
+       ((!saved_check.injected && bytes==5120u && !strcmp(test.test,"burst-sd-patch-primary-error")) ||
+        (saved_check.injected && bytes==512u && !strcmp(test.test,"burst-sd-patch-fresh-error")))) {
+        saved_check.injected=true;saved_check.patch_fault=true;
+        *got=0;*result=FR_DISK_ERR;return true;
+    }
     saved_check.track_io=saved_check_track_file(file,bytes);
     if(!saved_check.track_io)return false;
     ++saved_check.track_reads;if(bytes>saved_check.largest_read)saved_check.largest_read=bytes;
@@ -76,6 +99,22 @@ static bool saved_check_read_error(FIL *file,void *data,UINT bytes,UINT *got,FRE
 }
 static void saved_check_read_result(FIL *file,void *data,UINT bytes,UINT *got,FRESULT result) {
     saved_check.track_io=false;
+    if(saved_patch_file(file) && result==FR_OK && *got==bytes) {
+        if(bytes==5120u) {
+            ++saved_check.patch_reads;assert(!saved_check.injected && !((uintptr_t)data%32u));
+            saved_check.injected=true;
+            uint8_t *p=data;
+            if(!strcmp(test.test,"burst-sd-patch-index")) {
+                put32(p+8,5);put32(p+bytes-4,kui_crc32(0,p,bytes-4));
+            } else p[0]^=1;
+        } else if(bytes==512u && saved_check.injected) {
+            ++saved_check.patch_fresh_reads;assert(!((uintptr_t)data%32u));
+            if(!strcmp(test.test,"burst-sd-patch-repeat") && f_tell(file)==4u*5120u+512u)
+                ((uint8_t *)data)[0]^=1;
+            if(!strcmp(test.test,"burst-sd-patch-fresh-short")) {--*got;saved_check.patch_fault=true;}
+            if(!strcmp(test.test,"burst-sd-patch-fresh-cancel"))test.cancelled=true;
+        }
+    }
     if(!saved_check_track_file(file,bytes) || result!=FR_OK || *got!=bytes)return;
     if(bytes>KUI_RAW_BYTES) {
         if(bytes%512u) {assert(f_tell(file)==f_size(file));saved_check.clipped_tail=true;}
@@ -254,12 +293,26 @@ static void saved_check_edit(const char *job,const char *name,uint64_t offset,ui
     else assert(f_read(&file,bytes,size,&count)==FR_OK && count==size);
     assert(f_close(&file)==FR_OK && f_mount(NULL,"0:",0)==FR_OK);
 }
+static uint32_t saved_file_fingerprint(const char *job,const char *name,uint64_t *length) {
+    remount();char path[512];FIL file;uint8_t bytes[4096];UINT got;uint32_t crc=0;
+    snprintf(path,sizeof(path),"0:%s/%s",job,name);assert(f_open(&file,path,FA_READ)==FR_OK);
+    *length=f_size(&file);
+    while(f_tell(&file)<f_size(&file)) {
+        UINT count=f_size(&file)-f_tell(&file)>sizeof(bytes)?sizeof(bytes):(UINT)(f_size(&file)-f_tell(&file));
+        assert(f_read(&file,bytes,count,&got)==FR_OK && got==count);crc=kui_crc32(crc,bytes,count);
+    }
+    assert(f_close(&file)==FR_OK && f_mount(NULL,"0:",0)==FR_OK);return crc;
+}
 static void run_saved_check_fixture(const char *job,struct kui_capture_ops *ops,struct kui_salvage_options *options) {
     struct kui_salvage_status status;
     test.stop_after=5;
     assert(run_salvage(&plan,ops,options,KUI_SALVAGE_RESUME,&status)==KUI_SALVAGE_STOPPED && status.recovered==5);
     assert(burst_inspect(job,false)==5);
     test.stop_after=0;test.cancelled=false;
+    const char *preserved[]={"header.bin","journal.bin","patches.bin"};
+    uint32_t preserved_crc[3]={0};uint64_t preserved_length[3]={0};
+    if(saved_patch_case())for(unsigned i=0;i<3;++i)
+        preserved_crc[i]=saved_file_fingerprint(job,preserved[i],&preserved_length[i]);
     if(!strcmp(test.test,"burst-sd-pending")) {
         saved_check.seed_candidate=true;
         assert(run_salvage(&plan,ops,options,KUI_SALVAGE_RESUME,&status)==KUI_SALVAGE_STOPPED && status.recovered==5);
@@ -288,6 +341,35 @@ static void run_saved_check_fixture(const char *job,struct kui_capture_ops *ops,
         !strcmp(test.test,"burst-sd-short-read") || !strcmp(test.test,"burst-sd-read-error") || !strcmp(test.test,"burst-sd-media-error");
     unsigned batches=burst.batches,singles=burst.singles;
     enum kui_salvage_result result=run_salvage(&plan,ops,options,KUI_SALVAGE_RESUME,&status);
+    if(saved_patch_case()) {
+        bool cancelled=!strcmp(test.test,"burst-sd-patch-fresh-cancel");
+        bool unstable=!strcmp(test.test,"burst-sd-patch-transient") || !strcmp(test.test,"burst-sd-patch-index");
+        assert(saved_check.injected && result==(cancelled?KUI_SALVAGE_STOPPED:KUI_SALVAGE_FAILED));
+        assert(!status.complete && !status.pass && status.recovered==5 && status.remaining==burst.targets-5);
+        assert(saved_check.target_done==4 && burst.batches==batches && burst.singles==singles);
+        if(!strcmp(test.test,"burst-sd-patch-primary-error"))assert(!saved_check.patch_reads && !saved_check.patch_reopens);
+        else assert(saved_check.patch_reads==1 && saved_check.patch_reopens==1);
+        if(unstable || !strcmp(test.test,"burst-sd-patch-repeat"))assert(saved_check.patch_fresh_reads==10);
+        if(cancelled || !strcmp(test.test,"burst-sd-patch-fresh-short"))assert(saved_check.patch_fresh_reads==1);
+        if(strstr(test.test,"error") || strstr(test.test,"short"))assert(saved_check.patch_fault);
+        saved_check.active=false;test.cancelled=false;
+        assert(burst_inspect(job,false)==5);
+        for(unsigned i=0;i<3;++i) {
+            uint64_t length=0;
+            assert(saved_file_fingerprint(job,preserved[i],&length)==preserved_crc[i] && length==preserved_length[i]);
+        }
+        remount();assert(kui_recovery_guard_check(job,NULL)==!unstable);
+        assert(f_mount(NULL,"0:",0)==FR_OK);
+        if(unstable) {
+            unsigned writes=test.writes;
+            assert(run_salvage(&plan,ops,options,KUI_SALVAGE_RESUME,&status)==KUI_SALVAGE_FAILED && strstr(status.message,"unstable"));
+            assert(test.writes==writes);
+        }
+        assert(f_mount(NULL,"0:",0)==FR_OK);
+        printf("PASS saved candidate diagnostics: no new repairs, primary=%u fresh=%u reopen=%u quarantine=%u\n",
+            saved_check.patch_reads,saved_check.patch_fresh_reads,saved_check.patch_reopens,unstable?1u:0u);
+        return;
+    }
     assert(saved_check.journal_seen && saved_check.journal_done);
     if(saved_check.cancel_mode || failed) {
         assert(result==(failed?KUI_SALVAGE_FAILED:KUI_SALVAGE_STOPPED) && !status.complete);

@@ -759,6 +759,22 @@ int main(int argc,char **argv) {
     if(!strcmp(test.test,"repair-fatal") || !strcmp(test.test,"repair-stop")) {assert(result==(!strcmp(test.test,"repair-stop")?KUI_SALVAGE_STOPPED:KUI_SALVAGE_FAILED) && !status.complete && status.recovered==34);goto end;}
     if(repair_fault) {
         assert(test.injected && result==KUI_SALVAGE_FAILED && !status.complete);
+        if(!strcmp(test.test,"backup-substitute")) {
+            /* This changes a successful read of an already published audio
+             * candidate, recomputing both CRCs. Its journal publication must
+             * reject that substitute; the fresh valid reread proves saved
+             * reads disagreed, so an immediate Resume must remain blocked. */
+            assert(!status.pass && status.recovered==34 && status.remaining==2 &&
+                strstr(status.message,"Saved candidate reads differ"));
+            test.capturing=false;compare_unresolved(job);
+            remount();assert(!kui_recovery_guard_check(job,NULL));
+            assert(f_mount(NULL,"0:",0)==FR_OK);
+            test.fault=NULL;test.injected=false;test.last_event=0;test.patch_started=false;
+            unsigned writes=test.writes;test.capturing=true;
+            result=run_salvage(&plan,&ops,&options,KUI_SALVAGE_RESUME,&status);
+            assert(result==KUI_SALVAGE_FAILED && !status.complete && strstr(status.message,"unstable") && test.writes==writes);
+            test.capturing=false;compare_unresolved(job);goto end;
+        }
         test.fault=NULL;test.injected=false;test.last_event=0;test.patch_started=false;
         result=run_salvage(&plan,&ops,&options,KUI_SALVAGE_RECOVER,&status);
     }
