@@ -21,6 +21,7 @@ NATIVE_SPAN := 0x1c000
 $(BUILD)/vmu-only-config: force-mode-config
 	@mkdir -p $(BUILD)
 	@printf '%s\n' 'VMU_TRANSPORT=$(VMU_TRANSPORT)' 'FULL_SUBMIT=$(VMU_ONLY_FULL_SUBMIT)' \
+	 'SCI_RX_POLICY=$(VMU_SCI_RX_POLICY)' \
 	 'NATIVE_LAYOUT=$(NATIVE_LAYOUT)' 'NATIVE_SPAN=$(NATIVE_SPAN)' > $@.tmp
 	@cmp -s $@.tmp $@ || cp $@.tmp $@
 	@rm -f $@.tmp

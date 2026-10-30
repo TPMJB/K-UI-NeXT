@@ -190,7 +190,7 @@ static void geometry_invalidation(void) {
     p.per = 1000; p.still = 20; p.spin = 15;
     sample(&p, 50, 260, 625, 1); /* same vblank, different counter period */
     CHECK(p.epoch != epoch && p.period == 625 && p.frames == frames);
-    CHECK(p.per == 0 && p.still == 0 && p.spin == 0);
+    CHECK(p.per == 0 && p.still == 0 && p.spin == 15);
     kui_retail_pace_measure(&p, frames, 450, epoch, 2);
     CHECK(p.per == 0); /* do not measure across a geometry change */
     sample(&p, 500, 260, 625, 1);
@@ -205,14 +205,14 @@ static void geometry_invalidation(void) {
     p.per = 1000; p.still = 20; p.spin = 15;
     sample(&p, 50, 300, 525, 1); /* unchanged period, different interrupt line */
     CHECK(p.epoch != epoch && p.vbi == 300 && p.frames == frames);
-    CHECK(p.per == 0 && p.still == 0 && p.spin == 0);
+    CHECK(p.per == 0 && p.still == 0 && p.spin == 15);
     kui_retail_pace_measure(&p, frames, 450, epoch, 2);
     CHECK(p.per == 0);
 
     epoch = p.epoch;
     p.per = 1000; p.still = 20; p.spin = 15;
     sample(&p, 525, 300, 525, 1); /* line equal to period is invalid */
-    CHECK(p.epoch != epoch && p.per == 0 && p.still == 0 && p.spin == 0);
+    CHECK(p.epoch != epoch && p.per == 0 && p.still == 0 && p.spin == 15);
     CHECK(p.frames == frames);
     uint32_t invalid_epoch = p.epoch;
     sample(&p, 50, 300, 525, 1);
@@ -226,7 +226,7 @@ static void geometry_invalidation(void) {
         epoch = p.epoch;
         p.per = 1000; p.still = 20; p.spin = 15;
         sample(&p, 50, invalid_vbi[i], 525, 1);
-        CHECK(p.epoch != epoch && p.per == 0 && p.still == 0 && p.spin == 0);
+        CHECK(p.epoch != epoch && p.per == 0 && p.still == 0 && p.spin == 15);
         CHECK(p.frames == frames && kui_retail_pace_budget(&p, 2, 8) == 2);
     }
 
@@ -271,6 +271,43 @@ static void spinning(void) {
     for(unsigned i = 0; i < 64; ++i) {
         sample(&p, 261, 260, 262, 1); sample(&p, line, 260, 262, 1);
         CHECK(kui_retail_pace_spin(&p) == 0);
+    }
+}
+
+/* Every one of these samples invalidates the timing estimate. A CHECK-only
+ * caller must still receive an ordinary step after sixteen polls, even if
+ * the scanline jumps backwards or forwards between them. These are poll
+ * counts, not inferred elapsed time or permission to enlarge a read batch. */
+static void unmeasurable_spinning(void) {
+    for(unsigned mode = 0; mode < 5; ++mode) {
+        struct kui_retail_pace p = {0};
+        unsigned permits = 0;
+        for(unsigned i = 0; i < KUI_RETAIL_PACE_SPIN_CALLS * 4u; ++i) {
+            uint32_t line = i & 1u ? 500u : 100u;
+            uint32_t period = 525u, vbi = 520u;
+            if(mode == 0) { period = 1u; vbi = 0u; }
+            else if(mode == 1) vbi = period;
+            else if(mode == 2) line = period + (i & 1u ? 100u : 0u);
+            else if(mode == 3) period = i & 1u ? 525u : 625u;
+            else vbi = i & 1u ? 520u : 260u;
+            p.per = 1000u; p.still = KUI_RETAIL_PACE_STILL_FRAMES;
+            uint32_t epoch = p.epoch, frames = p.frames;
+            sample(&p, line, vbi, period, 1);
+            CHECK(p.epoch != epoch && p.frames == frames);
+            CHECK(p.per == 0 && p.still == 0);
+            CHECK(kui_retail_pace_budget(&p, 2, 8) == 2);
+            int permit = kui_retail_pace_spin(&p);
+            CHECK(permit == ((i + 1u) % KUI_RETAIL_PACE_SPIN_CALLS == 0));
+            permits += (unsigned)permit;
+        }
+        CHECK(permits == 4u && p.spin == 0);
+        /* Stable timing resumes the original close-poll rule. An ordinary
+         * EXEC clears spin; no fallback permission survives that reset. */
+        p.spin = 0;
+        sample(&p, 100, 520, 525, 1);
+        CHECK(!kui_retail_pace_spin(&p));
+        sample(&p, 102, 520, 525, 1);
+        CHECK(!kui_retail_pace_spin(&p) && p.spin == 1);
     }
 }
 
@@ -386,6 +423,7 @@ static void simulations(void) {
 }
 
 int main(void) {
+    unmeasurable_spinning();
     sampling(); budgets(); measurement(); moving_screen();
     register_geometry(); geometry_invalidation(); spinning(); simulations();
     printf("retail read pacing: %u checks passed\n", assertions);

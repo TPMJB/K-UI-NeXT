@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/native-vmu-lite-unpaced-sci
+override VMU_SCI_RX_POLICY := unpaced
+include Makefile.vmu-native-vmu-lite-paced

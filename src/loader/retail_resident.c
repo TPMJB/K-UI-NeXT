@@ -605,7 +605,7 @@ static void report_fault(const char *reason, uint32_t function) {
     retail_display_line(reason);
 #if KUI_NATIVE_VMU_ONLY
     terminal_row("FN CMD SD IMG STATE",image.block,5);
-    terminal_row("LAST LBA CNT DST DONE",image.block+20u,4);
+    terminal_row("LBA CNT DST DONE",image.block+20u,4);
 #elif KUI_RETAIL_RETURN_TRACE == 3
 #elif KUI_RETAIL_RETURN_TRACE == 2
     terminal_row("FN REJECT PR SP PARAM",image.block,5);

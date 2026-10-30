@@ -81,6 +81,28 @@
 #if KUI_NATIVE_VMU_LITE && !KUI_NATIVE_VMU_ONLY
 #error "VMU-lite refines the VMU-only service"
 #endif
+/* Separate SCI receive-credit comparison. The normal VMU-lite Makefile
+ * retains its existing unpaced policy until console validation. */
+#ifndef KUI_NATIVE_VMU_SCI_RX_PACED
+#define KUI_NATIVE_VMU_SCI_RX_PACED 0
+#endif
+#if KUI_NATIVE_VMU_SCI_RX_PACED != 0 && KUI_NATIVE_VMU_SCI_RX_PACED != 1
+#error "Native VMU SCI receive pacing must be exactly zero or one"
+#endif
+#if KUI_NATIVE_VMU_SCI_RX_PACED && (!KUI_NATIVE_VMU_ONLY || !KUI_NATIVE_VMU_LITE || \
+    KUI_SCI_SD_PIO_ONLY || KUI_RETAIL_TOY_PILOT || defined(KUI_RETAIL_ASYNC) || defined(KUI_RETAIL_CE))
+#error "Native SCI receive pacing belongs only to the separate SCI VMU-lite comparison"
+#endif
+#if KUI_NATIVE_VMU_SCI_RX_PACED && defined(KUI_NATIVE_VMU_ONLY_TRANSPORT) && KUI_NATIVE_VMU_ONLY_TRANSPORT != 1
+#error "Native SCI receive pacing requires the SCI transport"
+#endif
+#if KUI_NATIVE_VMU_SCI_RX_PACED
+#define KUI_NATIVE_VMU_SCI_RX_POLICY_TEXT "1"
+#elif KUI_SCI_SD_PIO_ONLY
+#define KUI_NATIVE_VMU_SCI_RX_POLICY_TEXT "2"
+#else
+#define KUI_NATIVE_VMU_SCI_RX_POLICY_TEXT "0"
+#endif
 /* The general split controller with the controller prefetch TICK restored.
  * TICK was turned off only to isolate Evolution 1, which still failed
  * without it; the split controller then passed with TICK still off. */

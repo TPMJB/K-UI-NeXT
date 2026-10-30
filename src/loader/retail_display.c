@@ -167,7 +167,11 @@ void retail_display_restore(const struct retail_display_state *s) {
     retail_display_line("NATIVE");
 #endif
 #else
+#if !KUI_NATIVE_VMU_ONLY || !defined(KUI_RETAIL_TRANSPORT)
+    /* The compact VMU resident retains BUILD and its complete failure rows.
+     * Omit this redundant branding row inside its fixed protected image. */
     retail_display_line("NATIVE GD IMAGE");
+#endif
 #endif
 #endif
     row=108;

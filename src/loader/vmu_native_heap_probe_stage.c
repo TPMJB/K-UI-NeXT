@@ -32,6 +32,10 @@ static enum kui_loader_sd_result native_persist_storage_init(struct kui_retail_s
 #define kui_retail_stage_relay kui_native_heap_base_relay
 #include "retail_stage.c"
 #undef kui_retail_stage_relay
+#if KUI_NATIVE_VMU_ONLY
+__asm__(".global __kui_native_vmu_sci_rx_policy_stage\n"
+        ".set __kui_native_vmu_sci_rx_policy_stage," KUI_NATIVE_VMU_SCI_RX_POLICY_TEXT "\n");
+#endif
 #if KUI_NATIVE_SPLIT_CONTROLLER_GENERAL && KUI_NATIVE_GENERAL_LEAN_LAYOUT
 __asm__(".global __kui_native_general_lean_stage_layout\n"
         ".set __kui_native_general_lean_stage_layout,1\n");

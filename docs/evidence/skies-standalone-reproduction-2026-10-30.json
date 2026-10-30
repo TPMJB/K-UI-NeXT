@@ -1,0 +1,52 @@
+{
+  "schema": "kui.skies.standalone.repeatable-regression.v1",
+  "owner_observations": {
+    "baseline_build": "76b53dcc9464",
+    "vmu_reservation_bytes": 73728,
+    "intro": "scene-transition repeat/loop then black before menu; Start did not escape",
+    "background_reader": "owner reports better audio/video sync; complete intro freeze result unconfirmed",
+    "battle_failure": "second fight after Alfonso dispatches troops; repeats at same point",
+    "prior_build": "owner reached the save point before standalone VMU work",
+    "launch_seconds": {
+      "previous_approximate": 20,
+      "current_approximate": 10
+    }
+  },
+  "terminal": {
+    "function": 2,
+    "command": 17,
+    "sd_result": 3,
+    "sd_meaning": "TIMEOUT",
+    "image_result": 5,
+    "image_meaning": "IO",
+    "state": "0x00001208",
+    "request_lba": "0x000263ad",
+    "request_count": 73,
+    "destination": "0x0cb8e5e0",
+    "completed_bytes": 129024,
+    "completed_game_sectors": 63,
+    "state_interpretation": {
+      "ready": false,
+      "stream_active": false,
+      "bus_fault_latched": true,
+      "last_sd_command": 18,
+      "last_sd_response": 0
+    },
+    "exact_failing_physical_sd_block_unknown": true
+  },
+  "inventory_summary": {
+    "inventoried_pairs": 15,
+    "inventoried_skies_save_found": false,
+    "both_current_installed_loaders_select": "p0005",
+    "pairs_without_usable_prepared_profile": 7,
+    "missing_profile_is_not_card_corruption": true,
+    "scope": "KUI/vmu-test card images scanned by supplied read-only report; does not establish contents of physical VMUs or other backups",
+    "private_sd_identity_omitted": true
+  },
+  "next_test": {
+    "fixed_reservation_bytes": 73728,
+    "all_modes_same_profile": true,
+    "crc_and_ownership_guards_retained": true,
+    "console_fix_verified": false
+  }
+}

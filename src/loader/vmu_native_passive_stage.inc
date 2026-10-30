@@ -500,6 +500,15 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
 #if KUI_NATIVE_VMU_ONLY_FULL_SUBMIT
     retail_display_line("FULL SUBMIT CONTROL");
 #endif
+#if KUI_NATIVE_VMU_ONLY_TRANSPORT == 1
+#if KUI_NATIVE_VMU_SCI_RX_PACED
+    retail_display_line("SCI RX DMA / BYTE CREDIT");
+#elif KUI_SCI_SD_PIO_ONLY
+    retail_display_line("SCI PIO / NO RX DMA");
+#else
+    retail_display_line("SCI RX DMA / UNPACED CONTROL");
+#endif
+#endif
 #else
     retail_display_line(native_runtime_mode()==KUI_VMU_NATIVE_MODE_READER_ONLY?
         "NEW READER / VIRTUAL A2 OFF":"NEW READER / VIRTUAL A2 ON");

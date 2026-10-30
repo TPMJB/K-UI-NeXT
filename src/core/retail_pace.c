@@ -11,7 +11,11 @@ void kui_retail_pace_sample(struct kui_retail_pace *p, uint32_t status,
     if(period != p->period || vbi != p->vbi || line >= period ||
        p->line >= period || period < 64u || vbi >= period) {
         ++p->epoch;
-        p->per = p->still = p->spin = 0;
+        p->per = p->still = 0;
+        /* Unmeasurable video must not starve CHECK-only readers. Preserve
+         * their poll count and make this sample count as close regardless
+         * of its scanline. Stable geometry keeps the usual close-poll rule. */
+        p->spin_line = line; p->spin_frames = p->frames;
     /* Count only wraps within unchanged, valid geometry. Samples a whole
      * period apart can hide wraps; reads therefore sample every SD block. */
     } else if(line < p->line) { ++p->frames; ++p->still; }

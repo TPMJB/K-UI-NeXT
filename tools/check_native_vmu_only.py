@@ -195,6 +195,73 @@ def controller_submit_mode(stage, worker, self_test=True):
     return result
 
 
+def sci_rx_selection(stage_symbols, low_symbols):
+    """Select solely from exact compiled stage/resident policy markers."""
+    names=('__kui_native_vmu_sci_rx_policy_stage',
+           '__kui_native_vmu_sci_rx_policy_resident')
+    markers=(stage_symbols.get(names[0]),low_symbols.get(names[1]))
+    require(markers[0] == markers[1] and markers[0] in
+            tuple((value,0,0,0xfff1) for value in (0,1,2)),
+            'SCI receive policy requires exact matching stage/resident markers')
+    return ('unpaced','paced','pio')[markers[0][0]]
+
+
+def sci_rx_policy(stage, low, transport, self_test=True):
+    selected=sci_rx_selection(stage[4],low[4])
+    actual=low[4].get('__kui_native_vmu_sci_rx_paced_bus')
+    bound=low[4].get('__kui_native_vmu_sci_rx_paced_max_polls')
+    result={'policy':selected if transport else None,
+            'matching_immutable_markers':True,'mutation_rejections':0,
+            'instruction_loop_bound_modeled':False}
+    if selected=='paced':
+        require(transport==1 and actual==ONE and bound==(10000,0,0,0xfff1),
+                'Paced SCI policy lacks its actual low bus and poll-bound markers')
+        address,body,section=symbol_bytes(low,'_feed_read',2)
+        require(section[2]&7==6 and 0 < len(body) <= 1024 and
+                all(struct.pack('<I',literal) in body for literal in
+                    (0xffa00018,0xffa00040,0xffe00010)) and
+                struct.pack('<H',10000) in body,
+                'Paced receive helper lacks its bounded count/error/arbitration checks')
+        wait_address,wait_body,wait_section=symbol_bytes(low,'_wait_flag',2)
+        require(wait_section[2]&7==6 and 0 < len(wait_body) <= 256 and
+                struct.pack('<H',10000) in wait_body and
+                struct.pack('<I',0xffe00010) in wait_body,
+                'Paced receive TDRE waiter lacks its compiled bounded SCI flag check')
+        result.update(receive_helper='_feed_read',receive_helper_address=hex(address),
+                      receive_helper_bytes=len(body),receive_helper_sha256=sha(body),
+                      compiled_max_polls=10000,
+                      compiled_max_polls_scope='each RX-credit or TDRE phase per byte; not combined',
+                      credit_max_polls_per_byte=10000,tdre_wait_max_polls_per_byte=10000,
+                      tdre_wait_helper='_wait_flag',tdre_wait_helper_address=hex(wait_address),
+                      tdre_wait_helper_bytes=len(wait_body),tdre_wait_helper_sha256=sha(wait_body),
+                      bound_evidence='compiled marker, helper literals, and production-C MMIO tests')
+    else:
+        require(actual is None and bound is None,
+                'Unpaced/PIO policy unexpectedly contains the paced SCI bus')
+        if selected=='pio':
+            require(transport==1 and not any(name.startswith(('_dma_block','_feed_read'))
+                    for name in low[4]), 'PIO policy retains an RX DMA implementation')
+            result['rx_dma_functions_absent']=True
+    if self_test:
+        names=('__kui_native_vmu_sci_rx_policy_stage',
+               '__kui_native_vmu_sci_rx_policy_resident')
+        other=(('unpaced','paced','pio').index(selected)+1)%3
+        for domain in range(2):
+            for replacement in (None,(3,0,0,0xfff1),(other,0,0,0xfff1)):
+                symbols=[dict(stage[4]),dict(low[4])]
+                if replacement is None:
+                    symbols[domain].pop(names[domain])
+                else:
+                    symbols[domain][names[domain]]=replacement
+                try:
+                    sci_rx_selection(*symbols)
+                except ValueError:
+                    result['mutation_rejections']+=1
+                else:
+                    raise ValueError('SCI receive policy accepted changed compiled markers')
+    return result
+
+
 def terminal_guard_model(low, self_test=True, span=SPAN):
     """Execute the emitted pure low guard at compact-lease boundaries."""
     class Guard(Machine):
@@ -464,6 +531,7 @@ def audit(directory, *, transport, allow_dirty=False, self_test=True):
     directory = Path(directory)
     worker, stage, low = (read_elf(directory/name) for name in ('native-worker.elf','stage.elf','resident-sci.elf'))
     submit_mode=controller_submit_mode(stage,worker,self_test)
+    rx_policy=sci_rx_policy(stage,low,transport,self_test)
     for image, marker in ((worker, '__kui_native_vmu_only_worker'), (stage, '__kui_native_vmu_only_stage')):
         require(image[4].get(marker) == ONE, 'Missing exact VMU-only marker: '+marker)
     # Every image selects the same exact compiled geometry: 112 KiB VMU-only
@@ -579,6 +647,7 @@ def audit(directory, *, transport, allow_dirty=False, self_test=True):
     return {'schema':'kui.native.vmu-only.linked.v1','transport':transport,
             'variant':'vmu-lite' if layout is VMU_LITE else 'vmu-only','lease_bytes':span,
             'controller_submit':submit_mode['controller_submit'],'controller_submit_audit':submit_mode,
+            'sci_rx_policy':rx_policy['policy'],'sci_rx_policy_audit':rx_policy,
             'worker_span':span,'worker_initialized_bytes':len(binary),'worker_stack_bytes':STACK_BYTES,
             'worker_bss_end':hex(fields[8]),'worker_stack_bottom':hex(fields[9]),
             'worker_bss_stack_gap':fields[9]-fields[8], 'module_sha256':sha(module),'runtime':runtime,

@@ -19,7 +19,9 @@
  * in bits 25:16), and FB_R_SOF1. Only the
  * counter's wraps and positions are used; no mode table or timer is needed.
  * A game calling CHECK in a tight loop with no EXEC in between is waiting on
- * the read; SPIN_CALLS such calls within one scanline permit one step there. */
+ * the read; SPIN_CALLS such calls within one scanline permit one step there.
+ * When every sample invalidates the video geometry, SPIN_CALLS CHECKs also
+ * permit one ordinary step. Invalid video never supplies a larger budget. */
 #define KUI_RETAIL_PACE_STILL_FRAMES 12u
 #define KUI_RETAIL_PACE_SPIN_CALLS 16u
 
@@ -43,7 +45,8 @@ uint32_t kui_retail_pace_budget(const struct kui_retail_pace *, uint32_t normal,
 void kui_retail_pace_measure(struct kui_retail_pace *, uint32_t frames,
     uint32_t line, uint32_t epoch, uint32_t sectors);
 /* Call on each CHECK while a read is pending, after sampling. Returns nonzero
- * when the game is spinning on CHECK; the caller then runs one step. The
- * caller clears spin on every EXEC. */
+ * for close polling, or after SPIN_CALLS consecutive polls whose samples
+ * invalidate the geometry; the caller then runs one step. Sampling alone
+ * never advances the poll count. The caller clears spin on every EXEC. */
 int kui_retail_pace_spin(struct kui_retail_pace *);
 #endif
