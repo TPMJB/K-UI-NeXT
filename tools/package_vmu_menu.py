@@ -37,6 +37,7 @@ def main():
                         help='Archive name prefix; the source build is appended')
     parser.add_argument('--readme', type=Path, default=ROOT/'docs/vmu-menu-test.md')
     parser.add_argument('--evidence', type=Path, action='append', default=[])
+    parser.add_argument('--source-base', help='Include commits after this existing source commit; default includes complete history')
     args = parser.parse_args()
     require(re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*', args.name),
             'Package name must be a filename prefix using letters, digits, dots, underscores or hyphens')
@@ -46,6 +47,12 @@ def main():
     runtime = args.gui.read_bytes()
     build = verify(runtime)['build']
     require(build == source[:12], 'GUI build identifier differs from committed source')
+    base = None
+    if args.source_base:
+        base = git('rev-parse', '--verify', args.source_base+'^{commit}')
+        require(re.fullmatch('[0-9a-f]{40}', base) and base != source and
+                git('merge-base', base, source) == base,
+                'Source base must be a different ancestor of the packaged commit')
     name = args.name+'-'+build
     folder = args.output/name
     require(not folder.exists(), 'Output folder already exists: '+str(folder))
@@ -70,8 +77,17 @@ def main():
                     replaces=['KUI/runtime.kui'], native_runtime_unchanged=True,
                     experimental=True, console_compatibility_verified=False,
                     full_persistent_instruction_model_complete=False)
+    if base:
+        metadata.update(source_base=base, source_bundle_complete=False)
+        (folder/'SOURCE.md').write_text(
+            'This source bundle contains all commits after '+base+' through '+source+'.\n'
+            'The base and earlier history are in https://github.com/TPMJB/K-UI-NeXT.\n\n'
+            'From a clone containing that base, run:\n\n'
+            '```bash\ngit fetch /absolute/path/to/source.bundle HEAD\n'
+            'git switch --detach FETCH_HEAD\n```\n')
     (folder/'menu.json').write_text(json.dumps(metadata, indent=2)+'\n')
-    subprocess.run(['git', '-C', str(ROOT), 'bundle', 'create', str(folder/'source.bundle'), 'HEAD'],
+    subprocess.run(['git', '-C', str(ROOT), 'bundle', 'create', str(folder/'source.bundle'), 'HEAD']+
+                   (['^'+base] if base else []),
                    check=True, capture_output=True)
     files = sorted(path for path in folder.rglob('*') if path.is_file())
     sums = ''.join(f'{sha(path.read_bytes())}  {path.relative_to(folder).as_posix()}\n' for path in files)

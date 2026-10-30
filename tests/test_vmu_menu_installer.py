@@ -380,17 +380,25 @@ class MenuPackager(unittest.TestCase):
         self.source = '0123456789ab'+'0'*28
         self.output = self.work/'delivery'
 
-    def invoke(self, status='', name=None):
+    def invoke(self, status='', name=None, source_base=None, ancestor=True):
         # Bundle creation is mocked here; final delivery separately verifies
         # the real complete source bundle and actual compiled GUI.
         def git(*args):
+            if args[:2] == ('rev-parse', '--verify'):
+                return 'a'*40
+            if args[0] == 'merge-base':
+                return 'a'*40 if ancestor else 'b'*40
             return self.source if args == ('rev-parse', 'HEAD') else status
         def bundle(arguments, **kwargs):
+            if source_base is not None:
+                self.assertEqual(arguments[-1], '^'+'a'*40)
             Path(arguments[5]).write_bytes(b'mocked source bundle for packaging tests')
             return subprocess.CompletedProcess(arguments, 0)
         args = ['package_vmu_menu.py', '--gui', str(self.gui), '--output', str(self.output)]
         if name is not None:
             args.extend(['--name', name])
+        if source_base is not None:
+            args.extend(['--source-base', source_base])
         with mock.patch.object(packager, 'ROOT', self.root), mock.patch.object(packager, 'git', git), \
              mock.patch.object(packager.subprocess, 'run', bundle), mock.patch.object(sys, 'argv', args):
             packager.main()
@@ -439,6 +447,23 @@ class MenuPackager(unittest.TestCase):
         self.gui.write_bytes(envelope(b'other-ui', 8192, 'abcdefabcdef'))
         with self.assertRaisesRegex(ValueError, 'differs from committed source'):
             self.invoke()
+        self.assertFalse(self.output.exists())
+
+    def test_incremental_source_declares_base_and_restore_instructions(self):
+        import zipfile
+        self.invoke(source_base='main')
+        with zipfile.ZipFile(next(self.output.glob('*.zip'))) as z:
+            metadata = json.loads(z.read('menu.json'))
+            self.assertEqual(metadata['source_base'], 'a'*40)
+            self.assertFalse(metadata['source_bundle_complete'])
+            self.assertIn('git fetch /absolute/path/to/source.bundle HEAD', z.read('SOURCE.md').decode())
+            for line in z.read('SHA256SUMS.txt').decode().splitlines():
+                digest, member = line.split('  ', 1)
+                self.assertEqual(installer.sha(z.read(member)), digest)
+
+    def test_nonancestor_source_base_refuses(self):
+        with self.assertRaisesRegex(ValueError, 'different ancestor'):
+            self.invoke(source_base='unrelated', ancestor=False)
         self.assertFalse(self.output.exists())
 
 

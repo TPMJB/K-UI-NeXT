@@ -32,6 +32,7 @@
 #include "kui/games_retail.h"
 #include "kui/games_covers.h"
 #include "kui/games_storage.h"
+#include "kui/games_library.h"
 #include "kui/image_loader_layout.h"
 #include <arch/exec.h>
 #include "kui/splash.h"
@@ -241,10 +242,11 @@ static unsigned games_selection_generation,games_selection_request,games_selecti
 static uint64_t games_selection_deadline;
 static unsigned games_epoch_pending,games_result_epoch,games_result_view;
 static char games_path_pending[KUI_GAMES_FILE_CAP];
+static char games_group_pending[33];
 static unsigned games_reader_pending,games_codec_pending;
 static bool games_codec_override_pending;
 static unsigned games_view_pending;
-static bool games_refresh_pending,games_cache_clear_pending;
+static bool games_refresh_pending,games_rebuild_pending,games_cache_clear_pending;
 static bool games_warm_done;
 static unsigned games_storage_observed=KUI_STORAGE_AUTO;
 static struct kui_shell_games_art_key games_art_requested,games_art_running,games_art_published,games_art_done;
@@ -2178,12 +2180,12 @@ static bool games_page(enum kui_shell_page page) {
  * either side, nearest first. One step per idle pass; input, an art request
  * or an action stops it, and it resumes at the same step. */
 #define GAMES_PREFETCH_DONE 6u
-static struct {char root[KUI_DEST_ROOT_CAP];unsigned page,view,step;bool valid;} games_prefetch;
+static struct {char root[KUI_DEST_ROOT_CAP],group[33];unsigned page,view,step;bool valid;} games_prefetch;
 static uint16_t games_prefetch_pixels[KUI_COVER_PIXELS];
 static void games_prefetch_reset(void) {games_prefetch.valid=false;}
 static void games_cache_invalidate(void) {
     (void)kui_games_storage_release();
-    kui_games_cache_clear();kui_games_covers_cache_clear();games_warm_done=false;
+    kui_games_cache_clear();kui_games_library_clear();kui_games_covers_cache_clear();games_warm_done=false;
     games_prefetch_reset();
     mutex_lock(&lock);
     games_art_done_valid=false;games_art_result_ready=false;games_titles_ready=false;
@@ -2204,9 +2206,15 @@ static bool games_action_invalidates(unsigned action) {
     return action==2 || action==3 || (action>=4 && action<=9) || action==11 ||
         action==14 || action==17 || action==18 || action==19 || action==21 || action==22 ||
         action==25 || action==30 || action==33 || action==38 || action==40 ||
-        (action>=42 && action<=48) || (action>=56 && action<=59) || action==62 ||
+        (action>=42 && action<=48) || (action>=56 && action<=58) || action==62 ||
         action==64 || action==65 || action==67 || action==79 || action==81 || action==96 || action==97 || action==82 ||
         action==83 || action==85 || action==86 || action==90 || action==92 || action==95 || action==98 || action==100 || (action>=68 && action<=71);
+}
+static bool games_action_changes_content(unsigned action) {
+    /* Directory-changing writers can add/remove launch selectors. Saved
+     * recovery edits existing track bytes; it does not change this list and
+     * must retain its same-session resume receipt. */
+    return action==4 || action==5 || action==22 || action==62 || action==64;
 }
 static bool games_idle_cancelled(void) {
     mutex_lock(&lock);
@@ -2350,6 +2358,7 @@ static void games_storage_idle(void) {
 static bool games_prefetch_current(void) {
     return shell.page==KUI_SHELL_GAMES && !shell.games_loading && !shell.games_scanning &&
         games_prefetch.valid && shell.games_page==games_prefetch.page &&
+        !strcmp(shell.games_group,games_prefetch.group) &&
         kui_shell_games_view(&shell)==games_prefetch.view && !strcmp(shell.games_path,games_prefetch.root) &&
         !strcmp(shell.games_path,shell.games_listing.root) &&
         (!games_art_request_valid ||
@@ -2364,7 +2373,7 @@ static bool games_prefetch_cancelled(void) {
  * storage failure ends the work for this page, so a failing card is not
  * reread on every idle pass. */
 static bool games_prefetch_rows(unsigned offset,struct kui_games_page *rows) {
-    if(kui_games_list_rows(games_prefetch.root,offset,games_prefetch.view,rows,kui_log,
+    if(kui_games_library_rows(games_prefetch.root,games_prefetch.group,offset,games_prefetch.view,rows,kui_log,
        games_prefetch_cancelled)) return true;
     if(!games_prefetch_cancelled()) games_prefetch.step=GAMES_PREFETCH_DONE;
     return false;
@@ -2375,8 +2384,10 @@ static bool games_prefetch_idle_work(void) {
     bool showing=shell.page==KUI_SHELL_GAMES && !shell.games_loading && !shell.games_scanning &&
         !strcmp(shell.games_path,shell.games_listing.root);
     if(showing && (!games_prefetch.valid || shell.games_page!=games_prefetch.page ||
-       kui_shell_games_view(&shell)!=games_prefetch.view || strcmp(shell.games_path,games_prefetch.root))) {
+       kui_shell_games_view(&shell)!=games_prefetch.view || strcmp(shell.games_path,games_prefetch.root) ||
+       strcmp(shell.games_group,games_prefetch.group))) {
         snprintf(games_prefetch.root,sizeof(games_prefetch.root),"%s",shell.games_path);
+        snprintf(games_prefetch.group,sizeof(games_prefetch.group),"%s",shell.games_group);
         games_prefetch.page=shell.games_page;games_prefetch.view=kui_shell_games_view(&shell);
         games_prefetch.step=0;games_prefetch.valid=true;
     }
@@ -2425,7 +2436,7 @@ static void games_warm_idle_work(void) {
     if(song_pending || (music.enabled && !music.loaded)) return;
     kui_sd_set_params(KUI_STORAGE_AUTO,true);
     struct kui_games_page page;
-    bool ok=kui_games_list_rows(KUI_GAMES_SCAN_ROOT,0,KUI_GAMES_VIEW_SAVED,&page,kui_log,games_warm_cancelled);
+    bool ok=kui_games_library_rows(KUI_GAMES_SCAN_ROOT,"",0,KUI_GAMES_VIEW_SAVED,&page,kui_log,games_warm_cancelled);
     if(!games_warm_cancelled()) {
         if(!ok) games_cache_invalidate();
         games_warm_done=true;
@@ -2442,7 +2453,7 @@ static void *worker(void *unused) {
         unsigned action = pending;
         pending = 0;
 #ifdef KUI_SD_RUNTIME
-        bool clear_games_cache=games_cache_clear_pending || (action==54 && games_refresh_pending);
+        bool clear_games_cache=games_cache_clear_pending;
         games_cache_clear_pending=false;
 #endif
         mutex_unlock(&lock);
@@ -2553,6 +2564,12 @@ static void *worker(void *unused) {
             }
             mutex_unlock(&lock);action=0;
         } else if(action && needs_cd_handoff(action)) publish_cd_audio();
+        if(games_action_changes_content(action) && !kui_cancelled()) {
+            kui_sd_set_params(KUI_STORAGE_AUTO,true);
+            if(!kui_games_library_invalidate(KUI_GAMES_SCAN_ROOT,kui_log))
+                kui_log("Games: saved library invalidation failed; scan after editing game files.");
+            (void)kui_games_storage_release();
+        }
 #endif
         if(kui_cancelled()
 #ifdef KUI_SD_RUNTIME
@@ -2611,9 +2628,11 @@ static void *worker(void *unused) {
                 games_listing.view=KUI_GAMES_VIEW_SAVED;
                 snprintf(games_listing.root,sizeof(games_listing.root),"%.*s",
                     (int)sizeof(games_listing.root)-1,action==59?KUI_GAMES_SCAN_ROOT:games_path_pending);
+                if(action==54)snprintf(games_listing.group,sizeof(games_listing.group),"%s",games_group_pending);
                 snprintf(games_listing.message,sizeof(games_listing.message),"%s",action==59?
                     "Box art scan stopped before starting":"Games browse stopped before starting");
                 games_result_offset=action==59?0:games_offset_pending;
+                games_result_restore=action==54 && games_seek_request;games_result_selected=0;
                 games_result_epoch=games_epoch_pending;games_result_view=games_view_pending;++games_listing_generation;
             }
             if(action==60 || action==62) {
@@ -2869,23 +2888,40 @@ static void *worker(void *unused) {
                 publish_music();
             }
             if(action==54) {
+                uint64_t list_started=timer_ms_gettime64();
                 kui_sd_set_params(KUI_STORAGE_AUTO,true);
+                bool scanned=true;
+                if(games_refresh_pending) {
+                    games_prefetch_reset();
+                    scanned=kui_games_library_scan(games_path_pending,games_rebuild_pending,kui_log,kui_cancelled);
+                }
+                bool stopped_scan=games_refresh_pending && !scanned && kui_cancelled();
                 unsigned offset=games_offset_pending,selected=0;
                 bool restore=games_seek_request;
+                kui_cancel_fn list_cancel=stopped_scan && kui_games_library_ready(games_path_pending)?NULL:kui_cancelled;
                 if(restore && games_seek_pending[0]) {
                     unsigned found;
                     offset=0;
-                    if(kui_games_find(games_path_pending,games_seek_pending,&found,kui_log,kui_cancelled)) {
+                    if(kui_games_library_find(games_path_pending,games_group_pending,games_seek_pending,&found,kui_log,list_cancel)) {
                         offset=found/KUI_GAMES_ROWS*KUI_GAMES_ROWS;selected=found%KUI_GAMES_ROWS;
                     }
                 }
-                struct kui_games_page page;
-                bool ok=kui_games_list_rows(games_path_pending,offset,games_view_pending,&page,kui_log,kui_cancelled);
+                struct kui_games_page page={0};
+                bool ok=kui_games_library_rows(games_path_pending,games_group_pending,offset,games_view_pending,&page,kui_log,list_cancel);
+                if(!ok && games_group_pending[0] && !kui_cancelled()) {
+                    offset=selected=0;restore=true;
+                    ok=kui_games_library_rows(games_path_pending,"",0,games_view_pending,&page,kui_log,kui_cancelled);
+                }
                 if(!ok && restore && !kui_cancelled() && strcmp(games_path_pending,"/Games")) {
                     offset=selected=0;
-                    ok=kui_games_list_rows("/Games",0,games_view_pending,&page,kui_log,kui_cancelled);
+                    ok=kui_games_library_rows("/Games","",0,games_view_pending,&page,kui_log,kui_cancelled);
                 }
+                if(games_refresh_pending && ok) snprintf(page.message,sizeof(page.message),"%s",
+                    scanned?"Game library updated.":stopped_scan?"Scan stopped; previous game library kept.":
+                    "Scan failed; previous game library kept.");
                 if(!ok && !kui_cancelled()) games_cache_invalidate();
+                kui_log("Games list: %u rows, %u items, %lu ms%s",page.count,page.total,
+                    (unsigned long)(timer_ms_gettime64()-list_started),ok?"":" (stopped or failed)");
                 mutex_lock(&lock);games_listing=page;games_result_offset=offset;
                 games_result_restore=restore;games_result_selected=selected;
                 games_result_epoch=games_epoch_pending;games_result_view=games_view_pending;
@@ -2898,8 +2934,10 @@ static void *worker(void *unused) {
                 /* Show the library either way: finished covers are kept, and
                  * a Stop request already ended the scan itself. */
                 struct kui_games_page page;
-                games_cache_invalidate();
-                if(kui_games_list_rows(KUI_GAMES_SCAN_ROOT,0,games_view_pending,&page,kui_log,NULL))
+                kui_games_cache_clear();kui_games_covers_cache_clear();games_prefetch_reset();
+                if(!kui_cancelled()) (void)kui_games_library_scan(KUI_GAMES_SCAN_ROOT,false,kui_log,kui_cancelled);
+                kui_cancel_fn list_cancel=kui_games_library_ready(KUI_GAMES_SCAN_ROOT)?NULL:kui_cancelled;
+                if(kui_games_library_rows(KUI_GAMES_SCAN_ROOT,"",0,games_view_pending,&page,kui_log,list_cancel))
                     snprintf(page.message,sizeof(page.message),"%s",status.message);
                 else games_cache_invalidate();
                 mutex_lock(&lock);games_listing=page;games_result_offset=0;
@@ -4238,7 +4276,10 @@ int main(void) {
             }
             if(action==55) {games_codec_pending=shell.games_launch_codec;games_codec_override_pending=shell.games_codec_override;}
             if(action==54 || action==59) {games_view_pending=shell.games_view;games_epoch_pending=shell.games_generation;}
-            if(action==54) games_refresh_pending=shell.games_refresh;
+            if(action==54) {
+                games_refresh_pending=shell.games_refresh;games_rebuild_pending=shell.games_rebuild;
+                snprintf(games_group_pending,sizeof(games_group_pending),"%s",shell.games_group);
+            }
             if(action==54)snprintf(games_seek_pending,sizeof(games_seek_pending),"%s",shell.games_seek_name);
             if(action==54)games_seek_request=shell.games_seek;
             if(action>=60 && action<=63) {

@@ -1013,6 +1013,8 @@ static void games_controls(void) {
 
     /* The accepted synthetic probe remains available independently of a game. */
     reset(KUI_SHELL_GAMES_ADVANCED);
+    press(KUI_SHELL_UP,false);assert(s.games_advanced_selected==5);
+    press(KUI_SHELL_UP,false);assert(s.games_advanced_selected==4);
     press(KUI_SHELL_UP,false);assert(s.games_advanced_selected==3);
     assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_ADVANCED);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_TESTS);
@@ -1028,6 +1030,8 @@ static void games_controls(void) {
     assert(s.page==KUI_SHELL_GAMES_PROBE_CONFIRM);
     press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_GAMES_TESTS);
     press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_GAMES_ADVANCED);
+    press(KUI_SHELL_DOWN,false);assert(s.games_advanced_selected==4);
+    press(KUI_SHELL_DOWN,false);assert(s.games_advanced_selected==5);
     press(KUI_SHELL_DOWN,false);assert(s.games_advanced_selected==0);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST && !strcmp(s.games_path,"/Games"));
 
@@ -2793,6 +2797,144 @@ static void games_views(void) {
     assert(press(KUI_SHELL_B|KUI_SHELL_A,true)==KUI_SHELL_STOP && s.games_scanning && s.page==KUI_SHELL_GAMES);
     games_page(8,true,KUI_GAMES_VIEW_GALLERY);assert(!s.games_scanning && s.games_listing.count==8);
 }
+static void games_disc_group_controls(void) {
+    static const char key[]="0123456789abcdef0123456789abcdef";
+    struct kui_games_page parent={.count=5,.total=24,.has_more=true,.view=KUI_GAMES_VIEW_LIST};
+    strcpy(parent.root,"/Games");
+    for(unsigned i=0;i<parent.count;i++) {
+        snprintf(parent.entries[i].name,sizeof(parent.entries[i].name),"Game %u",i);
+        snprintf(parent.entries[i].path,sizeof(parent.entries[i].path),"/Games/Game %u/disc.gdi",i);
+    }
+    strcpy(parent.entries[3].name,"Skies of Arcadia");
+    strcpy(parent.entries[3].title,"Skies of Arcadia");
+    strcpy(parent.entries[3].path,"/Games/Skies Disc 1/disc.gdi");
+    strcpy(parent.entries[3].group,key);
+    reset(KUI_SHELL_GAMES);s.games_view=KUI_GAMES_VIEW_LIST;s.games_page=2;s.games_selected=3;
+    kui_shell_set_games_listing(&s,&parent);
+    struct kui_shell_games_art_key group_art;
+    struct kui_games_cover_result cover={.size=KUI_COVER_SIZE_LARGE,.cover=true};
+    assert(kui_shell_games_art_key(&s,&group_art));
+    strcpy(cover.path,parent.entries[3].path);strcpy(cover.name,parent.entries[3].name);
+    strcpy(cover.title,"SKIES OF ARCADIA DISC ONE");
+    assert(kui_shell_set_games_art(&s,&group_art,&cover));
+    assert(!strcmp(s.games_listing.entries[3].title,"Skies of Arcadia"));
+    struct kui_games_selection remembered;
+    assert(kui_shell_games_selection(&s,&remembered));
+    assert(!strcmp(remembered.root,"/Games") && !strcmp(remembered.name,"Skies of Arcadia"));
+    unsigned parent_epoch=s.games_generation;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST && s.page==KUI_SHELL_GAMES);
+    assert(!strcmp(s.games_path,"/Games") && !strcmp(s.games_group,key));
+    assert(s.games_loading && !s.games_page && !s.games_seek);
+    assert(s.games_parent_page==2 && s.games_parent_selected==3 && !s.games_selected_path[0]);
+    assert(s.games_generation!=parent_epoch);
+
+    struct kui_games_page discs={.count=2,.total=2,.view=KUI_GAMES_VIEW_LIST};
+    strcpy(discs.root,"/Games");strcpy(discs.group,key);strcpy(discs.group_name,"Skies of Arcadia");
+    for(unsigned i=0;i<discs.count;i++) {
+        snprintf(discs.entries[i].name,sizeof(discs.entries[i].name),"Disc %u",i+1);
+        snprintf(discs.entries[i].title,sizeof(discs.entries[i].title),"Disc %u",i+1);
+        snprintf(discs.entries[i].path,sizeof(discs.entries[i].path),"/Games/Skies Disc %u/disc.gdi",i+1);
+        discs.entries[i].disc=i+1;
+    }
+    strcpy(discs.entries[1].variant_2048_path,"/Games/Skies Disc 2-2048/disc.gdi");
+    unsigned epoch=s.games_generation;
+    /* A prior physical-root publication cannot replace the requested set. */
+    assert(!kui_shell_set_games_rows(&s,&parent,epoch,0,KUI_GAMES_VIEW_LIST) && s.games_loading);
+    struct kui_games_page other=discs;other.group[0]='f';
+    assert(!kui_shell_set_games_rows(&s,&other,epoch,0,KUI_GAMES_VIEW_LIST) && s.games_loading);
+    assert(!kui_shell_set_games_rows(&s,&discs,parent_epoch,0,KUI_GAMES_VIEW_LIST));
+    assert(kui_shell_set_games_rows(&s,&discs,epoch,0,KUI_GAMES_VIEW_LIST));
+    assert(!s.games_loading && s.games_listing.count==2 && !s.games_listing.entries[0].disabled);
+    assert(kui_shell_games_selection(&s,&remembered) && !strcmp(remembered.name,"Skies of Arcadia"));
+    strcpy(other.entries[0].title,"Stale title from another set");
+    assert(!kui_shell_set_games_titles(&s,&other,0));
+    assert(!strcmp(s.games_listing.entries[0].title,"Disc 1"));
+    other=discs;strcpy(other.entries[0].title,"SKIES OF ARCADIA DISC ONE");
+    assert(!kui_shell_set_games_titles(&s,&other,0));
+    assert(kui_shell_games_art_key(&s,&group_art));
+    strcpy(cover.path,discs.entries[0].path);strcpy(cover.name,discs.entries[0].name);
+    assert(kui_shell_set_games_art(&s,&group_art,&cover));
+    assert(!strcmp(s.games_listing.entries[0].title,"Disc 1"));
+    struct kui_shell_view view={0};render(&view);
+    assert(strstr(drawn,"Discs") && strstr(drawn,"Skies of Arcadia") && strstr(drawn,"Disc 1") && strstr(drawn,"Disc 2"));
+
+    /* Both the direct image and the cooked/original selector keep exact real
+     * image paths while returning to this same set and selected disc. */
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_INSPECT && s.page==KUI_SHELL_GAMES_DETAIL);
+    assert(!strcmp(s.games_selected_path,discs.entries[0].path) && !strcmp(s.games_group,key));
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES);
+    assert(!strcmp(s.games_group,key) && !s.games_selected);
+    assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && s.games_selected==1);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_VARIANTS);
+    assert(!strcmp(s.games_original_path,discs.entries[1].path));
+    assert(!strcmp(s.games_2048_path,discs.entries[1].variant_2048_path));
+    assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && s.games_variant_selected==1);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_INSPECT);
+    assert(!strcmp(s.games_selected_path,discs.entries[1].variant_2048_path));
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_VARIANTS);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES);
+    assert(!strcmp(s.games_group,key) && s.games_selected==1);
+    assert(kui_shell_games_selection(&s,&remembered) && !strcmp(remembered.name,"Skies of Arcadia"));
+
+    /* Back returns to the set's original row, using its saved real root. */
+    epoch=s.games_generation;
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_GAMES_LIST && !s.games_group[0]);
+    assert(!strcmp(s.games_path,"/Games") && s.games_page==2 && s.games_seek);
+    assert(!strcmp(s.games_seek_name,"Skies of Arcadia"));
+    assert(!kui_shell_set_games_rows(&s,&discs,epoch,0,KUI_GAMES_VIEW_LIST));
+    assert(kui_shell_set_games_found_rows(&s,&parent,s.games_generation,16,KUI_GAMES_VIEW_LIST,3));
+    assert(s.games_page==2 && s.games_selected==3 && !s.games_group[0] && !s.games_seek);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST && !strcmp(s.games_group,key));
+    assert(kui_shell_set_games_rows(&s,&discs,s.games_generation,0,KUI_GAMES_VIEW_LIST));
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_GAMES_LIST && s.games_refresh && !s.games_group[0]);
+    assert(!strcmp(s.games_path,"/Games") && s.games_seek && !strcmp(s.games_seek_name,"Skies of Arcadia"));
+
+    /* A disc set inside a physical category consumes one Back. A second
+     * Back then leaves the category, rather than treating the key as a path. */
+    reset(KUI_SHELL_GAMES);s.games_view=KUI_GAMES_VIEW_LIST;strcpy(s.games_path,"/Games/RPG");
+    parent.count=1;parent.total=1;parent.has_more=false;strcpy(parent.root,"/Games/RPG");
+    parent.entries[0]=parent.entries[3];strcpy(parent.entries[0].path,"/Games/RPG/Skies 1/disc.gdi");
+    kui_shell_set_games_listing(&s,&parent);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST && !strcmp(s.games_group,key));
+    strcpy(discs.root,"/Games/RPG");
+    strcpy(discs.entries[0].path,"/Games/RPG/Skies 1/disc.gdi");
+    strcpy(discs.entries[1].path,"/Games/RPG/Skies 2/disc.gdi");
+    discs.entries[1].variant_2048_path[0]=0;
+    assert(kui_shell_set_games_rows(&s,&discs,s.games_generation,0,KUI_GAMES_VIEW_LIST));
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_GAMES_LIST && !s.games_group[0] && !strcmp(s.games_path,"/Games/RPG"));
+    assert(kui_shell_set_games_found_rows(&s,&parent,s.games_generation,0,KUI_GAMES_VIEW_LIST,0));
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_GAMES_LIST && !s.games_group[0] && !strcmp(s.games_path,"/Games"));
+    assert(s.games_seek && !strcmp(s.games_seek_name,"RPG"));
+
+    /* A set removed by a refresh falls back to its real root even when
+     * opening the set was not a remembered-selection seek request. */
+    reset(KUI_SHELL_GAMES);s.games_view=KUI_GAMES_VIEW_LIST;strcpy(parent.root,"/Games");
+    kui_shell_set_games_listing(&s,&parent);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST && !strcmp(s.games_group,key) && !s.games_seek);
+    assert(kui_shell_set_games_found_rows(&s,&parent,s.games_generation,0,KUI_GAMES_VIEW_LIST,0));
+    assert(!s.games_group[0] && !s.games_loading && !strcmp(s.games_path,"/Games") && s.games_listing.count==1);
+
+    /* Corrupt publications cannot nest synthetic groups or expose unsafe
+     * image paths as launchable disc rows. */
+    reset(KUI_SHELL_GAMES);s.games_view=KUI_GAMES_VIEW_LIST;strcpy(s.games_group,key);
+    other=discs;strcpy(other.root,"/Games");
+    strcpy(other.entries[0].group,key);strcpy(other.entries[1].path,"/Games/../outside.gdi");
+    kui_shell_set_games_listing(&s,&other);
+    assert(s.games_listing.entries[0].disabled && s.games_listing.entries[1].disabled);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES && !s.games_selected_path[0]);
+
+    /* New discovery controls leave the established Advanced actions in place. */
+    for(unsigned choice=4;choice<=5;choice++) {
+        reset(KUI_SHELL_GAMES_ADVANCED);s.games_advanced_selected=choice;
+        strcpy(s.games_path,"/Games/RPG");strcpy(s.games_group,key);s.games_page=4;
+        assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_ADVANCED);
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST && s.page==KUI_SHELL_GAMES);
+        assert(!strcmp(s.games_path,"/Games") && !s.games_group[0] && !s.games_page);
+        assert(s.games_refresh && s.games_rebuild==(choice==5) && s.games_loading);
+        assert(press(KUI_SHELL_Y,false)==KUI_SHELL_GAMES_LIST && !s.games_rebuild);
+    }
+    puts("PASS Games disc sets: real paths, exact disc/variant selection, remembered parent, stale publications, refresh and rebuild controls");
+}
 static void games_async_publication(void) {
     reset(KUI_SHELL_HOME);s.home_selected=home_index(KUI_SHELL_GAMES);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST);
@@ -2887,8 +3029,8 @@ static void games_rendering(void) {
     strcpy(s.games_listing.entries[7].title,"GAME EIGHT TITLE");render(&view);
     assert(strstr(drawn,"GAME EIGHT TITLE") && !strstr(drawn,"Game 8"));
     s.games_view=KUI_GAMES_VIEW_COMPACT;render(&view);
-    assert(strstr(drawn,"GAME EIGHT TITLE") && strstr(drawn,"Game 8") && strstr(drawn,"Folder") && strstr(drawn,"D-pad Move"));
-    s.games_view=KUI_GAMES_VIEW_GALLERY;render(&view);assert(strstr(drawn,"GAME EIGHT") && strstr(drawn,"D-pad Move"));
+    assert(strstr(drawn,"GAME EIGHT TITLE") && strstr(drawn,"Game 8") && strstr(drawn,"Folder") && strstr(drawn,"A Open") && strstr(drawn,"X Scan"));
+    s.games_view=KUI_GAMES_VIEW_GALLERY;render(&view);assert(strstr(drawn,"GAME EIGHT") && strstr(drawn,"A Open") && strstr(drawn,"X Scan"));
     s.games_scanning=true;view.busy=true;render(&view);
     assert(strstr(drawn,"Scanning for box art") && strstr(drawn,"B stops safely"));
     s.games_scanning=false;view.busy=false;s.games_view=KUI_GAMES_VIEW_SAVED;
@@ -4929,7 +5071,7 @@ int main(int argc,char **argv) {
     vmu_continuous_scrolling();vmu_catalog_scrolling();vmu_scroll_rendering();small_tools_controls();small_tools_rendering();
     vmu_copy_all_controls();vmu_import_controls();vmu_bulk_import_rendering();
     vmu_collection_copy_controls();vmu_collection_controls();vmu_collection_rendering();
-    games_remembered_selection(); games_controls(); games_background_titles(); games_views(); games_async_publication(); games_retail_controls(); games_armada_ce_music_controls(); games_bam4_ce_music_controls(); games_cdda_compatibility_status(); games_launch_options_controls(); games_cd_controls(); games_saved_launch_controls(); games_patch_controls(); games_image_defaults_controls(); games_zso_controls(); games_codec_controls(); games_check_baseline_controls(); games_variant_controls();
+    games_remembered_selection(); games_disc_group_controls(); games_controls(); games_background_titles(); games_views(); games_async_publication(); games_retail_controls(); games_armada_ce_music_controls(); games_bam4_ce_music_controls(); games_cdda_compatibility_status(); games_launch_options_controls(); games_cd_controls(); games_saved_launch_controls(); games_patch_controls(); games_image_defaults_controls(); games_zso_controls(); games_codec_controls(); games_check_baseline_controls(); games_variant_controls();
     if(argc==2 && !strcmp(argv[1],"--games-controls")) { puts("PASS Games navigation and launch controls"); return 0; }
     games_rendering(); games_native_reader_choices(); games_new_reader_defaults(); games_patch_rendering(); games_zso_rendering(); games_selected_art_rendering(); games_variant_rendering();
     if(argc==2 && !strcmp(argv[1],"--games")) { puts("PASS Games navigation, launch eligibility and rendering"); return 0; }

@@ -70,6 +70,14 @@ measurement.
 
 ### Stage 2: a scrolling browser
 
+The saved catalogue portion is now implemented separately from the scrolling
+browser. `games_library.c` keeps a compact, checked list on the card, loads it
+without walking game directories, and derives disc groups from explicit disc
+markers. Games uses a real root plus a group key rather than invented folder
+paths. X scans for changes; Advanced also offers a full rebuild. Artwork remains
+asynchronous. See [console checks and installation](games-catalogue-test.md).
+No console latency measurement is claimed by the host checks.
+
 - One continuous list over the in-RAM catalogue (up to 1024 sorted entries
   today) instead of fixed pages, with view modes: list only, list with the
   selected game's cover, and tiles.

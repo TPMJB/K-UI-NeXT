@@ -22,6 +22,8 @@ enum kui_games_view {
 
 enum kui_cover_size kui_games_view_size(unsigned view);
 const char *kui_games_view_name(unsigned view);
+/* Resolve/save only the view preference, without listing any game folders. */
+unsigned kui_games_library_view(unsigned view,kui_log_fn log,kui_cancel_fn cancel);
 
 /* Rows and cached display titles only, without artwork reads. SAVED loads the
  * view preference once; explicit changes save once. Warm rows use RAM only.
