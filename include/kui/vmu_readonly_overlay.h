@@ -7,8 +7,16 @@
 #define KUI_VMU_READONLY_OVERLAY_FRAMES 32u
 #define KUI_VMU_READONLY_OVERLAY_REPLY 524u
 /* Every admitted batch contains one physical parent, which never needs a
- * virtual reply. All remaining frames may still be maximum-size READs. */
+ * virtual reply. All remaining frames may still be maximum-size READs.
+ * VMU-lite and compact Background emulate only A2. It owns one receive slot
+ * per bank, and their chain parser refuses a repeated slot. One staged reply
+ * is the bound; prepare() refuses a second target. */
+#if (defined(KUI_NATIVE_VMU_LITE) && KUI_NATIVE_VMU_LITE) || \
+    (defined(KUI_NATIVE_BACKGROUND_COMPACT) && KUI_NATIVE_BACKGROUND_COMPACT)
+#define KUI_VMU_READONLY_OVERLAY_STAGED_FRAMES 1u
+#else
 #define KUI_VMU_READONLY_OVERLAY_STAGED_FRAMES (KUI_VMU_READONLY_OVERLAY_FRAMES - 1u)
+#endif
 
 /* A snapshot of one real DMA packet, excluding one-word SDK padding. The
  * caller proves the pointer maps to this physical RX address, the capacity is

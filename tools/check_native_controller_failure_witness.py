@@ -100,7 +100,8 @@ MODELED_FUNCTIONS=set()
 def worker_geometry(worker):
     """Keep historical model bounds separate from the exact lean General ABI."""
     lean=lean_worker_profile(worker)
-    span=0x1c000 if lean else 0x20000
+    from native_runtime_layout import layout_for
+    span=layout_for(worker[4]).WORKER_BYTES if lean else 0x20000
     return dict(lean=lean,begin=0x0c100000,end=0x0c100000+span,
                 stack_begin=0x0c100000+span-0x1000)
 
@@ -858,9 +859,11 @@ def objects(worker):
     geometry=worker_geometry(worker)
     if geometry['lean']:
         from check_native_general_lean_profile import prepared_objects
+        from check_native_compact_background_profile import worker_profile as compact_profile
         prepared_objects(worker)
+        overlay_bytes=1452 if compact_profile(worker) else 17172
         selected=(('_state',100),('_controller_pair',188),('_config',2304),
-            ('_live_plan',456),('_lifetime_plan',616),('_overlay',17172),('_durable_card',4160))
+            ('_live_plan',456),('_lifetime_plan',616),('_overlay',overlay_bytes),('_durable_card',4160))
     else:
         selected=(('_state',100),('_controller_pair',188),('_config',2300),
             ('_live_plan',456),('_lifetime_plan',616),('_overlay',0x45a0),('_durable_card',0x1040))
@@ -935,6 +938,9 @@ def mutations(resident,worker,layout):
             else:raise ValueError('controller witness accepted an untyped/mutable constant table')
     geometry_schemas=0
     if lean_worker_profile(worker):
+        geometry=worker_geometry(worker)
+        stack_begin=0xa0000000|geometry['stack_begin']
+        worker_end=0xa0000000|geometry['end']
         # New geometry must never fall back to the historical larger object
         # minima or its now-unowned final 16 KiB. Exercise schema admission
         # independently from the code/literal pins above.
@@ -944,7 +950,7 @@ def mutations(resident,worker,layout):
                 symbols=dict(worker[4]);sections=list(worker[3])
                 if variant=='size':symbols[name]=(address,count+4,kind,owner)
                 elif variant=='function':symbols[name]=(address,count,2,owner)
-                elif variant=='stack':symbols[name]=(0xac11b000,count,kind,owner)
+                elif variant=='stack':symbols[name]=(stack_begin,count,kind,owner)
                 else:
                     section=list(sections[owner]);section[2]&=~1;sections[owner]=tuple(section)
                 trial=(*worker[:3],sections,symbols)
@@ -960,10 +966,10 @@ def mutations(resident,worker,layout):
             except ValueError:geometry_schemas+=1
             else:raise ValueError('lean witness accepted an inexact compact worker marker')
         c=WitnessCPU(resident,worker,layout)
-        require(c.owned_stack_address(0xac11b000,0x1000) and
-                not c.owned_worker_address(0xac11c000) and
-                not c.owned_worker_address(0xac11bfff,2) and
-                not c.owned_stack_address(0xac11afff),
+        require(c.owned_stack_address(stack_begin,0x1000) and
+                not c.owned_worker_address(worker_end) and
+                not c.owned_worker_address(worker_end-1,2) and
+                not c.owned_stack_address(stack_begin-1),
                 'lean witness model retained historical private-stack/worker ownership')
     return dict(actual_instruction_mutation_rejections=functional,
                 owned_timer_policy_branch_mutation_rejections=timer_branches,

@@ -21,6 +21,9 @@ CAPTURE = $(DESTINATION) src/core/hash.c src/core/capture_plan.c src/core/captur
 FATFS = .deps/fatfs/source/ff.c .deps/fatfs/source/ffunicode.c
 VMU_MANAGEMENT = src/core/vmu_collection.c src/core/vmu_image.c src/core/vmu_image_subset.c src/core/vmu_save_snapshot.c src/core/vmu_image_pack.c src/core/vmu_image_merge.c src/core/vmu_description.c
 VMU_MANAGEMENT += src/core/vmu_library.c src/core/vmu_game_assign.c src/core/vmu_game_card.c src/core/vmu_persist_profile.c src/core/retail_image.c src/core/game_cover.c
+VMU_MANAGEMENT += src/core/vmu_game_candidates.c src/core/vmu_import_plan.c
+
+
 
 include config/lwext4.mk
 LWEXT4_HOST_OBJECTS := $(patsubst %.c,build/host/%.o,$(LWEXT4_SOURCES))
@@ -1371,3 +1374,19 @@ build/test-recovery-dashboard: tests/test_recovery_dashboard.c include/kui/recov
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) tests/test_recovery_dashboard.c -o $@
 test-recovery-dashboard: build/test-recovery-dashboard
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-recovery-dashboard
+
+.PHONY: test-vmu-per-game
+test-vmu-per-game: build/test-shell build/test-vmu-game-candidates
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-shell --vmu-wizard
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-game-candidates
+	python3 tests/test_vmu_import_plan.py
+	python3 tests/test_vmu_import_match.py
+	python3 tests/test_vmu_import_match_adversarial.py
+	python3 tests/test_vmu_wizard.py
+	python3 tests/test_vmu_game_info.py
+	python3 tests/test_vmu_wizard_filesystems.py
+	python3 tests/test_vmu_wizard_installer.py
+
+build/test-vmu-game-candidates: tests/test_vmu_game_candidates.c src/core/vmu_game_candidates.c src/core/vmu_game_assign.c include/kui/vmu_game_candidates.h src/core/vmu_game_card.c src/core/retail_image.c
+	@mkdir -p build
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -ffunction-sections -fdata-sections $(INCLUDES) tests/test_vmu_game_candidates.c src/core/vmu_game_card.c src/core/retail_image.c -Wl,--gc-sections -o $@

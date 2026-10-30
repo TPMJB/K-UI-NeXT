@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# VMU-lite: the VMU-only A2 service with bounded batch buffers. One staged
+# virtual reply replaces 31, and 4 KiB chain copies replace two 12 KiB ones;
+# everything else is the VMU-only build. A longer chain stops the game.
+BUILD ?= build/native-vmu-lite-sci
+include Makefile.vmu-native-vmu-only
+FLAGS += -DKUI_NATIVE_VMU_LITE=1
+NATIVE_FLAGS += -DKUI_NATIVE_VMU_LITE=1
+NATIVE_LAYOUT := src/loader/vmu_native_lite.ld
+NATIVE_SPAN := 0x12000
+$(BUILD)/native-worker.elf: src/loader/vmu_native_lite.ld
+$(BUILD)/retail-native-vmu-lite.kui: $(BUILD)/retail-maple-observe.kui
+	cp $< $@
+all: $(BUILD)/retail-native-vmu-lite.kui
+
+VMU_LITE_HOST_FLAGS = $(VMU_ONLY_HOST_FLAGS) -DKUI_NATIVE_VMU_LITE=1
+.PHONY: vmu-lite-host-tests
+vmu-lite-host-tests:
+	python3 tests/test_native_vmu_lite.py
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) $(VMU_LITE_HOST_FLAGS) \
+	 tests/test_vmu_native_vmu_only_worker.c $(COMPAT_WORKER_HOST_SRC) \
+	 -Wl,--gc-sections -o $(BUILD)/test-vmu-lite-worker
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-vmu-lite-worker
+	$(HOST_CC) -std=c11 -O1 -fno-pie -no-pie -Wall -Wextra -Werror -pedantic \
+	 -fsanitize=address,undefined -g -Iinclude -Isrc/loader -DKUI_NATIVE_VMU_LITE=1 \
+	 src/core/vmu_readonly.c src/core/vmu_emulation.c src/core/vmu_image.c \
+	 src/loader/vmu_readonly_overlay.c tests/test_vmu_lite_overlay.c -o $(BUILD)/test-vmu-lite-overlay
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-vmu-lite-overlay

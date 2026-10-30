@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Separate combined Background candidate: 72 KiB VMU worker, full 192 KiB
+# read-ahead cache, New/Legacy low engines and physical-VMU toggle.
+# The Standard paced 72 KiB module remains independently linked.
+BUILD ?= build/native-background-compact
+include Makefile.vmu-native-split-controller-stream-guard
+FLAGS += -DKUI_NATIVE_BACKGROUND_COMPACT=1
+NATIVE_FLAGS += -DKUI_NATIVE_BACKGROUND_COMPACT=1
+# The legacy flag filter deliberately removes New-engine KUI_NATIVE flags.
+# Its shared worker/map ownership must retain this exact geometry selector.
+LEGACY_FLAGS += -DKUI_NATIVE_BACKGROUND_COMPACT=1
+NATIVE_LAYOUT := src/loader/vmu_native_background_compact.ld
+NATIVE_SPAN := 0x12000
+$(BUILD)/native-worker.elf: src/loader/vmu_native_background_compact.ld
+
+# Bind every final object family to the selected complete layout. Keep this
+# stamp in the shared base config so switching BACK to a historical profile
+# in the same directory also recompiles all objects.
+$(RESIDENT_OBJ) $(LEGACY_OBJ) $(STAGE_OBJ) $(NATIVE_OBJ) $(WORKER_OBJ) $(RA_OBJ): $(BUILD)/readonly-config
+
+$(BUILD)/retail-native-background-compact.kui: $(BUILD)/retail-native-dual.kui
+	cp $< $@
+all: $(BUILD)/retail-native-background-compact.kui
+
+.PHONY: compact-background-config-host-tests
+compact-background-config-host-tests:
+	python3 tests/test_native_background_compact_config.py

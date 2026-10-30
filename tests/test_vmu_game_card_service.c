@@ -4,6 +4,7 @@
  * stays in memory; the stage's admission is replayed on every chosen card. */
 #include "kui/vmu_game_card_service.h"
 #include "kui/vmu_persist_profile.h"
+#include "kui/hash.h"
 #include "kui/media.h"
 #include "diskio.h"
 #include <stdarg.h>
@@ -197,6 +198,53 @@ static uint8_t *snapshot(void) {
     memcpy(copy,disk,(size_t)sectors*512u);return copy;
 }
 static bool unchanged(const uint8_t *copy) {return !memcmp(copy,disk,(size_t)sectors*512u);}
+struct protected_file {char path[192];uint64_t bytes;uint8_t sha256[32];};
+static struct protected_file protected_files[256];
+static unsigned protected_count;
+static void file_digest(const char *path,uint64_t *bytes,uint8_t digest[32]) {
+    FIL file;uint8_t block[512];struct kui_sha256 hash;
+    CHECK(f_open(&file,path,FA_READ)==FR_OK);*bytes=f_size(&file);kui_sha256_init(&hash);
+    for(uint64_t left=*bytes;left;) {
+        UINT want=left>sizeof(block)?sizeof(block):(UINT)left,got=0;
+        CHECK(f_read(&file,block,want,&got)==FR_OK && got==want);
+        kui_sha256_update(&hash,block,want);left-=want;
+    }
+    CHECK(f_close(&file)==FR_OK);kui_sha256_digest(&hash,digest);
+}
+static void protect_tree(const char *path,unsigned depth) {
+    DIR dir;FILINFO info;CHECK(depth<=3u && f_opendir(&dir,path)==FR_OK);
+    FRESULT r;
+    while((r=f_readdir(&dir,&info))==FR_OK && info.fname[0]) {
+        char child[192];int n=snprintf(child,sizeof(child),"%s/%s",path,info.fname);CHECK(n>0 && n<(int)sizeof(child));
+        if(info.fattrib&AM_DIR)protect_tree(child,depth+1u);
+        else {
+            CHECK(protected_count<256u);struct protected_file *file=protected_files+protected_count++;
+            strcpy(file->path,child);file_digest(child,&file->bytes,file->sha256);
+        }
+    }
+    CHECK(r==FR_OK && f_closedir(&dir)==FR_OK);
+}
+static void protect_current_files(void) {protected_count=0;protect_tree(KUI_VMU_GAME_CARD_ROOT,0u);}
+static void verify_protected_files(void) {
+    for(unsigned i=0;i<protected_count;i++) {
+        uint64_t bytes;uint8_t digest[32];file_digest(protected_files[i].path,&bytes,digest);
+        CHECK(bytes==protected_files[i].bytes && !memcmp(digest,protected_files[i].sha256,32u));
+    }
+}
+static void imported_destination(unsigned pair,const uint8_t identity[16],const uint8_t image[131072]) {
+    static uint8_t data[131072];char path[96];uint8_t expected[64]={0};
+    snprintf(path,sizeof(path),KUI_VMU_GAME_CARD_ROOT "/p%04u/card.vmd",pair);
+    CHECK(file_read(path,data,sizeof(data))==sizeof(data) && !memcmp(data,image,sizeof(data)));
+    snprintf(path,sizeof(path),KUI_VMU_GAME_CARD_ROOT "/p%04u/identity.bin",pair);
+    CHECK(file_read(path,data,sizeof(data))==16u && !memcmp(data,identity,16u));
+    snprintf(path,sizeof(path),KUI_VMU_GAME_CARD_ROOT "/p%04u/card.journal",pair);
+    CHECK(file_read(path,data,sizeof(data))==1024u);
+    for(unsigned i=0;i<1024u;i++)CHECK(!data[i]);
+    memcpy(expected,"KUIVMUI1",8u);memcpy(expected+16u,identity,16u);
+    uint32_t crc=kui_crc32(0,expected,60u);for(unsigned i=0;i<4u;i++)expected[60u+i]=(uint8_t)(crc>>(8u*i));
+    snprintf(path,sizeof(path),KUI_VMU_GAME_CARD_ROOT "/p%04u/import.bin",pair);
+    CHECK(file_read(path,data,sizeof(data))==64u && !memcmp(data,expected,64u));
+}
 
 static void restore_disk(const uint8_t *saved) {
     unmount();memcpy(disk,saved,(size_t)sectors*512u);mount();
@@ -308,10 +356,13 @@ static void imported_assignments(void) {
     }
     snprintf(path,sizeof(path),KUI_VMU_GAME_CARD_ROOT "/p%04u/retail-persistent-profile-%04u.bin",imported,imported);CHECK(f_unlink(path)==FR_OK);
     snprintf(path,sizeof(path),KUI_VMU_GAME_CARD_ROOT "/p%04u",imported);CHECK(f_unlink(path)==FR_OK);
-    --fresh_salt[0];before=snapshot();
-    CHECK(kui_vmu_game_card_import_publish(image,sizeof(image),fresh_salt,&work,&choice,changed,log_line,cancelled)==KUI_VMU_GAME_CARD_FAILED);
-    CHECK(strstr(choice.problem,"identity would repeat") && unchanged(before));free(before);
+    --fresh_salt[0];protect_current_files();
+    CHECK(kui_vmu_game_card_import_publish(image,sizeof(image),fresh_salt,&work,&choice,changed,log_line,cancelled)==KUI_VMU_GAME_CARD_READY);
+    CHECK(choice.pair!=imported && memcmp(changed,imported_id,16u));
+    imported_destination(choice.pair,changed,image);verify_protected_files();
+    FILINFO absent;CHECK(f_stat(path,&absent)==FR_NO_FILE);
     CHECK(select_card("MK-51136",NULL,0,&choice,wire)==KUI_VMU_GAME_CARD_FAILED);
+    verify_protected_files();
     restore_disk(stable);
     /* Keep the old pin only in the older slot; it is still a possible
      * recovery generation, so its identity must remain reserved too. */
@@ -321,9 +372,11 @@ static void imported_assignments(void) {
     }
     snprintf(path,sizeof(path),KUI_VMU_GAME_CARD_ROOT "/p%04u/retail-persistent-profile-%04u.bin",imported,imported);CHECK(f_unlink(path)==FR_OK);
     snprintf(path,sizeof(path),KUI_VMU_GAME_CARD_ROOT "/p%04u",imported);CHECK(f_unlink(path)==FR_OK);
-    before=snapshot();
-    CHECK(kui_vmu_game_card_import_publish(image,sizeof(image),fresh_salt,&work,&choice,changed,log_line,cancelled)==KUI_VMU_GAME_CARD_FAILED);
-    CHECK(strstr(choice.problem,"identity would repeat") && unchanged(before));free(before);
+    protect_current_files();
+    CHECK(kui_vmu_game_card_import_publish(image,sizeof(image),fresh_salt,&work,&choice,changed,log_line,cancelled)==KUI_VMU_GAME_CARD_READY);
+    CHECK(choice.pair!=imported && memcmp(changed,imported_id,16u));
+    imported_destination(choice.pair,changed,image);verify_protected_files();
+    CHECK(f_stat(path,&absent)==FR_NO_FILE);
     restore_disk(stable);
     /* A journal pending replay survives assignment changes. Remapping a
      * moved imported image refuses until that journal can be recovered. */

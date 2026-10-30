@@ -362,10 +362,14 @@ class AbsentCompletion(Machine):
                  parent_index=None):
         from check_native_general_lean_profile import worker_profile
         self.lean = worker_profile(worker)
+        from native_runtime_layout import layout_for,BACKGROUND_COMPACT
+        geometry=layout_for(worker[4])
+        compact=geometry is BACKGROUND_COMPACT
+        self.single_staging=compact
         # These are independently compiled SH32 object layouts, selected only
         # by the complete reviewed worker profile. Never infer a new layout
         # from the object being checked or widen the historical profile.
-        self.overlay_bytes = 17172 if self.lean else 17824
+        self.overlay_bytes = 1452 if compact else 17172 if self.lean else 17824
         self.frame_stride = 24 if self.lean else 28
         self.staging_offset = 928 if self.lean else 1056
         self.reply_lengths_offset = 864 if self.lean else 992
@@ -373,7 +377,7 @@ class AbsentCompletion(Machine):
         require(0 <= self.parent_index < count and 0 <= targets < count,
                 'overlay model has impossible parent/target geometry')
         super().__init__(worker, self.helper, seed, 15,
-                         0xAC11BFE0 if self.lean else 0xAC11FFE0, body=body)
+                         0xAC100000+geometry.WORKER_BYTES-32 if self.lean else 0xAC11FFE0, body=body)
         self.functions = [symbol_bytes(worker, name, 2)[:2] for name in self.closure]
         if body is not None:
             self.functions[0] = self.functions[0][0], body
@@ -632,6 +636,8 @@ class RetryCompletion(AbsentCompletion):
         self.put(self.overlay+60,0 if outcome=='unfiltered' else worker[4]['_persistent_admit'][0])
         self.targets=[(i,rx) for i,(rx,destination) in enumerate(self.rx) if destination==2]
         require(self.targets, 'retry model requires at least one target')
+        require(not self.single_staging or len(self.targets)==1,
+                'Single-staging retry fixture exceeds its independently admitted target bound')
         self.target=self.targets[0][1];self.parent=self.rx[self.parent_index][0]
         self.phase=1 if outcome=='sync-phase-one' else 4
         words=34 if command==12 else 2
@@ -642,7 +648,7 @@ class RetryCompletion(AbsentCompletion):
             location=((42+ordinal)<<24)|((self.phase<<8) if command==13 else 0)
             frame=self.overlay+96+self.frame_stride*index
             self.put(frame,self.header);self.put(frame+4,0x02000000);self.put(frame+8,location)
-            slot=index-int(index>self.parent_index) if self.lean else index
+            slot=0 if self.single_staging else index-int(index>self.parent_index) if self.lean else index
             staging=self.overlay+self.staging_offset+524*slot
             self.staging_addresses.append(staging)
             packet=struct.pack('<III',self.header,0x02000000,location)
@@ -688,6 +694,11 @@ class RetryCompletion(AbsentCompletion):
 
     def plain(self,word,pc):
         n,m=word>>8&15,word>>4&15
+        if word&0xF00F==0x6004:
+            address=self.r[m]
+            self.r[n]=self.byte(address)
+            if n!=m:self.r[m]=(address+1)&MASK
+            return
         if word&0xF00F==0x300A:
             value=self.r[n]-self.r[m]-(self.sr&1)
             self.r[n]=value&MASK;self.t(value<0);return
@@ -741,7 +752,36 @@ class RetryCompletion(AbsentCompletion):
         return self.run().check()
 
 
+def retry_byte_postincrement_truth_cases():
+    """SH MOV.B @Rm+,Rn sign-extension, overlap and exact alias witnesses."""
+    cases=0
+    for n in range(16):
+        for m in range(16):
+            for address in (0x0c200000,0x8c200000,0xac200000,MASK):
+                for value in (0,0x7f,0x80,0xff):
+                    cpu=RetryCompletion.__new__(RetryCompletion)
+                    cpu.r=[(0x13570000+17*i)&MASK for i in range(16)]
+                    cpu.r[m]=address;cpu.data={address:value};cpu.sr=0x600000f1
+                    before=cpu.r.copy();expected=before.copy()
+                    expected[n]=(value-256 if value&128 else value)&MASK
+                    if n!=m:expected[m]=(address+1)&MASK
+                    cpu.plain(0x6004|(n<<8)|(m<<4),0)
+                    require(cpu.r==expected and cpu.sr==0x600000f1 and cpu.data=={address:value},
+                            'Retry byte postincrement model changes SH semantics')
+                    cases+=1
+    cpu=RetryCompletion.__new__(RetryCompletion)
+    cpu.r=[0]*16;cpu.r[7]=0x8c200000;cpu.data={0xac200000:0x80};cpu.sr=0x600000f1
+    before=cpu.r.copy()
+    try:cpu.plain(0x6674,0)
+    except ValueError:
+        require(cpu.r==before and cpu.sr==0x600000f1,
+                'Rejected byte alias changed instruction state')
+    else:raise ValueError('Retry byte postincrement silently aliases unprepared P1/P2 memory')
+    return cases+1
+
+
 def audit_retry_completion(worker,*,self_test=False):
+    byte_truth=retry_byte_postincrement_truth_cases()
     cases=successes=0
     for seed in range(2):
         for command in (11,12,13):
@@ -750,18 +790,31 @@ def audit_retry_completion(worker,*,self_test=False):
                 if outcome=='again':model.next_success();successes+=1
         RetryCompletion(worker,seed,13,'sync-phase-one').run().check();cases+=1
     from check_native_general_lean_profile import worker_profile
-    full_batches=0
+    full_batches=full_targets=0
     if worker_profile(worker):
+        from native_runtime_layout import layout_for,BACKGROUND_COMPACT
+        targets=1 if layout_for(worker[4]) is BACKGROUND_COMPACT else 31
+        full_targets=targets
         for parent in range(32):
             for command in (11,12,13):
                 for outcome in ('again','success','late-host'):
-                    RetryCompletion(worker,parent&1,command,outcome,count=32,targets=31,
+                    RetryCompletion(worker,parent&1,command,outcome,count=32,targets=targets,
                                     parent_index=parent).run().check()
                     cases+=1;full_batches+=1
     rejected=0
     if self_test:
         _,original,_=symbol_bytes(worker,RetryCompletion.helper,2)
-        if worker_profile(worker):
+        from check_native_compact_background_profile import worker_profile as compact_profile
+        if compact_profile(worker):
+            # Separately reviewed 72 KiB allocation uses R9 for staging and
+            # R10 for reply length; retain the complete actual predicates.
+            mutations=[(struct.pack('<H',0x88fc),struct.pack('<H',0x8800),'again'),
+                (struct.pack('<4H',0x8491,0x2008,0x8b07,0x8492),
+                 struct.pack('<4H',0x8491,0x2008,0x0009,0x8492),'host'),
+                (struct.pack('<6H',0x8492,0x51f9,0x600c,0x3010,0x8b02,0x8493),
+                 struct.pack('<6H',0x8492,0x51f9,0x600c,0x3010,0x0009,0x8493),'source'),
+                (struct.pack('<2H',0x60a3,0x8804),struct.pack('<2H',0x60a3,0x8808),'length')]
+        elif worker_profile(worker):
             # Exact reviewed register allocation of the compact publisher.
             # Historical opcode mutants below remain unchanged.
             mutations=[(struct.pack('<H',0x88fc),struct.pack('<H',0x8800),'again'),
@@ -784,7 +837,9 @@ def audit_retry_completion(worker,*,self_test=False):
             except (ValueError,AssertionError,KeyError):rejected+=1
             else:raise ValueError('retry model accepts changed predicate: '+outcome)
     return dict(linked_instruction_cases=cases,retry_then_success_cases=successes,
-        full_32_frame_batches=full_batches,all_parent_positions=full_batches!=0,
+        postincrement_byte_truth_cases=byte_truth,
+        full_32_frame_batches=full_batches,full_batch_virtual_targets=full_targets,
+        all_parent_positions=full_batches!=0,
         mutation_rejections=rejected,virtual_address=2,physical_a1_unchanged=True,
         retry_header_only_publication=True,exact_endpoint_length_and_command_gates=True,
         authored_backend_handler=True,storage_or_sdk_retry_scheduling_proved=False)
@@ -1325,6 +1380,8 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
     """Pin the P2 publisher and witness initialization before its first arm."""
     from check_native_general_lean_profile import stage_profile
     lean_stage=stage_profile(stage)
+    from check_native_compact_background_profile import stage_profile as compact_profile
+    compact_stage=compact_profile(stage)
     span = layout_for(stage[4]).WORKER_BYTES
     image = inspect_elf(stage[0], HIGH, LIMIT)
     symbols = stage[4]
@@ -1373,7 +1430,7 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
         selected_callbacks=callbacks is not None
         require(not lean_stage or selected_callbacks,
                 'Lean General publication requires its selected low callbacks')
-        i=(0x480 if lean_stage else 0x464 if callbacks is not None else 0x46c)//2
+        i=(0x49a if compact_stage else 0x480 if lean_stage else 0x464 if callbacks is not None else 0x46c)//2
         prior=words[i-4:i]
         # The selected low-reader accessors move this complete block by8B.
         # Keep its actual refusal branch tied to the original phase/detail
@@ -1381,16 +1438,24 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
         branch=prior[2]
         displacement=branch&0xfff
         if displacement&0x800:displacement-=0x1000
-        selected_prior=(prior[:2]==[0x8d02,0x6493] and prior[3]==0xe503 and
+        selected_prior=(prior[:2]==[0x8d02,0x6483 if compact_stage else 0x6493] and prior[3]==0xe503 and
                         branch&0xf000==0xa000 and
-                        begin+2*(i-2)+4+2*displacement==begin+(0x3e if lean_stage else 0x28))
+                        begin+2*(i-2)+4+2*displacement==begin+(0x46 if compact_stage else 0x3e if lean_stage else 0x28))
         if callbacks is not None:
-            configure=(0x12a if lean_stage else 0x114)//2
+            configure=(0x138 if compact_stage else 0x12a if lean_stage else 0x114)//2
             require(words[configure]&0xff00==0xd100 and
                     literal(configure)==symbols['_native_low_configure'][0] and
                     words[configure+1:configure+4]==[0x64f3,0x410b,0x7444],
                     'selected low callbacks were not configured into the actual SP+68 worker config')
-        require(background and mode_config and words[i]&0xff00==0xdc00 and
+        compact_setup=(compact_stage and background and mode_config and words[i]&0xff00==0xde00 and
+            literal(i)==symbols['_native_driver'][0] and words[i+1]&0xff00==0xdd00 and literal(i+1)==address and
+            words[i+2:i+8]==[0x53e7,0x55f6,0x2232,0x53ee,0x358c,0x529d] and
+            words[i+8]&0xff00==0xd800 and literal(i+8)==symbols['_retail_display_line'][0] and
+            words[i+9:i+11]==[0x4d0b,0x2232] and words[i+11]&0xff00==0xd400 and
+            words[i+12:i+15]==[0x6c83,0x480b,0x1fba] and words[i+15]&0xff00==0xd000 and
+            literal(i+15)==symbols['_kui_vmu_native_worker_call'][0] and
+            words[i+16:i+23]==[0x67f3,0x559a,0x7728,0x5493,0x66f3,0x400b,0x7644] and selected_prior)
+        historical_setup=(not compact_stage and background and mode_config and words[i]&0xff00==0xdc00 and
             literal(i)==symbols['_native_driver'][0] and words[i+1]&0xff00==0xdd00 and literal(i+1)==address and
             words[i+2:i+8]==[0x53c7,0x55f7,0x2232,0x53ce,0x359c,0x528d] and
             words[i+8]&0xff00==0xd900 and literal(i+8)==symbols['_retail_display_line'][0] and
@@ -1399,13 +1464,14 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
             literal(i+14)==symbols['_kui_vmu_native_worker_call'][0] and
             words[i+15:i+22]==[0x67f3,0x558a,0x7728,0x5483,0x66f3,0x400b,0x7644] and
             (selected_prior if callbacks is not None else
-             prior==[0x8d02,0x6493,0xadde,0xe503]),
+             prior==[0x8d02,0x6493,0xadde,0xe503]))
+        require(compact_setup or historical_setup,
             'witness worker-publication exact setup/first-arm block differs')
         report.update(selected_low_callback_profile=callbacks is not None,
                       first_arm_setup_offset=hex(2*i),
                       selected_callback_refusal_branch_target_checked=callbacks is not None,
                       selected_low_configure_receives_actual_arm_config=callbacks is not None)
-        candidates.append((i,9,20,5))
+        candidates.append((i,9,21,6) if compact_stage else (i,9,20,5))
     for i in (() if witness else range(len(words) - 20)):
         # Original configuration layout: the publisher uses callee-saved R14.
         old = (words[i] & 0xff00 == 0xde00 and literal(i) == address and
@@ -1526,7 +1592,13 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
             words[i+6]&0xff00==0xd400 and literal(i+6)==symbols['__native_worker_blob_begin'][0] and
             words[i+7:i+11]==[0x1f92,0x1fa1,0x400b,0x2f82]):
             relocations.append((i,i+9,4,True))
-        if (witness and i==(0x28a if lean_stage else 0x26e if selected_callbacks else 0x272)//2 and words[i+1]==0x37b8 and
+        if (compact_stage and i==0x29c//2 and words[i+1]==0x37b8 and
+            words[i+2]&0xff00==0xde00 and literal(i+2)==span and words[i+3]==0x55f6 and
+            words[i+4]&0xff00==0xd600 and literal(i+4)==symbols['__native_worker_blob_end'][0] and
+            words[i+5]&0xff00==0xd400 and literal(i+5)==symbols['__native_worker_blob_begin'][0] and
+            words[i+6:i+10]==[0x1f82,0x1fe1,0x400b,0x2f92]):
+            relocations.append((i,i+8,6,True))
+        if (witness and not compact_stage and i==(0x28a if lean_stage else 0x26e if selected_callbacks else 0x272)//2 and words[i+1]==0x37b8 and
             words[i+2]&0xff00==(0xde00 if selected_callbacks else 0xdd00) and literal(i+2)==span and words[i+3]==0x55f7 and
             words[i+4]&0xff00==0xd600 and literal(i+4)==symbols['__native_worker_blob_end'][0] and
             words[i+5]&0xff00==0xd400 and literal(i+5)==symbols['__native_worker_blob_begin'][0] and
@@ -1540,23 +1612,24 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
         [0x6e83,0x3e9c,0xe500,0x66b3,0x64e3,0x4c0b,0x3698],
         [0x5bf7,0xe500,0x51f7,0x66a3,0x3b8c,0x3618,0x4d0b,0x64b3],
         [0x5bf7,0xe500,0x52f7,0x66d3,0x3b8c,0x3628,0x4e0b,0x64b3],
-        [0x5bf7,0xe500,0x51f7,0x66e3,0x3b8c,0x3618,0x4d0b,0x64b3])
-    zero_families = (0, 1, 1, 2, 3, 4, 5, 5)
+        [0x5bf7,0xe500,0x51f7,0x66e3,0x3b8c,0x3618,0x4d0b,0x64b3],
+        [0x5bf6,0xe500,0x51f6,0x66e3,0x3b9c,0x3618,0x4d0b,0x64b3])
+    zero_families = (0, 1, 1, 2, 3, 4, 5, 5, 6)
     zeroes = [(i,zero_families[j],j) for j,pattern in enumerate(zero_patterns)
               for i in range(len(words)-len(pattern)) if words[i:i+len(pattern)]==pattern and
               (j!=5 or background) and (j!=6 or witness and not selected_callbacks) and
-              (j!=7 or selected_callbacks)]
+              (j!=7 or selected_callbacks and not compact_stage) and (j!=8 or compact_stage)]
     releases = [i for i in range(len(words) - 3) if words[i:i + 3] ==
-                ([0x52aa,0x7214,0x2022] if register_family in (4,5) else
+                ([0x52aa,0x7214,0x2022] if register_family in (4,5,6) else
                  [0x52ba, 0x7214, 0x2022] if register_family in (2,3) else [0x53ca, 0x7314, 0x2032])]
     require(len(relocations) == len(zeroes) == len(releases) == 1,
             "missing linked relocation/BSS/release-cell initialization witnesses")
     require(relocations[0][2] == zeroes[0][1] == register_family,
             "installer relocation/BSS/publication use inconsistent load/length registers")
-    require(relocations[0][3] == mode_config and (zeroes[0][2] in (2, 3, 4, 5, 6, 7)) == mode_config,
+    require(relocations[0][3] == mode_config and (zeroes[0][2] in (2, 3, 4, 5, 6, 7, 8)) == mode_config,
             "installer mode configuration uses an unreviewed relocation/zero-fill ABI")
     relocate_pc = begin + relocations[0][1] * 2
-    zero_pc = begin + (zeroes[0][0] + (6 if register_family in (4,5) else 5)) * 2
+    zero_pc = begin + (zeroes[0][0] + (6 if register_family in (4,5,6) else 5)) * 2
     release_pc = begin + (releases[0] + 2) * 2
     # The compiler keeps memset in callee-saved R12 until this BSS call.
     # Pin its initializer and reject any intervening write to R12.
@@ -1611,10 +1684,10 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
     # v3 puts the consumer-cell store in the publisher JSR delay slot.
     # The exact block above pins that store; the JSR node represents both
     # instructions in this CFG, before control reaches the publisher.
-    dynamic_stores = (4,9) if register_family==5 else (4,8) if register_family==4 else (5, 8) if register_family in (2, 3) else (4, 7)
+    dynamic_stores = (4,9) if register_family in (5,6) else (4,8) if register_family==4 else (5, 8) if register_family in (2, 3) else (4, 7)
     witnesses = {relocate_pc, zero_pc, release_pc,
                  *(begin + (first + offset) * 2 for offset in dynamic_stores)}
-    if register_family in (2, 3, 4, 5):witnesses.add(begin + (first - 4) * 2)
+    if register_family in (2, 3, 4, 5, 6):witnesses.add(begin + (first - 4) * 2)
     require(witnesses <= dom[publish] and publish in dom[arm],
             "installer can enter P1 arm before initialization/publication")
     require(begin + 2 * memset_loads[0] in dom[zero_pc],
@@ -1628,7 +1701,7 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
         # clobber R0. Both getter and store must dominate the first arm.
         config_start, config_base = (0x48, 0x904) if register_family in (3,4) else (0x44, 0x900)
         if lean_stage:
-            require(register_family==5 and selected_callbacks,
+            require(register_family in (5,6) and selected_callbacks,
                     'Lean General diagnostics requires its exact selected-callback installer')
             config_base=0x940
         alias_add = 0x38AC if register_family == 3 else 0x389C
@@ -1644,6 +1717,11 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
             choices=[j for j in range(len(words)-7) if
                 words[j]&0xff00==0xd000 and literal(j)==symbols['_native_runtime_diagnostics'][0] and
                 words[j+1:j+7]==[0x400b,0x0009,0x51c8,0x31a0,0x8f09,0x1b0f]]
+        elif register_family==6:
+            choices=[j for j in (0x14a//2,) if
+                words[j]&0xff00==0xd000 and literal(j)==symbols['_native_runtime_diagnostics'][0] and
+                words[j+1:j+3]==[0x400b,0x0009] and words[j+3]&0xff00==0x9100 and
+                words[j+4:j+8]==[0x5ef7,0x31fc,0x7e40,0x2102]]
         elif register_family==5:
             if selected_callbacks:
                 choices=[j for j in ((0x13c if lean_stage else 0x126)//2,) if
@@ -1667,9 +1745,9 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
         require(len(bases) == 1 and
                 config_base+(0 if lean_stage else 60)-config_start==(0x8fc if lean_stage else 0x8f8),
                 'diagnostics store no longer names exact final config word')
-        getter_pc = begin + 2 * (diagnostics_getter + (1 if register_family in (4,5) else 3))
-        store_call_pc = begin + 2 * (diagnostics_getter + (5 if register_family in (4,5) else 7))
-        base_pc = begin + 2 * (bases[0] + (1 if selected_callbacks else 3))
+        getter_pc = begin + 2 * (diagnostics_getter + (1 if register_family in (4,5,6) else 3))
+        store_call_pc = begin + 2 * (diagnostics_getter + (7 if compact_stage else 5 if register_family in (4,5) else 7))
+        base_pc = begin + 2 * (bases[0] + (2 if compact_stage else 1 if selected_callbacks else 3))
         base_dominates=(getter_pc in dom[base_pc] if selected_callbacks else base_pc in dom[getter_pc])
         require(base_dominates and base_pc in dom[store_call_pc] and
                 getter_pc in dom[store_call_pc] and store_call_pc in dom[arm],
@@ -1702,28 +1780,30 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
             words[j+5]&0xff00==0xd100 and literal(j+5)==0x80000000 and
             words[j+6:j+11]==[0x7448,0x6683,0xeb01,0x4d0b,0x291b]]
         if witness:
-            normalizers=[j for j in ((0x66 if lean_stage else 0x50)//2,) if
+            normalizers=[j for j in ((0x6e if compact_stage else 0x66 if lean_stage else 0x50)//2,) if
                 words[j]&0xff00==0xd100 and literal(j)==0x1fffffff and
                 words[j+1]&0xff00==(0xdd00 if selected_callbacks else 0xde00) and literal(j+1)==symbols['_memset'][0] and
-                words[j+2]==0x64f3 and words[j+4]==0x2919 and
+                words[j+2]==0x64f3 and words[j+4]==(0x2819 if compact_stage else 0x2919) and
                 words[j+5]&0xff00==0xd100 and literal(j+5)==0x80000000 and
-                words[j+6:j+11]==([0x7444,0x6683,0xeb01,0x4d0b,0x291b] if selected_callbacks else
+                words[j+6:j+11]==([0x7444,0x6693,0xea01,0x4d0b,0x281b] if compact_stage else
+                                  [0x7444,0x6683,0xeb01,0x4d0b,0x291b] if selected_callbacks else
                                   [0x7444,0x6683,0xec01,0x4e0b,0x291b])]
         require(len(normalizers)==1,'Background prefix lacks its exact P1 payload normalization')
         normal=normalizers[0]
-        require(words[normal-12]==(0x5af8 if witness else 0x5cf8) and words[normal-10]&0xff00==0xd000 and
+        require(words[normal-12]==(0x5bf7 if compact_stage else 0x5af8 if witness else 0x5cf8) and words[normal-10]&0xff00==0xd000 and
                 literal(normal-10)==symbols['_kui_vmu_native_heap_lease_valid'][0] and
-                words[normal-9:normal-7]==[0xe600,0x7a40 if witness else 0x7c40] and
+                words[normal-9:normal-7]==[0xe600,0x7b40 if compact_stage else 0x7a40 if witness else 0x7c40] and
                 words[normal-7]&0xff00==0xd500 and literal(normal-7)==symbols['_native_read'][0] and
-                words[normal-6:normal]==[0x59aa if witness else 0x59ca,0x400b,0x54f8,0x2008,0x8deb,0xe500],
+                words[normal-6:normal]==[0x58ba if compact_stage else 0x59aa if witness else 0x59ca,
+                                        0x400b,0x54f7 if compact_stage else 0x54f8,0x2008,0x8deb,0xe500],
                 'Background prefix does not bind the loaded payload to its admitted native lease')
         memcpy_loads=[j for j in range(normal,(tail_entry-begin)//2) if
-            words[j]&0xff00==0xd800 and literal(j)==symbols['_memcpy'][0]]
+            words[j]&0xff00==(0xd900 if compact_stage else 0xd800) and literal(j)==symbols['_memcpy'][0]]
         selected_lease=layout_for(symbols).LEASE_BYTES if '__kui_native_readahead_stage' in symbols else 0x30000
         require(background_tail.get('lease_bytes')==selected_lease,
                 'Background tail replay selected a different owned lease size')
         lease_constants=[j for j in range(normal,(tail_entry-begin)//2) if
-            words[j]&0xff00==(0xdb00 if witness else 0xda00) and literal(j)==selected_lease]
+            words[j]&0xff00==(0xd300 if compact_stage else 0xdb00 if witness else 0xda00) and literal(j)==selected_lease]
         require(len(memcpy_loads)==len(lease_constants)==1,
                 'Background prefix needs exact unique memcpy/lease-size register initializers')
         memcpy_pc=begin+2*memcpy_loads[0];lease_pc=begin+2*lease_constants[0]
@@ -1750,6 +1830,37 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
                 # the final configuration word. The linked tail starts after
                 # that store and no longer assumes a callee-saved R12 base.
                 stable=tuple(row for row in stable if row[0]!=12)
+            if compact_stage:
+                # Compact uses the source-pinned runtime field store rather
+                # than carrying the lease constant in a preserved register.
+                # The tail independently executes its own exact lease load,
+                # comparison and refusal. Bind every real incoming register.
+                runtime_base=0xd6//2
+                runtime_word=begin+2*runtime_base+4+2*(words[runtime_base]&255)
+                runtime_store=begin+0xfe
+                owner_load=begin+2*(diagnostics_getter+4)
+                owner_add=begin+2*(diagnostics_getter+6)
+                require(memcpy_loads==[0x8e//2] and lease_constants==[0xec//2] and
+                        words[runtime_base]&0xff00==0x9700 and
+                        struct.unpack('<h',region(body,runtime_word-begin,2,'compact runtime base'))[0]==0x2c0 and
+                        words[0xdc//2]==0x37fc and words[0xfe//2]==0x173e and
+                        begin+2*runtime_base in dom[begin+0xdc] and
+                        lease_pc in dom[runtime_store] and begin+0xdc in dom[runtime_store] and
+                        runtime_store in dom[tail_entry] and
+                        owner_load in dom[owner_add] and owner_add in dom[tail_entry],
+                        'Compact prefix loses its runtime lease field or admitted owner reload')
+                prefix.update((runtime_store,owner_load,owner_add))
+                require(prefix<=dom[tail_entry],
+                        'Compact Background prefix setup can be bypassed')
+                stable=((8,norm_or+4,tail['relocate']),
+                        (9,memcpy_pc+2,tail['copy_region']),
+                        (14,owner_add+2,tail_entry),
+                        (3,lease_pc+2,runtime_store),
+                        (7,begin+2*runtime_base+2,begin+0xdc),
+                        (7,begin+0xde,runtime_store))
+                background_prefix_mutations.extend([((0xfe//2,0x173d),),
+                    ((runtime_base,0x9700),),((diagnostics_getter+4,0x5ef8),),
+                    ((diagnostics_getter+6,0x7e44),)])
         for register,first_pc,last_pc in stable:
             for pc,(_,mnemonic,operands) in decoded.items():
                 if first_pc<=pc<last_pc and mnemonic not in ('cmp/eq','cmp/hi','cmp/hs','tst'):
@@ -1759,8 +1870,8 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
             'whole_function_cfg_domination':True,'ordered_witnesses':[hex(pc) for pc in ordered],
             'lease_validation_dominates_copy':True,'normalized_p1_payload_dominates_copy':True,
             'exact_memcpy_and_lease_size_setup':True,'callee_preserved_registers_stable':True}
-        background_prefix_mutations=[((normal+4,0x0009),),((normal+10,0x0009),),
-                                     ((memcpy_loads[0],0x0009),),((lease_constants[0],0x0009),)]
+        background_prefix_mutations.extend([((normal+4,0x0009),),((normal+10,0x0009),),
+                                     ((memcpy_loads[0],0x0009),),((lease_constants[0],0x0009),)])
     report.update(worker_relocation_before_publication=True, worker_bss_zero_before_publication=True,
                   dynamic_cells_before_publication=True, publication_dominates_first_arm=True,
                   first_worker_publish=hex(publish), first_worker_arm=hex(arm),
@@ -1808,8 +1919,9 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
                 self.values=(0x8c123456,0x8c234568)
                 self.write(self.driver+28,self.values[0]);self.write(self.driver+56,self.values[1])
                 self.sp=0x8cdd0000;self.r[15]=self.sp
-                self.write(self.sp+28,worker_bytes)
-                self.r[8],self.r[9],self.r[11],self.r[2]=self.header,self.load,0,self.resume
+                self.write(self.sp+(24 if compact_stage else 28),worker_bytes)
+                self.r[8],self.r[9],self.r[11],self.r[2]=\
+                    (self.load,self.header,0,self.resume) if compact_stage else (self.header,self.load,0,self.resume)
                 self.pc=begin+2*(first-4);self.flag(True)
                 self.ccr,self.owner_ccr=ccr,ccr
                 self.purges=[];self.ccr_writes=[];self.cells=[]
@@ -1862,6 +1974,8 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
                             self.read(self.resume)==self.values[0] and self.read(self.consumer)==self.values[1] and
                             self.read(self.sp+40)==0,
                             'first worker-call ABI loses its published entries/stack/config/result')
+                    require(not compact_stage or self.r[12]==symbols['_retail_display_line'][0],
+                            'Compact first-arm setup loses the preserved later display target')
                     self.called=True
                 else:raise ValueError('unadmitted call in actual worker publication slice: '+hex(target))
 
@@ -1905,6 +2019,11 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
                      ((begin+2*(first-3),0x6483),),((begin+2*(first+6),0x358c),),
                      ((begin+2*(first+12),9),),((arm+2,0x7648),),
                      ((address+12+8,9),),((address+12+24,9),))
+            if compact_stage:
+                changes=(((publish,9),),((begin+2*(first+4),9),),((publish+2,9),),
+                         ((begin+2*(first-3),0x6493),),((begin+2*(first+6),0x359c),),
+                         ((begin+2*(first+12),9),),((begin+2*(first+13),9),),
+                         ((arm+2,0x7648),),((address+12+8,9),),((address+12+24,9),))
             for changed in changes:
                 try:PublicationReplay(0x8c300000,0x105,changed).run()
                 except (ValueError,AssertionError):actual_refusals+=1
@@ -1917,15 +2036,19 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
         # An individually recognized register-family block must not be mixed
         # with the other family's relocation/zero-fill/publication. Mutate the
         # actual ELF instruction bytes, keeping its typed geometry unchanged.
-        alternate = 0 if register_family in (2, 3, 4, 5) else 1 - register_family
+        alternate = 0 if register_family in (2, 3, 4, 5, 6) else 1 - register_family
         mutations = [((zeroes[0][0] + 2, zero_patterns[alternate][2]),
                       (zeroes[0][0] + 3, zero_patterns[alternate][3])),
                      ((relocations[0][0] + 1, 0x0009),)]
         mutations.extend(background_prefix_mutations)
         if selected_callbacks:
-            configure=(0x12a if lean_stage else 0x114)//2
+            configure=(0x138 if compact_stage else 0x12a if lean_stage else 0x114)//2
             mutations.extend([((configure+2,0x0009),),((configure+3,0x7448),)])
-        if register_family==5:
+        if register_family==6:
+            mutations.extend([((first+3,0x0009),),((first+6,0x359c),),
+                              ((first+10,0x0009),),((first-3,0x6493),),((first-2,0x0009),),
+                              ((first+12,0x0009),),((first+13,0x0009),),((first+22,0x7648),)])
+        elif register_family==5:
             mutations.extend([((first+3,0x0009),),((first+6,0x35ac),),
                               ((first+10,0x0009),),((first-3,0x64a3),),((first-2,0x0009),),
                               ((first+12,0x0009),),((first+21,0x7648),)])
@@ -1945,7 +2068,7 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
             getter_literal = (((begin + 2 * diagnostics_getter + 4) & ~3) +
                               4 * (words[diagnostics_getter] & 255) - begin) // 2
             wrong_getter = symbols['_native_runtime_mode'][0]
-            store_index=diagnostics_getter+(5 if selected_callbacks else 6 if register_family in (4,5) else 8)
+            store_index=diagnostics_getter+(7 if compact_stage else 5 if selected_callbacks else 6 if register_family in (4,5) else 8)
             mutations.extend([((store_index, 0x0009),),
                               ((store_index, 0x110e if selected_callbacks else 0x1C0E if register_family==5 else 0x1B0E if register_family==4 else 0x1D0E),),
                               ((diagnostics_getter, 0xE000),),
@@ -2001,8 +2124,17 @@ def cached_submit_callback(symbols,relocation_delta=0):
     required=(marker,'__kui_native_split_controller_general_worker',
               '__kui_native_split_controller_isolation_worker',
               '__kui_native_general_unbounded_pairs_worker')
+    compact='__kui_native_background_compact_worker_layout' in symbols
+    lite='__kui_native_vmu_lite_worker_layout' in symbols
+    if compact:
+        require(not lite and symbols['__kui_native_background_compact_worker_layout']==1+relocation_delta and
+                symbols.get('__kui_native_background_compact_worker')==1+relocation_delta and
+                symbols.get('__kui_native_isolation_lease_bytes')==0x47000+relocation_delta,
+                'Compact Background gateway lacks its exact linked profile and lease')
+    worker_bytes=0x12000 if compact or lite else 0x1c000
     require(all(symbols.get(name)==1+relocation_delta for name in required) and
-            symbols.get('__vmu_native_worker_stack_top')==P2+relocation_delta+0x1c000 and
+            symbols.get('__vmu_native_worker_stack_top')==P2+relocation_delta+
+                worker_bytes and
             '_kui_vmu_native_passive_split_submit' in symbols,
             'General gateway requires its exact compact split-controller API profile')
     return '_kui_vmu_native_passive_split_submit'

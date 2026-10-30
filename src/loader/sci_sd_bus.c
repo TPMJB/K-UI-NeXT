@@ -324,6 +324,40 @@ static void purge_buffer(void *buffer) {
         __asm__ __volatile__("ocbp @%0" : : "r"(p) : "memory");
 #endif
 }
+#if KUI_NATIVE_VMU_SCI_RX_PACED && defined(KUI_RETAIL_TRANSPORT)
+__asm__(".global __kui_native_vmu_sci_rx_paced_bus\n"
+        ".set __kui_native_vmu_sci_rx_paced_bus,1\n"
+        ".global __kui_native_vmu_sci_rx_paced_max_polls\n"
+        ".set __kui_native_vmu_sci_rx_paced_max_polls,10000\n");
+_Static_assert(POLLS==10000u,"Linked native receive poll bound");
+/* Keep the actual bounded byte-credit loop available to the linked audit.
+ * TDRE alone admits another transmitted byte before receive DMA has drained
+ * RDR. A contending DMA request can therefore overrun the previous byte.
+ * Only this SCI Standard comparison waits for exactly one receive credit.
+ * No owner timer, other DMA channel or DMAOR priority is changed. */
+static bool __attribute__((noinline,noclone)) feed_read(void) {
+    /* transfer_block witnessed TDRE before borrowing the idle DMA channel.
+     * No transmitter byte is submitted between that witness and this seed. */
+    wr8(TDR,0xff);
+    unsigned expected=512u;
+    do {
+        wr8(SSR,0x7cu);
+        --expected;
+        unsigned polls=POLLS;
+        for(;;) {
+            uint32_t delta=rd32(DMA_COUNT)-expected;
+            if((rd8(SSR)&ERRORS) || (rd32(DMA_OPERATION)&7u)!=1u || delta>1u)
+                return false;
+            if(!delta) break;
+            if(!--polls) return false;
+        }
+        /* The existing flag waiter witnesses TDRE before the next write
+         * clears it; each wait retains its own bounded fault handling. */
+        if(!wait_flag(TDRE)) return false;
+    } while(expected);
+    return true;
+}
+#else
 static bool feed_read(void) {
     /* TDR retains its value after the shift register takes it. As in the
      * programmed read path, seed once and clear TDRE for each exact byte. */
@@ -388,6 +422,7 @@ static bool feed_read(void) {
     }
     return true;
 }
+#endif
 #ifndef KUI_RETAIL_TRANSPORT
 /* The game reader is read-only and carries neither this buffer nor TX DMA. */
 static uint8_t dma_write_buffer[512] __attribute__((aligned(32)));
@@ -564,6 +599,11 @@ static bool transfer_block(void *ctx, const uint8_t *tx, uint8_t *rx,
     if(!count || count > 512 || (!tx && !rx) || !port.acquired || port.fault)
         return false;
     if(!prepare(slow)) return false;
+#if KUI_NATIVE_VMU_SCI_RX_PACED && defined(KUI_RETAIL_TRANSPORT)
+    /* Shared by the DMA path and its unclaimed-channel PIO fallback. This
+     * is before any DMA setup; no SCI byte is clocked while borrowing it. */
+    if(!wait_flag(TDRE)) return false;
+#endif
 #if !KUI_SCI_SD_PIO_ONLY
     if(!slow && count == 512 && (!tx || !rx)) {
         int result = dma_block(tx, rx, crc_out);
@@ -577,7 +617,9 @@ static bool transfer_block(void *ctx, const uint8_t *tx, uint8_t *rx,
     /* One byte in flight, so interrupt latency cannot overrun a second
      * receive. Commands and short/unaligned payloads need no DMAC ownership.
      * Start the next wire byte before reversing/storing the previous one. */
+#if !KUI_NATIVE_VMU_SCI_RX_PACED || !defined(KUI_RETAIL_TRANSPORT)
     if(!wait_flag(TDRE)) return false;
+#endif
     wr8(TDR, tx ? reverse(tx[0]) : 0xff);
     wr8(SSR, 0x7cu);
     uint16_t crc = 0;

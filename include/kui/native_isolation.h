@@ -42,6 +42,81 @@
 #ifndef KUI_NATIVE_SPLIT_CONTROLLER_GENERAL
 #define KUI_NATIVE_SPLIT_CONTROLLER_GENERAL 0
 #endif
+/* A separately linked persistent A2 service with synchronous disc I/O.
+ * Its allocation contains only the worker, including its private stack. */
+#ifndef KUI_NATIVE_VMU_ONLY
+#define KUI_NATIVE_VMU_ONLY 0
+#endif
+/* Diagnostic control: retain all VMU-only contracts, but enter the complete
+ * submit path instead of capturing a controller batch ahead of its DMA. */
+#ifndef KUI_NATIVE_VMU_ONLY_FULL_SUBMIT
+#define KUI_NATIVE_VMU_ONLY_FULL_SUBMIT 0
+#endif
+#if KUI_NATIVE_VMU_ONLY_FULL_SUBMIT != 0 && KUI_NATIVE_VMU_ONLY_FULL_SUBMIT != 1
+#error "VMU-only full-submit selector must be exactly zero or one"
+#endif
+#if KUI_NATIVE_VMU_ONLY_FULL_SUBMIT && !KUI_NATIVE_VMU_ONLY
+#error "Full-submit control is restricted to the independent VMU service"
+#endif
+#if KUI_NATIVE_VMU_ONLY != 0 && KUI_NATIVE_VMU_ONLY != 1
+#error "VMU-only selector must be exactly zero or one"
+#endif
+#ifdef KUI_NATIVE_VMU_ONLY_TRANSPORT
+#if KUI_NATIVE_VMU_ONLY_TRANSPORT != 0 && KUI_NATIVE_VMU_ONLY_TRANSPORT != 1
+#error "VMU-only transport must be SCIF or SCI"
+#endif
+#define KUI_VMU_ONLY_TRANSPORT_STRING_(x) #x
+#define KUI_VMU_ONLY_TRANSPORT_STRING(x) KUI_VMU_ONLY_TRANSPORT_STRING_(x)
+#define KUI_VMU_ONLY_TRANSPORT_TEXT KUI_VMU_ONLY_TRANSPORT_STRING(KUI_NATIVE_VMU_ONLY_TRANSPORT)
+#endif
+/* VMU-lite: the same A2 service with bounded batch buffers. A2 owns one
+ * receive slot per bank and the chain parser refuses a repeated slot, so a
+ * batch stages at most one virtual reply; its chain copies hold 4 KiB. */
+#ifndef KUI_NATIVE_VMU_LITE
+#define KUI_NATIVE_VMU_LITE 0
+#endif
+#if KUI_NATIVE_VMU_LITE != 0 && KUI_NATIVE_VMU_LITE != 1
+#error "VMU-lite selector must be exactly zero or one"
+#endif
+#if KUI_NATIVE_VMU_LITE && !KUI_NATIVE_VMU_ONLY
+#error "VMU-lite refines the VMU-only service"
+#endif
+/* A separate combined profile reuses the bounded 72 KiB VMU worker with
+ * the retained Background reader, auxiliary stack and full read-ahead cache.
+ * Legacy low-reader code shares its geometry but not the New reader flags. */
+#ifndef KUI_NATIVE_BACKGROUND_COMPACT
+#define KUI_NATIVE_BACKGROUND_COMPACT 0
+#endif
+#if KUI_NATIVE_BACKGROUND_COMPACT != 0 && KUI_NATIVE_BACKGROUND_COMPACT != 1
+#error "Compact Background selector must be exactly zero or one"
+#endif
+#if KUI_NATIVE_BACKGROUND_COMPACT && \
+    (!KUI_NATIVE_GENERAL_LEAN_LAYOUT || !KUI_NATIVE_DUAL_READERS || \
+     KUI_NATIVE_VMU_ONLY || KUI_NATIVE_VMU_LITE || defined(KUI_RETAIL_CE) || KUI_RETAIL_ZSO)
+#error "Compact Background requires its separate lean dual-reader geometry"
+#endif
+/* Separate SCI receive-credit comparison. The normal VMU-lite Makefile
+ * retains its existing unpaced policy until console validation. */
+#ifndef KUI_NATIVE_VMU_SCI_RX_PACED
+#define KUI_NATIVE_VMU_SCI_RX_PACED 0
+#endif
+#if KUI_NATIVE_VMU_SCI_RX_PACED != 0 && KUI_NATIVE_VMU_SCI_RX_PACED != 1
+#error "Native VMU SCI receive pacing must be exactly zero or one"
+#endif
+#if KUI_NATIVE_VMU_SCI_RX_PACED && (!KUI_NATIVE_VMU_ONLY || !KUI_NATIVE_VMU_LITE || \
+    KUI_SCI_SD_PIO_ONLY || KUI_RETAIL_TOY_PILOT || defined(KUI_RETAIL_ASYNC) || defined(KUI_RETAIL_CE))
+#error "Native SCI receive pacing belongs only to the separate SCI VMU-lite comparison"
+#endif
+#if KUI_NATIVE_VMU_SCI_RX_PACED && defined(KUI_NATIVE_VMU_ONLY_TRANSPORT) && KUI_NATIVE_VMU_ONLY_TRANSPORT != 1
+#error "Native SCI receive pacing requires the SCI transport"
+#endif
+#if KUI_NATIVE_VMU_SCI_RX_PACED
+#define KUI_NATIVE_VMU_SCI_RX_POLICY_TEXT "1"
+#elif KUI_SCI_SD_PIO_ONLY
+#define KUI_NATIVE_VMU_SCI_RX_POLICY_TEXT "2"
+#else
+#define KUI_NATIVE_VMU_SCI_RX_POLICY_TEXT "0"
+#endif
 /* The general split controller with the controller prefetch TICK restored.
  * TICK was turned off only to isolate Evolution 1, which still failed
  * without it; the split controller then passed with TICK still off. */
@@ -96,12 +171,20 @@
 #error "Metadata cache isolation requires cached persistent dual readers, TICK off, real callbacks and VMU"
 #endif
 #if KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION && \
-    ((!KUI_NATIVE_RA_TICK_OFF_ISOLATION && !KUI_NATIVE_SPLIT_CONTROLLER_PREFETCH) || !KUI_NATIVE_DUAL_READERS || \
+    ((((!KUI_NATIVE_RA_TICK_OFF_ISOLATION && !KUI_NATIVE_SPLIT_CONTROLLER_PREFETCH) || !KUI_NATIVE_DUAL_READERS) && !KUI_NATIVE_VMU_ONLY) || \
      !KUI_VMU_NATIVE_CACHED_CODE || !KUI_VMU_NATIVE_PERSISTENT_PROBE || \
      KUI_NATIVE_READER_ONLY_ISOLATION || KUI_NATIVE_STANDARD_VMU_ISOLATION || \
      KUI_NATIVE_MAPLE_BYPASS_ISOLATION || KUI_NATIVE_MAPLE_DELAY_ISOLATION || \
      KUI_NATIVE_E1_WAIT_CAPTURE || KUI_NATIVE_METADATA_CACHE_ISOLATION)
 #error "Split controller isolation requires cached persistent dual readers, TICK off, real callbacks and VMU"
+#endif
+#if KUI_NATIVE_VMU_ONLY && \
+    (!KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION || !KUI_NATIVE_SPLIT_CONTROLLER_GENERAL || \
+     !KUI_NATIVE_GENERAL_LEAN_LAYOUT || !KUI_VMU_NATIVE_PERSISTENT_PROBE || \
+     !KUI_VMU_NATIVE_CACHED_CODE || KUI_NATIVE_DUAL_READERS || KUI_NATIVE_READAHEAD || \
+     KUI_VMU_NATIVE_BACKGROUND || KUI_NATIVE_STANDARD_VMU_ISOLATION || \
+     KUI_NATIVE_SPLIT_CONTROLLER_PREFETCH || KUI_NATIVE_RA_TICK_OFF_ISOLATION)
+#error "VMU-only requires the compact persistent split worker and synchronous reader"
 #endif
 #if KUI_NATIVE_E1_WAIT_CAPTURE && \
     (!KUI_NATIVE_RA_TICK_OFF_ISOLATION || !KUI_NATIVE_READER_ONLY_ISOLATION || !KUI_NATIVE_DUAL_READERS)
@@ -153,6 +236,6 @@
 /* Match the current dual-reader reservation and placement in the Standard
  * control without enabling a background engine or its reader bindings. */
 #define KUI_NATIVE_CURRENT_BOTTOM_HEAP \
-    (KUI_NATIVE_DUAL_READERS || KUI_NATIVE_STANDARD_VMU_ISOLATION)
+    (KUI_NATIVE_DUAL_READERS || KUI_NATIVE_STANDARD_VMU_ISOLATION || KUI_NATIVE_VMU_ONLY)
 
 #endif

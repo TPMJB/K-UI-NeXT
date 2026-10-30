@@ -207,9 +207,13 @@ def stage_profile(stage):
         return False
     from check_native_general_lean_profile import stage_profile as lean
     require(lean(stage), 'VMU toggle requires the complete exact lean General stage')
+    from native_runtime_layout import layout_for
+    geometry=layout_for(stage[4])
     _, body, section = symbol_bytes(stage, '_kui_vmu_native_toggle_capability', 1)
-    require(body == CAPABILITY and section[2] & 7 == 2,
-            'VMU toggle capability differs from physical A2 passthrough/324KiB/192KiB contract')
+    expected=struct.pack('<8I',0x5649554b,0x3130544d,1,32,7,
+                         geometry.LEASE_BYTES,geometry.DATA_BYTES,1)
+    require(body == expected and section[2] & 7 == 2,
+            'VMU toggle capability differs from its exact retained lease/cache contract')
     return True
 
 def worker_profile(worker):
@@ -221,11 +225,17 @@ def worker_profile(worker):
 
 def stage_pins(stage, role):
     require(stage_profile(stage), 'VMU toggle stage pins require its explicit profile')
+    from check_native_compact_background_profile import marked,stage_pins as compact_pins
+    if marked(stage,'stage'):
+        return compact_pins(stage,role)
     require(role in STAGE_PINS and STAGE_PINS[role], 'Missing VMU toggle stage role: ' + role)
     return STAGE_PINS[role]
 
 def worker_pins(worker, role):
     require(worker_profile(worker), 'VMU toggle worker pins require its explicit profile')
+    from check_native_compact_background_profile import marked,worker_pins as compact_pins
+    if marked(worker,'worker'):
+        return compact_pins(worker,role)
     require(role in WORKER_PINS and WORKER_PINS[role], 'Missing VMU toggle worker role: ' + role)
     return WORKER_PINS[role]
 
@@ -233,8 +243,8 @@ def exact_toggle_kernels(stage, worker):
     require(stage_profile(stage) and worker_profile(worker),
             'VMU toggle stage and worker profiles must be paired')
     result = {}
-    for label, image, selected in (('stage', stage, STAGE_PINS['toggle']),
-                                   ('worker', worker, WORKER_PINS['toggle'])):
+    for label, image, selected in (('stage', stage, stage_pins(stage,'toggle')),
+                                   ('worker', worker, worker_pins(worker,'toggle'))):
         rows = {}
         for name, expected in selected.items():
             _, body, section = symbol_bytes(image, name, 2)

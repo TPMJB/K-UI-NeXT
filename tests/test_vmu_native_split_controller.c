@@ -17,10 +17,17 @@ static void split_prepare(void) {
     if(split_other_identity) input.driver.image_sha256[31]^=1u;
     input.exits.image_bytes=input.driver.image_bytes;
     input.lease.owner.image_bytes=input.driver.image_bytes;
-    input.lease.heap_bytes=0x50000u+KUI_NATIVE_RA_LEASE_BYTES;input.lease.lease_bytes=KUI_NATIVE_RA_LEASE_BYTES;input.lease.units=KUI_NATIVE_RA_LEASE_BYTES/32u+1u;
+    /* The independent VMU build owns exactly its worker, with no reader
+     * map, stream state, auxiliary or cache following it. */
+#if KUI_NATIVE_VMU_ONLY
+    const uint32_t lease_bytes=KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES;
+#else
+    const uint32_t lease_bytes=KUI_NATIVE_RA_LEASE_BYTES;
+#endif
+    input.lease.heap_bytes=0x50000u+lease_bytes;input.lease.lease_bytes=lease_bytes;input.lease.units=lease_bytes/32u+1u;
     put(input.lease.owner.bytes_cell,4u,input.lease.heap_bytes);
     put(input.lease.header+4u,4u,input.lease.units);
-    input.runtime.lease_bytes=input.runtime.required_lease_bytes=KUI_NATIVE_RA_LEASE_BYTES;
+    input.runtime.lease_bytes=input.runtime.required_lease_bytes=lease_bytes;
     lease_calls=block_callbacks=0u;corrupt_before_loan=corrupt_after_loan=0u;
     release_saw_unpublished=false;
 }

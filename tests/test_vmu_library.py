@@ -15,6 +15,7 @@ SOURCES = (
     'tests/test_vmu_library.c', 'src/core/vmu_library.c',
     'src/core/vmu_collection.c', 'src/core/vmu_game_card_service.c',
     'src/core/vmu_game_card.c', 'src/core/vmu_game_assign.c',
+    'src/core/vmu_game_candidates.c',
     'src/core/vmu_fs_admission.c', 'src/core/vmu_persist_profile.c',
     'src/core/vmu_image.c', 'src/core/vmu_store.c', 'src/core/retail_image.c',
     'src/core/hash.c', 'src/core/data.c', 'src/core/destination.c',

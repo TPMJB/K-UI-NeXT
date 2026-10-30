@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Separate 72 KiB SCI comparison. The base VMU-lite default is unchanged.
+BUILD ?= build/native-vmu-lite-paced-sci
+VMU_SCI_RX_POLICY ?= paced
+VMU_TRANSPORT ?= 1
+ifneq ($(VMU_TRANSPORT),1)
+$(error This SCI receive-policy comparison requires VMU_TRANSPORT=1)
+endif
+ifeq ($(VMU_SCI_RX_POLICY),paced)
+VMU_SCI_RX_FLAGS := -DKUI_NATIVE_VMU_SCI_RX_PACED=1 -DKUI_SCI_SD_PIO_ONLY=0
+else ifeq ($(VMU_SCI_RX_POLICY),pio)
+VMU_SCI_RX_FLAGS := -DKUI_NATIVE_VMU_SCI_RX_PACED=0 -DKUI_SCI_SD_PIO_ONLY=1
+else ifeq ($(VMU_SCI_RX_POLICY),unpaced)
+VMU_SCI_RX_FLAGS := -DKUI_NATIVE_VMU_SCI_RX_PACED=0 -DKUI_SCI_SD_PIO_ONLY=0
+else
+$(error VMU_SCI_RX_POLICY must be paced, pio, or unpaced)
+endif
+include Makefile.vmu-native-vmu-lite
+ifneq ($(VMU_ONLY_FULL_SUBMIT),0)
+$(error SCI receive-policy comparisons retain the split controller)
+endif
+FLAGS += $(VMU_SCI_RX_FLAGS)
+$(BUILD)/retail-native-vmu-lite-$(VMU_SCI_RX_POLICY).kui: $(BUILD)/retail-maple-observe.kui
+	cp $< $@
+all: $(BUILD)/retail-native-vmu-lite-$(VMU_SCI_RX_POLICY).kui
+
+.PHONY: vmu-lite-rx-policy-host-tests
+vmu-lite-rx-policy-host-tests:
+	python3 tests/test_native_vmu_sci_rx_policy.py
+
+.PHONY: vmu-lite-rx-host-tests
+vmu-lite-rx-host-tests: vmu-lite-rx-policy-host-tests
+	python3 tests/test_native_vmu_sci_rx_pacing.py
+	python3 tests/test_retail_pace.py
+	python3 tests/test_install_skies_read_fix.py
+	python3 tests/test_package_skies_read_fix.py

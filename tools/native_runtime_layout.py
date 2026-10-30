@@ -44,7 +44,67 @@ HISTORICAL = SimpleNamespace(**{**vars(DIAGNOSTIC),
     'AUX_STACK_TOP': 0xac428000, 'STACK_OFFSET': 0x27000,
     'STACK_END': 0x28000, 'DATA_OFFSET': 0x30000})
 
+# Standalone virtual-A2 service owns only the measured worker and private
+# stack. An exact compiled marker, never a caller-selected byte count, selects
+# this geometry. No retained disc map, read-ahead auxiliary or cache exists.
+VMU_ONLY = SimpleNamespace(**{**vars(GENERAL),
+    'LEASE_BYTES': 0x1c000, 'WORKER_BYTES': 0x1c000,
+    'MAP_OFFSET': 0, 'REGION_OFFSET': 0, 'AUX_OFFSET': 0, 'AUX_SPAN': 0,
+    'STACK_OFFSET': 0x1b000, 'STACK_END': 0x1c000,
+    'DATA_OFFSET': 0, 'DATA_BYTES': 0})
+
+# VMU-lite: the same service with one staged reply and 4 KiB chain copies,
+# selected by its own exact compiled marker on each image.
+VMU_LITE = SimpleNamespace(**{**vars(VMU_ONLY),
+    'LEASE_BYTES': 0x12000, 'WORKER_BYTES': 0x12000,
+    'STACK_OFFSET': 0x11000, 'STACK_END': 0x12000})
+
+# Combined Background keeps the full 192 KiB cache and its independent
+# auxiliary stack, after the separately bounded 72 KiB VMU worker.
+BACKGROUND_COMPACT = SimpleNamespace(**{**vars(GENERAL),
+    'LEASE_BYTES': 0x47000, 'WORKER_BYTES': 0x12000, 'MAP_OFFSET': 0x12000,
+    'REGION_OFFSET': 0x12400, 'AUX_OFFSET': 0x13000,
+    'STACK_OFFSET': 0x16000, 'STACK_END': 0x17000, 'DATA_OFFSET': 0x17000})
+
 def layout_for(symbols):
+    combined_names=('__kui_native_background_compact_stage',
+        '__kui_native_background_compact_worker', '__kui_native_background_compact_resident',
+        '__kui_native_background_compact_auxiliary', '__kui_native_background_compact_worker_layout')
+    combined=[symbols[name] for name in combined_names if name in symbols]
+    if combined:
+        if any(value != (1,0,0,0xfff1) for value in combined):
+            raise ValueError('Malformed compact Background runtime geometry marker')
+        if any(name in symbols for name in ('__kui_native_vmu_only_worker',
+            '__kui_native_vmu_only_stage','__kui_native_vmu_only_resident',
+            '__kui_native_vmu_lite_worker','__kui_native_vmu_lite_stage','__kui_native_vmu_lite_resident')):
+            raise ValueError('Compact Background cannot select standalone VMU-only geometry')
+        general_names=('__kui_native_general_lean_stage_layout',
+            '__kui_native_general_lean_worker_layout','__kui_native_general_lean_auxiliary',
+            '__kui_native_general_lean_resident_layout')
+        present=[symbols[name] for name in general_names if name in symbols]
+        if not present or any(value != (1,0,0,0xfff1) for value in present):
+            raise ValueError('Compact Background requires its exact General layout marker')
+        lease=symbols.get('__kui_native_isolation_lease_bytes')
+        if lease is not None and lease != (BACKGROUND_COMPACT.LEASE_BYTES,0,0,0xfff1):
+            raise ValueError('Compact Background lease conflicts with its exact compiled profile')
+        return BACKGROUND_COMPACT
+    compact = [symbols[name] for name in ('__kui_native_vmu_only_worker',
+        '__kui_native_vmu_only_stage', '__kui_native_vmu_only_resident') if name in symbols]
+    if compact:
+        if any(value != (1, 0, 0, 0xfff1) for value in compact):
+            raise ValueError('Malformed VMU-only runtime geometry marker')
+        lite = [symbols[name] for name in ('__kui_native_vmu_lite_worker',
+            '__kui_native_vmu_lite_stage', '__kui_native_vmu_lite_resident') if name in symbols]
+        if any(value != (1, 0, 0, 0xfff1) for value in lite):
+            raise ValueError('Malformed VMU-lite runtime geometry marker')
+        selected = VMU_LITE if lite else VMU_ONLY
+        lease = symbols.get('__kui_native_isolation_lease_bytes')
+        if lease is not None and lease != (selected.LEASE_BYTES, 0, 0, 0xfff1):
+            raise ValueError('VMU-only lease conflicts with its exact compiled profile')
+        if any(name in symbols for name in ('__kui_native_readahead_stage',
+                '__kui_native_readahead_worker', '__kui_native_readahead_resident')):
+            raise ValueError('VMU-only runtime cannot retain read-ahead machinery')
+        return selected
     markers = ('__kui_native_general_lean_stage_layout',
                '__kui_native_general_lean_worker_layout',
                '__kui_native_general_lean_auxiliary',

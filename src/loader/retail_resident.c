@@ -14,6 +14,10 @@
 #include "kui/retail_pace.h"
 #include "retail_storage.h"
 #include "retail_display.h"
+#if KUI_NATIVE_VMU_ONLY
+#include "native_vmu_io_diagnostic.h"
+#include "vmu_native_transport.h"
+#endif
 #include "kui/toy_loader_schedule.h"
 #include "kui/armada_ce_audio_observe.h"
 #if KUI_ARMADA_CE_MAPLE_HOOK
@@ -266,6 +270,11 @@ static int check_sectors(void *unused, uint32_t lba, uint32_t count, uint32_t by
 static int read_sectors(void *unused, uint32_t lba, uint32_t count,
                         uint32_t bytes, void *out) {
     (void)unused;
+#if KUI_NATIVE_VMU_ONLY
+    /* Existing diagnostic-only word; no new persistent low-memory state.
+     * A refused acquisition must not report an earlier image attempt. */
+    service.diag.read_flags=KUI_NATIVE_VMU_IO_IMAGE_NOT_ATTEMPTED;
+#endif
 #if KUI_RETAIL_OBSERVE
     image_result=(enum kui_game_result)UINT32_MAX;
     observe_read_card_result=observe_stop_result=(enum kui_loader_sd_result)UINT32_MAX;
@@ -285,6 +294,9 @@ static int read_sectors(void *unused, uint32_t lba, uint32_t count,
 #endif
 #if defined(KUI_RETAIL_CE) || KUI_RETAIL_OBSERVE
     image_result = result;
+#endif
+#if KUI_NATIVE_VMU_ONLY
+    service.diag.read_flags=(uint32_t)result;
 #endif
 #if KUI_RETAIL_OBSERVE
     observe_read_card_result=card_result;
@@ -415,7 +427,15 @@ static void ce_trace(unsigned earlier) {
     retail_display_values((legend), (const uint32_t *)(const void *)(snapshot), (count))
 #if KUI_RETAIL_RETURN_TRACE != 3
 static void capture_native_fault(uint32_t function, uint32_t current_param) {
-#if KUI_RETAIL_RETURN_TRACE >= 2
+#if KUI_NATIVE_VMU_ONLY
+    (void)current_param;
+    _Static_assert(sizeof(image.block)>=KUI_NATIVE_VMU_IO_DIAGNOSTIC_WORDS*4u,
+        "VMU image-failure snapshot fits the retired sector cache");
+    kui_native_vmu_io_snapshot((void *)image.block,&service,&card.device.sd,
+        (uint32_t)card_result,service.diag.read_flags,card.stream.active,
+        kui_native_vmu_transport_faulted(card.transport),function);
+    __asm__ __volatile__("" : : : "memory");
+#elif KUI_RETAIL_RETURN_TRACE >= 2
     /* The RAM return diagnostic has its own bounded terminal windows.
      * Fatal request errors retain a compact summary with no owner reads. */
     typedef uint32_t terminal_word __attribute__((__may_alias__));
@@ -545,7 +565,9 @@ static void report_fault(const char *reason, uint32_t function) {
 #endif
     retail_display_restore(&display);
 #if !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC)
-#if KUI_RETAIL_RETURN_TRACE == 3
+#if KUI_NATIVE_VMU_ONLY
+    retail_display_line("NATIVE GD FAILURE");
+#elif KUI_RETAIL_RETURN_TRACE == 3
     /* The early-read diagnostic has its own complete pre-cleanup snapshot.
      * A loader storage fault still stops with its reason, without owner reads. */
 #elif KUI_RETAIL_RETURN_TRACE == 2
@@ -581,7 +603,10 @@ static void report_fault(const char *reason, uint32_t function) {
     retail_display_values("SD       IMAGE    BLOCKS   DMAOR    DMA2 CTL",io,5);
 #else
     retail_display_line(reason);
-#if KUI_RETAIL_RETURN_TRACE == 3
+#if KUI_NATIVE_VMU_ONLY
+    terminal_row("FN CMD SD IMG STATE",image.block,5);
+    terminal_row("LBA CNT DST DONE",image.block+20u,4);
+#elif KUI_RETAIL_RETURN_TRACE == 3
 #elif KUI_RETAIL_RETURN_TRACE == 2
     terminal_row("FN REJECT PR SP PARAM",image.block,5);
 #else

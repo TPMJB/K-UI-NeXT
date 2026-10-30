@@ -18,6 +18,8 @@
 #include "kui/storage_test.h"
 #include "kui/network_wifi.h"
 #include "kui/vmu_wizard.h"
+#include "kui/vmu_image.h"
+#include "kui/vmu_game_info.h"
 #include "kui/drive_controls.h"
 #include <stdbool.h>
 #include <stdint.h>
@@ -56,7 +58,7 @@ enum kui_shell_page { KUI_SHELL_HOME, KUI_SHELL_RIPPER,
     KUI_SHELL_GAMES_TESTS, KUI_SHELL_GAMES_INFO, KUI_SHELL_GAMES_PATCHES, KUI_SHELL_GAMES_CODEC, KUI_SHELL_GAMES_CHECK, KUI_SHELL_VMU_IMAGE, KUI_SHELL_VMU_IMPORT,
     KUI_SHELL_VMU_COLLECTION, KUI_SHELL_VMU_TOOLS, KUI_SHELL_VMU_WIZARD,
     KUI_SHELL_DISC_TOOLS, KUI_SHELL_VMU_CARD, KUI_SHELL_SALVAGE_DRIVE,
-    KUI_SHELL_SALVAGE_OPTIONS };
+    KUI_SHELL_SALVAGE_OPTIONS, KUI_SHELL_GAMES_VMU_CARD };
 enum kui_shell_recovery_row {
     KUI_SHELL_RECOVERY_CONTINUE, KUI_SHELL_RECOVERY_NEW, KUI_SHELL_RECOVERY_OPTIONS,
     KUI_SHELL_RECOVERY_DIAGNOSTICS, KUI_SHELL_RECOVERY_COUNT
@@ -87,7 +89,8 @@ enum kui_salvage_diagnostic {
 };
 enum kui_shell_game_option {
     KUI_SHELL_GAME_OPTION_READER, KUI_SHELL_GAME_OPTION_CDDA,
-    KUI_SHELL_GAME_OPTION_ADVANCED, KUI_SHELL_GAME_OPTION_CODEC, KUI_SHELL_GAME_OPTION_COUNT
+    KUI_SHELL_GAME_OPTION_ADVANCED, KUI_SHELL_GAME_OPTION_VMU_CARD,
+    KUI_SHELL_GAME_OPTION_CODEC, KUI_SHELL_GAME_OPTION_COUNT
 };
 enum kui_shell_vmu_card_action {
     KUI_SHELL_VMU_CARD_SAVES,KUI_SHELL_VMU_CARD_USERS,KUI_SHELL_VMU_CARD_RENAME,
@@ -148,7 +151,7 @@ enum kui_shell_action {
     KUI_SHELL_VMU_COLLECTION_COPY_COMMIT, KUI_SHELL_REPAIR_IN_PLACE, KUI_SHELL_REPAIR_NEW_COPY,
     KUI_SHELL_SALVAGE_RESUME_DEFER, KUI_SHELL_VMU_WIZARD_RUN,
     KUI_SHELL_VMU_EMULATION_LOAD, KUI_SHELL_VMU_EMULATION_SAVE,
-    KUI_SHELL_VMU_RENAME, KUI_SHELL_VMU_GAME_INFO
+    KUI_SHELL_VMU_RENAME, KUI_SHELL_VMU_GAME_INFO, KUI_SHELL_VMU_GAME_CARD_DEFAULT
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
@@ -263,6 +266,11 @@ struct kui_shell {
     char games_vmu_label[64],games_vmu_notice[128],games_vmu_product[12];
     unsigned games_vmu_generation;
     bool games_vmu_loading;
+    struct kui_vmu_game_info games_vmu_info;
+    struct kui_vmu_game_selection games_vmu_selection;
+    unsigned games_vmu_card_selected;
+    bool games_vmu_default_clear,games_vmu_pick_pending_launch,games_vmu_default_saving,games_vmu_pick_check;
+    enum kui_shell_page games_vmu_pick_return;
     bool games_launch_cdda, games_retail_scrambled;
     struct kui_game_ram_patches games_launch_patches;
     unsigned games_patch_selected, games_patch_digit;
@@ -360,6 +368,7 @@ bool kui_shell_system_dirty(const struct kui_shell *shell);
 void kui_shell_set_vmu(struct kui_shell *shell, const struct kui_vmu_view *view);
 /* Wizard publications belong to the current page and exact request generation. */
 void kui_shell_set_vmu_wizard(struct kui_shell *,const struct kui_vmu_wizard_view *);
+void kui_shell_set_game_vmu_cards(struct kui_shell *,unsigned generation,const struct kui_vmu_game_info *);
 /* Global preference results echo the exact outstanding request generation.
  * Failed/uncertain saves preserve the last confirmed value and require reload. */
 void kui_shell_set_vmu_emulation(struct kui_shell *,unsigned generation,bool enabled,

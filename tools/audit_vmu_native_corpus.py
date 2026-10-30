@@ -16,7 +16,7 @@ import shlex
 import subprocess
 import sys
 import tempfile
-from native_runtime_layout import LEASE_BYTES, GENERAL, DIAGNOSTIC
+from native_runtime_layout import LEASE_BYTES, GENERAL, DIAGNOSTIC, BACKGROUND_COMPACT
 from prove_vmu_native_evolution1_readahead_lease import geometry_defines
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -29,7 +29,8 @@ PROOF_FILES=("tools/native_runtime_layout.py","tools/prove_vmu_native_evolution1
     *tuple("include/kui/"+name for name in ("vmu_native_program.h","vmu_native_discovery.h",
         "vmu_native_layout.h","vmu_native_runtime.h","vmu_native_heap.h","vmu_native_exit.h",
         "vmu_native_patch.h","vmu_native_resolution_cache.h","vmu_native_stage_placement.h",
-        "vmu_native_background.h","native_readahead_layout.h")))
+        "vmu_native_background.h","native_readahead_layout.h",
+        "native_dual_reader.h","native_isolation.h")))
 GATES=("extent","driver","layout","heap","initializer_slot","initializer_call",
        "aligned_hook_entries","release_hook_shape","exits","guarded_exits",
        "combined_resolution","placement_384k","transport_execution","live_bind_384k")
@@ -49,7 +50,7 @@ def input_pair(value):
 
 
 def audit(inputs,stage_begin,stage_end,records=None,*,selected_layout=GENERAL):
-    assert selected_layout in (GENERAL,DIAGNOSTIC),"Unreviewed corpus layout"
+    assert selected_layout in (GENERAL,DIAGNOSTIC,BACKGROUND_COMPACT),"Unreviewed corpus layout"
     rows=[]
     hashes={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in PROOF_FILES}
     with tempfile.TemporaryDirectory(prefix="kui-native-structural-corpus-") as temporary:
@@ -101,8 +102,11 @@ def main():
     parser.add_argument("--stage-begin",type=lambda value:int(value,0),default=0x8ce00000)
     parser.add_argument("--stage-end",type=lambda value:int(value,0),required=True,
         help="Exact linked stage BSS end; do not substitute a shorter initialized-file boundary")
-    parser.add_argument("--diagnostic-layout",action="store_true",
+    layouts=parser.add_mutually_exclusive_group()
+    layouts.add_argument("--diagnostic-layout",action="store_true",
         help="Audit the exact retained diagnostic worker layout")
+    layouts.add_argument("--compact-background-layout",action="store_true",
+        help="Audit the exact 72 KiB worker / 284 KiB combined Background layout")
     parser.add_argument("--records",type=Path,help="Optional generated metadata records for independently accepted complete discovery")
     parser.add_argument("--output",type=Path,required=True)
     args=parser.parse_args();inputs=list(args.input);metadata={}
@@ -122,7 +126,8 @@ def main():
     if not inputs:parser.error("Provide at least one original startup")
     if len({slug for slug,_ in inputs})!=len(inputs):parser.error("Input slugs must be unique")
     result=audit(inputs,args.stage_begin,args.stage_end,args.records,
-        selected_layout=DIAGNOSTIC if args.diagnostic_layout else GENERAL)
+        selected_layout=BACKGROUND_COMPACT if args.compact_background_layout else
+                        DIAGNOSTIC if args.diagnostic_layout else GENERAL)
     for row in result["results"]:row.update(metadata.get(row["slug"],{}))
     if args.manifest:result["input_manifest_sha256"]=hashlib.sha256(args.manifest.read_bytes()).hexdigest()
     args.output.parent.mkdir(parents=True,exist_ok=True)

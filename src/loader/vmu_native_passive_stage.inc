@@ -293,7 +293,7 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
 #endif
 #if KUI_VMU_NATIVE_BACKGROUND
     /* The retained map and reader region are outside the worker's
-     * copied/zeroed 128 KiB span. Retain the validated 64-slot map there before
+     * copied/zeroed worker span. Retain the validated 64-slot map there before
      * the temporary stage can retire. Both aliases are checked by the low
      * binder; every P1 line reaches RAM before the P2 copy and comparison. */
     uint32_t map_address=load+KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES;
@@ -490,6 +490,29 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     retail_display_line("READER SUPPORT HOOKS RETAINED");
 #endif
 #elif KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION
+#if KUI_NATIVE_VMU_ONLY
+    retail_display_line("STANDARD READER / VIRTUAL A2 ON");
+#if KUI_NATIVE_VMU_LITE
+    retail_display_line("72 KIB VMU LITE / BACKGROUND OFF");
+#else
+    retail_display_line("112 KIB VMU / BACKGROUND OFF");
+#endif
+#if KUI_NATIVE_VMU_ONLY_FULL_SUBMIT
+    retail_display_line("FULL SUBMIT CONTROL");
+#endif
+#if KUI_NATIVE_VMU_ONLY_TRANSPORT == 1
+#if KUI_NATIVE_VMU_SCI_RX_PACED
+    retail_display_line("SCI RX DMA / BYTE CREDIT");
+#elif KUI_SCI_SD_PIO_ONLY
+    retail_display_line("SCI PIO / NO RX DMA");
+#else
+    retail_display_line("SCI RX DMA / UNPACED CONTROL");
+#endif
+#endif
+#else
+#if KUI_NATIVE_BACKGROUND_COMPACT
+    retail_display_line("72 KIB VMU / 284 KIB BACKGROUND");
+#endif
     retail_display_line(native_runtime_mode()==KUI_VMU_NATIVE_MODE_READER_ONLY?
         "NEW READER / VIRTUAL A2 OFF":"NEW READER / VIRTUAL A2 ON");
 #if KUI_NATIVE_SPLIT_CONTROLLER_STREAM_GUARD
@@ -500,6 +523,7 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     retail_display_line("PREFETCH OFF / SPLIT CONTROLLER ALL");
 #else
     retail_display_line("PREFETCH OFF / SPLIT CONTROLLER");
+#endif
 #endif
     retail_display_line("REAL MAPLE CALLBACKS ON");
 #elif KUI_NATIVE_METADATA_CACHE_ISOLATION

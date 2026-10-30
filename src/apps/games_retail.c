@@ -17,6 +17,8 @@
 #include "kui/vmu_launch_package.h"
 #include "kui/native_dual_reader.h"
 #include "kui/native_standalone_capability.h"
+#include "kui/native_physical_capability.h"
+#include "kui/native_vmu_standard.h"
 #include "kui/vmu_emulation_settings.h"
 #include "kui/media.h"
 #include "../core/games_cdda_profile.h"
@@ -467,7 +469,7 @@ static bool fill_ram_patches(struct kui_runtime_image *package,
 #endif
 
 static bool prepare_launch(const char *path,uint32_t reader,const struct kui_game_ram_patches *patches,
-    bool reporting,struct kui_runtime_image *package,kui_log_fn log,kui_cancel_fn cancel) {
+    const struct kui_vmu_game_selection *selection,bool reporting,struct kui_runtime_image *package,kui_log_fn log,kui_cancel_fn cancel) {
     if(!package) return false;
     *package=(struct kui_runtime_image){0};
     if(!log || !cancel) return false;
@@ -505,6 +507,10 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     }
     const bool native_dual=!ce && !cdda && !ce_excerpt && !zso &&
         (reader==KUI_RETAIL_READER_ASYNC || reader==KUI_RETAIL_READER_ASYNC_EAGER);
+    const bool native_standard=!ce && !cdda && !ce_excerpt && !zso && reader==KUI_RETAIL_READER_STANDARD;
+#if KUI_VMU_GAME_CARDS
+    bool standard_virtual_a2=false;
+#endif
     if(native_dual && patched) {
         log("Native virtual-A2 background testing requires RAM patches Off");return false;
     }
@@ -534,6 +540,11 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     enum kui_wince_cdda_profile music_profile=KUI_WINCE_CDDA_NONE;
     const char *launch_package=zso?(codec==KUI_ZSO_LZO1X?KUI_GAMES_RETAIL_LZO_PACKAGE:KUI_GAMES_RETAIL_ZSO_PACKAGE):ce?KUI_GAMES_RETAIL_CE_PACKAGE:KUI_GAMES_RETAIL_PACKAGE;
     if(native_dual)launch_package=KUI_GAMES_RETAIL_NATIVE_DUAL_PACKAGE;
+#if KUI_VMU_GAME_CARDS
+    if(native_standard && !emulation_enabled) launch_package=KUI_GAMES_RETAIL_PHYSICAL_PACKAGE;
+#else
+    (void)native_standard;
+#endif
     enum kui_runtime_result rr=KUI_RUNTIME_OK;
     if(!cdda && !ce_excerpt) {
         rr=kui_runtime_read(launch_package,package,log,cancel);
@@ -541,6 +552,20 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
             problem=native_dual?"native X/Y virtual-A2 module missing or unreadable; install the matching candidate":kui_runtime_result_name(rr);goto done;
         }
         if(!layout_codec(package,ce,zso,codec)) {problem="unsupported game-launch package layout";goto done;}
+#if KUI_VMU_GAME_CARDS
+        if(native_standard) {
+            if(!emulation_enabled) {
+                if(kui_native_physical_descriptor_find(package->data,package->info.payload_bytes,NULL)!=1) {
+                    problem="physical Standard module capability missing or ambiguous; reinstall this update";goto done;
+                }
+            } else {
+                standard_virtual_a2=kui_native_vmu_standard_recognize(package,NULL);
+                if(!standard_virtual_a2) {
+                    problem="Standard virtual VMU needs the matching paced SCI72 module; reinstall the accepted candidate";goto done;
+                }
+            }
+        }
+#endif
         if(native_dual && kui_native_dual_descriptor_find(package->data,package->info.payload_bytes,NULL)!=1) {
             problem="native X/Y module capability missing or ambiguous; install the matching candidate";goto done;
         }
@@ -565,6 +590,15 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     }
     if(image->compressed!=zso) {problem="compressed image/backend mismatch";goto done;}
     map->storage_transport=kui_storage_active();
+#if KUI_VMU_GAME_CARDS
+    if(native_standard && !emulation_enabled &&
+       !kui_native_physical_launch_valid(reader,map->storage_transport)) {
+        problem="physical Standard module does not support this storage transport";goto done;
+    }
+    if(standard_virtual_a2 && map->storage_transport!=KUI_STORAGE_SCI) {
+        problem="paced Standard virtual VMU requires SCI microSD";goto done;
+    }
+#endif
     if(zso && map->storage_transport!=KUI_STORAGE_SCI) {
         problem="ZSO direct launch needs SCI microSD";goto done;
     }
@@ -662,7 +696,11 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     snprintf(map->product,sizeof(map->product),"%s",metadata.product);
     snprintf(map->region,sizeof(map->region),"%s",metadata.region);
     snprintf(map->bootfile,sizeof(map->bootfile),"%s",metadata.bootfile);
-    if(emulation_enabled && !native_dual && (kui_vmu_launch_silver_candidate(map) || kui_vmu_launch_toy_candidate(map))) {
+    bool optional_virtual=emulation_enabled && !native_dual;
+#if KUI_VMU_GAME_CARDS
+    if(standard_virtual_a2) optional_virtual=false;
+#endif
+    if(optional_virtual && (kui_vmu_launch_silver_candidate(map) || kui_vmu_launch_toy_candidate(map))) {
         bool silver=kui_vmu_launch_silver_candidate(map);
         const char *optional_path=silver?KUI_GAMES_RETAIL_VMU_SILVER_PACKAGE:KUI_GAMES_RETAIL_VMU_TOY_PACKAGE;
         FILINFO optional;
@@ -705,7 +743,15 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
             image->tracks[i].start_lba<boot_end && image->tracks[i].end_lba>map->boot_lba)
             cooked_boot=true;
     const bool need_boot_crc=reporting || patched || cdda || cooked_boot || vmu_package || image->format!=KUI_GAME_IMAGE_GDI;
-    const bool defer_boot_crc=native_dual && need_boot_crc;
+    /* Standard cache-bearing VMU modules also read the full source for SHA
+     * and SDK preflight. Reuse that read's exact-byte CRC as X/Y already do.
+     * An absent/incomplete source proof still takes the full CRC fallback;
+     * one-sector I/O and the detached checksum checks remain unchanged. */
+    const bool standard_cache_source=reader==KUI_RETAIL_READER_STANDARD &&
+        native_cache_source_eligible(image,map,!ce && metadata.native_gd,
+            requested_options,patched,package,false) &&
+        kui_vmu_native_cache_seed_find(package->data,package->info.payload_bytes)!=SIZE_MAX;
+    const bool defer_boot_crc=need_boot_crc && (native_dual || standard_cache_source);
     if(need_boot_crc) {
         map->flags|=KUI_RETAIL_IMAGE_BOOT_CRC;
         if(!defer_boot_crc) {
@@ -870,7 +916,7 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     }
     struct native_cache_source_proof source_proof;bool standalone_candidate=false;
     const enum native_cache_result cache=native_cache_prepare(image,map,!ce && metadata.native_gd,
-       requested_options,patched,package,files.root,log,cancel,defer_boot_crc?&source_proof:NULL,
+       requested_options,patched,package,files.root,emulation_enabled,log,cancel,defer_boot_crc?&source_proof:NULL,
        native_dual?&standalone_candidate:NULL);
     if(cache==NATIVE_CACHE_CANCELLED) {
         problem="cancelled during native executable mapping";goto done;
@@ -900,18 +946,28 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
         }
     }
 #if KUI_VMU_GAME_CARDS
-    const bool virtual_a2=emulation_enabled && native_dual && !native_standalone && cache==NATIVE_CACHE_READY;
+    if(standard_virtual_a2) {
+        char product[12];
+        if(cache!=NATIVE_CACHE_READY || !kui_vmu_game_card_key(map->product,product)) {
+            problem="Standard virtual VMU needs a supported native game and current game card; installed card fallback is disabled";goto done;
+        }
+    }
+    const bool virtual_a2=emulation_enabled &&
+        ((native_dual && !native_standalone && cache==NATIVE_CACHE_READY) || standard_virtual_a2);
     if(!games_card_route(map,emulation_enabled,virtual_a2,native_standalone,&problem,cancel)) goto done;
     /* The virtual-A2 module will run this game: hand it the game's own card.
      * Its raw ownership scan unmounts FatFs, so no image file stays open. */
     if(virtual_a2) {
         if(!close_reader(&files)) {problem="cannot close image reader";goto done;}
-        if(!games_card_prepare(map,package,&fs,&problem,log,cancel)) goto done;
+        bool prepared=selection && selection->selected?
+            games_card_prepare_selected(map,package,&fs,selection,&problem,log,cancel):
+            games_card_prepare(map,package,&fs,&problem,log,cancel);
+        if(!prepared) goto done;
     }
     if(!emulation_enabled && native_dual && !native_standalone)
         log("Virtual A2 Off: physical VMUs pass through; the full reader cache remains reserved");
 #else
-    (void)cache;
+    (void)cache;(void)selection;
 #endif
     if(defer_boot_crc) {
         if(source_proof.complete)map->boot_crc32=source_proof.crc32;
@@ -974,18 +1030,28 @@ done:
 
 bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
     struct kui_runtime_image *image,kui_log_fn log,kui_cancel_fn cancelled) {
-    return prepare_launch(path,reader,NULL,false,image,log,cancelled);
+    return prepare_launch(path,reader,NULL,NULL,false,image,log,cancelled);
 }
 bool kui_games_retail_prepare_launch(const char *path,uint32_t reader,
     const struct kui_game_ram_patches *patches,struct kui_runtime_image *image,
     kui_log_fn log,kui_cancel_fn cancelled) {
-    return prepare_launch(path,reader,patches,true,image,log,cancelled);
+    return prepare_launch(path,reader,patches,NULL,true,image,log,cancelled);
+}
+bool kui_games_retail_prepare_launch_card(const char *path,uint32_t reader,
+    const struct kui_game_ram_patches *patches,const struct kui_vmu_game_selection *selection,
+    struct kui_runtime_image *image,kui_log_fn log,kui_cancel_fn cancelled) {
+    return prepare_launch(path,reader,patches,selection,true,image,log,cancelled);
 }
 
 bool kui_games_retail_check_launch(const char *path,uint32_t reader,
     const struct kui_game_ram_patches *patches,kui_log_fn log,kui_cancel_fn cancelled) {
+    return kui_games_retail_check_launch_card(path,reader,patches,NULL,log,cancelled);
+}
+bool kui_games_retail_check_launch_card(const char *path,uint32_t reader,
+    const struct kui_game_ram_patches *patches,const struct kui_vmu_game_selection *selection,
+    kui_log_fn log,kui_cancel_fn cancelled) {
     struct kui_runtime_image staged={0};
-    bool ok=kui_games_retail_prepare_launch(path,reader,patches,&staged,log,cancelled);
+    bool ok=kui_games_retail_prepare_launch_card(path,reader,patches,selection,&staged,log,cancelled);
     kui_runtime_free(&staged);
     if(ok && cancelled && cancelled())ok=false;
     if(ok && log)log("Executable check passed; staged package released without handoff");

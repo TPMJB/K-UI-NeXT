@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Full-submit diagnostic control for the 72 KiB VMU-lite baseline. Preserve
+# its compact worker, synchronous reader, transport and durable save path.
+BUILD ?= build/native-vmu-lite-full-sci
+override VMU_ONLY_FULL_SUBMIT := 1
+include Makefile.vmu-native-vmu-lite
+FLAGS += -DKUI_NATIVE_VMU_ONLY_FULL_SUBMIT=1
+NATIVE_FLAGS += -DKUI_NATIVE_VMU_ONLY_FULL_SUBMIT=1
+
+$(BUILD)/retail-native-vmu-lite-full-submit.kui: $(BUILD)/retail-maple-observe.kui
+	cp $< $@
+all: $(BUILD)/retail-native-vmu-lite-full-submit.kui
+
+.PHONY: skies-next-host-tests help
+skies-next-host-tests:
+	python3 tests/test_native_vmu_lite.py
+	python3 tests/test_native_vmu_io_diagnostic.py
+	python3 tests/test_vmu_native_compact_persistent.py
+	python3 tests/test_vmu_native_skies_lifecycle.py
+	python3 tests/test_install_skies_next.py
+	python3 tests/test_package_skies_next.py
+
+help:
+	@printf '%s\n' \
+	 '72 KiB VMU-lite is the next-test baseline.' \
+	 'all: build its 72 KiB full-submit diagnostic control (VMU_TRANSPORT=1 SCI, 0 SCIF).' \
+	 'skies-next-host-tests: run the compact VMU, diagnostic, lifecycle and delivery checks.'

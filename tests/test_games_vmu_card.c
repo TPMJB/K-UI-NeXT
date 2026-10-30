@@ -20,10 +20,11 @@ bool kui_sd_vmu_profile_identity(struct kui_vmu_sd_identity *out);
 #include "../src/apps/games_vmu_card.inc"
 
 static struct {
-    int result,mounts,unmounts,raw_reads,assignment_result,assignment_reads;bool mounted,identity_fails,volume_moves,salts_differ;
+    int result,mounts,unmounts,raw_reads,assignment_result,assignment_reads,candidate_reads,identity_reads,exact_reads;
+    int candidate_result;bool mounted,identity_fails,volume_moves,salts_differ;
     char problem[96];uint8_t fill;
     const struct kui_retail_manifest *map;
-} mock;
+} mock={.candidate_result=KUI_VMU_GAME_CANDIDATES_ABSENT};
 static struct kui_volume volume={2048u,1000000u,true};
 static FATFS mounted_fs;
 FRESULT f_mount(FATFS *fs,const TCHAR *path,BYTE opt) {
@@ -42,6 +43,7 @@ bool kui_sd_raw_read_ops(struct kui_media_ops *out) {
     *out=(struct kui_media_ops){.ctx=&mock,.read=raw_read};return true;
 }
 bool kui_sd_vmu_profile_identity(struct kui_vmu_sd_identity *out) {
+    ++mock.identity_reads;
     if(mock.identity_fails) return false;
     memset(out,0,sizeof(*out));memset(out->cid,0x42,16u);out->sectors=4000000u;out->high_capacity=true;
     return true;
@@ -50,6 +52,12 @@ bool kui_clock_now(struct kui_datetime *out) {memset(out,0,sizeof(*out));return 
 bool kui_clock_to_seconds(const struct kui_datetime *value,int64_t *out) {(void)value;*out=0;return false;}
 static void log_line(const char *format,...) {(void)format;}
 static bool never(void) {return false;}
+int kui_vmu_game_candidates_list(const char *product,const struct kui_vmu_game_candidates_storage *storage,
+    struct kui_vmu_game_candidates_view *out,kui_log_fn log,kui_cancel_fn cancel) {
+    (void)log;CHECK(!strcmp(product,mock.map->product) && cancel==never && storage);
+    CHECK(storage->partition_first==mock.map->partition_start && storage->partition_end==mock.map->partition_end);
+    ++mock.candidate_reads;memset(out,0,sizeof(*out));return mock.candidate_result;
+}
 
 int kui_vmu_game_card_assignment(const char *product,struct kui_vmu_game_card_work *work,
     struct kui_vmu_game_card_choice *choice,kui_cancel_fn cancel) {
@@ -91,6 +99,15 @@ int kui_vmu_game_card_select(const char *product,uint64_t partition_first,uint64
     snprintf(choice->problem,sizeof(choice->problem),"%s",mock.problem);
     return mock.result;
 }
+int kui_vmu_game_card_select_exact(const char *product,const struct kui_vmu_game_candidate_target *target,
+    const struct kui_vmu_game_candidates_storage *storage,uint64_t first,uint64_t end,
+    const struct kui_vmu_fs_range *forbidden,size_t count,const struct kui_vmu_game_card_platform *platform,
+    struct kui_vmu_game_card_work *work,uint8_t wire[KUI_VMU_PERSIST_PROFILE_WIRE_BYTES],
+    struct kui_vmu_game_card_choice *choice,kui_log_fn log,kui_cancel_fn cancel) {
+    CHECK(target && target->pair==23 && target->identity[0]==0x23 && storage && storage->cid[0]==0x42);
+    ++mock.exact_reads;
+    return kui_vmu_game_card_select(product,first,end,forbidden,count,platform,work,wire,choice,log,cancel);
+}
 
 static uint8_t template_wire[4096];
 static uint8_t payload[65536];
@@ -114,7 +131,7 @@ static void toggle_mode(uint8_t *wire,unsigned mode) {
     memset(wire,0,32u);memcpy(wire,"KUINVM01",8u);
     mode_put32(wire+8u,1u);mode_put32(wire+12u,32u);mode_put32(wire+16u,mode);
 }
-static void emulation_mode_controls(void) {
+static void emulation_mode_controls(uint32_t lease_bytes) {
     const char *problem=NULL;
     struct kui_runtime_image package={.data=payload,.info={.payload_bytes=sizeof(payload)}};
     static uint8_t before[sizeof(payload)];
@@ -123,7 +140,8 @@ static void emulation_mode_controls(void) {
     CHECK(!memcmp(payload,before,sizeof(payload)));
     CHECK(!games_card_emulation_mode(&package,false,&problem) && strstr(problem,"matching toggle-capable"));
     CHECK(!memcmp(payload,before,sizeof(payload)));
-    toggle_capability(payload+1024u);memcpy(before,payload,sizeof(before));
+    toggle_capability(payload+1024u);mode_put32(payload+1044u,lease_bytes);
+    memcpy(before,payload,sizeof(before));
     CHECK(!games_card_emulation_mode(&package,false,&problem) && strstr(problem,"mode is missing"));
     CHECK(!memcmp(payload,before,sizeof(payload)));
     toggle_mode(payload+2048u,KUI_VMU_NATIVE_MODE_NORMAL);
@@ -144,6 +162,7 @@ static void emulation_mode_controls(void) {
     toggle_mode(payload+4096u,KUI_VMU_NATIVE_MODE_NORMAL);memcpy(before,payload,sizeof(before));
     CHECK(!games_card_emulation_mode(&package,false,&problem) && strstr(problem,"ambiguous"));
     CHECK(!memcmp(payload,before,sizeof(payload)));
+    /* Duplicate and mixed-layout toggle capabilities both refuse. */
     memset(payload+4096u,0xa5,32u);toggle_capability(payload+4096u);memcpy(before,payload,sizeof(before));
     CHECK(!games_card_emulation_mode(&package,false,&problem));
     CHECK(!games_card_emulation_mode(&package,true,&problem));
@@ -165,7 +184,8 @@ int main(int argc,char **argv) {
     map.slots[4].extent=(struct kui_retail_extent){.card_lba=600000u,.blocks=128u};
     mock.map=&map;mounted_fs.fs_type=FS_EXFAT;mounted_fs.last_clst=77u;
     const char *problem;
-    emulation_mode_controls();
+    emulation_mode_controls(UINT32_C(0x51000));
+    emulation_mode_controls(UINT32_C(0x47000));
 
     /* Unassigned games retain standalone/Legacy behavior. An explicit
      * import can only run through combined virtual A2, never silently fall
@@ -176,11 +196,14 @@ int main(int argc,char **argv) {
     mock.assignment_result=KUI_VMU_GAME_CARD_READY;
     CHECK(!games_card_route(&map,true,false,true,&problem,never) && strstr(problem,"standalone New"));
     CHECK(!games_card_route(&map,true,false,false,&problem,never) && strstr(problem,"combined New reader"));
-    int lookups=mock.assignment_reads;
+    int lookups=mock.assignment_reads,catalogues=mock.candidate_reads,identities=mock.identity_reads;
+    mock.candidate_result=KUI_VMU_GAME_CANDIDATES_INVALID;mock.identity_fails=true;
     CHECK(games_card_route(&map,false,false,false,&problem,never) && mock.assignment_reads==lookups);
     CHECK(games_card_route(&map,false,false,true,&problem,never) && mock.assignment_reads==lookups);
     CHECK(games_card_route(&map,false,true,false,&problem,never) && mock.assignment_reads==lookups);
     CHECK(games_card_route(&map,true,true,false,&problem,never) && mock.assignment_reads==lookups);
+    CHECK(mock.candidate_reads==catalogues && mock.identity_reads==identities);
+    mock.candidate_result=KUI_VMU_GAME_CANDIDATES_ABSENT;mock.identity_fails=false;
     snprintf(mock.problem,sizeof(mock.problem),"VMU game assignments are damaged");
     mock.assignment_result=KUI_VMU_GAME_CARD_FAILED;
     CHECK(!games_card_route(&map,true,false,false,&problem,never) && strstr(problem,"assignments are damaged"));
@@ -199,6 +222,21 @@ int main(int argc,char **argv) {
     CHECK(prepare(&problem) && !problem && mock.salts_differ);
     for(size_t i=0;i<sizeof(payload);i++)
         CHECK(payload[i]==(i>=8192u && i<12288u?0x5c:before[i]));
+    /* The launch snapshot carries product/pair/identity/storage by value;
+     * it cannot silently become a different game's default or row index. */
+    memcpy(payload,before,sizeof(payload));
+    struct kui_runtime_image selected_package={.data=payload,.info={.payload_bytes=sizeof(payload)}};
+    struct kui_vmu_game_selection selected={.pair=23,.selected=true};
+    strcpy(selected.product,map.product);memset(selected.identity,0x23,16u);
+    selected.storage.cid[0]=0x42;selected.storage.card_sectors=4000000u;
+    selected.storage.partition_first=map.partition_start;selected.storage.partition_end=map.partition_end;
+    mock.unmounts=mock.mounts=mock.raw_reads=0;mock.mounted=true;
+    CHECK(games_card_prepare_selected(&map,&selected_package,&mounted_fs,&selected,&problem,log_line,never));
+    CHECK(mock.exact_reads==1);
+    memcpy(payload,before,sizeof(payload));strcpy(selected.product,"ANOTHER");
+    int exact=mock.exact_reads,raw=mock.raw_reads;
+    CHECK(!games_card_prepare_selected(&map,&selected_package,&mounted_fs,&selected,&problem,log_line,never));
+    CHECK(mock.exact_reads==exact && mock.raw_reads==raw && !memcmp(payload,before,sizeof(payload)));
 
     /* No product key: an installed card stays; the build template refuses. */
     memcpy(payload,before,sizeof(payload));
@@ -212,6 +250,8 @@ int main(int argc,char **argv) {
     CHECK(prepare(&problem) && !problem && !memcmp(payload,before,sizeof(payload)));
 
     /* Refusals keep the slot and name the service's reason. */
+    mock.result=KUI_VMU_GAME_CARD_CHOICE_REQUIRED;
+    CHECK(!prepare(&problem) && strstr(problem,"choose a virtual VMU") && !memcmp(payload,before,sizeof(payload)));
     mock.result=KUI_VMU_GAME_CARD_FAILED;snprintf(mock.problem,sizeof(mock.problem),"p0002 and p0010 both claim MK-51136");
     CHECK(!prepare(&problem) && !strcmp(problem,"virtual card: p0002 and p0010 both claim MK-51136"));
     CHECK(!memcmp(payload,before,sizeof(payload)));

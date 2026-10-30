@@ -23,7 +23,7 @@ struct fake_node {char path[128];uint8_t data[1024];size_t size;bool directory,e
 static struct fake_node disk[20];
 static struct {
     const uint8_t *boot;size_t bytes;unsigned reads,opens,closed,writes,syncs,renames,unlinks,builds,replays,logs;
-    unsigned cancel_checks,cancel_at,allocation_at,allocations;
+    unsigned cancel_checks,cancel_at,allocation_at,allocations,stats,mkdirs;
     unsigned fail,cancel_when;bool cancelled;
 } io;
 enum {FAIL_NONE,FAIL_OPEN,FAIL_WRITE,FAIL_SHORT,FAIL_SYNC,FAIL_CLOSE,FAIL_READBACK,FAIL_RENAME,FAIL_MKDIR,
@@ -38,6 +38,7 @@ static unsigned node_add(const char *path,bool directory) {
     CHECK(false);return 0;
 }
 static FRESULT f_stat(const char *path,FILINFO *out) {
+    ++io.stats;
     int n=node_find(path);if(n<0) return FR_NO_FILE;
     *out=(FILINFO){disk[n].size,disk[n].directory?AM_DIR:0u};return FR_OK;
 }
@@ -73,6 +74,7 @@ static FRESULT f_close(FIL *f) {
     return io.fail==FAIL_CLOSE && strstr(disk[f->node].path,".tmp")?FR_DISK_ERR:FR_OK;
 }
 static FRESULT f_mkdir(const char *path) {
+    ++io.mkdirs;
     if(io.cancel_when==1u) io.cancelled=true;
     if(io.fail==FAIL_MKDIR) return FR_DENIED;
     if(node_find(path)>=0) return FR_EXIST;
@@ -128,8 +130,10 @@ static bool cancelled(void) {
     if(io.cancel_at && ++io.cancel_checks==io.cancel_at) io.cancelled=true;
     return io.cancelled;
 }
+static bool allow_persistent_cache=true;
 static void logger(const char *format,...) {CHECK(format);++io.logs;}
 static void setup(const uint8_t *boot,size_t bytes) {
+    allow_persistent_cache=true;
     memset(&io,0,sizeof(io));memset(disk,0,sizeof(disk));io.boot=boot;io.bytes=bytes;
     memset(&game,0,sizeof(game));game.format=KUI_GAME_IMAGE_GDI;
     memset(&map,0,sizeof(map));map.storage_transport=KUI_STORAGE_SCI;map.boot_lba=100u;map.boot_bytes=(uint32_t)bytes;
@@ -153,7 +157,7 @@ static unsigned seed_cache(const uint8_t *boot,size_t bytes,bool actual) {
 static enum native_cache_result prepare(bool native,uint32_t options,bool patches,const char *source) {
     source_proof=(struct native_cache_source_proof){true,UINT32_MAX};
     bool standalone=true;
-    enum native_cache_result result=native_cache_prepare(&game,&map,native,options,patches,&package,source,logger,cancelled,&source_proof,&standalone);
+    enum native_cache_result result=native_cache_prepare(&game,&map,native,options,patches,&package,source,allow_persistent_cache,logger,cancelled,&source_proof,&standalone);
     CHECK(io.opens==io.closed);
     CHECK(!standalone); /* No fixture executable carries the SDK SCI family. */
     if(source_proof.complete) {
@@ -344,6 +348,19 @@ static void actual_frontend(const char *path) {
         memcpy(module+3072u,&cap,sizeof(cap));memcpy(before,module,sizeof(module));
         CHECK(prepare(true,reader,false,"/Games/PS2")==NATIVE_CACHE_READY);
         CHECK(io.replays==1u && !io.builds && !io.writes && !io.renames);
+    }
+    /* VMU Off keeps both Background readers' complete executable proof in
+     * RAM, and never even stats the VMU/cache tree. A damaged old cache is
+     * deliberately present but must be irrelevant to this route. */
+    for(unsigned reader=KUI_RETAIL_READER_STANDARD;reader<=KUI_RETAIL_READER_ASYNC_EAGER;reader++) {
+        setup(boot,bytes);map.reader=reader;allow_persistent_cache=false;
+        if(reader)memcpy(module+3072u,&cap,sizeof(cap));
+        memcpy(before,module,sizeof(module));
+        unsigned stale=seed_cache(boot,bytes,true);disk[stale].data[0]^=1u;
+        io.fail=FAIL_OPEN;
+        CHECK(prepare(true,reader,false,"/Games/PS2")==NATIVE_CACHE_READY);
+        CHECK(io.builds==1u && !io.replays && !io.stats && !io.mkdirs && !io.opens &&
+            !io.writes && !io.syncs && !io.renames && !io.unlinks);
     }
     free(boot);
 }

@@ -18,6 +18,12 @@ __asm__(".global __kui_vmu_native_background_resident\n"
 __asm__(".global __kui_native_general_lean_resident_layout\n"
         ".set __kui_native_general_lean_resident_layout,1\n");
 #endif
+#if KUI_NATIVE_BACKGROUND_COMPACT
+__asm__(".global __kui_native_background_compact_resident\n"
+        ".set __kui_native_background_compact_resident,1\n"
+        ".global __kui_native_isolation_lease_bytes\n"
+        ".set __kui_native_isolation_lease_bytes,0x47000\n");
+#endif
 
 /* NATIVE_RESIDENT_GUARDS_BEGIN
  * Pure admission predicates are also compiled by the host adversarial test.

@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Diagnostic control for the independent VMU: keep the same service, lease,
+# transport and save protocol; route the assembly submit entry through the
+# retained full C path. This is not a compatibility fix or a new default.
+BUILD ?= build/native-vmu-only-full-sci
+override VMU_ONLY_FULL_SUBMIT := 1
+include Makefile.vmu-native-vmu-only
+FLAGS += -DKUI_NATIVE_VMU_ONLY_FULL_SUBMIT=1
+NATIVE_FLAGS += -DKUI_NATIVE_VMU_ONLY_FULL_SUBMIT=1
+
+$(BUILD)/vmu-only-full-submit-config: force-mode-config
+	@mkdir -p $(BUILD)
+	@printf '%s\n' 'KUI_NATIVE_VMU_ONLY_FULL_SUBMIT=1' > $@.tmp
+	@cmp -s $@.tmp $@ || cp $@.tmp $@
+	@rm -f $@.tmp
+$(RESIDENT_OBJ) $(STAGE_OBJ) $(NATIVE_OBJ): $(BUILD)/vmu-only-full-submit-config
+
+.PHONY: vmu-only-full-submit-host-tests
+vmu-only-full-submit-host-tests:
+	python3 tests/test_vmu_only_full_submit.py
+
+.PHONY: skies-vmu-host-tests
+skies-vmu-host-tests: vmu-only-full-submit-host-tests
+	python3 tests/test_vmu_native_skies_lifecycle.py
+	python3 tests/test_inspect_native_vmu_cards.py
+	python3 tests/test_install_skies_vmu_compare.py
+	python3 tests/test_install_skies_launch_ui.py

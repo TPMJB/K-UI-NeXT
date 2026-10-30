@@ -12,7 +12,7 @@ import copy
 import hashlib
 import json
 from pathlib import Path
-from native_runtime_layout import LEASE_BYTES, layout_for
+from native_runtime_layout import LEASE_BYTES, BACKGROUND_COMPACT, layout_for
 import struct
 import sys
 import tempfile
@@ -155,6 +155,53 @@ def markers(stage,worker):
     for image,role in ((stage,'stage'),(worker,'worker')):
         require(image[4].get(MARK+role)==(1,0,0,0xfff1),
                 'dual '+role+' marker is not exact absolute one')
+    require(layout_for(stage[4]) is layout_for(worker[4]),
+            'dual stage/worker select different complete runtime geometries')
+
+
+def compact_component_markers(stage,worker,resident,legacy,auxiliary):
+    images=((stage,'stage'),(worker,'worker'),(resident,'resident'),
+            (legacy,'resident'),(auxiliary,'auxiliary'))
+    geometry=layout_for(worker[4])
+    require(all(layout_for(image[4]) is geometry for image,_ in images),
+            'Combined reader components select different geometry contracts')
+    if geometry is not BACKGROUND_COMPACT:
+        return {'enabled':False}
+    for image,role in images:
+        require(image[4].get('__kui_native_background_compact_'+role)==(1,0,0,0xfff1) and
+                image[4].get('__kui_native_isolation_lease_bytes')==(0x47000,0,0,0xfff1),
+                'Compact Background component lost its exact marker/lease: '+role)
+    require(worker[4].get('__kui_native_background_compact_worker_layout')==(1,0,0,0xfff1),
+            'Compact Background worker lacks its separately selected linker layout')
+    return {'enabled':True,'matching_immutable_component_markers':True,
+            'worker_bytes':geometry.WORKER_BYTES,'lease_bytes':geometry.LEASE_BYTES,
+            'cache_bytes':geometry.DATA_BYTES,'components':len(images)}
+
+
+def compact_component_mutations(stage,worker,resident,legacy,auxiliary):
+    """Refuse missing, forged or mixed contracts in all five actual images."""
+    images=(stage,worker,resident,legacy,auxiliary)
+    roles=('stage','worker','resident','resident','auxiliary')
+    require(compact_component_markers(*images).get('enabled') is True,
+            'Compact component mutations require the complete actual profile')
+    rejected=0
+    for index,(image,role) in enumerate(zip(images,roles)):
+        names=['__kui_native_background_compact_'+role,
+               '__kui_native_isolation_lease_bytes']
+        if role=='worker':names.append('__kui_native_background_compact_worker_layout')
+        for name in names:
+            original=image[4][name]
+            for value in (None,(original[0]^4,*original[1:]),
+                          (original[0],4,*original[2:]),
+                          (*original[:3],1)):
+                symbols=dict(image[4])
+                if value is None:del symbols[name]
+                else:symbols[name]=value
+                changed=list(images);changed[index]=(*image[:4],symbols)
+                try:compact_component_markers(*changed)
+                except (ValueError,KeyError):rejected+=1
+                else:raise ValueError('Compact combined audit accepted altered '+role+' '+name)
+    return rejected
 
 
 def initialized(image,address,count):
@@ -744,6 +791,10 @@ def check(directory,*,self_test=False,cold_binder_proof=None,witness_proof=None)
     resident,legacy,stage,worker=(read_elf(directory/name) for name in
         ('resident-sci.elf','resident-legacy.elf','stage.elf','native-worker.elf'))
     markers(stage,worker)
+    auxiliary=read_elf(directory/'native-ra-aux.elf')
+    compact=compact_component_markers(stage,worker,resident,legacy,auxiliary)
+    if self_test and compact.get('enabled'):
+        compact['mutation_rejections']=compact_component_mutations(stage,worker,resident,legacy,auxiliary)
     from check_native_dual_callbacks import check as check_low_callbacks
     low_callbacks=check_low_callbacks(directory,self_test=self_test)
     low_artifacts={name:sha(image[0]) for name,image in
@@ -776,7 +827,9 @@ def check(directory,*,self_test=False,cold_binder_proof=None,witness_proof=None)
     witness_companion(worker,{'controller_failure_witness':witness_proof})
     module=(directory/'retail-maple-observe.kui').read_bytes()
     cap=capability(stage,module);blobs=embedded_blobs(stage,resident,legacy,directory)
-    layouts=console_layouts(general=layout_for(stage[4]).WORKER_BYTES==0x1c000);layout=layouts['layouts']['x']
+    geometry=layout_for(stage[4])
+    layouts=console_layouts(general=geometry.WORKER_BYTES in (0x1c000,0x12000),
+                            compact=geometry is BACKGROUND_COMPACT);layout=layouts['layouts']['x']
     tail=tail_contract(directory,stage,resident,worker,cold_binder_proof)
     selection=selector_cases(resident,stage);binding=binding_cases(resident,stage,worker)
     binding.update(tail)
@@ -843,6 +896,7 @@ def check(directory,*,self_test=False,cold_binder_proof=None,witness_proof=None)
                 require(not closed_callgraph(changed),'dual accepts an incomplete legacy callgraph')
                 closure_refusals+=1
     return dict(schema='kui.native.dual-readers.audit.v1',enabled=True,
+        compact_background=compact,
         artifact_sha256={name:sha(image[0]) for name,image in
                          (('resident',resident),('legacy',legacy),('stage',stage),('worker',worker))},
         capability=cap,embedded_engines=blobs,immutable_stage_pins=stage_pins,immutable_worker_pins=worker_pins,

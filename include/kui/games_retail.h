@@ -3,7 +3,9 @@
 #define KUI_GAMES_RETAIL_H
 #include "kui/runtime.h"
 #include "kui/game_ram_patches.h"
+#include "kui/vmu_game_info.h"
 #define KUI_GAMES_RETAIL_PACKAGE "0:/KUI/apps/games/retail-boot.kui"
+#define KUI_GAMES_RETAIL_PHYSICAL_PACKAGE "0:/KUI/apps/games/retail-physical.kui"
 /* Native SCI Background X/Y with generic virtual A2. Standard and the
  * separate CE/CDDA/compressed routes retain their existing packages. */
 #define KUI_GAMES_RETAIL_NATIVE_DUAL_PACKAGE "0:/KUI/apps/games/retail-native-dual.kui"
@@ -64,9 +66,17 @@ bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
 bool kui_games_retail_prepare_launch(const char *path,uint32_t reader,
     const struct kui_game_ram_patches *patches,struct kui_runtime_image *image,
     kui_log_fn log,kui_cancel_fn cancelled);
+/* As above with a by-value shell snapshot's one-time card choice. An explicit
+ * VMU Off setting ignores it without looking up any card or assignment. */
+bool kui_games_retail_prepare_launch_card(const char *path,uint32_t reader,
+    const struct kui_game_ram_patches *patches,const struct kui_vmu_game_selection *selection,
+    struct kui_runtime_image *image,kui_log_fn log,kui_cancel_fn cancelled);
 /* Performs the same executable/package/map checks and preparation report as
  * a launch, then frees the staged package. Never exposes a handoff image or
  * executes a game. Success is preparation evidence, not console compatibility. */
 bool kui_games_retail_check_launch(const char *path,uint32_t reader,
     const struct kui_game_ram_patches *patches,kui_log_fn log,kui_cancel_fn cancelled);
+bool kui_games_retail_check_launch_card(const char *path,uint32_t reader,
+    const struct kui_game_ram_patches *patches,const struct kui_vmu_game_selection *selection,
+    kui_log_fn log,kui_cancel_fn cancelled);
 #endif

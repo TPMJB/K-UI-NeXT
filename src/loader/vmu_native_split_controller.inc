@@ -1,5 +1,9 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #if KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION
+#if KUI_NATIVE_VMU_ONLY_FULL_SUBMIT
+__asm__(".global __kui_native_vmu_only_full_submit_worker\n"
+        ".set __kui_native_vmu_only_full_submit_worker,1\n");
+#endif
 /* The original SDK owns this unchanged physical DMA. This capture grants no
  * RX publication, virtual packet, storage call, or MDSTAR change. All fresh
  * hook/lifetime/layout/response checks still precede our one parent-byte store
@@ -117,7 +121,14 @@ static inline __attribute__((always_inline)) bool split_controller_capture(
 }
 void __attribute__((noipa)) kui_vmu_native_passive_split_submit(
     const struct kui_vmu_native_passive_frame *f) {
+#if KUI_NATIVE_VMU_ONLY_FULL_SUBMIT
+    /* Diagnostic control only. The retained full submit still chooses its
+     * established physical-controller fast path or full virtual-card path.
+     * No pre-DMA capture or deferred first binding runs through this entry. */
+    kui_vmu_native_passive_submit(f);
+#else
     if(!split_controller_capture(f)) kui_vmu_native_passive_submit(f);
+#endif
 }
 static void split_controller_prepare_complete(const struct kui_vmu_native_passive_frame *f) {
     uint32_t source=controller_pair.source;

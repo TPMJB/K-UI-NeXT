@@ -312,13 +312,15 @@ def object_section(path,wanted):
     return data[section[4]:section[4]+section[5]]
 
 
-def console_layouts(general=False):
+def console_layouts(general=False,compact=False):
     compiler=shutil.which('sh-elf-gcc')
     if compiler is None:raise ValueError('sh-elf-gcc must be on PATH for the actual console layout proof')
     with tempfile.TemporaryDirectory(prefix='kui-dual-layout-') as temporary:
         directory=Path(temporary)
         make=directory/'flags.mk'
-        make.write_text('include '+str(ROOT/('Makefile.vmu-native-split-controller-stream-guard' if general else 'Makefile.vmu-native-dual-readers'))+'\n'+
+        makefile='Makefile.vmu-native-background-compact' if compact else \
+            'Makefile.vmu-native-split-controller-stream-guard' if general else 'Makefile.vmu-native-dual-readers'
+        make.write_text('include '+str(ROOT/makefile)+'\n'+
             'dump-dual-flags:\n\t$(file >'+str(directory/'x.flags')+',$(RESIDENT_FLAGS))\n'+
             '\t$(file >'+str(directory/'y.flags')+',$(LEGACY_FLAGS))\n\t@true\n')
         subprocess.run(['make','--no-print-directory','-s','-f',str(make),'dump-dual-flags'],
@@ -343,7 +345,7 @@ def console_layouts(general=False):
         differences=[name for name in LAYOUT_FIELDS if name!='engine_bytes' and reports['x'][name]!=reports['y'][name]]
         if differences:raise ValueError('X/Y worker-visible console offsets differ: '+', '.join(differences))
         x,y=reports['x'],reports['y']
-        if x['pointer_bytes']!=4 or x['region_bytes']!=0x760 or x['lease_bytes']!=(0x51000 if general else 0x55000) or x['manifest_bytes']!=1020:
+        if x['pointer_bytes']!=4 or x['region_bytes']!=0x760 or x['lease_bytes']!=(0x47000 if compact else 0x51000 if general else 0x55000) or x['manifest_bytes']!=1020:
             raise ValueError('dual console geometry differs from the existing lease/region/map ABI')
         if not (x['engine']+y['engine_bytes']<=x['engine.native_max_lba'] and
                 x['engine.native_max_count']+4<=x['vector400']):
@@ -375,7 +377,7 @@ def dual_lease_guards():
                 subprocess.run([str(binary)],check=True,env={**os.environ,'ASAN_OPTIONS':'detect_leaks=0'})
 
 
-def main(reader_only=False):
+def main(reader_only=False,host_only=False):
     stage=(ROOT/'src/loader/retail_stage.c').read_text()
     worker=(ROOT/'src/loader/vmu_native_reader_capture.inc').read_text()
     passive=(ROOT/'src/loader/vmu_native_passive_stage.inc').read_text()
@@ -406,8 +408,9 @@ def main(reader_only=False):
                             '-fno-sanitize-recover=all','-I',str(ROOT/'include'),'-I',str(ROOT/'src/loader'),
                             *selected,str(source),'-o',str(binary)],check=True)
             subprocess.run([str(binary)],check=True)
-    print(json.dumps(console_layouts(),sort_keys=True))
-    print(json.dumps(console_layouts(general=True),sort_keys=True))
+    if not host_only:
+        print(json.dumps(console_layouts(),sort_keys=True))
+        print(json.dumps(console_layouts(general=True),sort_keys=True))
     dual_lease_guards()
 
 
@@ -415,4 +418,7 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--reader-only',action='store_true',
                         help='also enforce the isolation module\'s New-only admission')
-    main(reader_only=parser.parse_args().reader_only)
+    parser.add_argument('--host-only',action='store_true',
+                        help='run host selector/lease guards without compiling the separate SH layout proof')
+    args=parser.parse_args()
+    main(reader_only=args.reader_only,host_only=args.host_only)

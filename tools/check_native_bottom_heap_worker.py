@@ -58,8 +58,10 @@ DISPATCH_GATE_PINS = {'_span@vmu_native_heap.c': (76, '64d42c5ab08e5e0c1e43b9aa8
                                                '79a1ea16da8da8eeee75d90cbfc5159823a23ba3aa871de989554a606c6313cc'),
  '_kui_vmu_native_heap_lease_valid': (28, 'ec3c8bce81483e723c16ff9f4ba19b982ff81e3dde4701f2706817b52e3462b3')}
 SOURCES=('tools/native_runtime_layout.py','tools/check_native_general_lean_profile.py',
-         'tools/check_native_general_lean_heap_pins.py','tools/check_native_bottom_heap_worker.py','tools/profile_vmu_native_release_sh.py',
-         'tests/test_vmu_native_heap_execution.py','src/core/vmu_native_heap.c',
+         'tools/check_native_general_lean_heap_pins.py','tools/check_native_compact_background_profile.py',
+         'tools/check_native_bottom_heap_worker.py','tools/profile_vmu_native_release_sh.py',
+         'tests/test_vmu_native_heap_execution.py','tests/test_native_compact_background_profile.py',
+         'src/core/vmu_native_heap.c',
          'include/kui/vmu_native_heap.h')
 
 
@@ -90,9 +92,13 @@ def pinned(worker):
             'Dispatch-gated worker lacks exact bottom capability')
     if worker_profile(worker):
         require(gate==(1,0,0,0xfff1), 'Lean heap worker requires its exact dispatch gate')
-        require(set(WORKER_FUNCTIONS)==set(PINS)==set(DISPATCH_GATE_PINS),
+        from check_native_compact_background_profile import worker_profile as compact_profile
+        if compact_profile(worker):
+            from check_native_compact_background_profile import WORKER_FUNCTIONS as pins
+        else:
+            pins=WORKER_FUNCTIONS
+        require(set(pins)==set(PINS)==set(DISPATCH_GATE_PINS),
                 'Lean heap worker must retain the complete historical closure')
-        pins=WORKER_FUNCTIONS
     else:
         pins=DISPATCH_GATE_PINS if gate is not None else PINS
     result={}

@@ -4,6 +4,7 @@
 #include "kui/vmu_library.h"
 #include "kui/vmu_collection.h"
 #include "kui/vmu_game_assign.h"
+#include "kui/vmu_game_candidates.h"
 #include "kui/vmu_game_card.h"
 #include "kui/vmu_persist_profile.h"
 #include "kui/hash.h"
@@ -566,18 +567,43 @@ static void row_game(struct kui_vmu_backup_entry *row,const char *key,struct lib
         char unknown[48];snprintf(unknown,sizeof(unknown),"Unknown game (%s)",key);game_append(row->titles,unknown);
     }
 }
+struct library_candidates {
+    struct kui_vmu_game_assignment entries[KUI_VMU_GAME_CANDIDATES_MAX];
+    unsigned count;
+};
+static bool library_candidate(void *context,const char key[KUI_VMU_GAME_CARD_KEY_BYTES],
+    const struct kui_vmu_game_candidate_target *target,bool is_default) {
+    (void)is_default;struct library_candidates *refs=context;
+    if(refs->count==KUI_VMU_GAME_CANDIDATES_MAX) return false;
+    struct kui_vmu_game_assignment *entry=refs->entries+refs->count++;
+    memcpy(entry->key,key,sizeof(entry->key));entry->pair=target->pair;
+    memcpy(entry->identity,target->identity,16u);return true;
+}
+static bool candidate_covers(const struct library_candidates *refs,const char *key) {
+    for(unsigned i=0;i<refs->count;i++) if(!strcmp(refs->entries[i].key,key)) return true;
+    return false;
+}
 int kui_vmu_library_list(unsigned page,struct kui_vmu_backup_view *out,kui_log_fn log,kui_cancel_fn cancel) {
     if(!out) return ARG;
     memset(out,0,sizeof(*out));out->page=page;
     uint8_t *image=malloc(KUI_VMU_IMAGE_BYTES),(*ids)[CATALOG_BITMAP_BYTES]=calloc(2u,CATALOG_BITMAP_BYTES);
     struct kui_vmu_game_assign_table *assignments=malloc(sizeof(*assignments));
     struct library_titles *titles=calloc(1u,sizeof(*titles));
+    struct library_candidates *candidates=calloc(1u,sizeof(*candidates));
     char keys[KUI_VMU_ROWS][KUI_VMU_GAME_CARD_KEY_BYTES]={{0}};
     unsigned file_counts[KUI_VMU_ROWS]={0};
     int result=OK;unsigned counts[2]={0};
-    if(!image || !ids || !assignments || !titles) {result=IO;goto done;}
+    if(!image || !ids || !assignments || !titles || !candidates) {result=IO;goto done;}
     if((result=assignments_load(assignments,cancel))) {
         snprintf(out->status.message,sizeof(out->status.message),"Cannot read game assignments; restore their backup");goto done;
+    }
+    /* This is browse metadata only: NULL deliberately uses the catalogue's
+     * stored SD descriptor. No displayed association grants launch authority.
+     * Load once for the entire page, before any row can advertise a user. */
+    int visited=kui_vmu_game_candidates_visit(NULL,library_candidate,candidates,log,cancel);
+    if(visited!=KUI_VMU_GAME_CANDIDATES_OK && visited!=KUI_VMU_GAME_CANDIDATES_ABSENT) {
+        result=visited==KUI_VMU_GAME_CANDIDATES_CANCELLED?STOP:visited==KUI_VMU_GAME_CANDIDATES_IO?IO:BAD;
+        snprintf(out->status.message,sizeof(out->status.message),"Game card choices could not be verified");goto done;
     }
     result=directory_ids(ACTIVE_ROOT,'p',ids[0],&counts[0],cancel);
     if(!result) result=directory_ids(SNAPSHOT_ROOT,'v',ids[1],&counts[1],cancel);
@@ -605,11 +631,17 @@ int kui_vmu_library_list(unsigned page,struct kui_vmu_backup_view *out,kui_log_f
         file_counts[row_index]=summary.files;save_contents(image,row->contents);
         memcpy(keys[row_index],key,sizeof(key));
         if(kind==0u) {
-            for(unsigned a=0;a<assignments->count;a++) {
-                const struct kui_vmu_game_assignment *entry=&assignments->entries[a];
+            for(unsigned a=0;a<candidates->count;a++) {
+                const struct kui_vmu_game_assignment *entry=candidates->entries+a;
                 if(entry->pair==id && !memcmp(entry->identity,row->identity,16u)) {++row->users;game_append(row->games,entry->key);title_want(titles,entry->key);}
             }
-            if(key[0]) {
+            for(unsigned a=0;a<assignments->count;a++) {
+                const struct kui_vmu_game_assignment *entry=&assignments->entries[a];
+                if(!candidate_covers(candidates,entry->key) && entry->pair==id && !memcmp(entry->identity,row->identity,16u)) {
+                    ++row->users;game_append(row->games,entry->key);title_want(titles,entry->key);
+                }
+            }
+            if(key[0] && !candidate_covers(candidates,key)) {
                 const struct kui_vmu_game_assignment *override=kui_vmu_game_assign_find(assignments,key);
                 if(!override) {++row->users;game_append(row->games,key);title_want(titles,key);}
             }
@@ -633,11 +665,16 @@ int kui_vmu_library_list(unsigned page,struct kui_vmu_backup_view *out,kui_log_f
         struct kui_vmu_backup_entry *row=&out->entries[i];if(!row->readable) continue;
         char first[129]={0};unsigned id=path_pair(row->path);
         if(row->active) {
-            for(unsigned a=0;a<assignments->count;a++) {
-                const struct kui_vmu_game_assignment *entry=assignments->entries+a;
+            for(unsigned a=0;a<candidates->count;a++) {
+                const struct kui_vmu_game_assignment *entry=candidates->entries+a;
                 if(entry->pair==id && !memcmp(entry->identity,row->identity,16u)) row_game(row,entry->key,titles,first);
             }
-            if(keys[i][0] && !kui_vmu_game_assign_find(assignments,keys[i])) row_game(row,keys[i],titles,first);
+            for(unsigned a=0;a<assignments->count;a++) {
+                const struct kui_vmu_game_assignment *entry=assignments->entries+a;
+                if(!candidate_covers(candidates,entry->key) && entry->pair==id && !memcmp(entry->identity,row->identity,16u))
+                    row_game(row,entry->key,titles,first);
+            }
+            if(keys[i][0] && !candidate_covers(candidates,keys[i]) && !kui_vmu_game_assign_find(assignments,keys[i])) row_game(row,keys[i],titles,first);
         }
         if(!row->custom_label) {
             const char *context=first[0]?first:row->contents;
@@ -663,7 +700,7 @@ int kui_vmu_library_list(unsigned page,struct kui_vmu_backup_view *out,kui_log_f
         else snprintf(out->status.message,sizeof(out->status.message),"%u cards; active game cards and stored snapshots",out->total);
     }
 done:
-    free(image);free(ids);free(assignments);free(titles);
+    free(image);free(ids);free(assignments);free(titles);free(candidates);
     out->status.complete=true;out->status.passed=result==OK;out->status.stopped=result==STOP;
     if(result && !out->status.message[0]) snprintf(out->status.message,sizeof(out->status.message),"Virtual-card listing %s",result==STOP?"stopped":"could not be verified");
     if(result && result!=STOP) ++out->status.errors;

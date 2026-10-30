@@ -17,10 +17,10 @@ static volatile uint32_t *reg(unsigned i) {
 }
 /* Original compact 5x7 glyphs, rows encoded low-five-bits, A-Z then 0-9.
  * The complete renderer/font belongs to each linked image. */
-#if KUI_NATIVE_COOP_PUMP && defined(KUI_RETAIL_ASYNC)
+#if KUI_NATIVE_VMU_ONLY || (KUI_NATIVE_COOP_PUMP && defined(KUI_RETAIL_ASYNC))
 /* Same exact 252 glyph rows, packed at five bits each to make room for
  * the cooperative reader in the existing guarded low reservation. */
-#if KUI_NATIVE_LOADER_TIMELINE
+#if KUI_NATIVE_VMU_ONLY || KUI_NATIVE_LOADER_TIMELINE
 /* Same252 rows in a contiguous1260-bit stream; no per-glyph padding. */
 static const uint8_t timeline_glyphs[158]={
  46,198,31,99,244,49,250,24,189,139,16,194,232,124,140,49,
@@ -167,7 +167,11 @@ void retail_display_restore(const struct retail_display_state *s) {
     retail_display_line("NATIVE");
 #endif
 #else
+#if !KUI_NATIVE_VMU_ONLY || !defined(KUI_RETAIL_TRANSPORT)
+    /* The compact VMU resident retains BUILD and its complete failure rows.
+     * Omit this redundant branding row inside its fixed protected image. */
     retail_display_line("NATIVE GD IMAGE");
+#endif
 #endif
 #endif
     row=108;

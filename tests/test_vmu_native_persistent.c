@@ -106,7 +106,16 @@ static void fixture(void) {
     input.lease.version=1u;input.lease.bytes=sizeof(input.lease);input.lease.phase=2u;input.lease.initializations=1u;
     input.lease.begin=0x0c6b0000u;input.lease.heap_bytes=0x80000u;input.lease.lease_bytes=0x30000u;
     input.lease.header=0x0c6fffe0u;input.lease.payload=0x0c700000u;input.lease.units=0x1801u;input.lease.remaining=0x27ffu;
-    put(h->begin_cell,4u,input.lease.begin);put(h->begin_copy_cell,4u,input.lease.begin);put(h->bytes_cell,4u,0x80000u);
+#if KUI_NATIVE_VMU_ONLY
+    /* Exercise the complete persistent regression inside the exact production
+     * span. Keep the original lower free block and derive the arena end from
+     * the retained worker; no larger lease can hide a lite boundary error. */
+    input.lease.lease_bytes=KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES;
+    input.lease.heap_bytes=input.lease.payload-input.lease.begin+input.lease.lease_bytes;
+    input.lease.units=input.lease.lease_bytes/32u+1u;
+    input.lease.remaining=(input.lease.header-input.lease.begin)/32u;
+#endif
+    put(h->begin_cell,4u,input.lease.begin);put(h->begin_copy_cell,4u,input.lease.begin);put(h->bytes_cell,4u,input.lease.heap_bytes);
     put(h->dispatch_cell,4u,h->dispatch_table);put(h->dispatch_table,4u,h->allocate);put(h->dispatch_table+4u,4u,h->release);
     put(h->sentinel+4u,4u,0u);put(h->sentinel,4u,input.lease.begin);put(h->cursor_cell,4u,h->sentinel);
     put(input.lease.begin,4u,h->sentinel);put(input.lease.begin+4u,4u,input.lease.remaining);
@@ -114,6 +123,9 @@ static void fixture(void) {
     input.runtime=(struct kui_vmu_native_runtime_config){.version=1u,.bytes=sizeof(input.runtime),
         .lease_address=0x8c700000u,.lease_bytes=0x30000u,.lease_header_bytes=32u,.required_lease_bytes=0x20000u,
         .rx_layout=KUI_VMU_NATIVE_RX_EXPLICIT48};
+#if KUI_NATIVE_VMU_ONLY
+    input.runtime.lease_bytes=input.runtime.required_lease_bytes=input.lease.lease_bytes;
+#endif
     static const unsigned ids[12]={0,1,2,6,7,8,12,13,14,18,19,20};
     input.layout=(struct kui_vmu_native_layout){.version=1u,.bytes=sizeof(input.layout),
         .initializer=0x8c011ac4u,.initializer_wrapper=0x8c020000u,.initializer_call=0x8c020020u,
@@ -188,7 +200,11 @@ static void physical_complete(void) {
     put(0xa05f6c18u,4u,0u);
 }
 static void arm(void) {
-    CHECK(kui_vmu_native_passive_arm(&input,NULL)==0);
+    int result=kui_vmu_native_passive_arm(&input,NULL);
+    if(result) fprintf(stderr,"Persistent arm refused %d: diagnostics=%u lease=%08x runtime=%08x required=%08x checks=%u\n",
+        result,input.diagnostics,input.lease.lease_bytes,input.runtime.lease_bytes,
+        input.runtime.required_lease_bytes,checks);
+    CHECK(result==0);
 #if KUI_VMU_NATIVE_CACHED_CODE
     /* The runtime gateway selects P1 only after cold P2 arm returns. */
     live_sp-=UINT32_C(0x20000000);
@@ -250,8 +266,15 @@ void kui_vmu_native_passive_test_write(uint32_t address,unsigned width,uint32_t 
     }
     put(address,width,value);
 }
+/* Where the modelled worker's issued chain lives; the lite copy sits below
+ * the private stack of its 72 KiB span. */
+#if KUI_NATIVE_VMU_LITE || KUI_NATIVE_BACKGROUND_COMPACT
+#define TEST_ISSUED_OFFSET 0x10000u
+#else
+#define TEST_ISSUED_OFFSET 0x18000u
+#endif
 uint32_t kui_vmu_native_persistent_test_chain(const void *pointer,unsigned bytes) {
-    CHECK(pointer==issued_chain && bytes==sizeof(issued_chain));return physical(SELF_ADDRESS)+0x18000u;
+    CHECK(pointer==issued_chain && bytes==sizeof(issued_chain));return physical(SELF_ADDRESS)+TEST_ISSUED_OFFSET;
 }
 int kui_vmu_native_persistent_test_lease(kui_vmu_sd_transaction callback,void *context) {
     CHECK(callback && context==&durable_card && state.pending);++lease_calls;
@@ -324,7 +347,7 @@ static void inspect_physical_chain(bool original_fast) {
     const uint8_t *hardware=issued_chain;
     size_t capacity=sizeof(issued_chain);
     uint32_t target=config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN?
-        state.source:physical(SELF_ADDRESS)+0x18000u;
+        state.source:physical(SELF_ADDRESS)+TEST_ISSUED_OFFSET;
     CHECK((controller_pair.pending!=0u)==original_fast);
     if(original_fast) {
         CHECK((config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_NORMAL ||
@@ -709,6 +732,37 @@ static void external_boundary_mutations(void) {
             else CHECK(!lease_calls && !sd.bytes && !sd.writes && durable_card.faulted);
         }
 }
+#if KUI_NATIVE_SPLIT_CONTROLLER_GENERAL
+/* The general production worker deliberately excludes the old diagnostic
+ * execution modes. Exercise their exact refusal contract here; legacy builds
+ * below retain every original successful diagnostic lifecycle. */
+static void excluded_diagnostic_mode_is_refused(unsigned mode) {
+    model_reset();fixture();prepare_handoff();model_card.bus.transfer_block=block_transfer;
+    lease_calls=block_callbacks=0u;corrupt_before_loan=corrupt_after_loan=0u;
+    stage_batch(0u,0u);input.diagnostics=mode;
+    uint8_t before[3][1024],tx_before[0x3000];
+    const unsigned slots[]={0u,2u,6u};
+    for(unsigned i=0u;i<3u;i++) memcpy(before[i],rx_bytes(slots[i]),sizeof(before[i]));
+    memcpy(tx_before,memory+physical(input.tx_base)-0x0c000000u,sizeof(tx_before));
+    CHECK(kui_vmu_native_passive_arm(&input,NULL)==-2 && !state.armed && !state.pending);
+    for(unsigned i=0u;i<3u;i++) CHECK(!memcmp(before[i],rx_bytes(slots[i]),sizeof(before[i])));
+    CHECK(!memcmp(tx_before,memory+physical(input.tx_base)-0x0c000000u,sizeof(tx_before)));
+    CHECK(!lease_calls && !block_callbacks && !sd.bytes && !sd.writes && !durable_card.commits);
+    CHECK(!overlay.pending && !overlay.stats.backend_calls && !clock_reads);
+}
+static void gameplay_diagnostics(void) {
+    excluded_diagnostic_mode_is_refused(KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE);
+    excluded_diagnostic_mode_is_refused(KUI_VMU_NATIVE_DIAGNOSTICS_EVOLUTION_TRACE);
+    excluded_diagnostic_mode_is_refused(KUI_VMU_NATIVE_DIAGNOSTICS_READER_ONLY+1u);
+    excluded_diagnostic_mode_is_refused(KUI_VMU_NATIVE_DIAGNOSTICS_READER_ONLY+2u);
+}
+static void hooks_only_has_no_virtual_card_or_io(void) {
+    excluded_diagnostic_mode_is_refused(KUI_VMU_NATIVE_DIAGNOSTICS_HOOKS_ONLY);
+}
+static void raw_chain_preserves_original_dma(void) {
+    excluded_diagnostic_mode_is_refused(KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN);
+}
+#else
 static void diagnostic_setup(void) {
     model_reset();fixture();prepare_handoff();model_card.bus.transfer_block=block_transfer;
     lease_calls=block_callbacks=0u;corrupt_before_loan=corrupt_after_loan=0u;
@@ -836,6 +890,7 @@ static void raw_chain_preserves_original_dma(void) {
     CHECK(persistent_lease(kui_vmu_native_persistent_sd_transaction,&durable_card)==KUI_VMU_SD_LEASE_FAULT);
     CHECK(!lease_calls);
 }
+#endif
 static void reject_context_complete(void) {
     if(setjmp(terminal)==0) {kui_vmu_native_passive_complete(&frame);CHECK(false);}
     CHECK(terminal_error==0x43u && !state.proof);

@@ -4,6 +4,7 @@
 #include "kui/probe.h"
 #include "kui/vmu_game_card.h"
 #include "kui/vmu_game_assign.h"
+#include "kui/vmu_game_candidates.h"
 #include "kui/vmu_fs_admission.h"
 #include "kui/vmu_image.h"
 
@@ -56,6 +57,7 @@ struct kui_vmu_game_card_work {
 enum kui_vmu_game_card_result {
     KUI_VMU_GAME_CARD_READY=0,
     KUI_VMU_GAME_CARD_UNBOUND=1,
+    KUI_VMU_GAME_CARD_CHOICE_REQUIRED=2,
     KUI_VMU_GAME_CARD_FAILED=-1,
     KUI_VMU_GAME_CARD_CANCELLED=-2
 };
@@ -81,6 +83,17 @@ int kui_vmu_game_card_select(const char *product,uint64_t partition_first,uint64
     const struct kui_vmu_game_card_platform *platform,struct kui_vmu_game_card_work *work,
     uint8_t wire[KUI_VMU_PERSIST_PROFILE_WIRE_BYTES],struct kui_vmu_game_card_choice *choice,
     kui_log_fn log,kui_cancel_fn cancel);
+/* One-time identity-pinned chooser result. Rechecks this physical storage and
+ * current product membership before preparing the profile. Never changes a
+ * candidate/default/assignment or creates a substitute card. */
+int kui_vmu_game_card_select_exact(const char *product,
+    const struct kui_vmu_game_candidate_target *target,
+    const struct kui_vmu_game_candidates_storage *storage,
+    uint64_t partition_first,uint64_t partition_end,
+    const struct kui_vmu_fs_range *forbidden,size_t forbidden_count,
+    const struct kui_vmu_game_card_platform *platform,struct kui_vmu_game_card_work *work,
+    uint8_t wire[KUI_VMU_PERSIST_PROFILE_WIRE_BYTES],struct kui_vmu_game_card_choice *choice,
+    kui_log_fn log,kui_cancel_fn cancel);
 /* Read-only explicit-assignment lookup on mounted FatFs. READY means a
  * complete identity-pinned target exists (choice->pair); UNBOUND means no
  * explicit assignment. FAILED/CANCELLED must refuse launch. This does not
@@ -92,8 +105,20 @@ int kui_vmu_game_card_assignment(const char *product,struct kui_vmu_game_card_wo
  * image must be an admitted standard 128 KiB image. Old cards are never
  * changed. The new folder may remain incomplete on failure and is never
  * reused. identity receives the pinned identity only on READY. No profile is
- * required here: ordinary launch prepares it after the game is assigned. */
+ * required here: ordinary launch prepares it after the game is assigned.
+ * Fresh imported and automatic blank cards also skip every pair number pinned
+ * by either valid v1 assignment generation, even if its folder was removed;
+ * an ordinary new card cannot close a later missing-reference repair path. */
 int kui_vmu_game_card_import_publish(const void *image,size_t bytes,const uint8_t salt[16],
+    struct kui_vmu_game_card_work *work,struct kui_vmu_game_card_choice *choice,
+    uint8_t identity[16],kui_log_fn log,kui_cancel_fn cancel);
+/* As above, reserving absent pair numbers while a confirmed legacy-reference
+ * repair is being prepared. Up to 256 numbers in 1..9999; duplicates are harmless.
+ * Reserved pairs are skipped after the real directory scan, never created or
+ * modified. This prevents this import from recreating a folder which the
+ * catalogue permission must still prove absent at its atomic publication. */
+int kui_vmu_game_card_import_publish_excluding(const void *image,size_t bytes,const uint8_t salt[16],
+    const uint16_t *excluded_pairs,size_t excluded_count,
     struct kui_vmu_game_card_work *work,struct kui_vmu_game_card_choice *choice,
     uint8_t identity[16],kui_log_fn log,kui_cancel_fn cancel);
 /* Atomically add/replace this entire batch of explicit game assignments,

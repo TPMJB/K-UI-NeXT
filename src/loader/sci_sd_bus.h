@@ -2,6 +2,19 @@
 #ifndef KUI_SCI_SD_BUS_H
 #define KUI_SCI_SD_BUS_H
 #include "sd_reader.h"
+#ifndef KUI_NATIVE_VMU_SCI_RX_PACED
+#define KUI_NATIVE_VMU_SCI_RX_PACED 0
+#endif
+#if KUI_NATIVE_VMU_SCI_RX_PACED != 0 && KUI_NATIVE_VMU_SCI_RX_PACED != 1
+#error "Native VMU SCI receive pacing must be exactly zero or one"
+#endif
+#if KUI_NATIVE_VMU_SCI_RX_PACED && defined(KUI_RETAIL_TRANSPORT) && \
+    (!KUI_NATIVE_VMU_ONLY || !KUI_NATIVE_VMU_LITE || KUI_RETAIL_TRANSPORT != 1 || \
+     !KUI_RETAIL_LOW_RESIDENT || defined(KUI_RETAIL_ASYNC) || defined(KUI_RETAIL_CE) || \
+     KUI_RETAIL_TOY_PILOT || KUI_RETAIL_MDK2_CDDA || KUI_RETAIL_ZSO || \
+     KUI_SCI_SD_PIO_ONLY || KUI_SCI_DMA_PACED)
+#error "Native VMU receive pacing belongs only to its 72 KiB SCI Standard resident"
+#endif
 #if KUI_SCI_DMA_PACED && !KUI_RETAIL_SCI_DIAGNOSTIC
 #error "Receive pacing is an isolated SCI diagnostic variant only"
 #endif

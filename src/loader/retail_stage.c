@@ -37,6 +37,36 @@
 #ifndef KUI_GAME_RAM_PATCHES_STAGE
 #define KUI_GAME_RAM_PATCHES_STAGE 0
 #endif
+#ifndef KUI_RETAIL_PHYSICAL_CAPABILITY
+#define KUI_RETAIL_PHYSICAL_CAPABILITY 0
+#endif
+#if KUI_RETAIL_PHYSICAL_CAPABILITY
+#if KUI_RETAIL_PHYSICAL_CAPABILITY != 1 || defined(KUI_RETAIL_CE) || \
+    defined(KUI_RETAIL_SD_BENCH) || KUI_RETAIL_ZSO || KUI_RETAIL_TOY_PILOT || \
+    KUI_RETAIL_MDK2_CDDA || KUI_RETAIL_OBSERVE || \
+    KUI_RETAIL_STARTUP_TRACE || KUI_RETAIL_SONIC_STACK_TEST || \
+    KUI_RETAIL_SKIES_READ_DIAGNOSTIC || KUI_NATIVE_DUAL_READERS || \
+    KUI_VMU_MAPLE_OBSERVE || KUI_VMU_READONLY_PROOF || KUI_VMU_NATIVE_BACKGROUND || \
+    KUI_NATIVE_VMU_ONLY || KUI_NATIVE_VMU_LITE || KUI_NATIVE_BACKGROUND_COMPACT || \
+    KUI_NATIVE_STANDALONE_READER || KUI_NATIVE_READAHEAD
+#error Physical Standard capability belongs only to its separate ordinary native stage
+#endif
+#include "kui/native_physical_capability.h"
+__asm__(".global __kui_native_physical_stage\n.set __kui_native_physical_stage,1\n");
+const struct kui_native_physical_capability kui_native_physical_capability
+    __attribute__((used,section(".rodata.native_physical_capability"),aligned(4)))={
+    KUI_NATIVE_PHYSICAL_CAP_WORDS};
+/* Tiny immutable ABI predicate: Standard reader only, all three ordinary
+ * transports. The physical audit executes/pins this exact linked body. */
+extern int kui_native_physical_stage_admit(unsigned reader,unsigned transport);
+__asm__(".pushsection .text.native_physical_stage_admit,\"ax\"\n"
+        ".align 1\n.global _kui_native_physical_stage_admit\n"
+        ".type _kui_native_physical_stage_admit,@function\n"
+        "_kui_native_physical_stage_admit:\n"
+        "mov r4,r0\ntst r0,r0\nbf 1f\nmov #3,r0\ncmp/hs r0,r5\nbt 1f\n"
+        "mov #1,r0\nrts\nnop\n1:\nmov #0,r0\nrts\nnop\n"
+        ".size _kui_native_physical_stage_admit,.-_kui_native_physical_stage_admit\n.popsection\n");
+#endif
 #if KUI_GAME_RAM_PATCHES_STAGE
 #if defined(KUI_RETAIL_CE) || defined(KUI_RETAIL_SD_BENCH) || KUI_RETAIL_TOY_PILOT || \
     KUI_RETAIL_MDK2_CDDA || KUI_RETAIL_OBSERVE || KUI_RETAIL_STARTUP_TRACE || \
@@ -1208,6 +1238,10 @@ void kui_retail_stage_main(const uint8_t *wire) {
         report_invalid_map(wire,result);
 #endif
     }
+#if KUI_RETAIL_PHYSICAL_CAPABILITY
+    if(!kui_native_physical_stage_admit(manifest.reader,manifest.storage_transport))
+        stopped("PHYSICAL STANDARD ONLY",manifest.reader);
+#endif
 #if KUI_GAME_RAM_PATCHES_STAGE
     struct kui_game_ram_patches patches;
     if(!kui_game_ram_patch_seed_decode(&patches,&ram_patch_seed,sizeof(ram_patch_seed),manifest.boot_bytes))
