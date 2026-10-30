@@ -387,6 +387,29 @@ class WizardPackageBindings(unittest.TestCase):
             with self.assertRaises(ValueError):self.tool.gui_artifacts(self.directory/'runtime.kui',self.commit)
             self.proof=saved;self.write_proof()
 
+    @staticmethod
+    def actual_shaped_stacks():
+        return {'scif':dict(conservative_bytes=1144,available_bytes=1232,assembly_allowance=256,retained_c_frames=49),
+                'sci':dict(conservative_bytes=1184,available_bytes=1232,assembly_allowance=256,retained_c_frames=42),
+                'ide':dict(conservative_bytes=1148,available_bytes=1232,assembly_allowance=256,retained_c_frames=50),
+                'scia':dict(worst_bytes=220,available_bytes=304,margin=64,call_graph=True)}
+
+    def test_actual_stack_report_shapes_preserve_each_existing_stack_gate(self):
+        self.tool.validate_resident_stacks(self.actual_shaped_stacks())
+        for name in ('scif','sci','ide'):
+            for field,value in (('conservative_bytes',1233),('conservative_bytes',-1),
+                                ('assembly_allowance',0),('retained_c_frames',0),('available_bytes',True)):
+                stacks=self.actual_shaped_stacks();stacks[name][field]=value
+                with self.subTest(name=name,field=field,value=value):
+                    with self.assertRaises(ValueError):self.tool.validate_resident_stacks(stacks)
+        for field,value in (('worst_bytes',305),('worst_bytes',241),('worst_bytes',-1),
+                            ('margin',-1),('margin',0),('call_graph',False),('available_bytes',True)):
+            stacks=self.actual_shaped_stacks();stacks['scia'][field]=value
+            with self.subTest(name='scia',field=field,value=value):
+                with self.assertRaises(ValueError):self.tool.validate_resident_stacks(stacks)
+        stacks=self.actual_shaped_stacks();stacks['sci']={'margin':48}
+        with self.assertRaises(ValueError):self.tool.validate_resident_stacks(stacks)
+
     def test_physical_audit_requires_zero_worker_and_exact_linked_descriptor(self):
         report=dict(schema='kui.native.physical-standard.audit.v1',
             source_provenance={'commit':self.commit,'source_dirty':False},runtime={'build':self.commit[:12]},
@@ -397,7 +420,7 @@ class WizardPackageBindings(unittest.TestCase):
             standard_only_runtime_guard=True,compiler_callgraphs={'complete_files':1},mutation_rejections=36,
             layout={**{name:{'payload_bytes':8,'unresolved_symbols':0} for name in
                 ('resident-scif','resident-sci','resident-ide','resident-scia','stage','entry')},
-                'resident_stacks':{name:{'margin':16} for name in ('scif','sci','ide','scia')}},
+                'resident_stacks':self.actual_shaped_stacks()},
             instruction_audit={name:1 for name in ('resident-scif','resident-sci','resident-ide','resident-scia','stage','entry')})
         from check_retail_physical import GUARD
         report['standard_only_guard']=dict(exact_immutable_body=True,body_bytes=len(GUARD),body_sha256=installer.sha(GUARD),

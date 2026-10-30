@@ -78,6 +78,27 @@ def package_metadata(runtime,physical,commit):
         preserved_native_modules=[str(path) for path in NATIVE_MODULES],console_compatibility_verified=False)
 
 
+def validate_resident_stacks(stacks):
+    from check_retail_loader_layout import ASSEMBLY_STACK_BYTES
+    from check_retail_stack import MARGIN
+    require(isinstance(stacks,dict) and set(stacks)=={'scif','sci','ide','scia'},
+            'Physical Standard requires all four resident stack proofs')
+    for name in ('scif','sci','ide'):
+        row=stacks[name]
+        require(isinstance(row,dict) and set(row)=={'conservative_bytes','available_bytes',
+            'assembly_allowance','retained_c_frames'} and all(type(value) is int for value in row.values()) and
+            row['assembly_allowance']==ASSEMBLY_STACK_BYTES and row['retained_c_frames']>0 and
+            0<row['conservative_bytes']<=row['available_bytes'] and
+            row['conservative_bytes']>=row['assembly_allowance'],
+            'Physical conservative resident stack proof differs: '+name)
+    row=stacks['scia']
+    require(isinstance(row,dict) and set(row)=={'worst_bytes','available_bytes','margin','call_graph'} and
+        all(type(row[key]) is int for key in ('worst_bytes','available_bytes','margin')) and
+        row['call_graph'] is True and row['margin']==MARGIN and row['worst_bytes']>0 and
+        row['worst_bytes']+row['margin']<=row['available_bytes'],
+        'Physical asynchronous resident stack/callgraph proof differs')
+
+
 def validate_physical(report,commit,module):
     from check_retail_physical import GUARD
     from retail_package import RAM_PATCH_SEED
@@ -100,12 +121,11 @@ def validate_physical(report,commit,module):
     images={'resident-scif','resident-sci','resident-ide','resident-scia','stage','entry'}
     layout=report.get('layout',{});instructions=report.get('instruction_audit',{})
     stacks=layout.get('resident_stacks',{})
+    validate_resident_stacks(stacks)
     require(report.get('standard_only_runtime_guard') is True and images<=set(layout) and
         all(type(layout[name].get('payload_bytes')) is int and layout[name]['payload_bytes']>0 and
             layout[name].get('unresolved_symbols')==0 for name in images) and
         set(instructions)==images and all(type(value) is int and value>0 for value in instructions.values()) and
-        set(stacks)=={'scif','sci','ide','scia'} and
-        all(type(row.get('margin')) is int and row['margin']>=0 for row in stacks.values()) and
         type(report.get('compiler_callgraphs',{}).get('complete_files')) is int and
         report['compiler_callgraphs']['complete_files']>0 and type(report.get('mutation_rejections')) is int and
         report['mutation_rejections']>=34,
