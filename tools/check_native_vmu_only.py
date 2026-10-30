@@ -22,7 +22,7 @@ from check_retail_loader_layout import (ASSEMBLY_STACK_BYTES, STACK_GUARD_BYTES,
                                        STACK_ALIGNMENT_GAP)
 from check_vmu_native_worker_gateway import read_elf, symbol_bytes
 from check_vmu_native_stage_stack import Machine
-from native_runtime_layout import layout_for
+from native_runtime_layout import VMU_LITE, VMU_ONLY, layout_for
 from package_vmu_maple_observe import _function_base, linked_stack_rows
 from runtime_package import verify
 from vmu_native_relocations import generate
@@ -86,7 +86,7 @@ def scif_descriptor(low):
             'block_callback_null':True,'linked_descriptor_users':users}
 
 
-def terminal_guard_model(low, self_test=True):
+def terminal_guard_model(low, self_test=True, span=SPAN):
     """Execute the emitted pure low guard at compact-lease boundaries."""
     class Guard(Machine):
         def __init__(self, control, body=None):
@@ -111,20 +111,20 @@ def terminal_guard_model(low, self_test=True):
         terminal, worker_end = c[10], c[8]
         start = lease|0x80000000
         return (status == 4 and installer == stack == 0 and not lease&31 and
-                0x0c010020 <= lease <= 0x0d000000-SPAN and
-                worker_end == start+0x20000000+SPAN and not terminal&1 and
-                80 <= ((terminal-start)&0xffffffff) < SPAN)
+                0x0c010020 <= lease <= 0x0d000000-span and
+                worker_end == start+0x20000000+span and not terminal&1 and
+                80 <= ((terminal-start)&0xffffffff) < span)
     def check(c, body=None):
         nonlocal cases
         machine = Guard(c, body).run()
         require(machine.r[0] == int(expected(c)) and not machine.writes,
                 'Compiled low terminal guard accepted wrong compact geometry')
         cases += 1
-    for lease in (0, 0x0c010000, 0x0c010020, 0x0c600020, 0x0d000000-SPAN,
-                  0x0d000000-SPAN+32, 0x0c600021, 0x8c600020, 0xac600020):
-        for offset in (-2,0,78,79,80,82,SPAN-2,SPAN-1,SPAN,SPAN+2):
+    for lease in (0, 0x0c010000, 0x0c010020, 0x0c600020, 0x0d000000-span,
+                  0x0d000000-span+32, 0x0c600021, 0x8c600020, 0xac600020):
+        for offset in (-2,0,78,79,80,82,span-2,span-1,span,span+2):
             c = [0]*14
-            c[2],c[3],c[8],c[10] = 4,lease,(lease|0x80000000)+0x20000000+SPAN,((lease|0x80000000)+offset)&0xffffffff
+            c[2],c[3],c[8],c[10] = 4,lease,(lease|0x80000000)+0x20000000+span,((lease|0x80000000)+offset)&0xffffffff
             check(c)
             for field in (0,1,2,8):
                 changed = c.copy()
@@ -133,18 +133,20 @@ def terminal_guard_model(low, self_test=True):
     mutations = 0
     if self_test:
         _,body,_ = symbol_bytes(low,'_native_resident_terminal',2)
-        literal = struct.pack('<I',0x20000000+SPAN)
+        literal = struct.pack('<I',0x20000000+span)
         require(body.count(literal) == 1,'Low guard lacks unique worker-end bound')
-        changed = body.replace(literal,struct.pack('<I',0x20020000))
-        c=[0]*14;c[2]=4;c[3]=0x0c600020;c[8]=0xac61c020;c[10]=0x8c600070
-        try:
-            check(c,changed)
-        except ValueError:
-            mutations += 1
-        else:
-            raise ValueError('Low guard accepted old128KiB worker endpoint')
+        # Every other delivered worker size must move the bound and be refused.
+        for other in {0x20000, 0x1c000, 0x12000}-{span}:
+            changed = body.replace(literal,struct.pack('<I',0x20000000+other))
+            c=[0]*14;c[2]=4;c[3]=0x0c600020;c[8]=0xac600020+span;c[10]=0x8c600070
+            try:
+                check(c,changed)
+            except ValueError:
+                mutations += 1
+            else:
+                raise ValueError(f'Low guard accepted a {other//1024} KiB worker endpoint')
     return {'instruction_cases':cases,'mutation_rejections':mutations,'owner_writes':0,
-            'lease_bytes':SPAN,'worker_bytes':SPAN}
+            'lease_bytes':span,'worker_bytes':span}
 
 
 def callgraph_stacks(directory, worker, resident, transport, coherence):
@@ -354,7 +356,12 @@ def audit(directory, *, transport, allow_dirty=False, self_test=True):
     worker, stage, low = (read_elf(directory/name) for name in ('native-worker.elf','stage.elf','resident-sci.elf'))
     for image, marker in ((worker, '__kui_native_vmu_only_worker'), (stage, '__kui_native_vmu_only_stage')):
         require(image[4].get(marker) == ONE, 'Missing exact VMU-only marker: '+marker)
-        require(layout_for(image[4]).LEASE_BYTES == SPAN, 'VMU-only lease must be112KiB')
+    # Every image selects the same exact compiled geometry: 112 KiB VMU-only
+    # or 72 KiB VMU-lite. A requested size never selects it.
+    layout = layout_for(worker[4])
+    require(layout in (VMU_ONLY, VMU_LITE) and all(layout_for(image[4]) is layout for image in (stage, low)),
+            'VMU-only images select different geometries')
+    span = layout.LEASE_BYTES
     for image, marker in ((stage, '__kui_native_vmu_only_transport_stage'),
                           (low, '__kui_native_vmu_only_transport_resident')):
         require(image[4].get(marker) == (transport,0,0,0xfff1), 'Selected transport differs: '+marker)
@@ -368,7 +375,7 @@ def audit(directory, *, transport, allow_dirty=False, self_test=True):
                 'VMU-only image retains read-ahead symbols')
     binary = (directory/'native-worker.bin').read_bytes()
     wire = (directory/'native-worker.reloc').read_bytes()
-    require(generate(worker[0],binary,WORKER_BASE,SPAN) == wire, 'Relocations differ from actual ELF')
+    require(generate(worker[0],binary,WORKER_BASE,span) == wire, 'Relocations differ from actual ELF')
     policy = persistent.worker_load_policy(worker,binary)
     require(policy['cached_code'], 'VMU-only requires cached code and P2 persistent data')
     symbols = {name: row[0] for name, row in worker[4].items()}
@@ -385,13 +392,13 @@ def audit(directory, *, transport, allow_dirty=False, self_test=True):
     require(fields[:3] == (0x4b4e5031,4,80) and fields[3:] == tuple(symbols[name] for name in names),
             'Typed worker exports differ from actual linked symbols')
     require(fields[7] == WORKER_P2+len(binary) <= fields[8] <= fields[9] and
-            fields[9:12] == (WORKER_P2+SPAN-STACK_BYTES,WORKER_P2+SPAN,WORKER_P2+SPAN),
+            fields[9:12] == (WORKER_P2+span-STACK_BYTES,WORKER_P2+span,WORKER_P2+span),
             'Worker BSS/stack escapes its exact reservation')
     for name,(address,size,kind,owner) in worker[4].items():
         if kind not in (1,2) or not size:
             continue
         physical = address&0x1fffffff
-        require(0x0c100000 <= physical < physical+size <= 0x0c100000+SPAN,
+        require(0x0c100000 <= physical < physical+size <= 0x0c100000+span,
                 'Worker typed object/function escapes allocation: '+name)
         require(owner < len(worker[3]), 'Worker object lacks a section owner: '+name)
         if kind == 2:
@@ -434,7 +441,7 @@ def audit(directory, *, transport, allow_dirty=False, self_test=True):
             instructions[name] = instruction_audit(name,dis)
         except SystemExit as error:
             raise ValueError(str(error)) from error
-    low_guard = terminal_guard_model(low,self_test)
+    low_guard = terminal_guard_model(low,self_test,span)
     from check_vmu_native_map_refusal import signature, PINS
     require(signature(low,disassemblies['resident-sci'],'_kui_vmu_observe_low_failure')[:2] ==
             PINS['_kui_vmu_observe_low_failure'],
@@ -457,10 +464,11 @@ def audit(directory, *, transport, allow_dirty=False, self_test=True):
     hook_cases = persistent.model_cached_hooks(binary,wire,symbols)
     installer = persistent.check_stage_stack(stage,low,worker=worker,self_test=self_test)
     from check_native_vmu_only_install import audit as audit_install
-    installation = audit_install(stage,low,worker,binary,wire)
+    installation = audit_install(stage,low,worker,binary,wire,span)
     stacks = callgraph_stacks(directory,worker,images['resident-sci'],transport,coherence)
-    return {'schema':'kui.native.vmu-only.linked.v1','transport':transport,'lease_bytes':SPAN,
-            'worker_span':SPAN,'worker_initialized_bytes':len(binary),'worker_stack_bytes':STACK_BYTES,
+    return {'schema':'kui.native.vmu-only.linked.v1','transport':transport,
+            'variant':'vmu-lite' if layout is VMU_LITE else 'vmu-only','lease_bytes':span,
+            'worker_span':span,'worker_initialized_bytes':len(binary),'worker_stack_bytes':STACK_BYTES,
             'worker_bss_end':hex(fields[8]),'worker_stack_bottom':hex(fields[9]),
             'worker_bss_stack_gap':fields[9]-fields[8], 'module_sha256':sha(module),'runtime':runtime,
             'source_provenance':source,'load_policy':policy,'instruction_counts':instructions,

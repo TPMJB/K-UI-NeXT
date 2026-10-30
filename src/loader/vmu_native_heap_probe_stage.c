@@ -45,7 +45,18 @@ const struct kui_vmu_native_toggle_capability kui_vmu_native_toggle_capability
 #endif
 #endif
 #if KUI_NATIVE_STANDARD_VMU_ISOLATION || KUI_NATIVE_READER_ONLY_ISOLATION || KUI_NATIVE_METADATA_CACHE_ISOLATION || KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION
-#if KUI_NATIVE_VMU_ONLY
+#if KUI_NATIVE_VMU_LITE
+__asm__(".global __kui_native_vmu_only_transport_stage\n"
+        ".set __kui_native_vmu_only_transport_stage," KUI_VMU_ONLY_TRANSPORT_TEXT "\n");
+_Static_assert(KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES==UINT32_C(0x12000),
+    "VMU-lite allocation contains exactly its worker and stack");
+__asm__(".global __kui_native_vmu_only_stage\n"
+        ".set __kui_native_vmu_only_stage,1\n"
+        ".global __kui_native_vmu_lite_stage\n"
+        ".set __kui_native_vmu_lite_stage,1\n"
+        ".global __kui_native_isolation_lease_bytes\n"
+        ".set __kui_native_isolation_lease_bytes,0x12000\n");
+#elif KUI_NATIVE_VMU_ONLY
 __asm__(".global __kui_native_vmu_only_transport_stage\n"
         ".set __kui_native_vmu_only_transport_stage," KUI_VMU_ONLY_TRANSPORT_TEXT "\n");
 _Static_assert(KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES==UINT32_C(0x1c000),

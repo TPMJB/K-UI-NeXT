@@ -250,8 +250,15 @@ void kui_vmu_native_passive_test_write(uint32_t address,unsigned width,uint32_t 
     }
     put(address,width,value);
 }
+/* Where the modelled worker's issued chain lives; the lite copy sits below
+ * the private stack of its 72 KiB span. */
+#if KUI_NATIVE_VMU_LITE
+#define TEST_ISSUED_OFFSET 0x10000u
+#else
+#define TEST_ISSUED_OFFSET 0x18000u
+#endif
 uint32_t kui_vmu_native_persistent_test_chain(const void *pointer,unsigned bytes) {
-    CHECK(pointer==issued_chain && bytes==sizeof(issued_chain));return physical(SELF_ADDRESS)+0x18000u;
+    CHECK(pointer==issued_chain && bytes==sizeof(issued_chain));return physical(SELF_ADDRESS)+TEST_ISSUED_OFFSET;
 }
 int kui_vmu_native_persistent_test_lease(kui_vmu_sd_transaction callback,void *context) {
     CHECK(callback && context==&durable_card && state.pending);++lease_calls;
@@ -324,7 +331,7 @@ static void inspect_physical_chain(bool original_fast) {
     const uint8_t *hardware=issued_chain;
     size_t capacity=sizeof(issued_chain);
     uint32_t target=config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN?
-        state.source:physical(SELF_ADDRESS)+0x18000u;
+        state.source:physical(SELF_ADDRESS)+TEST_ISSUED_OFFSET;
     CHECK((controller_pair.pending!=0u)==original_fast);
     if(original_fast) {
         CHECK((config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_NORMAL ||

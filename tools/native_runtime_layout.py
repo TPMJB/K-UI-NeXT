@@ -53,19 +53,30 @@ VMU_ONLY = SimpleNamespace(**{**vars(GENERAL),
     'STACK_OFFSET': 0x1b000, 'STACK_END': 0x1c000,
     'DATA_OFFSET': 0, 'DATA_BYTES': 0})
 
+# VMU-lite: the same service with one staged reply and 4 KiB chain copies,
+# selected by its own exact compiled marker on each image.
+VMU_LITE = SimpleNamespace(**{**vars(VMU_ONLY),
+    'LEASE_BYTES': 0x12000, 'WORKER_BYTES': 0x12000,
+    'STACK_OFFSET': 0x11000, 'STACK_END': 0x12000})
+
 def layout_for(symbols):
     compact = [symbols[name] for name in ('__kui_native_vmu_only_worker',
         '__kui_native_vmu_only_stage', '__kui_native_vmu_only_resident') if name in symbols]
     if compact:
         if any(value != (1, 0, 0, 0xfff1) for value in compact):
             raise ValueError('Malformed VMU-only runtime geometry marker')
+        lite = [symbols[name] for name in ('__kui_native_vmu_lite_worker',
+            '__kui_native_vmu_lite_stage', '__kui_native_vmu_lite_resident') if name in symbols]
+        if any(value != (1, 0, 0, 0xfff1) for value in lite):
+            raise ValueError('Malformed VMU-lite runtime geometry marker')
+        selected = VMU_LITE if lite else VMU_ONLY
         lease = symbols.get('__kui_native_isolation_lease_bytes')
-        if lease is not None and lease != (VMU_ONLY.LEASE_BYTES, 0, 0, 0xfff1):
+        if lease is not None and lease != (selected.LEASE_BYTES, 0, 0, 0xfff1):
             raise ValueError('VMU-only lease conflicts with its exact compiled profile')
         if any(name in symbols for name in ('__kui_native_readahead_stage',
                 '__kui_native_readahead_worker', '__kui_native_readahead_resident')):
             raise ValueError('VMU-only runtime cannot retain read-ahead machinery')
-        return VMU_ONLY
+        return selected
     markers = ('__kui_native_general_lean_stage_layout',
                '__kui_native_general_lean_worker_layout',
                '__kui_native_general_lean_auxiliary',

@@ -2002,7 +2002,8 @@ def cached_submit_callback(symbols,relocation_delta=0):
               '__kui_native_split_controller_isolation_worker',
               '__kui_native_general_unbounded_pairs_worker')
     require(all(symbols.get(name)==1+relocation_delta for name in required) and
-            symbols.get('__vmu_native_worker_stack_top')==P2+relocation_delta+0x1c000 and
+            symbols.get('__vmu_native_worker_stack_top')==P2+relocation_delta+
+                (0x12000 if '__kui_native_vmu_lite_worker_layout' in symbols else 0x1c000) and
             '_kui_vmu_native_passive_split_submit' in symbols,
             'General gateway requires its exact compact split-controller API profile')
     return '_kui_vmu_native_passive_split_submit'

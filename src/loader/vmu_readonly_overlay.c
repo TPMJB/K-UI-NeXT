@@ -89,9 +89,15 @@ static int readonly_overlay_parent_request(const struct kui_vmu_readonly_overlay
 }
 static uint8_t *readonly_overlay_staging(struct kui_vmu_readonly_overlay *s,
     unsigned frame,unsigned parent) {
+#if KUI_VMU_READONLY_OVERLAY_STAGED_FRAMES==1u
+    /* prepare admits at most one target, so it alone owns the slot. */
+    (void)frame;(void)parent;
+    return (uint8_t *)(void *)s->staged[0];
+#else
     /* prepare proves exactly one parent before staging is used. That parent
      * is physical and is excluded from every staging/publication loop. */
     return (uint8_t *)(void *)s->staged[frame-(frame>parent)];
+#endif
 }
 
 int kui_vmu_readonly_overlay_prepare(struct kui_vmu_readonly_overlay *s,
@@ -144,6 +150,10 @@ int kui_vmu_readonly_overlay_prepare(struct kui_vmu_readonly_overlay *s,
     }
     if(parents!=1u)
         return readonly_overlay_fail(s,KUI_VMU_OVERLAY_PARENT,KUI_VMU_OVERLAY_BAD_PARENT_COUNT);
+#if KUI_VMU_READONLY_OVERLAY_STAGED_FRAMES==1u
+    if(targets>1u)
+        return readonly_overlay_fail(s,KUI_VMU_OVERLAY_REQUEST,KUI_VMU_OVERLAY_BAD_REQUEST);
+#endif
     if(source_bytes<minimum_source_bytes)
         return readonly_overlay_fail(s,KUI_VMU_OVERLAY_SPAN,KUI_VMU_OVERLAY_BAD_SPAN);
     for(size_t i=0;i<count;i++) if(readonly_overlay_destination(frames[i].header)==s->address) {

@@ -432,9 +432,9 @@ def raw_owner_profile(worker):
 def bottom_stage_profile(stage):
     present = marked(stage, BOTTOM_STAGE_MARKER)
     if marked(stage, '__kui_native_vmu_only_stage'):
-        from native_runtime_layout import layout_for
+        from native_runtime_layout import VMU_LITE, VMU_ONLY, layout_for
         selected = layout_for(stage[4])
-        if (not present or selected.LEASE_BYTES != 0x1c000 or
+        if (not present or selected not in (VMU_ONLY, VMU_LITE) or
                 CALLBACK_MARKER in stage[4] or '_native_background_boot_region' in stage[4]):
             raise ValueError('VMU-only stage requires its exact synchronous bottom reservation')
         return True
