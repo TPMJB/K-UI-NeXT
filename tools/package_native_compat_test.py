@@ -80,7 +80,11 @@ def test_sheet():
     writer = csv.writer(stream)
     writer.writerow(('game', 'reader', 'virtual_vmu', 'boots', 'gameplay', 'loading_stutter',
                      'memory_card_seen', 'save', 'power_cycle_load', 'failure_screen', 'notes'))
-    for row in (('Sword of the Berserk', 'Background New (X)', 'On'),
+    for row in (('Sonic Adventure', 'Background New (X)', 'standalone, none'),
+                ('The House of the Dead 2', 'Background New (X)', 'standalone, none'),
+                ('Time Stalkers', 'Background New (X)', 'standalone, none'),
+                ('Elemental Gimmick Gear', 'Background New (X)', 'standalone, none'),
+                ('Sword of the Berserk', 'Background New (X)', 'On'),
                 ('Crazy Taxi', 'Background New (X)', 'standalone, none'),
                 ('Zombie Revenge', 'Background New (X)', 'standalone, none'),
                 ('Regression: a game that already worked', 'Background New (X)', 'On')):

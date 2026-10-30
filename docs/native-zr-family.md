@@ -115,5 +115,32 @@ proof before the launcher's New fallback is considered.
 
 With this, the New route can use the standalone reader for Sonic Adventure,
 House of the Dead 2, Time Stalkers and Elemental Gimmick Gear (no virtual VMU
-yet). The combined VMU route still needs their Maple layout (pd 1.46),
-allocator (syMalloc 1.35) and terminal exits.
+yet).
+
+## Virtual VMU route for the early titles (not yet admitted)
+
+All five early titles share one Maple driver build (pd 1.46). Its submit,
+resume, consumer, gate and ready code already passes the reviewed driver
+discovery. The rest differs from the pd 1.50 builds in these ways, identical
+across all five:
+
+- Constructor: the loop that fills the 48 receive slots stores the upper 24
+  through a second literal (manager+0x1048, which is 0xfe8+96) instead of adding
+  96. The geometry is the same: slot k is the RX base plus k KiB. The rest of
+  the function matches the pd 1.50 code shifted by 4 bytes.
+- Initializer wrapper: it never converts the lock pointer to its uncached P2
+  alias. The lock cell keeps its cached P1 value (the cell's own address + 4),
+  while the resident and the runtime proof currently require the P2 form.
+- Maple server: it does not save and mask SR. It sets a busy flag on entry and
+  clears it on exit instead. Its entry is 0x3a bytes before the completion call
+  (0x4a in pd 1.50), so the gun-flag wrapper, which has the reviewed shape,
+  branches there. The API functions that call the server directly when a
+  manager flag is set do not mask interrupts either. The server, and with it
+  the completion hook, then runs at the caller's interrupt level, while the
+  resident accepts only levels 6 and 15 and refuses others.
+
+With the constructor, wrapper and gun-flag variants accepted in a scratch
+build, the upper wrapper, root and timers resolve in all five titles. The
+remaining gates are a heap allocator family (syMalloc 1.35 does not match the
+reviewed allocator), a terminal exit family, and Silver's program extent, which
+depends on the allocator proof.
