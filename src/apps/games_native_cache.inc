@@ -98,7 +98,7 @@ static bool native_cache_source_eligible(const struct kui_game_image *image,
 }
 static enum native_cache_result native_cache_prepare(const struct kui_game_image *image,
     const struct kui_retail_manifest *map,bool native,uint32_t options,bool patched,
-    struct kui_runtime_image *package,const char *source_root,kui_log_fn log,kui_cancel_fn cancel,
+    struct kui_runtime_image *package,const char *source_root,bool allow_persistent_cache,kui_log_fn log,kui_cancel_fn cancel,
     struct native_cache_source_proof *source_proof,bool *standalone) {
     if(source_proof)*source_proof=(struct native_cache_source_proof){0};
     if(standalone)*standalone=false;
@@ -145,7 +145,9 @@ static enum native_cache_result native_cache_prepare(const struct kui_game_image
     int length=snprintf(path,sizeof(path),"0:/KUI/VMU/native-cache/v%u/%s.nvr",
         KUI_VMU_NATIVE_RESOLUTION_DETECTOR_EPOCH,hex);
     if(length<0 || (size_t)length>=sizeof(path)) goto finished;
-    bool disk=!native_cache_source_conflict(source_root);
+    /* VMU Off never searches or creates the VMU tree. Background still
+     * receives the complete proof built from the selected executable in RAM. */
+    bool disk=allow_persistent_cache && !native_cache_source_conflict(source_root);
     /* This copied digest is explicitly trusted local configuration. It is
      * kept separate from the record, never passed as an aliased self-hash. */
     if(log)log("Native VMU mapping: checking saved proof");

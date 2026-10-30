@@ -161,6 +161,9 @@ struct vmu_game_info_request {
 static struct vmu_game_info_request vmu_game_info_requested,vmu_game_info_running;
 static unsigned vmu_game_info_request_result,vmu_game_info_generation;
 static bool vmu_game_info_request_valid;
+static struct kui_vmu_game_selection vmu_game_default_pending,games_vmu_selection_pending;
+static unsigned vmu_game_default_generation;
+static bool vmu_game_default_clear_pending;
 static struct kui_vmu_view vmu_collection_copy_snapshot;
 static unsigned vmu_collection_copy_generation,vmu_collection_copy_request_pending,vmu_collection_copy_request_result;
 static unsigned vmu_collection_copy_source_result,vmu_collection_copy_page_result,vmu_collection_copy_selected_result;
@@ -2173,7 +2176,8 @@ static bool games_page(enum kui_shell_page page) {
         page==KUI_SHELL_GAMES_PROBE_CONFIRM || page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ||
         page==KUI_SHELL_GAMES_RETAIL_CONFIRM || page==KUI_SHELL_GAMES_LAUNCH_OPTIONS ||
         page==KUI_SHELL_GAMES_EXTRA_OPTIONS || page==KUI_SHELL_GAMES_TESTS || page==KUI_SHELL_GAMES_INFO ||
-        page==KUI_SHELL_GAMES_PATCHES || page==KUI_SHELL_GAMES_CODEC || page==KUI_SHELL_GAMES_CHECK;
+        page==KUI_SHELL_GAMES_PATCHES || page==KUI_SHELL_GAMES_CODEC || page==KUI_SHELL_GAMES_CHECK ||
+        page==KUI_SHELL_GAMES_VMU_CARD;
 }
 /* Background preparation of the Games page on screen: its rows' titles, then
  * their box art at the view's size, then the folders and titles of the pages
@@ -2313,7 +2317,7 @@ static bool vmu_game_info_idle_work(void) {
     if(wanted) vmu_game_info_running=vmu_game_info_requested;
     mutex_unlock(&lock);
     if(!wanted || vmu_game_info_cancelled()) return false;
-    struct kui_vmu_game_info result;
+    static struct kui_vmu_game_info result;
     kui_sd_set_params(KUI_STORAGE_AUTO,true);
     kui_vmu_game_info_run(vmu_game_info_running.product,vmu_game_info_running.native_route,
         &result,kui_log,vmu_game_info_cancelled);
@@ -2326,6 +2330,42 @@ static bool vmu_game_info_idle_work(void) {
     }
     mutex_unlock(&lock);
     return true;
+}
+/* Requires lock, just like the read-only information request fence. */
+static bool vmu_game_default_current(void) {
+    return shell.games_vmu_default_saving && shell.games_vmu_loading &&
+        shell.page==KUI_SHELL_GAMES_VMU_CARD && shell.games_vmu_generation==vmu_game_default_generation &&
+        !memcmp(shell.games_vmu_product,vmu_game_default_pending.product,12u) &&
+        !memcmp(shell.games_vmu_selection.product,vmu_game_default_pending.product,12u) &&
+        shell.games_vmu_selection.selected &&
+        shell.games_vmu_selection.pair==vmu_game_default_pending.pair &&
+        !memcmp(shell.games_vmu_selection.identity,vmu_game_default_pending.identity,16u) &&
+        shell.games_vmu_selection.candidates_sequence==vmu_game_default_pending.candidates_sequence &&
+        !memcmp(shell.games_vmu_selection.storage.cid,vmu_game_default_pending.storage.cid,16u) &&
+        shell.games_vmu_selection.storage.card_sectors==vmu_game_default_pending.storage.card_sectors &&
+        shell.games_vmu_selection.storage.partition_first==vmu_game_default_pending.storage.partition_first &&
+        shell.games_vmu_selection.storage.partition_end==vmu_game_default_pending.storage.partition_end &&
+        shell.games_vmu_selection.storage.high_capacity==vmu_game_default_pending.storage.high_capacity &&
+        shell.games_vmu_default_clear==vmu_game_default_clear_pending;
+}
+static bool vmu_game_default_cancelled(void) {
+    if(kui_cancelled()) return true;
+    mutex_lock(&lock);bool same=vmu_game_default_current();mutex_unlock(&lock);return !same;
+}
+static void vmu_game_default_publish(const struct kui_vmu_game_info *result) {
+    mutex_lock(&lock);
+    if(vmu_game_default_current()) {
+        vmu_game_info_snapshot=*result;
+        vmu_game_info_request_result=vmu_game_default_generation;++vmu_game_info_generation;
+    }
+    mutex_unlock(&lock);
+}
+static void vmu_game_default_work(void) {
+    static struct kui_vmu_game_info result;
+    kui_sd_set_params(KUI_STORAGE_AUTO,true);
+    (void)kui_vmu_game_info_default(&vmu_game_default_pending,vmu_game_default_clear_pending,
+        &result,kui_log,vmu_game_default_cancelled);
+    vmu_game_default_publish(&result);
 }
 static bool games_warm_cancelled(void) {
     if(games_idle_cancelled()) return true;
@@ -2692,6 +2732,13 @@ static void *worker(void *unused) {
                 memcpy(games_launch_result_path,games_launch_path_pending,sizeof(games_launch_result_path));
                 games_launch_saved=false;++games_launch_result_generation;
             }
+            if(action==102 && vmu_game_default_current()) {
+                memset(&vmu_game_info_snapshot,0,sizeof(vmu_game_info_snapshot));
+                memcpy(vmu_game_info_snapshot.product,vmu_game_default_pending.product,12u);
+                snprintf(vmu_game_info_snapshot.label,sizeof(vmu_game_info_snapshot.label),"Unavailable");
+                snprintf(vmu_game_info_snapshot.notice,sizeof(vmu_game_info_snapshot.notice),"Card preference operation stopped; reopen game options.");
+                vmu_game_info_request_result=vmu_game_default_generation;++vmu_game_info_generation;
+            }
             if(action==56 || action==57 || action==58) {
                 probe_status=(struct kui_app_status){.stopped=true};
                 snprintf(probe_status.message,sizeof(probe_status.message),"Games handoff stopped before starting.");
@@ -3037,8 +3084,8 @@ static void *worker(void *unused) {
             if(action==76) game_launch_settings_save();
             if(action==79) {
                 kui_sd_set_params(KUI_STORAGE_AUTO,true);
-                bool ok=kui_games_retail_check_launch(games_path_pending,games_reader_pending,
-                    &games_patches_pending,kui_log,kui_cancelled);
+                bool ok=kui_games_retail_check_launch_card(games_path_pending,games_reader_pending,
+                    &games_patches_pending,&games_vmu_selection_pending,kui_log,kui_cancelled);
                 bool stopped=kui_cancelled();if(stopped)ok=false;
                 struct kui_app_status checked={.complete=true,.passed=ok,.stopped=stopped};
                 checked.errors=!ok && !checked.stopped?1u:0u;
@@ -3052,7 +3099,8 @@ static void *worker(void *unused) {
                 (void)games_selection_store(true);
                 kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 bool prepared=action==58?
-                    kui_games_retail_prepare_launch(games_path_pending,games_reader_pending,&games_patches_pending,&probe_image,
+                    kui_games_retail_prepare_launch_card(games_path_pending,games_reader_pending,&games_patches_pending,
+                        &games_vmu_selection_pending,&probe_image,
                         kui_log,kui_cancelled):action==57?
                     kui_games_image_probe_prepare(games_path_pending,&probe_image,kui_log,kui_cancelled):
                     kui_games_probe_prepare(&probe_image,kui_log,kui_cancelled);
@@ -3280,6 +3328,7 @@ static void *worker(void *unused) {
                 vmu_collection_request_result=vmu_collection_request_pending;++vmu_collection_generation;
                 mutex_unlock(&lock);
             }
+            if(action==102) vmu_game_default_work();
             if(action==99 || action==100) {
                 active_app=action;kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 vmu_emulation_operation(action==100);
@@ -3669,6 +3718,7 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_VMU_EMULATION_LOAD:return 99;
         case KUI_SHELL_VMU_EMULATION_SAVE:return 100;
         case KUI_SHELL_VMU_RENAME:return 101;
+        case KUI_SHELL_VMU_GAME_CARD_DEFAULT:return 102;
         default: return 0;
     }
 }
@@ -3980,8 +4030,7 @@ int main(void) {
             seen_vmu_collection=vmu_collection_generation;
         }
         if(seen_vmu_game_info!=vmu_game_info_generation) {
-            kui_shell_set_game_vmu(&shell,vmu_game_info_request_result,vmu_game_info_snapshot.product,
-                vmu_game_info_snapshot.label,vmu_game_info_snapshot.notice);
+            kui_shell_set_game_vmu_cards(&shell,vmu_game_info_request_result,&vmu_game_info_snapshot);
             seen_vmu_game_info=vmu_game_info_generation;
         }
         if(seen_vmu_collection_copy!=vmu_collection_copy_generation) {
@@ -4235,6 +4284,11 @@ int main(void) {
                 memcpy(vmu_name_label_pending,shell.vmu_name_label,sizeof(vmu_name_label_pending));
                 memcpy(vmu_name_identity_pending,shell.vmu_name_identity,sizeof(vmu_name_identity_pending));
             }
+            if(action==102) {
+                vmu_game_default_pending=shell.games_vmu_selection;
+                vmu_game_default_clear_pending=shell.games_vmu_default_clear;
+                vmu_game_default_generation=shell.games_vmu_generation;
+            }
             if(action==98) {
                 vmu_wizard_pending=shell.vmu_wizard_request;
                 vmu_wizard_snapshot=shell.vmu_wizard;
@@ -4273,6 +4327,7 @@ int main(void) {
                 games_offset_pending=shell.games_page*KUI_GAMES_ROWS;
                 games_reader_pending=shell.games_retail_reader;
                 games_patches_pending=shell.games_launch_patches;
+                games_vmu_selection_pending=shell.games_vmu_selection;
             }
             if(action==55) {games_codec_pending=shell.games_launch_codec;games_codec_override_pending=shell.games_codec_override;}
             if(action==54 || action==59) {games_view_pending=shell.games_view;games_epoch_pending=shell.games_generation;}

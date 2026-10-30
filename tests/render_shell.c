@@ -302,7 +302,41 @@ int main(int argc,char **argv) {
         .music_playing=true,.music_volume=75};
     struct kui_app_status status={.complete=true,.passed=true};
     view.music_cache_bytes=1111209;
-    if(!strcmp(argv[1],"home-games")) shell.home_selected=home_row(KUI_SHELL_GAMES);
+    if(!strcmp(argv[1],"vmu-pergame-saves") || !strcmp(argv[1],"vmu-pergame-review")) {
+        shell.page=KUI_SHELL_VMU_WIZARD;shell.vmu_emulation_known=true;shell.vmu_emulation_enabled=true;
+        struct kui_vmu_wizard_view *w=&shell.vmu_wizard;
+        w->sources=w->cards=2;w->total=4;w->count=4;w->selected_games=4;w->variants=5;
+        const char *titles[]={"Skies of Arcadia","Phantasy Star Online","Grandia II","Toy Commander"};
+        for(unsigned i=0;i<4;i++) {strcpy(w->games[i].title,titles[i]);w->games[i].selected=w->games[i].supported=true;w->games[i].variants=i==1?2:1;w->games[i].saves=i==1?4:1;}
+        w->games[3].blank=true;w->games[3].saves=0;
+        w->stage=KUI_VMU_WIZARD_REVIEW;
+        strcpy(w->status.message,"Review each game; source copies remain unchanged.");
+        if(!strcmp(argv[1],"vmu-pergame-saves")) {
+            w->stage=KUI_VMU_WIZARD_SAVES;strcpy(w->game_title,"Phantasy Star Online");
+            w->saves_total=13;w->saves_count=8;w->saves_selected_files=2;w->saves_selected_blocks=31;
+            const char *names[]={"PSO_SYSTEM","PSO_CHAR","SKIES_SAVE","GRANDIA2","SONICADV02","DOA2_DATA","EVOLUTION","TOYCOMMANDER"};
+            const char *descriptions[]={"PSO system","PSO character","Skies save","Grandia II","Sonic Adventure","Dead or Alive 2","Evolution","Toy Commander"};
+            for(unsigned i=0;i<8;i++) {strcpy(w->saves[i].name,names[i]);strcpy(w->saves[i].short_description,descriptions[i]);w->saves[i].picked=i<2;w->saves[i].blocks=i==0?15:15+i;}
+            strcpy(w->saves[0].long_description,"Phantasy Star Online system data");
+            strcpy(w->status.message,"Pick related files on each source; START keeps choices.");
+        }
+    } else if(!strcmp(argv[1],"game-vmu-picker")) {
+        shell.page=KUI_SHELL_GAMES_VMU_CARD;strcpy(shell.games_detail.title,"Phantasy Star Online");
+        struct kui_vmu_game_info *info=&shell.games_vmu_info;
+        info->enabled=info->known=true;info->count=2;info->choice_required=true;info->candidates_sequence=1;
+        info->cards[0].pair=16;strcpy(info->cards[0].label,"PSO - Source A1");
+        info->cards[1].pair=17;strcpy(info->cards[1].label,"PSO - Source A2");
+        strcpy(shell.games_vmu_notice,"Choose a version. Your other card and saves are kept.");
+    }
+    else if(!strcmp(argv[1],"per-game-options")) {
+        shell.page=KUI_SHELL_GAMES_LAUNCH_OPTIONS;
+        strcpy(shell.games_selected_path,"/Games/PSO/disc.gdi");strcpy(shell.games_detail.path,shell.games_selected_path);
+        strcpy(shell.games_detail.title,"Phantasy Star Online");shell.games_detail.valid=shell.games_detail.native_gd=true;
+        shell.games_detail.format=KUI_GAME_IMAGE_GDI;shell.games_detail.boot_bytes=100000;shell.games_detail.tracks=3;
+        shell.games_launch_reader=KUI_GAME_READER_BACKGROUND;shell.games_launch_selected=KUI_SHELL_GAME_OPTION_VMU_CARD;
+        strcpy(shell.games_vmu_label,"Choose one of 2 cards");strcpy(shell.games_vmu_notice,"Choose a version, or save a default card.");
+    }
+    else if(!strcmp(argv[1],"home-games")) shell.home_selected=home_row(KUI_SHELL_GAMES);
     else if(!strcmp(argv[1],"home-files")) shell.home_selected=home_row(KUI_SHELL_FILES);
     else if(!strcmp(argv[1],"home-ripper")) shell.home_selected=home_row(KUI_SHELL_DISC_TOOLS);
     else if(!strcmp(argv[1],"home-network")) shell.home_selected=home_row(KUI_SHELL_NETWORK);

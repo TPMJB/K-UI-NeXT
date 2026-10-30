@@ -21,6 +21,9 @@ static char directories[20][6];static unsigned directory_count,directory_index;
 static bool mounted,directory_open,release_error,open_error,identity_error,swap_after_label;
 static unsigned card_cid=1,cancel_after,cancel_calls;
 static int name_error;static char nickname[49];
+static unsigned candidate_reads,identity_reads,directory_reads,default_writes;
+static int candidate_result=KUI_VMU_GAME_CANDIDATES_ABSENT;
+static struct kui_vmu_game_candidates_view candidate_view;
 static struct kui_volume volume={2048,65536,true};
 static bool cancel(void) {return cancel_after && ++cancel_calls>=cancel_after;}
 static int find(const char *path) {for(unsigned i=0;i<file_count;i++) if(!strcmp(files[i].path,path)) return (int)i;return -1;}
@@ -35,6 +38,7 @@ static void clear(void) {
     memset(files,0,sizeof(files));file_count=directory_count=0;
     release_error=open_error=identity_error=swap_after_label=false;card_cid=1;
     cancel_after=cancel_calls=0;name_error=0;nickname[0]=0;
+    candidate_result=KUI_VMU_GAME_CANDIDATES_ABSENT;memset(&candidate_view,0,sizeof(candidate_view));
 }
 static void put32(uint8_t *out,uint32_t value) {for(unsigned i=0;i<4;i++) out[i]=(uint8_t)(value>>(8u*i));}
 static void preference(bool enabled) {
@@ -74,7 +78,7 @@ enum kui_games_storage_result kui_games_storage_open(kui_log_fn log) {
 bool kui_games_storage_release(void) {CHECK(mounted && !directory_open);mounted=false;++releases;return !release_error;}
 const struct kui_volume *kui_media_volume(void) {return &volume;}
 bool kui_sd_vmu_profile_identity(struct kui_vmu_sd_identity *out) {
-    CHECK(mounted);memset(out,0,sizeof(*out));if(identity_error) return false;
+    CHECK(mounted);++identity_reads;memset(out,0,sizeof(*out));if(identity_error) return false;
     out->cid[0]=(uint8_t)card_cid;out->sectors=131072;out->high_capacity=true;return true;
 }
 FRESULT f_stat(const TCHAR *path,FILINFO *info) {
@@ -95,6 +99,7 @@ FRESULT f_read(FIL *file,void *data,UINT requested,UINT *got) {
 }
 FRESULT f_close(FIL *file) {(void)file;CHECK(mounted && !directory_open);return FR_OK;}
 FRESULT f_opendir(DIR *dir,const TCHAR *path) {
+    ++directory_reads;
     (void)dir;CHECK(mounted && !directory_open && !strcmp(path,KUI_VMU_GAME_CARD_ROOT));
     if(!directory_count) return FR_NO_PATH;
     directory_open=true;directory_index=0;return FR_OK;
@@ -108,6 +113,27 @@ FRESULT f_closedir(DIR *dir) {(void)dir;CHECK(mounted && directory_open);directo
 FRESULT f_write(FIL *file,const void *data,UINT size,UINT *written) {(void)file;(void)data;(void)size;(void)written;++writes;CHECK(false);return FR_DISK_ERR;}
 FRESULT f_sync(FIL *file) {(void)file;++writes;CHECK(false);return FR_DISK_ERR;}
 FRESULT f_mkdir(const TCHAR *path) {(void)path;++writes;CHECK(false);return FR_DISK_ERR;}
+int kui_vmu_game_candidates_list(const char *product,const struct kui_vmu_game_candidates_storage *storage,
+    struct kui_vmu_game_candidates_view *out,kui_log_fn log,kui_cancel_fn stop) {
+    (void)log;(void)stop;CHECK(mounted && !directory_open && storage && product);++candidate_reads;
+    *out=candidate_view;
+    if(candidate_result==KUI_VMU_GAME_CANDIDATES_OK) {
+        snprintf(out->key,sizeof(out->key),"%s",product);out->storage=*storage;
+    }
+    return candidate_result;
+}
+int kui_vmu_game_candidates_set_default(const char *product,const struct kui_vmu_game_candidate_target *target,
+    uint64_t sequence,const struct kui_vmu_game_candidates_storage *storage,kui_log_fn log,kui_cancel_fn stop) {
+    (void)log;(void)stop;CHECK(mounted && storage && !strcmp(product,"ALPHA-1"));
+    if(sequence!=candidate_view.sequence) return KUI_VMU_GAME_CANDIDATES_STALE;
+    uint32_t index=KUI_VMU_GAME_CANDIDATES_NO_DEFAULT;
+    if(target) {
+        for(unsigned i=0;i<candidate_view.count;i++) if(candidate_view.targets[i].pair==target->pair &&
+            !memcmp(candidate_view.targets[i].identity,target->identity,16u)) index=i;
+        if(index==KUI_VMU_GAME_CANDIDATES_NO_DEFAULT) return KUI_VMU_GAME_CANDIDATES_STALE;
+    }
+    candidate_view.default_index=index;++candidate_view.sequence;++default_writes;return KUI_VMU_GAME_CANDIDATES_OK;
+}
 int kui_vmu_library_label(const char *path,const uint8_t expected[16],char out[49],kui_cancel_fn stop) {
     (void)stop;CHECK(mounted && !directory_open && strstr(path,"/card.vmd"));++labels;
     char identity_path[192];size_t prefix=(size_t)(strrchr(path,'/')-path);
@@ -125,6 +151,14 @@ int main(void) {
     CHECK(!strcmp(result.label,"Automatic game card") && strstr(result.notice,"checked at launch"));
     clear();preference(false);unsigned before=metadata_reads;run("ALPHA-1",true);
     CHECK(result.known && !result.enabled && !strcmp(result.label,"Physical VMUs"));CHECK(metadata_reads==before+1);
+    /* Both reader selections share this frontdoor: Off may only read the
+     * preference. Missing/damaged choices and failed card identity are inert. */
+    for(unsigned reader=0;reader<2u;reader++) {
+        clear();preference(false);candidate_result=KUI_VMU_GAME_CANDIDATES_INVALID;identity_error=true;
+        unsigned c=candidate_reads,d=directory_reads,l=labels,id=identity_reads;
+        run("ALPHA-1",true);CHECK(result.known && !result.enabled && !result.count);
+        CHECK(candidate_reads==c && directory_reads==d && labels==l && identity_reads==id);
+    }
     clear();preference(false);files[0].bytes[30]^=1;run("ALPHA-1",true);
     CHECK(!result.known && !strcmp(result.label,"Unavailable"));
     before=opens;run("ALPHA-1",false);CHECK(result.known && !strcmp(result.label,"Physical / loader specific") && opens==before);
@@ -157,5 +191,21 @@ int main(void) {
     clear();release_error=true;run("ALPHA-1",true);CHECK(!result.known && strstr(result.notice,"release"));
     clear();identity_error=true;run("ALPHA-1",true);CHECK(!result.known);
     clear();cancel_after=2;run("ALPHA-1",true);CHECK(!result.known && strstr(result.notice,"cancelled"));
+    clear();card(5,NULL,true);card(6,NULL,true);candidate_result=KUI_VMU_GAME_CANDIDATES_OK;
+    candidate_view=(struct kui_vmu_game_candidates_view){.present=true,.sequence=9,.count=2,
+        .default_index=KUI_VMU_GAME_CANDIDATES_NO_DEFAULT};
+    for(unsigned i=0;i<2u;i++) {candidate_view.targets[i].pair=5u+i;memset(candidate_view.targets[i].identity,(int)(5u+i),16u);}
+    run("ALPHA-1",true);CHECK(result.known && result.choice_required && result.count==2 && !result.default_pair);
+    struct kui_vmu_game_selection selected;CHECK(kui_vmu_game_info_choose(&result,1,&selected));
+    CHECK(selected.pair==6 && selected.candidates_sequence==9 && selected.storage.partition_first==volume.start);
+    struct kui_vmu_game_info saved;unsigned prior=default_writes;
+    CHECK(kui_vmu_game_info_default(&selected,false,&saved,NULL,cancel));
+    CHECK(default_writes==prior+1u && saved.known && saved.default_pair==6 && !saved.choice_required);
+    CHECK(!kui_vmu_game_info_default(&selected,true,&saved,NULL,cancel) && default_writes==prior+1u);
+    CHECK(kui_vmu_game_info_choose(&result,0,&selected));selected.candidates_sequence=candidate_view.sequence;
+    CHECK(kui_vmu_game_info_default(&selected,true,&saved,NULL,cancel));
+    CHECK(saved.known && saved.choice_required && !saved.default_pair);
+    selected.storage.cid[0]^=1u;prior=default_writes;
+    CHECK(!kui_vmu_game_info_default(&selected,false,&saved,NULL,cancel) && default_writes==prior);
     CHECK(opens==releases+1);clear();printf("VMU game information: %u checks passed; metadata reads %u, names %u, writes %u\n",checks,metadata_reads,labels,writes);return 0;
 }

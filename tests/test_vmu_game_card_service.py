@@ -13,7 +13,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCES = ('tests/test_vmu_game_card_service.c', 'src/core/vmu_game_card_service.c',
-           'src/core/vmu_game_card.c', 'src/core/vmu_game_assign.c', 'src/core/vmu_fs_admission.c', 'src/core/vmu_persist_profile.c',
+           'src/core/vmu_game_card.c', 'src/core/vmu_game_assign.c', 'src/core/vmu_game_candidates.c', 'src/core/vmu_fs_admission.c', 'src/core/vmu_persist_profile.c',
            'src/core/vmu_image.c', 'src/core/retail_image.c', 'src/core/hash.c', 'src/core/data.c',
            'src/core/diskio.c', 'src/core/clock.c', 'src/core/command.c',
            '.deps/fatfs/source/ff.c', '.deps/fatfs/source/ffunicode.c')
@@ -41,6 +41,7 @@ class GameCardService(unittest.TestCase):
         cc = shlex.split(os.environ.get('CC', 'cc'))
         subprocess.run([*cc, '-std=c11', '-O1', '-g', '-Wall', '-Wextra', '-Werror', '-Wpedantic',
                         '-fsanitize=address,undefined', '-fno-omit-frame-pointer',
+                        '-ffunction-sections','-fdata-sections','-Wl,--gc-sections',
                         '-I', str(ROOT / 'include'), '-I', str(ROOT / '.deps/fatfs/source'),
                         *[str(ROOT / s) for s in SOURCES], '-o', str(cls.tool)], check=True)
 

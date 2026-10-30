@@ -4,6 +4,7 @@
 #include "kui/probe.h"
 #include "kui/vmu_game_card.h"
 #include "kui/vmu_game_assign.h"
+#include "kui/vmu_game_candidates.h"
 #include "kui/vmu_fs_admission.h"
 #include "kui/vmu_image.h"
 
@@ -56,6 +57,7 @@ struct kui_vmu_game_card_work {
 enum kui_vmu_game_card_result {
     KUI_VMU_GAME_CARD_READY=0,
     KUI_VMU_GAME_CARD_UNBOUND=1,
+    KUI_VMU_GAME_CARD_CHOICE_REQUIRED=2,
     KUI_VMU_GAME_CARD_FAILED=-1,
     KUI_VMU_GAME_CARD_CANCELLED=-2
 };
@@ -77,6 +79,17 @@ struct kui_vmu_game_card_choice {
  * partition_first/end are the mounted volume's absolute bounds; forbidden
  * lists the game's mapped track extents, which a card may not overlap. */
 int kui_vmu_game_card_select(const char *product,uint64_t partition_first,uint64_t partition_end,
+    const struct kui_vmu_fs_range *forbidden,size_t forbidden_count,
+    const struct kui_vmu_game_card_platform *platform,struct kui_vmu_game_card_work *work,
+    uint8_t wire[KUI_VMU_PERSIST_PROFILE_WIRE_BYTES],struct kui_vmu_game_card_choice *choice,
+    kui_log_fn log,kui_cancel_fn cancel);
+/* One-time identity-pinned chooser result. Rechecks this physical storage and
+ * current product membership before preparing the profile. Never changes a
+ * candidate/default/assignment or creates a substitute card. */
+int kui_vmu_game_card_select_exact(const char *product,
+    const struct kui_vmu_game_candidate_target *target,
+    const struct kui_vmu_game_candidates_storage *storage,
+    uint64_t partition_first,uint64_t partition_end,
     const struct kui_vmu_fs_range *forbidden,size_t forbidden_count,
     const struct kui_vmu_game_card_platform *platform,struct kui_vmu_game_card_work *work,
     uint8_t wire[KUI_VMU_PERSIST_PROFILE_WIRE_BYTES],struct kui_vmu_game_card_choice *choice,

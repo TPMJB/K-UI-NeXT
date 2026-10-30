@@ -4,6 +4,7 @@
 #include "kui/vmu_library.h"
 #include "kui/vmu_collection.h"
 #include "kui/vmu_game_card_service.h"
+#include "kui/vmu_game_candidates.h"
 #include "kui/vmu_persist_profile.h"
 #include "kui/vmu_store.h"
 #include "kui/game_cover.h"
@@ -15,7 +16,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-static unsigned checks,writes;
+static unsigned checks,writes,metadata_watch_reads;
+static uint64_t metadata_watch_lba=UINT64_MAX;
 static int fail_after=-1;
 static bool raw_open,cancelled_flag;
 static uint8_t *disk;
@@ -32,6 +34,7 @@ static bool cancelled(void) {return cancelled_flag;}
 static uint64_t blocks(void *context) {(void)context;return disk_bytes/512u;}
 static int read_media(void *context,uint32_t lba,size_t count,uint8_t *out) {
     (void)context;if((uint64_t)lba+count>disk_bytes/512u) return -1;
+    if(lba<=metadata_watch_lba && metadata_watch_lba<(uint64_t)lba+count) ++metadata_watch_reads;
     memcpy(out,disk+(size_t)lba*512u,count*512u);return 0;
 }
 static int write_media(void *context,uint32_t lba,size_t count,const uint8_t *data) {
@@ -198,6 +201,54 @@ static void display_metadata(const char *game_path,const char *import_path,const
     }
     snprintf(removed,sizeof(removed),"0:/KUI/vmu/cards/v%04u",backup.id);CHECK(f_unlink(removed)==FR_OK);
     file_write(orphan_path,blank,131072u);free(saved);
+}
+static void candidate_display_metadata(const char *game_path,const char *import_path,
+    const uint8_t blank[131072]) {
+    struct kui_vmu_game_card_choice choice;uint8_t ids[2][16],fresh[16]={0x71};unsigned pairs[2];
+    for(unsigned i=0;i<2u;i++) {
+        fresh[1]=(uint8_t)i;
+        CHECK(kui_vmu_game_card_import_publish(blank,131072u,fresh,&work,&choice,ids[i],log_line,cancelled)==KUI_VMU_GAME_CARD_READY);
+        pairs[i]=choice.pair;
+    }
+    struct kui_vmu_game_card_raw raw={0};CHECK(identity(&volume,&raw));
+    struct kui_vmu_game_candidates_storage storage={.card_sectors=raw.card_sectors,
+        .partition_first=volume.start,.partition_end=(uint64_t)volume.start+volume.count,.high_capacity=raw.high_capacity};
+    memcpy(storage.cid,raw.cid,16u);
+    struct kui_vmu_game_assignment batch[3]={0};
+    CHECK(kui_vmu_game_card_key("T-00001",batch[0].key));
+    CHECK(kui_vmu_game_card_key("MK-51000",batch[1].key));
+    CHECK(kui_vmu_game_card_key("T-00003",batch[2].key));
+    for(unsigned i=0;i<3u;i++) {unsigned n=i==2u?1u:0u;batch[i].pair=pairs[n];memcpy(batch[i].identity,ids[n],16u);}
+    CHECK(!kui_vmu_game_candidates_apply(batch,3u,&storage,log_line,cancelled));
+    /* A later legacy assignment is ignored for a catalogued product, as is
+     * the old dedicated game.bin. Uncatalogued v1 users remain visible. */
+    uint8_t original[KUI_VMU_GAME_ASSIGN_WIRE_BYTES],legacy_wire[KUI_VMU_GAME_ASSIGN_WIRE_BYTES];
+    struct kui_vmu_game_assign_table table;
+    CHECK(file_read("0:/KUI/vmu-test/assign-a.bin",original,sizeof(original))==sizeof(original));
+    CHECK(kui_vmu_game_assign_decode(original,sizeof(original),&table));
+    table.entries[0].pair=pairs[1];memcpy(table.entries[0].identity,ids[1],16u);
+    CHECK(kui_vmu_game_assign_encode(&table,legacy_wire));file_write("0:/KUI/vmu-test/assign-a.bin",legacy_wire,sizeof(legacy_wire));
+    FIL catalogue;CHECK(f_open(&catalogue,KUI_VMU_GAME_CANDIDATES_PATH_A,FA_READ)==FR_OK);
+    metadata_watch_lba=(uint64_t)volume.start+fs.database+(uint64_t)(catalogue.obj.sclust-2u)*fs.csize;
+    CHECK(f_close(&catalogue)==FR_OK);metadata_watch_reads=0;writes=0;
+    struct kui_vmu_backup_view view;CHECK(!kui_vmu_library_list(0u,&view,log_line,cancelled) && !writes);
+    CHECK(metadata_watch_reads==1u);metadata_watch_lba=UINT64_MAX;
+    char paths[2][96];for(unsigned i=0;i<2u;i++) pair_path(paths[i],pairs[i],"card.vmd");
+    const struct kui_vmu_backup_entry *row=find_row(&view,paths[0]);
+    CHECK(row && row->users==2u && strstr(row->titles,"Sonic Adventure") && strstr(row->titles,"Resident Evil Code Veronica"));
+    row=find_row(&view,paths[1]);CHECK(row && row->users==1u && strstr(row->titles,"T-00003") && !strstr(row->titles,"Sonic Adventure"));
+    row=find_row(&view,game_path);CHECK(row && !row->users && !row->titles[0]);
+    row=find_row(&view,import_path);CHECK(row && row->users==2u && strstr(row->titles,"Sonic Adventure") && strstr(row->titles,"Crazy Taxi"));
+    /* Metadata fails closed before advertising partial associations. */
+    uint8_t *wire=malloc(KUI_VMU_GAME_CANDIDATES_WIRE_BYTES);CHECK(wire);
+    CHECK(file_read(KUI_VMU_GAME_CANDIDATES_PATH_A,wire,KUI_VMU_GAME_CANDIDATES_WIRE_BYTES)==KUI_VMU_GAME_CANDIDATES_WIRE_BYTES);
+    wire[100]^=1u;file_write(KUI_VMU_GAME_CANDIDATES_PATH_A,wire,KUI_VMU_GAME_CANDIDATES_WIRE_BYTES);writes=0;
+    CHECK(kui_vmu_library_list(0u,&view,log_line,cancelled)<0 && !view.count && !writes);
+    wire[100]^=1u;file_write(KUI_VMU_GAME_CANDIDATES_PATH_A,wire,KUI_VMU_GAME_CANDIDATES_WIRE_BYTES);
+    char path[96];pair_path(path,pairs[0],"identity.bin");uint8_t bad_id[16];memcpy(bad_id,ids[0],16u);bad_id[0]^=1u;
+    file_write(path,bad_id,16u);writes=0;CHECK(kui_vmu_library_list(0u,&view,log_line,cancelled)<0 && !view.count && !writes);
+    file_write(path,ids[0],16u);file_write("0:/KUI/vmu-test/assign-a.bin",original,sizeof(original));free(wire);
+    protected_unchanged();
 }
 static void journal_make(uint8_t journal[1024],const struct kui_vmu_persist_profile *p,unsigned block,uint8_t byte) {
     memset(journal,byte,512u);memset(journal+512u,0,512u);uint8_t *m=journal+512u;
@@ -515,6 +566,7 @@ int main(int argc,char **argv) {
     CHECK(!kui_vmu_library_list(1u,&listing,log_line,cancelled) && listing.total==14u && listing.count==6u && !writes);
     CHECK(find_row(&listing,snapshot.path)!=NULL);
     CHECK(kui_vmu_library_list(2u,&listing,log_line,cancelled)<0 && !writes);
+    candidate_display_metadata(game_path,import_path,image);
     cancelled_flag=true;writes=0;
     CHECK(kui_vmu_library_read(game_path,result,log_line,cancelled)<0 && !writes);
     CHECK(kui_vmu_library_list(0u,&listing,log_line,cancelled)<0 && !writes);

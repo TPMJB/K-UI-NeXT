@@ -51,6 +51,8 @@ RUNTIME_OBJECTS += build/dc/src/core/vmu_game_card.o build/dc/src/core/vmu_game_
     build/dc/src/core/vmu_fs_admission.o build/dc/src/core/vmu_persist_profile.o build/dc/src/loader/vmu_backing.o \
     build/dc/src/core/vmu_game_assign.o build/dc/src/core/vmu_image_merge.o
 RUNTIME_OBJECTS += build/dc/src/core/vmu_emulation_settings.o
+RUNTIME_OBJECTS += build/dc/src/core/vmu_import_plan.o build/dc/src/core/vmu_game_candidates.o
+RUNTIME_OBJECTS += build/dc/src/core/native_vmu_standard.o
 RUNTIME_OBJECTS += build/dc/src/core/vmu_library.o
 RUNTIME_OBJECTS += build/dc/src/core/zso.o build/dc/src/core/lzo1x.o build/dc/src/core/retail_zso.o
 RUNTIME_OBJECTS += build/dc/src/core/game_cover.o build/dc/src/core/pvr_texture.o
@@ -625,3 +627,37 @@ $(LZO_DIR)/entry.elf: $(LZO_DIR)/retail_entry_asm.o src/loader/retail_entry.ld
 	python3 tools/record_build.py $@
 $(LZO_RESIDENT) $(LZO_STAGE) $(LZO_DIR)/retail_entry_asm.o: $(LZO_DIR)/layout-config
 -include $(LZO_RESIDENT:.o=.d) $(LZO_STAGE:.o=.d) $(LZO_DIR)/retail_entry_asm.d
+
+# Separate physical-only Standard entry. It reuses the exact ordinary resident
+# images, and never replaces retail-boot.kui or a native VMU module.
+RETAIL_PHYSICAL_DIR := build/retail-physical
+RETAIL_PHYSICAL_STAGE := $(RETAIL_PHYSICAL_DIR)/retail_stage.o \
+    $(RETAIL_PHYSICAL_DIR)/retail_stage_asm.o build/retail/src/core/game_ram_patches.o $(RETAIL_COMMON)
+.PHONY: retail-physical
+retail-physical: $(RETAIL_PHYSICAL_DIR)/retail-physical.kui
+$(RETAIL_PHYSICAL_DIR)/retail_stage.o: src/loader/retail_stage.c include/kui/native_physical_capability.h build/retail/layout-config
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SKIES_DEFS) -DKUI_GAME_RAM_PATCHES_STAGE=$(if $(filter-out 0,$(KUI_RETAIL_STARTUP_TRACE) $(KUI_RETAIL_SONIC_STACK_TEST) $(KUI_RETAIL_RETURN_TRACE)),0,1) -DKUI_RETAIL_PHYSICAL_CAPABILITY=1 -MMD -MP -c $< -o $@
+$(RETAIL_PHYSICAL_DIR)/retail_stage_asm.o: src/loader/retail_stage.S $(RETAIL_RESIDENT_BINS) build/retail/layout-config
+	@mkdir -p $(@D)
+	sh-elf-gcc $(RETAIL_FLAGS) -MMD -MP -c $< -o $@
+$(RETAIL_PHYSICAL_DIR)/stage.elf: $(RETAIL_PHYSICAL_STAGE) src/loader/retail_stage.ld
+	sh-elf-gcc $(RETAIL_LINK) -Wl,-u,_kui_native_physical_capability -Tsrc/loader/retail_stage.ld -Wl,-Map,$(RETAIL_PHYSICAL_DIR)/stage.map -o $@ $(RETAIL_PHYSICAL_STAGE) -lgcc
+	python3 tools/record_build.py $@
+$(RETAIL_PHYSICAL_DIR)/stage.bin: $(RETAIL_PHYSICAL_DIR)/stage.elf
+	sh-elf-objcopy -O binary $< $@
+$(RETAIL_PHYSICAL_DIR)/retail_entry_asm.o: src/loader/retail_entry.S $(RETAIL_PHYSICAL_DIR)/stage.bin build/retail/layout-config
+	sh-elf-gcc $(RETAIL_FLAGS) -DKUI_RETAIL_STAGE_BIN='"$(RETAIL_PHYSICAL_DIR)/stage.bin"' -MMD -MP -c $< -o $@
+$(RETAIL_PHYSICAL_DIR)/entry.elf: $(RETAIL_PHYSICAL_DIR)/retail_entry_asm.o src/loader/retail_entry.ld
+	sh-elf-gcc $(RETAIL_LINK) -Tsrc/loader/retail_entry.ld -Wl,-Map,$(RETAIL_PHYSICAL_DIR)/entry.map -o $@ $<
+	cp $(foreach transport,scif sci ide scia,$(addprefix build/retail/resident-$(transport),.elf .bin .map)) $(RETAIL_PHYSICAL_DIR)/
+	rm -rf $(RETAIL_PHYSICAL_DIR)/scif $(RETAIL_PHYSICAL_DIR)/sci $(RETAIL_PHYSICAL_DIR)/ide $(RETAIL_PHYSICAL_DIR)/scia
+	cp -r build/retail/scif build/retail/sci build/retail/ide build/retail/scia $(RETAIL_PHYSICAL_DIR)/
+	cp build/retail/layout-config $(RETAIL_PHYSICAL_DIR)/plain-layout-config
+	python3 tools/check_retail_instructions.py $(RETAIL_PHYSICAL_DIR)
+	python3 tools/check_retail_loader_layout.py $(RETAIL_PHYSICAL_DIR)
+	python3 tools/record_build.py $@
+	@for name in resident-scif resident-sci resident-ide resident-scia; do python3 tools/record_build.py $(RETAIL_PHYSICAL_DIR)/$$name.elf; done
+$(RETAIL_PHYSICAL_DIR)/retail-physical.kui: $(RETAIL_PHYSICAL_DIR)/entry.elf tools/check_retail_physical.py
+	python3 tools/runtime_package.py build $< $@ --build-id $(BUILD_ID)
+-include $(RETAIL_PHYSICAL_DIR)/retail_stage.d $(RETAIL_PHYSICAL_DIR)/retail_stage_asm.d $(RETAIL_PHYSICAL_DIR)/retail_entry_asm.d
