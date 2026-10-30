@@ -47,6 +47,17 @@
 #ifndef KUI_NATIVE_VMU_ONLY
 #define KUI_NATIVE_VMU_ONLY 0
 #endif
+/* Diagnostic control: retain all VMU-only contracts, but enter the complete
+ * submit path instead of capturing a controller batch ahead of its DMA. */
+#ifndef KUI_NATIVE_VMU_ONLY_FULL_SUBMIT
+#define KUI_NATIVE_VMU_ONLY_FULL_SUBMIT 0
+#endif
+#if KUI_NATIVE_VMU_ONLY_FULL_SUBMIT != 0 && KUI_NATIVE_VMU_ONLY_FULL_SUBMIT != 1
+#error "VMU-only full-submit selector must be exactly zero or one"
+#endif
+#if KUI_NATIVE_VMU_ONLY_FULL_SUBMIT && !KUI_NATIVE_VMU_ONLY
+#error "Full-submit control is restricted to the independent VMU service"
+#endif
 #if KUI_NATIVE_VMU_ONLY != 0 && KUI_NATIVE_VMU_ONLY != 1
 #error "VMU-only selector must be exactly zero or one"
 #endif

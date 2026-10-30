@@ -55,6 +55,13 @@ NATIVE_STANDALONE_SELECTED = "native-dual-standalone-report"
 NATIVE_DUAL_SUCCESS = NATIVE_DUAL_CASES[:4] + ("native-dual-fallback-report", "native-dual-retry-report", "native-dual-x-cooked-report",
     "native-dual-standalone-report", "native-dual-standalone-y-report", "native-dual-standalone-absent-report",
     "native-dual-standalone-nofamily-report")
+NATIVE_STANDARD_CASES = ("native-standard-report", "native-standard-cooked-report",
+    "native-standard-retry-report", "native-standard-short-report", "native-standard-cancel-source",
+    "native-standard-crc-fail", "native-standard-seed-absent-report",
+    "native-standard-seed-malformed-report", "native-standard-seed-duplicate-report", "native-standard-scif-report")
+NATIVE_STANDARD_REFUSED = ("native-standard-cancel-source", "native-standard-crc-fail")
+
+
 MANY_TRACKS = {"native-dual-too-many": 99, "tracks-31": 31, "tracks-99": 99, "async-tracks-31": 31, "async-tracks-40": 40}
 AUDIO_UNMAPPED = ("tracks-99", "async-tracks-40")
 FORMAT_CASES = (
@@ -205,7 +212,7 @@ def make_retail_fixture(folder, case):
             (folder / name).write_bytes(package_bytes)
         (folder / "retail-native-dual.kui").write_bytes(dual_package(case))
         return
-    if (case in LAUNCH_CASES or case in NATIVE_DUAL_CASES) and folder.exists():
+    if (case in LAUNCH_CASES or case in NATIVE_DUAL_CASES or case in NATIVE_STANDARD_CASES) and folder.exists():
         shutil.rmtree(folder)
     if case in FORMAT_CASES:
         if case in CHECKSUM_CASES:
@@ -231,7 +238,7 @@ def make_retail_fixture(folder, case):
     if case == "alternate-bootfile":
         data[16 + 96:16 + 112] = b"ALT_BOOT.BIN".ljust(16)
         data[20 * 2352 + 16 + 68 + 33:20 * 2352 + 16 + 68 + 47] = b"ALT_BOOT.BIN;1"
-    boot_bytes = 3001 if case in LAUNCH_CASES or case in NATIVE_DUAL_CASES and case.endswith("-report") else {"boot-tail": 3001, "cooked-boot-tail": 3001,
+    boot_bytes = 3001 if case in LAUNCH_CASES or case in NATIVE_STANDARD_CASES or case in NATIVE_DUAL_CASES and case.endswith("-report") else {"boot-tail": 3001, "cooked-boot-tail": 3001,
                   "boot-small": 127, "ce-probe-small": 2048,
                   "boot-large": 0xC00001}.get(case, 4096)
     # The third root record describes our generated random test bytes.
@@ -251,7 +258,7 @@ def make_retail_fixture(folder, case):
         # Merely changing the descriptor must not make raw bytes a valid
         # cooked file. This track's raw length is not divisible by 2048.
         gdi.write_text(gdi.read_text().replace("4 2352 track01", "4 2048 track01"), encoding="ascii")
-    if case in ("cooked-2048", "cooked-boot-tail", "async-cooked-2048", "ce-probe-cooked", "native-dual-x-cooked-report"):
+    if case in ("cooked-2048", "cooked-boot-tail", "async-cooked-2048", "ce-probe-cooked", "native-dual-x-cooked-report", "native-standard-cooked-report"):
         names = ("track01.bin", "track03.bin") if case == "async-cooked-2048" else ("track03.bin",)
         for name in names:
             path = folder / name
@@ -274,8 +281,16 @@ def make_retail_fixture(folder, case):
         # replace this track with diagnostic text.
         track.rename(folder / "last-launch-a.txt")
         gdi.write_text(gdi.read_text().replace("track03.bin", "last-launch-a.txt"), encoding="ascii")
+    cache_seed = None
+    if case in NATIVE_STANDARD_CASES and case != "native-standard-seed-absent-report":
+        from vmu_native_cache_seed import template_seed
+        cache_seed = template_seed()
+        if case == "native-standard-seed-malformed-report":
+            cache_seed = cache_seed[:8] + struct.pack("<I", 999) + cache_seed[12:]
+        if case == "native-standard-seed-duplicate-report":
+            cache_seed += template_seed()
     (folder / "retail-boot.kui").write_bytes(synthetic_package(
-        ram_seed=case in LAUNCH_CASES and case != "launch-patch-old-package"))
+        ram_seed=case in LAUNCH_CASES and case != "launch-patch-old-package", dual=cache_seed))
     (folder / "ce-probe.kui").write_bytes(synthetic_package(ce=True))
     (folder / "retail-native-dual.kui").write_bytes(dual_package(case))
     if "-standalone" in case and "-absent" not in case:
@@ -394,6 +409,7 @@ def check_zso_outputs(folder, case):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--native-standard-only", action="store_true", help="Only SCI/Standard complete-source CRC reuse and fallback guards")
     parser.add_argument("--native-dual-only", action="store_true", help="Only native X/Y module selection, capability, bounds and report cases")
     parser.add_argument("--rc-only", action="store_true",
                         help="Only native-title/boot selection and compatibility cases, on MBR FAT32/exFAT")
@@ -419,8 +435,8 @@ def main():
             run("mkfs.fat", "-F", "32", str(volume)) if kind == "fat32" else run("mkfs.exfat", str(volume))
             partitioned_clean = base / f"{kind}-mbr.img"
             partition_image(volume, partitioned_clean, kind)
-            layouts = ((True, NATIVE_DUAL_CASES),) if args.native_dual_only else ((True, ZSO_CASES),) if args.zso_only else ((True, LAUNCH_CASES),) if args.launch_only else ((True, CHECKSUM_CASES),) if args.checksums_only else ((True, FORMAT_CASES),) if args.formats_only else ((True, RC_CASES),) if args.rc_only else (
-                (True, CASES + FORMAT_CASES + LAUNCH_CASES + ZSO_CASES + NATIVE_DUAL_CASES), (False, ("valid", "boot-tail", "fragmented", "cooked-2048")))
+            layouts = ((True, NATIVE_STANDARD_CASES),) if args.native_standard_only else ((True, NATIVE_DUAL_CASES),) if args.native_dual_only else ((True, ZSO_CASES),) if args.zso_only else ((True, LAUNCH_CASES),) if args.launch_only else ((True, CHECKSUM_CASES),) if args.checksums_only else ((True, FORMAT_CASES),) if args.formats_only else ((True, RC_CASES),) if args.rc_only else (
+                (True, CASES + FORMAT_CASES + LAUNCH_CASES + ZSO_CASES + NATIVE_DUAL_CASES + NATIVE_STANDARD_CASES), (False, ("valid", "boot-tail", "fragmented", "cooked-2048")))
             for partitioned, cases in layouts:
                 clean = partitioned_clean if partitioned else volume
                 layout = "MBR" if partitioned else "superfloppy"
@@ -431,6 +447,44 @@ def main():
                     run(BINARY, str(image), str(fixture), "seed", case)
                     before = digest(image)
                     output = run(BINARY, str(image), str(fixture), "check", case)
+                    if case in NATIVE_STANDARD_CASES:
+                        prepared = case not in NATIVE_STANDARD_REFUSED
+                        assert "Native VMU emulation: Off; background reader selection is unchanged" in output
+                        preference = bytearray(64)
+                        preference[:8] = b"KUIVMUE1"
+                        struct.pack_into("<5I", preference, 8, 1, 64, 1, 0, 0)
+                        struct.pack_into("<I", preference, 60, zlib.crc32(preference[:60]))
+                        assert (fixture / "after-emulation-a.bin").read_bytes() == preference
+                        count = re.search(r"Native Standard exact source: (\d+) raw/cooked reads; max (\d+) bytes; reporting=1; prepared=(\d+)", output)
+                        assert count and int(count[3]) == int(prepared)
+                        expected_reads = 4 if case in ("native-standard-retry-report", "native-standard-short-report", "native-standard-crc-fail") else 2
+                        assert int(count[1]) == expected_reads and int(count[2]) == (2048 if "cooked" in case else 2352)
+                        for name in ("retail-boot.kui", "ce-probe.kui", "disc.gdi", "track01.bin", "music track02.raw", "track03.bin"):
+                            assert (fixture / ("after-" + name)).read_bytes() == (fixture / name).read_bytes()
+                        if prepared:
+                            payload = (fixture / "standard-payload.bin").read_bytes()
+                            original = (fixture / "retail-boot.kui").read_bytes()[64:]
+                            assert payload[:0x1000] == original[:0x1000] and payload[0x2000:] == original[0x2000:]
+                            source = (fixture / "track03.bin").read_bytes()
+                            stride, header = (2048, 0) if "cooked" in case else (2352, 16)
+                            logical = b"".join(source[n + header:n + header + 2048] for n in range(0, len(source), stride))
+                            expected_crc = zlib.crc32(logical[21 * 2048:21 * 2048 + 3001])
+                            assert expected_crc != zlib.crc32(logical[21 * 2048:23 * 2048])
+                            assert struct.unpack_from("<I", payload, 0x1000 + 256)[0] == expected_crc
+                            data = (fixture / "after-last-launch-a.txt").read_bytes()
+                            body, footer = data.rsplit(b"crc32: ", 1)
+                            assert int(footer, 16) == zlib.crc32(body)
+                            fields = dict(line.split(": ", 1) for line in body.decode().splitlines()[1:])
+                            assert fields["package"] == "/kui/apps/games/retail-boot.kui" and fields["reader"] == "Standard"
+                            assert fields["storage"] == ("SCIF microSD" if case == "native-standard-scif-report" else "SCI microSD")
+                            assert int(fields["source executable bytes"]) == 3001
+                            assert int(fields["source executable crc32"], 16) == expected_crc
+                        else:
+                            assert digest(image) == before and not (fixture / "standard-payload.bin").exists()
+                        check_fs(image, base / "check-volume.img", kind, partitioned)
+                        image.unlink()
+                        print(f"PASS {kind} {case}; source reads={expected_reads}; exact CRC and source/package bytes preserved", flush=True)
+                        continue
                     if case in NATIVE_DUAL_CASES:
                         reasons = {"native-dual-absent": "module missing or unreadable",
                             "native-dual-scif": "require SCI microSD", "native-dual-too-many": "map exceeds 64 slots",

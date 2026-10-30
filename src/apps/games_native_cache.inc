@@ -83,6 +83,19 @@ static bool native_cache_file_publish(const char *path,const uint8_t wire[1024],
     if(!valid) (void)f_unlink(temporary);
     return valid;
 }
+/* A completed source read proves bytes/CRC only. Keep its eligibility shared
+ * with checksum reuse; SDK resolution and live ownership stay independent. */
+static bool native_cache_source_eligible(const struct kui_game_image *image,
+    const struct kui_retail_manifest *map,bool native,uint32_t options,bool patched,
+    const struct kui_runtime_image *package,bool dual) {
+    return native && (!options || dual) && !patched && image && map && package && package->data &&
+        image->format==KUI_GAME_IMAGE_GDI && !image->compressed && !image->scrambled && !image->cd_image &&
+        map->storage_transport==KUI_STORAGE_SCI && (map->reader==KUI_RETAIL_READER_STANDARD || dual) &&
+        !(map->flags&(KUI_RETAIL_IMAGE_CD|KUI_RETAIL_IMAGE_SCRAMBLED)) &&
+        map->boot_bytes>=128u && map->boot_bytes<=KUI_RETAIL_IMAGE_BOOT_MAX &&
+        map->boot_lba<KUI_GAME_LBA_LIMIT &&
+        (map->boot_bytes+2047u)/2048u<=KUI_GAME_LBA_LIMIT-map->boot_lba;
+}
 static enum native_cache_result native_cache_prepare(const struct kui_game_image *image,
     const struct kui_retail_manifest *map,bool native,uint32_t options,bool patched,
     struct kui_runtime_image *package,const char *source_root,kui_log_fn log,kui_cancel_fn cancel,
@@ -93,13 +106,7 @@ static enum native_cache_result native_cache_prepare(const struct kui_game_image
         kui_native_dual_reader_valid(map->reader,map->storage_transport) &&
         options==map->reader &&
         kui_native_dual_descriptor_find(package->data,package->info.payload_bytes,NULL)==1;
-    if(!native || (options && !dual) || patched || !image || !map || !package || !package->data ||
-       image->format!=KUI_GAME_IMAGE_GDI || image->compressed || image->scrambled || image->cd_image ||
-       map->storage_transport!=KUI_STORAGE_SCI || (map->reader!=KUI_RETAIL_READER_STANDARD && !dual) ||
-       (map->flags&(KUI_RETAIL_IMAGE_CD|KUI_RETAIL_IMAGE_SCRAMBLED)) ||
-       map->boot_bytes<128u || map->boot_bytes>KUI_RETAIL_IMAGE_BOOT_MAX ||
-       map->boot_lba>=KUI_GAME_LBA_LIMIT ||
-       (map->boot_bytes+2047u)/2048u>KUI_GAME_LBA_LIMIT-map->boot_lba)
+    if(!native_cache_source_eligible(image,map,native,options,patched,package,dual))
         return NATIVE_CACHE_SKIPPED;
     size_t slot=kui_vmu_native_cache_seed_find(package->data,package->info.payload_bytes);
     if(slot==SIZE_MAX) return NATIVE_CACHE_SKIPPED;

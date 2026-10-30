@@ -3,6 +3,7 @@
 # reader, read-ahead auxiliary/cache, or retained disc map in the VMU lease.
 BUILD ?= build/native-vmu-only-sci
 VMU_TRANSPORT ?= 1
+VMU_ONLY_FULL_SUBMIT ?= 0
 ifneq ($(filter $(VMU_TRANSPORT),0 1),$(VMU_TRANSPORT))
 $(error VMU_TRANSPORT must be 0 (SCIF) or 1 (SCI))
 endif
@@ -19,7 +20,7 @@ NATIVE_LAYOUT := src/loader/vmu_native_general_lean.ld
 NATIVE_SPAN := 0x1c000
 $(BUILD)/vmu-only-config: force-mode-config
 	@mkdir -p $(BUILD)
-	@printf '%s\n' 'VMU_TRANSPORT=$(VMU_TRANSPORT)' > $@.tmp
+	@printf '%s\n' 'VMU_TRANSPORT=$(VMU_TRANSPORT)' 'FULL_SUBMIT=$(VMU_ONLY_FULL_SUBMIT)' > $@.tmp
 	@cmp -s $@.tmp $@ || cp $@.tmp $@
 	@rm -f $@.tmp
 $(RESIDENT_OBJ) $(STAGE_OBJ) $(NATIVE_OBJ): $(BUILD)/vmu-only-config

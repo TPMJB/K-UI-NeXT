@@ -10,6 +10,7 @@
 #include "kui/native_dual_reader.h"
 #include "kui/native_standalone_capability.h"
 #include "kui/native_sdk_sci_family.h"
+#include "kui/vmu_emulation_settings.h"
 #include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -27,6 +28,7 @@ static struct {
     FIL *track, *report_write;
     unsigned writes, connects, disconnects, files, read_calls, physical_reads;
     unsigned hash_phase,hash_reads[2],hash_max[2],between_read_cancel_checks;
+    unsigned native_source_passes,direct_crc_passes;
     unsigned vmu_package_opens,dual_package_opens,ordinary_package_opens;
     unsigned standalone_package_opens,family_calls;
     uint64_t hash_begin[2],hash_end[2];
@@ -42,6 +44,7 @@ static const char *const selected = "/Games/Reader Test/disc.gdi";
 static const char *const package = "0:/KUI/apps/games/retail-boot.kui";
 static const char *const dual_package = "0:/KUI/apps/games/retail-native-dual.kui";
 static bool native_dual_case(void) {return !strncmp(test.fault,"native-dual-",12);}
+static bool native_standard_case(void) {return !strncmp(test.fault,"native-standard-",16);}
 static bool native_dual_report(void) {return native_dual_case() && strstr(test.fault,"-report");}
 static const char *const standalone_package = KUI_GAMES_RETAIL_NATIVE_STANDALONE_PACKAGE;
 static bool native_standalone_case(void) {return native_dual_case() && strstr(test.fault,"-standalone");}
@@ -71,7 +74,7 @@ static uint32_t track_sectors(unsigned i) { return i < 4 ? counts[i] : 4u; }
  * case also cooks track 1, while audio always remains raw. */
 static bool cooked_track(unsigned i) {
     bool cooked = !strcmp(test.fault, "cooked-2048") || !strcmp(test.fault, "cooked-boot-tail") ||
-        !strcmp(test.fault, "async-cooked-2048") || !strcmp(test.fault, "ce-probe-cooked") || !strcmp(test.fault,"native-dual-x-cooked-report");
+        !strcmp(test.fault, "async-cooked-2048") || !strcmp(test.fault, "ce-probe-cooked") || !strcmp(test.fault,"native-dual-x-cooked-report") || !strcmp(test.fault,"native-standard-cooked-report");
     return cooked && (i == 2 || (i == 0 && !strcmp(test.fault, "async-cooked-2048")));
 }
 static uint32_t track_stride(unsigned i) { return cooked_track(i) ? 2048u : 2352u; }
@@ -124,6 +127,8 @@ static struct format_expect format_expect(const char *directory) {
 }
 static void log_line(const char *format, ...) {
     if(!strcmp(format,"Retail boot: %.100s; product=%s version=%s region=%s")) test.hash_phase=1;
+    if(strstr(format,"checking exact executable"))++test.direct_crc_passes;
+    if(strstr(format,"Native VMU mapping: reading"))++test.native_source_passes;
     if(strstr(format,"checking exact executable") || strstr(format,"Native VMU mapping: reading")) test.hash_phase=2;
     if(strstr(format,"mapping %u tracks")) test.hash_phase=0;
     if(strstr(format,"Launch report unavailable; continuing")) test.report_warning=true;
@@ -138,7 +143,7 @@ static int read_image(void *ctx, uint32_t block, size_t count, uint8_t *data) {
         fread(data, 512, count, test.image) != count ? -1 : 0;
 }
 static int write_image(void *ctx, uint32_t block, size_t count, const uint8_t *data) {
-    (void)ctx; ++test.writes; assert(!test.active || launch_case() || zso_case() || native_dual_report());
+    (void)ctx; ++test.writes; assert(!test.active || launch_case() || zso_case() || native_dual_report() || native_standard_case());
     return fseeko(test.image, (off_t)block * 512, SEEK_SET) ||
         fwrite(data, 512, count, test.image) != count ? -1 : 0;
 }
@@ -148,7 +153,8 @@ static int sync_image(void *ctx) {
 static const struct kui_media_ops media = {NULL, blocks, read_image, write_image, sync_image};
 unsigned kui_storage_active(void) {
     /* The CE boot test needs SCI; ce-probe-scif checks the refusal. */
-    return (native_dual_case() && strcmp(test.fault,"native-dual-scif")) || !strcmp(test.fault, "vmu-present-corrupt") || !strcmp(test.fault, "async-on-sci") || !strcmp(test.fault, "async-cooked-2048") ||
+    return (native_standard_case() && strcmp(test.fault,"native-standard-scif-report")) ||
+        (native_dual_case() && strcmp(test.fault,"native-dual-scif")) || !strcmp(test.fault, "vmu-present-corrupt") || !strcmp(test.fault, "async-on-sci") || !strcmp(test.fault, "async-cooked-2048") ||
         (zso_case() && strcmp(test.fault,"zso-scif")) ||
         !strncmp(test.fault, "async-tracks", 12) ||
         (format_case() && strstr(test.fault, "-async")) ||
@@ -176,7 +182,7 @@ FRESULT __real_f_open(FIL *, const TCHAR *, BYTE);
 FRESULT __wrap_f_open(FIL *file, const TCHAR *path, BYTE flags) {
     bool writes=(flags & (FA_WRITE | FA_CREATE_NEW | FA_CREATE_ALWAYS | FA_OPEN_ALWAYS | FA_OPEN_APPEND))!=0;
     if(test.active && writes) {
-        assert((launch_case() || zso_case() || native_dual_report()) && report_path(path));
+        assert((launch_case() || zso_case() || native_dual_report() || native_standard_case()) && report_path(path));
         if(fault("launch-report-readonly")) {test.injected=true;return FR_WRITE_PROTECTED;}
     }
     FRESULT result = __real_f_open(file, path, flags);
@@ -213,6 +219,12 @@ FRESULT __wrap_f_read(FIL *file, void *buffer, UINT bytes, UINT *got) {
                 }
                 if(phase==1u && test.hash_reads[phase]==2u && fault("native-dual-retry-report")) {test.injected=true;return FR_DISK_ERR;}
                 if(phase==1u && test.hash_reads[phase]==2u && fault("native-dual-cancel-source"))test.cancelled=test.injected=true;
+                if(phase==1u && native_standard_case()) {
+                    if(test.hash_reads[phase]==2u && (fault("native-standard-retry-report") || fault("native-standard-crc-fail"))) {test.injected=true;return FR_DISK_ERR;}
+                    if(test.hash_reads[phase]==4u && fault("native-standard-crc-fail")) {test.injected=true;return FR_DISK_ERR;}
+                    if(test.hash_reads[phase]==2u && fault("native-standard-short-report")) {assert(*got);--*got;test.injected=true;}
+                    if(test.hash_reads[phase]==2u && fault("native-standard-cancel-source"))test.cancelled=test.injected=true;
+                }
                 if(checksum_case() && phase==1u && test.hash_reads[phase]==2u) {
                     if(strstr(test.fault,"read-fail")) {test.injected=true;return FR_DISK_ERR;}
                     if(strstr(test.fault,"short-read")) {assert(*got);--*got;test.injected=true;}
@@ -273,7 +285,7 @@ FRESULT __wrap_f_mount(FATFS *volume, const TCHAR *path, BYTE option) {
 FRESULT __real_f_write(FIL *, const void *, UINT, UINT *);
 FRESULT __wrap_f_write(FIL *file, const void *data, UINT bytes, UINT *written) {
     if(test.active) {
-        assert((launch_case() || zso_case() || native_dual_report()) && file==test.report_write);
+        assert((launch_case() || zso_case() || native_dual_report() || native_standard_case()) && file==test.report_write);
         if(fault("launch-report-full")) {test.injected=true;*written=0;return FR_OK;}
     }
     return __real_f_write(file, data, bytes, written);
@@ -368,6 +380,7 @@ static void seed(const char *directory) {
     assert(f_mkdir("0:/KUI") == FR_OK && f_mkdir("0:/KUI/apps") == FR_OK);
     assert(f_mkdir("0:/KUI/apps/games") == FR_OK && f_mkdir("0:/Games") == FR_OK);
     assert(f_mkdir("0:/Games/Reader Test") == FR_OK);
+    if(native_standard_case())assert(kui_vmu_emulation_settings_save(false,log_line));
     size_t size; uint8_t *data = host_file(directory, "retail-boot.kui", &size);
     if(!strcmp(test.fault, "layout-manifest")) {
         put32(data + KUI_RUNTIME_HEADER_BYTES + 0x100 + 20, 4092);
@@ -624,7 +637,7 @@ static void check_mapping(const char *directory, const struct kui_runtime_image 
     assert(map->track_count == track_count() &&
            map->extent_count >= (audio_unmapped() ? 2u : track_count()));
     assert(map->session_lba == 45000 && map->boot_lba == 45021 &&
-           map->boot_bytes == (launch_case() || native_dual_report() || !strcmp(test.fault, "boot-tail") || !strcmp(test.fault, "cooked-boot-tail") ? 3001u : 4096u));
+           map->boot_bytes == (launch_case() || native_dual_report() || native_standard_case() || !strcmp(test.fault, "boot-tail") || !strcmp(test.fault, "cooked-boot-tail") ? 3001u : 4096u));
     assert(!strcmp(map->title, !strcmp(test.fault, "other-title") ? "Independent Native Game" :
         !strcmp(test.fault, "blank-title") ? "Untitled game" : "DEAD OR ALIVE 2"));
     assert(!strcmp(map->bootfile, !strcmp(test.fault, "alternate-bootfile") ? "ALT_BOOT.BIN" : "1ST_READ.BIN"));
@@ -699,7 +712,7 @@ static void check_mapping(const char *directory, const struct kui_runtime_image 
         }
         done += bytes;
     }
-    assert(map->boot_crc32 == (cooked_track(2) || launch_case() || native_dual_report() ? boot_crc : 0));
+    assert(map->boot_crc32 == (cooked_track(2) || launch_case() || native_dual_report() || native_standard_case() ? boot_crc : 0));
     if(launch_case()) assert(map->flags & KUI_RETAIL_IMAGE_BOOT_CRC);
     if(cooked_track(2))
         assert(boot_crc == (map->boot_bytes==3001u ? 0x4a3efbf8u : 0xbaf6ad9cu));
@@ -757,6 +770,7 @@ static void export_launch_files(const char *directory) {
     kui_media_set(&media);assert(kui_mount(&fs,log_line));
     export_file(directory,package,"after-retail-boot.kui",false);
     export_file(directory,ce_package,"after-ce-probe.kui",false);
+    if(native_standard_case())export_file(directory,KUI_VMU_EMULATION_SETTINGS_PATH_A,"after-emulation-a.bin",false);
     if(native_dual_case())export_file(directory,dual_package,"after-retail-native-dual.kui",false);
     if(native_standalone_case() && !strstr(test.fault,"-absent"))
         export_file(directory,standalone_package,"after-retail-native-standalone.kui",false);
@@ -958,9 +972,36 @@ static void check_native_dual(const char *directory) {
         export_launch_files(directory);
     }
 }
+/* Real reporting launch through the ordinary SCI/Standard module. Complete
+ * source bytes can supply CRC even when optional synthetic SDK discovery fails. */
+static void check_native_standard(const char *directory) {
+    test.hash_begin[0]=0u;test.hash_end[0]=16u*track_stride(2);
+    test.hash_begin[1]=21u*track_stride(2);test.hash_end[1]=23u*track_stride(2);test.hash_bounded=true;
+    bool success=!fault("native-standard-cancel-source") && !fault("native-standard-crc-fail");
+    struct kui_runtime_image image={0};struct kui_game_ram_patches patches={0};
+    bool result=kui_games_retail_prepare_launch(selected,KUI_RETAIL_READER_STANDARD,&patches,&image,log_line,cancel);
+    assert(result==success && test.ordinary_package_opens==1u && !test.dual_package_opens && !test.family_calls);
+    bool eligible=!strstr(test.fault,"-seed-") && !fault("native-standard-scif-report");
+    bool fallback=fault("native-standard-retry-report") || fault("native-standard-short-report") || fault("native-standard-crc-fail");
+    unsigned expected_reads=fallback?4u:2u;
+    assert(test.native_source_passes==(eligible?1u:0u));
+    assert(test.direct_crc_passes==(!eligible || fallback?1u:0u));
+    assert(test.hash_reads[0]==16u && test.hash_reads[1]==expected_reads && test.hash_max[1]==track_stride(2));
+    if(result) {
+        check_mapping(directory,&image);host_write(directory,"standard-payload.bin",image.data,image.info.payload_bytes);
+        assert(test.writes && !test.cancelled);
+    } else {
+        assert(!image.data && !image.info.payload_bytes && !test.writes && test.injected);
+        if(fault("native-standard-cancel-source"))assert(test.cancelled);
+    }
+    printf("Native Standard exact source: %u raw/cooked reads; max %u bytes; reporting=%u; prepared=%u\n",
+        test.hash_reads[1],test.hash_max[1],1u,result);
+    kui_runtime_free(&image);export_launch_files(directory);
+}
 static void check(const char *directory) {
     struct kui_runtime_image image = {0};
     if(native_dual_case()) {check_native_dual(directory);return;}
+    if(native_standard_case()) {check_native_standard(directory);return;}
     if(zso_case()) {check_zso(directory);return;}
     if(launch_case()) {check_launch(directory);return;}
     if(format_case()) {
@@ -1044,12 +1085,12 @@ int main(int argc, char **argv) {
         assert(f_mount(NULL, "0:", 0) == FR_OK); kui_media_set(NULL);
     } else {
         assert(!strcmp(argv[3], "check")); test.active = true; check(argv[2]);
-        assert((launch_case() || zso_case() || native_dual_report() || !test.writes) && !test.files && !test.report_write && !test.connected && test.connects == test.disconnects);
+        assert((launch_case() || zso_case() || native_dual_report() || native_standard_case() || !test.writes) && !test.files && !test.report_write && !test.connected && test.connects == test.disconnects);
         if(strstr(test.fault, "-fail") || !strncmp(test.fault, "sector-", 7) ||
             !strcmp(test.fault, "cancel-map") || !strcmp(test.fault, "cancel-ip") || !strcmp(test.fault, "size-change")) assert(test.injected);
     }
     assert(!fclose(test.image));
     printf("PASS retail preparation %s %s; %s\n", argv[3], test.fault,
-        launch_case() || zso_case() || native_dual_report()?"only bounded launch-report writes allowed":"no active-operation writes");
+        launch_case() || zso_case() || native_dual_report() || native_standard_case()?"only bounded launch-report writes allowed":"no active-operation writes");
     return 0;
 }

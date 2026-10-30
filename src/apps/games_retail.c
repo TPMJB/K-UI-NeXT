@@ -705,7 +705,15 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
             image->tracks[i].start_lba<boot_end && image->tracks[i].end_lba>map->boot_lba)
             cooked_boot=true;
     const bool need_boot_crc=reporting || patched || cdda || cooked_boot || vmu_package || image->format!=KUI_GAME_IMAGE_GDI;
-    const bool defer_boot_crc=native_dual && need_boot_crc;
+    /* Standard cache-bearing VMU modules also read the full source for SHA
+     * and SDK preflight. Reuse that read's exact-byte CRC as X/Y already do.
+     * An absent/incomplete source proof still takes the full CRC fallback;
+     * one-sector I/O and the detached checksum checks remain unchanged. */
+    const bool standard_cache_source=reader==KUI_RETAIL_READER_STANDARD &&
+        native_cache_source_eligible(image,map,!ce && metadata.native_gd,
+            requested_options,patched,package,false) &&
+        kui_vmu_native_cache_seed_find(package->data,package->info.payload_bytes)!=SIZE_MAX;
+    const bool defer_boot_crc=need_boot_crc && (native_dual || standard_cache_source);
     if(need_boot_crc) {
         map->flags|=KUI_RETAIL_IMAGE_BOOT_CRC;
         if(!defer_boot_crc) {

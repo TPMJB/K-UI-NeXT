@@ -86,6 +86,115 @@ def scif_descriptor(low):
             'block_callback_null':True,'linked_descriptor_users':users}
 
 
+def controller_submit_mode(stage, worker, self_test=True):
+    """Bind both control markers and execute the actual full-entry forwarder.
+
+    The authored callee represents the retained full submit's C ABI only;
+    production-C protocol/lifecycle tests exercise that callee separately.
+    No capture function or other external target is allowed in this replay.
+    """
+    names=('__kui_native_vmu_only_full_submit_stage',
+           '__kui_native_vmu_only_full_submit_worker')
+
+    def mode(stage_symbols, worker_symbols):
+        markers=(stage_symbols.get(names[0]),worker_symbols.get(names[1]))
+        require(markers==(None,None) or markers==(ONE,ONE),
+                'Full-submit control requires exact matching stage/worker markers')
+        return 'full' if markers[0] is not None else 'split'
+
+    selected=mode(stage[4],worker[4])
+    cases=0
+    rejected=0
+    result={'controller_submit':selected,'matching_immutable_markers':True,
+            'forwarder_instruction_cases':0,'mutation_rejections':0,
+            'full_callee_is_authored_abi_stub':selected=='full',
+            'full_protocol_execution_included_in_this_model':False}
+    if selected=='full':
+        target=symbol_bytes(worker,'_kui_vmu_native_passive_submit',2)[0]
+        forwarder='_kui_vmu_native_passive_split_submit'
+        _,forward_body,forward_section=symbol_bytes(worker,forwarder,2)
+        require(len(forward_body)==12 and forward_section[2]&7==6,
+                'Full-submit forwarder must be one immutable twelve-byte tail transfer')
+        first,jump,slot,padding,literal=struct.unpack('<4HI',forward_body)
+        register=first>>8&15
+        require(first&0xf0ff==0xd001 and jump==(0x402b|(register<<8)) and
+                slot==padding==9 and literal==target,
+                'Full-submit forwarder changed its exact unconditional retained target')
+
+        class Forwarder(Machine):
+            def __init__(self,seed,body=None):
+                super().__init__(worker,forwarder,seed,6 if seed&1 else 15,
+                                 0x8c61bfc0,body=body)
+                self.frame=(0x8c61bf00,0xac61bf00,0x0c61bf00,0x8c61be80)[seed%4]
+                self.r[4]=self.frame
+                self.saved=(self.r.copy(),self.mach,self.macl,self.gbr,self.sr,
+                            self.fpscr,self.fr.copy())
+
+            def call(self,address):
+                if address==self.stop_pc:
+                    return False
+                require(address==target,'Control forwarder reaches a target other than retained full submit')
+                require(self.r[4]==self.frame,'Control forwarder changes the captured-frame argument')
+                self.calls.append(address)
+                # Clobber volatile integer registers, PR and T as an ABI
+                # adversary. A tail transfer may leave PR clobbered on return;
+                # arrival at the original stop PC proves its return path.
+                self.abi_return(0x73510000|len(self.calls))
+                return True
+
+            def check(self):
+                self.run()
+                before,mach,macl,gbr,sr,fpscr,fr=self.saved
+                require(self.calls==[target] and self.r[8:]==before[8:] and
+                        (self.mach,self.macl,self.gbr)==(mach,macl,gbr) and
+                        self.sr&~1==sr&~1 and self.fpscr==fpscr and self.fr==fr and
+                        not self.published,
+                        'Compiled full-submit forwarder violates preserved caller ABI')
+
+        for seed in range(8):
+            Forwarder(seed).check()
+            cases+=1
+        result.update(full_submit_target=hex(target),captured_frame_argument_unchanged=True,
+                      callee_preserved_registers_unchanged=True,
+                      no_capture_or_other_external_target=True,
+                      exact_unconditional_forwarder_bytes=len(forward_body))
+        if self_test:
+            _,body,_=symbol_bytes(worker,forwarder,2)
+            # Change the first transfer's legal delay slot to destroy R4.
+            # The unmodified target/caller code and remaining literal pool
+            # still execute, so the model must reject the changed argument.
+            changed=bytearray(body)
+            transfer=None
+            for offset in range(0,len(body)-3,2):
+                word=struct.unpack_from('<H',body,offset)[0]
+                if word>>12 in (0xa,0xb) or word&0xf0ff in (0x400b,0x402b):
+                    transfer=offset
+                    break
+            require(transfer is not None,'Control forwarder lacks a compiled transfer')
+            struct.pack_into('<H',changed,transfer+2,0xe400)
+            try:
+                Forwarder(0,bytes(changed)).check()
+            except (ValueError,AssertionError):
+                rejected+=1
+            else:
+                raise ValueError('Full-submit forwarder accepted a changed frame argument')
+    if self_test:
+        for selected_image in range(2):
+            symbols=[dict(stage[4]),dict(worker[4])]
+            if selected=='full':
+                symbols[selected_image].pop(names[selected_image])
+            else:
+                symbols[selected_image][names[selected_image]]=ONE
+            try:
+                mode(*symbols)
+            except ValueError:
+                rejected+=1
+            else:
+                raise ValueError('Submit mode accepted mismatched stage/worker control markers')
+    result.update(forwarder_instruction_cases=cases,mutation_rejections=rejected)
+    return result
+
+
 def terminal_guard_model(low, self_test=True):
     """Execute the emitted pure low guard at compact-lease boundaries."""
     class Guard(Machine):
@@ -352,6 +461,7 @@ def callgraph_stacks(directory, worker, resident, transport, coherence):
 def audit(directory, *, transport, allow_dirty=False, self_test=True):
     directory = Path(directory)
     worker, stage, low = (read_elf(directory/name) for name in ('native-worker.elf','stage.elf','resident-sci.elf'))
+    submit_mode=controller_submit_mode(stage,worker,self_test)
     for image, marker in ((worker, '__kui_native_vmu_only_worker'), (stage, '__kui_native_vmu_only_stage')):
         require(image[4].get(marker) == ONE, 'Missing exact VMU-only marker: '+marker)
         require(layout_for(image[4]).LEASE_BYTES == SPAN, 'VMU-only lease must be112KiB')
@@ -460,6 +570,7 @@ def audit(directory, *, transport, allow_dirty=False, self_test=True):
     installation = audit_install(stage,low,worker,binary,wire)
     stacks = callgraph_stacks(directory,worker,images['resident-sci'],transport,coherence)
     return {'schema':'kui.native.vmu-only.linked.v1','transport':transport,'lease_bytes':SPAN,
+            'controller_submit':submit_mode['controller_submit'],'controller_submit_audit':submit_mode,
             'worker_span':SPAN,'worker_initialized_bytes':len(binary),'worker_stack_bytes':STACK_BYTES,
             'worker_bss_end':hex(fields[8]),'worker_stack_bottom':hex(fields[9]),
             'worker_bss_stack_gap':fields[9]-fields[8], 'module_sha256':sha(module),'runtime':runtime,

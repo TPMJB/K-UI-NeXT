@@ -1,0 +1,18 @@
+{
+  "schema": "kui.native.vmu-only.console-followup.v1",
+  "date": "2026-10-30",
+  "tested_build": "4edbc56c295b",
+  "transport_confirmed": "SCI",
+  "owner_report": "Everything worked...except Skies of Arcadia, which doesn't detect my save.",
+  "batch_result": "Owner reports all other tested cases worked; individual save-cycle coverage was not enumerated.",
+  "skies": {
+    "old_save_detected": false,
+    "virtual_card_presence": "not yet distinguished from absent save content",
+    "failure": "intermittent freeze or black screen, per owner selection",
+    "prebootstrap_delay_seconds": 20,
+    "prebootstrap_scope": "after pressing A and before Bootstrap 1",
+    "profile_selected": "p0005, according to the preceding install instructions; current contents require inspection"
+  },
+  "scif_console_result": "not established",
+  "next_scope": "Skies only: inspect actual prepared-card contents, remove duplicate prelaunch executable read, compare split and retained full-submit controller paths with the same 112 KiB reservation and card."
+}

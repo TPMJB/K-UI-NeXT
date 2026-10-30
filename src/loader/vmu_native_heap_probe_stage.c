@@ -46,6 +46,10 @@ const struct kui_vmu_native_toggle_capability kui_vmu_native_toggle_capability
 #endif
 #if KUI_NATIVE_STANDARD_VMU_ISOLATION || KUI_NATIVE_READER_ONLY_ISOLATION || KUI_NATIVE_METADATA_CACHE_ISOLATION || KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION
 #if KUI_NATIVE_VMU_ONLY
+#if KUI_NATIVE_VMU_ONLY_FULL_SUBMIT
+__asm__(".global __kui_native_vmu_only_full_submit_stage\n"
+        ".set __kui_native_vmu_only_full_submit_stage,1\n");
+#endif
 __asm__(".global __kui_native_vmu_only_transport_stage\n"
         ".set __kui_native_vmu_only_transport_stage," KUI_VMU_ONLY_TRANSPORT_TEXT "\n");
 _Static_assert(KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES==UINT32_C(0x1c000),
