@@ -81,6 +81,20 @@
 #if KUI_NATIVE_VMU_LITE && !KUI_NATIVE_VMU_ONLY
 #error "VMU-lite refines the VMU-only service"
 #endif
+/* A separate combined profile reuses the bounded 72 KiB VMU worker with
+ * the retained Background reader, auxiliary stack and full read-ahead cache.
+ * Legacy low-reader code shares its geometry but not the New reader flags. */
+#ifndef KUI_NATIVE_BACKGROUND_COMPACT
+#define KUI_NATIVE_BACKGROUND_COMPACT 0
+#endif
+#if KUI_NATIVE_BACKGROUND_COMPACT != 0 && KUI_NATIVE_BACKGROUND_COMPACT != 1
+#error "Compact Background selector must be exactly zero or one"
+#endif
+#if KUI_NATIVE_BACKGROUND_COMPACT && \
+    (!KUI_NATIVE_GENERAL_LEAN_LAYOUT || !KUI_NATIVE_DUAL_READERS || \
+     KUI_NATIVE_VMU_ONLY || KUI_NATIVE_VMU_LITE || defined(KUI_RETAIL_CE) || KUI_RETAIL_ZSO)
+#error "Compact Background requires its separate lean dual-reader geometry"
+#endif
 /* Separate SCI receive-credit comparison. The normal VMU-lite Makefile
  * retains its existing unpaced policy until console validation. */
 #ifndef KUI_NATIVE_VMU_SCI_RX_PACED

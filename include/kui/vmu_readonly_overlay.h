@@ -8,10 +8,11 @@
 #define KUI_VMU_READONLY_OVERLAY_REPLY 524u
 /* Every admitted batch contains one physical parent, which never needs a
  * virtual reply. All remaining frames may still be maximum-size READs.
- * VMU-lite emulates only A2, which owns one receive slot per bank, and its
- * chain parser refuses a repeated slot: one staged reply is the bound, and
- * prepare() refuses a second target. */
-#if defined(KUI_NATIVE_VMU_LITE) && KUI_NATIVE_VMU_LITE
+ * VMU-lite and compact Background emulate only A2. It owns one receive slot
+ * per bank, and their chain parser refuses a repeated slot. One staged reply
+ * is the bound; prepare() refuses a second target. */
+#if (defined(KUI_NATIVE_VMU_LITE) && KUI_NATIVE_VMU_LITE) || \
+    (defined(KUI_NATIVE_BACKGROUND_COMPACT) && KUI_NATIVE_BACKGROUND_COMPACT)
 #define KUI_VMU_READONLY_OVERLAY_STAGED_FRAMES 1u
 #else
 #define KUI_VMU_READONLY_OVERLAY_STAGED_FRAMES (KUI_VMU_READONLY_OVERLAY_FRAMES - 1u)

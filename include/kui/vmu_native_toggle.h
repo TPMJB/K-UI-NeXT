@@ -25,7 +25,8 @@ static inline int kui_vmu_native_toggle_find(const void *data,size_t bytes,size_
            kui_vmu_native_toggle_u32(p+at+8u)!=1u ||
            kui_vmu_native_toggle_u32(p+at+12u)!=32u ||
            kui_vmu_native_toggle_u32(p+at+16u)!=7u ||
-           kui_vmu_native_toggle_u32(p+at+20u)!=UINT32_C(0x51000) ||
+           (kui_vmu_native_toggle_u32(p+at+20u)!=UINT32_C(0x51000) &&
+            kui_vmu_native_toggle_u32(p+at+20u)!=UINT32_C(0x47000)) ||
            kui_vmu_native_toggle_u32(p+at+24u)!=UINT32_C(0x30000) ||
            kui_vmu_native_toggle_u32(p+at+28u)!=1u) continue;
         found=at;if(++count>1u) return -1;

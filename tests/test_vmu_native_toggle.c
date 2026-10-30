@@ -149,6 +149,19 @@ static void capability_suite(void) {
     for(unsigned i=0u;i<8u;i++) {
         words[i]^=1u;CHECK(kui_vmu_native_toggle_find(words,32u,&offset)==0);words[i]^=1u;
     }
+    /* The GUI accepts exactly the two reviewed complete layouts. Mixed
+     * General/compact descriptors are still ambiguous, never first-match. */
+    words[5]=UINT32_C(0x47000);offset=SIZE_MAX;
+    CHECK(kui_vmu_native_toggle_find(words,32u,&offset)==1 && offset==0u);
+    CHECK(kui_vmu_native_toggle_find(words,sizeof(words),&offset)==-1);
+    for(unsigned i=0u;i<8u;i++) {
+        words[i]^=1u;CHECK(kui_vmu_native_toggle_find(words,32u,&offset)==0);words[i]^=1u;
+    }
+    static const uint32_t refused[]={0u,0x12000u,0x46000u,0x48000u,0x51001u,0x55000u,UINT32_MAX};
+    for(unsigned i=0u;i<sizeof(refused)/sizeof(refused[0]);i++) {
+        words[5]=refused[i];offset=SIZE_MAX;
+        CHECK(kui_vmu_native_toggle_find(words,32u,&offset)==0 && offset==SIZE_MAX);
+    }
 }
 int main(void) {
     CHECK(normal_prefetch_regression_main()==0);

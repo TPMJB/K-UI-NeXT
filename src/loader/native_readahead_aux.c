@@ -10,6 +10,11 @@
 #if !KUI_NATIVE_READAHEAD || defined(KUI_RETAIL_CE) || KUI_SCI_STREAM_TOKEN_SLICED
 #error "Read-ahead auxiliary code requires its separate native unsliced SCI profile"
 #endif
+#if KUI_NATIVE_BACKGROUND_COMPACT && \
+    (!KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION || !KUI_NATIVE_SPLIT_CONTROLLER_GENERAL || \
+     !KUI_VMU_NATIVE_CACHED_CODE || !KUI_VMU_NATIVE_PERSISTENT_PROBE)
+#error "Compact Background auxiliary requires its complete persistent General reader profile"
+#endif
 
 /* These are the existing unsliced sci_stream.c states. No new state or field
  * is inserted in the tightly bounded low reader region. */
@@ -26,6 +31,12 @@ __asm__(".global __kui_native_readahead_diagnostic_auxiliary\n"
 #if KUI_NATIVE_GENERAL_LEAN_LAYOUT
 __asm__(".global __kui_native_general_lean_auxiliary\n"
         ".set __kui_native_general_lean_auxiliary,1\n");
+#endif
+#if KUI_NATIVE_BACKGROUND_COMPACT
+__asm__(".global __kui_native_background_compact_auxiliary\n"
+        ".set __kui_native_background_compact_auxiliary,1\n"
+        ".global __kui_native_isolation_lease_bytes\n"
+        ".set __kui_native_isolation_lease_bytes,0x47000\n");
 #endif
 #define C kui_native_readahead_aux_context
 struct kui_native_readahead_aux_context kui_native_readahead_aux_context

@@ -224,6 +224,8 @@ def marked(image, marker):
 
 
 def stage_profile(stage):
+    from check_native_compact_background_profile import stage_profile as compact_profile
+    compact=compact_profile(stage)
     if not marked(stage, STAGE_MARKER):
         require(stage[4].get('__kui_native_isolation_lease_bytes') != (LEASE_BYTES, 0, 0, 0xfff1),
                 'Compact General stage lost its explicit layout marker')
@@ -234,12 +236,15 @@ def stage_profile(stage):
                 '__kui_native_private_pool_budget_stage', '__kui_native_readahead_stage')
     require(all(stage[4].get(name) == ONE for name in required),
             'Lean stage requires its exact General/bottom/selected-callback profile')
-    require(stage[4].get('__kui_native_isolation_lease_bytes') == (LEASE_BYTES, 0, 0, 0xfff1),
+    lease_bytes=0x47000 if compact else LEASE_BYTES
+    require(stage[4].get('__kui_native_isolation_lease_bytes') == (lease_bytes, 0, 0, 0xfff1),
             'Lean stage does not own its exact reviewed lease')
     return True
 
 
 def worker_profile(worker):
+    from check_native_compact_background_profile import worker_profile as compact_profile
+    compact=compact_profile(worker)
     if not marked(worker, WORKER_MARKER):
         require(not any(name in worker[4] for name in
                     ('__kui_native_general_timeline_elided_worker',
@@ -257,9 +262,11 @@ def worker_profile(worker):
             'Lean worker requires its complete General/owned-timer/elision profile')
     require('__kui_native_raw_owner_terminal_worker' not in worker[4],
             'Lean worker must not advertise the removed raw owner observer')
-    require(worker[4].get('__kui_native_isolation_lease_bytes') == (LEASE_BYTES, 0, 0, 0xfff1),
+    lease_bytes=0x47000 if compact else LEASE_BYTES
+    worker_bytes=0x12000 if compact else WORKER_BYTES
+    require(worker[4].get('__kui_native_isolation_lease_bytes') == (lease_bytes, 0, 0, 0xfff1),
             'Lean worker does not own its exact reviewed lease')
-    require(worker[4].get('__kui_native_worker_span') == (WORKER_BYTES, 0, 0, 0xfff1),
+    require(worker[4].get('__kui_native_worker_span') == (worker_bytes, 0, 0, 0xfff1),
             'Lean worker linker did not select its exact reviewed span')
     from check_native_general_diagnostics import inspect
     require(inspect(worker) is not None, 'Lean worker lacks the explicit diagnostic elision proof')
@@ -272,14 +279,16 @@ def worker_profile(worker):
     _, header, _ = symbol_bytes(worker, '_kui_vmu_native_worker_exports', 1)
     fields = struct.unpack('<20I', header)
     require(fields[:3] == (0x4b4e5031, 4, 80) and
-            fields[9:12] == (0xac100000 + WORKER_BYTES - 4096,
-                              0xac100000 + WORKER_BYTES,
-                              0xac100000 + WORKER_BYTES),
+            fields[9:12] == (0xac100000 + worker_bytes - 4096,
+                              0xac100000 + worker_bytes,
+                              0xac100000 + worker_bytes),
             'Lean worker does not retain its exact private stack/header geometry')
     return True
 
 
 def low_profile(image):
+    from check_native_compact_background_profile import low_profile as compact_profile
+    compact_profile(image)  # Reject malformed compact markers before old-profile selection.
     if not marked(image, LOW_MARKER):
         return False
     require(image[4].get('__kui_vmu_native_background_resident') == ONE,
@@ -300,6 +309,9 @@ def low_profile(image):
 def stage_pins(stage, role, historical):
     if not stage_profile(stage):
         return historical
+    from check_native_compact_background_profile import stage_profile as compact_profile, stage_pins as compact_pins
+    if compact_profile(stage):
+        return compact_pins(stage,role)
     from check_native_vmu_toggle_profile import stage_profile as toggle_profile, stage_pins as toggle_pins
     if toggle_profile(stage):
         return toggle_pins(stage, role)
@@ -310,6 +322,9 @@ def stage_pins(stage, role, historical):
 def worker_pins(worker, role, historical):
     if not worker_profile(worker):
         return historical
+    from check_native_compact_background_profile import worker_profile as compact_profile, worker_pins as compact_pins
+    if compact_profile(worker):
+        return compact_pins(worker,role)
     from check_native_vmu_toggle_profile import worker_profile as toggle_profile, worker_pins as toggle_pins
     if toggle_profile(worker):
         return toggle_pins(worker, role)
@@ -320,8 +335,23 @@ def worker_pins(worker, role, historical):
 def low_pins(image, role, historical):
     # The dual companion validates its already-executed Legacy guard report
     # against the paired worker's exact profile rather than reopening ELF.
-    if not worker_profile(image) and not low_profile(image):
+    from check_native_compact_background_profile import worker_profile as compact_worker, low_profile as compact_low, low_pins as compact_pins
+    symbols=image[4]
+    worker=WORKER_MARKER in symbols or any(name in symbols for name in
+        ('__kui_native_background_compact_worker','__kui_native_background_compact_worker_layout'))
+    resident=LOW_MARKER in symbols or '__kui_native_background_compact_resident' in symbols
+    require(not(worker and resident),'Low pin companion has ambiguous worker/resident roles')
+    if worker:
+        selected=worker_profile(image);compact=compact_worker(image)
+    elif resident:
+        selected=low_profile(image);compact=compact_low(image)
+    else:
+        compact_low(image)  # Refuse orphan compact geometry before historical fallback.
         return historical
+    if not selected:
+        return historical
+    if compact:
+        return compact_pins(image,role)
     require(role in LOW_PINS and LOW_PINS[role], 'Missing lean General low guard pins: ' + role)
     return LOW_PINS[role]
 
@@ -329,7 +359,11 @@ def low_pins(image, role, historical):
 def prepared_objects(worker):
     """Require the complete source-qualified mutable object inventory."""
     require(worker_profile(worker), 'Lean state inventory requires its explicit worker')
-    require(MUTABLE_OBJECTS, 'Lean mutable-object inventory has not been reviewed')
+    from check_native_compact_background_profile import worker_profile as compact_profile, MUTABLE_OBJECTS as compact_objects
+    compact=compact_profile(worker)
+    expected=compact_objects if compact else MUTABLE_OBJECTS
+    worker_bytes=0x12000 if compact else WORKER_BYTES
+    require(expected, 'Lean mutable-object inventory has not been reviewed')
     from check_vmu_native_persistent import prepared_symbol_records
     records = prepared_symbol_records(worker)
     actual = {}
@@ -341,10 +375,10 @@ def prepared_objects(worker):
             continue
         require(name not in actual and section[1] in (1, 8) and
                 section[3] <= address < address + count <= section[3] + section[5] and
-                0xac100000 <= address < address + count <= 0xac100000 + WORKER_BYTES - 4096,
+                0xac100000 <= address < address + count <= 0xac100000 + worker_bytes - 4096,
                 'Lean mutable object lacks unique private state ownership: ' + name)
         actual[name] = (section[1], count)
-    require(actual == MUTABLE_OBJECTS, 'Lean complete mutable-object inventory changed')
+    require(actual == expected, 'Lean complete mutable-object inventory changed')
     return dict(objects=len(actual), bytes=sum(row[1] for row in actual.values()),
                 complete_source_qualified_inventory=True)
 
@@ -357,6 +391,10 @@ def profile_mutation_checks(stage, worker, resident, legacy):
     their executing auditors; this covers the new profile-selection boundary.
     """
     from check_loader_layout import SYM, region
+    from check_native_compact_background_profile import worker_profile as compact_profile, MUTABLE_OBJECTS as compact_objects
+    compact=compact_profile(worker)
+    expected_objects=compact_objects if compact else MUTABLE_OBJECTS
+    worker_bytes=0x12000 if compact else WORKER_BYTES
     counts = dict(marker_mutations=0, header_mutations=0,
                   mutable_inventory_mutations=0, unknown_role_mutations=0)
 
@@ -395,6 +433,10 @@ def profile_mutation_checks(stage, worker, resident, legacy):
                      '__kui_native_sdk_sci_structural_resident'))]
         if selector is low_profile and image[4].get('__kui_vmu_native_background_resident') == ONE:
             names.append('__kui_vmu_native_background_resident')
+        if compact:
+            names.append('__kui_native_background_compact'+suffix)
+            if selector is worker_profile:
+                names.append('__kui_native_background_compact_worker_layout')
         for name in names:
             for value in (None, (2, 0, 0, 0xfff1)):
                 symbols = dict(image[4])
@@ -408,7 +450,9 @@ def profile_mutation_checks(stage, worker, resident, legacy):
     for image, selector, name in (
             (stage, stage_profile, '__kui_native_isolation_lease_bytes'),
             (worker, worker_profile, '__kui_native_isolation_lease_bytes'),
-            (worker, worker_profile, '__kui_native_worker_span')):
+            (worker, worker_profile, '__kui_native_worker_span'),
+            *((image,low_profile,'__kui_native_isolation_lease_bytes')
+              for image in (resident,legacy) if compact)):
         symbols = dict(image[4]); value, size, kind, owner = symbols[name]
         symbols[name] = (value + 32, size, kind, owner)
         refused(selector, (*image[:4], symbols), 'Lean selector accepts forged layout: ' + name)
@@ -438,17 +482,17 @@ def profile_mutation_checks(stage, worker, resident, legacy):
                 source = name
                 continue
             qualified = name + ('@' + source if not info >> 4 else '')
-            if qualified not in MUTABLE_OBJECTS:
+            if qualified not in expected_objects:
                 continue
             # Removing an object, changing its size, or moving it across the
             # private-stack boundary must change the complete inventory.
             for at, changed in ((8, 0), (8, size + 4),
-                                (4, 0xac100000 + WORKER_BYTES - 4096)):
+                                (4, 0xac100000 + worker_bytes - 4096)):
                 data = bytearray(worker[0]); struct.pack_into('<I', data, offset + at, changed)
                 refused(prepared_objects, (bytes(data), *worker[1:]),
                         'Lean mutable inventory accepts a changed object: ' + qualified)
                 counts['mutable_inventory_mutations'] += 1
-    require(counts['mutable_inventory_mutations'] == 3 * len(MUTABLE_OBJECTS),
+    require(counts['mutable_inventory_mutations'] == 3 * len(expected_objects),
             'Lean state mutation corpus does not cover every reviewed object')
     for image, selector in ((stage, stage_pins), (worker, worker_pins),
                             (resident, low_pins), (legacy, low_pins)):

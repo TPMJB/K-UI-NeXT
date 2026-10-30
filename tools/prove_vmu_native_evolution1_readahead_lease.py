@@ -24,7 +24,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / "tests"), str(ROOT / "tools")]
 import test_vmu_native_heap_execution as heap
-from native_runtime_layout import LEASE_BYTES, WORKER_BYTES, DATA_BYTES, MAP_OFFSET, GENERAL, DIAGNOSTIC, layout_for
+from native_runtime_layout import LEASE_BYTES, WORKER_BYTES, DATA_BYTES, MAP_OFFSET, GENERAL, DIAGNOSTIC, BACKGROUND_COMPACT, layout_for
 
 OWNER_SHA256 = "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35"
 EVOLUTION2_SHA256 = "16b45fcc84992a60d5a64bf64bf22b699b27306b95f177ba3d9730ca380069ae"
@@ -64,9 +64,11 @@ GENERAL_HOST_DEFINES=(
 
 
 def geometry_defines(readahead,selected_layout):
-    assert selected_layout in (GENERAL,DIAGNOSTIC),"Unreviewed host layout"
+    assert selected_layout in (GENERAL,DIAGNOSTIC,BACKGROUND_COMPACT),"Unreviewed host layout"
+    assert readahead or selected_layout is not BACKGROUND_COMPACT,"Compact Background retains its reader"
     return [f"-DKUI_NATIVE_READAHEAD={int(readahead)}",
-        *(GENERAL_HOST_DEFINES if readahead and selected_layout==GENERAL else ())]
+        *(GENERAL_HOST_DEFINES if readahead and selected_layout in (GENERAL,BACKGROUND_COMPACT) else ()),
+        *(['-DKUI_NATIVE_BACKGROUND_COMPACT=1'] if selected_layout is BACKGROUND_COMPACT else ())]
 
 
 class LiveAllocatorProof:

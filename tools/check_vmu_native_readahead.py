@@ -158,7 +158,13 @@ def pinned_code(aux):
     selected=PIO_PAIR_CODE_PIN if pio_pair_profile(aux) else PIO_CODE_PIN if pio_profile(aux) else \
         REPAIR_DIAGNOSTIC_CODE_PIN if repair_diagnostic_profile(aux) else \
         DIAGNOSTIC_CODE_PIN if diagnostic_profile(aux) else CODE_PIN
-    if layout_for(aux[4]).WORKER_BYTES==0x1c000:
+    from native_runtime_layout import BACKGROUND_COMPACT
+    if layout_for(aux[4]) is BACKGROUND_COMPACT:
+        from check_native_compact_background_profile import AUX_CODE_PIN,marked
+        require(marked(aux,'auxiliary') and pio_pair_profile(aux),
+                'Compact Background auxiliary lacks its exact paired profile markers')
+        selected=AUX_CODE_PIN
+    elif layout_for(aux[4]).WORKER_BYTES==0x1c000:
         require(aux[4].get('__kui_native_general_lean_auxiliary')==(1,0,0,0xfff1) and
                 pio_pair_profile(aux),'Lean auxiliary lacks its exact paired profile markers')
         selected=GENERAL_LEAN_PAIR_CODE_PIN
@@ -409,7 +415,9 @@ def worker_bindings(resident,worker,*,diagnostic=False,pio=False,pio_pair=False,
                 'Lean General worker binding requires its complete dual PIO-pair profile')
         from check_native_dual_readers import general_worker_cases
         from test_native_dual_readers import console_layouts
-        proof=general_worker_cases(resident,worker,console_layouts(general=True)['layouts']['x'],
+        from native_runtime_layout import BACKGROUND_COMPACT
+        proof=general_worker_cases(resident,worker,console_layouts(general=True,
+            compact=layout_for(worker[4]) is BACKGROUND_COMPACT)['layouts']['x'],
                                    expected_pins=selected)
         require(proof['immutable_function_pins']==pins,
                 'Lean General binding proof did not execute its complete selected pin map')

@@ -23,7 +23,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'tests'), str(ROOT / 'tools')]
 from test_vmu_native_heap_execution import SH, MASK, physical, signed
-from native_runtime_layout import LEASE_BYTES, GENERAL, DIAGNOSTIC
+from native_runtime_layout import LEASE_BYTES, GENERAL, DIAGNOSTIC, BACKGROUND_COMPACT
 
 SCHEMA = 'kui.native.private-pool-capacity-original.v1'
 INPUT_SHA256 = 'b05853a539011b02fff09062441372a924f4ac2465abc498d69631d4b137bdf5'
@@ -279,7 +279,7 @@ def scene_arguments(image):
 
 
 def prove(image: Path, expected_plan: dict | None = None, *, lease_bytes=LEASE_BYTES) -> dict:
-    assert lease_bytes in (GENERAL.LEASE_BYTES,DIAGNOSTIC.LEASE_BYTES),"Unreviewed runtime lease"
+    assert lease_bytes in (GENERAL.LEASE_BYTES,DIAGNOSTIC.LEASE_BYTES,BACKGROUND_COMPACT.LEASE_BYTES),"Unreviewed runtime lease"
     lease_cost=lease_bytes+32
     image = Path(image)
     assert image.stat().st_size == INPUT_BYTES, 'Expected exact external capacity-regression input'

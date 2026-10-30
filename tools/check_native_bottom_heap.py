@@ -310,10 +310,15 @@ def pin_sets(stage):
     if stage_profile(stage):
         require(gate==ABSOLUTE_ONE and budget_stage(stage),
                 'Lean heap stage requires its exact dispatch/budget profile')
-        require(set(COLD_FUNCTIONS)==set(DISPATCH_GATE_PIN_FUNCTIONS) and
-                set(COLD_OBJECTS)==set(DISPATCH_GATE_PIN_OBJECTS),
+        from check_native_compact_background_profile import stage_profile as compact_profile
+        if compact_profile(stage):
+            from check_native_compact_background_profile import COLD_FUNCTIONS as functions, COLD_OBJECTS as objects
+        else:
+            functions,objects=COLD_FUNCTIONS,COLD_OBJECTS
+        require(set(functions)==set(DISPATCH_GATE_PIN_FUNCTIONS) and
+                set(objects)==set(DISPATCH_GATE_PIN_OBJECTS),
                 'Lean heap stage must retain the complete historical closure')
-        return COLD_FUNCTIONS,COLD_OBJECTS
+        return functions,objects
     if gate is not None:
         require(gate==ABSOLUTE_ONE and budget_stage(stage), 'Dispatch gate stage lacks its exact budget capability')
         return DISPATCH_GATE_PIN_FUNCTIONS, DISPATCH_GATE_PIN_OBJECTS
@@ -483,8 +488,10 @@ def require_companion(stage, worker, proof, corpus=None):
 
 
 SOURCES = ('tools/native_runtime_layout.py', 'tools/check_native_general_lean_profile.py',
-           'tools/check_native_general_lean_heap_pins.py', 'tools/check_native_bottom_heap.py', 'tools/check_native_bottom_heap_worker.py',
+           'tools/check_native_general_lean_heap_pins.py', 'tools/check_native_compact_background_profile.py',
+           'tools/check_native_bottom_heap.py', 'tools/check_native_bottom_heap_worker.py',
            'tools/profile_vmu_native_release_sh.py', 'tests/test_vmu_native_heap_execution.py',
+           'tests/test_native_compact_background_profile.py',
            'src/loader/vmu_native_heap_probe_stage.c', 'src/core/vmu_native_heap.c',
            'src/core/vmu_native_heap_bottom_code.inc', 'src/core/vmu_native_stage_placement.c',
            'include/kui/vmu_native_heap.h', 'include/kui/vmu_native_stage_placement.h',

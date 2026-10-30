@@ -204,7 +204,10 @@ static unsigned interrupts(unsigned limit) {
 enum { X, Y }; /* launch X: 20 blocks per EXEC or CHECK; Y: 25 */
 static void setup(uint32_t game_vbr, unsigned how, unsigned take_max, bool scattered) {
 #if KUI_VMU_NATIVE_BACKGROUND
-    kui_retail_async_region_storage=&test_background_region;
+    /* A containing fixture may select another static owned workspace. Supply
+     * this default only when none was selected, so switching is exercised. */
+    if(!kui_retail_async_region_storage)
+        kui_retail_async_region_storage=&test_background_region;
 #endif
     fixture(take_max, scattered);
     manifest.reader = how == Y ? KUI_RETAIL_READER_ASYNC_EAGER : KUI_RETAIL_READER_ASYNC;

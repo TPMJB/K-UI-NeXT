@@ -10,11 +10,15 @@
  * stack occupy the first 128 KiB; the immutable 64-slot map and native
  * vector/receive/state region use the beginning of the remaining 64 KiB.
  * The General read-ahead profile owns 324 KiB with a 112 KiB worker;
- * diagnostic builds retain 340 KiB with their complete 128 KiB worker. The Standard-reader VMU isolation keeps that same complete
+ * compact Background owns 284 KiB with its bounded 72 KiB worker.
+ * diagnostic builds retain 340 KiB with their complete 128 KiB worker.
+ * The compact Background profile retains the same 192 KiB cache and two
+ * private stacks in 284 KiB, using its bounded 72 KiB VMU worker.
+ * The Standard-reader VMU isolation keeps that same complete
  * reservation while leaving reader/cache workspace unused. Auxiliary code,
  * stack and cache have disjoint owned spans.
  * Keep the region cache-line aligned. */
-#if KUI_NATIVE_VMU_LITE
+#if KUI_NATIVE_VMU_LITE || KUI_NATIVE_BACKGROUND_COMPACT
 #define KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES UINT32_C(0x12000)
 #define KUI_VMU_NATIVE_BACKGROUND_REGION_OFFSET UINT32_C(0x12400)
 /* Bounded copies of one admitted Maple chain; a longer chain stops. */
@@ -35,6 +39,11 @@
 #endif
 #define KUI_VMU_NATIVE_BACKGROUND_MAP_BYTES UINT32_C(1020)
 #define KUI_VMU_NATIVE_BACKGROUND_REGION_BYTES UINT32_C(0x760)
+#if KUI_NATIVE_BACKGROUND_COMPACT
+_Static_assert(KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES==UINT32_C(0x12000) &&
+    KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES==UINT32_C(0x47000),
+    "Compact Background retains a 72 KiB worker inside its complete 284 KiB lease");
+#endif
 #if KUI_NATIVE_DUAL_READERS
 _Static_assert(KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES==KUI_NATIVE_DUAL_LEASE_BYTES,
     "Both dual low engines own the advertised complete lease");

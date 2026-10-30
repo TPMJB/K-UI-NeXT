@@ -405,6 +405,8 @@ def prove(build, manifest_path, matrix_path, records, *, selected_slugs=None):
         source_sha256={name: sha(ROOT / name) for name in (
             "tools/native_runtime_layout.py", "tools/prove_vmu_native_bottom_corpus_heap.py", "tools/prove_vmu_native_corpus_heap.py",
             "tests/test_vmu_native_heap_execution.py", "tools/prove_vmu_native_evolution1_readahead_lease.py",
+            "include/kui/native_isolation.h", "include/kui/native_dual_reader.h",
+            "include/kui/native_readahead_layout.h", "include/kui/vmu_native_background.h",
             "src/core/vmu_native_heap.c", "src/core/vmu_native_heap_bottom_code.inc",
             "src/core/vmu_native_lifetime.c", "src/core/vmu_native_stage_placement.c")},
         limits=["Original integer SH allocator execution plus production C state/code/placement/lifetime admission; no cycle or hardware-cache model.",

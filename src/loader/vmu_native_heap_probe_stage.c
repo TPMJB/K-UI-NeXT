@@ -5,6 +5,12 @@
 #endif
 #include "kui/vmu_native_mode.h"
 #include "kui/vmu_native_background.h"
+#if KUI_NATIVE_BACKGROUND_COMPACT && \
+    (!KUI_NATIVE_READAHEAD || !KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION || \
+     !KUI_NATIVE_SPLIT_CONTROLLER_GENERAL || !KUI_VMU_NATIVE_CACHED_CODE || \
+     !KUI_VMU_NATIVE_PERSISTENT_PROBE || !KUI_VMU_NATIVE_BACKGROUND)
+#error "Compact Background stage requires its complete persistent General reader profile"
+#endif
 #include "kui/vmu_native_startup_stack.h"
 #include "kui/vmu_native_toggle.h"
 __asm__(".global __kui_native_owner_stack_ip_stage\n"
@@ -45,7 +51,7 @@ __asm__(".global __kui_native_vmu_toggle_stage\n"
 const struct kui_vmu_native_toggle_capability kui_vmu_native_toggle_capability
     __attribute__((used,section(".rodata.vmu_native_toggle")))={
     KUI_VMU_NATIVE_TOGGLE_MAGIC0,KUI_VMU_NATIVE_TOGGLE_MAGIC1,1u,32u,7u,
-    UINT32_C(0x51000),UINT32_C(0x30000),1u};
+    KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES,UINT32_C(0x30000),1u};
 #endif
 #endif
 #if KUI_NATIVE_STANDARD_VMU_ISOLATION || KUI_NATIVE_READER_ONLY_ISOLATION || KUI_NATIVE_METADATA_CACHE_ISOLATION || KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION
@@ -73,6 +79,14 @@ __asm__(".global __kui_native_vmu_only_stage\n"
         ".set __kui_native_vmu_only_stage,1\n"
         ".global __kui_native_isolation_lease_bytes\n"
         ".set __kui_native_isolation_lease_bytes,0x1c000\n");
+#elif KUI_NATIVE_BACKGROUND_COMPACT
+_Static_assert(KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES==UINT32_C(0x12000) &&
+    KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES==UINT32_C(0x47000),
+    "Compact Background stage and its complete reader lease");
+__asm__(".global __kui_native_background_compact_stage\n"
+        ".set __kui_native_background_compact_stage,1\n"
+        ".global __kui_native_isolation_lease_bytes\n"
+        ".set __kui_native_isolation_lease_bytes,0x47000\n");
 #elif KUI_NATIVE_GENERAL_LEAN_LAYOUT
 _Static_assert(KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES==UINT32_C(0x51000),
     "General isolation owns its exact compact lease");

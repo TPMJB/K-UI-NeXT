@@ -140,7 +140,7 @@ package: $(BUILD)/$(TEST_ZIP)
 force-mode-config:
 $(BUILD)/readonly-config: force-mode-config
 	@mkdir -p $(BUILD)
-	@printf '%s\n' 'READONLY_PROOF=$(READONLY_PROOF)' 'SD_PROFILE=$(SD_PROFILE)' 'MAPLE_PROFILE=$(MAPLE_PROFILE)' 'VMU_READER_PROFILE=$(VMU_READER_PROFILE)' 'BUILD_ID=$(BUILD_ID)' > $(BUILD)/readonly-config.tmp
+	@printf '%s\n' 'READONLY_PROOF=$(READONLY_PROOF)' 'SD_PROFILE=$(SD_PROFILE)' 'MAPLE_PROFILE=$(MAPLE_PROFILE)' 'VMU_READER_PROFILE=$(VMU_READER_PROFILE)' 'BUILD_ID=$(BUILD_ID)' 'NATIVE_LAYOUT=$(NATIVE_LAYOUT)' 'NATIVE_SPAN=$(NATIVE_SPAN)' > $(BUILD)/readonly-config.tmp
 ifneq ($(filter $(READONLY_PROOF),2 3 4),)
 	@sha256sum '$(SD_PROFILE)' >> $(BUILD)/readonly-config.tmp
 endif

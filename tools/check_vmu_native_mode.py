@@ -40,13 +40,30 @@ def generic_mode(wire):
 
 
 class ModeHelper(Machine):
-    def __init__(self, stage, seed, mask, result, *, body=None):
+    def __init__(self, stage, seed, mask, result, *, body=None,off_mode=None):
         super().__init__(stage, HELPER, seed, mask, 0x8CFF0000, body=body)
         self.result, self.refused = result, False
         self.symbols = stage[4]
         self.background="_native_background_boot_region" in self.symbols
-        self.must_refuse=bool(result&0x80000000) or self.background and result in (1,3)
+        from check_native_vmu_toggle_profile import stage_profile
+        self.toggle=stage_profile(stage)
+        self.capability_reads=[]
+        self.off_mode=off_mode
+        if self.toggle:
+            at,wire,section=symbol_bytes(stage,'_kui_vmu_native_toggle_capability',1)
+            require(section[2]&7==2,'Mode helper capability must be immutable')
+            self.capability_word=at+16
+            if self.off_mode is None:self.off_mode=struct.unpack_from('<I',wire,16)[0]
+        self.must_refuse=(bool(result&0x80000000) or self.background and result in (1,3) or
+                          result==7 and (not self.toggle or self.off_mode!=7))
         self.targets = {self.symbols[DECODER][0]: "decode", self.symbols["_stopped"][0]: "stop"}
+
+    def read(self,address):
+        if self.toggle and address==self.capability_word:
+            assert self.result==7,'mode helper samples toggle capability outside reader-only admission'
+            self.capability_reads.append(address)
+            return self.off_mode
+        return super().read(address)
 
     def call(self, target):
         if target == self.stop_pc:
@@ -65,6 +82,7 @@ class ModeHelper(Machine):
         return True
 
     def check(self):
+        assert self.capability_reads==([self.capability_word] if self.toggle and self.result==7 else [])
         if self.must_refuse:
             assert self.refused and self.calls == ["decode", "stop"]
             return
@@ -76,10 +94,19 @@ class ModeHelper(Machine):
 
 class StorageRoute(Machine):
     """Stop normal modes at profile decode; execute the complete control exit."""
-    def __init__(self, stage, seed, mask, mode, result, *, body=None):
+    def __init__(self, stage, seed, mask, mode, result, *, body=None,storage=0x8ce70000,selected=1):
         super().__init__(stage, "_native_persist_storage_init", seed, mask, 0x8CFF0000, body=body)
         self.symbols, self.mode, self.result = stage[4], mode, result
-        self.storage, self.selected, self.route = 0x8CE70000, 1, None
+        from check_native_vmu_toggle_profile import stage_profile,stage_pins
+        self.toggle=stage_profile(stage)
+        if self.toggle:
+            _,original,section=symbol_bytes(stage,'_native_persist_storage_init',2)
+            require(section[2]&7==6 and (len(original),hashlib.sha256(original).hexdigest())==
+                    stage_pins(stage,'toggle')['_native_persist_storage_init'],
+                    'Toggle storage route lacks its exact whole-function instruction pin')
+        self.mode_prefix=['mode']*(2 if self.toggle and mode!=1 else 1)
+        self.ready_reads=0
+        self.storage, self.selected, self.route = storage, selected, None
         self.r[4:6] = [self.storage, self.selected]
         self.before = self.r.copy(), self.pr, self.mach, self.macl, self.gbr, self.sr, self.fpscr, self.fr.copy()
         self.mem[self.symbols["_native_persist_ready"][0]] = 0
@@ -92,6 +119,7 @@ class StorageRoute(Machine):
             n, m = word >> 8 & 15, word >> 4 & 15
             address = self.r[m]
             assert address == self.symbols["_native_persist_ready"][0], "unexpected pre-profile byte access"
+            self.ready_reads+=1
             value = self.mem[address] & 255
             self.r[n] = (value - 256 if value & 128 else value) & MASK
             return
@@ -104,24 +132,30 @@ class StorageRoute(Machine):
         label = self.targets[target]
         self.calls.append(label)
         if label == "mode":
-            assert self.calls == ["mode"], "storage activity precedes immutable mode admission"
+            assert self.calls==self.mode_prefix[:len(self.calls)] and len(self.calls)<=len(self.mode_prefix), \
+                "storage activity precedes immutable mode admission"
             self.abi_return(self.mode)
         elif label == "storage":
-            assert self.mode == 1 and self.calls == ["mode", "storage"]
+            assert (self.mode==1 or self.toggle and self.mode==7) and self.calls==self.mode_prefix+['storage']
             assert self.r[4:6] == [self.storage, self.selected]
-            self.route = "control"
+            assert self.ready_reads==0,'ordinary storage bypass sampled virtual profile state'
+            self.route = "reader-only" if self.mode==7 else "control"
             self.abi_return(self.result)
         else:
-            assert self.mode in (0, 2, 3, 4, 5, 6) and self.calls == ["mode", "profile"]
+            assert self.mode in (0, 2, 3, 4, 5, 6) and self.calls == self.mode_prefix+['profile']
+            profile_bytes=self.symbols['__vmu_sd_profile_blob_end'][0]-self.symbols['__vmu_sd_profile_blob_start'][0]
+            assert profile_bytes==0x1000 and self.r[4:7]==[self.symbols['_native_persist_profile'][0],
+                self.symbols['__vmu_sd_profile_blob_start'][0],profile_bytes], \
+                'profile route lost its exact typed prepared-profile arguments'
             self.route, self.pc = "profile", self.stop_pc
         return True
 
     def check(self):
-        if self.mode != 1:
-            assert self.route == "profile" and self.calls == ["mode", "profile"]
+        if self.mode!=1 and not(self.toggle and self.mode==7):
+            assert self.route == "profile" and self.calls == self.mode_prefix+['profile']
             return
         registers, pr, _, _, _, sr, fpscr, fr = self.before
-        assert self.route == "control" and self.calls == ["mode", "storage"]
+        assert self.route==('reader-only' if self.mode==7 else 'control') and self.calls==self.mode_prefix+['storage']
         # A sibling call to ordinary init may leave ABI-volatile PR clobbered.
         # Its target/arguments, complete returned value and callee-saved state
         # remain exact; the enclosing startup caller owns its return frame.
@@ -134,6 +168,8 @@ class DiagnosticRoute(Machine):
     def __init__(self, stage, seed, mask, mode, *, body=None):
         super().__init__(stage, "_native_runtime_diagnostics", seed, mask, 0x8CFF0000, body=body)
         self.symbols, self.mode = stage[4], mode
+        from check_native_vmu_toggle_profile import stage_profile
+        self.toggle=stage_profile(stage)
 
     def call(self, target):
         if target == self.stop_pc:
@@ -165,23 +201,37 @@ class DiagnosticRoute(Machine):
 
     def check(self):
         registers, pr, _, _, _, sr, fpscr, fr = self.before
-        assert self.calls == ["mode"] and self.r[0] == {2: 1, 4: 2, 5: 3, 6: 4}.get(self.mode, 0)
+        expected={2:1,4:2,5:3,6:4,**({7:5} if self.toggle else {})}.get(self.mode,0)
+        assert self.calls == ["mode"] and self.r[0] == expected
         assert self.r[8:] == registers[8:] and self.pr == pr
         assert self.sr & ~1 == sr & ~1 and self.fpscr == fpscr and self.fr == fr
 
 
 def instruction_routes(stage, *, self_test=False):
-    cases = storage = diagnostics = 0
+    cases = storage = diagnostics = reader_only_storage = 0
     background="_native_background_boot_region" in stage[4]
+    from check_native_vmu_toggle_profile import stage_profile
+    toggle=stage_profile(stage)
     modes=(0,2,4,5,6) if background else (0,1,2,3,4,5,6)
+    if toggle:modes+= (7,)
     for seed in range(12):
         for mask in range(16):
-            for result in (0, 1, 2, 3, 4, 5, 6, MASK):
+            for result in (0, 1, 2, 3, 4, 5, 6,*((7,) if toggle else ()),MASK):
                 ModeHelper(stage, seed, mask, result).run().check(); cases += 1
             for mode in modes:
                 DiagnosticRoute(stage, seed, mask, mode).run().check(); diagnostics += 1
                 for result in (0, 1, MASK):
                     StorageRoute(stage, seed, mask, mode, result).run().check(); storage += 1
+                    if mode==7:reader_only_storage+=1
+    capability_cases=ordinary_argument_cases=0
+    if toggle:
+        for off_mode in (0,1,6,7,8,MASK):
+            ModeHelper(stage,7,15,7,off_mode=off_mode).run().check();capability_cases+=1
+        for address in (0x8ce70000,0x8ce80000):
+            for selected in (0,1,2,3,MASK):
+                for result in (0,1,MASK):
+                    StorageRoute(stage,7,15,7,result,storage=address,selected=selected).run().check()
+                    ordinary_argument_cases+=1
     mutations = 0
     if self_test:
         first_mutations=[
@@ -243,27 +293,69 @@ def instruction_routes(stage, *, self_test=False):
         edits.append(bytes(changed))
         # GCC lowers the five-element policy to a bounded byte table.
         # Mutate the exact bounds/index arithmetic, then execute all modes.
-        for immediate in (0xE204, 0x71FE, 0x3126):
+        policy_bound=0xe205 if toggle else 0xe204
+        for immediate in (policy_bound, 0x71FE, 0x3126):
             at = policy.find(struct.pack("<H", immediate))
             require(at >= 0, "worker policy lacks exact canonical mode comparison")
             # Narrow4 to3 so the mutation excludes reachable trace mode6.
             # Widening4 to5 would change only unreachable decoder results.
             changed = bytearray(policy)
-            struct.pack_into("<H", changed, at, immediate ^ (7 if immediate == 0xE204 else 1))
+            struct.pack_into("<H", changed, at,
+                             0xe204 if toggle and immediate==policy_bound else
+                             immediate ^ (7 if immediate == 0xE204 else 1))
             edits.append(bytes(changed))
         for changed in edits:
             try:
-                for mode in (0, 1, 2, 3, 4, 5, 6):
+                for mode in (0, 1, 2, 3, 4, 5, 6,*((7,) if toggle else ())):
                     DiagnosticRoute(stage, 7, 15, mode, body=changed).run().check()
             except (AssertionError, ValueError, struct.error, KeyError):
                 mutations += 1
             else:
                 raise ValueError("worker policy accepted changed selector/callback")
+        if toggle:
+            _,storage_body,_=symbol_bytes(stage,'_native_persist_storage_init',2)
+            # These are reviewed offsets in the exact pinned toggle body.
+            # Each counterfactual still executes all real argument and return
+            # instructions, with hostile ABI callbacks and bounded writes.
+            for offset,expected,replacement in (
+                    (0x18,0x490b,0x4e0b),(0x1c,0x8801,0x8802),
+                    (0x3a,0x490b,0x0009),(0x3a,0x490b,0x4e0b),
+                    (0x3e,0x8807,0x8806),(0x42,0x65b3,0xe502),
+                    (0x22,0x6483,0x6493),(0x36,0x412b,0x0009)):
+                assert struct.unpack_from('<H',storage_body,offset)[0]==expected, \
+                    'toggle storage mutation no longer names its reviewed instruction'
+                changed=bytearray(storage_body);struct.pack_into('<H',changed,offset,replacement)
+                try:
+                    for mode in (0,2,4,5,6,7):
+                        for result in (0,1,MASK):
+                            StorageRoute(stage,7,15,mode,result,body=bytes(changed)).run().check()
+                except (AssertionError,ValueError,struct.error,KeyError):mutations+=1
+                else:raise ValueError('Toggle storage route accepted altered call order/mode/ABI')
+            _,helper,_=symbol_bytes(stage,HELPER,2)
+            selectors=[offset for offset in range(0,len(helper),2)
+                       if struct.unpack_from('<H',helper,offset)[0]==0x8807]
+            require(len(selectors)==2,'Toggle mode helper lacks both exact reader-only/capability comparisons')
+            for offset in selectors:
+                changed=bytearray(helper);struct.pack_into('<H',changed,offset,0x8806)
+                try:
+                    for mode in (0,2,4,5,6,7):
+                        for off_mode in (6,7):
+                            ModeHelper(stage,7,15,mode,body=bytes(changed),off_mode=off_mode).run().check()
+                except (AssertionError,ValueError,struct.error,KeyError):mutations+=1
+                else:raise ValueError('Toggle helper accepted altered reader-only/capability comparison')
     return {"mode_helper_instruction_cases": cases, "storage_instruction_cases": storage,
             "worker_policy_instruction_cases": diagnostics,
             "mutation_rejections": mutations, "malformed_mode_stops_before_storage": True,
             "control_storage_bypasses_profile_acquire_recovery_and_writes": not background,
-            "background_refuses_control_and_lease_only_before_storage":background}
+            "background_refuses_control_and_lease_only_before_storage":background,
+            "reader_only_toggle_profile":toggle,
+            "reader_only_storage_cases":reader_only_storage,
+            "reader_only_capability_cases":capability_cases,
+            "reader_only_ordinary_argument_cases":ordinary_argument_cases,
+            "reader_only_bypasses_profile_acquire_recovery_and_writes":toggle,
+            "reader_only_no_virtual_profile_state_reads":toggle,
+            "reader_only_worker_policy":5 if toggle else None,
+            "typed_profile_arguments_checked":True}
 
 
 def audit(stage_data, entry_data, module, *, cached_code, stage_image=None, resident_image=None, self_test=False):
@@ -325,6 +417,7 @@ def audit(stage_data, entry_data, module, *, cached_code, stage_image=None, resi
         report.update(instruction_routes(stage_image, self_test=self_test))
         if background:
             report['modes']={name:value for name,value in report['modes'].items() if value not in (1,3)}
+            if report.get('reader_only_toggle_profile'):report['modes']['reader-only']=7
             report['lease_only']={'enabled':False,'refused_by_exact_mode_helper':True}
         else:
             from check_vmu_native_lease_only import audit as audit_lease_only

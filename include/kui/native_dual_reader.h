@@ -21,6 +21,7 @@
 #define KUI_NATIVE_DUAL_CAPABILITY_BYTES 32u
 #define KUI_NATIVE_DUAL_GENERAL_LEASE_BYTES UINT32_C(0x51000)
 #define KUI_NATIVE_DUAL_DIAGNOSTIC_LEASE_BYTES UINT32_C(0x55000)
+#define KUI_NATIVE_DUAL_COMPACT_LEASE_BYTES UINT32_C(0x47000)
 #if KUI_NATIVE_DUAL_READERS
 #define KUI_NATIVE_DUAL_LEASE_BYTES KUI_NATIVE_RA_LEASE_BYTES
 #else
@@ -46,10 +47,11 @@ static inline bool kui_native_dual_descriptor_valid(const volatile void *data,si
 #if KUI_NATIVE_DUAL_READERS
         kui_native_dual_u32(p+24u)==KUI_NATIVE_DUAL_LEASE_BYTES &&
 #else
-        /* The GUI discovers either reviewed layout. Each loader itself
+        /* The GUI discovers the reviewed layouts. Each loader itself
          * validates only its own exact compiled descriptor above. */
         (kui_native_dual_u32(p+24u)==KUI_NATIVE_DUAL_GENERAL_LEASE_BYTES ||
-         kui_native_dual_u32(p+24u)==KUI_NATIVE_DUAL_DIAGNOSTIC_LEASE_BYTES) &&
+         kui_native_dual_u32(p+24u)==KUI_NATIVE_DUAL_DIAGNOSTIC_LEASE_BYTES ||
+         kui_native_dual_u32(p+24u)==KUI_NATIVE_DUAL_COMPACT_LEASE_BYTES) &&
 #endif
         kui_native_dual_u32(p+28u)==0u;
 }

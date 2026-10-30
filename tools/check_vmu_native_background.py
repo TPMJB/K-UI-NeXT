@@ -668,7 +668,7 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
             "hostile_abi_callees": True, "refused_mutations": rejected}
 
 
-def source_contract(readahead=False,wide_lease=False,general=False):
+def source_contract(readahead=False,wide_lease=False,general=False,compact=False):
     paths = ("include/kui/vmu_native_background.h", "include/kui/vmu_native_async_loan.h",
              "src/loader/vmu_native_background_resident.c", "src/loader/retail_resident.c",
              "src/loader/retail_async.c", "src/loader/retail_async.h", "src/loader/retail_resident.S",
@@ -693,8 +693,9 @@ def source_contract(readahead=False,wide_lease=False,general=False):
         tail='\n#define KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES KUI_NATIVE_RA_LEASE_BYTES\n#else\n#define KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES UINT32_C(0x30000)\n#endif'
         old='#if KUI_NATIVE_READAHEAD'+tail
         current='#if KUI_NATIVE_READAHEAD || KUI_NATIVE_CURRENT_BOTTOM_HEAP'+tail
+        current_elif='#elif KUI_NATIVE_READAHEAD || KUI_NATIVE_CURRENT_BOTTOM_HEAP'+tail
         dual='#if KUI_NATIVE_READAHEAD || KUI_NATIVE_DUAL_READERS'+tail
-        require(old in sources[paths[0]] or dual in sources[paths[0]] or current in sources[paths[0]],
+        require(any(fragment in sources[paths[0]] for fragment in (old,dual,current,current_elif)),
                 'read-ahead did not isolate the selected owned lease')
         if dual in sources[paths[0]]:
             header=(ROOT/'include/kui/native_dual_reader.h').read_text()
@@ -705,14 +706,26 @@ def source_contract(readahead=False,wide_lease=False,general=False):
         require('#define KUI_NATIVE_RA_LEASE_BYTES UINT32_C(0x55000)' in layout and
                 '#define KUI_NATIVE_RA_LEASE_BYTES UINT32_C(0x51000)' in layout,
                 'read-ahead selected lease geometry changed')
-        expected['KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES']=LEASE_BYTES if general else 0x55000
+        expected['KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES']=0x47000 if compact else LEASE_BYTES if general else 0x55000
     if general:
-        require('#if KUI_NATIVE_GENERAL_LEAN_LAYOUT' in sources[paths[0]] and
+        require(any(fragment in sources[paths[0]] for fragment in
+                    ('#if KUI_NATIVE_GENERAL_LEAN_LAYOUT','#elif KUI_NATIVE_GENERAL_LEAN_LAYOUT')) and
                 '#define KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES UINT32_C(0x1c000)' in sources[paths[0]] and
                 '#define KUI_VMU_NATIVE_BACKGROUND_REGION_OFFSET UINT32_C(0x1c400)' in sources[paths[0]],
                 'General source lacks its explicit compact worker/map geometry')
         expected['KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES']=0x1c000
         expected['KUI_VMU_NATIVE_BACKGROUND_REGION_OFFSET']=0x1c400
+    if compact:
+        require(general and (readahead or wide_lease),
+                'Compact Background source requires the complete General retained reader')
+        require('KUI_NATIVE_BACKGROUND_COMPACT' in sources[paths[0]] and
+                '#define KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES UINT32_C(0x12000)' in sources[paths[0]] and
+                '#define KUI_VMU_NATIVE_BACKGROUND_REGION_OFFSET UINT32_C(0x12400)' in sources[paths[0]] and
+                '#define KUI_NATIVE_RA_LEASE_BYTES UINT32_C(0x47000)' in layout and
+                '#define KUI_NATIVE_RA_DATA_BYTES UINT32_C(0x30000)' in layout,
+                'Compact Background source lost its exact worker/full-cache geometry')
+        expected['KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES']=0x12000
+        expected['KUI_VMU_NATIVE_BACKGROUND_REGION_OFFSET']=0x12400
     wrapper = sources["src/loader/vmu_native_background_resident.c"]
     guard = wrapper[:wrapper.index("#endif")]
     for flag in ("KUI_VMU_NATIVE_BACKGROUND", "KUI_VMU_NATIVE_PERSISTENT_PROBE", "KUI_RETAIL_ASYNC",
@@ -918,8 +931,10 @@ def check(directory, *, self_test=False, require_stage=False):
             require(actual[:2]==expected,'wide Background lease guard instructions changed: '+name)
             lease_guards[name]={'sha256':actual[0],'bytes':actual[1]}
     require(not readahead or wide_lease,'read-ahead lost its exact384KiB low guards')
+    from native_runtime_layout import BACKGROUND_COMPACT
     source = source_contract(readahead,wide_lease,
-        general='__kui_native_general_lean_resident_layout' in image[4])
+        general='__kui_native_general_lean_resident_layout' in image[4],
+        compact=layout_for(image[4]) is BACKGROUND_COMPACT)
     result = {"schema": "kui.native.background.audit.v1", "console_execution_verified": False,
               "resident_sha256": digest(data), "payload_bytes": len(inspected["payload"]),
               "memory_end": hex(inspected["memory_end"]), "low_limit": hex(BOTTOM),

@@ -43,10 +43,24 @@
     "scope": "KUI/vmu-test card images scanned by supplied read-only report; does not establish contents of physical VMUs or other backups",
     "private_sd_identity_omitted": true
   },
+  "paced_console_followup": {
+    "source": "owner report",
+    "build": "d6d517fa133a",
+    "receive_policy": "paced",
+    "vmu_reservation_bytes": 73728,
+    "alfonso_second_fight_completed": true,
+    "save_point_reached": true,
+    "new_save_created": true,
+    "new_save_loaded_after_reboot": true,
+    "opening_cupil_hang_remains": true,
+    "scope": "accepts the reported second-fight read and save/reboot/load sequence; does not establish that the opening hang or every game read is fixed"
+  },
   "next_test": {
     "fixed_reservation_bytes": 73728,
     "all_modes_same_profile": true,
     "crc_and_ownership_guards_retained": true,
-    "console_fix_verified": false
+    "console_fix_verified": false,
+    "remaining_failure": "opening Cupil hang",
+    "paced_battle_and_save_reboot_load_verified": true
   }
 }

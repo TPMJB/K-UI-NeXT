@@ -4,6 +4,12 @@ This package changes only the ordinary game loader. **Keep the current GUI**;
 there is no GUI installer or replacement in this ZIP. Every mode retains the
 **72 KiB VMU worker**, split controller path and the same prepared virtual A2.
 
+The owner tested paced build **d6d517fa133a** and completed Alfonso's second
+fight, reached the save point, created a save, then rebooted and loaded that
+save. The opening **Cupil hang remains**. This accepts the reported battle-read
+and save/reboot/load sequence; it does not establish that the opening hang or
+every game read is fixed.
+
 The latest blue failure screen records an SD timeout (`SD=3`) during an image
 read (`IMG=5`), with `STATE=0x1208` and 63 sectors already completed. That is a
 partial accepted read, rather than a refusal before any disc data was supplied.
@@ -38,7 +44,7 @@ unpaced receive modes are included for a controlled comparison.
 All modes also include the CHECK-progress correction: changing or invalid video
 geometry no longer repeatedly erases the CHECK-only reader's progress count.
 It retains the existing normal read step and introduces no new busy-wait timer.
-Console testing must establish whether this resolves the opening loop.
+The owner's test still encountered the opening Cupil hang with this correction.
 
 Safely eject. Use **SCI**, **Background Off (Standard)**, saved **Emulated VMU
 Off**, CD music Off and RAM patches Off. This module supplies A2 itself. Keep

@@ -2,6 +2,12 @@
 /* Passive one-pair proof, or a separately enabled bounded read-only bridge. */
 #include "kui/vmu_native_passive.h"
 #include "kui/vmu_native_background.h"
+#if KUI_NATIVE_BACKGROUND_COMPACT && \
+    (!KUI_NATIVE_READAHEAD || !KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION || \
+     !KUI_NATIVE_SPLIT_CONTROLLER_GENERAL || !KUI_VMU_NATIVE_CACHED_CODE || \
+     !KUI_VMU_NATIVE_PERSISTENT_PROBE)
+#error "Compact Background worker requires its complete persistent General reader profile"
+#endif
 #include "retail_display.h"
 #include <string.h>
 #if KUI_VMU_NATIVE_READONLY_PROBE || KUI_VMU_NATIVE_PERSISTENT_PROBE
@@ -53,6 +59,14 @@ __asm__(".global __kui_native_vmu_only_worker\n"
         ".set __kui_native_vmu_only_worker,1\n"
         ".global __kui_native_isolation_lease_bytes\n"
         ".set __kui_native_isolation_lease_bytes,0x1c000\n");
+#elif KUI_NATIVE_BACKGROUND_COMPACT
+_Static_assert(KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES==UINT32_C(0x12000) &&
+    KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES==UINT32_C(0x47000),
+    "Compact Background worker and its complete reader lease");
+__asm__(".global __kui_native_background_compact_worker\n"
+        ".set __kui_native_background_compact_worker,1\n"
+        ".global __kui_native_isolation_lease_bytes\n"
+        ".set __kui_native_isolation_lease_bytes,0x47000\n");
 #elif KUI_NATIVE_GENERAL_LEAN_LAYOUT
 _Static_assert(KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES==UINT32_C(0x51000),
     "General isolation owns its exact compact lease");
@@ -150,7 +164,7 @@ __asm__(".global __kui_native_general_unbounded_pairs_worker\n"
 #define NATIVE_HOT_LIVE live_plan
 #endif
 #define GUARD UINT32_C(0x4b535431)
-#if KUI_NATIVE_VMU_LITE
+#if KUI_NATIVE_VMU_LITE || KUI_NATIVE_BACKGROUND_COMPACT
 /* The SDK bank stays 12 KiB; only this capture and the issued copy shrink.
  * chain() refuses a longer list, which stops the game instead of handling it. */
 #define TX_WORDS (KUI_VMU_NATIVE_LITE_CHAIN_BYTES/4u)

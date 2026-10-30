@@ -183,8 +183,8 @@ def synthetic_package(ce=False, ram_seed=False, zso=False, lzo=False, dual=None)
     return envelope(payload, len(payload), "0123456789ab")
 
 
-def dual_package(case):
-    cap = struct.pack("<8I", 0x3152444B, 0x4C415544, 1, 32, 1, 2, 0x51000, 0)
+def dual_package(case, lease_bytes=0x51000):
+    cap = struct.pack("<8I", 0x3152444B, 0x4C415544, 1, 32, 1, 2, lease_bytes, 0)
     if case == "native-dual-cap-absent": cap = b""
     if case == "native-dual-cap-duplicate": cap += b"x" + cap
     if case == "native-dual-cap-malformed": cap = cap[:8] + struct.pack("<I", 2) + cap[12:]
@@ -202,7 +202,7 @@ def standalone_package(case):
     return synthetic_package(dual=cap)
 
 
-def make_retail_fixture(folder, case):
+def make_retail_fixture(folder, case, dual_lease=0x51000):
     if case in ZSO_CASES:
         make_zso_fixture(folder, case)
         for name, package_bytes in (("retail-boot.kui", synthetic_package()),
@@ -210,7 +210,7 @@ def make_retail_fixture(folder, case):
                                     ("zso-boot.kui", synthetic_package(zso=True)),
                                     ("lzo-boot.kui", synthetic_package(zso=True, lzo=case != "zso-lzo-wrong-package"))):
             (folder / name).write_bytes(package_bytes)
-        (folder / "retail-native-dual.kui").write_bytes(dual_package(case))
+        (folder / "retail-native-dual.kui").write_bytes(dual_package(case, dual_lease))
         return
     if (case in LAUNCH_CASES or case in NATIVE_DUAL_CASES or case in NATIVE_STANDARD_CASES) and folder.exists():
         shutil.rmtree(folder)
@@ -221,7 +221,7 @@ def make_retail_fixture(folder, case):
             make_format_fixture(folder, case)
         (folder / "retail-boot.kui").write_bytes(synthetic_package())
         (folder / "ce-probe.kui").write_bytes(synthetic_package(ce=True))
-        (folder / "retail-native-dual.kui").write_bytes(dual_package(case))
+        (folder / "retail-native-dual.kui").write_bytes(dual_package(case, dual_lease))
         return
     make_fixture(folder)
     track = folder / "track03.bin"
@@ -292,7 +292,7 @@ def make_retail_fixture(folder, case):
     (folder / "retail-boot.kui").write_bytes(synthetic_package(
         ram_seed=case in LAUNCH_CASES and case != "launch-patch-old-package", dual=cache_seed))
     (folder / "ce-probe.kui").write_bytes(synthetic_package(ce=True))
-    (folder / "retail-native-dual.kui").write_bytes(dual_package(case))
+    (folder / "retail-native-dual.kui").write_bytes(dual_package(case, dual_lease))
     if "-standalone" in case and "-absent" not in case:
         (folder / "retail-native-standalone.kui").write_bytes(standalone_package(case))
 
@@ -411,6 +411,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--native-standard-only", action="store_true", help="Only SCI/Standard complete-source CRC reuse and fallback guards")
     parser.add_argument("--native-dual-only", action="store_true", help="Only native X/Y module selection, capability, bounds and report cases")
+    parser.add_argument("--compact-background-only", action="store_true",
+                        help="Native X/Y cases with the compact 284 KiB combined capability")
     parser.add_argument("--rc-only", action="store_true",
                         help="Only native-title/boot selection and compatibility cases, on MBR FAT32/exFAT")
     parser.add_argument("--formats-only", action="store_true",
@@ -435,13 +437,13 @@ def main():
             run("mkfs.fat", "-F", "32", str(volume)) if kind == "fat32" else run("mkfs.exfat", str(volume))
             partitioned_clean = base / f"{kind}-mbr.img"
             partition_image(volume, partitioned_clean, kind)
-            layouts = ((True, NATIVE_STANDARD_CASES),) if args.native_standard_only else ((True, NATIVE_DUAL_CASES),) if args.native_dual_only else ((True, ZSO_CASES),) if args.zso_only else ((True, LAUNCH_CASES),) if args.launch_only else ((True, CHECKSUM_CASES),) if args.checksums_only else ((True, FORMAT_CASES),) if args.formats_only else ((True, RC_CASES),) if args.rc_only else (
+            layouts = ((True, NATIVE_STANDARD_CASES),) if args.native_standard_only else ((True, NATIVE_DUAL_CASES),) if args.native_dual_only or args.compact_background_only else ((True, ZSO_CASES),) if args.zso_only else ((True, LAUNCH_CASES),) if args.launch_only else ((True, CHECKSUM_CASES),) if args.checksums_only else ((True, FORMAT_CASES),) if args.formats_only else ((True, RC_CASES),) if args.rc_only else (
                 (True, CASES + FORMAT_CASES + LAUNCH_CASES + ZSO_CASES + NATIVE_DUAL_CASES + NATIVE_STANDARD_CASES), (False, ("valid", "boot-tail", "fragmented", "cooked-2048")))
             for partitioned, cases in layouts:
                 clean = partitioned_clean if partitioned else volume
                 layout = "MBR" if partitioned else "superfloppy"
                 for case in cases:
-                    make_retail_fixture(fixture, case)
+                    make_retail_fixture(fixture, case, 0x47000 if args.compact_background_only else 0x51000)
                     image = base / "working.img"
                     shutil.copyfile(clean, image)
                     run(BINARY, str(image), str(fixture), "seed", case)

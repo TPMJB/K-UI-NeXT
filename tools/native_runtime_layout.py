@@ -59,7 +59,35 @@ VMU_LITE = SimpleNamespace(**{**vars(VMU_ONLY),
     'LEASE_BYTES': 0x12000, 'WORKER_BYTES': 0x12000,
     'STACK_OFFSET': 0x11000, 'STACK_END': 0x12000})
 
+# Combined Background keeps the full 192 KiB cache and its independent
+# auxiliary stack, after the separately bounded 72 KiB VMU worker.
+BACKGROUND_COMPACT = SimpleNamespace(**{**vars(GENERAL),
+    'LEASE_BYTES': 0x47000, 'WORKER_BYTES': 0x12000, 'MAP_OFFSET': 0x12000,
+    'REGION_OFFSET': 0x12400, 'AUX_OFFSET': 0x13000,
+    'STACK_OFFSET': 0x16000, 'STACK_END': 0x17000, 'DATA_OFFSET': 0x17000})
+
 def layout_for(symbols):
+    combined_names=('__kui_native_background_compact_stage',
+        '__kui_native_background_compact_worker', '__kui_native_background_compact_resident',
+        '__kui_native_background_compact_auxiliary', '__kui_native_background_compact_worker_layout')
+    combined=[symbols[name] for name in combined_names if name in symbols]
+    if combined:
+        if any(value != (1,0,0,0xfff1) for value in combined):
+            raise ValueError('Malformed compact Background runtime geometry marker')
+        if any(name in symbols for name in ('__kui_native_vmu_only_worker',
+            '__kui_native_vmu_only_stage','__kui_native_vmu_only_resident',
+            '__kui_native_vmu_lite_worker','__kui_native_vmu_lite_stage','__kui_native_vmu_lite_resident')):
+            raise ValueError('Compact Background cannot select standalone VMU-only geometry')
+        general_names=('__kui_native_general_lean_stage_layout',
+            '__kui_native_general_lean_worker_layout','__kui_native_general_lean_auxiliary',
+            '__kui_native_general_lean_resident_layout')
+        present=[symbols[name] for name in general_names if name in symbols]
+        if not present or any(value != (1,0,0,0xfff1) for value in present):
+            raise ValueError('Compact Background requires its exact General layout marker')
+        lease=symbols.get('__kui_native_isolation_lease_bytes')
+        if lease is not None and lease != (BACKGROUND_COMPACT.LEASE_BYTES,0,0,0xfff1):
+            raise ValueError('Compact Background lease conflicts with its exact compiled profile')
+        return BACKGROUND_COMPACT
     compact = [symbols[name] for name in ('__kui_native_vmu_only_worker',
         '__kui_native_vmu_only_stage', '__kui_native_vmu_only_resident') if name in symbols]
     if compact:

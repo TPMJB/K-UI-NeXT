@@ -268,7 +268,7 @@ void kui_vmu_native_passive_test_write(uint32_t address,unsigned width,uint32_t 
 }
 /* Where the modelled worker's issued chain lives; the lite copy sits below
  * the private stack of its 72 KiB span. */
-#if KUI_NATIVE_VMU_LITE
+#if KUI_NATIVE_VMU_LITE || KUI_NATIVE_BACKGROUND_COMPACT
 #define TEST_ISSUED_OFFSET 0x10000u
 #else
 #define TEST_ISSUED_OFFSET 0x18000u

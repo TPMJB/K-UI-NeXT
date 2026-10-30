@@ -114,7 +114,7 @@ static void toggle_mode(uint8_t *wire,unsigned mode) {
     memset(wire,0,32u);memcpy(wire,"KUINVM01",8u);
     mode_put32(wire+8u,1u);mode_put32(wire+12u,32u);mode_put32(wire+16u,mode);
 }
-static void emulation_mode_controls(void) {
+static void emulation_mode_controls(uint32_t lease_bytes) {
     const char *problem=NULL;
     struct kui_runtime_image package={.data=payload,.info={.payload_bytes=sizeof(payload)}};
     static uint8_t before[sizeof(payload)];
@@ -123,7 +123,8 @@ static void emulation_mode_controls(void) {
     CHECK(!memcmp(payload,before,sizeof(payload)));
     CHECK(!games_card_emulation_mode(&package,false,&problem) && strstr(problem,"matching toggle-capable"));
     CHECK(!memcmp(payload,before,sizeof(payload)));
-    toggle_capability(payload+1024u);memcpy(before,payload,sizeof(before));
+    toggle_capability(payload+1024u);mode_put32(payload+1044u,lease_bytes);
+    memcpy(before,payload,sizeof(before));
     CHECK(!games_card_emulation_mode(&package,false,&problem) && strstr(problem,"mode is missing"));
     CHECK(!memcmp(payload,before,sizeof(payload)));
     toggle_mode(payload+2048u,KUI_VMU_NATIVE_MODE_NORMAL);
@@ -144,6 +145,7 @@ static void emulation_mode_controls(void) {
     toggle_mode(payload+4096u,KUI_VMU_NATIVE_MODE_NORMAL);memcpy(before,payload,sizeof(before));
     CHECK(!games_card_emulation_mode(&package,false,&problem) && strstr(problem,"ambiguous"));
     CHECK(!memcmp(payload,before,sizeof(payload)));
+    /* Duplicate and mixed-layout toggle capabilities both refuse. */
     memset(payload+4096u,0xa5,32u);toggle_capability(payload+4096u);memcpy(before,payload,sizeof(before));
     CHECK(!games_card_emulation_mode(&package,false,&problem));
     CHECK(!games_card_emulation_mode(&package,true,&problem));
@@ -165,7 +167,8 @@ int main(int argc,char **argv) {
     map.slots[4].extent=(struct kui_retail_extent){.card_lba=600000u,.blocks=128u};
     mock.map=&map;mounted_fs.fs_type=FS_EXFAT;mounted_fs.last_clst=77u;
     const char *problem;
-    emulation_mode_controls();
+    emulation_mode_controls(UINT32_C(0x51000));
+    emulation_mode_controls(UINT32_C(0x47000));
 
     /* Unassigned games retain standalone/Legacy behavior. An explicit
      * import can only run through combined virtual A2, never silently fall
