@@ -60,7 +60,7 @@ def prove(startup):
             str(temporary/'shim.c'),*[str(ROOT/x) for x in sources],'-o',str(libfile)],check=True)
         c=ctypes.CDLL(str(libfile));ptr=ctypes.c_void_p;word=ctypes.c_uint32
         owner=ctypes.create_string_buffer(72);call=ctypes.create_string_buffer(20)
-        exits=ctypes.create_string_buffer(48);source=ctypes.create_string_buffer(image)
+        exits=ctypes.create_string_buffer(52);source=ctypes.create_string_buffer(image)
         for name in ('kui_vmu_native_heap_call_discover','kui_vmu_native_exit_discover'):
             getattr(c,name).restype=ctypes.c_bool
         c.kui_vmu_native_heap_discover.argtypes=[ptr,ctypes.c_size_t,word,ptr]
@@ -69,10 +69,10 @@ def prove(startup):
         assert c.kui_vmu_native_heap_discover(source,len(image),load,owner)==1
         assert c.kui_vmu_native_heap_call_discover(source,len(image),owner,call)
         assert c.kui_vmu_native_exit_discover(source,len(image),load,exits)
-        h=struct.unpack('<18I',owner.raw);e=struct.unpack('<12I',exits.raw)
+        h=struct.unpack('<18I',owner.raw);e=struct.unpack('<13I',exits.raw)
         assert e[2]==5 and e[5]==3
-        common,table=e[8],e[10];begin,count=struct.unpack('<5I',call.raw)[3:]
-        model=SH(image);lease_bytes=0x60000
+        common,table=e[8],e[11];begin,count=struct.unpack('<5I',call.raw)[3:]
+        model=SH(image);lease_bytes=0x51000
         _,_,init_steps=model.run(h[6],[begin,count],stack)
         payload,_,allocation_steps=model.run(h[9],[lease_bytes],stack);header=payload-32
         model.store_block(payload,bytes([0xa5])*lease_bytes)

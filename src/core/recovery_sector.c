@@ -83,3 +83,22 @@ unsigned kui_recovery_sector_check(const void *raw,size_t size,uint32_t fad) {
     return result;
 }
 
+
+unsigned kui_recovery_cd_sector_check(const void *raw,size_t size,uint32_t fad) {
+    if(!raw || size!=KUI_RECOVERY_RAW_BYTES || fad<150u || fad>KUI_RECOVERY_FAD_MAX)
+        return KUI_RECOVERY_SECTOR_INPUT;
+    const uint8_t *s=raw;
+    if(s[15]!=2)return kui_recovery_sector_check(raw,size,fad);
+    static const uint8_t sync[12]={0,255,255,255,255,255,255,255,255,255,255,0};
+    if(memcmp(s,sync,12))return KUI_RECOVERY_SECTOR_SYNC;
+    unsigned result=0;make_tables();
+    if(s[12]!=bcd(fad/4500) || s[13]!=bcd((fad/75)%60) || s[14]!=bcd(fad%75))result|=KUI_RECOVERY_SECTOR_ADDRESS;
+    if(memcmp(s+16,s+20,4))result|=KUI_RECOVERY_SECTOR_SUBHEADER;
+    if((s[18]|s[22])&0x20)return result|KUI_RECOVERY_SECTOR_UNSUPPORTED;
+    uint32_t edc=0;for(unsigned i=16;i<2072;++i)edc=(edc>>8)^edc_table[(edc^s[i])&255];
+    uint32_t stored=(uint32_t)s[2072]|(uint32_t)s[2073]<<8|(uint32_t)s[2074]<<16|(uint32_t)s[2075]<<24;
+    if(edc!=stored)result|=KUI_RECOVERY_SECTOR_EDC;
+    uint8_t parity_data[2236];memcpy(parity_data,s+12,sizeof(parity_data));memset(parity_data,0,4);
+    if(!parity_ok(parity_data,86,24,2,86,s+2076) || !parity_ok(parity_data,52,43,86,88,s+2248))result|=KUI_RECOVERY_SECTOR_ECC;
+    return result;
+}

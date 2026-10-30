@@ -1,0 +1,20 @@
+{
+  "console_build": "597306a860dc",
+  "source_report_sha256": "a998c7777d7338785e25862f520d2569844014cbb0bb6d9243c75b986fc2691d",
+  "report_truncated": false,
+  "job": "/KUI/salvage/job-0003",
+  "candidate_records": 6190,
+  "policy_confirmed": "SCI filesystem reads: CMD17 for one block; CMD18 for multiple blocks",
+  "profiles": [
+    {"id": 2, "label": "Bulk unaligned", "records": 6190, "read_ms": 44586, "DMA_rx_blocks": 0, "PIO_block_attempts": 61924, "bus_failures": 0},
+    {"id": 3, "label": "512-byte unaligned", "records": 6190, "read_ms": 62653, "DMA_rx_blocks": 0, "PIO_block_attempts": 61924, "bus_failures": 0},
+    {"id": 0, "label": "Bulk aligned", "records": 6190, "read_ms": 31954, "DMA_rx_blocks": 61900, "PIO_block_attempts": 24, "bus_failures": 0},
+    {"id": 1, "label": "512-byte aligned", "records": 6190, "read_ms": 50544, "DMA_rx_blocks": 61900, "PIO_block_attempts": 24, "bus_failures": 0}
+  ],
+  "all_profile_sha256": "d6dd83fde8028ac48fde5b2ed14c8a848fabcb83accb78ad8231020a969801fe",
+  "matches_prior_complete_passes": true,
+  "operation": {"complete": true, "inconsistent": false, "failed": false, "stopped": false, "budget_expired": false, "quarantine_unchanged": true},
+  "dma_failure_latch": false,
+  "conclusion": "CMD17 singleton candidate passed all four console comparison profiles, including the repeatedly failing aligned 512-byte profile. This validates the tested saved candidate reads, not all historical CRC failures or full salvage source consistency.",
+  "next_step": "Full read-only salvage metadata and track revalidation before authorizing matching quarantine removal."
+}

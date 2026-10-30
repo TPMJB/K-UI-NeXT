@@ -286,7 +286,8 @@ def dispatch_case(stage, resident, stack, *, fixed):
     route.run()
     if fixed:
         # The modeled extent helper's own result is the relay's only store.
-        require(frames == [route.frame] and route.calls[-1] == 'fixed-arm' and
+        suffix=['fixed-arm','crt-prearm'] if '_native_crt_bootstrap_prearm' in stage[4] else ['fixed-arm']
+        require(frames == [route.frame] and route.calls[-len(suffix):] == suffix and
                 route.calls.count('fixed-arm') == 1 and not route.callback_helper_calls and
                 not route.armed and route.nonstack_writes == [(route.exec_address, route.program_bytes)],
                 'Relay did not hand a fixed arena only to the fixed arm')

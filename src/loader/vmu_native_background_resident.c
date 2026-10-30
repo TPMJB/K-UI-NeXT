@@ -14,6 +14,10 @@ __asm__(".global __kui_vmu_native_background_resident\n"
 #include "kui/vmu_sd_lease.h"
 #include "kui/vmu_native_async_loan.h"
 #include "kui/vmu_native_background.h"
+#if KUI_NATIVE_GENERAL_LEAN_LAYOUT
+__asm__(".global __kui_native_general_lean_resident_layout\n"
+        ".set __kui_native_general_lean_resident_layout,1\n");
+#endif
 
 /* NATIVE_RESIDENT_GUARDS_BEGIN
  * Pure admission predicates are also compiled by the host adversarial test.
@@ -21,7 +25,7 @@ __asm__(".global __kui_vmu_native_background_resident\n"
  * mutable end use P2. The cached build admits P1 code only; legacy workers
  * execute from P2. No temporary-stage pointer is a runtime dependency. */
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
-#define NATIVE_RESIDENT_WORKER_BYTES UINT32_C(0x20000)
+#define NATIVE_RESIDENT_WORKER_BYTES KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES
 #define NATIVE_RESIDENT_HEADER_BYTES 80u
 #else
 #define NATIVE_RESIDENT_WORKER_BYTES UINT32_C(0x10000)

@@ -431,6 +431,13 @@ def raw_owner_profile(worker):
 
 def bottom_stage_profile(stage):
     present = marked(stage, BOTTOM_STAGE_MARKER)
+    if marked(stage, '__kui_native_vmu_only_stage'):
+        from native_runtime_layout import layout_for
+        selected = layout_for(stage[4])
+        if (not present or selected.LEASE_BYTES != 0x1c000 or
+                CALLBACK_MARKER in stage[4] or '_native_background_boot_region' in stage[4]):
+            raise ValueError('VMU-only stage requires its exact synchronous bottom reservation')
+        return True
     if present and not callback_profile(stage):
         raise ValueError('Bottom-heap stage requires selected low-reader callbacks')
     return present
@@ -438,12 +445,20 @@ def bottom_stage_profile(stage):
 
 def bottom_worker_profile(worker):
     present = marked(worker, BOTTOM_WORKER_MARKER)
+    from check_native_general_lean_profile import worker_profile
+    if worker_profile(worker):
+        if not present:
+            raise ValueError('Lean General worker lacks its bottom-heap profile')
+        return True
     if present and not raw_owner_profile(worker):
         raise ValueError('Bottom-heap worker requires its terminal owner observer')
     return present
 
 
 def stage_pins(stage, role, historical):
+    from check_native_general_lean_profile import stage_profile,stage_pins as lean_pins
+    if stage_profile(stage):
+        return lean_pins(stage,role,historical)
     if bottom_stage_profile(stage):
         selected = BOTTOM_STAGE_PINS.get(role)
         if not selected:
@@ -458,6 +473,9 @@ def stage_pins(stage, role, historical):
 
 
 def worker_pins(worker, role, historical):
+    from check_native_general_lean_profile import worker_profile,worker_pins as lean_pins
+    if worker_profile(worker):
+        return lean_pins(worker,role,historical)
     if bottom_worker_profile(worker):
         selected = BOTTOM_WORKER_PINS.get(role)
         if not selected:

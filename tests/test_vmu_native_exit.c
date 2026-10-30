@@ -107,6 +107,173 @@ static bool guarded(const void *data,size_t bytes,uint32_t address,
     if(!result) {struct kui_vmu_native_exit zero={0};CHECK(!memcmp(out,&zero,sizeof(*out)));}
     return result;
 }
+/* Independently assemble a restart routine from scalar SH operations and
+ * relocated literals. No owner executable body supplies this fixture. */
+static void crt_fixture(void) {
+    const unsigned start=0x600u;pvr_fixture(false);
+    static const struct {unsigned at;uint16_t op;} ops[]={
+        {0,0x006a},{2,0xc906},{4,0x406a},{6,0xc70e},{8,0x6f02},
+        {14,0xe000},{16,0x6303},{18,0xa002},{20,0x3548},
+        {22,0x0434},{24,0x7001},{26,0x3507},{28,0x89fb},
+        {32,0x400b},{34,0x0009},{38,0x400b},{40,0x0009},
+        {44,0x400b},{46,0x0009},{48,0xaffe},{50,0x0009}
+    };
+    for(unsigned i=0;i<sizeof(ops)/sizeof(ops[0]);i++) halfword(image+start+ops[i].at,ops[i].op);
+    long_load(start+10u,5u,start+0x48u,load+0x10020u);
+    long_load(start+12u,4u,start+0x44u,load+sizeof(image));
+    long_load(start+30u,0u,start+0x3cu,load+0x700u);
+    long_load(start+36u,0u,start+0x34u,UINT32_C(0x8c008300));
+    long_load(start+42u,0u,start+0x38u,load+0x720u);
+    word(image+start+0x40u,load+0x10000u);
+}
+static uint16_t model_half(const unsigned char *p) {
+    return (uint16_t)((uint16_t)p[0]|(uint16_t)p[1]<<8);
+}
+static uint32_t model_word(const unsigned char *p) {
+    return (uint32_t)model_half(p)|(uint32_t)model_half(p+2u)<<16;
+}
+static bool model_read(const unsigned char *p,size_t n,uint32_t address,uint32_t *value) {
+    uint32_t physical=address&UINT32_C(0x1fffffff),base=load&UINT32_C(0x1fffffff);
+    if(physical<base || physical-base>n || n-(physical-base)<4u) return false;
+    *value=model_word(p+physical-base);return true;
+}
+/* Execute the original CRT from its first instruction through the BIOS call,
+ * independently of the detector's witness/offset checks. BSS writes are
+ * observed rather than applied to owner bytes. The unrelated initializer
+ * and cleanup return adversarial caller registers. A returning BIOS stub also
+ * exercises cleanup and the final self-loop, not just the expected nonreturn.
+ * This establishes what the fourth-entry hook must prevent; the separate
+ * stage test executes its preinstalled veneer. */
+static bool crt_model(const unsigned char *p,size_t n,uint32_t entry) {
+    uint32_t first=load&UINT32_C(0x1fffffff),at=entry&UINT32_C(0x1fffffff);
+    if(at<first || at-first>n || n-(at-first)<0x4cu) return false;
+    at-=first;
+    uint32_t stack=model_word(p+at+0x40u),begin=model_word(p+at+0x44u),end=model_word(p+at+0x48u);
+    uint32_t initialize=model_word(p+at+0x3cu),cleanup=model_word(p+at+0x38u),cleared=0u;
+    unsigned phase=0u,loops=0u;
+    if(end<begin || end-begin>UINT32_C(0x1000000)) return false;
+    uint32_t r[16],pc=entry,pr=0u,pending=0u,fpscr=UINT32_MAX;bool t=false;
+    for(unsigned i=0;i<16u;i++) r[i]=UINT32_C(0x98765430)+i;
+    uint64_t bound=(uint64_t)(end-begin)*5u+80u;
+    for(uint64_t step=0;step<bound;step++) {
+        if(pc==entry+48u && phase==3u && !pending && ++loops==2u)
+            return cleared==end-begin && r[15]==stack && fpscr==6u;
+        if((pc==initialize && phase==0u) ||
+           (pc==UINT32_C(0x8c008300) && phase==1u) || (pc==cleanup && phase==2u)) {
+            if(pending || cleared!=end-begin) return false;
+            ++phase;
+            for(unsigned i=0;i<8u;i++) r[i]=UINT32_C(0xfedcba90)+i;
+            t=true;pc=pr;continue;
+        }
+        uint32_t offset=(pc&UINT32_C(0x1fffffff))-first;
+        if((pc&UINT32_C(0x1fffffff))<first || offset>n || n-offset<2u) return false;
+        uint16_t op=model_half(p+offset);unsigned rn=(op>>8)&15u,rm=(op>>4)&15u;
+        uint32_t next=pc+2u,after=pending;pending=0u;
+        if(op==0x006au) r[0]=fpscr;
+        else if((op&0xff00u)==0xc900u) r[0]&=op&255u;
+        else if(op==0x406au) fpscr=r[0];
+        else if((op&0xff00u)==0xc700u) r[0]=((pc+4u)&~3u)+4u*(op&255u);
+        else if((op&0xf000u)==0xd000u) {
+            if(!model_read(p,n,((pc+4u)&~3u)+4u*(op&255u),&r[rn])) return false;
+        } else if((op&0xf00fu)==0x6002u) {
+            if(!model_read(p,n,r[rm],&r[rn])) return false;
+        } else if((op&0xf000u)==0xe000u) r[rn]=(uint32_t)(int32_t)(int8_t)op;
+        else if((op&0xf00fu)==0x6003u) r[rn]=r[rm];
+        else if((op&0xf00fu)==0x3008u) r[rn]-=r[rm];
+        else if((op&0xf00fu)==0x0004u) {
+            if(r[rn]+r[0]!=begin+cleared || cleared>=end-begin || (r[rm]&255u)) return false;
+            ++cleared;
+        } else if((op&0xf000u)==0x7000u) r[rn]+=(uint32_t)(int32_t)(int8_t)op;
+        else if((op&0xf00fu)==0x3007u) t=(int32_t)r[rn]>(int32_t)r[rm];
+        else if((op&0xff00u)==0x8900u) {
+            if(t) next=pc+4u+(uint32_t)(2*(int32_t)(int8_t)op);
+        } else if((op&0xf000u)==0xa000u) {
+            if(after) return false;
+            int32_t displacement=(int32_t)((op&4095u)^2048u)-2048;
+            pending=pc+4u+(uint32_t)(2*displacement);
+        } else if((op&0xf0ffu)==0x400bu) {
+            if(after) return false;
+            pending=r[rn];pr=pc+4u;
+        } else if(op!=0x0009u) return false;
+        pc=after?after:next;
+    }
+    return false;
+}
+static void crt_tests(void) {
+    const unsigned start=0x600u;struct kui_vmu_native_exit out;
+    crt_fixture();CHECK(discover(image,sizeof(image),load,&out));
+    CHECK(out.family==KUI_VMU_NATIVE_EXIT_CRT_BOOTSTRAP && out.count==4u);
+    CHECK(out.entries[0]==load+pair && out.entries[1]==load+pair+54u &&
+        out.entries[2]==load+exec && out.entries[3]==load+start);
+    CHECK(out.exec_thunk==load+exec+112u);
+    CHECK(crt_model(image,sizeof(image),out.entries[3]));
+    /* The fourth entry precedes FPSCR/SP/BSS changes. Mutate every executed
+     * instruction, including all delay slots and branch displacements. A
+     * recognizable broken bootstrap load cannot downgrade to three entries. */
+    for(unsigned at=0;at<52u;at+=2u) {
+        crt_fixture();image[start+at]^=1u;
+        CHECK(!discover(image,sizeof(image),load,&out));
+    }
+    const unsigned literals[]={0x34u,0x38u,0x3cu,0x40u,0x44u,0x48u};
+    for(unsigned i=0;i<sizeof(literals)/sizeof(literals[0]);i++) {
+        crt_fixture();image[start+literals[i]]^=1u;
+        CHECK(!discover(image,sizeof(image),load,&out));
+    }
+    crt_fixture();halfword(image+start+36u,0x0009u);
+    CHECK(!discover(image,sizeof(image),load,&out));
+    crt_fixture();word(image+start+0x34u,UINT32_C(0x8c008304));
+    CHECK(!discover(image,sizeof(image),load,&out));
+    for(unsigned bit=0;bit<32u;bit++) {
+        crt_fixture();word(image+start+0x34u,UINT32_C(0x8c008300)^(UINT32_C(1)<<bit));
+        CHECK(!discover(image,sizeof(image),load,&out));
+    }
+    crt_fixture();memcpy(image+0x100u,image+start,0x4cu);
+    CHECK(!discover(image,sizeof(image),load,&out));
+    const uint32_t aliases[]={0u,UINT32_C(0x80000000),UINT32_C(0xa0000000)};
+    /* The BSS loop subtracts raw operands: matching physical addresses do
+     * not authorize mixed aliases with a different arithmetic difference. */
+    for(unsigned a=0;a<3u;a++) {
+        crt_fixture();word(image+start+0x44u,aliases[a]|((load+sizeof(image))&UINT32_C(0x1fffffff)));
+        word(image+start+0x48u,aliases[a]|((load+0x10020u)&UINT32_C(0x1fffffff)));
+        CHECK(discover(image,sizeof(image),load,&out));CHECK(crt_model(image,sizeof(image),out.entries[3]));
+    }
+    crt_fixture();word(image+start+0x44u,(load+sizeof(image))&UINT32_C(0x1fffffff));
+    CHECK(!discover(image,sizeof(image),load,&out));
+    crt_fixture();word(image+start+0x48u,(load+0x10020u)&UINT32_C(0x1fffffff));
+    CHECK(!discover(image,sizeof(image),load,&out));
+    for(unsigned a=0;a<3u;a++) for(unsigned interior=2u;interior<0x4cu;interior+=2u) {
+        crt_fixture();word(image+0x80u,aliases[a]|((load&UINT32_C(0x1fffffff))+start+interior));
+        CHECK(discover(image,sizeof(image),load,&out)==(interior==48u));
+    }
+    /* A later-body entry would bypass the prearmed first twelve bytes.
+     * Reject every encoded direct branch class from outside the CRT while
+     * allowing the exact entry and the already-bound internal loop edges. */
+    const uint16_t branches[]={0xa000u,0xb000u,0x8900u,0x8b00u,0x8d00u,0x8f00u};
+    const unsigned interiors[]={14u,36u,0x34u};
+    for(unsigned kind=0;kind<6u;kind++) for(unsigned target=0;target<3u;target++) {
+        crt_fixture();int32_t displacement=((int32_t)start+(int32_t)interiors[target]-0x704)/2;
+        unsigned mask=kind<2u?4095u:255u;
+        halfword(image+0x700u,(uint16_t)(branches[kind]|((uint32_t)displacement&mask)));
+        CHECK(!discover(image,sizeof(image),load,&out));
+    }
+    for(unsigned kind=0;kind<6u;kind++) {
+        crt_fixture();int32_t displacement=((int32_t)start+48-0x704)/2;
+        unsigned mask=kind<2u?4095u:255u;
+        halfword(image+0x700u,(uint16_t)(branches[kind]|((uint32_t)displacement&mask)));
+        CHECK(discover(image,sizeof(image),load,&out));
+    }
+    crt_fixture();word(image+0x80u,load+start);CHECK(discover(image,sizeof(image),load,&out));
+    crt_fixture();word(image+0x80u,load+start+0x4cu);CHECK(discover(image,sizeof(image),load,&out));
+    crt_fixture();long_load(0x80u,3u,0x100u,UINT32_C(0x8c008300));
+    CHECK(!discover(image,sizeof(image),load,&out));
+    const struct kui_vmu_native_patch_window additional[]={
+        {load+0x680u,12u},{load+0x690u,12u},{load+0x6a0u,12u},
+        {load+0x6b0u,12u},{load+0x6c0u,12u}};
+    crt_fixture();CHECK(guarded(image,sizeof(image),load,additional,5u,&out));
+    CHECK(out.count==4u);
+    crt_fixture();const struct kui_vmu_native_patch_window overlap[]={{load+start+2u,12u}};
+    CHECK(!guarded(image,sizeof(image),load,overlap,1u,&out));
+}
 static void pvr_tests(void) {
     struct kui_vmu_native_exit out;
     const uint32_t aliases[]={0u,UINT32_C(0x80000000),UINT32_C(0xa0000000)};
@@ -117,6 +284,7 @@ static void pvr_tests(void) {
         CHECK(out.entries[0]==load+pair && out.entries[1]==load+pair+54u && out.entries[2]==load+exec);
         CHECK(out.bios_vector_literal==load+pair+0x64u && out.cleanup==load+0x760u);
         CHECK(out.exec_thunk==load+exec+(compact?76u:112u));
+        CHECK(!out.entries[3]);
         for(unsigned alias=0;alias<3u;alias++) {
             pvr_fixture(compact!=0u);uint32_t base=(load&0x1fffffffu)|aliases[alias];
             CHECK(discover(image,sizeof(image),base,&out));CHECK(out.entries[1]==base+pair+54u);
@@ -216,9 +384,9 @@ static void pair_fill_tests(void) {
 }
 int main(int argc,char **argv) {
     struct kui_vmu_native_exit out;
-    pvr_tests();pair_only_tests();pair_fill_tests();
+    pvr_tests();pair_only_tests();pair_fill_tests();crt_tests();
     fixture();CHECK(discover(image,sizeof(image),load,&out));
-    CHECK(out.version==1u && out.family==1u && out.bytes==sizeof(out) && out.count==3u);
+    CHECK(out.version==KUI_VMU_NATIVE_EXIT_VERSION && out.family==1u && out.bytes==sizeof(out) && out.count==3u);
     CHECK(out.load==load && out.image_bytes==sizeof(image));
     CHECK(out.entries[0]==load+pair && out.entries[1]==load+pair+48u && out.entries[2]==load+exec);
     CHECK(out.bios_vector_literal==load+pair+0x58u && out.exec_thunk==load+exec+0x6au && out.cleanup==load+0x760u);
@@ -351,8 +519,63 @@ int main(int argc,char **argv) {
         CHECK(program_bytes<=(size_t)n);n=(long)program_bytes;
         CHECK(discover(actual,(size_t)n,load,&out));
         CHECK(out.family==KUI_VMU_NATIVE_EXIT_FAMILY || out.family==KUI_VMU_NATIVE_EXIT_PVR_CLEAR || out.family==KUI_VMU_NATIVE_EXIT_PVR_COMPACT ||
-            out.family==KUI_VMU_NATIVE_EXIT_PAIR_ONLY || out.family==KUI_VMU_NATIVE_EXIT_TERMINAL_DISPATCH);
+            out.family==KUI_VMU_NATIVE_EXIT_PAIR_ONLY || out.family==KUI_VMU_NATIVE_EXIT_TERMINAL_DISPATCH ||
+            out.family==KUI_VMU_NATIVE_EXIT_CRT_BOOTSTRAP);
         struct kui_vmu_native_exit original=out;
+        CHECK(out.count==(out.family==KUI_VMU_NATIVE_EXIT_PAIR_ONLY?2u:
+            out.family==KUI_VMU_NATIVE_EXIT_CRT_BOOTSTRAP?4u:3u));
+        CHECK(out.count==4u || !out.entries[3]);
+        if(original.family==KUI_VMU_NATIVE_EXIT_CRT_BOOTSTRAP) {
+            size_t at=original.entries[3]-load;CHECK(at+0x4cu<=(size_t)n);
+            CHECK(crt_model(actual,(size_t)n,original.entries[3]));
+            for(unsigned offset=0;offset<52u;offset+=2u) {
+                actual[at+offset]^=1u;CHECK(!discover(actual,(size_t)n,load,&out));
+                actual[at+offset]^=1u;
+            }
+            for(unsigned offset=0x34u;offset<0x4cu;offset+=4u) {
+                actual[at+offset]^=1u;CHECK(!discover(actual,(size_t)n,load,&out));
+                actual[at+offset]^=1u;
+            }
+            for(unsigned bit=0;bit<32u;bit++) {
+                word(actual+at+0x34u,UINT32_C(0x8c008300)^(UINT32_C(1)<<bit));
+                CHECK(!discover(actual,(size_t)n,load,&out));
+            }
+            word(actual+at+0x34u,UINT32_C(0x8c008300));
+            unsigned char pointer_saved[4];memcpy(pointer_saved,actual+0x100u,4u);
+            const uint32_t aliases[]={0u,UINT32_C(0x80000000),UINT32_C(0xa0000000)};
+            for(unsigned alias=0;alias<3u;alias++) for(unsigned interior=14u;interior<=36u;interior+=22u) {
+                word(actual+0x100u,aliases[alias]|((original.entries[3]&UINT32_C(0x1fffffff))+interior));
+                CHECK(!discover(actual,(size_t)n,load,&out));
+            }
+            for(unsigned alias=0;alias<3u;alias++) {
+                word(actual+0x100u,aliases[alias]|((original.entries[3]&UINT32_C(0x1fffffff))+48u));
+                CHECK(discover(actual,(size_t)n,load,&out));
+            }
+            memcpy(actual+0x100u,pointer_saved,4u);
+            const uint16_t branches[]={0xa000u,0xb000u,0x8900u,0x8b00u,0x8d00u,0x8f00u};
+            CHECK(at+0x82u<=(size_t)n);
+            unsigned char branch_saved[2];memcpy(branch_saved,actual+at+0x80u,2u);
+            for(unsigned kind=0;kind<6u;kind++) for(unsigned interior=14u;interior<=36u;interior+=22u) {
+                int32_t displacement=((int32_t)interior-0x84)/2;
+                unsigned mask=kind<2u?4095u:255u;
+                halfword(actual+at+0x80u,(uint16_t)(branches[kind]|((uint32_t)displacement&mask)));
+                CHECK(!discover(actual,(size_t)n,load,&out));
+            }
+            for(unsigned kind=0;kind<6u;kind++) {
+                int32_t displacement=(48-0x84)/2;
+                unsigned mask=kind<2u?4095u:255u;
+                halfword(actual+at+0x80u,(uint16_t)(branches[kind]|((uint32_t)displacement&mask)));
+                CHECK(discover(actual,(size_t)n,load,&out));
+            }
+            memcpy(actual+at+0x80u,branch_saved,2u);
+            /* A second complete linked CRT is ambiguous even when its
+             * literal pool refers to the same original startup helpers. */
+            unsigned char saved[0x4c];memcpy(saved,actual+0x100u,sizeof(saved));
+            memcpy(actual+0x100u,actual+at,sizeof(saved));
+            CHECK(!discover(actual,(size_t)n,load,&out));
+            memcpy(actual+0x100u,saved,sizeof(saved));
+            CHECK(discover(actual,(size_t)n,load,&out));CHECK(!memcmp(&out,&original,sizeof(out)));
+        }
         for(unsigned entry=0;entry<original.count;entry++) {
             size_t at=out.entries[entry]-load;unsigned char saved=actual[at];actual[at]^=1u;
             bool mutated=discover(actual,(size_t)n,load,&out);

@@ -1,0 +1,56 @@
+{
+  "schema": "kui.native.uniform-tail-layout.v1",
+  "date": "2026-10-28",
+  "baseline": "65b4ffba97cbb86f203cd1925cdf9a4bf46a4cbf",
+  "input": {
+    "title": "SPAWN IN THE DEMONS HAND",
+    "product": "T1216N",
+    "source_bytes": 1220228,
+    "source_sha256": "8f085c28f6a579662f95b65b0611f1dc08dded35fd5c6e676821c72a5384ed5f"
+  },
+  "finding": "The original uniform initializer, argument-saving wrapper, upper wrapper, gun flag and registered timers already match reviewed families. The immutable root instead uses a pure tail thunk: it loads the upper target and RX/TX arguments, then jumps with mode zero in its delay slot, retaining its startup caller's PR.",
+  "proof": [
+    "The target is loaded into R3 before JMP samples it; the RX and TX literals supply R5 and R6. No inherited register supplies the target or a buffer.",
+    "Exactly one aligned image word names the thunk, and exactly one PC-relative load of that word into R0-R14 is immediately followed by a call through the same register and a no-op delay slot. R15 is refused because loading the target there would replace SP before the upper wrapper saves its context.",
+    "Existing uniform initializer, constructor, wrapper, upper-wrapper, timer registration, gun flag and source-buffer checks remain required.",
+    "Earlier complete families retain their canonical metadata and layout ABI. Tightening the shared caller proof to preserve SP separately requires detector epoch 5, so earlier trusted cache records cannot bypass the new refusal."
+  ],
+  "tests": {
+    "synthetic_tail_and_caller": {
+      "sanitizers": "ASan/UBSan",
+      "instruction_mutations": 524288,
+      "checks": 1020,
+      "independently_executed_admissions": 276,
+      "also_checks": "all 16 coordinated caller MOV.L/JSR register pairs, unique caller/reference, U0 alias, target, truncation; the independent model verifies sampled target, arguments, unchanged PR and stack"
+    },
+    "original_ps2_and_spawn_layout": {
+      "sanitizers": "ASan/UBSan",
+      "checks": 2703,
+      "includes": "original argument transport and RX constructor execution, live layout bind, and fresh-discovery mutation refusals"
+    },
+    "existing_uniform_root": {
+      "sanitizers": "ASan/UBSan",
+      "checks": 3589
+    },
+    "existing_variable_leaf": {
+      "sanitizers": "ASan/UBSan",
+      "checks": 1840,
+      "also_checks": "all 16 coordinated caller MOV.L/JSR register pairs, preserving R0-R14 and refusing R15"
+    },
+    "corpus": {
+      "unique_native_startups": 21,
+      "stage_end_for_comparison": "0x8ce8d508",
+      "changed_gate": "Spawn: layout false -> true; first refusal layout -> initializer_slot",
+      "other_gate_and_verdict_changes": "none",
+      "note": "The original transport model performs one additional checked instruction read to distinguish a tail jump from a call; some successful rows therefore gain one check."
+    }
+  },
+  "independent_review_correction": "The first instruction-by-instruction mutation sweep missed a coordinated caller MOV.L/JSR change through R15. Independent review reproduced that invalid admission. The shared single-caller decoder now refuses R15, and both the tail and historical variable-leaf tests cover every coordinated caller register pair. The tail model executes the caller and verifies that SP is preserved.",
+  "remaining": [
+    "Spawn's reviewed SDK allocator is present but no immutable initializer slot or supported startup call is resolved. This change supplies layout discovery only; it does not supply a permanent RAM lease or virtual VMU admission.",
+    "A fixed arena would need its own reviewed lifetime and console RAM-map evidence, as with Crazy Taxi 2. No arena is inferred or admitted here.",
+    "The linked comparison build uses stage BSS end 0x8ce8d508 and passes callback, installer-stack and fixed-arena mutation audits. It is not a console package; Spawn remains New-only."
+  ],
+  "console_compatibility_verified": false,
+  "cache_epoch": 5
+}

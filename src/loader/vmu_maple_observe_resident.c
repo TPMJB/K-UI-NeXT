@@ -34,6 +34,12 @@ static void observe_display_restore(const struct retail_display_state *);
 #include "kui/vmu_maple_observe_boot.h"
 #include "kui/vmu_maple_observe_profile.h"
 #include "kui/vmu_native_background.h"
+#if KUI_NATIVE_VMU_ONLY
+__asm__(".global __kui_native_vmu_only_resident\n"
+        ".set __kui_native_vmu_only_resident,1\n"
+        ".global __kui_native_vmu_only_transport_resident\n"
+        ".set __kui_native_vmu_only_transport_resident," KUI_VMU_ONLY_TRANSPORT_TEXT "\n");
+#endif
 
 #if !KUI_RETAIL_GD_REJECTION_DETAILS
 #error Observer I/O telemetry requires the standard native diagnostic fields
@@ -78,13 +84,19 @@ static void observe_display_restore(const struct retail_display_state *state) {
  * mutable end use P2. The cached build admits P1 code only; legacy workers
  * execute from P2. No temporary-stage pointer is a runtime dependency. */
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
+#if KUI_NATIVE_VMU_ONLY
+#define NATIVE_RESIDENT_WORKER_BYTES KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES
+#else
 #define NATIVE_RESIDENT_WORKER_BYTES UINT32_C(0x20000)
+#endif
 #define NATIVE_RESIDENT_HEADER_BYTES 80u
 #else
 #define NATIVE_RESIDENT_WORKER_BYTES UINT32_C(0x10000)
 #define NATIVE_RESIDENT_HEADER_BYTES 64u
 #endif
-#if KUI_NATIVE_STANDARD_VMU_ISOLATION
+#if KUI_NATIVE_VMU_ONLY
+#define NATIVE_RESIDENT_LEASE_BYTES KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES
+#elif KUI_NATIVE_STANDARD_VMU_ISOLATION
 #define NATIVE_RESIDENT_LEASE_BYTES KUI_NATIVE_RA_LEASE_BYTES
 #else
 #define NATIVE_RESIDENT_LEASE_BYTES UINT32_C(0x30000)

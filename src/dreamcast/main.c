@@ -10,12 +10,19 @@
 #endif
 #ifdef KUI_SD_RUNTIME
 #include "kui/shell.h"
+#include "kui/recovery_dashboard.h"
+#include "kui/salvage_session_policy.h"
+#include "kui/storage_error.h"
+#include "kui/vmu_backing.h"
+#include "kui/recovery_guard.h"
 #include "kui/settings.h"
 #include "kui/system_settings.h"
 #include "kui/disc_identity.h"
 #include "kui/music.h"
 #include "kui/apps.h"
 #include "kui/vmu_import.h"
+#include "kui/vmu_emulation_settings.h"
+#include "kui/vmu_game_info.h"
 #include "kui/music_player.h"
 #include "kui/games.h"
 #include "kui/game_launch_settings.h"
@@ -31,12 +38,18 @@
 #include "kui/gd_play.h"
 #include "kui/recovery_scan.h"
 #include "kui/repair_copy.h"
+#include "kui/drive_speed_probe.h"
+#include "kui/saved_read_probe.h"
+#include "kui/salvage_revalidate.h"
+#include "kui/g1_mode_probe.h"
 #include "kui/capture_display.h"
+#include "kui/salvage_display.h"
 #include "kui/viewport.h"
 #include "kui/network_probe.h"
 #include "kui/ftp.h"
 #include "kui/wifi_update.h"
 #include "kui/salvage.h"
+#include "kui/salvage_completion.h"
 #include "kui/maintenance.h"
 #include "kui/menu_sound.h"
 #include "kui/cd_audio.h"
@@ -48,8 +61,10 @@
 #endif
 #include <kos.h>
 #include <dc/minifont.h>
+#include <inttypes.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 /* No KOS CD/VFS polling and no serial console competing with the SD adapter. */
@@ -70,6 +85,21 @@ KOS_INIT_FLAGS(INIT_IRQ | INIT_CONTROLLER | INIT_NO_DCLOAD | INIT_QUIET);
 static struct kui_memory_stats memory_status;
 static bool memory_valid;
 static struct kui_shell shell;
+/* Draw antialiasing and panels against cached RAM, then stream the complete
+ * RGB565 frame to the existing offscreen video buffer. Reading each font
+ * background pixel directly from uncached VRAM stalls controller polling.
+ * This optional cache is released before game/executable preparation so its
+ * 600 KiB cannot reduce the loader's available heap or in-game reservation. */
+static uint16_t *shell_frame;
+static uint16_t *shell_frame_prepare(bool working) {
+    if(!shell_frame && !working) shell_frame=aligned_alloc(32u,640u*480u*sizeof(*shell_frame));
+    return shell_frame;
+}
+static void shell_frame_release_for_action(unsigned action) {
+    if(action==19u || (action>=56u && action<=58u) || action==62u || action==79u) {
+        free(shell_frame);shell_frame=NULL;
+    }
+}
 static struct kui_settings settings_current, settings_pending;
 static unsigned settings_generation;
 static char settings_note[96];
@@ -119,10 +149,27 @@ static char vmu_import_path_pending[KUI_FILES_PATH_CAP],vmu_import_path_result[K
 static struct kui_vmu_backup_view vmu_collection_snapshot;
 static unsigned vmu_collection_generation,vmu_collection_page_pending;
 static unsigned vmu_collection_request_pending,vmu_collection_request_result;
+static char vmu_name_path_pending[KUI_VMU_BACKUP_PATH_CAP],vmu_name_label_pending[49];
+static uint8_t vmu_name_identity_pending[16];
+static struct kui_vmu_game_info vmu_game_info_snapshot;
+struct vmu_game_info_request {
+    char product[12];
+    unsigned generation;
+    bool native_route;
+};
+static struct vmu_game_info_request vmu_game_info_requested,vmu_game_info_running;
+static unsigned vmu_game_info_request_result,vmu_game_info_generation;
+static bool vmu_game_info_request_valid;
 static struct kui_vmu_view vmu_collection_copy_snapshot;
 static unsigned vmu_collection_copy_generation,vmu_collection_copy_request_pending,vmu_collection_copy_request_result;
 static unsigned vmu_collection_copy_source_result,vmu_collection_copy_page_result,vmu_collection_copy_selected_result;
 static bool vmu_collection_copy_all_pending,vmu_collection_copy_all_result,vmu_collection_copy_commit_result;
+static struct kui_vmu_wizard_request vmu_wizard_pending;
+static struct kui_vmu_wizard_view vmu_wizard_snapshot;
+static unsigned vmu_wizard_generation;
+static unsigned vmu_emulation_request,vmu_emulation_result,vmu_emulation_generation;
+static bool vmu_emulation_requested,vmu_emulation_enabled=true,vmu_emulation_ok,vmu_emulation_stopped;
+static char vmu_emulation_note[128];
 static struct kui_datetime clock_pending,clock_snapshot;
 static bool clock_valid;
 static unsigned clock_generation;
@@ -139,11 +186,31 @@ static struct kui_app_status sci_async_status;
  * after its final frame and SQ drain, never merely by the worker setting a flag. */
 static struct kui_sci_video_quiet sci_video_quiet;
 static struct kui_app_status scan_status,salvage_status;
+/* Worker-owned presentation snapshot. The UI copies this into shell under
+ * lock before input; the renderer never observes worker writes to shell. */
+static struct kui_salvage_dashboard recovery_dashboard;
+/* Single-worker, RAM-only optimization. UI snapshots never authorize reuse. */
+static struct kui_salvage_session_policy salvage_session={.epoch=1};
+static void salvage_session_forget(void) {
+    kui_salvage_session_policy_forget(&salvage_session);
+    kui_salvage_session_invalidate();
+}
+static void salvage_session_observe_errors(void) {
+    struct kui_storage_errors errors;kui_storage_errors_get(&errors);
+    if(kui_salvage_session_policy_errors(&salvage_session,errors.total))
+        salvage_session_forget();
+}
 static char salvage_path_pending[KUI_DEST_JOB_CAP];
 static unsigned salvage_passes_pending;
-static bool salvage_zero_pending;
+static struct kui_drive_options salvage_drive_pending;
+static bool salvage_trial_pending,salvage_speed_probe_pending;
+static enum kui_salvage_diagnostic salvage_diagnostic_pending;
+static bool salvage_verify_pending,salvage_defer_pending;
 static char scan_path_pending[KUI_DEST_JOB_CAP];
 static unsigned repair_attempts_pending=10u;
+static unsigned repair_passes_pending;
+static bool repair_in_place_pending,repair_new_copy_pending,recovery_cd_pending,repair_saved_identity_pending;
+static bool repair_new_copy_created; /* Worker publishes under lock after creating a transaction. */
 static unsigned active_app;
 static bool splash_active,boot_ready,startup_skip,startup_finished;
 static bool probe_launch_ready,probe_launch_failed;
@@ -358,6 +425,10 @@ static void save_report(const char *trigger,const char *outcome,bool automatic) 
         kui_log("Report save %s; diagnostics Y can retry.",result==KUI_REPORT_STOPPED?"cancelled":"FAILED");
         if(automatic) kui_log("Capture result remains: %s",outcome);
     }
+#ifdef KUI_SD_RUNTIME
+    if(result!=KUI_REPORT_SAVED)salvage_session_forget();
+    salvage_session_observe_errors();
+#endif
     mutex_lock(&lock);saving_report=false;mutex_unlock(&lock);
 }
 #ifdef KUI_SD_RUNTIME
@@ -444,6 +515,14 @@ static void publish_music(void) {
     struct kui_music_status status;
     kui_music_status_copy(&status);
     mutex_lock(&lock); music_snapshot=status; mutex_unlock(&lock);
+}
+/* Routine UI publication must not wait for Ogg decoding or a G2 stream
+ * transfer. Those run under audio_lock; controls still take fresh snapshots
+ * through publish_music/status_copy when their result requires one. */
+static void publish_music_if_ready(void) {
+    struct kui_music_status status;
+    if(!kui_music_status_try_copy(&status)) return;
+    mutex_lock(&lock);music_snapshot=status;mutex_unlock(&lock);
 }
 static void configure_music(void) {
     struct kui_system_settings value;
@@ -568,11 +647,46 @@ static void app_progress(const struct kui_app_status *status) {
     else if(active_app>=84 && active_app<=86) vmu_image_snapshot.status=*status;
     else if(active_app==89 || active_app==90) vmu_bulk_snapshot.status=*status;
     else if(active_app==91 || active_app==92) vmu_import_snapshot.status=*status;
-    else if(active_app==93) vmu_collection_snapshot.status=*status;
+    else if(active_app==93 || active_app==101) vmu_collection_snapshot.status=*status;
     else if(active_app==94 || active_app==95) vmu_collection_copy_snapshot.status=*status;
+    else if(active_app==98) vmu_wizard_snapshot.status=*status;
     else if(active_app==24) player_status=*status;
     else if(active_app==31) vmu_backups.status=*status;
     else vmu_snapshot.status=*status;
+    mutex_unlock(&lock);
+}
+/* Global launch preference only. A write finishes its small durable record
+ * even if Stop arrives during publication, then the view reports what the
+ * card actually confirms. No running game or VMU image is changed here. */
+static void vmu_emulation_operation(bool save) {
+    bool enabled=true,ok=false,stopped=false,write_unconfirmed=false;
+    char note[128]={0};
+    snprintf(note,sizeof(note),"Cannot read the VMU emulation setting; refresh to retry.");
+    if(kui_games_storage_open(kui_log)==KUI_GAMES_STORAGE_OK) {
+        ok=kui_vmu_emulation_settings_load(&enabled,kui_log);
+        if(ok && save) {
+            if(kui_cancelled()) {
+                stopped=true;snprintf(note,sizeof(note),"Setting change stopped; saved choice retained.");
+            } else {
+                ok=kui_vmu_emulation_settings_save(vmu_emulation_requested,kui_log);
+                if(ok) enabled=vmu_emulation_requested;
+                else {
+                    write_unconfirmed=true;
+                    ok=kui_vmu_emulation_settings_load(&enabled,kui_log);
+                    snprintf(note,sizeof(note),ok?"Write was not confirmed; current saved setting reloaded.":
+                        "Setting change was not confirmed; refresh before trying again.");
+                }
+            }
+        }
+        if(!kui_games_storage_release()) {
+            ok=false;snprintf(note,sizeof(note),"Could not release storage; refresh to confirm the setting.");
+        } else if(ok && !stopped && !write_unconfirmed && (!save || enabled==vmu_emulation_requested))
+            snprintf(note,sizeof(note),"Emulated VMU %s. Applies on the next supported native launch.",enabled?"On":"Off");
+    }
+    mutex_lock(&lock);
+    vmu_emulation_enabled=enabled;vmu_emulation_ok=ok;vmu_emulation_stopped=stopped;
+    memcpy(vmu_emulation_note,note,sizeof(vmu_emulation_note));
+    vmu_emulation_result=vmu_emulation_request;++vmu_emulation_generation;
     mutex_unlock(&lock);
 }
 static bool startup_sound_cancelled(void) {
@@ -1386,6 +1500,12 @@ static void scan_progress(void *ctx,const struct kui_scan_status *status) {
             "Manifest hashes checked too; original files are read-only.":
             "No manifest; only FULL TRACK MATCH checks all audio too.");
     }
+    if(status->storage_unstable || status->sampled || status->guard_cleared) {
+        unsigned line=view.line_count<KUI_APP_LINES?view.line_count++:KUI_APP_LINES-1;
+        snprintf(view.lines[line],KUI_APP_LINE_CAP,"%s Repeats %lu; changed chunks %lu",
+            status->storage_unstable?"Repair blocked.":status->guard_cleared?"Repair allowed.":"Samples agree.",
+            (unsigned long)status->sampled,(unsigned long)status->unstable_chunks);
+    }
     mutex_lock(&lock);scan_status=view;mutex_unlock(&lock);
 }
 static void scan_operation(void) {
@@ -1415,13 +1535,30 @@ static void repair_progress(void *ctx,const struct kui_repair_status *status) {
     struct kui_app_status view={.complete=status->complete,.stopped=status->result==KUI_REPAIR_STOPPED,
         .errors=status->result==KUI_REPAIR_FAILED?1u:0u,.done=status->done,.total=status->total,.line_count=4};
     snprintf(view.message,sizeof(view.message),"%.127s",status->message);
-    snprintf(view.lines[0],KUI_APP_LINE_CAP,"Track %u/%u; FAD %lu",status->track,status->tracks,(unsigned long)status->fad);
+    snprintf(view.lines[0],KUI_APP_LINE_CAP,"%s track %u/%u; FAD %lu",status->resumed?"Resuming":"Repairing",
+        status->track,status->tracks,(unsigned long)status->fad);
     snprintf(view.lines[1],KUI_APP_LINE_CAP,"Suspects %lu; repaired %lu; unresolved %lu",
         (unsigned long)status->suspects,(unsigned long)status->repaired,(unsigned long)status->unresolved);
     snprintf(view.lines[2],KUI_APP_LINE_CAP,"%s",status->storage_unstable?
         "Storage readbacks differ; optical repair blocked.":status->audio_unverified?
-        "Audio cannot be validated from sector parity.":"Original saved dump is read-only.");
+        "Audio cannot be validated from sector parity.":status->in_place?
+        "Repairing original tracks; durable backups retained.":"Original saved dump is read-only.");
     snprintf(view.lines[3],KUI_APP_LINE_CAP,"%.79s",status->job);
+    if(status->pass) {
+        view.line_count=5;
+        if(repair_passes_pending)snprintf(view.lines[4],KUI_APP_LINE_CAP,"Recovery pass %u/%u; B keeps progress",(unsigned)status->pass,repair_passes_pending);
+        else snprintf(view.lines[4],KUI_APP_LINE_CAP,"Recovery pass %u; until stopped; B keeps progress",(unsigned)status->pass);
+    }
+    if(status->alternate_identity) {
+        view.line_count=5;
+        snprintf(view.lines[4],KUI_APP_LINE_CAP,"Identity: verified saved prefixes and fixed recovery anchors");
+    }
+    if(status->catalogue_checked) {
+        view.line_count=6;
+        snprintf(view.lines[4],KUI_APP_LINE_CAP,"%.12s: %.53s",status->catalogue.catalog,kui_known_text(status->catalogue.result));
+        snprintf(view.lines[5],KUI_APP_LINE_CAP,"%.68s",status->catalogue.name);
+        view.passed=status->complete && status->result==KUI_REPAIR_COMPLETE && status->catalogue.result==KUI_KNOWN_FULL_MATCH;
+    }
     mutex_lock(&lock);scan_status=view;mutex_unlock(&lock);
 }
 static void forensic_progress(void *ctx,const struct kui_forensic_status *status) {
@@ -1437,6 +1574,65 @@ static void forensic_progress(void *ctx,const struct kui_forensic_status *status
     snprintf(view.lines[3],KUI_APP_LINE_CAP,"%.79s",status->report);
     mutex_lock(&lock);scan_status=view;mutex_unlock(&lock);
 }
+static enum kui_read_result recovery_read(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out) {
+    enum kui_read_result result=kui_disc_read_raw(ctx,fad,sectors,out);
+    mutex_lock(&lock);bool reset=drive_reset_required;mutex_unlock(&lock);
+    /* The existing reader uses FATAL for a clean user cancellation too. The
+     * recovery engine sees B before another read/write; genuine poisoned drive
+     * failures retain priority and never become placeholders. */
+    if(result==KUI_READ_FATAL && kui_cancelled() && !reset) return KUI_READ_RETRY;
+    return result;
+}
+static enum kui_read_result salvage_read(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out) {
+    enum kui_read_result result=kui_disc_read_salvage(ctx,fad,sectors,out);
+    mutex_lock(&lock);bool reset=drive_reset_required;mutex_unlock(&lock);
+    /* Salvage permits the drive more time for damaged media, while retaining
+     * the same clean-Stop translation and genuine fatal-state priority. */
+    if(result==KUI_READ_FATAL && kui_cancelled() && !reset)return KUI_READ_RETRY;
+    return result;
+}
+static bool prepare_recovery_disc(struct kui_capture_plan *plan) {
+    struct kui_toc sessions[2];bool is_cd=false;
+    if(!(recovery_cd_pending?kui_disc_prepare_capture(sessions,&is_cd):kui_disc_prepare(sessions)))return false;
+    if(kui_cancelled())return false;
+    if(is_cd)kui_log("Recovery CD scope: user-declared single session; TOC INDEX01 intervals");
+    return is_cd?kui_plan_cd_tracks(&sessions[0],plan):kui_plan_tracks(sessions,plan);
+}
+static void recovery_dashboard_admitted(const char *job) {
+    mutex_lock(&lock);
+    /* The title is an insertion label only. The caller has already admitted
+     * this job through saved anchors; no title comparison selects a job. */
+    kui_recovery_dashboard_admit(&recovery_dashboard,job,
+        disc_snapshot.state==KUI_DISC_IDENTITY_READY?disc_snapshot.title:NULL);
+    mutex_unlock(&lock);
+}
+static void recovery_dashboard_guard_refresh(const char *job) {
+    if(!kui_recovery_dashboard_job(job))return;
+    /* This small read-only check runs on the existing worker after admission,
+     * while storage is connected. Browsing and drawing perform no card I/O. */
+    FATFS fs;bool allowed=false;
+    if(kui_mount(&fs,kui_log)) {
+        allowed=kui_recovery_guard_check(job,NULL);
+        if(f_mount(NULL,"0:",0)!=FR_OK)allowed=false;
+    }
+    mutex_lock(&lock);
+    kui_recovery_dashboard_guard(&recovery_dashboard,job,!allowed);
+    mutex_unlock(&lock);
+    if(!allowed)salvage_session_forget();
+}
+static bool salvage_session_card(uint8_t digest[32]) {
+    struct kui_vmu_sd_identity card;
+    if(!kui_sd_card_identity(&card))return false;
+    /* Avoid structure padding and host byte order in the card binding. */
+    uint8_t geometry[9];
+    for(unsigned i=0;i<8;++i)geometry[i]=(uint8_t)(card.sectors>>(i*8));
+    geometry[8]=card.high_capacity?1u:0u;
+    struct kui_sha256 hash;kui_sha256_init(&hash);
+    kui_sha256_update(&hash,"KUI-SALVAGE-CARD1",17);
+    kui_sha256_update(&hash,card.cid,sizeof(card.cid));
+    kui_sha256_update(&hash,geometry,sizeof(geometry));
+    kui_sha256_digest(&hash,digest);return true;
+}
 static void repair_operation(bool forensic) {
     kui_sd_set_params(KUI_STORAGE_AUTO,true);
     if(forensic) {
@@ -1450,72 +1646,443 @@ static void repair_operation(bool forensic) {
             result.result==KUI_FORENSIC_UNSTABLE?"sampled reads differ":result.result==KUI_FORENSIC_STOPPED?"stopped":"failed",true);
     } else {
         struct kui_repair_status result={.result=KUI_REPAIR_FAILED,.complete=true};
-        snprintf(result.message,sizeof(result.message),"Could not prepare matching GD-ROM and storage.");
-        struct kui_toc sessions[2];struct kui_capture_plan plan;
-        const struct kui_repair_options options={.attempts=repair_attempts_pending,.progress=repair_progress};
-        const struct kui_capture_ops ops={.read=kui_disc_read_raw,.cancelled=scan_cancel,
-            .now_ms=scan_now,.log=kui_log,.build=KUI_BUILD_ID};
-        if(kui_disc_prepare(sessions) && kui_plan_tracks(sessions,&plan) && !kui_cancelled() && kui_sd_connect()) {
+        snprintf(result.message,sizeof(result.message),"Could not prepare matching disc and storage.");
+        struct kui_capture_plan plan;
+        const struct kui_repair_options options={.attempts=repair_attempts_pending,.progress=repair_progress,
+            .continuous=true,.passes=repair_passes_pending,.in_place=repair_in_place_pending,
+            .new_copy=repair_new_copy_pending,
+            .allow_saved_identity=repair_saved_identity_pending && !repair_in_place_pending};
+        const struct kui_capture_ops ops={.read=recovery_read,.cancelled=scan_cancel,
+            .now_ms=scan_now,.log=kui_log,.build=KUI_BUILD_ID,.recover=kui_disc_recover};
+        if(prepare_recovery_disc(&plan) && !kui_cancelled() && kui_sd_connect()) {
             kui_repair_copy(scan_path_pending,&plan,&ops,&options,&result);kui_sd_disconnect();
         }
+        if(repair_new_copy_pending && result.resume_ready) {
+            mutex_lock(&lock);repair_new_copy_created=true;mutex_unlock(&lock);
+        }
         result.complete=true;repair_progress(NULL,&result);
-        save_report("auto repair copy",result.result==KUI_REPAIR_COMPLETE?"copy completed":
+        save_report(repair_in_place_pending?"auto in-place repair":"auto repair copy",result.result==KUI_REPAIR_COMPLETE?"repair completed":
             result.result==KUI_REPAIR_UNRESOLVED?"unresolved copy":result.result==KUI_REPAIR_STOPPED?"stopped":"failed",true);
     }
 }
 static void salvage_progress(void *ctx,const struct kui_salvage_status *status) {
     (void)ctx;
-    struct kui_app_status view={.done=status->done,.total=status->total,
-        .complete=status->complete,.passed=status->result==KUI_SALVAGE_RESOLVED && status->complete,
-        .stopped=status->result==KUI_SALVAGE_STOPPED,.line_count=6};
-    snprintf(view.message,sizeof(view.message),"%s",status->message);
-    snprintf(view.lines[0],KUI_APP_LINE_CAP,"Track %u/%u  FAD %lu  attempts %lu",status->track,status->tracks,
-        (unsigned long)status->fad,(unsigned long)status->attempts);
-    snprintf(view.lines[1],KUI_APP_LINE_CAP,"Targets %lu  recovered %lu  remaining %lu",
-        (unsigned long)status->targets,(unsigned long)status->recovered,(unsigned long)status->remaining);
-    snprintf(view.lines[2],KUI_APP_LINE_CAP,"Recovery pass %u/%u  First pass: %s",status->pass,status->pass_limit,
-        status->first_pass_complete?"complete":"incomplete");
-    snprintf(view.lines[3],KUI_APP_LINE_CAP,"%.76s",status->job);
-    snprintf(view.lines[4],KUI_APP_LINE_CAP,"Unresolved zeros are NOT a verified game dump.");
-    snprintf(view.lines[5],KUI_APP_LINE_CAP,"Separate recovery job; normal captures unchanged.");
+    struct kui_app_status view;
+    kui_salvage_display_status(&view,status);
+    mutex_lock(&lock);
+    if(kui_recovery_dashboard_job(status->job)) {
+        /* NEW publishes its admitted folder through progress. Existing jobs
+         * have already passed latest() before this callback is installed. */
+        kui_recovery_dashboard_admit(&recovery_dashboard,status->job,
+            disc_snapshot.state==KUI_DISC_IDENTITY_READY?disc_snapshot.title:NULL);
+        /* A partial first pass cannot know how many unread sectors remain;
+         * a partially replayed journal must not look like a complete count. */
+        if(status->first_pass_complete && status->sd_phase!=KUI_SALVAGE_SD_JOURNAL)
+            kui_recovery_dashboard_counts(&recovery_dashboard,status->job,
+                status->targets,status->recovered,status->remaining);
+    }
+    salvage_status=view;mutex_unlock(&lock);
+}
+static void salvage_check_progress(void *ctx,const struct kui_salvage_check_status *status) {
+    const struct kui_salvage_status *receipt=ctx;
+    salvage_progress(NULL,receipt);
+    mutex_lock(&lock);struct kui_app_status view=salvage_status;mutex_unlock(&lock);
+    view.complete=status->complete;
+    view.stopped=status->result==KUI_SALVAGE_CHECK_STOPPED;
+    view.passed=status->complete && status->catalogue_checked && status->catalogue.result==KUI_KNOWN_FULL_MATCH;
+    if(status->total) {view.done=status->done;view.total=status->total;}
+    view.line_count=7;
+    snprintf(view.message,sizeof(view.message),"%.127s",status->message);
+    if(status->verifying_files)
+        snprintf(view.lines[0],KUI_APP_LINE_CAP,"Readback track %u/%u; recovered files retained",status->track,status->tracks);
+    else
+        snprintf(view.lines[0],KUI_APP_LINE_CAP,"Recovered %u tracks; all recorded holes resolved",receipt->tracks);
+    snprintf(view.lines[3],KUI_APP_LINE_CAP,"%s",status->saved_verified?
+        "Saved bytes: every track byte read back and verified.":status->verifying_files?
+        "Saved bytes: full track readback in progress.":status->readback_requested?
+        "Saved bytes: full readback did not complete.":"Saved bytes: not read back; recovery CRCs used.");
+    if(status->catalogue_checked) {
+        snprintf(view.lines[4],KUI_APP_LINE_CAP,"%.12s: %.53s",status->catalogue.catalog,kui_known_text(status->catalogue.result));
+        snprintf(view.lines[5],KUI_APP_LINE_CAP,"%.68s",status->catalogue.name[0]?
+            status->catalogue.name:"No matching reference title identified.");
+    } else {
+        snprintf(view.lines[4],KUI_APP_LINE_CAP,"Catalogue: comparison not complete.");
+        view.lines[5][0]=0;
+    }
+    snprintf(view.lines[6],KUI_APP_LINE_CAP,"%.68s",status->report[0]?status->report:receipt->job);
     mutex_lock(&lock);salvage_status=view;mutex_unlock(&lock);
 }
-static enum kui_read_result salvage_read(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out) {
-    enum kui_read_result result=kui_disc_read_raw(ctx,fad,sectors,out);
-    mutex_lock(&lock);bool reset=drive_reset_required;mutex_unlock(&lock);
-    /* The existing reader uses FATAL for a clean user cancellation too. The
-     * salvage engine sees B before another read/write; genuine poisoned drive
-     * failures retain priority and never become placeholders. */
-    if(result==KUI_READ_FATAL && kui_cancelled() && !reset) return KUI_READ_RETRY;
-    return result;
+static void speed_probe_progress(void *ctx,const struct kui_drive_speed_probe_status *status) {
+    (void)ctx;
+    static const char *const names[]={"Original","Maximum","1x requested","2x requested","4x requested",
+        "6x requested","8x requested","10x requested","12x requested"};
+    struct kui_app_status view={.done=status->done,.total=status->total,.line_count=9,
+        .complete=status->complete,.stopped=status->stopped,
+        .passed=status->complete && !status->failed && !status->budget_expired,
+        .errors=status->failed?1u:0u};
+    snprintf(view.message,sizeof(view.message),"%s",status->message);
+    for(unsigned p=0;p<9;++p) {
+        if(!status->tried[p])snprintf(view.lines[p],KUI_APP_LINE_CAP,"%s: pending",names[p]);
+        else if(!status->verified[p])snprintf(view.lines[p],KUI_APP_LINE_CAP,"%s: settings not verified; skipped",names[p]);
+        else snprintf(view.lines[p],KUI_APP_LINE_CAP,"%s: matched %u/%u regions; read %" PRIu64 " ms",
+            names[p],status->matched[p],status->attempted[p],status->read_ms[p]);
+    }
+    mutex_lock(&lock);salvage_status=view;mutex_unlock(&lock);
 }
-static void salvage_operation(unsigned action) {
-    struct kui_salvage_status result={.result=KUI_SALVAGE_FAILED};
-    snprintf(result.message,sizeof(result.message),"Could not prepare disc and SD for salvage.");
-    struct kui_toc sessions[2];struct kui_capture_plan plan;
-    const struct kui_salvage_options options={.zero_fill=salvage_zero_pending,
-        .passes=salvage_passes_pending,.job=salvage_path_pending,.progress=salvage_progress};
+static void speed_probe_operation(void) {
+    struct kui_drive_speed_probe_status result={0};struct kui_capture_plan plan;
     const struct kui_capture_ops ops={.read=salvage_read,.cancelled=scan_cancel,
         .now_ms=scan_now,.log=kui_log,.build=KUI_BUILD_ID};
-    kui_sd_set_params(KUI_STORAGE_AUTO,true);
-    if(kui_disc_prepare(sessions) && kui_plan_tracks(sessions,&plan) && !kui_cancelled() && kui_sd_connect()) {
+    kui_disc_timing_reset();
+    snprintf(result.message,sizeof(result.message),"Preparing read-only drive speed probe");
+    speed_probe_progress(NULL,&result);
+    bool ran=false;
+    if(prepare_recovery_disc(&plan) && !kui_cancelled() && kui_disc_controls_trial_begin()) {
         kui_disc_timing_phase(NULL,true);
-        if(action==46 || kui_salvage_latest(&plan,&ops,salvage_path_pending))
-            kui_salvage_run(&plan,&ops,&options,(enum kui_salvage_action)(action-46),&result);
-        else snprintf(result.message,sizeof(result.message),"No matching salvage job found; see Diagnostics.");
+        ran=kui_drive_speed_probe_run(&plan,&ops,kui_disc_controls_speed_select,speed_probe_progress,&result);
+        kui_disc_timing_phase(NULL,false);kui_disc_timing_report();
+    } else {
+        result.stopped=kui_cancelled();result.failed=!result.stopped;
+        snprintf(result.message,sizeof(result.message),"%s",result.stopped?"Speed probe stopped":
+            "Could not prepare drive controls; see Diagnostics");
+    }
+    bool restored=kui_disc_controls_end();
+    if(!restored) {
+        result.failed=true;
+        snprintf(result.message,sizeof(result.message),"Drive unavailable. Restart console; recovery jobs unchanged.");
+        mutex_lock(&lock);drive_reset_required=true;mutex_unlock(&lock);
+    }
+    speed_probe_progress(NULL,&result);
+    mutex_lock(&lock);salvage_status.complete=true;mutex_unlock(&lock);
+    kui_ui_set_hz(KUI_OPT_UI_FULL);
+    kui_log("SPEED probe end restored=%u complete=%u stopped=%u failed=%u budget=%u; no recovery jobs opened or changed",
+        restored?1u:0u,result.complete?1u:0u,result.stopped?1u:0u,result.failed?1u:0u,result.budget_expired?1u:0u);
+    save_report("auto drive speed support probe",!restored?"restart required":result.stopped?"stopped":
+        result.budget_expired?"soft budget reached":ran?"speed probe finished":"speed probe failed",true);
+}
+struct saved_read_evidence {
+    unsigned captured,profile;
+    bool profile_active;
+    struct kui_sci_sd_stats before;
+};
+static void saved_read_bus_summary(struct saved_read_evidence *e) {
+    if(!e->profile_active)return;
+    struct kui_sci_sd_stats after;kui_sci_sd_stats_get(&after);
+    kui_log("SAVED READ SCI profile=%u DMA_rx_blocks=%" PRIu32 " PIO_block_attempts=%" PRIu32 " bus_failures=%" PRIu32
+        "; includes metadata and evidence I/O",e->profile,after.rx_blocks-e->before.rx_blocks,
+        after.polled_blocks-e->before.polled_blocks,after.failures-e->before.failures);
+    e->profile_active=false;
+}
+static void saved_read_observe(void *ctx,unsigned profile,uint32_t slot,const char *problem,
+    const uint8_t record[KUI_SAVED_READ_RECORD_BYTES]) {
+    struct saved_read_evidence *e=ctx;
+    if(profile>=KUI_SAVED_READ_PROFILES || (e->captured&(1u<<profile)))return;
+    e->captured|=1u<<profile;
+    FRESULT r=f_mkdir("0:/KUI/probes");
+    if(r!=FR_OK && r!=FR_EXIST) {kui_log("Saved-read evidence directory unavailable");return;}
+    char path[128];FIL file;bool opened=false;
+    for(unsigned n=0;n<10000;++n) {
+        snprintf(path,sizeof(path),"0:/KUI/probes/saved-read-%04u-p%u-s%" PRIu32 ".bin",n,profile,slot);
+        r=f_open(&file,path,FA_WRITE|FA_CREATE_NEW);
+        if(r==FR_OK) {opened=true;break;}
+        if(r!=FR_EXIST)break;
+    }
+    if(!opened) {kui_log("Saved-read evidence file unavailable; no source file was opened for writing");return;}
+    UINT put=0;
+    bool ok=f_write(&file,record,KUI_SAVED_READ_RECORD_BYTES,&put)==FR_OK &&
+        put==KUI_SAVED_READ_RECORD_BYTES && f_sync(&file)==FR_OK;
+    if(f_close(&file)!=FR_OK)ok=false;
+    kui_log("Saved-read observation %s: %s; profile=%u slot=%" PRIu32 " problem=%s",
+        ok?"saved":"save incomplete",path+2,profile,slot,problem);
+}
+static void saved_read_progress(void *ctx,const struct kui_saved_read_probe_status *status) {
+    struct saved_read_evidence *e=ctx;
+    if(e && status->profile<KUI_SAVED_READ_PROFILES && status->tried[status->profile] &&
+       kui_storage_active()==KUI_STORAGE_SCI && (!e->profile_active || e->profile!=status->profile)) {
+        saved_read_bus_summary(e);
+        e->profile=status->profile;kui_sci_sd_stats_get(&e->before);e->profile_active=true;
+    }
+    struct kui_app_status view={.complete=status->complete,.stopped=status->stopped,
+        .passed=status->complete && !status->failed && !status->inconsistent,
+        .errors=(status->failed || status->inconsistent)?1u:0u,
+        .done=status->done,.total=status->total,.line_count=8};
+    snprintf(view.message,sizeof(view.message),"%.127s",status->message);
+    for(unsigned step=0;step<KUI_SAVED_READ_PROFILES;++step) {
+        unsigned p=kui_saved_read_probe_profile_at_step(step);
+        const char *name=kui_saved_read_probe_profile_name(p);
+        if(!status->tried[p])snprintf(view.lines[step],KUI_APP_LINE_CAP,"%s: pending",name);
+        else snprintf(view.lines[step],KUI_APP_LINE_CAP,"%s: %lu/%lu; bad %lu; %" PRIu64 " ms",
+            name,(unsigned long)status->processed[p],(unsigned long)status->records,
+            (unsigned long)status->invalids[p],status->read_ms[p]);
+    }
+    snprintf(view.lines[4],KUI_APP_LINE_CAP,"%.79s",status->job);
+    if(status->first_bad_seen)snprintf(view.lines[5],KUI_APP_LINE_CAP,"First bad: profile %u slot %lu; %.38s",
+        status->first_bad_profile,(unsigned long)status->first_bad_slot,status->first_problem);
+    else snprintf(view.lines[5],KUI_APP_LINE_CAP,"%s",status->budget_expired?
+        "Five-minute budget reached; comparison incomplete.":"Comparing saved candidate bytes; no sector repairs.");
+    snprintf(view.lines[6],KUI_APP_LINE_CAP,"Bad observations, if any, saved under /KUI/probes/.");
+    snprintf(view.lines[7],KUI_APP_LINE_CAP,"Quarantine remains; this test does not authorize repair.");
+    mutex_lock(&lock);salvage_status=view;mutex_unlock(&lock);
+}
+static void saved_read_probe_operation(void) {
+    struct kui_saved_read_probe_status result={0};struct saved_read_evidence evidence={0};
+    struct kui_capture_plan plan;
+    const struct kui_capture_ops discovery={.read=salvage_read,.cancelled=scan_cancel,
+        .now_ms=scan_now,.log=kui_log,.build=KUI_BUILD_ID};
+    const struct kui_saved_read_probe_ops ops={.ctx=&evidence,.cancelled=scan_cancel,
+        .now_ms=scan_now,.progress=saved_read_progress,.log=kui_log,.observe=saved_read_observe};
+    snprintf(result.message,sizeof(result.message),"Identifying the matching saved salvage job");
+    saved_read_progress(NULL,&result);
+    bool ran=false;
+    kui_sd_set_params(KUI_STORAGE_AUTO,true);
+    if(prepare_recovery_disc(&plan) && !kui_cancelled() && kui_sd_connect()) {
+        if(kui_salvage_latest(&plan,&discovery,salvage_path_pending)) {
+            recovery_dashboard_admitted(salvage_path_pending);
+            ran=kui_saved_read_probe_run(salvage_path_pending,&ops,&result);
+            recovery_dashboard_guard_refresh(salvage_path_pending);
+        } else {
+            result.stopped=kui_cancelled();result.failed=!result.stopped;
+            snprintf(result.message,sizeof(result.message),"No matching saved job; see Diagnostics");
+        }
+        saved_read_bus_summary(&evidence);
+        kui_sd_disconnect();
+    } else {
+        result.stopped=kui_cancelled();result.failed=!result.stopped;
+        snprintf(result.message,sizeof(result.message),"Could not prepare the saved-read comparison");
+    }
+    if(!kui_disc_controls_end()) {
+        result.failed=true;
+        mutex_lock(&lock);drive_reset_required=true;mutex_unlock(&lock);
+    }
+    saved_read_progress(NULL,&result);
+    mutex_lock(&lock);salvage_status.complete=true;mutex_unlock(&lock);
+    kui_ui_set_hz(KUI_OPT_UI_FULL);
+    kui_log("Saved-read probe end complete=%u inconsistent=%u failed=%u stopped=%u budget=%u; quarantine unchanged",
+        result.complete?1u:0u,result.inconsistent?1u:0u,result.failed?1u:0u,result.stopped?1u:0u,result.budget_expired?1u:0u);
+    save_report("auto saved repair read comparison",result.stopped?"stopped":
+        result.budget_expired?"comparison budget reached":ran?"candidate observations agree; repair remains blocked":
+        result.inconsistent?"saved candidate observations differ; repair remains blocked":"saved-read comparison failed",true);
+}
+static void salvage_revalidate_progress(void *ctx,const struct kui_salvage_revalidate_status *status) {
+    (void)ctx;
+    static const char *const phases[]={"Preparing","Header","Journal","Repair records","Track data","Final checks"};
+    const char *phase=(unsigned)status->phase<sizeof(phases)/sizeof(phases[0])?phases[status->phase]:"Unknown";
+    bool ended=status->complete || status->failed || status->stopped;
+    struct kui_app_status view={.complete=ended,.stopped=status->stopped,
+        .passed=status->complete && !status->failed && !status->stopped && status->guard_cleared,
+        .errors=status->failed?1u:0u,.done=status->bytes_done,.total=status->bytes_total,.line_count=8};
+    snprintf(view.message,sizeof(view.message),"%.127s",status->message);
+    snprintf(view.lines[0],KUI_APP_LINE_CAP,"Phase: %s; track %u/%u",phase,status->track,status->tracks);
+    snprintf(view.lines[1],KUI_APP_LINE_CAP,"Read %" PRIu64 " / %" PRIu64 " MiB; repeated reads included",
+        status->bytes_done>>20,status->bytes_total>>20);
+    snprintf(view.lines[2],KUI_APP_LINE_CAP,"Targets %lu; saved repairs %lu; candidate records %lu",
+        (unsigned long)status->targets,(unsigned long)status->recovered,(unsigned long)status->candidates);
+    snprintf(view.lines[3],KUI_APP_LINE_CAP,"%.79s",status->job);
+    snprintf(view.lines[4],KUI_APP_LINE_CAP,"Checks journal, repair records and every saved track byte.");
+    snprintf(view.lines[5],KUI_APP_LINE_CAP,"%s",status->guard_cleared?
+        "Quarantine cleared after full saved-data validation.":
+        ended?"Validation incomplete; quarantine was not cleared.":
+        "A full job scan can take tens of minutes; B stops safely.");
+    snprintf(view.lines[6],KUI_APP_LINE_CAP,"Saved source files are not repaired or rewritten.");
+    snprintf(view.lines[7],KUI_APP_LINE_CAP,"%s",status->guard_cleared?
+        "Choose Continue recovery when ready.":"No optical recovery starts during this check.");
+    mutex_lock(&lock);
+    if(status->phase>=KUI_SALVAGE_REVALIDATE_CANDIDATES)
+        kui_recovery_dashboard_counts(&recovery_dashboard,status->job,
+            status->targets,status->recovered,status->targets-status->recovered);
+    if(status->complete && status->guard_cleared && !status->failed && !status->stopped)
+        kui_recovery_dashboard_guard(&recovery_dashboard,status->job,false);
+    salvage_status=view;mutex_unlock(&lock);
+}
+static void salvage_revalidate_operation(void) {
+    struct kui_salvage_revalidate_status result={0};struct kui_capture_plan plan;
+    const struct kui_capture_ops ops={.read=salvage_read,.cancelled=scan_cancel,
+        .now_ms=scan_now,.log=kui_log,.build=KUI_BUILD_ID};
+    snprintf(result.message,sizeof(result.message),"Identifying the matching saved salvage job");
+    salvage_revalidate_progress(NULL,&result);
+    bool ran=false;
+    kui_sd_set_params(KUI_STORAGE_AUTO,true);
+    if(prepare_recovery_disc(&plan) && !kui_cancelled() && kui_sd_connect()) {
+        if(kui_salvage_latest(&plan,&ops,salvage_path_pending)) {
+            recovery_dashboard_admitted(salvage_path_pending);
+            ran=kui_salvage_revalidate(&plan,&ops,salvage_path_pending,salvage_revalidate_progress,&result);
+            if(!ran)recovery_dashboard_guard_refresh(salvage_path_pending);
+        } else {
+            result.stopped=kui_cancelled();result.failed=!result.stopped;
+            snprintf(result.message,sizeof(result.message),"No matching saved job; quarantine was not cleared");
+        }
+        kui_sd_disconnect();
+    } else {
+        result.stopped=kui_cancelled();result.failed=!result.stopped;
+        snprintf(result.message,sizeof(result.message),"Could not prepare full saved-data revalidation");
+    }
+    bool restored=kui_disc_controls_end();
+    if(!restored) {
+        result.failed=true;
+        snprintf(result.message,sizeof(result.message),"Drive needs restart; see saved-data result below");
+        mutex_lock(&lock);drive_reset_required=true;mutex_unlock(&lock);
+    }
+    salvage_revalidate_progress(NULL,&result);
+    kui_ui_set_hz(KUI_OPT_UI_FULL);
+    kui_log("Salvage revalidation end complete=%u failed=%u stopped=%u guard_cleared=%u bytes=%" PRIu64 "/%" PRIu64
+        "; no optical recovery started",result.complete?1u:0u,result.failed?1u:0u,result.stopped?1u:0u,
+        result.guard_cleared?1u:0u,result.bytes_done,result.bytes_total);
+    save_report("auto saved salvage revalidation",!restored?"drive restart required; see saved-data result":
+        result.stopped?"stopped; quarantine was not cleared":ran?"full saved-data checks passed; recovery idle":
+        "saved-data revalidation failed; quarantine was not cleared",true);
+}
+static void g1_mode_progress(void *ctx,const struct kui_g1_mode_probe_status *status) {
+    (void)ctx;
+    static const char *const names[]={"Maximum","1x","2x","4x","6x","8x","10x","12x"};
+    struct kui_app_status view={.complete=status->complete,.stopped=status->stopped,
+        .errors=(status->failed || status->restart_required)?1u:0u,.done=status->done,.total=status->total,.line_count=9};
+    snprintf(view.message,sizeof(view.message),"%.127s",status->message);
+    for(unsigned p=0;p<KUI_G1_MODE_CHOICES;++p) {
+        if(!status->tried[p])snprintf(view.lines[p],KUI_APP_LINE_CAP,"%s: pending",names[p]);
+        else if(status->observed_valid[p])snprintf(view.lines[p],KUI_APP_LINE_CAP,"%s: returned code %u; %s; diff %03x",
+            names[p],status->observed[p][2],status->verified[p]?"mode verified":"mode differs",status->difference[p]);
+        else snprintf(view.lines[p],KUI_APP_LINE_CAP,"%s: %.60s",names[p],kui_g1_probe_result_name(status->attempt[p]));
+    }
+    snprintf(view.lines[8],KUI_APP_LINE_CAP,"%s",status->restart_required?"Restart console before further drive use.":
+        status->restored?"Original settings verified; no physical-speed measurement.":"Mode requests only; no sector reads or saved-job changes.");
+    mutex_lock(&lock);salvage_status=view;mutex_unlock(&lock);
+}
+static void g1_mode_probe_operation(void) {
+    struct kui_g1_mode_probe_status result={0};struct kui_capture_plan plan;
+    snprintf(result.message,sizeof(result.message),"Preparing the direct G1 mode diagnostic");
+    g1_mode_progress(NULL,&result);
+    bool ran=false,began=false;
+    if(prepare_recovery_disc(&plan) && !kui_cancelled() && (began=kui_disc_g1_probe_begin()))
+        ran=kui_g1_mode_probe_native_run(g1_mode_progress,NULL,&result);
+    else {
+        result.stopped=kui_cancelled();result.failed=!result.stopped;
+        snprintf(result.message,sizeof(result.message),"Could not obtain safe direct G1 access; see Diagnostics");
+    }
+    bool usable=began?kui_disc_g1_probe_end(result.restored && !result.restart_required):kui_disc_controls_end();
+    if(!usable) {
+        result.failed=result.restart_required=true;
+        snprintf(result.message,sizeof(result.message),"G1 mode/ownership uncertain; restart console");
+        mutex_lock(&lock);drive_reset_required=true;mutex_unlock(&lock);
+    }
+    g1_mode_progress(NULL,&result);
+    mutex_lock(&lock);salvage_status.complete=true;mutex_unlock(&lock);
+    kui_ui_set_hz(KUI_OPT_UI_FULL);
+    kui_log("Direct G1 probe end complete=%u failed=%u stopped=%u raw_restored=%u BIOS_verified=%u retained_lease=%u",
+        result.complete?1u:0u,result.failed?1u:0u,result.stopped?1u:0u,result.restored?1u:0u,
+        usable?1u:0u,result.lease_retained?1u:0u);
+    save_report("auto direct G1 settings probe",!usable?"restart required":result.stopped?"stopped":
+        ran?"direct mode comparison complete; physical speed unmeasured":"direct mode comparison failed",true);
+}
+static void salvage_operation(unsigned action) {
+    if(salvage_diagnostic_pending==KUI_SALVAGE_DIAGNOSTIC_SAVED_READS) {saved_read_probe_operation();return;}
+    if(salvage_diagnostic_pending==KUI_SALVAGE_DIAGNOSTIC_G1_MODE) {g1_mode_probe_operation();return;}
+    if(salvage_diagnostic_pending==KUI_SALVAGE_DIAGNOSTIC_REVALIDATE) {salvage_revalidate_operation();return;}
+    if(salvage_diagnostic_pending!=KUI_SALVAGE_DIAGNOSTIC_NONE) {
+        mutex_lock(&lock);
+        salvage_status=(struct kui_app_status){.complete=true,.errors=1};
+        snprintf(salvage_status.message,sizeof(salvage_status.message),"Invalid diagnostic request; no salvage started");
+        mutex_unlock(&lock);
+        kui_log("Unknown salvage diagnostic request; repair was not started");
+        save_report("auto salvage diagnostic","invalid diagnostic request",true);return;
+    }
+    if(salvage_speed_probe_pending) {speed_probe_operation();return;}
+    uint64_t operation_started=scan_now(NULL);
+    kui_disc_timing_reset();
+    struct kui_salvage_status result={.result=KUI_SALVAGE_FAILED};
+    struct kui_salvage_check_status checked={0};bool checks_started=false;
+    snprintf(result.message,sizeof(result.message),"Could not prepare disc and SD for salvage.");
+    struct kui_capture_plan plan;
+    bool defer_next_range=salvage_defer_pending;salvage_defer_pending=false;
+    uint8_t session_card[32];
+    struct kui_salvage_options options={.passes=salvage_passes_pending,
+        .job=salvage_path_pending,.progress=salvage_progress,.defer_next_range=defer_next_range,
+        .control_trial=salvage_trial_pending,.trial_select=kui_disc_controls_trial_select};
+    const struct kui_capture_ops ops={.read=salvage_read,.cancelled=scan_cancel,
+        .now_ms=scan_now,.log=kui_log,.build=KUI_BUILD_ID,.recover=kui_disc_recover};
+    kui_sd_set_params(KUI_STORAGE_AUTO,true);
+    bool controls_ok=false;
+    if(prepare_recovery_disc(&plan) && !kui_cancelled()) {
+        controls_ok=salvage_trial_pending?kui_disc_controls_trial_begin():
+            kui_disc_controls_begin(&salvage_drive_pending);
+        if(!controls_ok)snprintf(result.message,sizeof(result.message),
+            "Drive controls could not be verified; salvage not started. See Diagnostics.");
+    }
+    if(controls_ok && !kui_cancelled() && kui_sd_connect()) {
+        kui_disc_timing_phase(NULL,true);
+        if(action==46 || kui_salvage_latest(&plan,&ops,salvage_path_pending)) {
+            if(action!=46)recovery_dashboard_admitted(salvage_path_pending);
+            bool ordinary=action==47 && !defer_next_range && !salvage_trial_pending;
+            bool card_ok=true;
+            if(ordinary && kui_storage_active()==KUI_STORAGE_SCI) {
+                card_ok=salvage_session_card(session_card);
+                salvage_session_observe_errors();
+                if(card_ok) {options.session_epoch=salvage_session.epoch;options.session_card=session_card;}
+                else {
+                    salvage_session_forget();
+                    snprintf(result.message,sizeof(result.message),"Card identity check failed; recovery did not start");
+                }
+            } else salvage_session_forget();
+            if(card_ok) {
+                kui_salvage_run(&plan,&ops,&options,(enum kui_salvage_action)(action-46),&result);
+                salvage_session.parked=result.session_retained;
+            }
+        } else snprintf(result.message,sizeof(result.message),"No matching salvage job found; see Diagnostics.");
         kui_disc_timing_phase(NULL,false);
+        kui_log("Salvage acquisition/repair wall_ms=%" PRIu64,scan_now(NULL)-operation_started);
+        kui_disc_timing_report();
+        if(result.result==KUI_SALVAGE_RESOLVED && result.complete) {
+            const struct kui_salvage_check_ops check_ops={.ctx=&result,.cancelled=scan_cancel,
+                .progress=salvage_check_progress,.log=kui_log};
+            checks_started=true;
+            kui_salvage_check_complete(&plan,&result,salvage_verify_pending,&check_ops,&checked);
+        }
+        if(result.job[0])recovery_dashboard_guard_refresh(result.job);
         kui_sd_disconnect();
     }
-    salvage_progress(NULL,&result);
+    /* Restore even after Stop, SD failure, failed mode application or completion
+     * checks. The adapter refuses cleanup commands after uncertain ownership. */
+    bool controls_restored=kui_disc_controls_end();
+    if(!controls_restored) {
+        salvage_session_forget();
+        snprintf(result.message,sizeof(result.message),
+            "Drive unavailable. Restart console; saved progress retained.");
+        mutex_lock(&lock);drive_reset_required=true;mutex_unlock(&lock);
+    }
+    mutex_lock(&lock);bool reset=drive_reset_required;mutex_unlock(&lock);
+    if(reset || result.result==KUI_SALVAGE_FAILED || !controls_ok)salvage_session_forget();
+    if(reset && result.result==KUI_SALVAGE_FAILED) {
+        snprintf(result.message,sizeof(result.message),"%s",result.job[0]?
+            "Drive reset required. Restart, then Continue recovery.":
+            "Drive reset required. Restart, then retry salvage.");
+        kui_log("Salvage: reset required; committed progress retained");
+    }
+    if(checks_started)salvage_check_progress(&result,&checked);
+    else salvage_progress(NULL,&result);
     mutex_lock(&lock);
     salvage_status.complete=true;
-    if(result.result==KUI_SALVAGE_FAILED) salvage_status.errors=1;
+    if(result.result==KUI_SALVAGE_FAILED || (checks_started && checked.result==KUI_SALVAGE_CHECK_FAILED)) salvage_status.errors=1;
+    if(!controls_restored) {
+        salvage_status.errors=1;
+        salvage_status.passed=false;
+        snprintf(salvage_status.message,sizeof(salvage_status.message),
+            "Drive unavailable. Restart console; saved progress retained.");
+    }
     mutex_unlock(&lock);
     kui_ui_set_hz(KUI_OPT_UI_FULL);
-    const char *outcome=result.result==KUI_SALVAGE_RESOLVED?"all targets resolved; no catalogue claim":
+    const char *outcome=!controls_restored?"drive unavailable; restart required":
+        checks_started && checked.result==KUI_SALVAGE_CHECK_STOPPED?"resolved; recovery checks stopped":
+        checks_started && checked.result==KUI_SALVAGE_CHECK_FAILED?"resolved; recovery checks failed":
+        checks_started && checked.catalogue.result==KUI_KNOWN_FULL_MATCH?
+            (checked.saved_verified?"resolved; saved bytes verified; full catalogue match":"resolved; recovery CRC full catalogue match"):
+        result.result==KUI_SALVAGE_RESOLVED?
+            (checked.saved_verified?"resolved; saved bytes verified; no full catalogue match":"resolved; no full catalogue match"):
+        result.result==KUI_SALVAGE_UNRESOLVED && salvage_trial_pending?
+            (result.trial_budget_expired?"bounded control trial budget reached; saved repairs retained":
+                "bounded control trial finished; unresolved sectors remain"):
         result.result==KUI_SALVAGE_UNRESOLVED?"unresolved holes remain":
         result.result==KUI_SALVAGE_STOPPED?"stopped":"failed";
-    save_report("auto salvage",outcome,true);
+    save_report(salvage_trial_pending?"auto salvage control trial":"auto salvage",outcome,true);
+    salvage_session_observe_errors();
 }
 /* Video is changed only by main, while no foreground I/O runs. The canvas
  * remains 640x480. VGA always receives its native 60 Hz progressive timing. */
@@ -1596,7 +2163,7 @@ static void files_song_result(const struct kui_app_status *result) {
 }
 static bool needs_cd_handoff(unsigned action) {
     return action==1 || (action>=4 && action<=7) || action==12 || action==22 ||
-        action==24 || action==25 || action==56 || action==57 || action==58 || action==65 || action==79 || action==81 || (action>=68 && action<=71) || (action>=46 && action<=48);
+        action==24 || action==25 || action==56 || action==57 || action==58 || action==65 || action==79 || action==81 || action==96 || action==97 || (action>=68 && action<=71) || (action>=46 && action<=48);
 }
 static bool games_page(enum kui_shell_page page) {
     return page==KUI_SHELL_GAMES || page==KUI_SHELL_GAMES_ADVANCED ||
@@ -1638,8 +2205,8 @@ static bool games_action_invalidates(unsigned action) {
         action==14 || action==17 || action==18 || action==19 || action==21 || action==22 ||
         action==25 || action==30 || action==33 || action==38 || action==40 ||
         (action>=42 && action<=48) || (action>=56 && action<=59) || action==62 ||
-        action==64 || action==65 || action==67 || action==79 || action==81 || action==82 ||
-        action==83 || action==85 || action==86 || action==90 || action==92 || action==95 || (action>=68 && action<=71);
+        action==64 || action==65 || action==67 || action==79 || action==81 || action==96 || action==97 || action==82 ||
+        action==83 || action==85 || action==86 || action==90 || action==92 || action==95 || action==98 || action==100 || (action>=68 && action<=71);
 }
 static bool games_idle_cancelled(void) {
     mutex_lock(&lock);
@@ -1666,6 +2233,7 @@ static bool games_selection_store(bool force) {
     struct kui_games_selection last=games_selection_requested;
     mutex_unlock(&lock);
     if(!wanted)return false;
+    salvage_session_forget();
     kui_sd_set_params(KUI_STORAGE_AUTO,true);
     if(kui_games_storage_open(kui_log)==KUI_GAMES_STORAGE_OK)
         (void)kui_games_storage_done(kui_games_selection_save(&last,kui_log));
@@ -1701,6 +2269,52 @@ static bool games_art_idle_work(void) {
        kui_shell_games_art_same(&games_art_requested,&games_art_running)) {
         games_art_result=result;games_art_published=games_art_running;games_art_result_ready=true;
         games_art_done=games_art_running;games_art_done_valid=true;
+    }
+    mutex_unlock(&lock);
+    return true;
+}
+/* Requires lock; submitting a metadata hint never reserves the foreground
+ * action slot or sets busy. A later hint replaces the queued request. */
+static void vmu_game_info_request_start(void) {
+    if(!shell.games_vmu_loading) return;
+    memcpy(vmu_game_info_requested.product,shell.games_vmu_product,sizeof(vmu_game_info_requested.product));
+    vmu_game_info_requested.native_route=(shell.games_detail.native_gd || shell.games_detail.native_cd) &&
+        !shell.games_detail.windows_ce;
+    vmu_game_info_requested.generation=shell.games_vmu_generation;
+    vmu_game_info_request_valid=true;
+}
+/* Requires lock. The running request is a private worker snapshot: opening
+ * another game's options cannot change the product being read mid-operation. */
+static bool vmu_game_info_current(void) {
+    return vmu_game_info_request_valid && shell.games_vmu_loading && games_page(shell.page) &&
+        vmu_game_info_running.generation==vmu_game_info_requested.generation &&
+        vmu_game_info_running.generation==shell.games_vmu_generation &&
+        vmu_game_info_running.native_route==vmu_game_info_requested.native_route &&
+        !memcmp(vmu_game_info_running.product,vmu_game_info_requested.product,12u) &&
+        !memcmp(vmu_game_info_running.product,shell.games_vmu_product,12u);
+}
+static bool vmu_game_info_cancelled(void) {
+    if(games_idle_cancelled()) return true;
+    mutex_lock(&lock);bool stop=!vmu_game_info_current();mutex_unlock(&lock);
+    return stop;
+}
+static bool vmu_game_info_idle_work(void) {
+    if(kui_cd_audio_owns_drive() || games_idle_cancelled()) return false;
+    mutex_lock(&lock);
+    bool wanted=vmu_game_info_request_valid && shell.games_vmu_loading && games_page(shell.page);
+    if(wanted) vmu_game_info_running=vmu_game_info_requested;
+    mutex_unlock(&lock);
+    if(!wanted || vmu_game_info_cancelled()) return false;
+    struct kui_vmu_game_info result;
+    kui_sd_set_params(KUI_STORAGE_AUTO,true);
+    kui_vmu_game_info_run(vmu_game_info_running.product,vmu_game_info_running.native_route,
+        &result,kui_log,vmu_game_info_cancelled);
+    bool stopped=vmu_game_info_cancelled();
+    mutex_lock(&lock);
+    if(!stopped && !busy && !pending && vmu_game_info_current()) {
+        vmu_game_info_snapshot=result;
+        vmu_game_info_request_result=vmu_game_info_running.generation;++vmu_game_info_generation;
+        vmu_game_info_request_valid=false;
     }
     mutex_unlock(&lock);
     return true;
@@ -1833,6 +2447,10 @@ static void *worker(void *unused) {
 #endif
         mutex_unlock(&lock);
 #ifdef KUI_SD_RUNTIME
+        salvage_session_observe_errors();
+        bool ordinary_continue=action==47 && !salvage_defer_pending && !salvage_trial_pending &&
+            !salvage_speed_probe_pending && salvage_diagnostic_pending==KUI_SALVAGE_DIAGNOSTIC_NONE;
+        if(!kui_salvage_session_policy_action(action,ordinary_continue))salvage_session_forget();
         if(action && !games_session_action(action)) (void)kui_games_storage_release();
         /* The worker exclusively owns cached discovery and artwork. */
         games_storage_observe();
@@ -1840,6 +2458,10 @@ static void *worker(void *unused) {
 #endif
         if(!action) {
 #ifdef KUI_SD_RUNTIME
+            /* This read-only hint never makes the UI busy. A newly queued
+             * foreground job cancels it, then runs on this same worker after
+             * the lookup has released its filesystem; no storage concurrency. */
+            if(!salvage_session.parked && vmu_game_info_idle_work()) {thd_sleep(1);continue;}
             /* Only this worker touches the drive. A queued foreground action
              * always wins over the optional insertion title read. */
             mutex_lock(&lock);
@@ -1866,6 +2488,13 @@ static void *worker(void *unused) {
                         kui_disc_identity_text(disc_identity.state),disc_identity.last_status_result,
                         disc_identity.last_status,disc_identity.last_disc_type);
                 mutex_lock(&lock);
+                /* Observed removal invalidates the presentation cache even
+                 * when the next disc has the same title. Routine post-I/O
+                 * parking below is not a removal and retains earned counts. */
+                if(disc_identity.state==KUI_DISC_IDENTITY_OPEN || disc_identity.state==KUI_DISC_IDENTITY_EMPTY) {
+                    kui_recovery_dashboard_clear(&recovery_dashboard);
+                    salvage_session_forget();
+                }
                 disc_snapshot=disc_identity;
                 if(identify && !pending && !busy && !video_preview) {
                     busy=true;cancel_requested=false;ui_hz_busy=2;action=12;
@@ -1873,9 +2502,14 @@ static void *worker(void *unused) {
                 mutex_unlock(&lock);
             }
             if(!action) {
-                games_storage_idle();
-                if(idle && !games_art_idle_work() && !games_selection_store(false)) {
-                    music_idle_work();games_warm_idle_work();(void)games_prefetch_idle_work();
+                /* Keep the just-validated job exclusive while paused. Audio
+                 * keeps playing from RAM; unrelated preloads/cache writers
+                 * resume after another foreground action revokes the receipt. */
+                if(!salvage_session.parked) {
+                    games_storage_idle();
+                    if(idle && !games_art_idle_work() && !games_selection_store(false)) {
+                        music_idle_work();games_warm_idle_work();(void)games_prefetch_idle_work();
+                    }
                 }
                 thd_sleep(16);continue;
             }
@@ -1887,14 +2521,18 @@ static void *worker(void *unused) {
         /* Other operations may alter card content, reconnect storage or hand
          * all memory to a game. Only browsing and inspection retain the cache. */
         if(games_action_invalidates(action)) games_cache_invalidate();
+        if(action==1 || is_capture_action(action) || action==7 || action==49 ||
+           action==81 || action==96 || action==97) {
+            mutex_lock(&lock);kui_recovery_dashboard_clear(&recovery_dashboard);mutex_unlock(&lock);
+        }
         if(action && needs_cd_handoff(action) && !kui_cd_audio_stop_for_io(kui_log)) {
             publish_cd_audio();
             mutex_lock(&lock);
             snprintf(capture_message,sizeof(capture_message),"Audio CD stop failed; no new optical operation started.");
             if(is_capture_action(action)) {capture_outcome=KUI_SHELL_OUTCOME_FAILED;observing_capture=false;}
             if(action==24) {player_status.errors=1;snprintf(player_status.message,sizeof(player_status.message),"Audio CD stop failed; SD playback refused.");}
-            if(action>=46 && action<=48) {salvage_status.errors=1;snprintf(salvage_status.message,sizeof(salvage_status.message),"Audio CD stop failed; salvage refused.");}
-            if(action==81) {scan_status=(struct kui_app_status){.complete=true,.errors=1};
+            if(action>=46 && action<=48) {salvage_status.complete=true;salvage_status.errors=1;snprintf(salvage_status.message,sizeof(salvage_status.message),"Audio CD stop failed; salvage refused.");}
+            if(action==81 || action==96 || action==97) {scan_status=(struct kui_app_status){.complete=true,.errors=1};
                 snprintf(scan_status.message,sizeof(scan_status.message),"Audio CD stop failed; repair did not start.");}
             if(action==56 || action==57 || action==58) probe_launch_failed=true;
             if(action==79) {
@@ -1955,12 +2593,13 @@ static void *worker(void *unused) {
                 else if(action==31) {vmu_backups.status=stopped;++vmu_backups_generation;}
                 else {vmu_snapshot.status=stopped;vmu_snapshot.restore_ready=false;++vmu_restore_generation;}
             }
-            if(action==81 || action==82) {
+            if(action==81 || action==82 || action==96 || action==97) {
                 scan_status=(struct kui_app_status){.complete=true,.stopped=true};
                 snprintf(scan_status.message,sizeof(scan_status.message),"Operation stopped before starting.");
             }
             if(action>=46 && action<=48) {
-                salvage_status=(struct kui_app_status){.stopped=true};
+                salvage_session_forget();
+                salvage_status=(struct kui_app_status){.complete=true,.stopped=true};
                 snprintf(salvage_status.message,sizeof(salvage_status.message),"Salvage stopped before starting.");
             }
             if(action>=49 && action<=52) {
@@ -2068,12 +2707,12 @@ static void *worker(void *unused) {
                 vmu_import_request_result=vmu_import_request_pending;vmu_import_commit_result=action==92;
                 ++vmu_import_generation;
             }
-            if(action==93) {
+            if(action==93 || action==101) {
                 memset(&vmu_collection_snapshot,0,sizeof(vmu_collection_snapshot));
                 vmu_collection_snapshot.page=vmu_collection_page_pending;
                 vmu_collection_snapshot.status=(struct kui_app_status){.complete=true,.stopped=true};
                 snprintf(vmu_collection_snapshot.status.message,sizeof(vmu_collection_snapshot.status.message),
-                    "Virtual card listing stopped before starting.");
+                    "Virtual VMU operation stopped before starting.");
                 vmu_collection_request_result=vmu_collection_request_pending;++vmu_collection_generation;
             }
             if(action==94 || action==95) {
@@ -2091,6 +2730,25 @@ static void *worker(void *unused) {
             if(action==45) {
                 network_test_status=(struct kui_app_status){.stopped=true};
                 snprintf(network_test_status.message,sizeof(network_test_status.message),"Connection test stopped before starting.");
+            }
+            if(action==98) {
+                vmu_wizard_snapshot.generation=vmu_wizard_pending.generation;
+                if(vmu_wizard_pending.op==KUI_VMU_WIZARD_USE_CARD) {
+                    vmu_wizard_snapshot.view_only=vmu_wizard_pending.view_only;
+                    vmu_wizard_snapshot.existing_card=true;
+                    vmu_wizard_snapshot.stage=KUI_VMU_WIZARD_GAMES_STAGE;
+                    vmu_wizard_snapshot.count=vmu_wizard_snapshot.total=0;
+                }
+                vmu_wizard_snapshot.status=(struct kui_app_status){.complete=true,.stopped=true};
+                snprintf(vmu_wizard_snapshot.status.message,sizeof(vmu_wizard_snapshot.status.message),
+                    "Import wizard stopped before starting.");
+                ++vmu_wizard_generation;
+            }
+            if(action==99 || action==100) {
+                vmu_emulation_result=vmu_emulation_request;
+                vmu_emulation_ok=false;vmu_emulation_stopped=true;
+                snprintf(vmu_emulation_note,sizeof(vmu_emulation_note),"VMU setting operation stopped before starting.");
+                ++vmu_emulation_generation;
             }
             if(action>=37 && action<=40) {
                 vmu_snapshot.status=(struct kui_app_status){.stopped=true};
@@ -2431,7 +3089,7 @@ static void *worker(void *unused) {
                 publish_cd_audio();
             }
             if(action==30) scan_operation();
-            if(action==81 || action==82)repair_operation(action==82);
+            if(action==81 || action==82 || action==96 || action==97)repair_operation(action==82);
             if(action==31) {
                 struct kui_vmu_backup_view result;
                 active_app=31;kui_sd_set_params(KUI_STORAGE_AUTO,true);
@@ -2569,6 +3227,25 @@ static void *worker(void *unused) {
                 vmu_collection_copy_commit_result=action==95;++vmu_collection_copy_generation;
                 mutex_unlock(&lock);
             }
+            if(action==98) {
+                struct kui_vmu_wizard_view result;
+                active_app=action;kui_sd_set_params(KUI_STORAGE_AUTO,true);
+                kui_vmu_wizard_run(&vmu_wizard_pending,&result,kui_log,kui_cancelled,app_progress);
+                mutex_lock(&lock);vmu_wizard_snapshot=result;++vmu_wizard_generation;mutex_unlock(&lock);
+            }
+            if(action==101) {
+                struct kui_vmu_backup_view result;
+                active_app=action;kui_sd_set_params(KUI_STORAGE_AUTO,true);
+                kui_vmu_collection_rename_run(vmu_name_path_pending,vmu_name_label_pending,vmu_name_identity_pending,
+                    vmu_collection_page_pending,&result,kui_log,kui_cancelled,app_progress);
+                mutex_lock(&lock);vmu_collection_snapshot=result;
+                vmu_collection_request_result=vmu_collection_request_pending;++vmu_collection_generation;
+                mutex_unlock(&lock);
+            }
+            if(action==99 || action==100) {
+                active_app=action;kui_sd_set_params(KUI_STORAGE_AUTO,true);
+                vmu_emulation_operation(action==100);
+            }
             if(action>=46 && action<=48) salvage_operation(action);
             if(action==45) {
                 struct kui_app_status result;
@@ -2638,13 +3315,14 @@ static void *worker(void *unused) {
 #ifdef KUI_SD_RUNTIME
         if(action!=12 && action!=27 && action!=60) kui_log("Operation ended. Diagnostics page: Y saves the log to SD.");
         if(action==12 || action==1 || (action>=4 && action<=7) || action==22 ||
-           action==49 || action==81 || (action>=46 && action<=48)) {
-            if(!kui_cd_audio_owns_drive()) (void)kui_disc_stop();
+           action==49 || action==81 || action==96 || action==97 || (action>=46 && action<=48)) {
+            if(!kui_cd_audio_owns_drive() && !kui_disc_stop())salvage_session_forget();
             if(action!=12) kui_disc_identity_invalidate(&disc_identity);
             mutex_lock(&lock);
             if(!drive_reset_required) disc_snapshot=disc_identity;
             mutex_unlock(&lock);
         }
+        salvage_session_observe_errors();
 #else
         if(action==1 || action==7) (void)kui_disc_stop();
         kui_log("Operation ended. View Log; saving a report is a separate write action.");
@@ -2653,6 +3331,7 @@ static void *worker(void *unused) {
         busy = false;
 #ifdef KUI_SD_RUNTIME
         storage_test_running=false;
+        salvage_defer_pending=false;
 #endif
         cancel_requested = false;
         ui_hz_busy = KUI_OPT_UI_FULL;   /* no operation leaves its cap behind for the next */
@@ -2719,9 +3398,13 @@ static void draw_shell(void) {
     mutex_lock(&lock);
     if(!kui_sci_video_quiet_draw_begin(&sci_video_quiet)) {mutex_unlock(&lock);return;}
     bool startup=splash_active;
+    bool working=busy || boot_ready || probe_launch_ready;
     mutex_unlock(&lock);
+    uint16_t *frame=shell_frame_prepare(working);
     if(startup) {
-        kui_splash_draw(vram_s);vid_waitvbl();vid_flip(-1);return;
+        kui_splash_draw(frame?frame:vram_s);
+        if(frame) {sq_cpy(vram_s,frame,640u*480u*sizeof(*frame));sq_wait();}
+        vid_waitvbl();vid_flip(-1);return;
     }
     char visible[KUI_SHELL_LOG_ROWS][LINE_BYTES] = {{0}};
     const char *log_rows[KUI_SHELL_LOG_ROWS];
@@ -2749,6 +3432,9 @@ static void draw_shell(void) {
     view.storage_test_progress=storage_test_running?&test_progress:NULL;
     view.storage_test_target=kui_storage_name(kui_storage_selected());
     view.busy = busy; view.saving = saving_report; view.cancel_requested = cancel_requested;
+    view.salvage_control_trial=salvage_trial_pending;
+    view.salvage_speed_probe=salvage_speed_probe_pending;
+    view.salvage_diagnostic=salvage_diagnostic_pending;
     view.sci_video_quiet=sci_video_quiet.requested;
     view.outcome = capture_outcome; view.saved_verified = capture_summary.verified;
     snprintf(path, sizeof(path), "%s", capture_summary.job_dir);
@@ -2806,6 +3492,7 @@ static void draw_shell(void) {
         shell.page==KUI_SHELL_VMU_IMAGE?vmu_image_snapshot.status:
         shell.page==KUI_SHELL_VMU_IMPORT?vmu_import_snapshot.status:
         shell.page==KUI_SHELL_VMU_COLLECTION?vmu_collection_snapshot.status:
+        shell.page==KUI_SHELL_VMU_WIZARD?vmu_wizard_snapshot.status:
         shell.page==KUI_SHELL_VMU_ACTIONS && shell.vmu_copy_slot==8 &&
             (shell.vmu_action_selected==1 || shell.vmu_action_selected==3)?vmu_collection_copy_snapshot.status:
         shell.page==KUI_SHELL_VMU_ACTIONS && shell.vmu_action_selected==3?vmu_bulk_snapshot.status:
@@ -2821,13 +3508,15 @@ static void draw_shell(void) {
     mutex_unlock(&lock);
     view.memory_valid = memory_valid; view.memory_used = memory_status.used;
     view.memory_physical = memory_status.physical; view.memory_peak = memory_status.sampled_peak;
-    /* The pinned KOS RGB565 clear uses SH-4 store queues instead of a pixel
-     * loop. DM_MULTIBUFFER/vid_flip leave vram_s on the next, offscreen buffer;
-     * publish only after the complete frame has been drawn. RGB565 = 0x0864,
-     * matching the portable renderer's background. */
-    vid_clear(8, 15, 35);
-    kui_shell_draw_content(vram_s, &shell, &view, NULL, NULL);
-    kui_viewport_inset(vram_s,640,480,screen_inset,0x0864);
+    /* DM_MULTIBUFFER/vid_flip leave vram_s on the next offscreen buffer.
+     * Complete the cached frame before its one sequential store-queue upload;
+     * sq_wait drains the upload before the buffer can become visible. */
+    if(frame) {
+        for(unsigned i=0;i<640u*480u;i++) frame[i]=UINT16_C(0x0864);
+    } else vid_clear(8,15,35); /* Busy handoff or allocation failure: old path. */
+    kui_shell_draw_content(frame?frame:vram_s, &shell, &view, NULL, NULL);
+    kui_viewport_inset(frame?frame:vram_s,640,480,screen_inset,0x0864);
+    if(frame) {sq_cpy(vram_s,frame,640u*480u*sizeof(*frame));sq_wait();}
     vid_waitvbl(); vid_flip(-1);
 }
 static unsigned shell_buttons(unsigned buttons) {
@@ -2887,7 +3576,8 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_RESTART: return 44;
         case KUI_SHELL_NETWORK_CONNECT: return 45;
         case KUI_SHELL_SALVAGE_NEW: return 46;
-        case KUI_SHELL_SALVAGE_RESUME: return 47;
+        case KUI_SHELL_SALVAGE_RESUME:
+        case KUI_SHELL_SALVAGE_RESUME_DEFER: return 47;
         case KUI_SHELL_SALVAGE_RECOVER: return 48;
         case KUI_SHELL_CD_LIST: return 49;
         case KUI_SHELL_CD_PLAY: return 50;
@@ -2921,6 +3611,8 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_WIFI_UPDATE_CHECK: return 77;
         case KUI_SHELL_WIFI_UPDATE: return 78;
         case KUI_SHELL_REPAIR_COPY:return 81;
+        case KUI_SHELL_REPAIR_IN_PLACE:return 96;
+        case KUI_SHELL_REPAIR_NEW_COPY:return 97;
         case KUI_SHELL_FORENSIC:return 82;
         case KUI_SHELL_VMU_BACKUP_CARD:return 83;
         case KUI_SHELL_VMU_IMAGE_LIST:return 84;
@@ -2935,6 +3627,10 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_VMU_COLLECTION_LIST:return 93;
         case KUI_SHELL_VMU_COLLECTION_COPY_PREVIEW:return 94;
         case KUI_SHELL_VMU_COLLECTION_COPY_COMMIT:return 95;
+        case KUI_SHELL_VMU_WIZARD_RUN:return 98;
+        case KUI_SHELL_VMU_EMULATION_LOAD:return 99;
+        case KUI_SHELL_VMU_EMULATION_SAVE:return 100;
+        case KUI_SHELL_VMU_RENAME:return 101;
         default: return 0;
     }
 }
@@ -3110,7 +3806,8 @@ int main(void) {
     unsigned seen_games_selection=0;
     unsigned seen_files_listing=0,seen_files_preview=0,seen_files_result=0,seen_files_picture=0;
     unsigned seen_wifi_generation=0,seen_vmu_bulk=0,seen_vmu_import=0;
-    unsigned seen_vmu_collection=0,seen_vmu_collection_copy=0;
+    unsigned seen_vmu_collection=0,seen_vmu_collection_copy=0,seen_vmu_wizard=0,seen_vmu_emulation=0;
+    unsigned seen_vmu_game_info=0;
     bool startup_routed=false;
     unsigned held_navigation = 0;
     uint64_t repeat_at = 0;
@@ -3123,13 +3820,16 @@ int main(void) {
         const unsigned navigation = CONT_DPAD_UP | CONT_DPAD_DOWN | CONT_DPAD_LEFT | CONT_DPAD_RIGHT;
         unsigned held = buttons & navigation;
         uint64_t input_at = timer_ms_gettime64();
-        if(held != held_navigation) { held_navigation = held; repeat_at = input_at + 400; }
-        else if(held && input_at >= repeat_at) { pressed |= held; repeat_at = input_at + 140; }
+        pressed=kui_ui_navigation_repeat(held,pressed,&held_navigation,&repeat_at,input_at);
         /* Preserve Stop/cancel priority even if B was held before an A edge. */
         if(pressed && (buttons & CONT_B)) pressed |= CONT_B;
         bool games_ui_changed=false;
-        publish_music();
+        publish_music_if_ready();
         mutex_lock(&lock);
+        if(repair_new_copy_created) {
+            repair_new_copy_created=false;
+            if(shell.recovery_operation==4u)shell.recovery_operation=1u;
+        }
         if(splash_active && input_at>=splash_deadline) {splash_active=false;last_draw=0;}
         if(seen_settings_generation != settings_generation) {
             kui_shell_set_preferences(&shell, &settings_current);
@@ -3241,6 +3941,11 @@ int main(void) {
             kui_shell_set_vmu_collection(&shell,vmu_collection_request_result,&vmu_collection_snapshot);
             seen_vmu_collection=vmu_collection_generation;
         }
+        if(seen_vmu_game_info!=vmu_game_info_generation) {
+            kui_shell_set_game_vmu(&shell,vmu_game_info_request_result,vmu_game_info_snapshot.product,
+                vmu_game_info_snapshot.label,vmu_game_info_snapshot.notice);
+            seen_vmu_game_info=vmu_game_info_generation;
+        }
         if(seen_vmu_collection_copy!=vmu_collection_copy_generation) {
             kui_shell_set_vmu_collection_copy(&shell,vmu_collection_copy_source_result,
                 vmu_collection_copy_page_result,vmu_collection_copy_selected_result,vmu_collection_copy_all_result,
@@ -3250,6 +3955,15 @@ int main(void) {
         if(seen_vmu_restore!=vmu_restore_generation) {
             kui_shell_set_vmu_restore_preview(&shell,&vmu_snapshot);
             seen_vmu_restore=vmu_restore_generation;
+        }
+        if(seen_vmu_wizard!=vmu_wizard_generation) {
+            kui_shell_set_vmu_wizard(&shell,&vmu_wizard_snapshot);
+            seen_vmu_wizard=vmu_wizard_generation;
+        }
+        if(seen_vmu_emulation!=vmu_emulation_generation) {
+            kui_shell_set_vmu_emulation(&shell,vmu_emulation_result,vmu_emulation_enabled,
+                vmu_emulation_ok,vmu_emulation_stopped,vmu_emulation_note);
+            seen_vmu_emulation=vmu_emulation_generation;
         }
         if(seen_vmu_delete!=vmu_delete_generation) {
             kui_shell_set_vmu_delete_preview(&shell,&vmu_snapshot);seen_vmu_delete=vmu_delete_generation;
@@ -3262,18 +3976,16 @@ int main(void) {
         }
         if(startup_finished && !busy && !startup_routed) {
             startup_routed=true;
-            switch(system_current.startup_app) {
-                case KUI_STARTUP_RIPPER: shell.page=KUI_SHELL_RIPPER;break;
-                case KUI_STARTUP_VMU: shell.page=KUI_SHELL_VMU;break;
-                case KUI_STARTUP_MUSIC: shell.page=KUI_SHELL_MUSIC;break;
-                case KUI_STARTUP_DIAGNOSTICS: shell.page=KUI_SHELL_DIAGNOSTICS;break;
-                default: shell.page=KUI_SHELL_HOME;break;
-            }
+            shell.page=kui_shell_startup_page(system_current.startup_app);
             /* Populate read-only lists through the storage worker. A save,
              * rip or VMU write always needs an explicit controller action. */
             if(shell.page==KUI_SHELL_VMU) {
                 vmu_slot_pending=shell.vmu_slot;vmu_page_pending=shell.vmu_page;
                 vmu_selected_pending=shell.vmu_selected;pending=16;
+            } else if(shell.page==KUI_SHELL_VMU_TOOLS) {
+                (void)kui_shell_input(&shell,KUI_SHELL_X,false);
+                vmu_emulation_request=shell.vmu_emulation_generation;
+                vmu_emulation_requested=shell.vmu_emulation_requested;pending=99;
             } else if(shell.page==KUI_SHELL_MUSIC) {
                 snprintf(music_path_pending,sizeof(music_path_pending),"%s",shell.music_path);
                 music_offset_pending=0;pending=23;
@@ -3287,6 +3999,9 @@ int main(void) {
             shell.system_draft.video_mode=system_current.video_mode;
             snprintf(system_note,sizeof(system_note),"Video reverted after 10 seconds.");
         }
+        /* UI-thread ownership: worker snapshots are copied under lock before
+         * controller dispatch, then stay immutable while this thread draws. */
+        shell.salvage_dashboard=recovery_dashboard;
         enum kui_shell_action requested=KUI_SHELL_NONE;
         enum kui_shell_page page_before_input=shell.page;
         if(splash_active) {if(pressed&CONT_B) {startup_skip=true;splash_active=false;last_draw=0;}}
@@ -3330,15 +4045,23 @@ int main(void) {
             }
         }
         if(cd_drive_owned && requested==KUI_SHELL_MUSIC_STOP) requested=KUI_SHELL_CD_STOP;
+        if(requested==KUI_SHELL_VMU_GAME_INFO && !busy) vmu_game_info_request_start();
         unsigned action = worker_action(requested);
-        if(drive_reset_required && (action==1 || (action>=4 && action<=7) || action==22 || action==81 || (action>=46 && action<=53))) {
+        if(drive_reset_required && (action==1 || (action>=4 && action<=7) || action==22 || action==81 || action==96 || action==97 || (action>=46 && action<=53))) {
             snprintf(capture_message,sizeof(capture_message),
                 "Drive reset required. Reboot, then Resume the partial dump.");
             if(action>=46 && action<=48) {
-                salvage_status=(struct kui_app_status){.errors=1};
+                salvage_defer_pending=false;
+                salvage_trial_pending=false;
+                salvage_speed_probe_pending=false;
+                salvage_diagnostic_pending=KUI_SALVAGE_DIAGNOSTIC_NONE;
+                shell.salvage_diagnostic_requested=KUI_SALVAGE_DIAGNOSTIC_NONE;
+                shell.salvage_speed_probe_requested=false;
+                shell.salvage_trial_requested=shell.salvage_trial_result=false;
+                salvage_status=(struct kui_app_status){.complete=true,.errors=1};
                 snprintf(salvage_status.message,sizeof(salvage_status.message),"Drive reset required. Use System Tools > Restart.");
             }
-            if(action==81) {scan_status=(struct kui_app_status){.complete=true,.errors=1};
+            if(action==81 || action==96 || action==97) {scan_status=(struct kui_app_status){.complete=true,.errors=1};
                 snprintf(scan_status.message,sizeof(scan_status.message),"Drive reset required. Use System Tools > Restart.");}
             if(action>=49 && action<=53) {
                 cd_audio_snapshot.poisoned=true;
@@ -3364,6 +4087,9 @@ int main(void) {
             }
         }
         if(action && !busy) {
+            /* Main is the sole frame owner. Free before exposing pending to
+             * the worker; drawing cannot reallocate it while this job is busy. */
+            shell_frame_release_for_action(action);
             if(action>=68 && action<=71) {
                 sci_async_status=(struct kui_app_status){0};
                 snprintf(sci_async_status.message,sizeof(sci_async_status.message),"%s",
@@ -3399,8 +4125,16 @@ int main(void) {
                 vmu_selected_pending=shell.vmu_selected;
                 vmu_snapshot.status=(struct kui_app_status){0};
             }
-            if(action==30 || action==81 || action==82) {
-                shell.recovery_operation=action==81?1u:action==82?2u:0u;
+            if(action==30 || action==81 || action==82 || action==96 || action==97) {
+                /* Consume New only after creation. Preparation failures retain
+                 * it, while stopped created work uses Resume on this page. */
+                shell.recovery_operation=action==97?4u:action==81?1u:action==82?2u:action==96?3u:0u;
+                repair_in_place_pending=action==96;
+                repair_new_copy_pending=action==97;
+                repair_new_copy_created=false;
+                repair_saved_identity_pending=shell.repair_saved_identity;
+                repair_passes_pending=shell.salvage_passes;
+                recovery_cd_pending=shell.capture_cd_toc;
                 repair_attempts_pending=shell.saved.retry_limit?shell.saved.retry_limit:10u;
                 snprintf(scan_path_pending,sizeof(scan_path_pending),"%s",shell.browse_path);
                 scan_status=(struct kui_app_status){0};
@@ -3420,7 +4154,19 @@ int main(void) {
                 vmu_snapshot.status=(struct kui_app_status){0};
             }
             if(action>=46 && action<=48) {
-                salvage_zero_pending=shell.salvage_zero_fill;salvage_passes_pending=shell.salvage_passes;
+                recovery_cd_pending=shell.capture_cd_toc;
+                salvage_passes_pending=shell.salvage_passes;
+                salvage_drive_pending=shell.salvage_drive_options;
+                salvage_trial_pending=shell.salvage_trial_requested;
+                salvage_speed_probe_pending=shell.salvage_speed_probe_requested;
+                salvage_diagnostic_pending=action==48?shell.salvage_diagnostic_requested:KUI_SALVAGE_DIAGNOSTIC_NONE;
+                if(salvage_diagnostic_pending!=KUI_SALVAGE_DIAGNOSTIC_NONE)
+                    salvage_trial_pending=salvage_speed_probe_pending=false;
+                shell.salvage_diagnostic_requested=KUI_SALVAGE_DIAGNOSTIC_NONE;
+                shell.salvage_speed_probe_requested=false;
+                shell.salvage_trial_requested=false;
+                salvage_verify_pending=shell.salvage_verify_files;
+                salvage_defer_pending=requested==KUI_SHELL_SALVAGE_RESUME_DEFER;
                 salvage_path_pending[0]=0;
                 salvage_status=(struct kui_app_status){0};
             }
@@ -3440,11 +4186,25 @@ int main(void) {
                 vmu_import_snapshot=shell.vmu_import;vmu_import_snapshot.import_ready=false;
                 vmu_import_snapshot.status=(struct kui_app_status){0};
             }
-            if(action==93) {
+            if(action==93 || action==101) {
                 vmu_collection_page_pending=shell.vmu_collection_page;
                 vmu_collection_request_pending=shell.vmu_collection_generation;
                 vmu_collection_snapshot=shell.vmu_collection;
                 vmu_collection_snapshot.status=(struct kui_app_status){0};
+            }
+            if(action==101) {
+                memcpy(vmu_name_path_pending,shell.vmu_name_path,sizeof(vmu_name_path_pending));
+                memcpy(vmu_name_label_pending,shell.vmu_name_label,sizeof(vmu_name_label_pending));
+                memcpy(vmu_name_identity_pending,shell.vmu_name_identity,sizeof(vmu_name_identity_pending));
+            }
+            if(action==98) {
+                vmu_wizard_pending=shell.vmu_wizard_request;
+                vmu_wizard_snapshot=shell.vmu_wizard;
+                vmu_wizard_snapshot.status=(struct kui_app_status){0};
+            }
+            if(action==99 || action==100) {
+                vmu_emulation_request=shell.vmu_emulation_generation;
+                vmu_emulation_requested=shell.vmu_emulation_requested;
             }
             if(action==94 || action==95) {
                 vmu_slot_pending=shell.vmu_slot;vmu_page_pending=shell.vmu_page;
@@ -3558,7 +4318,6 @@ int main(void) {
         } else shell.games_art_loading=false;
         games_art_request_valid=art_wanted;
         bool is_busy = busy, cd_owned=cd_drive_owned;
-        bool games_ui=games_page(shell.page);
         mutex_unlock(&lock);
         if(requested==KUI_SHELL_MUSIC_NEXT && !cd_owned) music_step(1);
         if(requested==KUI_SHELL_MUSIC_PREVIOUS && !cd_owned) music_step(-1);
@@ -3670,8 +4429,8 @@ int main(void) {
         }
         mutex_lock(&lock);bool is_busy=busy;mutex_unlock(&lock);
 #endif
-        /* Games idle controls run independently of the 33 ms redraw cadence.
-         * Other idle pages redraw as before. Busy: at most ui_hz_busy redraws per
+        /* Idle controls on every shell page run independently of the 33 ms
+         * redraw cadence. Busy: at most ui_hz_busy redraws per
          * second, plus one at each start and end so the screen is never stale
          * about what state it is in. The controller is polled every loop either
          * way, so B still stops an operation whatever the cap. Keyed on when
@@ -3681,7 +4440,8 @@ int main(void) {
         unsigned hz = ui_hz_busy;
         uint64_t t = timer_ms_gettime64();
 #ifdef KUI_SD_RUNTIME
-        bool due = kui_ui_games_redraw_due(games_ui,is_busy,was_busy,hz,
+        bool menu_drew=false;
+        bool due = kui_ui_menu_redraw_due(is_busy,was_busy,hz,
             pressed || games_ui_changed,t,last_draw);
 #else
         bool due = kui_ui_redraw_due(is_busy,was_busy,hz,t,last_draw);
@@ -3697,6 +4457,7 @@ int main(void) {
         if(due) {
 #ifdef KUI_SD_RUNTIME
             draw_shell();
+            menu_drew=true;
             if(quiet_pending) {
                 /* This is the sole drawing thread. Complete every store queue
                  * write from this and prior frames before releasing the worker.
@@ -3709,10 +4470,17 @@ int main(void) {
 #else
             draw_boot();
 #endif
+#ifdef KUI_SD_RUNTIME
+            /* Count the idle interval from the completed frame. Timestamping
+             * before an expensive paint/vblank can make its next background
+             * repaint immediately due, spending each loop drawing again. */
+            last_draw=is_busy?t:timer_ms_gettime64();
+#else
             last_draw = t;
+#endif
         }
 #ifdef KUI_SD_RUNTIME
-        thd_sleep((int)kui_ui_poll_delay(games_ui,is_busy));
+        thd_sleep(kui_ui_menu_wait_ms(is_busy,menu_drew));
 #else
         thd_sleep(33);
 #endif

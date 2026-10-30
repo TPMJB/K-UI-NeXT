@@ -14,9 +14,9 @@ int main(void) {
     const uint32_t areas[]={0u,UINT32_C(0x80000000),UINT32_C(0xa0000000)};
     const uint32_t lease_bytes=KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES;
     const bool expanded=KUI_NATIVE_READAHEAD || KUI_NATIVE_DUAL_READERS;
-    CHECK(lease_bytes==(expanded?UINT32_C(0x60000):UINT32_C(0x30000)));
-    CHECK(KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES==UINT32_C(0x20000));
-    CHECK(KUI_VMU_NATIVE_BACKGROUND_REGION_OFFSET==UINT32_C(0x20400));
+    CHECK(lease_bytes==(expanded?(KUI_NATIVE_GENERAL_LEAN_LAYOUT?UINT32_C(0x51000):UINT32_C(0x55000)):UINT32_C(0x30000)));
+    CHECK(KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES==(KUI_NATIVE_GENERAL_LEAN_LAYOUT?UINT32_C(0x1c000):UINT32_C(0x20000)));
+    CHECK(KUI_VMU_NATIVE_BACKGROUND_REGION_OFFSET==KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES+0x400u);
     CHECK(KUI_VMU_NATIVE_BACKGROUND_REGION_BYTES==UINT32_C(0x760));
     for(unsigned a=0;a<3u;a++) {
         struct kui_vmu_native_heap h=fixture(0x800u,areas[a],true);
@@ -42,7 +42,7 @@ int main(void) {
     for(unsigned p=0;p<3u;p++) {
         uint32_t payload=payloads[p],begin,end;
         struct kui_vmu_observe_boot_control c={.status=KUI_VMU_OBS_BOOT_INSTALLED,
-            .lease=payload,.worker_end=(payload|UINT32_C(0xa0000000))+UINT32_C(0x20000),
+            .lease=payload,.worker_end=(payload|UINT32_C(0xa0000000))+KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES,
             .terminal=(payload|UINT32_C(0x80000000))+256u,
             .sd_transaction=(payload|UINT32_C(0x80000000))+512u};
         CHECK(native_resident_lease(&c,&begin,&end));

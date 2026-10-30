@@ -20,6 +20,7 @@ sys.path[:0]=[str(ROOT/'tests'),str(ROOT/'tools')]
 from check_vmu_native_sdk_sci_route import (BinderStop,ColdBinderCPU,COOKIE,GUARD,
     MASK,OWNER_CONSTANTS,SDK_VBR,assert_c_abi,require)
 from check_vmu_native_worker_gateway import read_elf,symbol_bytes
+from native_runtime_layout import LEASE_BYTES, layout_for
 
 STRUCTURAL='__kui_native_sdk_sci_structural_'
 EXACT='_kui_native_sdk_sci_route_admit'
@@ -27,7 +28,6 @@ DISCOVER='_kui_native_sdk_sci_route_discover'
 LOW=0x8c004000
 STACK_TOP=0x8c007d00
 STAGE=0x8ce00000
-LEASE_BYTES=0x60000
 VBR_SPAN=0x660
 ABSOLUTE_ONE=(1,0,0,0xfff1)
 
@@ -223,7 +223,7 @@ def check(stage,resident,self_test=False):
     # nonoverlapping side of the lease/low/stage reservations. U0 is retained
     # raw for common/default callback pointers while table accesses remain P1.
     relocated=tuple(dict.fromkeys((0x8c000000,0x8c003900,STACK_TOP,0x8c02a000,
-        0x8c3ff900,0x8c460000,0x8cdff900,(stage_end+255)&~255,0x8cfff900)))
+        0x8c3ff900,0x8c400000+layout_for(stage[4]).LEASE_BYTES,0x8cdff900,(stage_end+255)&~255,0x8cfff900)))
     for cache in (False,True):
         for vbr in relocated:
             for alias in (0,0x80000000):
@@ -289,7 +289,7 @@ def check(stage,resident,self_test=False):
         # Canonical-P1/alignment/full-span guards run before both helpers.
         addresses=(0,0x0c02a000,0xac02a000,0x8c02a001,0x8c02a080,0x8bffff00,
             0x8cfffa00,0x8d000000,0x8c003a00,LOW,GUARD&~255,
-            0x8c007c00,0x8c3ffa00,0x8c3fff00,0x8c400000,0x8c45ff00,
+            0x8c007c00,0x8c3ffa00,0x8c3fff00,0x8c400000,0x8c400000+layout_for(stage[4]).LEASE_BYTES-0x100,
             0x8cdffa00,STAGE,(stage_end-1)&~255)
         for vbr in addresses:
             expect_refusal(StructuralColdCPU(stage,resident,cache=cache,vbr=vbr,exact=0),
@@ -344,7 +344,7 @@ def check(stage,resident,self_test=False):
         malformed_vbr_or_overlap_refusals=negative_address,malformed_shared_plan_refusals=negative_plan,
         omitted_ocbp_mutation_rejections=mutations,dynamic_vbr_canonical_p1_aligned256=True,
         dynamic_vbr_bounds=['0x8c000000','0x8cfff900'],live_vbr_span_bytes=VBR_SPAN,
-        lease_bytes_excluded=LEASE_BYTES,lease_header_bytes_excluded=32,
+        lease_bytes_excluded=layout_for(stage[4]).LEASE_BYTES,lease_header_bytes_excluded=32,
         low_resident_and_service_stack_excluded=True,temporary_stage_excluded=True,
         stage_end=hex(stage_end),selected_async_bound_checked=True,
         p1_writeback_cache_and_p2_ram_distinct=True,full_cacheline_writeback_and_sentinels_preserved=True,

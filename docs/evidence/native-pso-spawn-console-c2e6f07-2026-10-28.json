@@ -1,0 +1,170 @@
+{
+  "schema": "kui.native.owner-console-result.v1",
+  "date": "2026-10-28",
+  "build": "c2e6f07cb52e",
+  "source_commit": "c2e6f07cb52eb2a389b0840b3e5b4cc19741fa95",
+  "owner_report_verbatim": "Code veronica works. PSO works. Spawn screenshots attached. PSO intro video runs pretty poorly. Spawn intro video rubs poorly AND the audio is distorted.",
+  "code_veronica": {
+    "source_sha256": "199b72af9bcd7fb80d401d4645c731e595970a0dcbcfd98e1bec187f4382fbbb",
+    "reported_working": true,
+    "scope": "Positive regression report for this candidate; no new separate save/power-cycle/Disc2 detail.",
+    "prior_complete_persistence_evidence": "docs/evidence/native-code-veronica-console-2026-10-28.json"
+  },
+  "pso": {
+    "source_sha256": "11dc59ee0278675decf5e0bf1fa30646f889a0e5a7f10251f3c3a697e42a28e5",
+    "reported_working": true,
+    "intro_video": "Poor playback reported",
+    "save_and_full_power_cycle_reload": "Not separately specified in this report"
+  },
+  "spawn": {
+    "source_sha256": "8f085c28f6a579662f95b65b0611f1dc08dded35fd5c6e676821c72a5384ed5f",
+    "route": "Standalone New RAM-map diagnostic; no virtual VMU or combined prefetch worker",
+    "intro_video": "Poor playback reported",
+    "audio": "Distortion reported",
+    "sessions": [
+      {
+        "photo": "01-image-1793214253061.jpg",
+        "photo_sha256": "003ae2ba0b87f369bc83d1639d3c08e66e44ccac22e2491f692d7de567e2adf6",
+        "build": "c2e6f07cb52e",
+        "fn_cmd": [
+          "00000004",
+          "00000022"
+        ],
+        "ram_unused": [
+          "00000000",
+          "00000003",
+          "00000000",
+          "1FF00000"
+        ],
+        "decoded": {
+          "unused": [
+            {
+              "begin": "0x8c400000",
+              "end": "0x8c440000",
+              "kib": 256
+            },
+            {
+              "begin": "0x8ce80000",
+              "end": "0x8cfa0000",
+              "kib": 1152
+            }
+          ],
+          "holds_384k_lease": [
+            "0x8ce80000-0x8cfa0000"
+          ],
+          "note": "One session only: a page this game writes in another mode reads used there."
+        },
+        "service_field_note": "Other last-service fields are not used for RAM decoding or treated as transfer-rate/error measurements."
+      },
+      {
+        "photo": "02-image-1793214390730.jpg",
+        "photo_sha256": "c205af5dc9c0f569c72d9d12b91745e667109d843e8cd09b8afa795e4417e1db",
+        "build": "c2e6f07cb52e",
+        "fn_cmd": [
+          "00000004",
+          "00000022"
+        ],
+        "service_field_note": "Other last-service fields are not used for RAM decoding or treated as transfer-rate/error measurements.",
+        "ram_unused_alternatives": [
+          [
+            "00000000",
+            "00000003",
+            "00000000",
+            "1FE00000"
+          ],
+          [
+            "00000000",
+            "00000083",
+            "00000000",
+            "1FE00000"
+          ]
+        ],
+        "decoded_alternatives": [
+          {
+            "unused": [
+              {
+                "begin": "0x8c400000",
+                "end": "0x8c440000",
+                "kib": 256
+              },
+              {
+                "begin": "0x8cea0000",
+                "end": "0x8cfa0000",
+                "kib": 1024
+              }
+            ],
+            "holds_384k_lease": [
+              "0x8cea0000-0x8cfa0000"
+            ],
+            "note": "One session only: a page this game writes in another mode reads used there."
+          },
+          {
+            "unused": [
+              {
+                "begin": "0x8c400000",
+                "end": "0x8c440000",
+                "kib": 256
+              },
+              {
+                "begin": "0x8c4e0000",
+                "end": "0x8c500000",
+                "kib": 128
+              },
+              {
+                "begin": "0x8cea0000",
+                "end": "0x8cfa0000",
+                "kib": 1024
+              }
+            ],
+            "holds_384k_lease": [
+              "0x8cea0000-0x8cfa0000"
+            ],
+            "note": "One session only: a page this game writes in another mode reads used there."
+          }
+        ]
+      }
+    ],
+    "common_ram_unused_words": [
+      "00000000",
+      "00000003",
+      "00000000",
+      "1FE00000"
+    ],
+    "common_decoded": {
+      "unused": [
+        {
+          "begin": "0x8c400000",
+          "end": "0x8c440000",
+          "kib": 256
+        },
+        {
+          "begin": "0x8cea0000",
+          "end": "0x8cfa0000",
+          "kib": 1024
+        }
+      ],
+      "holds_384k_lease": [
+        "0x8cea0000-0x8cfa0000"
+      ],
+      "note": "One session only: a page this game writes in another mode reads used there."
+    },
+    "transcription_note": "Photo 2 second-word bit 7 is visually ambiguous between 00000003 and 00000083. Both full transcriptions and decodes are retained. Photo 1 has 00000003, so both alternatives give exactly the same certain intersection.",
+    "full_power_off_between_captures": "Not specified",
+    "characters_modes_stages_durations": "Not specified",
+    "selected_arena": null,
+    "virtual_vmu_enabled": false
+  },
+  "interpretation": [
+    "The upper interval 0x8cea0000-0x8cfa0000 is a 1 MiB candidate untouched in both captures, not a permanent reservation. The common 256 KiB lower interval is too small for the 384 KiB runtime lease.",
+    "The larger interval is above the measured combined stage end 0x8ce8dd08. Static hook lifetime and allocator placement proofs are still required.",
+    "Spawn reproduces poor streaming without a virtual VMU, so VMU work cannot be the sole explanation.",
+    "RAM marking runs before launch and scanning at return, not every frame. Its changed initial memory contents may still affect reads, so a no-pattern structural control is needed.",
+    "RET/FN/CMD/LBA/COUNT/DEST are last-service fields; they do not measure stream rate, underruns or retry counts."
+  ],
+  "next_controls": [
+    "Normal structural standalone without RAM marking, with only existing stream counters printed at return.",
+    "Compare the same intro with Background Off and New (X), same original GDI and other settings.",
+    "Keep Prefetch Auto and all integrity/priority/resume guards unchanged for the shared-path control."
+  ],
+  "console_full_persistence_acceptance": false
+}

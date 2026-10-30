@@ -172,7 +172,7 @@ def install_actual_stage(cpu, build):
             cpu.store_block(address, data[offset:offset + stored] + bytes(memory - stored))
     wire = (Path(__file__).resolve().parents[1] / 'tests/fixtures/native-cache/evolution1.nvr').read_bytes()
     for name, payload in (('_native_driver', wire[64:168]), ('_passive_layout', wire[168:608]),
-                          ('_native_heap', wire[608:680]), ('_native_exits', wire[700:748])):
+                          ('_native_heap', wire[608:680]), ('_native_exits', wire[700:752])):
         assert symbols[name][1] == len(payload)
         cpu.store_block(symbols[name][0], payload)
     SH.write(cpu, symbols['_exec_bytes'][0], IMAGE_BYTES)

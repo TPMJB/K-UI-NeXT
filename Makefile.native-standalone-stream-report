@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Ordinary structural New reader, with its existing SCI totals shown only
+# on terminal return. No RAM marking, timing sampling or scheduling change.
+BUILD ?= build/native-standalone-stream-report
+include Makefile.native-standalone-general
+FLAGS += -DKUI_NATIVE_STREAM_REPORT=1
+
+.PHONY: stream-report-host-tests
+stream-report-host-tests: $(BUILD)/resident-sci.elf
+	python3 tests/test_native_stream_report_scope.py
+	python3 tools/check_native_stream_report.py $(BUILD)/resident-sci.elf --self-test

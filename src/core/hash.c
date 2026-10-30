@@ -58,6 +58,36 @@ void kui_hex(const uint8_t *bytes, size_t size, char *out) {
     for(size_t i=0;i<size;i++) { out[2*i]=digits[bytes[i]>>4];out[2*i+1]=digits[bytes[i]&15]; }
     out[2*size]=0;
 }
+uint32_t kui_crc32_capture(uint32_t previous,const void *data,size_t size) {
+    static uint32_t table[4][256];static bool ready;
+    if(!ready) {
+        for(unsigned i=0;i<256u;++i) {
+            uint32_t value=i;
+            for(unsigned bit=0;bit<8u;++bit)
+                value=(value>>1)^(UINT32_C(0xedb88320)&(0u-(value&1u)));
+            table[0][i]=value;
+        }
+        for(unsigned part=1;part<4u;++part)
+            for(unsigned i=0;i<256u;++i) {
+                uint32_t value=table[part-1u][i];
+                table[part][i]=(value>>8)^table[0][value&255u];
+            }
+        ready=true;
+    }
+    const uint8_t *bytes=data;uint32_t crc=~previous;
+    /* Read individual bytes: the SH-4 cannot dereference an unaligned word.
+     * Explicit little-endian assembly also keeps the result host-independent.
+     * Four independent table lookups reduce the per-byte dependency chain. */
+    while(size>=4u) {
+        crc^=(uint32_t)bytes[0]|(uint32_t)bytes[1]<<8|
+            (uint32_t)bytes[2]<<16|(uint32_t)bytes[3]<<24;
+        crc=table[3][crc&255u]^table[2][(crc>>8)&255u]^
+            table[1][(crc>>16)&255u]^table[0][crc>>24];
+        bytes+=4u;size-=4u;
+    }
+    for(size_t i=0;i<size;++i)crc=(crc>>8)^table[0][(crc^bytes[i])&255u];
+    return ~crc;
+}
 uint32_t kui_cd_edc(const uint8_t *data, size_t size) {
     /* CD EDC reflected polynomial, zero initialization, no final complement. */
     static uint32_t table[256];
@@ -82,4 +112,15 @@ bool kui_sector_edc_valid(const uint8_t raw[KUI_RAW_BYTES]) {
         (uint32_t)raw[end+2]<<16|(uint32_t)raw[end+3]<<24;
     unsigned begin=offset==16?0:16;
     return stored==kui_cd_edc(raw+begin,end-begin);
+}
+bool kui_sector_edc_valid_at(const uint8_t raw[KUI_RAW_BYTES],uint32_t fad) {
+    if(!kui_sector_edc_valid(raw))return false;
+    if(raw[15]!=1u)return true;
+    /* GD-ROM extends the minute byte beyond 99 (for example 122 -> 0xc2).
+     * Refuse an expected address that would wrap this representation. */
+    if(fad<150u || fad>719999u)return false;
+    const unsigned fields[3]={fad/4500u,(fad/75u)%60u,fad%75u};
+    for(unsigned i=0;i<3u;++i)
+        if(raw[12u+i]!=(uint8_t)((fields[i]/10u)*16u+fields[i]%10u))return false;
+    return true;
 }

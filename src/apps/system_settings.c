@@ -31,7 +31,7 @@ const char *kui_system_video_name(unsigned mode) {
     return mode<KUI_VIDEO_MODE_COUNT?names[mode]:"Invalid";
 }
 const char *kui_system_startup_name(unsigned app) {
-    static const char *const names[]={"Home","Disc Ripper","VMU Manager","Music","Diagnostics"};
+    static const char *const names[]={"Home","Disc Ripper","VMU tools","Music","Diagnostics"};
     return app<KUI_STARTUP_APP_COUNT?names[app]:"Invalid";
 }
 bool kui_system_settings_encode(uint8_t out[KUI_SYSTEM_SETTINGS_RECORD_SIZE],

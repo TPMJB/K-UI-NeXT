@@ -25,6 +25,7 @@ from test_vmu_native_heap_execution import MASK,signed
 from sh4_delay_slots import validate_delay_slot
 from test_native_dual_readers import object_section
 from profile_vmu_native_release_sh import ReleaseSH
+from check_native_general_lean_profile import worker_profile as lean_worker_profile
 
 WITNESS_MARK='__kui_native_controller_failure_witness_worker'
 TIMER_MARK='__kui_native_owned_timer_callbacks_worker'
@@ -94,6 +95,14 @@ LAYOUT_FIELDS={
 }
 MEMORY={}
 MODELED_FUNCTIONS=set()
+
+
+def worker_geometry(worker):
+    """Keep historical model bounds separate from the exact lean General ABI."""
+    lean=lean_worker_profile(worker)
+    span=0x1c000 if lean else 0x20000
+    return dict(lean=lean,begin=0x0c100000,end=0x0c100000+span,
+                stack_begin=0x0c100000+span-0x1000)
 
 
 def require(ok,message):
@@ -292,6 +301,7 @@ class WitnessCPU(SDKCPU):
                     at=self.offset(address,count);memory[at:at+count]=worker[0][offset:offset+count]
             MEMORY[key]=bytes(memory)
         self.memory=MEMORY[key];self.symbols=dict(worker[4]);self.layout=layout
+        self.geometry=worker_geometry(worker)
         self.worker=worker;self.targets=set();self.transfer_ok=True;self.transfer_calls=[]
         self.code_reads=set();self.identity_reads=[];self.stop_at_mdstar=False
         self.forbidden_reads=set()
@@ -301,11 +311,11 @@ class WitnessCPU(SDKCPU):
         self.live=self.addr('_live_plan');self.overlay_at=self.addr('_overlay');self.durable=self.addr('_durable_card')
         self.lifetime=self.addr('_lifetime_plan');self.frame=0x8c900000
         self.source=0x0c800000;self.manager=0x8c990000;self.manager_cell=0x8c980000
-        self.rx_base=0x0c820000;self.r[15]=0x8c11ffe0;self.pr=RETURN
+        self.rx_base=0x0c820000;self.r[15]=0x80000000|(self.geometry['end']-32);self.pr=RETURN
         self.write(self.state,1);self.write(self.state+4,1)
         self.write(self.state+8,30);self.write(self.state+12,29)
         self.write(self.state+20,self.source)
-        for i in range(16):self.write(0x8c11f000+4*i,0x4b535431)
+        for i in range(16):self.write((0x80000000|self.geometry['stack_begin'])+4*i,0x4b535431)
         self.write(self.frame+68,self.sr)
         self.owner_code=0x8c010000;self.owner_bytes=0x20000
         self.write(self.config+layout['config.driver.load_address'],self.owner_code)
@@ -347,7 +357,7 @@ class WitnessCPU(SDKCPU):
         if getattr(self,'stop_at_mdstar',False) and address==0xa05f6c04:raise PrefixComplete()
         if hasattr(self,'identity_addresses') and count==4 and address in self.identity_addresses:
             self.identity_reads.append(address)
-        if hasattr(self,'owner_reads') and count==4 and not 0x0c100000<=address&0x1fffffff<0x0c120000:
+        if hasattr(self,'owner_reads') and count==4 and not self.owned_worker_address(address):
             self.owner_reads.append(address)
         return super().read(address,count)
 
@@ -476,10 +486,17 @@ class WitnessCPU(SDKCPU):
 
     def assert_no_owner_writes(self,allowed=()):
         for _,address,_,count in self.writes:
-            physical=address&0x1fffffff
-            if 0x0c100000<=physical<0x0c120000:continue
+            if self.owned_worker_address(address,count):continue
             assert any(address==at and count==width for at,width in allowed),\
                 ('unexpected owner/MMIO write',hex(address),count)
+
+    def owned_worker_address(self,address,count=1):
+        physical=address&0x1fffffff
+        return self.geometry['begin']<=physical<physical+count<=self.geometry['end']
+
+    def owned_stack_address(self,address,count=1):
+        physical=address&0x1fffffff
+        return self.geometry['stack_begin']<=physical<physical+count<=self.geometry['end']
 
 
 def helper_cases(resident,worker,layout):
@@ -492,7 +509,7 @@ def helper_cases(resident,worker,layout):
             cpu.execute('_failure_witness.isra.0',values)
             assert cpu.witness()==values
             assert_c_abi(cpu,before)
-            assert [(a,v,n) for _,a,v,n in cpu.writes if not 0x0c11f000<=a&0x1fffffff<0x0c120000]==\
+            assert [(a,v,n) for _,a,v,n in cpu.writes if not cpu.owned_stack_address(a,n)]==\
                 [(cpu.state+64,values[1],4),(cpu.state+68,values[2],4),
                  (cpu.state+72,values[3],4),(cpu.state+76,values[0],4)]
             cpu.assert_no_owner_writes();count+=1
@@ -690,14 +707,18 @@ def terminal_identity_cases(resident,worker,layout):
     words=((0x26,0xd4126543),(0x2a,0x0009afe9),(0x7a,0xafc0d417),(0x7e,0xd417e5ff),
            (0x82,0xafbc2f56),(0x86,0xd4167f04),(0x8a,0xafb82f56),(0x8e,0x00007f04))
     patch=(0xd001,0x402b,9,terminal&65535,terminal>>16,9)
+    lean=lean_worker_profile(worker)
+    if lean:
+        require(layout['exit_bytes']==52,'lean witness requires its exact version-two exit shape')
     def fixture():
         c=WitnessCPU(resident,worker,layout)
-        fields={'exits.version':1,'exits.bytes':layout['exit_bytes'],'exits.family':5,
+        fields={'exits.version':2 if lean else 1,'exits.bytes':layout['exit_bytes'],'exits.family':5,
             'exits.load':0x8c950000,'exits.image_bytes':0x20000,'exits.count':3,
             'exits.terminal_dispatch.table':table,'low_terminal':terminal,
             'lease.owner.dispatch_cell':c.identity_addresses[0],'lease.owner.dispatch_table':default}
         for name,value in fields.items():c.write(c.config+layout['config.'+name],value)
         c.write(c.config+layout['config.exits.entries']+8,common)
+        if lean:c.write(c.config+layout['config.exits.entries']+12,0)
         c.write(c.identity_addresses[0],table)
         c.write(c.lifetime+layout['lifetime.identity']+4,default)
         for i,offset in enumerate(entries):c.write(table+4*i,common+offset)
@@ -760,7 +781,7 @@ def complete_cases(resident,worker,layout):
                     c.writes=[];before=c.snapshot();c.execute('_kui_vmu_native_passive_complete',[c.frame])
                     assert_c_abi(c,before)
                     c.assert_no_owner_writes([((c.rx[parent]+2)|0xa0000000,1)])
-                    owner=[(a,v,n) for _,a,v,n in c.writes if not 0x0c100000<=a&0x1fffffff<0x0c120000]
+                    owner=[(a,v,n) for _,a,v,n in c.writes if not c.owned_worker_address(a,n)]
                     assert owner==[((c.rx[parent]+2)|0xa0000000,0x23,1)]
                     assert c.read(c.pair)==c.read(c.state+4)==0 and c.read(c.state+12)==30
                     assert c.read(c.overlay_at+layout['overlay.stats.advertisements'])==1
@@ -834,11 +855,20 @@ def complete_cases(resident,worker,layout):
 
 def objects(worker):
     result={}
-    for name,minimum in (('_state',100),('_controller_pair',188),('_config',2300),
-        ('_live_plan',456),('_lifetime_plan',616),('_overlay',0x45a0),('_durable_card',0x1040)):
+    geometry=worker_geometry(worker)
+    if geometry['lean']:
+        from check_native_general_lean_profile import prepared_objects
+        prepared_objects(worker)
+        selected=(('_state',100),('_controller_pair',188),('_config',2304),
+            ('_live_plan',456),('_lifetime_plan',616),('_overlay',17172),('_durable_card',4160))
+    else:
+        selected=(('_state',100),('_controller_pair',188),('_config',2300),
+            ('_live_plan',456),('_lifetime_plan',616),('_overlay',0x45a0),('_durable_card',0x1040))
+    for name,minimum in selected:
         address,count,kind,owner=worker[4][name];section=worker[3][owner]
         require(kind==1 and section[1]==8 and section[2]&7==3 and
-                count>=minimum and 0xac100000<=address<address+count<=0xac11f000,
+                (count==minimum if geometry['lean'] else count>=minimum) and
+                0xac100000<=address<address+count<=(0xa0000000|geometry['stack_begin']),
                 'controller witness mutable object escapes its owned uncached BSS: '+name)
         result[name]=dict(address=hex(address),bytes=count)
     return result
@@ -903,10 +933,43 @@ def mutations(resident,worker,layout):
             try:pinned(trial)
             except ValueError:schemas+=1
             else:raise ValueError('controller witness accepted an untyped/mutable constant table')
+    geometry_schemas=0
+    if lean_worker_profile(worker):
+        # New geometry must never fall back to the historical larger object
+        # minima or its now-unowned final 16 KiB. Exercise schema admission
+        # independently from the code/literal pins above.
+        for name in objects(worker):
+            address,count,kind,owner=worker[4][name]
+            for variant in ('size','function','stack','readonly'):
+                symbols=dict(worker[4]);sections=list(worker[3])
+                if variant=='size':symbols[name]=(address,count+4,kind,owner)
+                elif variant=='function':symbols[name]=(address,count,2,owner)
+                elif variant=='stack':symbols[name]=(0xac11b000,count,kind,owner)
+                else:
+                    section=list(sections[owner]);section[2]&=~1;sections[owner]=tuple(section)
+                trial=(*worker[:3],sections,symbols)
+                try:objects(trial)
+                except ValueError:geometry_schemas+=1
+                else:raise ValueError('lean witness accepted changed exact owned object geometry: '+name)
+        marker='__kui_native_general_lean_worker_layout'
+        for value in (None,(0,0,0,0xfff1),(1,4,0,0xfff1),(1,0,1,0xfff1),(1,0,0,1)):
+            symbols=dict(worker[4])
+            if value is None:symbols.pop(marker)
+            else:symbols[marker]=value
+            try:objects((*worker[:4],symbols))
+            except ValueError:geometry_schemas+=1
+            else:raise ValueError('lean witness accepted an inexact compact worker marker')
+        c=WitnessCPU(resident,worker,layout)
+        require(c.owned_stack_address(0xac11b000,0x1000) and
+                not c.owned_worker_address(0xac11c000) and
+                not c.owned_worker_address(0xac11bfff,2) and
+                not c.owned_stack_address(0xac11afff),
+                'lean witness model retained historical private-stack/worker ownership')
     return dict(actual_instruction_mutation_rejections=functional,
                 owned_timer_policy_branch_mutation_rejections=timer_branches,
                 instruction_and_literal_byte_mutation_rejections=bytes_rejected,
-                typed_constant_schema_mutation_rejections=schemas)
+                typed_constant_schema_mutation_rejections=schemas,
+                lean_owned_state_schema_mutation_rejections=geometry_schemas)
 
 
 def companion_mutations(worker,report):

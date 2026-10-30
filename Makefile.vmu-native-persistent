@@ -71,7 +71,7 @@ persistent-host-tests: $(BUILD)/native-worker.bin $(BUILD)/native-worker.reloc n
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-lifetime
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_exit.c \
 	 src/core/vmu_native_program.c src/core/vmu_native_heap.c src/core/vmu_native_exit.c src/core/vmu_native_patch.c src/core/data.c -o $(BUILD)/test-exit
-	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-exit $(if $(STARTUP),'$(STARTUP)',)
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-exit $(if $(STARTUP),'$(STARTUP)' $(if $(PSO_STARTUP),'$(PSO_STARTUP)',),)
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_worker_relocate.c \
 	 src/core/vmu_native_relocate.c src/core/hash.c src/core/data.c -o $(BUILD)/test-real-relocation
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-real-relocation $(BUILD)/native-worker.bin $(BUILD)/native-worker.reloc

@@ -1,0 +1,47 @@
+{
+  "schema": "kui.native.pso-terminal-consumer-review.v1",
+  "date": "2026-10-28",
+  "reviewed_source_commit": "65b4ffba97cbb86f203cd1925cdf9a4bf46a4cbf",
+  "startup": {
+    "title": "PSO",
+    "product": "MK-51100",
+    "bytes": 3783264,
+    "sha256": "11dc59ee0278675decf5e0bf1fa30646f889a0e5a7f10251f3c3a697e42a28e5",
+    "load": "0x8c010000"
+  },
+  "production_probe": {
+    "method": "A private read-only host wrapper called the existing exit_pvr_pair, exec_loader, consumers and kui_vmu_native_patch_no_interiors implementations against the supplied startup. No image bytes were changed.",
+    "complete_exit_pairs": 1,
+    "exit_pair": "0x8c31c7b4",
+    "cleanup_exit": "0x8c31c7ea",
+    "cleanup_target": "0x8c30ef78",
+    "complete_executable_loaders": 1,
+    "executable_loader": "0x8c20a768",
+    "family": "PVR_CLEAR",
+    "three_existing_hook_windows_pass_interior_guard": true,
+    "complete_consumer_check": false
+  },
+  "extra_consumer": {
+    "bootstrap_literal_load": "0x8c16c8cc",
+    "bootstrap_literal_slot": "0x8c16c8dc",
+    "bootstrap_target": "0x8c008300",
+    "enclosing_startup_shape": "0x8c16c8a8",
+    "observed_operations_before_bootstrap": [
+      "Updates FPSCR and replaces the stack pointer.",
+      "Clears the BSS interval beginning at 0x8c3aba60 (the startup image end) and ending at 0x8c4d7420.",
+      "Calls 0x8c16be28, then invokes the bootstrap target."
+    ],
+    "aligned_literal_references_to_enclosing_entry_found": 0,
+    "reachability_proved": false,
+    "note": "The lack of an aligned literal reference alone cannot prove this startup-shaped path unreachable; direct, interior and computed entry paths need separate treatment."
+  },
+  "conclusion": "PSO already matches the complete reviewed PVR exit pair and executable loader. Its additional encoded bootstrap consumer is why complete exit discovery refuses the image. Keep that refusal: accepting only the existing three entries would leave the extra lifetime path uncovered.",
+  "next_work": [
+    "Determine the enclosing startup path's actual reachability and lifetime from the executable entry and dispatch machinery.",
+    "If reachable, prove a terminal entry before its state-changing operations and carry that additional entry through cache validation, stage installation and runtime witnesses. The present exit descriptor supports at most three entries.",
+    "Do not treat a patch at the final BIOS call, or the absence of a direct pointer to the enclosing entry, as a complete lifetime proof."
+  ],
+  "console_compatibility_verified": false,
+  "production_code_changed": false,
+  "game_bytes_or_disassembly_committed": false
+}

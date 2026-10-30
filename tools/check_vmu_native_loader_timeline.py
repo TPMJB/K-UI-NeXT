@@ -273,8 +273,11 @@ def check(directory,*,self_test=False,read_ahead_proof=None):
     require(struct.unpack('<3I',body)==(0x4b4c5431,1,callback) and callback%2==0 and
             P1+80<=callback<callback+len(callback_body)<=P1+SPAN and callback_section[2]&7==6,
             'timeline descriptor does not bind its exact private P1 callback')
-    private=private_state(worker)
-    division=division_helper(resident,worker,read_ahead,bool(diagnostic),pio,pio_pair,dual,witness)
+    from check_native_general_diagnostics import check as check_general_diagnostics
+    general=check_general_diagnostics(worker,stage,self_test=self_test)
+    private={} if general else private_state(worker)
+    division=({'linked':False,'profile_arithmetic_removed':True} if general else
+              division_helper(resident,worker,read_ahead,bool(diagnostic),pio,pio_pair,dual,witness))
     begin,bridge,_=symbol_bytes(resident,'_kui_retail_async_trace',2)
     bridge_pin=READAHEAD_BRIDGE_PIN if read_ahead else SDK_BRIDGE_PIN if sdk else BRIDGE_PIN
     binder_pin=WITNESS_DUAL_BINDER_PIN if witness else DUAL_BINDER_PIN if dual else READAHEAD_BINDER_PIN if read_ahead else SDK_BINDER_PIN if sdk else BINDER_PIN
@@ -315,7 +318,8 @@ def check(directory,*,self_test=False,read_ahead_proof=None):
         'controller_failure_witness_companion_required':witness,
         'descriptor_bytes':12,'trace_descriptor_bytes_unchanged':40,
         'callback_address':hex(callback),'callback_bytes':len(callback_body),
-        'private_state':private,'private_state_bytes':sum(PRIVATE_OBJECTS.values()),
+        'private_state':private,'private_state_bytes':0 if general else sum(PRIVATE_OBJECTS.values()),
+        'general_diagnostics_elision':general,
         'division_helper':division,
         'private_p2_nobits_only':True,'bridge_address':hex(begin),'bridge_bytes':len(bridge),
         'complete_linked_bridge_pinned':True,'actual_bridge_model_cases':cases,

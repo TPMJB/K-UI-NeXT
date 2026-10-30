@@ -24,8 +24,20 @@
  * sci-async-failure, sci-async-dma-failure, sci-async-handoff-failure, sci-async-bus-failure,
  * sci-async-reset-failure, sci-async-stress-result, sci-async-stress-busy, sci-async-stress-failure,
  * sci-async-quiet-fault, ftp-wifi, wifi, wifi-online, wifi-joining,
- * wifi-password, wifi-name, wifi-forget, wifi-absent. */
+ * wifi-password, wifi-name, wifi-forget, wifi-absent, salvage-uncertain,
+ * salvage-resume, salvage-defer-confirm, salvage-deferred,
+ * salvage-drive, salvage-drive-retries, salvage-drive-trial, salvage-drive-speed-probe, salvage-drive-return,
+ * salvage-profile, salvage-trial-working, salvage-trial-result,
+ * speed-probe-working, speed-probe-result, salvage-drive-saved-reads, salvage-drive-g1,
+ * saved-reads-working, saved-reads-result, g1-mode-working, g1-mode-result,
+ * salvage-drive-revalidate, salvage-revalidate-working, salvage-revalidate-result,
+ * salvage-revalidate-stopped, recovery-dashboard, recovery-dashboard-unknown,
+ * recovery-dashboard-blocked, recovery-dashboard-long, recovery-options,
+ * recovery-diagnostics, recovery-check-confirm, disc-tools-recovery,
+ * disc-tools-verify, verify-direct, salvage-working-details, recovery-dashboard-error,
+ * recovery-dashboard-stopped, recovery-dashboard-reset, recovery-dashboard-complete. */
 #include "kui/shell.h"
+#include "kui/salvage_display.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -292,7 +304,7 @@ int main(int argc,char **argv) {
     view.music_cache_bytes=1111209;
     if(!strcmp(argv[1],"home-games")) shell.home_selected=home_row(KUI_SHELL_GAMES);
     else if(!strcmp(argv[1],"home-files")) shell.home_selected=home_row(KUI_SHELL_FILES);
-    else if(!strcmp(argv[1],"home-ripper")) shell.home_selected=home_row(KUI_SHELL_RIPPER);
+    else if(!strcmp(argv[1],"home-ripper")) shell.home_selected=home_row(KUI_SHELL_DISC_TOOLS);
     else if(!strcmp(argv[1],"home-network")) shell.home_selected=home_row(KUI_SHELL_NETWORK);
     else if(!strcmp(argv[1],"home-settings")) shell.home_selected=home_row(KUI_SHELL_SETTINGS);
     else if(!strcmp(argv[1],"home-diagnostics")) shell.home_selected=home_row(KUI_SHELL_DIAGNOSTICS);
@@ -599,17 +611,195 @@ int main(int argc,char **argv) {
         shell.page=KUI_SHELL_SYSTEM_TOOLS;shell.confirm_restart=!strcmp(argv[1],"restart");
         view.app_status=&status;strcpy(status.message,"Settings flash backup verified on SD.");
         status.line_count=1;strcpy(status.lines[0],"/KUI/backups/system/flash-0001.bin");
-    } else if(!strcmp(argv[1],"salvage") || !strcmp(argv[1],"salvage-confirm") || !strcmp(argv[1],"salvage-working")) {
-        shell.page=KUI_SHELL_SALVAGE;shell.salvage_selected=3;shell.salvage_zero_fill=true;
-        shell.confirm_salvage=!strcmp(argv[1],"salvage-confirm");
+    } else if(!strcmp(argv[1],"recovery-dashboard") || !strcmp(argv[1],"recovery-dashboard-unknown") ||
+              !strcmp(argv[1],"recovery-dashboard-blocked") || !strcmp(argv[1],"recovery-dashboard-long") ||
+              !strcmp(argv[1],"recovery-dashboard-error") || !strcmp(argv[1],"recovery-dashboard-stopped") ||
+              !strcmp(argv[1],"recovery-dashboard-reset") || !strcmp(argv[1],"recovery-dashboard-complete") ||
+              !strcmp(argv[1],"recovery-options") || !strcmp(argv[1],"recovery-diagnostics") ||
+              !strcmp(argv[1],"recovery-check-confirm")) {
+        shell.page=KUI_SHELL_SALVAGE;
+        if(strcmp(argv[1],"recovery-dashboard-unknown")) {
+            shell.salvage_dashboard=(struct kui_salvage_dashboard){.known=true,.counts_known=true,
+                .targets=7017,.recovered=6190,.remaining=827};
+            strcpy(shell.salvage_dashboard.title,"POWER STONE");
+            strcpy(shell.salvage_dashboard.job,"/KUI/salvage/job-0003");
+        }
+        if(!strcmp(argv[1],"recovery-dashboard-blocked") || !strcmp(argv[1],"recovery-check-confirm"))
+            shell.salvage_dashboard.blocked=true;
+        if(!strcmp(argv[1],"recovery-check-confirm"))shell.confirm_salvage_check=true;
+        if(!strcmp(argv[1],"recovery-dashboard-long")) {
+            strcpy(shell.salvage_dashboard.title,"A VERY LONG DISC TITLE THAT SHOULD STAY INSIDE THE SAFE SCREEN AREA WHILE COUNTS REMAIN CLEAR");
+            shell.salvage_dashboard.targets=999999;shell.salvage_dashboard.recovered=499999;shell.salvage_dashboard.remaining=500000;
+        }
+        if(!strcmp(argv[1],"recovery-dashboard-error") || !strcmp(argv[1],"recovery-dashboard-stopped") ||
+           !strcmp(argv[1],"recovery-dashboard-reset") || !strcmp(argv[1],"recovery-dashboard-complete")) {
+            view.app_status=&status;status.complete=true;
+            if(!strcmp(argv[1],"recovery-dashboard-error")) {
+                status.errors=1;
+                strcpy(status.message,"Could not open the saved recovery job after an SD read failure; recovery remains paused and existing progress is retained.");
+            } else if(!strcmp(argv[1],"recovery-dashboard-reset")) {
+                view.drive_reset_required=true;status.errors=1;strcpy(status.message,"The drive needs a restart.");
+            } else if(!strcmp(argv[1],"recovery-dashboard-stopped")) {
+                status.stopped=true;strcpy(status.message,"Stopped safely; existing saved progress is retained.");
+            } else {
+                status.passed=true;status.line_count=5;
+                strcpy(status.message,"All targets resolved; every saved track byte verified.");
+                strcpy(status.lines[4],"TOSEC: FULL TRACK MATCH");
+                shell.salvage_dashboard.recovered=shell.salvage_dashboard.targets;shell.salvage_dashboard.remaining=0;
+            }
+        }
+        if(!strcmp(argv[1],"recovery-options")) {
+            shell.page=KUI_SHELL_SALVAGE_OPTIONS;shell.salvage_options_selected=KUI_SHELL_RECOVERY_RETRIES;
+            shell.salvage_drive_options.retries=2;
+        }
+        if(!strcmp(argv[1],"recovery-diagnostics"))shell.page=KUI_SHELL_SALVAGE_DRIVE;
+    } else if(!strcmp(argv[1],"salvage-drive") || !strcmp(argv[1],"salvage-drive-retries") || !strcmp(argv[1],"salvage-drive-trial") || !strcmp(argv[1],"salvage-drive-speed-probe") || !strcmp(argv[1],"salvage-drive-saved-reads") || !strcmp(argv[1],"salvage-drive-g1") || !strcmp(argv[1],"salvage-drive-revalidate") || !strcmp(argv[1],"salvage-drive-return")) {
+        shell.page=KUI_SHELL_SALVAGE_DRIVE;
+        if(!strcmp(argv[1],"salvage-drive")) {
+            shell.page=KUI_SHELL_SALVAGE_OPTIONS;shell.salvage_options_selected=KUI_SHELL_RECOVERY_SPEED;
+        }
+        if(!strcmp(argv[1],"salvage-drive-retries")) {
+            shell.page=KUI_SHELL_SALVAGE_OPTIONS;shell.salvage_options_selected=KUI_SHELL_RECOVERY_RETRIES;
+            shell.salvage_drive_options=(struct kui_drive_options){8,1};
+        }
+        if(!strcmp(argv[1],"salvage-drive-trial"))shell.salvage_drive_selected=KUI_SHELL_RECOVERY_TRIAL;
+        if(!strcmp(argv[1],"salvage-drive-speed-probe"))shell.salvage_drive_selected=KUI_SHELL_RECOVERY_SPEED_PROBE;
+        if(!strcmp(argv[1],"salvage-drive-saved-reads"))shell.salvage_drive_selected=KUI_SHELL_RECOVERY_SAVED_READS;
+        if(!strcmp(argv[1],"salvage-drive-g1"))shell.salvage_drive_selected=KUI_SHELL_RECOVERY_G1_MODE;
+        if(!strcmp(argv[1],"salvage-drive-revalidate"))shell.salvage_drive_selected=KUI_SHELL_RECOVERY_REVALIDATE;
+        if(!strcmp(argv[1],"salvage-drive-return"))shell.salvage_drive_selected=KUI_SHELL_RECOVERY_DIAGNOSTICS_RETURN;
+    } else if(!strcmp(argv[1],"salvage-revalidate-working") || !strcmp(argv[1],"salvage-revalidate-result") ||
+              !strcmp(argv[1],"salvage-revalidate-stopped")) {
+        bool finished=strcmp(argv[1],"salvage-revalidate-working")!=0;
+        bool stopped=!strcmp(argv[1],"salvage-revalidate-stopped");
+        shell.page=KUI_SHELL_SALVAGE;shell.salvage_selected=5;shell.salvage_trial_result=true;
+        status.complete=finished;status.stopped=stopped;status.passed=finished && !stopped;
+        status.done=finished && !stopped?2400u:750u;status.total=2400;status.line_count=8;
+        strcpy(status.message,stopped?"Example: stopped; quarantine retained":
+            finished?"Example: saved-data revalidation passed":"Example: checking all saved track bytes");
+        strcpy(status.lines[0],"Phase: Track data; track 3/3");
+        strcpy(status.lines[1],finished && !stopped?"Read 2400 / 2400 MiB; repeated reads included":
+            "Read 750 / 2400 MiB; repeated reads included");
+        strcpy(status.lines[2],"Targets 7017; saved repairs 6190; candidate records 6190");
+        strcpy(status.lines[3],"/KUI/salvage/job-0003");
+        strcpy(status.lines[4],"Checks journal, repair records and every saved track byte.");
+        strcpy(status.lines[5],finished && !stopped?"Quarantine cleared after full saved-data validation.":
+            stopped?"Validation incomplete; quarantine was not cleared.":
+            "A full job scan can take tens of minutes; B stops safely.");
+        strcpy(status.lines[6],"Saved source files are not repaired or rewritten.");
+        strcpy(status.lines[7],finished && !stopped?"Retry unresolved sectors separately when ready.":
+            "No optical recovery starts during this check.");
+        view.app_status=&status;view.busy=!finished;view.salvage_diagnostic=KUI_SALVAGE_DIAGNOSTIC_REVALIDATE;
+    } else if(!strcmp(argv[1],"speed-probe-working") || !strcmp(argv[1],"speed-probe-result")) {
+        bool finished=!strcmp(argv[1],"speed-probe-result");
+        static const char *const names[]={"Original speed","Maximum","1x","2x","4x","6x","8x","10x","12x"};
+        shell.page=KUI_SHELL_SALVAGE;shell.salvage_selected=5;shell.salvage_trial_result=true;
+        status.complete=finished;status.passed=finished;status.done=finished?9u:5u;status.total=9;status.line_count=9;
+        strcpy(status.message,finished?"Example speed probe result":"Example speed probe in progress");
+        for(unsigned i=0;i<9;++i) {
+            if(!finished && i>=5)snprintf(status.lines[i],KUI_APP_LINE_CAP,"%s: waiting",names[i]);
+            else if(i==0 || i==1)snprintf(status.lines[i],KUI_APP_LINE_CAP,"%s: matched 3/3, read 1200 ms",names[i]);
+            else snprintf(status.lines[i],KUI_APP_LINE_CAP,"%s: setting not verified; skipped",names[i]);
+        }
+        view.app_status=&status;view.busy=!finished;view.salvage_speed_probe=true;
+    } else if(!strcmp(argv[1],"saved-reads-working") || !strcmp(argv[1],"saved-reads-result") ||
+              !strcmp(argv[1],"g1-mode-working") || !strcmp(argv[1],"g1-mode-result")) {
+        bool saved=!strncmp(argv[1],"saved-reads-",12);
+        bool finished=strstr(argv[1],"-result")!=NULL;
+        shell.page=KUI_SHELL_SALVAGE;shell.salvage_selected=5;shell.salvage_trial_result=true;
+        status.complete=finished;status.passed=finished;status.done=finished?8u:3u;status.total=8;status.line_count=9;
+        strcpy(status.message,finished?"Example read-only diagnostic result":"Example read-only diagnostic in progress");
+        if(saved) {
+            strcpy(status.lines[0],"Job /KUI/salvage/job-0003; packed candidates");
+            strcpy(status.lines[1],"Bulk / aligned: 6190 records checked");
+            strcpy(status.lines[2],"512-byte / aligned: 6190 records checked");
+            strcpy(status.lines[3],finished?"Bulk / unaligned: 6190 records checked":"Bulk / unaligned: 2000/6190 records");
+            strcpy(status.lines[4],finished?"512-byte / unaligned: 6190 records checked":"512-byte / unaligned: waiting");
+            strcpy(status.lines[5],finished?"Example: complete file hashes agree":"Comparing saved bytes; source files read-only");
+            strcpy(status.lines[6],"No repair or quarantine clearing was performed.");
+            strcpy(status.lines[7],"This is a read-path diagnostic, not job verification.");
+            strcpy(status.lines[8],"Send the automatically saved diagnostic report.");
+        } else {
+            for(unsigned i=0;i<8;++i)snprintf(status.lines[i],KUI_APP_LINE_CAP,
+                !finished && i>=3?"Speed code %u: waiting":"Speed code %u: example returned code 0",i);
+            strcpy(status.lines[8],finished?"Example: original mode restored and verified":"Original mode is retained for restoration.");
+        }
+        view.app_status=&status;view.busy=!finished;
+        view.salvage_diagnostic=saved?KUI_SALVAGE_DIAGNOSTIC_SAVED_READS:KUI_SALVAGE_DIAGNOSTIC_G1_MODE;
+    } else if(!strcmp(argv[1],"salvage-trial-working") || !strcmp(argv[1],"salvage-trial-result")) {
+        bool finished=!strcmp(argv[1],"salvage-trial-result");
+        shell.page=KUI_SHELL_SALVAGE;shell.salvage_selected=5;shell.salvage_trial_result=true;
+        shell.salvage_drive_options=(struct kui_drive_options){8,5}; /* Ignored by fixed trial profiles. */
+        struct kui_salvage_status progress={.track=3,.tracks=3,.fad=309149,
+            .targets=7017,.recovered=6183,.remaining=834,.first_pass_complete=true,
+            .complete=finished,.trial_active=!finished,.trial_complete=finished,.trial_qualification_done=true,
+            .trial_done=finished?32u:20u,.trial_total=32,.trial_sample_count=8,.trial_profile=2,
+            .trial_profile_reads={8,8,8,8},.trial_profile_valid={0,1,2,1},.trial_profile_repairs={0,1,2,0},
+            .trial_profile_ms={60000,31000,29000,35000},.trial_qualified={true,true,true,true}};
+        if(!finished)for(unsigned p=0;p<KUI_SALVAGE_TRIAL_PROFILES;++p)progress.trial_profile_reads[p]=5;
+        strcpy(progress.message,finished?"Bounded drive-control trial finished":"Comparing fixed drive-control profiles");
+        strcpy(progress.job,"/KUI/salvage/job-0002");
+        kui_salvage_display_status(&status,&progress);
+        view.app_status=&status;view.busy=!finished;view.salvage_control_trial=true;
+    } else if(!strcmp(argv[1],"salvage") || !strcmp(argv[1],"salvage-confirm") || !strcmp(argv[1],"salvage-working") || !strcmp(argv[1],"salvage-working-details") || !strcmp(argv[1],"salvage-collecting") || !strcmp(argv[1],"salvage-retrying") || !strcmp(argv[1],"salvage-audio") || !strcmp(argv[1],"salvage-uncertain") || !strcmp(argv[1],"salvage-resume") || !strcmp(argv[1],"salvage-defer-confirm") || !strcmp(argv[1],"salvage-deferred") || !strcmp(argv[1],"salvage-verified") || !strcmp(argv[1],"salvage-profile")) {
+        shell.page=KUI_SHELL_SALVAGE;shell.salvage_selected=3;
+        shell.confirm_salvage_defer=!strcmp(argv[1],"salvage-defer-confirm");
+        shell.confirm_salvage=!strcmp(argv[1],"salvage-confirm") || shell.confirm_salvage_defer;
+        if(!strcmp(argv[1],"salvage-resume") || shell.confirm_salvage_defer)shell.salvage_selected=1;
         view.app_status=&status;status.passed=false;strcpy(status.message,"Incomplete: 3 unresolved sectors remain.");
-        if(!strcmp(argv[1],"salvage-working")) {
-            view.busy=true;status.complete=false;status.line_count=6;status.done=5;status.total=12;
-            strcpy(status.message,"Retrying unresolved sectors");
-            const char *lines[]={"Track 3/31  FAD 45150  attempts 3","Targets 12  recovered 5  remaining 7",
-                "Recovery pass 2/5  First pass: complete","/KUI/salvage/job-0001",
-                "Unresolved zeros are NOT a verified game dump.","Separate recovery job; normal captures unchanged."};
-            for(unsigned i=0;i<6;i++) snprintf(status.lines[i],KUI_APP_LINE_CAP,"%s",lines[i]);
+        if(!strcmp(argv[1],"salvage-working") || !strcmp(argv[1],"salvage-working-details") || !strcmp(argv[1],"salvage-collecting") || !strcmp(argv[1],"salvage-retrying") || !strcmp(argv[1],"salvage-audio") || !strcmp(argv[1],"salvage-uncertain") || !strcmp(argv[1],"salvage-deferred") || !strcmp(argv[1],"salvage-profile")) {
+            shell.salvage_details=!strcmp(argv[1],"salvage-working-details");
+            shell.salvage_dashboard=(struct kui_salvage_dashboard){.known=true,.counts_known=true,.targets=7017,.recovered=6190,.remaining=827};
+            strcpy(shell.salvage_dashboard.title,"POWER STONE");
+            if(!strcmp(argv[1],"salvage-profile"))shell.salvage_drive_options=(struct kui_drive_options){8,0};
+            bool uncertain=!strcmp(argv[1],"salvage-uncertain");
+            bool deferred=!strcmp(argv[1],"salvage-deferred");
+            bool collecting=!strcmp(argv[1],"salvage-collecting") || uncertain || deferred;
+            bool retrying=!strcmp(argv[1],"salvage-retrying");
+            struct kui_salvage_status progress={.track=3,.tracks=3,.fad=173032,.attempts=291,
+                .targets=31,.remaining=31,.done=327680000,.total=1179648000,.first_pass_complete=!collecting && !retrying,
+                .collection_active=collecting || retrying,.collected_this_run=327680000,.collection_elapsed_ms=1000000,
+                .pass=collecting || retrying?0u:2u,.read_fad=173032,.read_count=collecting?32u:1u,
+                .read_attempt=retrying?2u:1u,.read_limit=retrying?2u:1u,.read_state=KUI_SALVAGE_READ_READING,
+                .last_problem_fad=173011,.last_problem_count=1,.last_problem_attempt=2,
+                .last_problem_limit=2,.last_problem_state=KUI_SALVAGE_READ_DEFERRED};
+            if(collecting)progress.read_limit=1;
+            if(!strcmp(argv[1],"salvage-audio")) {progress.read_confirm=2;progress.read_confirm_limit=2;
+                progress.read_attempt=progress.read_limit=1;}
+            if(uncertain) {
+                progress.targets=progress.remaining=185;
+                progress.done=1182585600;progress.total=1411200000;
+                progress.collected_this_run=75264;progress.collection_elapsed_ms=400000;
+                progress.fad=progress.read_fad=599000;progress.last_problem_fad=598968;
+                progress.last_problem_count=32;progress.last_problem_attempt=progress.last_problem_limit=1;
+            }
+            strcpy(progress.message,collecting?"Collecting good data; 31 unresolved sectors":retrying?"First-pass retry 2/2 at FAD 173032":"Retrying unresolved sectors");
+            if(uncertain)strcpy(progress.message,"Collecting ranges; deferred ranges repair later.");
+            if(deferred) {
+                progress.targets=progress.remaining=447;progress.done=1182585600;progress.total=1411200000;
+                progress.collected_this_run=0;progress.collection_elapsed_ms=2000;
+                progress.fad=progress.read_fad=progress.last_problem_fad=469694;
+                progress.read_count=progress.last_problem_count=32;
+                progress.read_attempt=progress.read_limit=progress.last_problem_attempt=progress.last_problem_limit=0;
+                progress.read_state=KUI_SALVAGE_READ_DEFERRED;
+                strcpy(progress.message,"Deferring next range by request; not recovered");
+            }
+            strcpy(progress.job,"/KUI/salvage/job-0002");
+            if(!strcmp(argv[1],"salvage-working") || !strcmp(argv[1],"salvage-working-details")) {
+                progress.targets=7017;progress.recovered=6190;progress.remaining=827;
+            }
+            shell.salvage_dashboard.targets=progress.targets;shell.salvage_dashboard.recovered=progress.recovered;
+            shell.salvage_dashboard.remaining=progress.remaining;
+            view.disc_title=view.inserted_title="POWER STONE";
+            kui_salvage_display_status(&status,&progress);view.busy=true;
+        } else if(!strcmp(argv[1],"salvage-verified")) {
+            shell.salvage_verify_files=true;status.complete=true;status.passed=true;
+            status.line_count=7;status.done=status.total=12;
+            strcpy(status.message,"All targets resolved; every saved track byte verified");
+            const char *lines[]={"Track 3/3  FAD 45189","Targets 12000 recovered 12000 remaining 0",
+                "Optical acquisition complete.","Saved bytes: every track byte read back and verified.",
+                "TOSEC: FULL TRACK MATCH","SWORD OF THE BERSERK","/KUI/salvage/job-0001"};
+            for(unsigned i=0;i<7;i++)snprintf(status.lines[i],KUI_APP_LINE_CAP,"%s",lines[i]);
         }
     } else if(!strcmp(argv[1],"retry")) {
         shell.page=KUI_SHELL_RIPPER;view.busy=true;view.retries=11;view.retry_attempt=3;view.retry_limit=10;view.retry_fad=45150;
@@ -645,7 +835,7 @@ int main(int argc,char **argv) {
         shell.page=KUI_SHELL_DESTINATION;shell.browse_for_scan=true;
         strcpy(shell.browse_path,"/Games/MDK2");
     } else if(!strcmp(argv[1],"home-music")) shell.home_selected=home_row(KUI_SHELL_MUSIC);
-    else if(!strcmp(argv[1],"home-gd")) shell.home_selected=home_row(KUI_SHELL_GD_PLAY);
+    else if(!strcmp(argv[1],"home-gd")) shell.home_selected=home_row(KUI_SHELL_DISC_TOOLS);
     else if(!strcmp(argv[1],"gd-play") || !strcmp(argv[1],"gd-confirm")) {
         shell.page=KUI_SHELL_GD_PLAY;shell.confirm_gd_boot=!strcmp(argv[1],"gd-confirm");
     } else if(!strcmp(argv[1],"quick-resume")) {
@@ -679,6 +869,78 @@ int main(int argc,char **argv) {
             shell.vmu.entries[i].bytes=16384;
         }
         snprintf(shell.vmu.status.message,128,"12 saves found. Select a save to back up.");
+    } else if(!strcmp(argv[1],"disc-tools") || !strcmp(argv[1],"disc-tools-recovery") || !strcmp(argv[1],"disc-tools-verify")) {
+        shell.page=KUI_SHELL_DISC_TOOLS;
+        if(!strcmp(argv[1],"disc-tools-recovery"))shell.disc_tools_selected=1;
+        if(!strcmp(argv[1],"disc-tools-verify"))shell.disc_tools_selected=2;
+    } else if(!strcmp(argv[1],"verify-direct")) {
+        shell.page=KUI_SHELL_CRC_SCAN;shell.scan_return=KUI_SHELL_DISC_TOOLS;
+        strcpy(shell.browse_path,"/Games/POWER STONE");
+    }
+    else if(!strncmp(argv[1],"vmu-card",8)) {
+        shell.page=KUI_SHELL_VMU_COLLECTION;shell.vmu_emulation_known=true;
+        shell.vmu_collection.count=shell.vmu_collection.total=4;
+        const char *names[]={"Resident Evil Code Veronica","Shared imports","White VMU backup","Card needs checking"};
+        for(unsigned i=0;i<4;i++) {
+            struct kui_vmu_backup_entry *entry=&shell.vmu_collection.entries[i];
+            snprintf(entry->label,sizeof(entry->label),"%s",names[i]);
+            snprintf(entry->folder,sizeof(entry->folder),"%c%04u",i==2?'v':'p',i+1);
+            snprintf(entry->path,sizeof(entry->path),i==2?"0:/KUI/vmu/cards/v%04u/card.vmd":"0:/KUI/vmu-test/p%04u/card.vmd",i+1);
+            entry->active=i!=2;entry->readable=i!=3;entry->free_blocks=84u+i*12u;
+            entry->users=i==0?1u:i==1?4u:0u;entry->identity[0]=(uint8_t)(i+1u);
+            entry->custom_label=i==1u || i==2u;
+            snprintf(entry->games,sizeof(entry->games),"%s",i==0?"T-12345":i==1?"T-23456 T-34567 T-45678 T-56789":i==3?"Card identity could not be verified":"");
+            snprintf(entry->titles,sizeof(entry->titles),"%s",i==0?"Resident Evil Code Veronica":i==1?"Grandia II, Sonic Adventure 2, Crazy Taxi, Toy Commander":"");
+            snprintf(entry->contents,sizeof(entry->contents),"%s",i==0?"Code Veronica save":i==1?"Grandia II save, Sonic Adventure 2 save":i==2?"Jet Set Radio save, Crazy Taxi save":"");
+        }
+        shell.vmu_collection_selected=1;
+        strcpy(shell.vmu_collection.status.message,"4 virtual VMUs; active cards and backup snapshots.");
+        if(strcmp(argv[1],"vmu-cards")) {
+            shell.page=KUI_SHELL_VMU_CARD;
+            shell.vmu_card=shell.vmu_collection.entries[!strcmp(argv[1],"vmu-card-unavailable")?3:1];
+            shell.vmu_card_details=!strcmp(argv[1],"vmu-card-details");
+            if(!shell.vmu_card.readable) shell.vmu_card_selected=KUI_SHELL_VMU_CARD_DETAILS;
+            if(!strcmp(argv[1],"vmu-card-rename")) {
+                shell.vmu_card_selected=KUI_SHELL_VMU_CARD_RENAME;(void)kui_shell_input(&shell,KUI_SHELL_A,false);
+                strcpy(shell.keyboard,"Shared imports");
+            }
+        }
+    } else if(!strcmp(argv[1],"vmu-users")) {
+        shell.page=KUI_SHELL_VMU_WIZARD;shell.vmu_wizard_return=KUI_SHELL_VMU_CARD;
+        shell.vmu_emulation_known=true;shell.vmu_wizard.view_only=true;
+        shell.vmu_wizard.stage=KUI_VMU_WIZARD_GAMES_STAGE;
+        shell.vmu_wizard.total=shell.vmu_wizard.count=4;shell.vmu_wizard.cards=1;
+        const char *names[]={"Grandia II","Resident Evil Code Veronica","Sonic Adventure 2","Toy Commander"};
+        for(unsigned i=0;i<4;i++) snprintf(shell.vmu_wizard.games[i].title,sizeof(shell.vmu_wizard.games[i].title),"%s",names[i]);
+    } else if(!strcmp(argv[1],"vmu-tools") || !strcmp(argv[1],"vmu-tools-off") ||
+              !strcmp(argv[1],"vmu-tools-saving") || !strcmp(argv[1],"vmu-tools-unavailable")) {
+        shell.page=KUI_SHELL_VMU_TOOLS;shell.vmu_tools_selected=4;shell.vmu_emulation_known=true;
+        shell.vmu_emulation_enabled=strcmp(argv[1],"vmu-tools-off")!=0;
+        if(!strcmp(argv[1],"vmu-tools-saving")) {
+            shell.vmu_emulation_loading=true;shell.vmu_emulation_requested=false;
+            strcpy(shell.vmu_emulation_notice,"Saving virtual VMU preference...");
+        } else if(!strcmp(argv[1],"vmu-tools-unavailable")) {
+            shell.vmu_emulation_known=false;
+            strcpy(shell.vmu_emulation_notice,"Preference not confirmed. X Reload before changing it.");
+        }
+    } else if(!strncmp(argv[1],"vmu-wizard-",11)) {
+        shell.page=KUI_SHELL_VMU_WIZARD;shell.vmu_wizard_slot=2;shell.vmu_emulation_known=true;
+        if(!strcmp(argv[1],"vmu-wizard-off") || !strcmp(argv[1],"vmu-wizard-done-off"))
+            shell.vmu_emulation_enabled=false;
+        struct kui_vmu_wizard_view *w=&shell.vmu_wizard;
+        w->sources=3;w->cards=2;w->selected_games=4;
+        w->summary[0]=(struct kui_vmu_wizard_card){.files=19,.blocks=172,.sources=2,.games=3};
+        w->summary[1]=(struct kui_vmu_wizard_card){.files=9,.blocks=81,.sources=1,.games=1};
+        strcpy(w->status.message,"Imported 9 saves. A different save name required another card.");
+        if(!strcmp(argv[1],"vmu-wizard-games")) {
+            w->stage=KUI_VMU_WIZARD_GAMES_STAGE;w->total=40;w->count=8;shell.vmu_wizard_selected=6;
+            const char *names[]={"Resident Evil Code: Veronica","Phantasy Star Online","Spawn: In the Demon's Hand","Crazy Taxi 2","Record of Lodoss War","Sonic Adventure","Grandia II","Windows CE sample"};
+            for(unsigned i=0;i<8;i++) {snprintf(w->games[i].title,sizeof(w->games[i].title),"%s",names[i]);snprintf(w->games[i].product,sizeof(w->games[i].product),"T-%04u",i);w->games[i].supported=i!=7;w->games[i].selected=i<3;}
+            strcpy(w->status.message,"Choose games for card 1. L/R changes the card.");
+        } else if(!strcmp(argv[1],"vmu-wizard-review")) w->stage=KUI_VMU_WIZARD_REVIEW;
+        else if(!strcmp(argv[1],"vmu-wizard-retry")) {w->stage=KUI_VMU_WIZARD_REVIEW;w->publication_started=true;w->status.complete=true;strcpy(w->status.message,"Card created. Game choices could not be saved; retry this import.");}
+        else if(!strcmp(argv[1],"vmu-wizard-done") || !strcmp(argv[1],"vmu-wizard-done-off")) {w->stage=KUI_VMU_WIZARD_DONE;w->summary[0].pair=12;w->summary[1].pair=13;strcpy(w->status.message,"Cards created and game choices saved.");}
+        else if(!strcmp(argv[1],"vmu-wizard-reset")) shell.confirm_vmu_wizard_reset=true;
     } else if(!strcmp(argv[1],"memory")) {
         shell.page=KUI_SHELL_MEMORY;view.app_status=&status;
         snprintf(status.message,128,"Allocated region passed");
@@ -693,8 +955,8 @@ int main(int argc,char **argv) {
         const char *lines[]={"Broadband and LAN adapters were checked.","No DHCP request or traffic sent.",
             "No reachable network is asserted.","Connect an adapter and inspect again."};
         for(unsigned i=0;i<4;i++) snprintf(status.lines[i],80,"%s",lines[i]);
-    } else if(!strcmp(argv[1],"home-vmu")) shell.home_selected=home_row(KUI_SHELL_VMU);
-    else if(!strcmp(argv[1],"home-memory")) shell.home_selected=home_row(KUI_SHELL_MEMORY);
+    } else if(!strcmp(argv[1],"home-vmu")) shell.home_selected=home_row(KUI_SHELL_VMU_TOOLS);
+    else if(!strcmp(argv[1],"home-memory")) shell.home_selected=home_row(KUI_SHELL_DIAGNOSTICS);
     else if(!strcmp(argv[1],"home-network")) shell.home_selected=home_row(KUI_SHELL_NETWORK);
     else if(!strncmp(argv[1],"sci-async-",10)) {
         shell.page=KUI_SHELL_SCI_ASYNC_PROBE;view.app_status=&status;
@@ -776,10 +1038,14 @@ int main(int argc,char **argv) {
     else if(!strcmp(argv[1],"diagnostics")) shell.page=KUI_SHELL_DIAGNOSTICS;
     else if(!strcmp(argv[1],"advanced") || !strcmp(argv[1],"advanced-destination") ||
             !strcmp(argv[1],"advanced-saved-job") || !strcmp(argv[1],"advanced-label") ||
-            !strcmp(argv[1],"advanced-repair") || !strcmp(argv[1],"advanced-network") || !strcmp(argv[1],"advanced-cd")) {
+            !strcmp(argv[1],"advanced-repair") || !strcmp(argv[1],"advanced-new-copy") || !strcmp(argv[1],"new-copy") || !strcmp(argv[1],"advanced-inplace") || !strcmp(argv[1],"inplace-confirm") || !strcmp(argv[1],"advanced-network") || !strcmp(argv[1],"advanced-cd")) {
         shell.page=KUI_SHELL_ADVANCED;
         if(!strcmp(argv[1],"advanced-destination")) shell.advanced_selected=4;
         if(!strcmp(argv[1],"advanced-repair")) shell.advanced_selected=KUI_SHELL_RIPPER_TOOL_REPAIR;
+        if(!strcmp(argv[1],"advanced-new-copy")) shell.advanced_selected=KUI_SHELL_RIPPER_TOOL_REPAIR_NEW_COPY;
+        if(!strcmp(argv[1],"new-copy")) {shell.page=KUI_SHELL_CRC_SCAN;shell.recovery_operation=4;strcpy(shell.browse_path,"/Games/Changed source");}
+        if(!strcmp(argv[1],"advanced-inplace")) shell.advanced_selected=KUI_SHELL_RIPPER_TOOL_REPAIR_IN_PLACE;
+        if(!strcmp(argv[1],"inplace-confirm")) {shell.page=KUI_SHELL_CRC_SCAN;shell.recovery_operation=3;shell.confirm_repair_in_place=true;strcpy(shell.browse_path,"/Games/Recovered disc");}
         if(!strcmp(argv[1],"advanced-network")) {shell.advanced_selected=KUI_SHELL_RIPPER_TOOL_NETWORK;shell.capture_network=true;}
         if(!strcmp(argv[1],"advanced-cd")) {shell.advanced_selected=KUI_SHELL_RIPPER_TOOL_CD_SOURCE;shell.capture_cd_toc=true;}
         if(!strcmp(argv[1],"advanced-saved-job")) {
@@ -895,6 +1161,8 @@ int main(int argc,char **argv) {
                 d->audio.audio_tracks=14;d->audio.candidate_tracks=13;
             }
             strcpy(shell.games_launch_notice,"Options save automatically for this image.");
+            strcpy(shell.games_vmu_label,ce?"This loader checks its own VMU":"Grandia II saves");
+            strcpy(shell.games_vmu_notice,"Compatibility is checked at game launch.");
         }
     }
     view.game_covers=(const uint16_t (*)[KUI_COVER_PIXELS])covers;view.game_detail_cover=detail_cover;

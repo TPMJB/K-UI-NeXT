@@ -107,7 +107,7 @@ static enum kui_capture_result capture_start(enum kui_capture_mode mode,const ch
         .retry_limit=kui_options.capture_retry_limit,.strict_sectors=kui_options.capture_strict_sectors,
         .job_directory=selected[0]?selected:NULL};
     struct kui_capture_ops ops={NULL,kui_disc_read_raw,cancelled,now,kui_capture_status,
-        kui_log,build,now_us,kui_disc_timing_phase,KUI_CAPTURE_DMA_OPS,&options,&last_stats};
+        kui_log,build,now_us,kui_disc_timing_phase,KUI_CAPTURE_DMA_OPS,&options,&last_stats,NULL};
     /* Whole-operation CPU split: how much of this capture the UI thread took. */
     struct kui_cpu_census cpu_before,cpu_after;
     kui_cpu_census_mark(&cpu_before);

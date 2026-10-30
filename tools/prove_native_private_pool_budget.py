@@ -23,6 +23,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'tests'), str(ROOT / 'tools')]
 from test_vmu_native_heap_execution import SH, MASK, physical, signed
+from native_runtime_layout import LEASE_BYTES, GENERAL, DIAGNOSTIC
 
 SCHEMA = 'kui.native.private-pool-capacity-original.v1'
 INPUT_SHA256 = 'b05853a539011b02fff09062441372a924f4ac2465abc498d69631d4b137bdf5'
@@ -38,11 +39,10 @@ SCENE_STOP = 0x8c2ad22a
 SCENE_POINTER = 0x8c4ffb70
 SCENE_USER_BUFFER = 0x8c350970
 STACK = 0x8c52f000
-LEASE_BYTES = 0x60000
 LEASE_COST = LEASE_BYTES + 32
 PLAN_FIELDS = ('reserve_address', 'reserve_before', 'reserve_after',
                'child_bytes_before', 'child_bytes_after')
-SOURCE_FILES = ('tools/prove_native_private_pool_budget.py',
+SOURCE_FILES = ('tools/native_runtime_layout.py', 'tools/prove_native_private_pool_budget.py',
                 'tests/test_vmu_native_heap_execution.py',
                 'src/core/vmu_native_heap.c',
                 'src/core/vmu_native_heap_bottom_code.inc',
@@ -86,7 +86,8 @@ class ProductionBudget:
         assert self.call_discover(self.source, len(image), self.heap, self.call)
         assert tuple(self.call) == (BOUNDARY - 12, BOUNDARY - 4, BOUNDARY, 0x8c59dd00, 0xa62300)
 
-    def plan(self, model, *, image=None, cost=LEASE_COST, deny=None):
+    def plan(self, model, *, image=None, cost=None, deny=None):
+        if cost is None:cost=model.lease_cost
         original = self.source if image is None else ctypes.create_string_buffer(bytes(image))
         errors, reads = [], []
 
@@ -118,9 +119,10 @@ class PoolSH(SH):
     this reviewed branch has no rounding ambiguity. No movie FPU operations,
     PVR/AICA hardware, interrupt delivery or complete gameplay are emulated.
     """
-    def __init__(self, image, mode, helper, mutation_checks=False):
+    def __init__(self, image, mode, helper, mutation_checks=False, *, lease_bytes=LEASE_BYTES):
         super().__init__(image)
         self.image, self.mode, self.helper = image, mode, helper
+        self.lease_bytes,self.lease_cost=lease_bytes,lease_bytes+32
         self.injected = False
         self.fr, self.fpul = [0.0] * 16, 0
         self.lease = self.placeholder = None
@@ -160,7 +162,7 @@ class PoolSH(SH):
             self.write(address, before)
             assert result == -1 and not any(plan.values()), label
             self.refusals.append(label)
-        for label, cost in (('unaligned-cost', LEASE_COST + 1),
+        for label, cost in (('unaligned-cost', self.lease_cost + 1),
                             ('oversize-cost', 0xffffffe0)):
             result, plan, _ = self.helper.plan(self, cost=cost)
             assert result == -1 and not any(plan.values()), label
@@ -181,17 +183,17 @@ class PoolSH(SH):
         self.phase = 'reservation'
         count = int(self.helper.call[4])
         if self.mode == 'tail':
-            self.lease, _, _ = self.run(allocator, [LEASE_BYTES], STACK - 0x1000)
+            self.lease, _, _ = self.run(allocator, [self.lease_bytes], STACK - 0x1000)
         elif self.mode in ('bottom', 'bottom-budget'):
-            self.placeholder, _, _ = self.run(allocator, [count - LEASE_BYTES - 64], STACK - 0x1000)
-            self.lease, _, _ = self.run(allocator, [LEASE_BYTES], STACK - 0x1000)
+            self.placeholder, _, _ = self.run(allocator, [count - self.lease_bytes - 64], STACK - 0x1000)
+            self.lease, _, _ = self.run(allocator, [self.lease_bytes], STACK - 0x1000)
             self.run(release, [self.placeholder], STACK - 0x1000)
         self.r, self.pc, self.pr, self.sr, self.executing, self.phase = saved
         if self.mode == 'bottom-budget':
             assert self.read(plan['reserve_address']) == plan['reserve_before']
             self.write(plan['reserve_address'], plan['reserve_after'])
         if self.lease is not None:
-            self.worker_canary = bytes([0xa7]) * LEASE_BYTES
+            self.worker_canary = bytes([0xa7]) * self.lease_bytes
             self.store_block(self.lease, self.worker_canary)
             self.worker_header = self.block(self.lease - 32, 32)
 
@@ -276,7 +278,9 @@ def scene_arguments(image):
     return [MASK, 0, count, 0], 0
 
 
-def prove(image: Path, expected_plan: dict | None = None) -> dict:
+def prove(image: Path, expected_plan: dict | None = None, *, lease_bytes=LEASE_BYTES) -> dict:
+    assert lease_bytes in (GENERAL.LEASE_BYTES,DIAGNOSTIC.LEASE_BYTES),"Unreviewed runtime lease"
+    lease_cost=lease_bytes+32
     image = Path(image)
     assert image.stat().st_size == INPUT_BYTES, 'Expected exact external capacity-regression input'
     data = image.read_bytes()
@@ -286,7 +290,8 @@ def prove(image: Path, expected_plan: dict | None = None) -> dict:
     with tempfile.TemporaryDirectory(prefix='kui-private-pool-proof-') as temporary:
         helper = ProductionBudget(temporary, data)
         for mode in ('baseline', 'tail', 'bottom', 'bottom-budget'):
-            model = PoolSH(data, mode, helper, mutation_checks=(mode == 'bottom-budget'))
+            model = PoolSH(data, mode, helper, mutation_checks=(mode == 'bottom-budget'),
+                           lease_bytes=lease_bytes)
             original_return, _, _ = model.run(PARENT, [], STACK)
             assert model.injected and model.child_argument is not None
             plan = model.plan_output
@@ -305,7 +310,7 @@ def prove(image: Path, expected_plan: dict | None = None) -> dict:
             assert head == [0x6e6d0008, 0, requested - 32, 0,
                             sentinel, sentinel, 0, sentinel]
             assert end_words == [0x6e6d0000, 0, 32, pool, 0, 0, pool, sentinel]
-            assert pool + requested == 0x8d000000 - (LEASE_COST if mode == 'tail' else 0)
+            assert pool + requested == 0x8d000000 - (lease_cost if mode == 'tail' else 0)
             cursor = model.read(int(helper.heap[14]))
             free = model.read(cursor)
             free_before = model.read(free + 4) * 32
@@ -324,9 +329,9 @@ def prove(image: Path, expected_plan: dict | None = None) -> dict:
             else:
                 assert returned == 0 and published == 0x20000000
             if model.lease is not None:
-                assert model.block(model.lease, LEASE_BYTES) == model.worker_canary
+                assert model.block(model.lease, lease_bytes) == model.worker_canary
                 assert model.block(model.lease - 32, 32) == model.worker_header
-                lease_begin, lease_end = physical(model.lease - 32), physical(model.lease) + LEASE_BYTES
+                lease_begin, lease_end = physical(model.lease - 32), physical(model.lease) + lease_bytes
                 assert physical(pool) >= lease_end or physical(pool + requested) <= lease_begin
                 if returned:
                     assert physical(returned - 32) >= lease_end or physical(returned + scene_request) <= lease_begin
@@ -338,17 +343,21 @@ def prove(image: Path, expected_plan: dict | None = None) -> dict:
                 scene_allocator_return=returned, scene_published_pointer=published,
                 worker_payload_preserved=True if model.lease is not None else None,
                 worker_header_preserved=True if model.lease is not None else None,
-                canary_bytes=LEASE_BYTES if model.lease is not None else 0,
+                canary_bytes=lease_bytes if model.lease is not None else 0,
                 scene_allocator_calls=scene_allocs,
                 original_instructions=model.instructions))
             refusals.extend(model.refusals)
     assert all(plan == plans[0] for plan in plans)
-    assert plans[0] == dict(zip(PLAN_FIELDS, (0x8c01073c, 0xe0b84, 0x140ba4, 0x981360, 0x921340)))
-    assert [r['free_sdk_bytes_before_scene'] for r in rows] == [921472, 528224, 528224, 921472]
-    assert [r['scene_allocator_return'] for r in rows] == [0x8c59dfc0, 0, 0, 0x8c5fdfe0]
+    if expected_plan is not None:assert plans[0]==expected_plan
+    assert plans[0] == dict(zip(PLAN_FIELDS, (0x8c01073c, 0xe0b84,
+        0xe0b84 + lease_cost, 0x981360, 0x981360 - lease_cost)))
+    assert [r['free_sdk_bytes_before_scene'] for r in rows] == [
+        921472, 921472 - lease_cost, 921472 - lease_cost, 921472]
+    assert [r['scene_allocator_return'] for r in rows] == [
+        0x8c59dfc0, 0, 0, 0x8c59dfc0 + lease_cost]
     assert len(refusals) == 10
     return dict(schema=SCHEMA, status='PASS', input_bytes=len(data), input_sha256=sha(data),
-        lease_payload_bytes=LEASE_BYTES, lease_physical_cost=LEASE_COST, plan=plans[0],
+        lease_payload_bytes=lease_bytes, lease_physical_cost=lease_cost, plan=plans[0],
         source_files={name: sha((ROOT / name).read_bytes()) for name in SOURCE_FILES},
         original_entries=dict(startup=PARENT, initializer_return=BOUNDARY,
                               scene=SCENE_ENTRY, scene_caller=SCENE_CALL, stop=SCENE_STOP),
@@ -366,13 +375,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--image', type=Path, required=True, help='Unmodified external original startup image')
     parser.add_argument('--output', type=Path, help='Write successful capacity proof JSON')
+    parser.add_argument('--diagnostic-layout',action='store_true',
+                        help='Prove the exact retained diagnostic runtime geometry')
     args = parser.parse_args()
     if not __debug__:
         parser.exit(2, 'Private-pool replay requires Python assertions enabled\n')
     try:
         if args.output and args.output.resolve() == args.image.resolve():
             raise ValueError('Proof output must differ from the original input')
-        report = prove(args.image)
+        report = prove(args.image,lease_bytes=(DIAGNOSTIC if args.diagnostic_layout else GENERAL).LEASE_BYTES)
         if args.output:
             args.output.parent.mkdir(parents=True, exist_ok=True)
             args.output.write_text(json.dumps(report, indent=2) + '\n')

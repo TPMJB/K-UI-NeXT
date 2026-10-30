@@ -4,6 +4,7 @@
 import hashlib
 import json
 from pathlib import Path
+from native_runtime_layout import LEASE_BYTES, layout_for
 import shutil
 import struct
 import subprocess
@@ -37,6 +38,10 @@ READAHEAD_PINS={
     '_native_resident_terminal':('3c480406466530bec6748de2f40a8857772a3d159046db48d77c2b1ab3b7da7d',96),
     '_kui_vmu_observe_low_failure':BACKGROUND_PINS['_kui_vmu_observe_low_failure'],
 }
+
+def wide_guard_pins(image):
+    from check_native_general_lean_profile import low_pins
+    return low_pins(image,'map_refusal',READAHEAD_PINS)
 
 def require(condition,message):
     if not condition:raise ValueError(message)
@@ -99,11 +104,13 @@ def check(path,*,self_test=False,objdump=None):
     layout=inspect_elf(image[0],LOW,low_limit)
     bss_object(image[0],layout,'_kui_vmu_observe_boot_control',56,64,low_limit=low_limit)
     terminal=signature(image,disassembly,'_native_resident_terminal')[:2]
-    require(terminal==READAHEAD_PINS['_native_resident_terminal'] if read_ahead else
+    wide=read_ahead or '__kui_native_general_lean_resident_layout' in image[4]
+    wide_pins=wide_guard_pins(image)
+    require(terminal==wide_pins['_native_resident_terminal'] if wide else
             terminal in (PINS['_native_resident_terminal'],UNCACHED_TERMINAL),
         'GD refusal terminal code alias/guard changed')
-    cached=read_ahead or terminal==PINS['_native_resident_terminal']
-    selected=dict(READAHEAD_PINS if read_ahead else BACKGROUND_PINS if background else PINS)
+    cached=wide or terminal==PINS['_native_resident_terminal']
+    selected=dict(wide_pins if wide else BACKGROUND_PINS if background else PINS)
     if not cached:selected['_native_resident_terminal']=UNCACHED_TERMINAL
     functions={}
     for name,expected in selected.items():
@@ -127,7 +134,7 @@ def check(path,*,self_test=False,objdump=None):
         'cached_worker_terminal':cached,
         'resident_memory_end':hex(layout['memory_end']),'mutation_rejections':rejected,
         'no_new_callback_or_control_abi':not background,'reader_profile':'background' if background else 'standard',
-        'read_ahead_lease_variant':read_ahead,'guarded_lease_bytes':0x60000 if read_ahead else 0x30000,
+        'read_ahead_lease_variant':wide,'guarded_lease_bytes':layout_for(image[4]).LEASE_BYTES if wide else 0x30000,
         'diagnostic_detail':'00000100',
         'report_provenance':'differential only; existing late-heap/exit terminal uses same report'}
 

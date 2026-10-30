@@ -57,7 +57,7 @@ static const struct kui_native_ra_exports *reader_readahead_exports(
     uint32_t load=lease+KUI_NATIVE_RA_AUX_OFFSET;
     const struct kui_native_ra_exports *a=(const void *)(uintptr_t)(load|UINT32_C(0x20000000));
     if(!r || a->magic!=KUI_NATIVE_RA_AUX_MAGIC || a->version!=1u || a->bytes!=sizeof(*a) ||
-       a->image_end<load+UINT32_C(0x1002) || a->image_end>load+UINT32_C(0x5000) ||
+       a->image_end<load+UINT32_C(0x1002) || a->image_end>load+KUI_NATIVE_RA_AUX_IMAGE_BYTES ||
        (uint32_t)(uintptr_t)a->visit<load+UINT32_C(0x1000) ||
        (uint32_t)(uintptr_t)a->visit>=a->image_end ||
        r->vector600[KUI_NATIVE_RA_ENTRY_INDEX]!=(uint32_t)(uintptr_t)a->visit ||

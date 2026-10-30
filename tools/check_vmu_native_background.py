@@ -12,6 +12,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+from native_runtime_layout import LEASE_BYTES, layout_for
 import re
 import shutil
 import struct
@@ -283,6 +284,9 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
     from test_vmu_native_heap_execution import SH, MASK, signed
     begin, body, _ = symbol_bytes(stage, "_native_passive_run", 2)
     symbols = stage[4]
+    geometry=layout_for(symbols)
+    worker_bytes=geometry.WORKER_BYTES
+    region_offset=geometry.REGION_OFFSET
     words = list(struct.unpack("<" + "H" * (len(body) // 2), body))
     def literal(index):
         op = words[index]
@@ -294,6 +298,10 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
         return struct.unpack_from("<I", body, address - begin)[0]
     selected_passive_pins=GAME_STARTUP_PASSIVE_RUN_PINS if owned_timers else WITNESS_PASSIVE_RUN_PINS
     from check_native_followup_profile import stage_pins,callback_profile
+    from check_native_general_lean_profile import stage_profile
+    lean_stage=stage_profile(stage)
+    from check_native_vmu_toggle_profile import stage_profile as toggle_profile
+    toggle_stage=toggle_profile(stage)
     require(not callback_profile(stage) or owned_timers, 'Selected low callbacks require the owned-timer installer')
     selected_passive_pins=stage_pins(stage,'installer',selected_passive_pins)
     require(not owned_timers or witness, 'Owned-timer installer requires complete witness profile')
@@ -307,12 +315,28 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
         require((len(body),digest(body)) in selected_passive_pins,
                 'Background witness passive-run instruction/literal pin changed')
         selected_callbacks=callback_profile(stage)
-        index=(0x132 if selected_callbacks else 0x134)//2
-        expected_entry=([0x51a8,0x31b0,0x8f09,0xe548] if selected_callbacks else
-                        [0x51a8,0x31b0,0x8f08,0x1c0f])
-        require(words[index:index+4]==expected_entry and
-                literal(index+4)==0x20000,
-                'Background witness exact lease-size entry differs')
+        if lean_stage:
+            # The General cold selector has its own complete pinned body.
+            # Its final lease comparison uses a non-delayed refusal branch;
+            # the following literal is the separately bounded worker span.
+            index=(0x15a if toggle_stage else 0x148)//2
+            if toggle_stage:
+                require(selected_callbacks and words[index]==0x52e8 and
+                        words[index+1]&0xff00==0xd100 and literal(index+1)==lease_bytes and
+                        words[index+2:index+4]==[0x3210,0x8b07] and
+                        words[index+4]&0xff00==0xdb00 and literal(index+4)==worker_bytes,
+                        'VMU toggle exact lease-size entry differs')
+            else:
+                require(selected_callbacks and words[index:index+3]==[0x51a8,0x31b0,0x8b07] and
+                        words[index+3]&0xff00==0xdb00 and literal(index+3)==worker_bytes,
+                        'Lean General exact lease-size entry differs')
+        else:
+            index=(0x132 if selected_callbacks else 0x134)//2
+            expected_entry=([0x51a8,0x31b0,0x8f09,0xe548] if selected_callbacks else
+                            [0x51a8,0x31b0,0x8f08,0x1c0f])
+            require(words[index:index+4]==expected_entry and
+                    literal(index+4)==worker_bytes,
+                    'Background witness exact lease-size entry differs')
         start=begin+2*index
     else:
         require('__kui_native_cold_progress_stage' not in stage[4],
@@ -320,7 +344,7 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
         starts = [begin + 2 * index for index in range(len(words) - 5)
                   if words[index:index + 2] == [0x51C8, 0x31A0] and
                   words[index + 2] >> 8 == 0x8F and words[index + 3] == 0x1B0F and
-                  literal(index + 4) == 0x20000]
+                  literal(index + 4) == worker_bytes]
         require(len(starts) == 1, "missing unique compiled Background lease-size/tail-copy entry")
         start = starts[0]
     manifest = symbols["_manifest"][0]
@@ -337,6 +361,9 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
     admission = symbols["_kui_vmu_native_background_map_address"][0]
     report = symbols["_native_report"][0]
     worker_bytes = symbols["__native_worker_blob_end"][0] - symbols["__native_worker_blob_begin"][0]
+    # General retains the manifest after the whole reserved worker span;
+    # only initialized image bytes are copied/published by relocation.
+    map_offset=geometry.WORKER_BYTES if lean_stage else worker_bytes
 
     class Replay(SH):
         def __init__(self, raw, outcome, changes=(),*,lease_value=None,admissions=(1,1)):
@@ -347,7 +374,9 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
             self.raw, self.load, self.outcome = raw, (raw & 0x1FFFFFFF) | 0x80000000, outcome
             self.pc, self.r[15] = start, 0x8CDD0000
             self.lease = 0x8CDF0000
-            if witness:
+            if toggle_stage:
+                self.r[8],self.r[9],self.r[14]=self.load,copy,self.lease
+            elif witness:
                 self.r[8],self.r[9],self.r[10],self.r[11],self.r[12]=\
                     copy,self.load,self.lease,lease_bytes,self.r[15]+0x900
             else:
@@ -360,6 +389,8 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
             self.write(self.lease + 40, raw)
             self.write(self.r[15] + 32, self.lease - 64)
             self.write(self.r[15] + 28, worker_bytes)
+            if toggle_stage:
+                self.write(self.r[15] + 24, worker_bytes)
             pattern=bytearray((i * 17 + 3) & 255 for i in range(1020))
             if selected_callbacks:
                 # The fixture still uses distinctive bytes everywhere else.
@@ -434,15 +465,15 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
                     self.outer_binding_call=pc
                 self.pc=target
             elif target == admission:
-                require(self.r[4:6] == [self.raw, self.load + 0x20000], "tail admission changed its exact native allocation/map")
+                require(self.r[4:6] == [self.raw, self.load + map_offset], "tail admission changed its exact native allocation/map")
                 require(self.admission_calls<2,'Background tail acquired an extra address admission')
                 result=self.admissions[self.admission_calls]
                 self.admission_calls+=1
                 self.abi_return(result)
             elif target == copy:
                 index = len([event for event in self.events if event.startswith("copy_")])
-                name, offset, source, count, pattern = (("map", 0x20000, manifest, 1020, self.map_pattern) if index == 0 else
-                    ("region", 0x20400, workspace, 1888, self.region_pattern))
+                name, offset, source, count, pattern = (("map", map_offset, manifest, 1020, self.map_pattern) if index == 0 else
+                    ("region", region_offset, workspace, 1888, self.region_pattern))
                 require(index < 2 and self.r[4:7] == [self.load + offset + 0x20000000, source, count],
                         "compiled Background memcpy length/source/P2 destination changed")
                 self.purged(self.load + offset, count)
@@ -454,17 +485,17 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
                 self.length_literals[name] = self.length_literals["current"]
                 self.abi_return()
             elif target == publisher:
-                require(self.events == ["copy_map", "copy_region"] and self.r[4:6] == [self.load + 0x20400, self.load + 0x20B60],
+                require(self.events == ["copy_map", "copy_region"] and self.r[4:6] == [self.load + region_offset, self.load + region_offset + 1888],
                         "region publication must follow both exact tail copies")
                 self.witness["publish"] = pc
                 self.in_publisher = True
                 self.publisher_return = self.pr
                 self.pc = target
             elif target == binder:
-                require(self.events == ["copy_map", "copy_region", "publish"] and self.r[4:6] == [manifest, self.load + 0x20000],
+                require(self.events == ["copy_map", "copy_region", "publish"] and self.r[4:6] == [manifest, self.load + map_offset],
                         "typed low binder must follow complete vector publication")
-                require(self.block(self.load + 0x20000, 1020) == self.map_pattern and
-                        self.block(self.load + 0x20400, 1888) == self.region_pattern, "binder sees changed snapshots")
+                require(self.block(self.load + map_offset, 1020) == self.map_pattern and
+                        self.block(self.load + region_offset, 1888) == self.region_pattern, "binder sees changed snapshots")
                 self.events.append("bind")
                 self.selected_binder_edge=pc
                 self.witness["bind"] = self.outer_binding_call if selected_callbacks else pc
@@ -504,9 +535,10 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
                         self.r[6] == symbols["__native_worker_reloc_begin"][0] and
                         self.r[7] == symbols["__native_worker_reloc_end"][0] - symbols["__native_worker_reloc_begin"][0],
                         "worker relocation inputs changed")
+                relocation_span=geometry.WORKER_BYTES if lean_stage else worker_bytes
                 require([self.read(self.r[15] + 4 * index) for index in range(3)] ==
-                        [self.load + 0x20000000, 0x20000, self.load], "worker relocation overwrites the retained map/region tail")
-                self.purged(self.load, 0x20000)
+                        [self.load + 0x20000000, relocation_span, self.load], "worker relocation overwrites the retained map/region tail")
+                self.purged(self.load, worker_bytes)
                 require(not witness or len(self.display_events)==5,
                         'Background relocation omitted ordered cold progress')
                 self.witness["relocate"] = pc
@@ -536,7 +568,7 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
                     require(self.stopped == ("relocate" if self.outcome == 1 and not self.early_failure else "report"), "binder success predicate changed")
                     return self
                 if self.in_publisher and self.pc == self.publisher_return:
-                    self.purged(self.load + 0x20400, 1888, publication=True)
+                    self.purged(self.load + region_offset, 1888, publication=True)
                     require(self.ccr_writes == [0x905], "vector publisher changed owner CCR or omitted I-cache invalidation")
                     self.in_publisher = False
                     self.events.append("publish")
@@ -578,7 +610,7 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
                 example = completed
             cases += 1
         if witness:
-            for invalid in (0,0x30000,0x60004,MASK):
+            for invalid in (0,0x30000,lease_bytes+4,MASK):
                 Replay(raw,1,lease_value=invalid).run();cases+=1
             for admissions in ((0,1),(1,0)):
                 Replay(raw,1,admissions=admissions).run();cases+=1
@@ -594,10 +626,10 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
         mutations = {
             "map_copy_wrong_length": [(example.length_literals["map"], 1016, 2)],
             "region_copy_wrong_length": [(example.length_literals["region"], 1884, 2)],
-            "map_copy_wrong_alias": [(pool(0x20020000), 0x20000, 4)],
-            "region_copy_wrong_offset": [(pool(0x20020400), 0x20020800, 4)],
+            "map_copy_wrong_alias": [(pool(0x20000000+map_offset), map_offset, 4)],
+            "region_copy_wrong_offset": [(pool(0x20000000+region_offset), 0x20000000+region_offset+0x400, 4)],
             "region_copy_wrong_source": [(pool(workspace), manifest, 4)],
-            "missing_map_purge": [(next(pc for pc, address, inside in example.purges if address == example.load + 0x20000 and not inside), 9, 2)],
+            "missing_map_purge": [(next(pc for pc, address, inside in example.purges if address == example.load + map_offset and not inside), 9, 2)],
             "missing_region_publication": [(example.witness["publish"], 9, 2)],
             "binding_before_publication": [(((example.witness["publish"] - 4 + 4) & ~3) +
                 4 * (words[(example.witness["publish"] - 4 - begin) // 2] & 255), binder, 4)],
@@ -636,7 +668,7 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
             "hostile_abi_callees": True, "refused_mutations": rejected}
 
 
-def source_contract(readahead=False,wide_lease=False):
+def source_contract(readahead=False,wide_lease=False,general=False):
     paths = ("include/kui/vmu_native_background.h", "include/kui/vmu_native_async_loan.h",
              "src/loader/vmu_native_background_resident.c", "src/loader/retail_resident.c",
              "src/loader/retail_async.c", "src/loader/retail_async.h", "src/loader/retail_resident.S",
@@ -660,8 +692,9 @@ def source_contract(readahead=False,wide_lease=False):
         # terminal/map guard instructions independently prove that span.
         tail='\n#define KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES KUI_NATIVE_RA_LEASE_BYTES\n#else\n#define KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES UINT32_C(0x30000)\n#endif'
         old='#if KUI_NATIVE_READAHEAD'+tail
+        current='#if KUI_NATIVE_READAHEAD || KUI_NATIVE_CURRENT_BOTTOM_HEAP'+tail
         dual='#if KUI_NATIVE_READAHEAD || KUI_NATIVE_DUAL_READERS'+tail
-        require(old in sources[paths[0]] or dual in sources[paths[0]],
+        require(old in sources[paths[0]] or dual in sources[paths[0]] or current in sources[paths[0]],
                 'read-ahead did not isolate the selected owned lease')
         if dual in sources[paths[0]]:
             header=(ROOT/'include/kui/native_dual_reader.h').read_text()
@@ -669,9 +702,17 @@ def source_contract(readahead=False,wide_lease=False):
                     '#if KUI_NATIVE_DUAL_READERS != 0 && KUI_NATIVE_DUAL_READERS != 1' in header,
                     'dual lease must remain an explicit boolean opt-in')
         layout=(ROOT/'include/kui/native_readahead_layout.h').read_text()
-        require('#define KUI_NATIVE_RA_LEASE_BYTES UINT32_C(0x60000)' in layout,
+        require('#define KUI_NATIVE_RA_LEASE_BYTES UINT32_C(0x55000)' in layout and
+                '#define KUI_NATIVE_RA_LEASE_BYTES UINT32_C(0x51000)' in layout,
                 'read-ahead selected lease geometry changed')
-        expected['KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES']=0x60000
+        expected['KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES']=LEASE_BYTES if general else 0x55000
+    if general:
+        require('#if KUI_NATIVE_GENERAL_LEAN_LAYOUT' in sources[paths[0]] and
+                '#define KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES UINT32_C(0x1c000)' in sources[paths[0]] and
+                '#define KUI_VMU_NATIVE_BACKGROUND_REGION_OFFSET UINT32_C(0x1c400)' in sources[paths[0]],
+                'General source lacks its explicit compact worker/map geometry')
+        expected['KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES']=0x1c000
+        expected['KUI_VMU_NATIVE_BACKGROUND_REGION_OFFSET']=0x1c400
     wrapper = sources["src/loader/vmu_native_background_resident.c"]
     guard = wrapper[:wrapper.index("#endif")]
     for flag in ("KUI_VMU_NATIVE_BACKGROUND", "KUI_VMU_NATIVE_PERSISTENT_PROBE", "KUI_RETAIL_ASYNC",
@@ -784,7 +825,7 @@ def stage_contract(directory, resident, *, self_test=False,read_ahead_proof=None
             "generated_binder": hex(binder), "embedded_resident_copies": embedded,
             "selected_low_callback_companion_required":selected_callbacks,
             "tail_copy_replay": compiled_tail_copy(image, resident, self_test=self_test,
-                lease_bytes=0x60000 if '__kui_native_readahead_stage' in image[4] else 0x30000,
+                lease_bytes=layout_for(image[4]).LEASE_BYTES if '__kui_native_readahead_stage' in image[4] else 0x30000,
                 witness=witness,owned_timers=owned_timers),
             "memory_end": hex(inspected["memory_end"]),
             "scope": "stage bounds/profile/workspaces; full envelope and worker audited separately"}
@@ -867,7 +908,8 @@ def check(directory, *, self_test=False, require_stage=False):
     # A legacy engine in the dual module also owns384KiB, while retaining
     # raw vectors. Do not infer192KiB merely from absence of the RA marker:
     # pin every linked refusal/terminal guard before selecting the wide span.
-    from check_vmu_native_map_refusal import signature as guard_signature,READAHEAD_PINS
+    from check_vmu_native_map_refusal import signature as guard_signature,wide_guard_pins
+    READAHEAD_PINS=wide_guard_pins(image)
     wide_lease=guard_signature(image,disassembly,'_native_resident_terminal')[:2]==READAHEAD_PINS['_native_resident_terminal']
     lease_guards={}
     if wide_lease:
@@ -876,11 +918,12 @@ def check(directory, *, self_test=False, require_stage=False):
             require(actual[:2]==expected,'wide Background lease guard instructions changed: '+name)
             lease_guards[name]={'sha256':actual[0],'bytes':actual[1]}
     require(not readahead or wide_lease,'read-ahead lost its exact384KiB low guards')
-    source = source_contract(readahead,wide_lease)
+    source = source_contract(readahead,wide_lease,
+        general='__kui_native_general_lean_resident_layout' in image[4])
     result = {"schema": "kui.native.background.audit.v1", "console_execution_verified": False,
               "resident_sha256": digest(data), "payload_bytes": len(inspected["payload"]),
               "memory_end": hex(inspected["memory_end"]), "low_limit": hex(BOTTOM),
-              "selected_guarded_lease_bytes":0x60000 if wide_lease else 0x30000,
+              "selected_guarded_lease_bytes":layout_for(image[4]).LEASE_BYTES if wide_lease else 0x30000,
               "wide_lease_linked_guard_pins":lease_guards,
               "region_pointer": {"address": hex(pointer), "bytes": 4, "fixed_region_absent": True},
               "worker_stack_gateway": {"address": hex(lease), "allocated_bytes": lease_bytes,

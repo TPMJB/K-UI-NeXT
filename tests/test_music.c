@@ -57,6 +57,9 @@ static struct {
     snd_stream_callback_t callback;
     void *previous;uint8_t previous_copy[131072];size_t previous_size;
     unsigned log_lines;char last_log[256];
+#ifdef KUI_ON_CONSOLE
+    bool ui_snapshot_during_poll;unsigned skipped_ui_snapshots;
+#endif
 } fake;
 #ifdef KUI_ON_CONSOLE
 static kthread_t fake_thread;
@@ -162,7 +165,22 @@ void snd_stream_start(snd_stream_hnd_t hnd,uint32_t rate,int stereo) {
     fill(stereo?65536:32768);fill(stereo?65536:32768);
 }
 void snd_stream_volume(snd_stream_hnd_t hnd,int volume) {assert(hnd==0 && volume>=0 && volume<=255);fake.volume=(unsigned)volume;}
-int snd_stream_poll(snd_stream_hnd_t hnd) {assert(hnd==0 && fake.active);++fake.polls;if(fake.poll_error) return -1;fill(131072);return 0;}
+int snd_stream_poll(snd_stream_hnd_t hnd) {
+    assert(hnd==0 && fake.active);++fake.polls;if(fake.poll_error) return -1;
+#ifdef KUI_ON_CONSOLE
+    if(fake.ui_snapshot_during_poll) {
+        /* Interleave the UI while audio_lock belongs to the stream/decoder.
+         * The stub rejects nested blocking locks. A failed nonblocking copy
+         * must leave every byte of the preceding display snapshot intact. */
+        struct kui_music_status retained,before;
+        memset(&retained,0xa5,sizeof(retained));before=retained;
+        assert(!kui_music_status_try_copy(&retained));
+        assert(!memcmp(&retained,&before,sizeof(retained)));
+        ++fake.skipped_ui_snapshots;
+    }
+#endif
+    fill(131072);return 0;
+}
 /* Mono starts fill two 32 KiB halves; previous_copy holds the second. A WAV
  * source's PCM byte k is (uint8_t)(44+k). */
 static bool played_pcm(void) {
@@ -440,6 +458,31 @@ static void replacement_interleave(void) {
     kui_music_shutdown();assert(heap.bytes==0 && heap.allocations==heap.frees);
 #endif
 }
+static void ui_status_during_refill(void) {
+    assert(!kui_music_status_try_copy(NULL));
+    reset(1);fake.bundled_ogg=true;fake.bundled_wav=false;
+    kui_music_init(log_line);kui_music_set_config(true,30);
+    assert(kui_music_load(0,cancel));
+    struct kui_music_status copied,expected=state();
+    assert(kui_music_status_try_copy(&copied));
+    assert(!memcmp(&copied,&expected,sizeof(copied)));
+    unsigned reads=fake.reads,connects=fake.connects;
+    unsigned allocations=state().file_allocations;
+#ifdef KUI_ON_CONSOLE
+    fake.ui_snapshot_during_poll=true;
+#endif
+    for(unsigned i=0;i<128u;i++) {
+        kui_music_service();
+        assert(kui_music_status_try_copy(&copied) && copied.playing && copied.compressed);
+        expected=state();assert(!memcmp(&copied,&expected,sizeof(copied)));
+    }
+#ifdef KUI_ON_CONSOLE
+    assert(fake.skipped_ui_snapshots==128u);
+    fake.ui_snapshot_during_poll=false;
+#endif
+    assert(fake.reads==reads && fake.connects==connects && state().file_allocations==allocations);
+    kui_music_shutdown();
+}
 int main(void) {
     for(unsigned channels=1;channels<=2;channels++) {
         reset(channels);kui_music_init(log_line);assert(!fake.connects && !fake.init);
@@ -525,6 +568,6 @@ int main(void) {
     assert(!fake.init && !thread_live);kui_music_shutdown();thread_fail=false;
 #endif
     cache_churn();compressed_music();bundled_ogg();missing_songs();
-    replacement_interleave();
+    replacement_interleave();ui_status_during_refill();
     puts("PASS background music: independent polling, no playback I/O, preserved replacements, 1000 cached switches, 300 replacements/failures, exact 8MiB staging budget, allocation cleanup, replacement/resume interleaving, bundled Oggs sharing one decoder arena, 1.5 WAV fallback, missing songs skipped");return 0;
 }

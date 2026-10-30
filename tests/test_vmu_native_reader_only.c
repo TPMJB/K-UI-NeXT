@@ -60,10 +60,10 @@ static void reader_bind(void) {
 static void reader_only_setup(unsigned mode) {
     model_reset();fixture();
     /* Preserve the fixed worker payload, extending this fixture's exact heap
-     * to own the production384KiB lease and its192KiB cache arena. */
+     * to own the production340KiB lease and its192KiB cache arena. */
     struct kui_vmu_native_heap_lease *l=&input.lease;
-    l->begin=0x0c680000u;l->heap_bytes=0xe0000u;l->lease_bytes=0x60000u;
-    l->units=0x3001u;l->remaining=0x3fffu;
+    l->begin=0x0c680000u;l->heap_bytes=0x80000u+KUI_NATIVE_RA_LEASE_BYTES;l->lease_bytes=KUI_NATIVE_RA_LEASE_BYTES;
+    l->units=KUI_NATIVE_RA_LEASE_BYTES/32u+1u;l->remaining=0x3fffu;
     put(l->owner.begin_cell,4u,l->begin);put(l->owner.begin_copy_cell,4u,l->begin);
     put(l->owner.bytes_cell,4u,l->heap_bytes);put(l->owner.sentinel,4u,l->begin);
     put(l->begin,4u,l->owner.sentinel);put(l->begin+4u,4u,l->remaining);

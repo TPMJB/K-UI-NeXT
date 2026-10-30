@@ -13,12 +13,19 @@
 #endif
 #ifndef __ASSEMBLER__
 #include "kui/retail_image.h"
+#include "kui/native_readahead_layout.h"
 #include <stdbool.h>
 #include <stddef.h>
 #define KUI_NATIVE_DUAL_MAGIC0 UINT32_C(0x3152444b)
 #define KUI_NATIVE_DUAL_MAGIC1 UINT32_C(0x4c415544)
 #define KUI_NATIVE_DUAL_CAPABILITY_BYTES 32u
-#define KUI_NATIVE_DUAL_LEASE_BYTES UINT32_C(0x60000)
+#define KUI_NATIVE_DUAL_GENERAL_LEASE_BYTES UINT32_C(0x51000)
+#define KUI_NATIVE_DUAL_DIAGNOSTIC_LEASE_BYTES UINT32_C(0x55000)
+#if KUI_NATIVE_DUAL_READERS
+#define KUI_NATIVE_DUAL_LEASE_BYTES KUI_NATIVE_RA_LEASE_BYTES
+#else
+#define KUI_NATIVE_DUAL_LEASE_BYTES KUI_NATIVE_DUAL_GENERAL_LEASE_BYTES
+#endif
 struct kui_native_dual_capability {
     uint32_t magic0,magic1,version,bytes,new_reader,legacy_reader,lease_bytes,flags;
 };
@@ -36,7 +43,14 @@ static inline bool kui_native_dual_descriptor_valid(const volatile void *data,si
         kui_native_dual_u32(p+12u)==KUI_NATIVE_DUAL_CAPABILITY_BYTES &&
         kui_native_dual_u32(p+16u)==KUI_RETAIL_READER_ASYNC &&
         kui_native_dual_u32(p+20u)==KUI_RETAIL_READER_ASYNC_EAGER &&
+#if KUI_NATIVE_DUAL_READERS
         kui_native_dual_u32(p+24u)==KUI_NATIVE_DUAL_LEASE_BYTES &&
+#else
+        /* The GUI discovers either reviewed layout. Each loader itself
+         * validates only its own exact compiled descriptor above. */
+        (kui_native_dual_u32(p+24u)==KUI_NATIVE_DUAL_GENERAL_LEASE_BYTES ||
+         kui_native_dual_u32(p+24u)==KUI_NATIVE_DUAL_DIAGNOSTIC_LEASE_BYTES) &&
+#endif
         kui_native_dual_u32(p+28u)==0u;
 }
 /* 1 is a unique complete descriptor, 0 absent, -1 ambiguous.

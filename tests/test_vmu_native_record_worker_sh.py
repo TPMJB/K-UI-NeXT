@@ -12,6 +12,7 @@ sys.path[:0] = [str(ROOT/'tools'),str(ROOT/'tests')]
 from profile_vmu_native_record_worker_sh import Record, RecordWorker, VIRTUAL_ADDRESS, MEMCARD, LCD
 from test_vmu_native_heap_execution import SH
 from sh4_delay_slots import SlotIllegalInstruction
+from vmu_native_cache_seed import DETECTOR_EPOCH
 
 
 def fixture(layout_version=1):
@@ -48,7 +49,7 @@ def fixture(layout_version=1):
     digest = hashlib.sha256(image).digest()
     wire = bytearray(1024)
     wire[:8] = b'KUINVR01'
-    struct.pack_into('<6I',wire,8,1,1024,1,1,len(image),base)
+    struct.pack_into('<6I',wire,8,1,1024,DETECTOR_EPOCH,1,len(image),base)
     wire[32:64] = digest
     driver = [1,104,1,len(image),base,7,hook,hook+12,base+0x100,
               base+0xb00,base+0xc00,base+0xb10,wrapper+0xc0,complete,
@@ -59,6 +60,8 @@ def fixture(layout_version=1):
     layout[59] = 1
     struct.pack_into('<110I',wire,168,*layout)
     struct.pack_into('<5I',wire,680,base+0x400,base+0x404,base+0x408,base+0xd00,0x2000)
+    struct.pack_into('<13I',wire,700,2,52,1,base,len(image),3,
+                     base+0x100,base+0x200,base+0x300,0,base+0x400,base+0x500,base+0x600)
     wire[992:] = hashlib.sha256(wire[:992]).digest()
     return bytes(wire),bytes(image)
 
@@ -112,6 +115,35 @@ class RecordReplayTests(unittest.TestCase):
 
     def test_virtual_slot_is_a2(self):
         self.assertEqual(VIRTUAL_ADDRESS,2)
+
+    def test_rejects_resealed_old_epoch(self):
+        wire,image = fixture()
+        for epoch in range(1,DETECTOR_EPOCH):
+            with self.subTest(epoch=epoch):
+                changed = bytearray(wire)
+                struct.pack_into('<I',changed,16,epoch)
+                changed[992:] = hashlib.sha256(changed[:992]).digest()
+                with self.assertRaisesRegex(AssertionError,'NVR schema'):
+                    Record(bytes(changed),image)
+
+    def test_fourth_terminal_entry_is_typed(self):
+        wire,image = fixture()
+        for family,count,fourth,accepted in ((6,4,0x8c010700,True),
+                                             (6,3,0x8c010700,False),
+                                             (6,4,0,False),
+                                             (1,3,0x8c010700,False)):
+            with self.subTest(family=family,count=count,fourth=fourth):
+                changed = bytearray(wire)
+                for offset,value in ((708,family),(720,count),(736,fourth)):
+                    struct.pack_into('<I',changed,offset,value)
+                changed[992:] = hashlib.sha256(changed[:992]).digest()
+                if accepted:
+                    record = Record(bytes(changed),image)
+                    self.assertEqual(record.exits[6:10],
+                                     (0x8c010100,0x8c010200,0x8c010300,fourth))
+                else:
+                    with self.assertRaisesRegex(AssertionError,'NVR exit schema'):
+                        Record(bytes(changed),image)
 
     def test_physical_a1_long_payload_fixture(self):
         cpu = RecordWorker.__new__(RecordWorker)

@@ -15,11 +15,16 @@ enum kui_vmu_native_diagnostics {
     KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE = 1,
     KUI_VMU_NATIVE_DIAGNOSTICS_HOOKS_ONLY = 2,
     KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN = 3,
-    KUI_VMU_NATIVE_DIAGNOSTICS_EVOLUTION_TRACE = 4
+    KUI_VMU_NATIVE_DIAGNOSTICS_EVOLUTION_TRACE = 4,
+    KUI_VMU_NATIVE_DIAGNOSTICS_READER_ONLY = 5
 };
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
-#define KUI_VMU_NATIVE_PASSIVE_VERSION 3u
+#define KUI_VMU_NATIVE_PASSIVE_VERSION 4u
+#if KUI_NATIVE_GENERAL_LEAN_LAYOUT
+#define KUI_VMU_NATIVE_PASSIVE_SPAN 0x1c000u
+#else
 #define KUI_VMU_NATIVE_PASSIVE_SPAN 0x20000u
+#endif
 #else
 #define KUI_VMU_NATIVE_PASSIVE_VERSION 1u
 #define KUI_VMU_NATIVE_PASSIVE_SPAN 0x10000u
@@ -56,6 +61,9 @@ struct kui_vmu_native_passive_config {
     uint32_t diagnostics;
 #endif
 };
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE && UINTPTR_MAX==UINT32_MAX
+_Static_assert(sizeof(struct kui_vmu_native_passive_config)==2304u,"Persistent worker config ABI v4");
+#endif
 /* Frame order is shared with the SH gateway. R0 is dead at submission. */
 struct kui_vmu_native_passive_frame {
     uint32_t gbr,macl,mach,pr,r14,r13,r12,r11,r10,r9,r8,r7,r6,r5,r4,r3,r2,sr,r1;

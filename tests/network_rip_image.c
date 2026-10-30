@@ -11,6 +11,7 @@ static void register_remote(const struct kui_media_ops *unused){
  * local image FILE is never used for block I/O in this wrapper. */
 #define kui_media_set register_remote
 #define main local_fixture_main
+#define KUI_CAPTURE_NO_REPAIR_FIXTURE 1
 #include "capture_image.c"
 #undef main
 #undef kui_media_set

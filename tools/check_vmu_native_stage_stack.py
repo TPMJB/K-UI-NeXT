@@ -157,7 +157,7 @@ class Machine(CPU):
 
     def run(self):
         self.published = []
-        for _ in range(1200):
+        for _ in range(getattr(self, 'instruction_limit', 1200)):
             if self.pc == self.stop_pc:
                 return self
             pc = self.pc; word = struct.unpack("<H", self.code(pc, 2))[0]
@@ -221,7 +221,7 @@ class AllocationWrapper(Machine):
 class ArmRoute(Machine):
     """Execute the complete relay through publication of the low boot control."""
     def __init__(self, stage, resident, stack, seed, mask, *, body=None, helper_bodies=None,
-                 cache_hit=True, mode=0, sdk_admitted=True, normalized=False):
+                 cache_hit=True, mode=0, sdk_admitted=True, normalized=False, crt_admitted=True):
         super().__init__(stage, "_kui_retail_stage_relay", seed, mask, OLD_STACK, body=body)
         self.symbols, self.stack = stage[4], stack
         self.callback_helpers, self.callback_helper_calls = {}, []
@@ -255,6 +255,7 @@ class ArmRoute(Machine):
             require(not helper_bodies,'Historical relay cannot override selected callback helpers')
         self.cache_hit, self.mode = cache_hit, mode
         self.sdk_admitted,self.refused=sdk_admitted,False
+        self.crt_admitted=crt_admitted
         self.control = resident[4]["_kui_vmu_observe_boot_control"][0]
         self.cell = resident[4]["_kui_vmu_native_heap_original"][0]
         self.heap_hook = resident[4]["_kui_vmu_observe_heap_hook"][0]
@@ -271,7 +272,11 @@ class ArmRoute(Machine):
         self.program_bytes=self.source_bytes-(0x8000 if normalized else 0)
         self.mem[self.exec_address] = self.source_bytes
         manifest = self.symbols["_manifest"][0]
-        self.mem.update({manifest + 44: 1,
+        compact_transport=self.symbols.get('__kui_native_vmu_only_transport_stage')
+        if compact_transport is not None:
+            require(compact_transport in ((0,0,0,0xfff1),(1,0,0,0xfff1)),
+                    'VMU-only stage transport marker differs')
+        self.mem.update({manifest + 44: compact_transport[0] if compact_transport is not None else 1,
                          manifest + 48: (self.selected_reader if self.selected_callbacks else
                                          1 if '_native_background_boot_region' in self.symbols else 0),
                          manifest + 52: 0})
@@ -296,7 +301,8 @@ class ArmRoute(Machine):
                   ("_readonly_release_replay_valid", "release"),
                   ("_native_sdk_coherence_cached_admit", "sdk-slot"),
                   ("_kui_vmu_native_exit_discover_guarded", "exits"),
-                  ("_native_passive_capture_windows", "capture"), ("_native_runtime_mode", "mode"))
+                  ("_native_passive_capture_windows", "capture"), ("_native_runtime_mode", "mode"),
+                  ("_native_crt_bootstrap_prearm", "crt-prearm"))
         self.targets = {self.symbols[name][0]: label for name, label in labels if name in self.symbols}
         self.armed = False
         self.nonstack_writes = []
@@ -355,8 +361,12 @@ class ArmRoute(Machine):
         assert target in self.targets, "unexpected native relay callback"
         label = self.targets[target]; self.calls.append(label)
         if label=="refused":
-            assert not self.sdk_admitted and not self.cache_hit and not self.armed and self.calls[-2]=="sdk-slot"
-            assert self.r[4:6]==[2,13],"cold SDK-slot refusal changed its exact terminal diagnostic"
+            if self.calls[-2]=="crt-prearm":
+                assert not self.crt_admitted and self.sdk_admitted and self.armed
+                assert self.r[4:6]==[2,0x48],"cold CRT prearm refusal changed its exact terminal diagnostic"
+            else:
+                assert not self.sdk_admitted and not self.cache_hit and not self.armed and self.calls[-2]=="sdk-slot"
+                assert self.r[4:6]==[2,13],"cold SDK-slot refusal changed its exact terminal diagnostic"
             self.refused,self.pc=True,self.stop_pc;return True
         if label == "restore":
             assert self.r[4:6] == [self.frame, 0x105]
@@ -385,14 +395,29 @@ class ArmRoute(Machine):
             assert all(self.calls.count(name)==1 for name in ("driver","heap","call","allocation","release","exits"))
         if label=="capture" and "_native_sdk_coherence_cached_admit" in self.symbols:
             assert self.sdk_admitted and self.calls[-2]=="sdk-slot","cold windows captured before SDK-slot admission"
+        if label=="crt-prearm":
+            assert self.calls.count("sha")==1, "CRT entry patched before immutable proof completed"
+            if "fixed-arm" in self.calls:
+                # This dispatch-only test models the fixed arm; its actual
+                # stores are proved by the separate fixed-arena CPU audit.
+                assert self.calls[-2]=="fixed-arm"
+            else:
+                assert self.armed and self.mem[self.control+8]==1
+                assert self.mem[self.slot]==self.heap_hook and self.mem[self.frame+20]==self.return_hook
+            assert self.calls.count("crt-prearm")==1, "CRT entry prearm repeated during initial relay"
         result = (self.mode if label == "mode" else int(self.cache_hit) if label == "cache"
                   else int(self.sdk_admitted) if label=="sdk-slot"
+                  else int(self.crt_admitted) if label=="crt-prearm"
                   else int(label in ("ip", "extent", "driver", "heap", "call", "allocation", "release", "exits")))
         self.abi_return(result)
         return True
 
     def check(self):
         registers, pr, _, _, _, sr, fpscr, fr = self.before
+        if not self.crt_admitted and self.mode!=1:
+            assert self.refused and self.armed and self.calls[-2:]==["crt-prearm","refused"]
+            assert self.calls.count("sha")==1 and self.mem[self.slot]==self.heap_hook
+            return
         if not self.sdk_admitted and self.mode!=1:
             assert self.refused and not self.armed and not any(label in self.calls for label in ("capture","sha"))
             assert self.mem[self.slot]==self.original and self.mem[self.frame+20]==0x8C010000
@@ -413,6 +438,8 @@ class ArmRoute(Machine):
             assert self.armed and self.mem[self.control + 4] == self.stack[2]
             assert self.mem[self.slot] == self.heap_hook and self.mem[self.frame + 20] == self.return_hook
             assert self.mem[self.control + 8] == 1 and self.calls.count("sha") == 1
+            if "_native_crt_bootstrap_prearm" in self.symbols:
+                assert self.calls[-1]=="crt-prearm" and self.calls.count("crt-prearm")==1
             if not self.cache_hit and "_native_sdk_coherence_cached_admit" in self.symbols:
                 assert self.calls.count("sdk-slot")==1 and self.calls.index("sdk-slot")<self.calls.index("capture")
             if self.selected_callbacks:
@@ -543,7 +570,8 @@ def check(stage, resident, *, worker=None, self_test=False):
     require(owner_low-52>0x0c007d00+32,'Inherited owner save frame overlaps retained low stack')
     # The separate actual mode-helper proof covers Background's refused1/3
     # before this relay can be entered. Exercise all reachable live modes.
-    modes = ((0,2,4,5,6) if background else (0,1,2,3,4,5,6)) if "_native_runtime_mode" in stage[4] else (0,)
+    modes = ((0,) if '__kui_native_vmu_only_stage' in stage[4] else
+             ((0,2,4,5,6) if background else (0,1,2,3,4,5,6))) if "_native_runtime_mode" in stage[4] else (0,)
     for seed in range(12):
         for mask in range(16):
             for outcome in (False, True):
@@ -557,6 +585,15 @@ def check(stage, resident, *, worker=None, self_test=False):
                     refusals+=1
             for alias in (0, 0x80000000, 0xA0000000):
                 HeapHook(resident, stage, stack, seed, mask, alias=alias).run().check(); hooks += 1
+    crt_refusals=0
+    if "_native_crt_bootstrap_prearm" in stage[4]:
+        for mask in (0,15):
+            for mode in modes:
+                if mode==1: continue
+                for hit in (False,True):
+                    ArmRoute(stage,resident,stack,7,mask,cache_hit=hit,mode=mode,
+                             crt_admitted=False).run().check()
+                    crt_refusals+=1
     boundary_cases=0
     for seed in range(4):
         for mask in range(16):
@@ -653,6 +690,8 @@ def check(stage, resident, *, worker=None, self_test=False):
             "rayman_original_startup_sp_rejected_by_old_bound_cases":rayman_old_bound_refusals,
             "inherited_52byte_frame_above_retained_low_stack":True,
             "cold_sdk_slot_refusal_before_any_arming_cases":refusals,
+            "cold_crt_prearm_after_low_arming_before_owner_entry":bool(crt_refusals),
+            "cold_crt_prearm_result_refusal_cases":crt_refusals,
             "full_source_verified_before_program_extent":True,
             "normal_and_shortened_extent_arming_routes":True,
             "runtime_modes": list(modes), "control_preserves_original_frame_and_allocator": 1 in modes,

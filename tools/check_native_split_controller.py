@@ -20,7 +20,7 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path[:0]=[str(ROOT/'tools'),str(ROOT/'tests')]
 from check_native_isolation_linked import IsolationWorker,poll,LoanBoundary
 from profile_vmu_native_record_worker_sh import Record,fresh_verify,make_handoff
-from test_vmu_native_heap_execution import SH
+from test_vmu_native_heap_execution import SH, MASK
 
 SCHEMA='kui.native.split-controller-execution.v1'
 SOURCES=('tools/check_native_split_controller.py','tools/check_native_isolation_linked.py',
@@ -88,10 +88,10 @@ class SplitSDK(IsolationWorker):
         self.worker_runs=[];self.external_c_stores=[];self.mdst_writes=0
 
 
-def fresh(args):
+def fresh(args, *, general=False):
     source,image,extent=fresh_verify(args.startup,args.record)
     record=Record(args.record.read_bytes(),image,source)
-    cpu=SplitSDK(args.startup,args.build,make_handoff(),record,'split_controller',True,split_controller=True)
+    cpu=SplitSDK(args.startup,args.build,make_handoff(),record,'split_controller',not general,split_controller=True)
     cpu.prepare();initializer=cpu.initialize_sdk();cpu.seed_tick_boundary()
     cpu.reset_observations()
     return cpu,source,extent,initializer
@@ -295,6 +295,114 @@ def mutation_cases(pristine,warm):
     return rows
 
 
+def general_counter_cases(args):
+    """Age only private pair counters; execute the original SDK and linked C.
+
+    Each fixture starts with the real allocator, arm and SDK initializer. The
+    natural cold controller poll and authored virtual INFO force the separate
+    split/full submission paths. No successful storage reply is substituted.
+    """
+    args.build=args.build.resolve()
+    pristine,source,extent,initializer=fresh(args,general=True)
+    require(pristine.general,'Counter proof requires the explicit lean General profile')
+    require(pristine.symbols.get('__kui_native_general_unbounded_pairs_worker')==(1,0,0,0xfff1),
+            'Counter proof lacks the General uncapped-pair policy marker')
+    provenance=json.loads((args.build/'entry.compile.json').read_text())
+    require(provenance['commit']==args.source_commit,'Counter proof source commit differs from compile receipt')
+    build_id=args.build_id or args.source_commit[:12]
+    require(len(build_id)==12 and all(c in '0123456789abcdef' for c in build_id) and
+            build_id.encode() in (args.build/'entry.elf').read_bytes(),
+            'Counter proof requires its exact12-hex linked build identifier')
+    state=pristine.symbols['_state'][0]
+    require(pristine.symbols['_state'][1:3]==(100,1),'Pair state is not its reviewed100-byte object')
+
+    def seed(cpu,value):
+        require(cpu.read(state)==1 and cpu.read(state+4)==0,'Counter fixture is not idle and armed')
+        raw_write(cpu,state+8,value);raw_write(cpu,state+12,value)
+
+    rows=[]
+    for initial in (179999,180000,180001,MASK-1,MASK):
+        for path in ('split','full'):
+            cpu=copy.deepcopy(pristine);cpu.reset_observations();seed(cpu,initial)
+            if path=='full':cpu.inject_command=1
+            before=counters(cpu);cpu.submit();after_submit=counters(cpu)
+            wrapped=(initial+1)&MASK
+            require(cpu.read(state+4)==1 and cpu.read(state+8)==wrapped and cpu.read(state+12)==initial,
+                    'Actual submit did not preserve modulo32 pair ordering')
+            captured=cpu.read(cpu.symbols['_controller_pair'][0])==2
+            require(captured is (path=='split') and after_submit['split_submit']-before['split_submit']==1 and
+                    after_submit['submit']-before['submit']==int(path=='full'),
+                    'Counter fixture did not traverse its actual split/full submission path')
+            cpu.complete();cpu.original_call(cpu.record.consumer);cpu.original_call(cpu.record.ready)
+            require(cpu.read(state+4)==0 and cpu.read(state+8)==cpu.read(state+12)==wrapped,
+                    'Actual completion did not retire the modulo32 pair')
+            if path=='full':require(cpu.read(cpu.injected_rx)&255==5,'Full path lost actual virtual INFO reply')
+            require(cpu.overlay_stats()['advertisements']>0 and cpu.tick_calls==int(path=='split'),
+                    'Aged General pair lost virtual attachment or its selected TICK path: '+
+                    repr((initial,path,cpu.overlay_stats()['advertisements'],cpu.tick_calls)))
+            cpu.check_build_unchanged()
+            rows.append(dict(initial=initial,path=path,pending_submitted=wrapped,pending_completed=initial,
+                final_submitted=wrapped,final_completed=wrapped,controller_tick_calls=cpu.tick_calls,
+                full_submit_fallback_calls=after_submit['submit']-before['submit'],
+                original_sdk_and_consumer_executed=True,actual_c_pair_order_checked=True))
+
+    refusals=[]
+    for path in ('split','full'):
+        for field,value in ((4,0),(8,1),(12,0)):
+            cpu=copy.deepcopy(pristine);cpu.reset_observations();seed(cpu,MASK)
+            if path=='full':cpu.inject_command=1
+            cpu.submit()
+            require(cpu.read(state+8)==0 and cpu.read(state+12)==MASK,'Refusal fixture did not wrap submitted')
+            cpu.reset_observations()
+            cpu.inject_on_complete=lambda c,offset=field,v=value:raw_write(c,state+offset,v)
+            try:cpu.complete()
+            except AssertionError as error:
+                require(str(error).startswith('Actual worker refused with code 0x8;'),
+                        'Wrapped completion missed its actual pair-order refusal: '+str(error))
+            else:raise ValueError('Wrapped completion admitted corrupted pending/counter state')
+            require(cpu.mutation_rx_snapshot is not None and cpu.rx_snapshot()==cpu.mutation_rx_snapshot and
+                    not cpu.external_c_stores,'Wrapped counter refusal published RX')
+            cpu.check_build_unchanged()
+            refusals.append(dict(path=path,state_offset=field,value=value,refusal_code=8,
+                rx_unchanged=True,before_parent_store=True,actual_c_refusal=True))
+
+    loan=copy.deepcopy(pristine);loan.reset_observations();seed(loan,MASK);loan.inject_command=11
+    loan.submit()
+    try:loan.complete()
+    except LoanBoundary:pass
+    else:raise ValueError('Wrapped READ did not reach the actual low SD-loan entry')
+    require(loan.calls['actual_low_sd_loan_boundary']==1 and loan.read(state+8)==0 and
+            loan.read(state+12)==MASK and loan.block(loan.injected_rx,4)==bytes([0xa5])*4,
+            'Wrapped storage request changed pair order or published an acknowledgement')
+    storage=[]
+    for function in ('_persistent_storage_guard','_persistent_context_guard'):
+        for offset,value in ((None,None),(0,0),(4,0),(8,1),(12,0)):
+            cpu=copy.deepcopy(loan);cpu.reset_observations()
+            if offset is not None:raw_write(cpu,state+offset,value)
+            before=cpu.rx_snapshot();result=cpu.worker(function,[])['result']
+            require(result==int(offset is None) and cpu.rx_snapshot()==before and not cpu.external_c_stores,
+                    'Actual wrapped storage authority accepted corruption or changed RX: '+
+                    repr((function,offset,value,result,cpu.rx_snapshot()==before,cpu.external_c_stores)))
+            cpu.check_build_unchanged()
+            storage.append(dict(function=function,state_offset=offset,value=value,
+                accepted=offset is None,actual_linked_c_guard=True,rx_unchanged=True))
+    return dict(schema='kui.native.general-pair-counter-execution.v1',status='PASS',
+        source_commit=args.source_commit,build=build_id,compile_receipt=provenance,
+        artifact_sha256={name:sha((args.build/name).read_bytes()) for name in
+            ('entry.elf','stage.elf','native-worker.elf','native-worker.bin','native-worker.reloc','resident-sci.elf')},
+        source_sha256={name:sha((ROOT/name).read_bytes()) for name in
+            (*SOURCES,'tools/check_native_general_lean_profile.py','tools/native_runtime_layout.py')},
+        inputs=dict(startup_sha256=sha(source),record_sha256=sha(args.record.read_bytes()),extent=extent),
+        lease_bytes=pristine.lease_bytes,sdk_initializer=initializer,pair_cases=rows,
+        completion_refusals=refusals,storage_guard_cases=storage,
+        wrapped_read=dict(actual_low_sd_loan_entry=True,loan_boundary=loan.loan_boundary,
+            success_or_ack_substituted=False,rx_unpublished=True),
+        storage_guard_execution='Actual guards called on their private P1 C stack from a copy of the '
+            'real wrapped READ at its low-loan boundary; no game or storage function is substituted.',
+        worker_helpers_substituted=False,original_game_or_sdk_functions_substituted=False,
+        auxiliary_boundary_substituted=True,limitations=__doc__.strip())
+
+
 def check(args):
     args.build=args.build.resolve()
     cpu,source,extent,initializer=fresh(args)
@@ -324,11 +432,21 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     for name in ('build','startup','record','output'):p.add_argument('--'+name,type=Path,required=True)
     p.add_argument('--source-commit',required=True);p.add_argument('--polls',type=int,default=8)
+    p.add_argument('--general-counters',action='store_true',
+                   help='Execute General split/full pairs at the former cap and uint32 rollover')
+    p.add_argument('--build-id',help='Exact12-hex linked identifier when explicitly overridden at compile time')
     args=p.parse_args();require(args.polls>=8,'At least8 original SDK polls are required')
-    report=check(args);args.output.parent.mkdir(parents=True,exist_ok=True)
+    require(not args.build_id or args.general_counters,'Build-ID override is specific to General counter proof')
+    report=general_counter_cases(args) if args.general_counters else check(args)
+    args.output.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_text(json.dumps(report,indent=2)+'\n')
-    print(json.dumps(dict(status='PASS',polls=len(report['polls']),virtual_fallbacks=len(report['virtual_fallback_cases']),
-                          mutations=len(report['mutation_refusals']),output=str(args.output))))
+    if args.general_counters:
+        print(json.dumps(dict(status='PASS',pairs=len(report['pair_cases']),
+            completion_refusals=len(report['completion_refusals']),storage_guards=len(report['storage_guard_cases']),
+            output=str(args.output))))
+    else:
+        print(json.dumps(dict(status='PASS',polls=len(report['polls']),virtual_fallbacks=len(report['virtual_fallback_cases']),
+                              mutations=len(report['mutation_refusals']),output=str(args.output))))
 
 
 if __name__=='__main__':main()

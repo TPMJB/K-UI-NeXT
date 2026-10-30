@@ -7,6 +7,7 @@
 #include "kui/bench.h"
 #include "kui/storage.h"
 #include "kui/boot_image.h"
+#include "kui/drive_controls.h"
 
 void kui_log(const char *format, ...);
 bool kui_cancelled(void);
@@ -30,8 +31,12 @@ void kui_sd_disconnect(void);
  * Contains no write/sync callbacks; invalid immediately after disconnect. */
 struct kui_media_ops;
 bool kui_sd_raw_read_ops(struct kui_media_ops *out);
-#if KUI_VMU_PROFILE_PREP || KUI_VMU_GAME_CARDS
 struct kui_vmu_sd_identity;
+/* GUI runtime only, while exclusively connected to unmounted healthy SCI.
+ * Read-only CRC-checked card CID/capacity identity; unsupported transports
+ * return false. A protocol failure is not silently retried. */
+bool kui_sd_card_identity(struct kui_vmu_sd_identity *out);
+#if KUI_VMU_PROFILE_PREP || KUI_VMU_GAME_CARDS
 /* Card preparation only: the import tool, and the Games launcher while it
  * maps a game's own card with FatFs unmounted. Caller exclusively owns
  * connected SCI storage, with no filesystem request/optical read running.
@@ -73,7 +78,40 @@ enum kui_runtime_result kui_bootstrap_measure(unsigned transport_filter,
     kui_cancel_fn cancelled);
 bool kui_disc_prepare(struct kui_toc sessions[2]);
 bool kui_disc_prepare_capture(struct kui_toc sessions[2],bool *is_cd);
+/* Exclusive salvage owner, after successful preparation and before reads.
+ * Zero selections issue no mode commands. An active session is reapplied after
+ * INIT and restored on end, including a clean user Stop. Never call begin/end
+ * with a live read. A failed restore blocks optical use until console restart. */
+bool kui_disc_controls_begin(const struct kui_drive_options *options);
+bool kui_disc_controls_end(void);
+/* Bounded diagnostic session: capture the original tuple before identity reads.
+ * Profiles: 0 original; 1 original speed/retry 1; 2 requested 4x/retry 1;
+ * 3 requested 2x/retry 1. Selection returns 1 verified, 0 unsupported with the
+ * prior verified tuple restored, or -1 unavailable/fatal. */
+bool kui_disc_controls_trial_begin(void);
+int kui_disc_controls_trial_select(void *ctx,unsigned profile);
+/* Original speed, then all eight optional wire codes; one firmware retry.
+ * Returns 1 verified, 0 safely rolled back, -1 ownership/restore unavailable. */
+int kui_disc_controls_speed_select(void *ctx,unsigned selection);
+/* Exclusive opt-in raw G1 diagnostic gate. No BIOS optical entry may run
+ * between begin/end. The caller restores and verifies all raw mode bytes;
+ * end additionally checks the BIOS tuple. Uncertain ownership/restoration
+ * poisons normal drive use until a console restart. */
+bool kui_disc_g1_probe_begin(void);
+bool kui_disc_g1_probe_end(bool restored);
+/* Explicit salvage/repair only. Refuses poisoned, media-changed, cancelled or
+ * command-owned state; never clears poison or rearms disabled DMA. Reinitializes
+ * with bounded commands and checks the fresh profile/layout against expected.
+ * Content anchors remain the recovery worker's responsibility after success. */
+bool kui_disc_recover(void *ctx,const struct kui_capture_plan *expected);
 enum kui_read_result kui_disc_read_raw(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out);
+/* Explicit damaged-disc salvage only: same ownership checks as raw, with a
+ * 30-second read and 5-second abort-drain window. A released, guard-clean
+ * ordinary medium-error command may return KUI_READ_PARTIAL and tentative
+ * bytes; the core must validate every retained data sector and reject partial
+ * audio. Unconfirmed aborts remain fatal until restart. Normal capture/repair
+ * deadlines and full-transfer acceptance are unchanged. */
+enum kui_read_result kui_disc_read_salvage(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out);
 /* Normal capture uses a normalized card-root destination (for example /Games)
  * and game-named output. Invalid paths fail before preference or drive I/O. */
 enum kui_capture_result kui_capture_start(enum kui_capture_mode mode,const char *build,

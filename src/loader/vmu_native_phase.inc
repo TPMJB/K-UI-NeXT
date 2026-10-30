@@ -7,8 +7,10 @@
 #define NATIVE_PHASE_RECORDS 16u
 #define NATIVE_RAW_OWNER_WORDS 192u
 #define NATIVE_RAW_OWNER_MODE 2u
+#if !KUI_NATIVE_SPLIT_CONTROLLER_GENERAL
 __asm__(".global __kui_native_raw_owner_terminal_worker\n"
         ".set __kui_native_raw_owner_terminal_worker,1\n");
+#endif
 enum native_raw_flags {
     NATIVE_RAW_SPAN=1u,NATIVE_RAW_WORDS=2u,NATIVE_RAW_VIDEO=4u
 };
@@ -17,12 +19,14 @@ enum native_phase_flags {
     NATIVE_PHASE_UNWIND=8u,NATIVE_PHASE_WAIT=16u,NATIVE_PHASE_WRAP=32u
 };
 typedef bool (*native_phase_read)(void *,uint32_t,unsigned,uint32_t *);
+#if !KUI_NATIVE_SPLIT_CONTROLLER_GENERAL
 static bool native_phase_image(uint32_t bytes,uint32_t load,const uint8_t digest[32]) {
     static const uint8_t expected[32]={
         0xff,0xb5,0xa8,0xe5,0xff,0x55,0x47,0x02,0x6d,0x93,0x64,0x9e,0x1f,0x90,0x58,0xb7,
         0xee,0x5e,0x29,0xd8,0xd0,0xff,0x8a,0x89,0x33,0x57,0x01,0xf7,0xe9,0x64,0x7f,0x35};
     return bytes==2143652u && load==UINT32_C(0x8c010000) && digest && !memcmp(digest,expected,32u);
 }
+#endif
 struct native_phase_record {
     union {
         struct {

@@ -1,0 +1,68 @@
+{
+  "schema": "kui.native.pso-fourth-terminal-candidate.v1",
+  "date": "2026-10-28",
+  "base_commit": "b9f67aef2b809714cf254318d4fecb73c50a453d",
+  "startup": {
+    "title": "PSO",
+    "product": "MK-51100",
+    "source_bytes": 3783264,
+    "source_sha256": "11dc59ee0278675decf5e0bf1fa30646f889a0e5a7f10251f3c3a697e42a28e5"
+  },
+  "change": "The strict PVR exit/loader family may additionally prove one complete CRT bootstrap path and return its enclosing entry as a fourth terminal hook. No additional BIOS consumer is ignored, no presumed dead code is exempted, and no fixed RAM arena is inferred.",
+  "crt_proof": {
+    "entry": "0x8c16c8a8",
+    "bootstrap_load": "0x8c16c8cc",
+    "bootstrap_target": "0x8c008300",
+    "body": "Complete FPSCR setup, stack literal transport, BSS clearing loop, initialization call, BIOS bootstrap call, cleanup call and final self-loop; all instructions and literal slots are bound.",
+    "bounds": "BSS begins exactly at the source image end; BSS operands have one raw alias for their actual subtraction, and stack/BSS end satisfy main-RAM bounds and the reviewed 32-byte relation. Initialization/cleanup targets lie inside the image and outside this CRT body.",
+    "uniqueness": "A second or malformed recognizable CRT refuses. All encoded firmware-vector and bootstrap loads must belong to the admitted complete entries. External encoded branches/aligned RAM pointers into its full body/pool refuse, except its exactly proved BRA-self/NOP halt sink, which cannot reach state-changing operations. The fourth 12-byte window also participates in the ordinary disjointness/interior proof.",
+    "initial_lifetime": "After the initial immutable proof and low-hook arming, the stage publishes and verifies the fourth terminal veneer before returning to any original executable instruction. This prevents an extra CRT already being in flight when an allocator callback later installs the worker.",
+    "before_worker": "The retained low terminal hook permanently stops without entering an unready worker.",
+    "after_worker": "The late installer checks the already-published veneer, and the fourth veneer is retained in the ordinary runtime hook witnesses."
+  },
+  "abi": {
+    "exit_descriptor_version": 2,
+    "exit_descriptor_bytes": 52,
+    "maximum_terminal_entries": 4,
+    "crt_family": 6,
+    "ordinary_family_counts": "pair-only 2; existing SDK/terminal-dispatch families 3 with zero fourth entry; CRT-bootstrap 4",
+    "cache_detector_epoch": 6,
+    "cache_record_bytes": 1024,
+    "cache_payload_end": 752,
+    "persistent_exports_version": 4,
+    "persistent_exports_bytes": 80,
+    "persistent_config_bytes": 2304,
+    "old_records": "Rejected by epoch; all eight existing fixture records were freshly rebuilt from original sources. Their driver/layout/heap/call and existing terminal addresses are unchanged."
+  },
+  "host_validation": {
+    "exit_discovery_and_original_crt_execution_asan_ubsan": 13130,
+    "complete_cache_with_original_ps2_and_pso_asan_ubsan": 67491,
+    "cache_seed_codec_asan_ubsan": 16797,
+    "patch_guard_asan_ubsan": 7830,
+    "persistent_worker_asan_ubsan": 2085049,
+    "cold_prearm_asan_ubsan": 469,
+    "fourth_entry_witnesses": "6400 byte/bit mutations, 960 neighbor-bit checks and 215 read-fault positions across the prepared-hook suite",
+    "original_lodoss_terminal_dispatch_asan_ubsan": 4462,
+    "original_lodoss_callback_execution": "142 production checks and 32 terminal executions",
+    "python_record_replay_tests": 15,
+    "python_personalizer_seed_tests": 65,
+    "actual_cache_cli_tests": 13,
+    "cached_metadata_package_tests": 5
+  },
+  "corpus_comparison": {
+    "unique_native_startups": 33,
+    "detector_epoch": 6,
+    "stage_end_used_for_source_comparison": "0x8ce8d508",
+    "changed_gate": "PSO: exits -> complete structural models passed",
+    "other_first_refusal_changes": "none",
+    "complete_structural_model_rows": 12,
+    "stage_limit": "This comparison uses the baseline linked stage end. Final delivery must repeat placement/stack/audits against its actual newly linked stage."
+  },
+  "remaining": [
+    "Build and audit the linked candidate modules and complete GUI together before delivery.",
+    "Hardware launch, virtual A2 detection, gameplay, saving and power-cycle reload are not established by these host proofs.",
+    "PSO may expose additional live Maple/peripheral schedules or save semantics that require separate implementation."
+  ],
+  "console_compatibility_verified": false,
+  "game_bytes_or_disassembly_committed": false
+}

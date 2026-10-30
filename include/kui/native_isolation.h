@@ -42,6 +42,22 @@
 #ifndef KUI_NATIVE_SPLIT_CONTROLLER_GENERAL
 #define KUI_NATIVE_SPLIT_CONTROLLER_GENERAL 0
 #endif
+/* A separately linked persistent A2 service with synchronous disc I/O.
+ * Its allocation contains only the worker, including its private stack. */
+#ifndef KUI_NATIVE_VMU_ONLY
+#define KUI_NATIVE_VMU_ONLY 0
+#endif
+#if KUI_NATIVE_VMU_ONLY != 0 && KUI_NATIVE_VMU_ONLY != 1
+#error "VMU-only selector must be exactly zero or one"
+#endif
+#ifdef KUI_NATIVE_VMU_ONLY_TRANSPORT
+#if KUI_NATIVE_VMU_ONLY_TRANSPORT != 0 && KUI_NATIVE_VMU_ONLY_TRANSPORT != 1
+#error "VMU-only transport must be SCIF or SCI"
+#endif
+#define KUI_VMU_ONLY_TRANSPORT_STRING_(x) #x
+#define KUI_VMU_ONLY_TRANSPORT_STRING(x) KUI_VMU_ONLY_TRANSPORT_STRING_(x)
+#define KUI_VMU_ONLY_TRANSPORT_TEXT KUI_VMU_ONLY_TRANSPORT_STRING(KUI_NATIVE_VMU_ONLY_TRANSPORT)
+#endif
 /* The general split controller with the controller prefetch TICK restored.
  * TICK was turned off only to isolate Evolution 1, which still failed
  * without it; the split controller then passed with TICK still off. */
@@ -96,12 +112,20 @@
 #error "Metadata cache isolation requires cached persistent dual readers, TICK off, real callbacks and VMU"
 #endif
 #if KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION && \
-    ((!KUI_NATIVE_RA_TICK_OFF_ISOLATION && !KUI_NATIVE_SPLIT_CONTROLLER_PREFETCH) || !KUI_NATIVE_DUAL_READERS || \
+    ((((!KUI_NATIVE_RA_TICK_OFF_ISOLATION && !KUI_NATIVE_SPLIT_CONTROLLER_PREFETCH) || !KUI_NATIVE_DUAL_READERS) && !KUI_NATIVE_VMU_ONLY) || \
      !KUI_VMU_NATIVE_CACHED_CODE || !KUI_VMU_NATIVE_PERSISTENT_PROBE || \
      KUI_NATIVE_READER_ONLY_ISOLATION || KUI_NATIVE_STANDARD_VMU_ISOLATION || \
      KUI_NATIVE_MAPLE_BYPASS_ISOLATION || KUI_NATIVE_MAPLE_DELAY_ISOLATION || \
      KUI_NATIVE_E1_WAIT_CAPTURE || KUI_NATIVE_METADATA_CACHE_ISOLATION)
 #error "Split controller isolation requires cached persistent dual readers, TICK off, real callbacks and VMU"
+#endif
+#if KUI_NATIVE_VMU_ONLY && \
+    (!KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION || !KUI_NATIVE_SPLIT_CONTROLLER_GENERAL || \
+     !KUI_NATIVE_GENERAL_LEAN_LAYOUT || !KUI_VMU_NATIVE_PERSISTENT_PROBE || \
+     !KUI_VMU_NATIVE_CACHED_CODE || KUI_NATIVE_DUAL_READERS || KUI_NATIVE_READAHEAD || \
+     KUI_VMU_NATIVE_BACKGROUND || KUI_NATIVE_STANDARD_VMU_ISOLATION || \
+     KUI_NATIVE_SPLIT_CONTROLLER_PREFETCH || KUI_NATIVE_RA_TICK_OFF_ISOLATION)
+#error "VMU-only requires the compact persistent split worker and synchronous reader"
 #endif
 #if KUI_NATIVE_E1_WAIT_CAPTURE && \
     (!KUI_NATIVE_RA_TICK_OFF_ISOLATION || !KUI_NATIVE_READER_ONLY_ISOLATION || !KUI_NATIVE_DUAL_READERS)
@@ -153,6 +177,6 @@
 /* Match the current dual-reader reservation and placement in the Standard
  * control without enabling a background engine or its reader bindings. */
 #define KUI_NATIVE_CURRENT_BOTTOM_HEAP \
-    (KUI_NATIVE_DUAL_READERS || KUI_NATIVE_STANDARD_VMU_ISOLATION)
+    (KUI_NATIVE_DUAL_READERS || KUI_NATIVE_STANDARD_VMU_ISOLATION || KUI_NATIVE_VMU_ONLY)
 
 #endif

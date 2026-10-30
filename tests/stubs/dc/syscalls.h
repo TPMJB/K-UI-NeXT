@@ -21,7 +21,8 @@ typedef struct cd_check_drive_status {
     cd_stat_t status;
     cd_disc_types_t disc_type;
 } cd_check_drive_status_t;
-enum { CD_CMD_PIOREAD=16, CD_CMD_DMAREAD=17, CD_CMD_INIT=24, CD_CMD_GETTOC2=19, CD_CMD_STOP=33,
+enum { CD_CMD_PIOREAD=16, CD_CMD_DMAREAD=17, CD_CMD_INIT=24, CD_CMD_GETTOC2=19,
+       CD_CMD_REQ_MODE=30, CD_CMD_SET_MODE=31, CD_CMD_STOP=33,
        CDROM_READ_WHOLE_SECTOR=0xff, CDROM_READ_DATA_AREA=0x20 };
 typedef struct {uint32_t start_sec,num_sec;void *buffer;int is_test;} cd_read_params_t;
 typedef struct {uint32_t entry[99],first,last,leadout_sector;} cd_toc_t;

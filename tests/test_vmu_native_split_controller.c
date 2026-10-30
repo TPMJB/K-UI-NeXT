@@ -17,10 +17,17 @@ static void split_prepare(void) {
     if(split_other_identity) input.driver.image_sha256[31]^=1u;
     input.exits.image_bytes=input.driver.image_bytes;
     input.lease.owner.image_bytes=input.driver.image_bytes;
-    input.lease.heap_bytes=0xb0000u;input.lease.lease_bytes=0x60000u;input.lease.units=0x3001u;
+    /* The independent VMU build owns exactly its worker, with no reader
+     * map, stream state, auxiliary or cache following it. */
+#if KUI_NATIVE_VMU_ONLY
+    const uint32_t lease_bytes=KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES;
+#else
+    const uint32_t lease_bytes=KUI_NATIVE_RA_LEASE_BYTES;
+#endif
+    input.lease.heap_bytes=0x50000u+lease_bytes;input.lease.lease_bytes=lease_bytes;input.lease.units=lease_bytes/32u+1u;
     put(input.lease.owner.bytes_cell,4u,input.lease.heap_bytes);
     put(input.lease.header+4u,4u,input.lease.units);
-    input.runtime.lease_bytes=input.runtime.required_lease_bytes=0x60000u;
+    input.runtime.lease_bytes=input.runtime.required_lease_bytes=lease_bytes;
     lease_calls=block_callbacks=0u;corrupt_before_loan=corrupt_after_loan=0u;
     release_saw_unpublished=false;
 }
@@ -175,11 +182,57 @@ static void split_identity(void) {
 #endif
     split_other_identity=false;
 }
+#if KUI_NATIVE_SPLIT_CONTROLLER_GENERAL
+static void split_long_sessions(void) {
+    const uint32_t starts[]={PAIR_LIMIT-1u,PAIR_LIMIT,PAIR_LIMIT+1u,
+        UINT32_MAX-1u,UINT32_MAX,0u};
+    for(unsigned route=0u;route<2u;route++)
+        for(unsigned i=0u;i<sizeof(starts)/sizeof(*starts);i++) {
+            split_setup();state.submitted=state.completed=starts[i];
+            for(uint32_t n=0u;n<5u;n++) {
+                if(!route) {
+                    split_batch(1u,0u,0u);split_submit_ok();
+                    split_done(1u,0u,0x01000000u);complete_return();
+                } else transfer_batch(1u,0u,0u,NULL);
+                CHECK(state.submitted==starts[i]+n+1u && state.completed==state.submitted);
+                CHECK(!state.pending && !state.error && !durable_card.faulted);
+            }
+        }
+    /* Four WRITE phases cross the uint32 boundary. Final SYNC and READ then
+     * exercise the complete storage-ownership and durable journal path. */
+    uint8_t next[512];for(unsigned i=0u;i<sizeof(next);i++) next[i]=(uint8_t)(i^0x9bu);
+    split_setup();state.submitted=state.completed=UINT32_MAX-2u;
+    stage_block(42u,next);transfer_batch(13u,42u,4u,NULL);
+    CHECK(durable_card.commits==1u && value_at(rx_at(2))==0x00020007u);
+    read_compare(42u,next);CHECK(state.submitted==3u && state.completed==3u);
+    CHECK(release_saw_unpublished);protect_media();
+    model_reopen();
+    struct kui_vmu_backing backing={0};struct kui_vmu_store reopened={0};
+    CHECK(!kui_vmu_backing_init(&backing,&model_bus,&backing_config));
+    struct kui_vmu_store_io io=kui_vmu_backing_io(&backing);
+    CHECK(!kui_vmu_store_open(&reopened,&io,&store_config));
+    CHECK(!kui_vmu_store_checkpoint(&reopened));
+    CHECK(!memcmp(sd.media[image_lba(42u)],next,512u));
+    CHECK(!memcmp(sd.media[950u],(uint8_t[512]){0},512u));protect_media();
+    /* A zero submission count after wrap grants no authority to publish. */
+    split_setup();state.submitted=state.completed=UINT32_MAX;
+    split_batch(1u,0u,0u);split_submit_ok();CHECK(!state.submitted && state.pending);
+    split_done(1u,0u,0x01000000u);
+    uint8_t before[4][1024];
+    for(unsigned port=0u;port<4u;port++) memcpy(before[port],rx_bytes(port*6u),1024u);
+    put(input.driver.submit,4u,0u);reject_complete();
+    for(unsigned port=0u;port<4u;port++) CHECK(!memcmp(before[port],rx_bytes(port*6u),1024u));
+    CHECK(!lease_calls && !block_callbacks && !sd.bytes && !sd.writes);
+}
+#endif
 #ifndef KUI_SPLIT_CONTROLLER_TEST_MAIN
 #define KUI_SPLIT_CONTROLLER_TEST_MAIN main
 #endif
 int KUI_SPLIT_CONTROLLER_TEST_MAIN(void) {
     split_success();split_geometry_refusals();split_deferred_refusals();split_full_fallback();
     split_warm_tag_refusals();split_identity();
+#if KUI_NATIVE_SPLIT_CONTROLLER_GENERAL
+    split_long_sessions();
+#endif
     printf("Split controller host checks: %u\n",checks);return 0;
 }

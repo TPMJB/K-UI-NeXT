@@ -4,6 +4,17 @@
 #include <string.h>
 
 volatile uint32_t kui_vmu_native_fault_capture_state[8];
+#if KUI_NATIVE_SPLIT_CONTROLLER_GENERAL
+/* General's cold mode gate admits NORMAL only. Keep the assembly-owned
+ * scratch ABI, but retain no optional vector installer or owner inspection. */
+__asm__(".global __kui_native_general_fault_capture_elided_worker\n"
+        ".set __kui_native_general_fault_capture_elided_worker,1\n");
+int kui_vmu_native_fault_capture_install(bool enabled,
+    const struct kui_vmu_native_discovery *driver) {
+    (void)driver;
+    return enabled?-1:0;
+}
+#else
 #define VECTOR UINT32_C(0x8c00f500)
 #define VBR UINT32_C(0x8c00f400)
 #define COMMON UINT32_C(0x8c1da10c)
@@ -108,3 +119,4 @@ int kui_vmu_native_fault_capture_install(bool enabled,
     kui_vmu_native_fault_capture_state[7]=1u;
     return 1;
 }
+#endif

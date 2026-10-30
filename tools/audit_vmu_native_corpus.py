@@ -16,6 +16,8 @@ import shlex
 import subprocess
 import sys
 import tempfile
+from native_runtime_layout import LEASE_BYTES, GENERAL, DIAGNOSTIC
+from prove_vmu_native_evolution1_readahead_lease import geometry_defines
 
 ROOT=Path(__file__).resolve().parents[1]
 SOURCES=("tools/vmu_native_corpus_probe.c","src/core/vmu_native_program.c",
@@ -23,7 +25,7 @@ SOURCES=("tools/vmu_native_corpus_probe.c","src/core/vmu_native_program.c",
     "src/core/vmu_native_layout.c","src/core/vmu_native_runtime.c","src/core/vmu_native_heap.c",
     "src/core/vmu_native_exit.c","src/core/vmu_native_patch.c","src/core/vmu_native_stage_placement.c",
     "src/core/hash.c","src/core/data.c")
-PROOF_FILES=(*SOURCES,"tests/test_vmu_native_layout.c","tools/audit_vmu_native_corpus.py",
+PROOF_FILES=("tools/native_runtime_layout.py","tools/prove_vmu_native_evolution1_readahead_lease.py",*SOURCES,"tests/test_vmu_native_layout.c","tools/audit_vmu_native_corpus.py",
     *tuple("include/kui/"+name for name in ("vmu_native_program.h","vmu_native_discovery.h",
         "vmu_native_layout.h","vmu_native_runtime.h","vmu_native_heap.h","vmu_native_exit.h",
         "vmu_native_patch.h","vmu_native_resolution_cache.h","vmu_native_stage_placement.h",
@@ -46,13 +48,14 @@ def input_pair(value):
     return slug,Path(path)
 
 
-def audit(inputs,stage_begin,stage_end,records=None):
+def audit(inputs,stage_begin,stage_end,records=None,*,selected_layout=GENERAL):
+    assert selected_layout in (GENERAL,DIAGNOSTIC),"Unreviewed corpus layout"
     rows=[]
     hashes={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in PROOF_FILES}
     with tempfile.TemporaryDirectory(prefix="kui-native-structural-corpus-") as temporary:
         executable=Path(temporary)/"probe"
         command=[*shlex.split(os.environ.get("HOST_CC","cc")),"-std=c11","-O2","-Wall","-Wextra",
-            "-Werror","-Wpedantic","-DKUI_NATIVE_READAHEAD=1","-I",str(ROOT/"include"),
+            "-Werror","-Wpedantic",*geometry_defines(True,selected_layout),"-I",str(ROOT/"include"),
             *[str(ROOT/name) for name in SOURCES],"-o",str(executable)]
         subprocess.run(command,check=True)
         for slug,path in inputs:
@@ -61,6 +64,7 @@ def audit(inputs,stage_begin,stage_end,records=None):
             lines=[json.loads(line) for line in run.stdout.splitlines() if line.startswith("{")]
             row=dict(slug=slug,input_name=path.name,probe_returncode=run.returncode)
             for line in lines:row.update(line)
+            if lines:assert row["lease_bytes"]==selected_layout.LEASE_BYTES,"Production corpus lease differs from reviewed layout"
             wire=row.pop("record_hex",None)
             if wire is not None and records:
                 records.mkdir(parents=True,exist_ok=True)
@@ -74,13 +78,13 @@ def audit(inputs,stage_begin,stage_end,records=None):
             rows.append(row)
             print(f"{slug}: {row['first_refusal'] or 'structural models passed'}",file=sys.stderr)
     assert hashes=={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in PROOF_FILES},"Structural proof sources changed during audit"
-    return dict(schema="kui.native.structural-corpus.v1",lease_bytes=0x60000,
+    return dict(schema="kui.native.structural-corpus.v1",lease_bytes=selected_layout.LEASE_BYTES,
         detector_epoch=rows[0]["detector_epoch"],
         stage_begin=stage_begin,stage_end=stage_end,inputs=len(rows),
         distinct_source_hashes=len({row.get("source_sha256") for row in rows if row.get("source_sha256")}),
         first_refusals=dict(Counter(row["first_refusal"] or "models_passed" for row in rows)),
         source_sha256=hashes,results=rows,
-        limits=["Static discovery, guarded terminal interception and384KiB placement are independent necessary gates.",
+        limits=[f"Static discovery, guarded terminal interception and{selected_layout.LEASE_BYTES//1024}KiB placement are independent necessary gates.",
             "The original transport interpreter supplies adversarial ABI returns for unrelated helper calls; it is not a complete game emulator.",
             "Live layout binding uses the original initializer's modeled RAM result, not observations from the console.",
             "Original allocator execution, retained live ownership, SDK SCI route, full cache/DMA integration and console save/load require separate proofs.",
@@ -97,6 +101,8 @@ def main():
     parser.add_argument("--stage-begin",type=lambda value:int(value,0),default=0x8ce00000)
     parser.add_argument("--stage-end",type=lambda value:int(value,0),required=True,
         help="Exact linked stage BSS end; do not substitute a shorter initialized-file boundary")
+    parser.add_argument("--diagnostic-layout",action="store_true",
+        help="Audit the exact retained diagnostic worker layout")
     parser.add_argument("--records",type=Path,help="Optional generated metadata records for independently accepted complete discovery")
     parser.add_argument("--output",type=Path,required=True)
     args=parser.parse_args();inputs=list(args.input);metadata={}
@@ -115,7 +121,8 @@ def main():
             if path.is_file() and path.name.lower()=="1st_read.bin":inputs.append((path.parent.name,path))
     if not inputs:parser.error("Provide at least one original startup")
     if len({slug for slug,_ in inputs})!=len(inputs):parser.error("Input slugs must be unique")
-    result=audit(inputs,args.stage_begin,args.stage_end,args.records)
+    result=audit(inputs,args.stage_begin,args.stage_end,args.records,
+        selected_layout=DIAGNOSTIC if args.diagnostic_layout else GENERAL)
     for row in result["results"]:row.update(metadata.get(row["slug"],{}))
     if args.manifest:result["input_manifest_sha256"]=hashlib.sha256(args.manifest.read_bytes()).hexdigest()
     args.output.parent.mkdir(parents=True,exist_ok=True)

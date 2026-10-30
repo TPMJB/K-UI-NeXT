@@ -8,9 +8,11 @@ are explicit inputs here. No cache record is treated as live ownership.
 """
 import random
 import struct
+import hashlib
 
 from check_vmu_native_worker_gateway import CPU, MASK, symbol_bytes
 from sh4_delay_slots import validate_delay_slot
+from check_native_general_lean_profile import stage_profile,stage_pins
 
 STAGE, LIMIT = 0x8CE00000, 0x8CFE0000
 
@@ -21,7 +23,7 @@ def require(value, message):
 
 
 class CacheGateway(CPU):
-    def __init__(self, stage, seed, mask, outcomes, blob=None):
+    def __init__(self, stage, seed, mask, outcomes, blob=None, *, fixed_fallback=False):
         symbols = stage[4]
         begin, body, _ = symbol_bytes(stage, "_native_resolution_replay", 2)
         super().__init__(seed, begin, 1)
@@ -32,18 +34,25 @@ class CacheGateway(CPU):
         self.sr = (self.sr & ~0xf0) | mask << 4
         self.pr = begin + len(self.blob) + 0x100
         self.before = self.r.copy(), self.pr, self.sr, self.fpscr, self.fr.copy()
-        require(len(outcomes)==5,"cache wrapper needs all five independently admitted callback results")
-        self.outcomes = dict(zip(("seed", "replay", "allocation", "release", "sdk-slot"), outcomes))
+        self.fixed_fallback=fixed_fallback
+        require(not fixed_fallback or stage_profile(stage),
+                'fixed-plan cache replay requires the exact lean General stage')
+        require(len(outcomes)==(6 if fixed_fallback else 5),
+                "cache wrapper needs every independently admitted callback result")
+        self.outcomes = dict(zip(("seed", "replay", "allocation", "release", "sdk-slot", "fixed-plan"), outcomes))
         self.symbols, self.calls, self.copies = symbols, [], []
         self.seed_address = symbols["__native_resolution_cache_seed_start"][0]
         self.state = symbols["_native_cached_resolution"][0]
         self.mem[symbols["_exec_bytes"][0]] = 0x200000
-        values = random.Random(seed + 903).choices(range(0x100000000), k=171)
+        values = random.Random(seed + 903).choices(range(0x100000000), k=172)
         values[544 // 4 + 6] = 0x8c013000
         values[544 // 4 + 10] = 0x8c0131b0
         values[616 // 4 + 3] = 0x0c300000
         values[616 // 4 + 4] = 0x00800000
+        if fixed_fallback:
+            values[544//4+7]=values[544//4+8]=0
         self.proof = [int(v) for v in values]
+        self.fixed_writes=[]
         self.targets = {symbols[name][0]: label for name, label in (
             ("_kui_vmu_native_cache_seed_read", "seed"),
             ("_kui_vmu_native_resolution_cache_replay", "replay"),
@@ -51,6 +60,8 @@ class CacheGateway(CPU):
             ("_readonly_release_replay_valid", "release"),
             ("_native_sdk_coherence_cached_admit", "sdk-slot"),
             ("_native_passive_capture_windows", "capture"))}
+        if fixed_fallback:
+            self.targets[symbols['_native_fixed_plan_bind'][0]]='fixed-plan'
 
     def code(self, address, size):
         assert self.base <= address < address + size <= self.base + len(self.blob)
@@ -109,7 +120,7 @@ class CacheGateway(CPU):
                 result = 1
         elif name == "memcpy":
             copies = (("_native_driver", 0, 104), ("_passive_layout", 104, 440),
-                      ("_native_heap", 544, 72), ("_native_call", 616, 20), ("_native_exits", 636, 48))
+                      ("_native_heap", 544, 72), ("_native_call", 616, 20), ("_native_exits", 636, 52))
             assert self.outcomes["seed"] and self.outcomes["replay"] and len(self.copies) < len(copies), \
                 "metadata published before exact-image replay succeeded"
             symbol, offset, count = copies[len(self.copies)]
@@ -124,7 +135,21 @@ class CacheGateway(CPU):
             result = int(self.outcomes[name])
         elif name == "release":
             assert len(self.copies) == 5
+            assert not self.fixed_fallback or self.outcomes['fixed-plan'] and self.calls[-2]=='fixed-plan'
             result = int(self.outcomes[name])
+        elif name == 'fixed-plan':
+            assert self.fixed_fallback and self.calls==['seed','replay']+['memcpy']*5+['fixed-plan']
+            assert len(self.copies)==5 and self.r[4]==1
+            heap=self.symbols['_native_heap'][0]
+            assert self.read(heap+28)==self.read(heap+32)==0
+            if self.outcomes[name]:
+                # The separately proved fixed-plan API admits exactly the
+                # replayed call/arena. Its successful initializer metadata
+                # is private stage state; the wrapper must still perform
+                # its release, allocation and SDK-slot admissions afterward.
+                self.fixed_writes=[(heap+28,0x8c014000),(heap+32,self.read(heap+24))]
+                self.mem.update(self.fixed_writes)
+                result=1
         elif name == "sdk-slot":
             assert len(self.copies)==5 and all(self.outcomes[name] for name in ("seed","replay","release","allocation"))
             assert self.calls[-3:]==["release","allocation","sdk-slot"]
@@ -185,19 +210,36 @@ class CacheGateway(CPU):
         if self.outcomes["seed"]:
             calls.append("replay")
             if self.outcomes["replay"]:
-                calls += ["memcpy"]*5+["release"]
-                if self.outcomes["release"]:
+                calls += ["memcpy"]*5
+                if self.fixed_fallback:calls.append('fixed-plan')
+                if not self.fixed_fallback or self.outcomes['fixed-plan']:
+                    calls.append('release')
+                if 'release' in calls and self.outcomes["release"]:
                     calls.append("allocation")
                     if self.outcomes["allocation"]:
                         calls.append("sdk-slot")
                         if self.outcomes["sdk-slot"]:calls.append("capture")
         assert self.calls==calls,"cache wrapper bypassed/reordered a live metadata/ownership/SDK-slot admission"
         if self.outcomes["seed"] and self.outcomes["replay"]:
-            assert len(self.copies) == 5 and "release" in self.calls
-            if self.outcomes["release"]:
+            assert len(self.copies) == 5
+            assert ('release' in self.calls)==(not self.fixed_fallback or bool(self.outcomes['fixed-plan']))
+            if 'release' in self.calls and self.outcomes["release"]:
                 assert "allocation" in self.calls
         else:
             assert not self.copies and "allocation" not in self.calls and "release" not in self.calls
+        if self.fixed_fallback:
+            heap=self.symbols['_native_heap'][0]
+            expected_fixed=[(heap+28,0x8c014000),(heap+32,self.proof[544//4+6])]
+            assert self.fixed_writes==(expected_fixed if 'fixed-plan' in self.calls and self.outcomes['fixed-plan'] else [])
+        # Check every copied word, including the two documented fixed-plan
+        # output fields. Failure never permits an extra metadata publication.
+        copies=(("_native_driver",0,104),("_passive_layout",104,440),
+                ("_native_heap",544,72),("_native_call",616,20),("_native_exits",636,52))
+        for name,offset,count in copies[:len(self.copies)]:
+            for i in range(0,count,4):
+                address=self.symbols[name][0]+i
+                expected=dict(self.fixed_writes).get(address,self.proof[(offset+i)//4])
+                assert self.read(address)==expected
 
 
 class CacheRoute(CacheGateway):
@@ -445,20 +487,35 @@ def check_extent_scope(stage,self_test=False):
 
 def check(stage, *, self_test=False):
     symbols, sections = stage[4], stage[3]
+    lean_stage=stage_profile(stage)
     address, size, kind, owner = symbols["_native_cached_resolution"]
-    require(kind == 1 and size == 684 and owner < len(sections), "cache metadata must be one typed684B stage object")
+    require(kind == 1 and size == 688 and owner < len(sections), "cache metadata must be one typed688B stage object")
     section = sections[owner]
     require(section[1] == 8 and section[2] & 7 == 3 and
             STAGE <= address < address + size <= LIMIT and
             section[3] <= address < address + size <= section[3] + section[5],
             "temporary cache metadata must remain in high-stage BSS")
     begin, body, _ = symbol_bytes(stage, "_native_resolution_replay", 2)
+    def pinned_replay(image):
+        _,actual,section=symbol_bytes(image,'_native_resolution_replay',2)
+        pins=stage_pins(image,'cache_gateway',{})
+        require(set(pins)=={'_native_resolution_replay'} and section[2]&7==6 and
+                (len(actual),hashlib.sha256(actual).hexdigest())==pins['_native_resolution_replay'],
+                'Lean General complete cache replay instructions/targets changed')
+    if lean_stage:pinned_replay(stage)
     cases = 0
     for seed in range(24):
         for mask in range(16):
             for flags in range(32):
                 outcomes = [(flags >> i) & 1 for i in range(5)]
                 CacheGateway(stage, seed, mask, outcomes).run().check(); cases += 1
+    fixed_cases=0
+    if lean_stage:
+        for seed in range(24):
+            for mask in range(16):
+                for flags in range(64):
+                    CacheGateway(stage,seed,mask,[(flags>>i)&1 for i in range(6)],
+                                 fixed_fallback=True).run().check();fixed_cases+=1
     routes = 0
     background='_native_background_boot_region' in symbols
     modes = ((0,2,4,5,6) if background else (0,1,2,3,4,5,6)) if "_native_runtime_mode" in symbols else (0,)
@@ -478,6 +535,7 @@ def check(stage, *, self_test=False):
             "_kui_vmu_native_resolution_cache_replay", "_allocation_safe", "_readonly_release_replay_valid",
             "_native_sdk_coherence_cached_admit",
             "_native_passive_capture_windows")]
+        if lean_stage:targets.append(symbols['_native_fixed_plan_bind'][0])
         changed_bodies = []
         for target in targets:
             at = body.find(struct.pack("<I", target))
@@ -489,26 +547,52 @@ def check(stage, *, self_test=False):
         changed = bytearray(body); struct.pack_into("<H", changed, at, 0xe664)
         changed_bodies.append(bytes(changed))
         for changed in changed_bodies:
-            try:
-                CacheGateway(stage, 7, 15, [1, 1, 1, 1, 1], changed).run().check()
-            except (AssertionError, struct.error, KeyError):
-                mutations += 1
+            rejected=False
+            for fixed in ((False,True) if lean_stage else (False,)):
+                try:CacheGateway(stage,7,15,[1]*(6 if fixed else 5),changed,
+                                 fixed_fallback=fixed).run().check()
+                except (AssertionError,struct.error,KeyError):rejected=True;break
+            if rejected:mutations+=1
             else:
                 raise ValueError("cache wrapper accepted a callback/copy mutation")
         words = struct.unpack("<" + "H" * (len(body) // 2), body)
         gates = [i + 1 for i in range(len(words) - 1) if words[i] == 0x2008 and
                  words[i + 1] >> 8 in (0x89, 0x8b, 0x8d, 0x8f)]
-        require(len(gates) == 5, "cache wrapper must branch on all five callback results")
+        if lean_stage:
+            require(tuple(2*i for i in gates)==(0x1a,0x46,0x90,0x9e,0xa8,0xbe),
+                    'Lean General must retain all six exact callback result gates')
+        else:
+            require(len(gates) == 5, "cache wrapper must branch on all five callback results")
         for gate in gates:
             changed = bytearray(body); struct.pack_into("<H", changed, gate * 2, 9)
-            for flags in range(32):
-                try:
-                    CacheGateway(stage, 7, 15, [(flags >> i) & 1 for i in range(5)], bytes(changed)).run().check()
-                except (AssertionError, struct.error, KeyError):
-                    mutations += 1
-                    break
+            rejected=False
+            for fixed in ((False,True) if lean_stage else (False,)):
+                bits=6 if fixed else 5
+                for flags in range(1<<bits):
+                    try:CacheGateway(stage,7,15,[(flags>>i)&1 for i in range(bits)],bytes(changed),
+                                     fixed_fallback=fixed).run().check()
+                    except (AssertionError,struct.error,KeyError):rejected=True;break
+                if rejected:break
+            if rejected:mutations+=1
             else:
                 raise ValueError("cache wrapper accepted a missing result guard")
+        if lean_stage:
+            require(words[0x76//2:0x7c//2]==(0x5197,0x2118,0x891c) and
+                    words[0xb6//2:0xc6//2]==(0xd018,0x400b,0xe401,0x2008,0x8fdd,0xe800,0xafae,0x6083),
+                    'Lean General fixed-plan selection/callback/refusal block changed')
+            changed=bytearray(body);struct.pack_into('<H',changed,0x7a,9)
+            try:CacheGateway(stage,7,15,[1]*6,bytes(changed),fixed_fallback=True).run().check()
+            except (AssertionError,struct.error,KeyError):mutations+=1
+            else:raise ValueError('cache wrapper bypassed its required fixed-plan fallback')
+    pin_mutations=0
+    if self_test and lean_stage:
+        _,_,section=symbol_bytes(stage,'_native_resolution_replay',2)
+        offset=section[4]+begin-section[3]
+        for index in range(len(body)):
+            changed=bytearray(stage[0]);changed[offset+index]^=1
+            try:pinned_replay((bytes(changed),*stage[1:]))
+            except ValueError:pin_mutations+=1
+            else:raise ValueError('Lean cache replay pin accepted changed instructions or targets')
     extent_scope=check_extent_scope(stage,self_test)
     return {"enabled": True, "temporary_resolution_address": hex(address), "temporary_resolution_bytes": size,
             "temporary_high_bss_only": True, "wrapper_entry": hex(begin), "wrapper_bytes": len(body),
@@ -521,4 +605,12 @@ def check(stage, *, self_test=False):
             "extent_failure_keeps_source_length_and_refuses":True,"pure_extent_cache_scope":extent_scope,
             "no_metadata_before_exact_image_replay": True, "fresh_allocation_and_release_guards": True,
             "fresh_sdk_initializer_slot_admission":True,"sdk_slot_admission_is_independent_image_predicate":True,
-            "capture_only_after_all_guards": True}
+            "capture_only_after_all_guards": True,
+            "fixed_plan_fallback":dict(enabled=lean_stage,actual_wrapper_instruction_cases=fixed_cases,
+                callback_result_combinations=64 if lean_stage else 0,
+                initializer_slot_offset=544+28,initializer_target_offset=544+32,
+                fixed_callback_argument_one=True if lean_stage else None,
+                exact_six_result_gate_offsets=[0x1a,0x46,0x90,0x9e,0xa8,0xbe] if lean_stage else [],
+                capture_requires_fixed_release_allocation_sdk_admissions=lean_stage,
+                complete_wrapper_byte_mutation_rejections=pin_mutations,
+                model_scope='Actual wrapper instructions; fixed-plan is a typed success/failure API boundary, with its two consumed private heap-output fields modeled; fixed-plan decoder itself is separately proved')}

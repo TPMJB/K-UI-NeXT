@@ -560,9 +560,9 @@
       "heap_bytes": "0xc34280",
       "exit_family": 4,
       "layout_version": 2,
-      "now": "VMU + New (structural; console test next)",
+      "now": "VMU + New",
       "verdict": "vmu_and_new",
-      "console": null
+      "console": "saves, power-cycle reload and Disc 2 work (2322fda6f92e candidate; owner report)"
     },
     {
       "title": "SKIES OF ARCADIA DISC 1",

@@ -1,105 +1,159 @@
-# Repair copies and saved-sector reread evidence
+# Saved-dump repair, continuation and reread evidence
 
-These are separate, explicit workflows. Advanced CRC remains read-only and
-ordinary Resume does not repair saved tracks. No DreamShell implementation
-code is used.
+Repair is explicit. Advanced CRC remains a read-only diagnosis. Ordinary
+Capture Resume never silently changes suspect saved bytes.
 
-## Repair to a new copy
+## Repair modes
 
-The worker accepts a completed normal K-UI raw-track job or an imported raw
-2352-byte GDI folder. Imported filenames must be safe single components, file
-offsets must be zero, and the track file lengths must match the inserted disc's
-prepared capture ranges exactly. Ambiguous folders, traversal, truncated files,
-overlaps and incompatible layouts fail before a repair folder is created.
+**Repair / resume a separate copy** admits completed raw K-UI jobs, matching
+checkpointed partial captures, raw2352 GDI folders and the supported separate-file
+raw CD CUE subset. It also imports the supported raw legacy DS jobs through the
+strict read-only legacy importer. Original files remain read-only; output and
+original/candidate evidence live in `/KUI/repair/job-NNNN`. Selecting the same
+source resumes the matching checked copy.
 
-Normal completed jobs require the same optical content identity stored by
-capture: the complete track layout and the start/middle/end raw samples of
-every track. Imported jobs have no stored optical identity. They require two
-distinct healthy high-density data anchors, chosen with bounded alternatives
-near the ends of game data. Both must match the inserted disc byte for byte.
-The shared low-density warning/data tracks are never used as imported identity
-anchors. Identity checks are not a catalogue match.
+**Repair / resume in place** is a separate confirmed action. It supports normal
+completed raw K-UI jobs, normal checkpointed partial captures and complete raw
+GDI/CUE imports. It avoids another complete track copy: existing good bytes stay
+in their files, accepted replacements are applied to targets, and missing tails
+of normal partial captures are appended. Legacy partial jobs first use separate
+copy import. Derived CHD/CSO/ZSO/cooked jobs cannot be edited in place because the
+raw edits would invalidate their separate exported files.
 
-Every original file is opened read-only. Output goes into a newly and
-exclusively created `/KUI/repair/job-NNNN`. Each supported Mode 1 suspect sector
-gets two independent saved-file open/seek/read/close passes. A difference from
-the initial sample blocks optical repair and preserves the evidence.
+In-place repair checks saved prefixes and exact disc identity before writing.
+Every replacement first publishes original bytes and two agreed candidate reads
+in durable evidence, then publishes a checked replayable pending patch. A
+checkpoint follows saved-target sync and exact readback. A restart verifies the
+committed prefix and reconciles an interrupted patch before new recovery.
 
-A replacement requires two byte-identical optical reads, each passing sync,
-expected FAD, Mode 1 EDC, reserved-byte and P/Q checks. Fatal/reset-required
-results stop immediately. The selected 1/5/10/20/50 attempt limit counts
-candidate pairs per sector; it does not change normal acquisition retries.
-Original and candidate bytes are written, synced and read back in the binary
-evidence file before candidate bytes reach the copy. Up to 8192 suspects can be
-handled in one copy operation.
+The source `.kui-inplace-active` guard blocks ordinary Capture Resume/Verify
+until finalization. Its partial-source flag makes a restart use original
+checkpoint/manifest backups while replacement metadata is being published.
+On completion the worker reads back all track bytes, updates raw manifests and
+checkpoints, retains original metadata backups, and publishes a checked
+`.kui-inplace-complete` receipt binding the exact manifest, checkpoint, source
+path and GDI/CUE descriptor bytes. The active guard is retired last. Ordinary
+Capture checks this receipt and every saved hash rather than pretending the
+repair manifest is byte-identical to the earlier capture's presentation.
 
-All tracks, including unchanged audio, are copied and hashed with CRC32 and
-SHA-256. Every saved copy byte is then reread and compared with both digests.
-When a source manifest provides expected track hashes, those must also match
-the final tracks. A whole-track hash cannot identify an individual corrupt
-audio sector or a structurally valid but incorrect data sector. Those
-mismatches remain unresolved. Mode 2 is unsupported for optical repair.
+## Identity and formats
 
-The final GDI is published only after all tracks pass their complete readback,
-all available source hashes match, and evidence files close successfully. The
-folder also contains `copy.txt` with track sizes and final CRC32/SHA-256 values,
-`samples.bin` and `evidence.txt`. An imported copy can have unverified audio;
-that qualification is recorded and displayed. Completion is not independent
-archival verification or a Redump/TOSEC match.
+Completed normal jobs require the original profile/layout and original fixed
+start/middle/end content identity. Checkpointed normal partial jobs retain that
+same identity. Bounded retries help temporarily unreadable fixed samples. Separate-copy repair
+also offers an explicit saved-anchor fallback: it first verifies every admitted
+saved prefix against the original recorded CRC/SHA, rejects any readable original
+identity sample that disagrees, then creates a distinct recovery binding from
+two healthy matching saved/optical anchors. Its immutable receipt is published
+before copying/repair and the same exact anchors are rechecked on Resume/reset.
+The report distinguishes this new binding from the unreadable original capture
+digest. In-place repair retains the original exact identity requirement; use a
+separate copy for saved-anchor admission. Ordinary Capture never uses fallback.
 
-Stopped, failed or unresolved operations retain a partial copy and
-`evidence.part`, without a published GDI. A subsequent attempt creates another
-unique folder; partial repairs are not silently resumed or overwritten. An
-error during the final descriptor publication can leave completed data and
-evidence beside `disc.part`. Original files remain unchanged in every case.
-FatFs sync/close cannot guarantee physical power-loss atomicity inside a card.
+Imports discover two distinct healthy matching saved/optical anchors with up to
+128 deterministic endpoint/interior/scattered candidates per eligible track.
+GD imports exclude shared low-density tracks. CD imports use their actual
+single-session layout; audio-only imports require paired equal optical reads,
+but do not acquire sector parity or offset correction by doing so. Constant PCM
+and repeated identical audio blocks are not independent identity anchors. Raw GDI/CUE
+paths are bounded, safe and have zero file offsets. Filesystem object aliases
+between track names are rejected before any in-place mutation.
 
-## Saved-sector rereads
+Mode1 and CD Mode2 Form1 candidates pass sync, expected address, EDC and P/Q
+checks. Two byte-identical validated optical reads precede replacement. Audio
+requires two equal optical reads. Mode2 Form2 and mixed data modes within one
+CUE track are refused. Whole-track audio/hash differences cannot automatically
+identify individual bad sectors; they remain unresolved unless explicit legacy
+bad-sector targets identify them. No generic ECC reconstruction, subchannels,
+INDEX00 measurement or audio offset correction is added.
 
-This storage-only diagnostic needs no inserted disc. It scans the saved raw
-data tracks for structural Mode 1 issues. At most 64 suspect sectors receive
-two independent reopen/read/close passes in addition to the initial sample.
-The full scan still counts later suspects and records when the sample limit
-was reached. Audio and whole-track hash mismatches cannot be localized by
-this workflow; use Advanced CRC for saved hashes and catalogue comparison.
+Normal CD captures use their raw internal GDI and BIN/CUE metadata. Successful
+CD repair copies publish a CUE as well as raw tracks and the internal geometry.
+Single-session CD support remains explicit; no multisession layout is guessed.
 
-Each run creates a separate `/KUI/recovery/readback-NNNN` containing
-`samples.bin` and a completed `evidence.txt`, or incomplete `evidence.part`.
-The log records byte difference counts, first differing offsets and CRC32 for
-each pass. All three raw samples are retained, including disagreements.
-Agreement means the sampled reads were stable, not that the original defects
-are repaired or that the storage device is fully verified.
+## Collection and target recovery
 
-## Binary evidence v1
+With continuous recovery enabled, a missing source sector that remains
+unreadable receives a journaled zero placeholder and collection continues.
+`KUIHOL1` declarations live in the existing checksummed `samples.bin` evidence
+stream and are committed by the containing copied-chunk checkpoint. An
+uncommitted declaration cannot create a completed target.
 
-All integers are little-endian. A record has a 64-byte header followed by
-exactly three raw 2352-byte samples. Records append sequentially. Header and
-payload CRCs detect torn/truncated or changed records; a partial tail is never
-evidence of a completed operation.
+Structural/legacy target declarations and accepted replacement records rebuild
+a compact derived bitmap. Subsequent passes visit only unresolved targets,
+alternating directions. The worker does not reread healthy track bytes on every
+pass. In-place repair combines baseline hashing and structural discovery in one
+saved-file pass; Resume combines committed-prefix verification and discovery in
+that pass instead. A bounded derived bitmap narrows later storage reads to
+suspects, while durable checkpoints and original/candidate evidence remain the
+repair authority. Final verification reads saved bytes once and calculates both
+whole-track and original-prefix hashes together. Healthy bytes therefore receive
+two engine reads in the tested fresh/resumed cases, plus targeted patch checks;
+this is a host filesystem read count, not a console throughput measurement.
 
-| Header offset | Meaning |
-| --- | --- |
-| 0 | Eight bytes `KUIRDB1` plus NUL for saved rereads, or `KUIRPT1` plus NUL for an optical candidate |
-| 8 | Version, 1 |
-| 12 | Record sequence, starting at 1 |
-| 16 | One-based track number |
-| 20 | FAD |
-| 24 | Zero-based raw sector within the saved track |
-| 28 | Structural flags for a reread; zero for an accepted optical candidate |
-| 32 | Sample count, 3 |
-| 36, 40, 44 | CRC32 of each sample |
-| 48 | CRC32 of all three concatenated samples |
-| 52–59 | Reserved zero |
-| 60 | CRC32 of the preceding 60 header bytes |
+A patch inside a partial prefix invalidates SHA's running state. Its append
+checkpoints retain the checked CRC with an explicit invalid-SHA flag until the
+mandatory final read computes SHA-256. No completion metadata is published from
+that intermediate state. Zero pass limit means **Until stopped**; finite pass limits retain
+unresolved work. B stops with progress retained. Saved target reads must agree
+before optical replacement; disagreement retains samples and blocks recovery.
 
-Reread records contain initial saved bytes and the two reopened reads.
-Candidate records contain the original saved bytes and both identical,
-validated optical reads. Appending and syncing a candidate record is followed
-by exact saved-byte readback before any candidate is used in the new track.
+Drive recovery is optional through the native ownership-safe callback between
+passes. A successful reset is followed by content-identity revalidation before
+writes. A fatal/poisoned command stops immediately; it is never a zero hole or
+permission to reinitialize a still-owned drive.
 
-Host validation: `make test-repair-copy` runs the real FatFs implementation
-against FAT32 and exFAT images with synthetic sectors and ASan/UBSan. It checks
-unchanged originals, valid and wrong-disc identities, optical disagreement,
-unlocalizable hashes, bounded forensic sampling, cancellation, write/sync/
-readback/close failures and final publication failures. Console acceptance is
-still required.
+All accepted replacements update track CRCs from their old/new sector CRCs.
+One complete saved-byte read establishes final CRC32/SHA-256 and validates
+required source-prefix hashes. The previous 8192-target limit is removed, but
+free space and filesystem file-size limits remain: repair's three-sample
+7120-byte evidence records are larger than salvage's packed candidate format.
+Extremely damaged full-disc FAT32 work should use Salvage rather than assume
+unbounded repair evidence capacity.
+
+After successful repair, Redump/TOSEC comparison runs automatically and records
+its separate grade. Full saved-byte readback, a completed repair and a full
+independent catalogue match are different results. No database, partial matches
+and mismatches do not become full-match badges.
+
+## Retained state and repeated operations
+
+Repair copies and in-place transactions bind source identity and checked
+committed bytes. Changed source data or damaged authoritative state is refused.
+Old independent v1 repair copies have no automatic migration to v2 resume.
+An interrupted in-place action resumes its existing transaction. After verified
+completion, a new action may diagnose later corruption in a fresh transaction,
+retaining the earlier job and all of its original metadata/evidence. The prior
+completion receipt, state, descriptors and finalized evidence must agree before
+a fresh transaction begins.
+
+Each in-place transaction retains original metadata in its own job folder.
+A checked original-metadata receipt binds every backup and its absence/presence.
+Older fixed `.kui-repair-original` backups remain untouched. Do not remove active guards or edit transaction evidence to bypass a
+refusal. FatFs sync/close cannot guarantee physical power-loss atomicity inside
+a storage device.
+
+## Storage-only reread evidence
+
+The separate suspect-sector diagnostic requires no inserted disc. It scans raw
+saved data, samples at most 64 structural suspects through two independent
+reopens, and retains the initial and two repeat samples plus differences under
+`/KUI/recovery/readback-NNNN`. It continues counting further suspects beyond the
+sample cap. Stable samples do not establish correct disc data.
+
+Advanced CRC independently repeats every saved chunk, stores suspect evidence,
+and persists storage-instability quarantine across operations. A complete
+consistent scan may clear that quarantine; cancelled/incomplete scans cannot.
+
+The fixed evidence record is a 64-byte little-endian header plus three raw2352
+samples. Magic is `KUIRDB1` (saved repeats), `KUIRPT1` (accepted optical pair),
+or `KUIHOL1` (missing-source declaration). Header fields retain version1,
+sequence, track, FAD, sector, flags, three sample CRCs, aggregate sample CRC and
+header CRC. Checkpointed evidence fences distinguish durable records from
+uncommitted tails. Pending chunk/patch publication is replayed before the fence
+advances.
+
+Host tests run real FatFs against FAT32/exFAT images with ASan/UBSan, including
+partial in-place continuation, torn writes, interrupted metadata, CD Mode1/
+Mode2 Form1, audio holes, CUE imports, stable-source guards and all existing
+copy faults. Console damaged-disc acceptance remains required.

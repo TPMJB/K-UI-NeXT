@@ -36,7 +36,7 @@ static inline bool kui_vmu_native_terminal_dispatch_span(
 }
 static inline bool kui_vmu_native_terminal_dispatch_tagged(const struct kui_vmu_native_exit *e) {
     return e && e->version==KUI_VMU_NATIVE_EXIT_VERSION && e->bytes==sizeof(*e) &&
-        e->family==KUI_VMU_NATIVE_EXIT_TERMINAL_DISPATCH && e->count==3u &&
+        e->family==KUI_VMU_NATIVE_EXIT_TERMINAL_DISPATCH && kui_vmu_native_exit_shape_valid(e) &&
         !(e->load&3u) && !(e->terminal_dispatch.table&3u) &&
         (e->entries[2]&3u)==2u &&
         kui_vmu_native_terminal_dispatch_span(e,e->terminal_dispatch.table,16u) &&

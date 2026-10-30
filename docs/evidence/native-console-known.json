@@ -3,6 +3,14 @@
   "note": "Owner console outcomes with New and the virtual A2 card, keyed by the boot file's SHA-256. Hashes and evidence names only; no game bytes. tools/native_library_sweep.py marks matching rows.",
   "games": [
     {
+      "title": "Resident Evil Code: Veronica",
+      "release": "US T1204N V1.000",
+      "source_bytes": 3915142,
+      "source_sha256": "199b72af9bcd7fb80d401d4645c731e595970a0dcbcfd98e1bec187f4382fbbb",
+      "console": "saves, power-cycle reload and Disc 2 verified on 2322fda6f92e; working again on c2e6f07cb52e (owner report)",
+      "evidence": "docs/evidence/native-pso-spawn-console-c2e6f07-2026-10-28.json"
+    },
+    {
       "title": "Crazy Taxi 2",
       "release": "US MK-51136 V1.004",
       "source_bytes": 1452148,
@@ -17,6 +25,14 @@
       "source_sha256": "8b294765225fc32020dd59010464a730b710d0bd79f69c79f16218cc4feac6a6",
       "console": "virtual A2 works (e4cc4914bc6a)",
       "evidence": "docs/evidence/native-ct2-ram-map-jgr-console-2026-10-28.json"
+    },
+    {
+      "title": "Phantasy Star Online",
+      "release": "US MK-51100",
+      "source_bytes": 3783264,
+      "source_sha256": "11dc59ee0278675decf5e0bf1fa30646f889a0e5a7f10251f3c3a697e42a28e5",
+      "console": "works on c2e6f07cb52e; intro video slow (owner report; persistence details not separately specified)",
+      "evidence": "docs/evidence/native-pso-spawn-console-c2e6f07-2026-10-28.json"
     }
   ]
 }

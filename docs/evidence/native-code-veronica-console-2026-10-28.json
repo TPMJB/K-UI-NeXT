@@ -1,0 +1,28 @@
+{
+  "schema": "kui.native.owner-console-result.v1",
+  "date": "2026-10-28",
+  "title": "Resident Evil Code: Veronica",
+  "release": "US T1204N V1.000",
+  "candidate_build": "2322fda6f92e",
+  "build_identification": "The Code Veronica candidate discussed with the owner; no additional build-ID photograph was supplied with this confirmation.",
+  "boot_sha256": "199b72af9bcd7fb80d401d4645c731e595970a0dcbcfd98e1bec187f4382fbbb",
+  "source_bytes": 3915142,
+  "result": "PASS",
+  "owner_observations": [
+    "Resident Evil Code Veronica - works flawlessly.",
+    "Yes Code Veronica included a power cycle, saving, and reloading. Disc 2 works as well."
+  ],
+  "reported_checks": {
+    "play": "PASS",
+    "saving": "PASS",
+    "full_power_cycle": "PASS",
+    "reloading_saved_progress": "PASS",
+    "disc_2": "PASS"
+  },
+  "startup_identity": "The supplied library lists the same full boot SHA-256 and product number for discs 1 and 2; disc 2 was deduplicated by the collector.",
+  "not_separately_reported": [
+    "An in-session disc-change operation",
+    "A complete playthrough or measured session duration"
+  ],
+  "supersedes": "The pre-console-test boundary in native-code-veronica-build-2322fd-2026-10-28.json; its original build audit remains a historical record."
+}

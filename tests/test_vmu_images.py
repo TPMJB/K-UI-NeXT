@@ -86,6 +86,10 @@ COLLECTION_READ_ONLY = tuple(case for case in COLLECTION[3:19] if case!="collect
 DESCRIPTIONS = ("description-physical", "description-fragmented", "description-malformed",
                 "description-read-fail", "description-image", "description-image-fragmented")
 DESCRIPTION_READ_ONLY = DESCRIPTIONS[:3]
+CAPTURE = ("capture-ok", "capture-opaque", "capture-empty", "capture-orphan",
+           "capture-duplicate", "capture-dirty", "capture-missing", "capture-short",
+           "capture-oversize", "capture-read-fail", "capture-device-change",
+           "capture-metadata-change", "capture-payload-change", "capture-cancel", "capture-invalid-slot")
 
 
 def digest(path):
@@ -104,11 +108,11 @@ def main():
             run(BINARY, str(seed), "seed")
             original = digest(seed)
             checker = "fsck.fat" if kind == "fat32" else "fsck.exfat"
-            for case in READ_ONLY + BACKUPS + RESTORES + MANAGED + IMAGES + BULK + PUBLISH + COLLECTION + DESCRIPTIONS:
+            for case in READ_ONLY + BACKUPS + RESTORES + MANAGED + IMAGES + BULK + PUBLISH + COLLECTION + DESCRIPTIONS + CAPTURE:
                 image = base / f"{kind}-{case}.img"
                 shutil.copyfile(seed, image)
                 assert f"PASS VMU {case}" in run(BINARY, str(image), case)
-                if case in READ_ONLY + BULK_READ_ONLY + PUBLISH_READ_ONLY + COLLECTION_READ_ONLY + DESCRIPTION_READ_ONLY:
+                if case in READ_ONLY + BULK_READ_ONLY + PUBLISH_READ_ONLY + COLLECTION_READ_ONLY + DESCRIPTION_READ_ONLY + CAPTURE:
                     assert digest(image) == original, f"{case} unexpectedly wrote to the SD card"
                 if case not in ("write-fail", "sync-fail", "card-image-write-fail", "card-image-sync-fail", "image-write-fail", "image-sync-fail", "publish-write-fail", "publish-sync-fail", "collection-write-fail", "collection-sync-fail") and not case.endswith(("sd-write-fail", "sd-sync-fail")):
                     run(checker, "-n", str(image))

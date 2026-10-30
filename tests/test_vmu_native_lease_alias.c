@@ -5,6 +5,7 @@
 #ifndef KUI_VMU_NATIVE_TEST_SELF_ADDRESS
 #define KUI_VMU_NATIVE_TEST_SELF_ADDRESS UINT32_C(0xacfd0000)
 #endif
+#include "kui/vmu_native_resolution_cache.h"
 #define main native_persistent_reference_main
 #include "test_vmu_native_persistent.c"
 #undef main
@@ -19,7 +20,8 @@ static uint32_t little32(const uint8_t *bytes) {
 static void load_record(const char *path) {
     uint8_t wire[1024],digest[32];FILE *file=fopen(path,"rb");CHECK(file);
     CHECK(fread(wire,1,sizeof(wire),file)==sizeof(wire));CHECK(fgetc(file)==EOF);CHECK(!fclose(file));
-    CHECK(!memcmp(wire,"KUINVR01",8u) && little32(wire+16u)==2u);
+    CHECK(!memcmp(wire,"KUINVR01",8u) &&
+        little32(wire+16u)==KUI_VMU_NATIVE_RESOLUTION_DETECTOR_EPOCH);
     struct kui_sha256 hash;kui_sha256_init(&hash);kui_sha256_update(&hash,wire,992u);
     kui_sha256_digest(&hash,digest);CHECK(!memcmp(digest,wire+992u,sizeof(digest)));
     uint32_t words[18];_Static_assert(sizeof(words)==sizeof(record_heap),"scalar heap record changed");

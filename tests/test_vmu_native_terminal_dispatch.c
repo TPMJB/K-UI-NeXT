@@ -20,7 +20,7 @@ static void half(uint32_t at,uint16_t value) {
 }
 static void terminal_fixture(uint32_t alias) {
     fixture(alias);
-    terminal_exit=(struct kui_vmu_native_exit){.version=1u,.bytes=sizeof(terminal_exit),
+    terminal_exit=(struct kui_vmu_native_exit){.version=KUI_VMU_NATIVE_EXIT_VERSION,.bytes=sizeof(terminal_exit),
         .family=KUI_VMU_NATIVE_EXIT_TERMINAL_DISPATCH,.load=UINT32_C(0x8c010000),
         .image_bytes=UINT32_C(0x200000),.count=3u,
         .entries={UINT32_C(0x8c012400),UINT32_C(0x8c012430),UINT32_C(0x8c0206e6)},
@@ -38,7 +38,7 @@ static bool live(void) {
     return kui_vmu_native_terminal_dispatch_live(&terminal_exit,read_word,NULL,terminal_target);
 }
 static void synthetic(uint32_t alias) {
-    terminal_fixture(alias);CHECK(sizeof(terminal_exit)==48u);CHECK(live());
+    terminal_fixture(alias);CHECK(sizeof(terminal_exit)==52u);CHECK(live());
     struct kui_vmu_native_lifetime_plan plan;
     CHECK(kui_vmu_native_lifetime_prepare(&plan,&lease,read_word,NULL,1u,NULL,0u));
     reads=0u;CHECK(kui_vmu_native_lifetime_identity_prepared_inline(&plan,read_word,NULL,1u));unsigned plain=reads;

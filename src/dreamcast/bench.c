@@ -69,7 +69,7 @@ enum kui_capture_result kui_capture_bench_run(uint32_t fad,unsigned sectors,bool
      * the job, and the console closes it when the bench ends. Opening and closing it here left
      * it closed for both of those. */
     struct kui_capture_ops ops={NULL,kui_disc_read_raw,cancelled,now,NULL,bench_log,"000000000000",now_us,
-        kui_disc_timing_phase,read_begin,read_end,options,stats};
+        kui_disc_timing_phase,read_begin,read_end,options,stats,NULL};
     return kui_capture_bench(&ops,fad,sectors,audio,mode);
 }
 static void set_ui(void *ctx, unsigned hz) { (void)ctx; kui_ui_set_hz(hz); }

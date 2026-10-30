@@ -8,6 +8,7 @@
 #include "kui/vmu_native_resolution_cache.h"
 #include "kui/vmu_native_stage_placement.h"
 #include "kui/hash.h"
+#include "kui/native_readahead_layout.h"
 
 static void digest(const void *p,size_t bytes,char text[65],uint8_t out[32]) {
     static const char hex[]="0123456789abcdef";
@@ -36,7 +37,7 @@ int main(int argc,char **argv) {
     if(length<0x300 || length>0xc00000 || fseek(file,0,SEEK_SET))return 2;
     uint8_t *image=malloc((size_t)length);if(!image)return 2;
     if(fread(image,1,(size_t)length,file)!=(size_t)length || fclose(file))return 2;
-    const uint32_t load=UINT32_C(0x8c010000),lease_bytes=UINT32_C(0x60000);
+    const uint32_t load=UINT32_C(0x8c010000),lease_bytes=KUI_NATIVE_RA_LEASE_BYTES;
     size_t bytes=(size_t)length,selected=0u;
     bool extent=kui_vmu_native_program_extent(image,bytes,load,&selected);
     size_t n=extent?selected:bytes;
@@ -69,14 +70,14 @@ int main(int argc,char **argv) {
         "\"image_sha256\":\"%s\",\"discarded_suffix_bytes\":%zu,\"driver\":%d,\"layout\":%s,"
         "\"heap\":%d,\"initializer_slot\":%s,\"initializer_call\":%s,\"fixed_arena\":%s,\"aligned_hook_entries\":%s,"
         "\"release_hook_shape\":%s,\"exits\":%s,\"guarded_exits\":%s,\"combined_resolution\":%s,"
-        "\"placement_384k\":%s,\"lease_payload\":%u,\"driver_submit\":%u,\"driver_initializer\":%u,"
+        "\"placement_384k\":%s,\"lease_bytes\":%u,\"lease_payload\":%u,\"driver_submit\":%u,\"driver_initializer\":%u,"
         "\"completion_call\":%u,\"layout_initializer\":%u,\"layout_wrapper\":%u,\"layout_call\":%u,"
         "\"rx_layout\":%u,\"layout_version\":%u,\"heap_initializer\":%u,\"heap_allocate\":%u,"
         "\"heap_release\":%u,\"heap_slot\":%u,\"heap_begin\":%u,\"heap_bytes\":%u,\"exit_family\":%u",
         KUI_VMU_NATIVE_RESOLUTION_DETECTOR_EPOCH,bytes,source_hash,extent?"true":"false",n,image_hash,extent?bytes-n:0u,driver_result,found_layout?"true":"false",
         heap_result,heap.initializer_slot?"true":"false",found_call?"true":"false",fixed?"true":"false",aligned?"true":"false",
         release?"true":"false",found_exits?"true":"false",found_guarded?"true":"false",complete?"true":"false",
-        placement?"true":"false",payload,driver.submit,driver.initializer,driver.completion_call,layout.initializer,
+        placement?"true":"false",lease_bytes,payload,driver.submit,driver.initializer,driver.completion_call,layout.initializer,
         layout.initializer_wrapper,layout.initializer_call,layout.rx_layout,layout.version,heap.initializer,
         heap.allocate,heap.release,heap.initializer_slot,call.entry_begin,call.entry_bytes,exits.family);
     if(complete) {

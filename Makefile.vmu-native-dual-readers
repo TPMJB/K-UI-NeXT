@@ -10,6 +10,7 @@ NATIVE_FLAGS += -DKUI_NATIVE_DUAL_READERS=1 -DKUI_RETAIL_NATIVE_HYBRID=1
 # Do not inherit a new-engine scheduling/SDK/auxiliary flag into Y. The
 # ordinary shared disc/drive/resume repairs and VMU storage loan remain.
 LEGACY_FLAGS = $(filter-out -DKUI_NATIVE_% -DKUI_RETAIL_NATIVE_HYBRID=%,$(RESIDENT_FLAGS)) \
+ $(filter -DKUI_NATIVE_GENERAL_LEAN_LAYOUT=%,$(RESIDENT_FLAGS)) \
  -DKUI_NATIVE_DUAL_READERS=1 -DKUI_RETAIL_NATIVE_HYBRID=0
 LEGACY_OBJ = $(patsubst %.c,$(BUILD)/legacy/%.o,$(RESIDENT_SRC)) \
  $(BUILD)/legacy/resident_asm.o $(BUILD)/legacy/observe_boot_asm.o

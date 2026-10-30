@@ -1,0 +1,45 @@
+{
+  "console_build": "fd08443a5b8d",
+  "source_report_sha256": "28c02541b4bb5a89ca0432f6396231d3c24a3d160322a3dd72e8fc22012ae008",
+  "report_truncated": false,
+  "job": "/KUI/salvage/job-0003",
+  "candidate_records": 6190,
+  "complete_profiles": [
+    {"id": 2, "label": "Bulk unaligned", "records": 6190, "read_ms": 43873, "DMA_rx_blocks": 0, "PIO_block_attempts": 61924, "bus_failures": 0},
+    {"id": 3, "label": "512-byte unaligned", "records": 6190, "read_ms": 84216, "DMA_rx_blocks": 0, "PIO_block_attempts": 61924, "bus_failures": 0},
+    {"id": 0, "label": "Bulk aligned", "records": 6190, "read_ms": 31842, "DMA_rx_blocks": 61900, "PIO_block_attempts": 24, "bus_failures": 0}
+  ],
+  "all_complete_profile_sha256": "d6dd83fde8028ac48fde5b2ed14c8a848fabcb83accb78ad8231020a969801fe",
+  "matches_previous_complete_bulk_pass": true,
+  "failed_profile": {
+    "id": 1,
+    "label": "512-byte aligned",
+    "slot_zero_based": 3685,
+    "file_offset": 18870272,
+    "offset_within_record": 3072,
+    "request_bytes": 512,
+    "returned_bytes": 0,
+    "fatfs_result": 1,
+    "protocol_result": "card timeout",
+    "lba": 170468856,
+    "blocks": 1,
+    "last_command": 18,
+    "last_response_hex": "00",
+    "ready": true,
+    "healthy": true,
+    "first_flag_fault": false,
+    "DMA_rx_blocks": 36856,
+    "PIO_block_attempts": 23,
+    "bus_failures": 0,
+    "secondary_close_fatfs_result": 9
+  },
+  "operation": {"complete": false, "inconsistent": false, "failed": true, "stopped": false, "budget_expired": false, "quarantine_unchanged": true},
+  "interpretation": [
+    "Saved candidate bytes and self-checks matched across three complete profiles; this does not validate the journal, target mapping, or full tracks.",
+    "The single-block CMD18 was accepted. Card readiness after cleanup and healthy SCI state do not indicate a DMA engine fault.",
+    "Completed DMA blocks equal 3685 complete records times ten sectors plus six sectors of the partial record. No payload DMA completed for the failed seventh sector.",
+    "Evidence most strongly fits waiting for the data token after accepted CMD18. Exact timeout phase was not logged; a whole-stream deadline before payload is not excluded.",
+    "FatFs close failure is secondary to the read failure. No invalid candidate bytes were captured in this run."
+  ],
+  "next_candidate": "Use existing CRC-checked CMD17 for one-block GUI SD media requests, including filesystem reads; retain CMD18 for larger chunks, DMA, clock, and probe ordering. No blind retries, repair authority, or quarantine clearing."
+}

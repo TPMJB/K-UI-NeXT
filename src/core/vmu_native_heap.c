@@ -250,7 +250,9 @@ static int call_discover(const void *image,size_t n,
     for(size_t at=0;at<n && n-at>=6u;at+=2u) {
         uint16_t op=h16(p+at);uint32_t target;
         unsigned reg=(op>>8)&15u;
-        if((op&0xf000u)!=0xd000u || (reg!=0u && reg!=2u && reg!=3u) ||
+        /* R0..R3 allocations share the same bounded expression and sampled
+         * target proof. Argument registers and SP cannot hold this target. */
+        if((op&0xf000u)!=0xd000u || reg>3u ||
            phys(((h->load+(uint32_t)at+4u)&~3u)+4u*(op&255u))!=phys(h->initializer_slot) ||
            !literal(p,n,h->load,at,reg,&target) || target!=h->initializer_target) continue;
         for(size_t call=at+2u;call<=at+16u && call<n && n-call>=4u;call+=2u) {

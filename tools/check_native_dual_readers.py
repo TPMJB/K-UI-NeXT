@@ -12,6 +12,7 @@ import copy
 import hashlib
 import json
 from pathlib import Path
+from native_runtime_layout import LEASE_BYTES, layout_for
 import struct
 import sys
 import tempfile
@@ -26,7 +27,7 @@ from test_vmu_native_heap_execution import MASK,signed
 from test_native_dual_readers import console_layouts
 
 MARK='__kui_native_dual_readers_'
-CAPABILITY=struct.pack('<8I',0x3152444b,0x4c415544,1,32,1,2,0x60000,0)
+CAPABILITY=struct.pack('<8I',0x3152444b,0x4c415544,1,32,1,2,LEASE_BYTES,0)
 # Populated only after reviewing the complete candidate instructions and
 # relocation literals. No digest is learned from the artifact at run time.
 STAGE_PINS={
@@ -166,10 +167,10 @@ def initialized(image,address,count):
 
 def capability(stage,module):
     address,body,section=symbol_bytes(stage,'_kui_native_dual_reader_capability',1)
-    require(len(body)==32 and section[2]&7==2 and body==CAPABILITY,
+    require(len(body)==32 and section[2]&7==2 and body==struct.pack('<8I',0x3152444b,0x4c415544,1,32,1,2,layout_for(stage[4]).LEASE_BYTES,0),
             'dual capability must be its exact immutable typed32B descriptor')
     stage_payload=b''.join(stage[0][p[1]:p[1]+p[4]] for p in stage[2] if p[0]==1 and p[4])
-    require(stage_payload.count(CAPABILITY)==1 and module.count(CAPABILITY)==1,
+    require(stage_payload.count(body)==1 and module.count(body)==1,
             'dual capability is missing or duplicated in the stage/module')
     return dict(address=hex(address),bytes=32,sha256=sha(body),exactly_one_in_stage_and_module=True)
 
@@ -202,12 +203,14 @@ def embedded_blobs(stage,resident,legacy,directory):
     return result
 
 
-def require_wide_legacy(proof):
-    from check_vmu_native_map_refusal import READAHEAD_PINS
+def require_wide_legacy(proof,image):
+    from check_vmu_native_map_refusal import wide_guard_pins
+    READAHEAD_PINS=wide_guard_pins(image)
+    lease_bytes=layout_for(image[4]).LEASE_BYTES
     require(isinstance(proof,dict),'dual legacy guard companion must be a report object')
     guards=proof.get('wide_lease_linked_guard_pins',{})
     require(isinstance(guards,dict),'dual legacy guard pins must be an exact table')
-    require(proof.get('selected_guarded_lease_bytes')==0x60000 and set(guards)==set(READAHEAD_PINS) and
+    require(proof.get('selected_guarded_lease_bytes')==lease_bytes and set(guards)==set(READAHEAD_PINS) and
             all(isinstance(guards[name],dict) and guards[name].get('sha256')==digest and guards[name].get('bytes')==count
                 for name,(digest,count) in READAHEAD_PINS.items()),
             'dual legacy image requires all three exact compiled384KiB lease guards')
@@ -242,6 +245,17 @@ def dual_companion(worker,proof):
             all(tuple(recorded[name])==tuple(value) for name,value in worker_pins.items()),
             'dual companion lacks the exact executed getter/region/visit pins')
     selected=report.get('selector',{});binding=report.get('late_binding',{});visits=report.get('worker',{})
+    from check_native_general_lean_profile import worker_profile
+    if worker_profile(worker):
+        worker_events=(visits.get('modeled_worker_entry')=='_reader_cooperative_service' and
+            visits.get('actual_tick_arguments_checked') is True and
+            visits.get('capture_start_not_present_in_general_profile') is True and
+            visits.get('rolling_stream_threshold_saturation_reset_and_resume_checked') is True and
+            visits.get('both_durable_writer_busy_fields_refused') is True and
+            visits.get('only_private_stream_history_and_caller_stack_written') is True and
+            visits.get('c_abi_preserved') is True and visits.get('actual_stream_guard_cases',0)>=164 and
+            visits.get('actual_busy_refusal_cases',0)>=12 and visits.get('actual_imask_and_bank_cases',0)>=128)
+    else:worker_events=visits.get('heartbeat_and_capture_start_checked') is True
     require(selected.get('actual_linked_selector_cases',0)>=1600 and
             selected.get('actual_capability_bit_mutations_before_mode_reads')==256 and
             all(selected.get(key) is True for key in ('all_imasks_and_integer_banks',
@@ -258,7 +272,7 @@ def dual_companion(worker,proof):
                 'y_standard_unknown_modes_and_forged_cookie_cannot_read_aux_or_vector_entries',
                 'foreign_manifest_pointer_refused_before_map_dereference',
                 'null_region_and_invalid_config_payloads_refused_before_dependent_reads',
-                'malformed_aux_headers_and_public_context_bounds_refused','heartbeat_and_capture_start_checked')) and
+                'malformed_aux_headers_and_public_context_bounds_refused')) and worker_events and
             report.get('additional_scalar_instruction_truth_cases',0)>=5728,
             'dual pin selection requires the complete actual selector/binder/worker SH proof')
     cold=proof.get('cold_binder',{});cold_pins=cold.get('exact_instruction_literal_pins',{})
@@ -268,7 +282,7 @@ def dual_companion(worker,proof):
             cold_pins and set(cold_pins)==set(tail_pins) and
             all(tuple(cold_pins[name])==tuple(tail_pins[name]) for name in cold_pins),
             'dual tail target lacks its matching actual cold-binder/initializer proof')
-    legacy=report.get('legacy_background',{});require_wide_legacy(legacy)
+    legacy=report.get('legacy_background',{});require_wide_legacy(legacy,worker)
     low_callback_companion(artifacts,report.get('selected_low_callbacks'))
     stack=legacy.get('private_stack',{});engines=report.get('embedded_engines',{})
     require(legacy.get('schema')=='kui.native.background.audit.v1' and
@@ -299,7 +313,7 @@ def legacy_audit(directory,*,self_test=False):
             (view/report.name.replace('resident-legacy','resident-sci',1)).symlink_to(report.resolve())
         (view/'resident').mkdir();(view/'resident/lto').symlink_to((directory/'legacy/lto').resolve())
         proof=check_background(view,self_test=self_test,require_stage=False)
-    require_wide_legacy(proof)
+    require_wide_legacy(proof,read_elf(directory/'resident-legacy.elf'))
     proof['all_emitted_legacy_callgraphs_closed']=True
     proof['closed_legacy_callgraph_files']=len(reports)
     return proof
@@ -335,6 +349,7 @@ class ScalarOps:
         if op&0xf00f==0x6008:
             value=self.r[m];self.r[n]=(value&0xffff0000)|((value&255)<<8)|((value>>8)&255);return
         if op>>8==0x84:self.r[0]=signed(self.read(self.r[m]+(op&15),1),8)&MASK;return
+        if op>>8==0x80:self.write(self.r[m]+(op&15),self.r[0],1);return
         if op&0xf0ff==0x4028:self.r[n]=(self.r[n]<<16)&MASK;return
         super().plain(op,pc)
 
@@ -456,16 +471,16 @@ def binding_cases(resident,stage,worker):
 
 
 class DualWorkerCPU(ScalarOps,BoundExecution,WorkerCPU):
-    def __init__(self,resident,worker,payload,event,variant,layout):
+    def __init__(self,resident,worker,payload,event,variant,layout,pins=None):
         super().__init__(resident,worker,payload,event,variant,656)
-        lease=(payload&0x1fffffff)|0x80000000;self.owned_map=lease+0x20000
+        lease=(payload&0x1fffffff)|0x80000000;self.owned_map=lease+layout_for(worker[4]).MAP_OFFSET
         self.write(worker[4]['_config'][0]+layout['config_payload'],payload)
         self.write(self.region+layout['engine.manifest'],self.owned_map)
         self.write(self.owned_map+layout['manifest_reader'],1)
         self.write(self.owned_map+layout['manifest_transport'],1)
         self.write(self.region+0x530,0x53434931)
         self.forbid_aux=False;self.forbid_map=False;self.aux_reads=self.vector_reads=self.map_reads=0
-        self.set_code_bounds(((worker,WORKER_PINS),));self.writes=[]
+        self.set_code_bounds(((worker,WORKER_PINS if pins is None else pins),));self.writes=[]
 
     def read(self,address,count=4):
         if hasattr(self,'forbid_aux'):
@@ -478,7 +493,169 @@ class DualWorkerCPU(ScalarOps,BoundExecution,WorkerCPU):
         return super().read(address,count)
 
 
+class GeneralWorkerCPU(DualWorkerCPU):
+    """The actual General cooperative service, including its inlined getter.
+
+    Only its final auxiliary gateway is an ABI substitute. The three complete
+    pinned functions execute; unknown code, dependent reads after a rejected
+    payload, and writes outside stream history/private stack are refused.
+    """
+    def __init__(self,resident,worker,payload,variant,layout,pins):
+        super().__init__(resident,worker,payload,2,variant,layout,pins)
+        self.stream,self.stream_bytes,kind,owner=worker[4]['_reader_stream']
+        require(kind==1 and self.stream_bytes==44 and owner<len(worker[3]) and
+                worker[3][owner][1]==8 and worker[3][owner][2]&7==3,
+                'General stream history must be its exact private44-byte BSS object')
+        _,wire,_=symbol_bytes(worker,'_kui_vmu_native_worker_exports',1)
+        fields=struct.unpack('<20I',wire)
+        self.worker_begin=worker[4]['_kui_vmu_native_worker_exports'][0]&0x1fffffff
+        self.worker_end=fields[11]&0x1fffffff
+        self.stack_begin,self.stack_end=(v&0x1fffffff for v in fields[9:11])
+        self.r[15]=(fields[10]&0x1fffffff)|0x80000000
+        self.r[15]-=32
+        self.no_dependent_reads=False
+        self.busy_fields=tuple(self.durable[0]+layout[name] for name in
+                              ('durable.handling','durable.inflight'))
+        require(len(set(self.busy_fields))==2 and all(
+                self.durable[0]<=v<=self.durable[0]+self.durable[1]-4 for v in self.busy_fields),
+                'General durable busy fields escape their SH-compiled object layout')
+        self.initial=self.snapshot();self.writes=[];self.durable_reads=set()
+
+    def read(self,address,count=4):
+        if getattr(self,'no_dependent_reads',False):
+            at=address&0x1fffffff
+            require(self.worker_begin<=at and at+count<=self.worker_end,
+                    'Rejected General payload was used to read dependent memory')
+        return super().read(address,count)
+
+    def set_stream(self,*,last=0,primed=0,at=0,history=None):
+        history=[0]*32 if history is None else history
+        require(len(history)==32 and 0<=at<32 and all(0<=v<=255 for v in history),
+                'General stream fixture is not a bounded32-frame history')
+        self.write(self.stream,last);self.write(self.stream+4,sum(history))
+        for index,value in enumerate(history):self.write(self.stream+8+index,value,1)
+        self.write(self.stream+40,at,1);self.write(self.stream+41,primed,1)
+
+    def set_blocks(self,layout,irq,call=0):
+        self.write(self.region+layout['engine.stats.irq_blocks'],irq)
+        self.write(self.region+layout['engine.stats.call_blocks'],call)
+
+    def execute(self,name='_reader_cooperative_service'):
+        before=self.snapshot();calls=self.calls;self.writes=[]
+        self.run_symbol(name);assert_c_abi(self,before)
+        require(not self.vbr_writes and not self.iprb_writes,
+                'General cooperative service changed interrupt ownership')
+        for _,address,_,count in self.writes:
+            at=address&0x1fffffff;stream=self.stream&0x1fffffff
+            require((self.stack_begin<=at and at+count<=self.stack_end) or
+                    (stream<=at and at+count<=stream+self.stream_bytes),
+                    'General cooperative service wrote outside its stream state/private stack')
+        return self.calls-calls
+
+
+def general_worker_cases(resident,worker,layout,*,expected_pins=None):
+    """Execute General's real TICK path, never a synthesized capture callback."""
+    from check_native_general_lean_profile import worker_profile,worker_pins
+    require(worker_profile(worker),'General cooperative proof requires its complete marked profile')
+    selected=worker_pins(worker,'dual',{})
+    require(expected_pins is None or expected_pins==selected,
+            'General read-ahead and dual companions selected different immutable worker functions')
+    require(set(selected)=={'_reader_capture_region','_reader_cooperative_service','_reader_streaming'} and
+            selected['_reader_capture_region'][0]==100 and
+            selected['_reader_cooperative_service'][0]==248 and
+            selected['_reader_streaming'][0]==120,
+            'General cooperative service lacks its closed three-function instruction map')
+    pinned=pin(worker,selected,'General cooperative worker')
+    require(all(name not in worker[4] for name in
+                ('_reader_readahead_exports','_reader_readahead_visit','_reader_capture_start')),
+            'General proof cannot substitute a separately emitted getter or PROFILE capture path')
+    g=layout_for(worker[4]);maximum=0x0d000000-g.LEASE_BYTES
+    payloads=(0x0c400000,0x8c400000,0xac400000,maximum)
+    variants=('valid','magic','version','bytes','image_low','image_high','entry_low','entry_high',
+              'bound_entry','bound_context','context_low','context_at_public_limit','context_high')
+    cases=refusals=stream_cases=busy_cases=abi_cases=0
+    for payload in payloads:
+        for variant in variants:
+            c=GeneralWorkerCPU(resident,worker,payload,variant,layout,selected)
+            called=c.execute();accepted=variant in ('valid','context_at_public_limit')
+            assert called==int(accepted)
+            refusals+=not accepted;cases+=1
+        invalid=[('reader',v) for v in (0,2,3,255,256,MASK)]
+        invalid += [('cookie',v) for v in (0,1,0x53434930,MASK)]
+        owned=((payload&0x1fffffff)|0x80000000)+g.MAP_OFFSET
+        invalid += [('map',v) for v in (0,1,owned+4,owned-4,owned&0x1fffffff,owned|0x20000000,MASK)]
+        for kind,value in invalid:
+            c=GeneralWorkerCPU(resident,worker,payload,'valid',layout,selected)
+            if kind=='reader':c.write(c.owned_map+layout['manifest_reader'],value)
+            elif kind=='cookie':c.write(c.region+0x530,value)
+            else:c.write(c.region+layout['engine.manifest'],value);c.forbid_map=True
+            c.forbid_aux=True
+            assert c.execute()==0 and not c.aux_reads and not c.vector_reads
+            cases+=1;refusals+=1
+        for mask in range(16):
+            for bank in (0,1):
+                c=GeneralWorkerCPU(resident,worker,payload,'valid',layout,selected)
+                c.set_sr((c.sr&~0x200000f0)|(bank<<29)|(mask<<4))
+                assert c.execute()==1
+                cases+=1;abi_cases+=1
+        for handling,inflight in ((1,0),(0,1),(MASK,MASK)):
+            c=GeneralWorkerCPU(resident,worker,payload,'valid',layout,selected)
+            for address,value in zip(c.busy_fields,(handling,inflight)):c.write(address,value)
+            c.forbid_aux=True
+            assert c.execute()==0 and not c.aux_reads and not c.vector_reads
+            assert c.durable_reads==set(c.busy_fields)
+            cases+=1;busy_cases+=1;refusals+=1
+        # Boundary, saturation, counter-reset and ring-wrap fixtures have
+        # explicit expected results, independent of the compiled helper.
+        fixtures=((0,0,0,0,0,0,0,1), (5000,0,0,1000,0,0,0,1), (0,1,0,96,0,96,96,1),
+                  (0,1,0,97,0,97,97,0), (0,1,0,256,0,255,255,0),
+                  (500,1,0,499,0,0,0,1), (MASK,1,0,0,0,0,0,1),
+                  (0,1,0,48,48,96,96,1), (0,1,31,97,0,97,97,0))
+        for last,primed,index,irq,call,delta,total,called in fixtures:
+            c=GeneralWorkerCPU(resident,worker,payload,'valid',layout,selected)
+            c.set_stream(last=last,primed=primed,at=index);c.set_blocks(layout,irq,call)
+            assert c.execute()==called and c.read(c.stream+4)==total
+            assert c.read(c.stream+8+index,1)==delta and c.read(c.stream+40,1)==(index+1)&31
+            assert c.read(c.stream)==(irq+call)&MASK and c.read(c.stream+41,1)==1
+            cases+=1;stream_cases+=1
+        # A burst exceeding96 blocks suppressesTICK until that sample rolls
+        # out of all32 controller frames, then normal prefetch resumes.
+        c=GeneralWorkerCPU(resident,worker,payload,'valid',layout,selected)
+        c.set_stream(last=0,primed=1);c.set_blocks(layout,128)
+        assert c.execute()==0;cases+=1;stream_cases+=1
+        for _ in range(31):
+            assert c.execute()==0;cases+=1;stream_cases+=1
+        assert c.execute()==1 and c.read(c.stream+4)==0
+        cases+=1;stream_cases+=1
+    invalid_payloads=(0,1,0x0c010000,maximum+32,0x8c400004,0x6c400000,
+                      0xcc400000,0x8d000000,MASK)
+    for payload in invalid_payloads:
+        for name in ('_reader_capture_region','_reader_cooperative_service'):
+            c=GeneralWorkerCPU(resident,worker,0x8c400000,'valid',layout,selected)
+            c.write(worker[4]['_config'][0]+layout['config_payload'],payload)
+            c.forbid_aux=c.forbid_map=c.no_dependent_reads=True
+            assert c.execute(name)==0 and not c.aux_reads and not c.map_reads and not c.vector_reads
+            if name=='_reader_capture_region':assert c.r[0]==0
+            cases+=1;refusals+=1
+    return dict(actual_linked_worker_cases=cases,actual_worker_binding_cases=cases,
+        refusal_cases=refusals,modeled_worker_entry='_reader_cooperative_service',
+        actual_stream_guard_cases=stream_cases,actual_busy_refusal_cases=busy_cases,
+        actual_imask_and_bank_cases=abi_cases,all_three_lease_aliases_and_highest_lease=True,
+        y_standard_unknown_modes_and_forged_cookie_cannot_read_aux_or_vector_entries=True,
+        foreign_manifest_pointer_refused_before_map_dereference=True,
+        null_region_and_invalid_config_payloads_refused_before_dependent_reads=True,
+        malformed_aux_headers_and_public_context_bounds_refused=True,
+        both_durable_writer_busy_fields_refused=True,actual_tick_arguments_checked=True,
+        capture_start_not_present_in_general_profile=True,
+        rolling_stream_threshold_saturation_reset_and_resume_checked=True,
+        only_private_stream_history_and_caller_stack_written=True,c_abi_preserved=True,
+        immutable_function_pins=pinned,
+        c_auxiliary_target='ABI substitute; complete auxiliary gateway proved separately')
+
+
 def worker_cases(resident,worker,layout):
+    from check_native_general_lean_profile import worker_profile
+    if worker_profile(worker):return general_worker_cases(resident,worker,layout)
     cases=0
     variants=('valid','magic','version','bytes','image_low','image_high','entry_low','entry_high',
               'bound_entry','bound_context','context_low','context_at_public_limit','context_high')
@@ -491,7 +668,7 @@ def worker_cases(resident,worker,layout):
                 assert c.calls==int(variant in ('valid','context_at_public_limit'));cases+=1
             invalid=[('reader',value) for value in (0,2,3,255,256,MASK)]
             invalid += [('cookie',value) for value in (0,1,0x53434930,MASK)]
-            lease=(payload&0x1fffffff)|0x80000000;owned=lease+0x20000
+            lease=(payload&0x1fffffff)|0x80000000;owned=lease+layout_for(worker[4]).MAP_OFFSET
             invalid += [('map',value) for value in (0,1,owned+4,owned-4,owned&0x1fffffff,owned|0x20000000,MASK)]
             for kind,value in invalid:
                 c=DualWorkerCPU(resident,worker,payload,event,'valid',layout)
@@ -546,6 +723,14 @@ def instruction_truth():
             for value in (0,1,0x7f,0x80,0xff):
                 c.r[m]=at;c.write(at+disp,value,1);c.sr=0x400000f1
                 c.plain(0x8400|(m<<4)|disp,0);assert c.r[0]==(signed(value,8)&MASK) and c.sr==0x400000f1;cases+=1
+                # Source and base overlap when m==0. Set both explicitly,
+                # then check the architectural byte store and neighbours.
+                c.r[m]=at;c.r[0]=value
+                target=c.r[m]+disp;c.memory[target-1]=0x5a;c.memory[target+1]=0xa5
+                registers=c.r.copy();c.sr=0x400000f1
+                c.plain(0x8000|(m<<4)|disp,0)
+                assert c.memory[target]==value and c.memory[target-1]==0x5a and c.memory[target+1]==0xa5
+                assert c.r==registers and c.sr==0x400000f1;cases+=1
     for n in range(16):
         for value in (0,1,0xffff,0x10000,0x80000000,MASK):
             c.r[n]=value;c.sr=0x400000f1;c.plain(0x4028|(n<<8),0)
@@ -591,7 +776,7 @@ def check(directory,*,self_test=False,cold_binder_proof=None,witness_proof=None)
     witness_companion(worker,{'controller_failure_witness':witness_proof})
     module=(directory/'retail-maple-observe.kui').read_bytes()
     cap=capability(stage,module);blobs=embedded_blobs(stage,resident,legacy,directory)
-    layouts=console_layouts();layout=layouts['layouts']['x']
+    layouts=console_layouts(general=layout_for(stage[4]).WORKER_BYTES==0x1c000);layout=layouts['layouts']['x']
     tail=tail_contract(directory,stage,resident,worker,cold_binder_proof)
     selection=selector_cases(resident,stage);binding=binding_cases(resident,stage,worker)
     binding.update(tail)
@@ -609,7 +794,7 @@ def check(directory,*,self_test=False,cold_binder_proof=None,witness_proof=None)
                 malformed.append(changed)
             changed=copy.deepcopy(legacy_proof);del changed['wide_lease_linked_guard_pins'][name];malformed.append(changed)
         for changed in malformed:
-            try:require_wide_legacy(changed)
+            try:require_wide_legacy(changed,legacy)
             except ValueError:guard_refusals+=1
             else:raise ValueError('dual accepted absent/changed compiled384KiB legacy guards')
         for image,pins,label in ((stage,selected_stage_pins,'stage'),(worker,selected_worker_pins,'worker')):
@@ -639,9 +824,10 @@ def check(directory,*,self_test=False,cold_binder_proof=None,witness_proof=None)
                 try:embedded_blobs((bytes(changed),*stage[1:]),resident,legacy,directory)
                 except ValueError:blob_refusals+=1
                 else:raise ValueError('dual accepted changed embedded low image bytes')
-        offset=module.index(CAPABILITY)
+        capability_bytes=struct.pack('<8I',0x3152444b,0x4c415544,1,32,1,2,layout_for(stage[4]).LEASE_BYTES,0)
+        offset=module.index(capability_bytes)
         changed=bytearray(module);changed[offset]^=1
-        for candidate in (bytes(changed),module+CAPABILITY):
+        for candidate in (bytes(changed),module+capability_bytes):
             try:capability(stage,candidate)
             except ValueError:cap_refusals+=1
             else:raise ValueError('dual accepted an absent or duplicated module capability')

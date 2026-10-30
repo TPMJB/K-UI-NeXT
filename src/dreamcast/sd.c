@@ -15,6 +15,7 @@
 #include <kos/thread.h>
 #include <kos/timer.h>
 #include <errno.h>
+#include <inttypes.h>
 #ifdef KUI_SCI_ASYNC_RUNTIME
 #include "sd.h"
 #include <stdio.h>
@@ -79,11 +80,33 @@ static int sci_failed(enum kui_storage_error_operation operation,
         reason=KUI_STORAGE_ERROR_REJECTED;
     /* An OK protocol result plus an unhealthy SCI lease has no trustworthy
      * protocol failure detail. Do not attach the previous command to it. */
-    return failed(operation,reason,KUI_STORAGE_SCI,block,count,
-                  result!=KUI_LOADER_SD_OK && sci.last_command!=0xff);
+    const bool detail=result!=KUI_LOADER_SD_OK && sci.last_command!=0xff;
+    const bool ready=sci.ready,healthy=kui_sci_sd_healthy();
+    const uint8_t command=detail?sci.last_command:0,response=detail?sci.last_response:0;
+    struct kui_sci_sd_fault fault;kui_sci_sd_fault_get(&fault);
+    int returned=failed(operation,reason,KUI_STORAGE_SCI,block,count,detail);
+    /* Capture RAM state before disconnect, report saving or reacquisition can
+     * replace it. Logging must not issue card I/O or retry the failed request. */
+    kui_log("SCI storage failure: operation=%s (%u) result=%s (%u)",
+        kui_storage_error_operation_name(operation),(unsigned)operation,
+        kui_storage_error_result_name(reason),(unsigned)reason);
+    kui_log("SCI failure protocol=%s (%u) LBA=%" PRIu32 " blocks=%" PRIu32,
+        kui_loader_sd_result_name(result),(unsigned)result,block,count);
+    kui_log("SCI failure state: ready=%u healthy=%u SD_detail=%u first_flag_fault=%u",
+        ready?1u:0u,healthy?1u:0u,detail?1u:0u,fault.valid?1u:0u);
+    if(detail)kui_log("SCI failure command: CMD%u response=%02x",(unsigned)command,(unsigned)response);
+    else kui_log("SCI failure command: unavailable");
+    if(fault.valid) {
+        kui_log("SCI first flag fault: flag=%02" PRIx32 " SSR=%02" PRIx32 " SCR=%02" PRIx32 " polls=%" PRIu32,
+            fault.wait_flag,fault.ssr,fault.scr,fault.polls);
+        kui_log("SCI first flag state: SMR=%02" PRIx32 " BRR=%02" PRIx32 " SCMR=%02" PRIx32
+                " SPTR=%04" PRIx32 " PDTR=%04" PRIx32,
+            fault.smr,fault.brr,fault.scmr,fault.sptr,fault.pdtr);
+    }
+    return returned;
 }
 #if KUI_VMU_PROFILE_PREP || KUI_VMU_GAME_CARDS
-bool kui_sd_vmu_profile_identity(struct kui_vmu_sd_identity *out) {
+bool kui_sd_card_identity(struct kui_vmu_sd_identity *out) {
     if(!out) return false;
     *out=(struct kui_vmu_sd_identity){0};
     if(!connected || active!=KUI_STORAGE_SCI || !sci.ready || sci.slow ||
@@ -97,6 +120,9 @@ bool kui_sd_vmu_profile_identity(struct kui_vmu_sd_identity *out) {
     }
     *out=captured;
     return true;
+}
+bool kui_sd_vmu_profile_identity(struct kui_vmu_sd_identity *out) {
+    return kui_sd_card_identity(out);
 }
 #endif
 static int ata_failed(enum kui_storage_error_operation operation,uint32_t block,uint32_t count) {
@@ -182,7 +208,11 @@ static int read_blocks(void *ctx,uint32_t block,size_t count,uint8_t *data) {
     if((uint64_t)block+count>sci.blocks) return -1;
     while(count) {
         uint32_t n=count>KUI_LOADER_SD_MAX_READ_BLOCKS?KUI_LOADER_SD_MAX_READ_BLOCKS:(uint32_t)count;
-        enum kui_loader_sd_result result=kui_loader_sd_read_multi(&sci,block,n,data);
+        /* A single block needs no CMD18 stream or CMD12 stop. Keep the
+         * existing bounded, CRC-checked CMD17 path for that request. */
+        enum kui_loader_sd_result result=n==1?
+            kui_loader_sd_read(&sci,block,n,data):
+            kui_loader_sd_read_multi(&sci,block,n,data);
         if(result!=KUI_LOADER_SD_OK || !kui_sci_sd_healthy())
             return sci_failed(KUI_STORAGE_ERROR_READ,result,block,n);
         count-=n;block+=n;data+=(size_t)n*512;
@@ -350,6 +380,8 @@ bool kui_sd_connect(void) {
     kui_log("Storage: %s%s",kui_storage_name(active),active==KUI_STORAGE_SCI?
         " (12.5 MHz, bounded sector DMA with PIO fallback, CRC checked)":
         active==KUI_STORAGE_IDE?" (G1 slave, bounded PIO)":check_crc?" (CRC checked)":" (read CRC disabled)");
+    if(active==KUI_STORAGE_SCI)
+        kui_log("SCI filesystem reads: CMD17 for one block; CMD18 for multiple blocks");
     return true;
 }
 

@@ -15,6 +15,8 @@ struct kui_scan_status {
     bool complete;
     bool reference_hashes, checkpoint_checked;
     bool catalogue_checked;
+    bool storage_unstable, guard_cleared;
+    uint32_t unstable_chunks, sampled;
     struct kui_known_summary catalogue; /* Independent; reference_hashes remains manifest-only. */
     unsigned track, tracks;
     uint64_t done, total, elapsed_ms;

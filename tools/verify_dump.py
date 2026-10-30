@@ -17,6 +17,7 @@ import zlib
 
 PROFILE = "gdi-raw2352-typegap150-v1"
 CD_PROFILE = "cd-toc-index01-raw2352-v1"
+DIRECT_PROFILE = "gdi-direct2048-rawaudio-v1"
 INTERNAL_GDI = ".capture.gdi"
 EDC_TABLE = []
 for _byte in range(256):
@@ -98,16 +99,21 @@ def load_json(path):
 def verify(directory):
     directory = Path(directory)
     m = load_json(directory / "manifest.json")
-    require(isinstance(m, dict) and m.get("schema") in (1, 2), "Unsupported manifest schema")
+    require(isinstance(m, dict) and m.get("schema") in (1, 2, 3), "Unsupported manifest schema")
     schema = m["schema"]
+    direct = schema == 3
     output_format = m.get("output_format")
     cue_output = output_format == "bin_cue"
     cooked_output = output_format == "gdi_2048"
     compressed_output = output_format in ("cso", "zso", "chd")
     derivative = cue_output or compressed_output or cooked_output
-    require("output_format" not in m or derivative, "Unsupported capture output format")
+    require("output_format" not in m or derivative or (direct and output_format == "gdi_direct_2048"), "Unsupported capture output format")
     require(("cue_file" in m) == cue_output, "Inconsistent CUE output metadata")
-    if schema == 1:
+    if direct:
+        require(m.get("complete") is True and m.get("saved_data_verified") is True
+                and type(m.get("crc_only")) is bool and output_format == "gdi_direct_2048",
+                "Direct payload capture is incomplete or has invalid hash metadata")
+    elif schema == 1:
         require(m.get("complete") is True and m.get("saved_data_verified") is True,
                 "Capture is incomplete or has not passed console readback")
     else:
@@ -119,7 +125,10 @@ def verify(directory):
                 "Schema 2 must not embed a verification claim")
     profile = m.get("profile")
     cd = profile == CD_PROFILE
-    require(profile in (PROFILE, CD_PROFILE) and m.get("sector_bytes") == 2352, "Unsupported capture profile")
+    require((direct and profile == DIRECT_PROFILE and m.get("optical_profile") == PROFILE
+             and "sector_bytes" not in m) or
+            (not direct and profile in (PROFILE, CD_PROFILE) and m.get("sector_bytes") == 2352),
+            "Unsupported capture profile")
     require(not cd or cue_output, "Single-session CD capture requires BIN/CUE output")
     require(isinstance(m.get("identity"), str) and re.fullmatch(r"[0-9a-f]{64}", m["identity"]), "Invalid disc identity")
     tracks = m.get("tracks")
@@ -132,7 +141,7 @@ def verify(directory):
         for key in ("number", "session", "control", "start_fad", "end_fad", "toc_end_fad", "excluded_tail_sectors", "bytes"):
             require(type(t.get(key)) is int, f"Track {i}: invalid {key}")
         require(t["number"] == i and t["control"] in (0, 4) and t["session"] in (0, 1), "Invalid track numbering/type/session")
-        if derivative:
+        if derivative or direct:
             require(type(t.get("sector_mode")) is int and t["sector_mode"] in (
                 (1, 2) if t["control"] == 4 else (0,)), f"Track {i}: invalid output sector mode")
         else:
@@ -148,12 +157,17 @@ def verify(directory):
         elif following:
             require(t["session"] == 0 and following.get("session") == 1 and
                     t["toc_end_fad"] <= following.get("start_fad", 0), "Invalid session order")
-        expected_name = f"track{i:02}.{'bin' if t['control'] == 4 else 'raw'}"
+        stride = 2048 if direct and t["control"] == 4 else 2352
+        expected_name = f"track{i:02}.{'iso' if direct and t['control'] == 4 else 'bin' if t['control'] == 4 else 'raw'}"
+        if direct:
+            require(t.get("sector_bytes") == stride, "Invalid direct track stride")
         require(t.get("file") == expected_name, "Unsafe or inconsistent track filename")
-        require(t["bytes"] == (t["end_fad"] - t["start_fad"]) * 2352 <= 0xFFFFFFFF, "Invalid track byte count")
+        require(t["bytes"] == (t["end_fad"] - t["start_fad"]) * stride <= 0xFFFFFFFF, "Invalid track byte count")
         require(isinstance(t.get("crc32"), str) and re.fullmatch(r"[0-9a-f]{8}", t["crc32"]), "Invalid CRC32")
-        if schema == 1:
+        if schema == 1 or direct:
             require(isinstance(t.get("sha256"), str) and re.fullmatch(r"[0-9a-f]{64}", t["sha256"]), "Invalid SHA-256")
+            if direct and m["crc_only"]:
+                require(t["sha256"] == "0" * 64, "CRC-only direct capture must not claim recorded SHA-256")
         else:
             require("sha256" not in t, "Schema 2 tracks record CRC32 only")
         file = directory / expected_name
@@ -169,13 +183,13 @@ def verify(directory):
                 digest.update(block)
                 crc = zlib.crc32(block, crc)
         crc_text, sha_text = f"{crc:08x}", digest.hexdigest()
-        require(crc_text == t["crc32"] and (schema == 2 or sha_text == t["sha256"]),
+        require(crc_text == t["crc32"] and (schema == 2 or (direct and m["crc_only"]) or sha_text == t["sha256"]),
                 f"{expected_name}: saved-data hash mismatch")
         # SHA-256 is always computed here (it is free on a PC); it is compared only
         # when the manifest recorded one.
         results.append({"file": expected_name, "bytes": t["bytes"], "crc32": crc_text, "sha256": sha_text,
-                        "sha256_recorded": schema == 1})
-        lines.append(f"{i} {t['start_fad'] - 150} {t['control']} 2352 {expected_name} 0")
+                        "sha256_recorded": schema == 1 or (direct and not m["crc_only"])})
+        lines.append(f"{i} {t['start_fad'] - 150} {t['control']} {stride} {expected_name} 0")
     require(tracks[0]["session"] == 0 and (cd or tracks[0]["start_fad"] == 150), "Invalid first-session start")
     if not cd:
         high = next((t for t in tracks if t["session"] == 1), None)
@@ -263,7 +277,7 @@ def verify(directory):
 
 
 def compare_reference(results, reference, profile=PROFILE):
-    require(profile in (PROFILE, CD_PROFILE) and isinstance(reference, dict) and reference.get("profile") == profile,
+    require(profile in (PROFILE, CD_PROFILE, DIRECT_PROFILE) and isinstance(reference, dict) and reference.get("profile") == profile,
             "Reference uses a different/unspecified layout profile")
     entries = reference.get("tracks")
     require(isinstance(entries, list), "Invalid reference track list")

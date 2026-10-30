@@ -4,7 +4,6 @@
 #include "kui/recovery_scan.h"
 
 #define KUI_FORENSIC_SECTOR_LIMIT 64u
-#define KUI_REPAIR_SECTOR_LIMIT 8192u
 enum kui_repair_result { KUI_REPAIR_FAILED, KUI_REPAIR_STOPPED,
     KUI_REPAIR_UNRESOLVED, KUI_REPAIR_COMPLETE };
 enum kui_repair_phase { KUI_REPAIR_IDENTIFY, KUI_REPAIR_COPYING,
@@ -12,36 +11,30 @@ enum kui_repair_phase { KUI_REPAIR_IDENTIFY, KUI_REPAIR_COPYING,
 struct kui_repair_status {
     enum kui_repair_result result;
     enum kui_repair_phase phase;
-    bool complete, imported, storage_unstable, audio_unverified;
+    bool complete, imported, storage_unstable, audio_unverified, resumed, partial_source;
+    bool in_place, catalogue_checked, alternate_identity, resume_ready;
+    struct kui_known_summary catalogue;
     unsigned track, tracks;
-    uint32_t fad, suspects, repaired, unresolved, attempts;
+    uint32_t fad, suspects, repaired, unresolved, attempts, pass;
     uint64_t done, total, elapsed_ms;
     char job[KUI_DEST_JOB_CAP], message[128];
 };
 struct kui_repair_options {
     unsigned attempts; /* Exactly 1, 5, 10, 20 or 50 candidate pairs per sector. */
     void (*progress)(void *ctx,const struct kui_repair_status *status);
+    bool continuous; /* Finish collection, then sweep unresolved targets. */
+    bool in_place; /* Explicit raw-source repair/partial continuation; old bytes retained. */
+    unsigned passes; /* continuous only: 0 until stopped, else 1/5/10/20/50. */
+    bool allow_saved_identity; /* Explicit verified-prefix alternate-anchor admission. */
+    bool new_copy; /* Explicit new separate-copy transaction; never resumes old jobs. */
 };
-/* Explicit repair-to-copy, never in-place. Caller prepares the inserted disc
- * and connects storage; this worker mounts/unmounts FatFs. Supports completed
- * ordinary raw GDI jobs and imported raw-2352 GDI folders with safe names and
- * zero offsets. The saved track ranges must exactly match prepared_plan.
- *
- * Normal jobs require their complete optical capture identity. Imports require
- * two distinct healthy saved high-density data sectors to match optical bytes. Only bad
- * supported Mode 1 sectors can be localized; whole-track hash mismatches and
- * audio cannot be automatically localized. Candidates need two identical
- * optical reads with correct FAD/EDC/PQ. Each suspect is reopened twice before
- * optical repair; disagreement blocks repair and retains binary evidence.
- *
- * Original tracks/descriptor/manifest/checkpoints are opened READ ONLY. A new
- * /KUI/repair/job-NNNN retains synced original/candidate evidence and a .part
- * log if stopped/failed. No playable GDI is published before every copied track
- * has full saved-byte hash readback and all available source hashes agree.
- * There is no automatic resume: a later run creates a separate copy; old partial
- * jobs remain evidence. A completed imported copy can still have unverified
- * audio; COMPLETE never means catalogue/archival verification.
- */
+/* Explicit repair worker. Default preserves separate-copy finite operation.
+ * continuous collects missing sectors as tracked placeholders then retries
+ * unresolved holes in alternating sweeps. in_place is a separate explicit
+ * operation on supported raw-track sources: durable original/candidate evidence
+ * precedes mutations; interruption retains a checked resume job. Partial or
+ * unreadable results are never published complete. Caller prepares the exact
+ * inserted disc and connects storage; worker owns mount/unmount. */
 enum kui_repair_result kui_repair_copy(const char *directory,
     const struct kui_capture_plan *prepared_plan,const struct kui_capture_ops *ops,
     const struct kui_repair_options *options,struct kui_repair_status *out);

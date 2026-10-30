@@ -30,8 +30,8 @@ void retail_display_line(const char *text) {
     CHECK(page_count && row<=444u && strlen(text)<sizeof(pages[0].text[0]));
     unsigned n=pages[page_count-1u].rows++;
     CHECK(n<16u);strcpy(pages[page_count-1u].text[n],text);row+=22u;
-    if(!strcmp(text,"INDEX CONTROL RX HEADER PAYLOAD0")) {packet_page=true;return;}
-    if(!strcmp(text,"CODE PR MDST TICK WAIT FLAG / OLDEST FIRST")) {packet_page=false;return;}
+    if(!strcmp(text,"I CTRL RX HEADER PAYLOAD0")) {packet_page=true;return;}
+    if(!strcmp(text,"CODE PR MDST TICK WAIT / OLDEST")) {packet_page=false;return;}
     /* The actual row helpers format five eight-digit words with a trailing
      * space per word. Titles and legends do not have this exact shape. */
     if(strlen(text)==45u && text[8]==' ' && text[17]==' ' && text[26]==' ' &&

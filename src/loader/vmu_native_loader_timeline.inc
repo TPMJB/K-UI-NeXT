@@ -14,6 +14,30 @@ __asm__(".global __kui_native_sci_priority7_worker\n"
 __asm__(".global __kui_native_sdk_sci_route_worker\n"
         ".set __kui_native_sdk_sci_route_worker,1\n");
 #endif
+#if KUI_NATIVE_SPLIT_CONTROLLER_GENERAL
+/* General accepts only NORMAL at cold arm. The immutable descriptor remains
+ * for the paired low-reader ABI, but its PROFILE-only binder never installs
+ * it. Retain a harmless typed callback without the unused collector/state. */
+__asm__(".global __kui_native_general_timeline_elided_worker\n"
+        ".set __kui_native_general_timeline_elided_worker,1\n");
+void __attribute__((noipa)) kui_native_loader_timeline_visit(
+    uint32_t exit,uint32_t function,uint32_t original_sr,void *region) {
+    (void)exit;(void)function;(void)original_sr;(void)region;
+}
+/* These calls occur only in PROFILE branches, already excluded in General.
+ * Keep source type checking while allowing dead diagnostic functions to drop. */
+static void native_loader_timeline_start(void) {}
+static void native_loader_timeline_heartbeat(const struct kui_vmu_native_profile_sample *clock) {
+    (void)clock;
+}
+#ifndef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
+static void native_loader_timeline_row(unsigned prefix,unsigned row,
+    const uint32_t *values,unsigned count) {
+    (void)prefix;(void)row;(void)values;(void)count;
+}
+static void native_loader_timeline_report(const struct retail_display_state *display) {(void)display;}
+#endif
+#else
 static struct kui_native_loader_timeline native_loader_timeline;
 static struct kui_native_loader_event native_loader_event;
 static struct kui_vmu_native_profile_sample native_loader_clock;
@@ -195,3 +219,4 @@ static void native_loader_timeline_report(const struct retail_display_state *dis
     }
 }
 #endif
+#endif /* KUI_NATIVE_SPLIT_CONTROLLER_GENERAL */

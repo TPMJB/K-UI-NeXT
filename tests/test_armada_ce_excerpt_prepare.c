@@ -24,6 +24,8 @@ bool kui_game_launch_report_save(const struct kui_game_launch_report *report,
 #define SEED_TOTAL (KUI_ARMADA_CE_EXCERPT_SEED_BYTES+KUI_ARMADA_CE_EXCERPT_PCM_BYTES)
 #define GUARD_BYTES 32u
 static unsigned checks,reads,logs;
+static unsigned native_preference_reads;
+static bool native_preference_fault;
 static enum kui_game_result read_result;
 static struct kui_game_image image;
 static struct kui_game_metadata metadata;
@@ -436,10 +438,33 @@ FRESULT f_mount(FATFS *fs,const TCHAR *path,BYTE option) {
 }
 FRESULT f_stat(const TCHAR *path,FILINFO *info) {
     CHECK(launch.connected && launch.mounted);
+    if(!strcmp(path,KUI_VMU_EMULATION_SETTINGS_PATH_A) || !strcmp(path,KUI_VMU_EMULATION_SETTINGS_PATH_B)) {
+        ++native_preference_reads;
+        if(native_preference_fault) return FR_DISK_ERR;
+    }
     const char *name=strrchr(path,'/');CHECK(name!=NULL);
     uint64_t bytes=fixture_size(name+1u);
     if(!bytes) return FR_NO_FILE;
     memset(info,0,sizeof(*info));info->fsize=bytes;return FR_OK;
+}
+/* The optional native-cache publisher is compiled into games_retail.c, but
+ * these legacy preparation fixtures must remain read-only. Keep the hooks
+ * linked and fail if any fixture accidentally reaches a mutation path. */
+FRESULT f_mkdir(const TCHAR *path) {
+    (void)path;CHECK(!"read-only preparation attempted to create a cache directory");return FR_DENIED;
+}
+FRESULT f_write(FIL *file,const void *data,UINT bytes,UINT *written) {
+    (void)file;(void)data;(void)bytes;*written=0;
+    CHECK(!"read-only preparation attempted to write a cache");return FR_DENIED;
+}
+FRESULT f_sync(FIL *file) {
+    (void)file;CHECK(!"read-only preparation attempted to sync a cache");return FR_DENIED;
+}
+FRESULT f_unlink(const TCHAR *path) {
+    (void)path;CHECK(!"read-only preparation attempted to remove a cache");return FR_DENIED;
+}
+FRESULT f_rename(const TCHAR *from,const TCHAR *to) {
+    (void)from;(void)to;CHECK(!"read-only preparation attempted to publish a cache");return FR_DENIED;
 }
 FRESULT f_open(FIL *file,const TCHAR *path,BYTE mode) {
     CHECK(launch.connected && launch.mounted && !launch.active && mode==FA_READ);
@@ -686,6 +711,28 @@ static void launcher_paths(void) {
         CHECK(!launch.connected && !launch.mounted && !launch.active);
     }
 }
+static void native_preference_scope(void) {
+    struct kui_runtime_image prepared;
+    native_preference_fault=true;
+    for(unsigned music=0;music<2u;music++) {
+        launch_setup();native_preference_reads=0;
+        uint32_t request=KUI_GAMES_RETAIL_CE_PROBE|KUI_RETAIL_READER_ASYNC|
+            (music?KUI_GAMES_RETAIL_CE_EXCERPT:0u);
+        CHECK(kui_games_retail_prepare_reader("/Games/ARMADA/ARMADA.gdi",request,&prepared,record_log,launch_cancel));
+        CHECK(!native_preference_reads && launch.package_reads==1u);
+        CHECK(!launch.connected && !launch.mounted && !launch.active && launch.opens==launch.closes);
+        kui_runtime_free(&prepared);
+    }
+    launch_setup();native_preference_reads=0;
+    metadata.windows_ce=false;metadata.native_gd=true;metadata.boot_bytes=123456u;
+    strcpy(metadata.bootfile,"1ST_READ.BIN");
+    CHECK(!kui_games_retail_prepare_reader("/Games/ARMADA/ARMADA.gdi",KUI_RETAIL_READER_STANDARD,
+        &prepared,record_log,launch_cancel));
+    CHECK(native_preference_reads==1u && !launch.package_reads && !prepared.data);
+    CHECK(!launch.connected && !launch.mounted && !launch.active);
+    native_preference_fault=false;
+    puts("PASS native VMU preference scope: damaged native settings refuse native preparation and leave ordinary/streaming WinCE preparation untouched");
+}
 static void stream_launcher_paths(void) {
     const uint32_t request=KUI_GAMES_RETAIL_CE_PROBE|KUI_GAMES_RETAIL_CE_EXCERPT|KUI_RETAIL_READER_ASYNC;
     struct kui_runtime_image prepared;
@@ -859,6 +906,7 @@ int main(void) {
     bam4_manifest_seed();
     worms_profile_and_seed();free(allocation);allocation=NULL;
     launcher_paths();
+    native_preference_scope();
     stream_launcher_paths();
     converted_ce_launcher_paths();
     experimental_ce_launcher_paths();

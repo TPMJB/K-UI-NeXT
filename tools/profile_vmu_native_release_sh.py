@@ -240,7 +240,7 @@ def worker_fixture(cpu, candidate, ranges):
     config, size = cpu.symbols["_config"][:2]
     # All fields through the fixed 116-byte lease are uint32_t/byte arrays.
     # These assertions bind this fixture to the persistent worker ABI.
-    assert size == 2300
+    assert size == 2304
     cpu.store_block(config + 116, cpu.block(LEASE, 116))
     cpu.write(cpu.symbols["_state"][0], 1)
     cpu.write(cpu.symbols["_kui_vmu_native_readonly_release_resume"][0], 0x8C0135B0 + 20)
@@ -263,7 +263,7 @@ def worker_fixture(cpu, candidate, ranges):
 def hook_fixture(cpu, exits):
     """Use actual SH encoders/preparation and their exact live patch bytes."""
     config, size = cpu.symbols["_config"][:2]
-    assert size == 2300 and 0 <= exits <= 3
+    assert size == 2304 and 0 <= exits <= 4
     cpu.store_block(config + 116, cpu.block(LEASE, 116))
     submit, complete_slot = 0x8C021000, 0x8C021100
     low_terminal, low_heap_hook = 0x8C008000, 0x8C008100
@@ -272,7 +272,7 @@ def hook_fixture(cpu, exits):
     cpu.write(config + 2240, low_terminal)
     cpu.write(config + 2244, low_heap_hook)
     cpu.write(config + 2268, exits)
-    entries = [0x8C022000, 0x8C022102, 0x8C022200][:exits]
+    entries = [0x8C022000, 0x8C022102, 0x8C022200, 0x8C022302][:exits]
     for i, address in enumerate(entries):
         cpu.write(config + 2272 + i * 4, address)
     exports = cpu.symbols["_kui_vmu_native_worker_exports"][0]

@@ -1,0 +1,63 @@
+{
+  "schema": "kui.native.spawn-heap-finding.v1",
+  "date": "2026-10-28",
+  "baseline": "b9f67ae",
+  "production_changed": false,
+  "retail_byte_payloads_embedded": false,
+  "input": {
+    "title": "SPAWN IN THE DEMONS HAND",
+    "product": "T1216N",
+    "bytes": 1220228,
+    "sha256": "8f085c28f6a579662f95b65b0611f1dc08dded35fd5c6e676821c72a5384ed5f",
+    "load": "0x8c010000"
+  },
+  "current_route": {
+    "sdk_sci_family": true,
+    "maple_layout": true,
+    "heap_family": true,
+    "guarded_exits": true,
+    "first_refusal": "initializer_slot",
+    "virtual_vmu_admitted": false,
+    "standalone_new_available": true
+  },
+  "sdk_heap": {
+    "initializer": "0x8c0d2c50",
+    "allocate": "0x0c0d2d32",
+    "release": "0x0c0d2e00",
+    "dispatch_cell": "0x0c375414",
+    "dispatch_table": "0x0c12b124",
+    "sentinel": "0x0c375418",
+    "initializer_references": {
+      "aligned_image_words": 0,
+      "unaligned_image_words": 0,
+      "encoded_bsr_or_bra": 0,
+      "method": "Scan every possible four-byte image word, normalizing physical aliases, and every aligned SH halfword for direct BSR/BRA targets. This tests encoded references, not arbitrary computed indirect calls."
+    },
+    "dispatch_setter": {
+      "entry": "0x8c0d2c96",
+      "aligned_image_words": 0,
+      "unaligned_image_words": 0,
+      "encoded_bsr_or_bra": ["0x8c0d2c7a, inside the initializer"]
+    },
+    "finding": "The supported allocator is linked, but no encoded entry reference starts it. This is the same kind of gap as Crazy Taxi 2, rather than an omitted target-register variant in initializer-call discovery. There is no present basis for claiming an ordinary allocator-backed runtime lease."
+  },
+  "startup_and_memory": {
+    "c_start": "0x8c0cfd20, reached from the entry's pointer at 0x8c01002c",
+    "main": "0x0c010080, called by the C start",
+    "boot_stack_fill": "0x8c00c000-0x8c00f400, filled with SEGA words",
+    "bss_word_clear": "0x8c13df00-0x8c374c80",
+    "bss_byte_clear": "0x8c374c80-0x8c3e5800",
+    "fixed_upper_ram": "Actual PC-relative loads name 0x8ce60000 and many 0x8cfe0000-0x8cffffff game-state addresses. They exclude assumptions based on Crazy Taxi 2's map; static absence of other literals proves no unused interval.",
+    "sdk_vector_setup": "The initial game setup calls 0x0c0d3680 once at 0x8c0116c0. Its nested 0x0c0e1340 routine copies the SDK vectors into the live VBR. Later setup calls 0x0c0d36aa, then the proved Maple-init tail thunk at 0x0c024100.",
+    "future_hook_limit": "A future fixed-arena hook must run after the live vector and Maple layout are initialized and must survive later setup. The initial SDK call alone is not admitted here as a hook. No initialization site or arena is added to the fixed-plan table."
+  },
+  "next_console_test": {
+    "build_variant": "Makefile.native-standalone-ram-map",
+    "production_change_required": false,
+    "guide": "docs/native-spawn-ram-map-test.md",
+    "question": "Which contiguous upper-RAM pages remain untouched across two separate cold-boot gameplay sessions with differing content and transitions?",
+    "expected_route": "New (X) selects the standalone RAM-map reader when the combined module refuses the absent heap initializer slot.",
+    "evidence": "Photograph each return screen with all four RAM UNUSED words, build ID, and a short account of the modes/stages played.",
+    "not_established": "No permanent unused interval, allocator arena, virtual-card admission, or console saving is established by this static analysis."
+  }
+}

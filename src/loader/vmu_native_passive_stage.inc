@@ -139,6 +139,9 @@ static void native_passive_capture_windows(void) {
 #endif
 }
 #endif
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+#include "vmu_native_crt_bootstrap_stage.inc"
+#endif
 static void native_passive_prepare(void) {
 #if KUI_VMU_NATIVE_READONLY_PROBE
     const struct kui_vmu_native_patch_window windows[3]={{native_driver.submit,12u},
@@ -198,6 +201,7 @@ static bool __attribute__((noipa)) native_resolution_replay(void) {
 static uint32_t __attribute__((noipa)) native_runtime_diagnostics(void) {
     uint32_t mode=native_runtime_mode();
     return mode==KUI_VMU_NATIVE_MODE_PROFILE?KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE:
+        mode==KUI_VMU_NATIVE_MODE_READER_ONLY?KUI_VMU_NATIVE_DIAGNOSTICS_READER_ONLY:
         mode==KUI_VMU_NATIVE_MODE_HOOKS_ONLY?KUI_VMU_NATIVE_DIAGNOSTICS_HOOKS_ONLY:
         mode==KUI_VMU_NATIVE_MODE_RAW_CHAIN?KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN:
         mode==KUI_VMU_NATIVE_MODE_EVOLUTION_TRACE?KUI_VMU_NATIVE_DIAGNOSTICS_EVOLUTION_TRACE:
@@ -240,7 +244,11 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
         stopped("WAIT CAPTURE NEEDS EVOLUTION 1",native_driver.image_bytes);
 #endif
 #endif
-    if(native_runtime_mode()!=KUI_VMU_NATIVE_MODE_NORMAL)
+    if(native_runtime_mode()!=KUI_VMU_NATIVE_MODE_NORMAL
+#if KUI_NATIVE_SPLIT_CONTROLLER_GENERAL && KUI_NATIVE_GENERAL_LEAN_LAYOUT && KUI_NATIVE_READAHEAD
+       && native_runtime_mode()!=KUI_VMU_NATIVE_MODE_READER_ONLY
+#endif
+       )
 #if KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION
         stopped("SPLIT CONTROLLER NEEDS NORMAL MODE",native_runtime_mode());
 #elif KUI_NATIVE_METADATA_CACHE_ISOLATION
@@ -268,10 +276,12 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
         .rx_layout=cfg.layout.rx_layout,.rx_base=cfg.layout.rx_base};
     memcpy(cfg.display,display.regs,sizeof(cfg.display));
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
-    if(!native_persist_ready ||
-       kui_vmu_persist_stage_handoff_matches(&native_persist_profile,&native_persist_handoff))
-        native_report(8u,5u);
-    cfg.durable=native_persist_handoff;
+    if(native_runtime_mode()!=KUI_VMU_NATIVE_MODE_READER_ONLY) {
+        if(!native_persist_ready ||
+           kui_vmu_persist_stage_handoff_matches(&native_persist_profile,&native_persist_handoff))
+            native_report(8u,5u);
+        cfg.durable=native_persist_handoff;
+    }
 #if KUI_NATIVE_DUAL_READERS
     native_low_configure(&cfg);
 #else
@@ -480,7 +490,12 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     retail_display_line("READER SUPPORT HOOKS RETAINED");
 #endif
 #elif KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION
-    retail_display_line("NEW READER / VIRTUAL A2 ON");
+#if KUI_NATIVE_VMU_ONLY
+    retail_display_line("STANDARD READER / VIRTUAL A2 ON");
+    retail_display_line("112 KIB VMU / BACKGROUND OFF");
+#else
+    retail_display_line(native_runtime_mode()==KUI_VMU_NATIVE_MODE_READER_ONLY?
+        "NEW READER / VIRTUAL A2 OFF":"NEW READER / VIRTUAL A2 ON");
 #if KUI_NATIVE_SPLIT_CONTROLLER_STREAM_GUARD
     retail_display_line("PREFETCH AUTO / SPLIT CONTROLLER ALL");
 #elif KUI_NATIVE_SPLIT_CONTROLLER_PREFETCH
@@ -489,6 +504,7 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     retail_display_line("PREFETCH OFF / SPLIT CONTROLLER ALL");
 #else
     retail_display_line("PREFETCH OFF / SPLIT CONTROLLER");
+#endif
 #endif
     retail_display_line("REAL MAPLE CALLBACKS ON");
 #elif KUI_NATIVE_METADATA_CACHE_ISOLATION

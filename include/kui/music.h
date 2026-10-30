@@ -27,6 +27,11 @@ void kui_music_init(kui_log_fn log);
 const char *kui_music_track_name(unsigned index);
 const char *kui_music_track_file(unsigned index);
 void kui_music_status_copy(struct kui_music_status *out);
+/* Display-only snapshot: never wait for the decoder/stream refill. Returns
+ * false without changing out while the audio thread owns its mutex. Keep the
+ * preceding UI snapshot and try on the next poll. Controls and worker decisions
+ * needing authoritative state continue to use status_copy. */
+bool kui_music_status_try_copy(struct kui_music_status *out);
 /* Snapshot under the audio mutex, then emit through the app logger after
  * releasing it. Safe while loading/capturing; performs no storage I/O. */
 void kui_music_log_stats(const char *reason);

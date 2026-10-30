@@ -4,11 +4,28 @@
 #include <kos/thread.h>
 #include <kos/timer.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <string.h>
 
 /* All firmware-visible objects survive a failed abort. Once poisoned, this
  * adapter will not touch them again, and requires a console reset. */
 static bool initialized, poisoned, media_changed;
+static bool command_running, dma_in_flight;
+static bool g1_probe_active;
+static struct kui_drive_mode g1_probe_original;
+static struct kui_drive_controls controls;
+static bool controls_format_pending, controls_format_refused;
+/* BIOS REQ_MODE takes one destination pointer and expands its ten wire bytes
+ * into four RAM words. SET_MODE takes those four words directly. These objects
+ * must outlive any failed abort, just like read_params and the optical buffers.
+ * Interface: pinned KOS syscalls.h; independently cross-checked against redream
+ * ffb7302245ff40515cb9f0f0b0e233a4b39342d3 bios syscalls.c. */
+static struct { struct kui_drive_mode *destination; uint32_t reserved[3]; } mode_query_params;
+static struct kui_drive_mode mode_set_params;
+static _Alignas(32) struct {
+    uint8_t before[32];struct kui_drive_mode data;uint8_t after[32];
+} mode_reply;
+static int last_poll_status=-2; /* -2: this request has not polled a command. */
 static cd_read_params_t read_params;
 static cd_cmd_toc_params_t toc_params;
 static cd_cmd_chk_status_t detail;
@@ -32,7 +49,7 @@ struct command_timing {
 };
 static struct optical_timing {
     uint64_t us,requests,bytes,mode_us,modes,mode_failures,buffers_us;
-    uint64_t result[3],mismatches,guards,refused,short_transfers;
+    uint64_t result[KUI_READ_PARTIAL+1],mismatches,guards,refused,short_transfers;
     struct command_timing read[2];
 } optical[2];
 static unsigned optical_phase;
@@ -70,6 +87,8 @@ void kui_disc_timing_report(void) {
         kui_log("opt buffers_us=%" PRIu64 " other_us=%" PRIu64,t->buffers_us,t->us>=children?t->us-children:0);
         kui_log("opt requests ok=%" PRIu64 " retry=%" PRIu64 " fatal=%" PRIu64,
             t->result[KUI_READ_OK],t->result[KUI_READ_RETRY],t->result[KUI_READ_FATAL]);
+        if(t->result[KUI_READ_PARTIAL])
+            kui_log("opt requests partial=%" PRIu64 "; tentative bytes need sector checks",t->result[KUI_READ_PARTIAL]);
         kui_log("opt mismatch=%" PRIu64 " guards=%" PRIu64 " refused=%" PRIu64,t->mismatches,t->guards,t->refused);
         kui_log("opt short=%" PRIu64,t->short_transfers);
         kui_log("opt poll buckets: call <25us/<100us/<400us/<1.6ms/more");
@@ -134,6 +153,7 @@ static int poll(void *ctx, int handle) {
     uint64_t start=(active_command||probe_stats)?timer_us_gettime64():0;
     syscall_gdrom_exec_server();
     int status=syscall_gdrom_check_command(handle, &detail);
+    last_poll_status=status;
     if(active_command||probe_stats) {
         uint64_t d=timer_us_gettime64()-start;unsigned b=kui_probe_bucket(d);
         if(active_command) {
@@ -149,17 +169,23 @@ static void abort_command(void *ctx, int handle) {
     syscall_gdrom_abort_command(handle);
     if(active_command) {active_command->abort_us+=timer_us_gettime64()-start;++active_command->aborts;}
 }
-static bool command_run(int code, void *params, uint32_t timeout,bool can_cancel) {
-    if(poisoned || (can_cancel && kui_cancelled())) {
+static bool command_run_deadlines(int code,void *params,uint32_t timeout,
+    uint32_t abort_ms,bool can_cancel,enum kui_command_result *outcome) {
+    if(outcome)*outcome=KUI_CMD_INVALID;
+    if(poisoned || g1_probe_active || command_running || dma_in_flight || (can_cancel && kui_cancelled())) {
         if(active_command) ++active_command->result[poisoned?KUI_CMD_RECOVERY_FAILED:KUI_CMD_CANCELLED];
         return false;
     }
     memset(&detail, 0, sizeof(detail));
+    last_poll_status=-2;
     fast_pio=code==CD_CMD_PIOREAD;
     last_pass_us=timer_us_gettime64();
     struct kui_command_ops ops = {NULL, now, pause_worker,
         can_cancel?cancelled:never_cancelled, submit, poll, abort_command};
-    enum kui_command_result result = kui_command(&ops, code, params, timeout, 1000);
+    command_running=true;
+    enum kui_command_result result = kui_command(&ops, code, params, timeout, abort_ms);
+    if(outcome)*outcome=result;
+    command_running=false;
     fast_pio=false;
     if(active_command) ++active_command->result[result];
     if(result == KUI_CMD_OK) return true;
@@ -170,18 +196,213 @@ static bool command_run(int code, void *params, uint32_t timeout,bool can_cancel
     if(detail.err1 == 6 || detail.err1 == 2) media_changed = true;
     return false;
 }
+static bool command_run(int code,void *params,uint32_t timeout,bool can_cancel) {
+    return command_run_deadlines(code,params,timeout,1000,can_cancel,NULL);
+}
 static bool command(int code,void *params,uint32_t timeout) {
     return command_run(code,params,timeout,true);
 }
 
+static bool controls_safe(void *ctx) {
+    (void)ctx;
+    return initialized && !poisoned && !g1_probe_active && !media_changed && !command_running && !dma_in_flight;
+}
+static bool controls_query(void *ctx,struct kui_drive_mode *out) {
+    (void)ctx;
+    if(!out || !controls_safe(NULL))return false;
+    memset(&mode_reply,0xa5,sizeof(mode_reply));
+    memset(&mode_query_params,0,sizeof(mode_query_params));
+    mode_query_params.destination=&mode_reply.data;
+    bool ok=command_run_deadlines(CD_CMD_REQ_MODE,&mode_query_params,5000,5000,false,NULL);
+    /* Neither guards nor payload may be inspected while firmware owns them. */
+    if(poisoned)return false;
+    if(!kui_guard_is(mode_reply.before,32,0xa5) || !kui_guard_is(mode_reply.after,32,0xa5)) {
+        poisoned=true;kui_log("DRIVE MODE GUARD CORRUPTION: RESET REQUIRED");return false;
+    }
+    if(!ok)return false;
+    if(detail.size!=10u || mode_reply.data.speed>7u || mode_reply.data.standby>65535u ||
+       mode_reply.data.read_flags>255u || mode_reply.data.read_retry>255u) {
+        kui_log("Drive mode response invalid: wire_bytes=%lu speed=%" PRIu32 " standby=%" PRIu32,
+            (unsigned long)detail.size,mode_reply.data.speed,mode_reply.data.standby);
+        kui_log("  flags=%08" PRIx32 " retries=%" PRIu32,mode_reply.data.read_flags,mode_reply.data.read_retry);
+        return false;
+    }
+    *out=mode_reply.data;return true;
+}
+static bool controls_set(void *ctx,const struct kui_drive_mode *mode) {
+    (void)ctx;
+    if(!mode || !controls_safe(NULL))return false;
+    mode_set_params=*mode;
+    bool ok=command_run_deadlines(CD_CMD_SET_MODE,&mode_set_params,5000,5000,false,NULL);
+    if(poisoned)return false;
+    if(ok && detail.size!=10u) {
+        kui_log("Drive mode SET response invalid: wire_bytes=%lu",(unsigned long)detail.size);return false;
+    }
+    return ok;
+}
+static const struct kui_drive_control_ops control_ops={NULL,controls_safe,controls_query,controls_set};
+bool kui_disc_g1_probe_begin(void) {
+    if(g1_probe_active || controls.active || kui_cancelled() || !controls_safe(NULL))return false;
+    if(!controls_query(NULL,&g1_probe_original) || kui_cancelled() || !controls_safe(NULL))return false;
+    g1_probe_active=true;
+    kui_log("Direct G1 gate: BIOS commands excluded until probe releases ownership");
+    return true;
+}
+bool kui_disc_g1_probe_end(bool restored) {
+    if(!g1_probe_active)return false;
+    g1_probe_active=false;
+    struct kui_drive_mode observed;
+    if(!restored || !controls_safe(NULL) || !controls_query(NULL,&observed) ||
+       observed.speed!=g1_probe_original.speed || observed.standby!=g1_probe_original.standby ||
+       observed.read_flags!=g1_probe_original.read_flags || observed.read_retry!=g1_probe_original.read_retry) {
+        poisoned=true;
+        kui_log("Direct G1 gate: original mode/ownership not verified; RESET REQUIRED");
+        return false;
+    }
+    kui_log("Direct G1 gate: BIOS mode matches original snapshot after raw restoration");
+    return true;
+}
+static void log_mode(const char *label,const struct kui_drive_mode *mode) {
+    kui_log("Drive %s speed_code=%" PRIu32 " standby=%" PRIu32 " flags=%02" PRIx32 " retries=%" PRIu32,
+        label,mode->speed,mode->standby,mode->read_flags,mode->read_retry);
+}
+static void log_control_attempt(void) {
+    log_mode("attempt requested",&controls.attempt_requested);
+    if(controls.attempt_observed_valid) {
+        const struct kui_drive_mode *a=&controls.attempt_requested,*b=&controls.attempt_observed;
+        unsigned mask=(a->speed!=b->speed?1u:0u)|(a->standby!=b->standby?2u:0u)|
+            (a->read_flags!=b->read_flags?4u:0u)|(a->read_retry!=b->read_retry?8u:0u);
+        log_mode("attempt returned before rollback",b);
+        kui_log("Drive attempt result=%s diff_mask=%u (speed=1 standby=2 flags=4 retries=8)",
+            kui_drive_control_result_name(controls.attempt_result),mask);
+    } else kui_log("Drive attempt result=%s; no valid returned tuple",
+        kui_drive_control_result_name(controls.attempt_result));
+}
+static bool controls_after_format(void) {
+    if(controls_format_refused)return false;
+    if(!controls_format_pending)return true;
+    controls_format_pending=false;
+    if(!controls_query(NULL,&controls.observed)) {
+        controls_format_refused=true;
+        kui_log("Drive controls after sector format: query failed; reads refused");return false;
+    }
+    log_mode("after sector format",&controls.observed);
+    const struct kui_drive_mode *a=&controls.requested,*b=&controls.observed;
+    if(a->speed!=b->speed || a->standby!=b->standby ||
+       a->read_flags!=b->read_flags || a->read_retry!=b->read_retry) {
+        controls_format_refused=true;
+        kui_log("Drive controls changed after sector format; reads refused");return false;
+    }
+    kui_log("Drive controls after sector format: firmware tuple retained; physical speed not measured");
+    return true;
+}
+bool kui_disc_controls_begin(const struct kui_drive_options *options) {
+    if(kui_cancelled() || controls.active)return false;
+    kui_log("Drive controls requested speed=%s retries=%s",kui_drive_speed_name(options?options->speed:UINT_MAX),
+        kui_drive_retry_name(options?options->retries:UINT_MAX));
+    enum kui_drive_control_result result=kui_drive_controls_begin(&controls,&control_ops,options);
+    controls_format_pending=result==KUI_DRIVE_CONTROL_OK && controls.modified;
+    controls_format_refused=false;
+    if(controls.active && controls.modified) {
+        log_mode("original",&controls.original);log_mode("requested",&controls.requested);
+        log_control_attempt();
+        if(result==KUI_DRIVE_CONTROL_OK)log_mode("readback",&controls.observed);
+    }
+    kui_log("Drive controls begin: %s; physical speed not measured",kui_drive_control_result_name(result));
+    return result==KUI_DRIVE_CONTROL_OK;
+}
+bool kui_disc_controls_trial_begin(void) {
+    if(kui_cancelled() || controls.active)return false;
+    enum kui_drive_control_result result=kui_drive_controls_trial_begin(&controls,&control_ops);
+    controls_format_pending=result==KUI_DRIVE_CONTROL_OK;
+    controls_format_refused=false;
+    if(result==KUI_DRIVE_CONTROL_OK)log_mode("trial original",&controls.original);
+    kui_log("Drive control trial begin: %s; physical speed not measured",kui_drive_control_result_name(result));
+    return result==KUI_DRIVE_CONTROL_OK;
+}
+int kui_disc_controls_trial_select(void *ctx,unsigned profile) {
+    (void)ctx;
+    static const struct kui_drive_options profiles[]={{0,0},{0,2},{4,2},{3,2}};
+    if(profile>=sizeof(profiles)/sizeof(profiles[0]) || kui_cancelled() ||
+       !controls_safe(NULL) || controls_format_refused || !controls.trial)return -1;
+    uint64_t start=timer_us_gettime64();
+    enum kui_drive_control_result result=kui_drive_controls_select(&controls,&control_ops,&profiles[profile]);
+    kui_log("Drive trial profile %u: %s control_us=%" PRIu64,
+        profile,kui_drive_control_result_name(result),timer_us_gettime64()-start);
+    log_control_attempt();
+    if(result==KUI_DRIVE_CONTROL_OK) {
+        controls_format_pending=true;log_mode("trial selected",&controls.requested);return 1;
+    }
+    if(controls.verified && controls_safe(NULL)) {
+        /* The controller has already proved rollback. Verify it again after
+         * the next sector-format setup before any later optical transfer. */
+        controls_format_pending=true;log_mode("trial rollback",&controls.requested);return 0;
+    }
+    controls_format_refused=true;
+    /* A partially applied tuple without verified rollback is unsuitable for
+     * any further optical work, even if the last command released ownership. */
+    poisoned=true;kui_log("Drive trial rollback unavailable: RESET REQUIRED");return -1;
+}
+int kui_disc_controls_speed_select(void *ctx,unsigned selection) {
+    (void)ctx;
+    if(selection>=KUI_DRIVE_SPEED_CHOICES || kui_cancelled() || !controls_safe(NULL) ||
+       controls_format_refused || !controls.trial)return -1;
+    /* All speed requests use the same verified retry policy. Selection zero
+     * retains the entry speed; selections 1..8 request wire codes 0..7. */
+    const struct kui_drive_options option={selection,2};
+    uint64_t start=timer_us_gettime64();
+    enum kui_drive_control_result result=kui_drive_controls_select(&controls,&control_ops,&option);
+    kui_log("SPEED mode selection=%u label=%s result=%s control_us=%" PRIu64,
+        selection,kui_drive_speed_name(selection),kui_drive_control_result_name(result),timer_us_gettime64()-start);
+    log_control_attempt();
+    if(result==KUI_DRIVE_CONTROL_OK) {
+        controls_format_pending=true;log_mode("speed probe selected",&controls.requested);return 1;
+    }
+    if(controls.verified && controls_safe(NULL)) {
+        controls_format_pending=true;log_mode("speed probe verified rollback",&controls.requested);return 0;
+    }
+    controls_format_refused=true;poisoned=true;
+    kui_log("SPEED rollback unavailable: RESET REQUIRED");return -1;
+}
+static bool controls_reapply(void) {
+    if(!controls.active || (!controls.modified && !controls.trial))return true;
+    if(controls_format_refused)return false;
+    enum kui_drive_control_result result=kui_drive_controls_reapply(&controls,&control_ops);
+    controls_format_pending=result==KUI_DRIVE_CONTROL_OK;
+    kui_log("Drive controls after INIT: %s",kui_drive_control_result_name(result));
+    if(result==KUI_DRIVE_CONTROL_OK)log_mode("readback",&controls.observed);
+    return result==KUI_DRIVE_CONTROL_OK;
+}
+bool kui_disc_controls_end(void) {
+    bool modified=controls.modified;
+    struct kui_drive_mode original=controls.original;
+    if(controls.active && modified) {
+        log_mode("session requested",&controls.requested);log_mode("session original",&original);
+    }
+    enum kui_drive_control_result result=kui_drive_controls_end(&controls,&control_ops);
+    controls_format_pending=controls_format_refused=false;
+    if(result!=KUI_DRIVE_CONTROL_OK && modified) {
+        /* A released but uncertain mode is also unsuitable for ordinary
+         * capture. This latch never frees or rewrites firmware-owned objects. */
+        poisoned=true;kui_log("Drive controls not restored: RESET REQUIRED");
+    }
+    if(modified && result==KUI_DRIVE_CONTROL_OK)log_mode("restored",&original);
+    kui_log("Drive controls end: %s",poisoned?"reset required":kui_drive_control_result_name(result));
+    return result==KUI_DRIVE_CONTROL_OK && !poisoned;
+}
+
 static bool set_mode(int size, int track_type) {
-    if(poisoned || kui_cancelled()) return false;
+    if(poisoned || g1_probe_active || command_running || dma_in_flight || kui_cancelled() || controls_format_refused) return false;
     cd_sec_mode_params_t mode = {0,
         size == 2352 ? CDROM_READ_WHOLE_SECTOR : CDROM_READ_DATA_AREA,
         track_type, size};
+    /* The hardware trial explicitly checks whether this BIOS call preserves
+     * mode fields. Until that is established, even its baseline-only profile
+     * needs restoration authority if the call changes a field or fails. */
+    if(controls.trial && controls.snapshot_valid)controls.modified=true;
     int r = syscall_gdrom_sector_mode(&mode);
     if(r != 0) kui_log("Set sector mode failed: %d", r);
-    return r == 0;
+    return r == 0 && (size!=2352 || controls_after_format());
 }
 static bool read_sector(void *data, uint32_t fad) {
     read_params = (cd_read_params_t){.start_sec = fad, .num_sec = 1,
@@ -241,6 +462,7 @@ static bool sample(const struct kui_track *track, uint32_t fad) {
 static bool disc_prepare(struct kui_toc sessions[2],bool allow_cd,bool *is_cd) {
     if(is_cd)*is_cd=false;
     if(poisoned) { kui_log("Drive unavailable after failed recovery; reset console"); return false; }
+    if(!sessions || g1_probe_active || command_running || dma_in_flight || kui_cancelled())return false;
     if(!initialized) { kui_drive_init_bus(); initialized = true; }
     bool ready = false;
     /* Two additional INIT attempts for disc-change sense only. */
@@ -250,6 +472,7 @@ static bool disc_prepare(struct kui_toc sessions[2],bool allow_cd,bool *is_cd) {
     }
     if(!ready) { kui_log("Disc initialization did not complete"); return false; }
     media_changed = false;
+    if(!controls_reapply())return false;
     unsigned areas=2;
     if(allow_cd) {
         cd_check_drive_status_t drive;
@@ -293,11 +516,40 @@ bool kui_disc_prepare_capture(struct kui_toc sessions[2],bool *is_cd) {
     return disc_prepare(sessions,true,is_cd);
 }
 
-enum kui_read_result kui_disc_read_raw(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out) {
+bool kui_disc_recover(void *ctx,const struct kui_capture_plan *expected) {
+    (void)ctx;
+    /* No INIT or bus reset is safe while firmware might still own any static
+     * parameter workspace or DMA buffer. A successful abort has already reached
+     * terminal command status; a failed abort permanently sets poisoned. A lid
+     * change requires the user to start Resume and reestablish disc identity. */
+    if(!expected || !expected->count || expected->count>99 ||
+       (expected->profile!=KUI_CAPTURE_PROFILE_GD && expected->profile!=KUI_CAPTURE_PROFILE_CD_TOC) ||
+       poisoned || g1_probe_active || media_changed || command_running || dma_in_flight || kui_cancelled())return false;
+    struct kui_toc sessions[2];struct kui_capture_plan actual;bool is_cd=false;
+    kui_log("Recovery: reinitializing released drive and checking track layout");
+    if(!disc_prepare(sessions,true,&is_cd))return false;
+    bool valid=is_cd?kui_plan_cd_tracks(&sessions[0],&actual):kui_plan_tracks(sessions,&actual);
+    if(!valid || actual.profile!=expected->profile || actual.count!=expected->count || actual.bytes!=expected->bytes) {
+        media_changed=true;kui_log("Recovery: media/profile/layout differs; Resume required");return false;
+    }
+    for(unsigned i=0;i<actual.count;++i) {
+        const struct kui_capture_track *a=&actual.tracks[i],*b=&expected->tracks[i];
+        if(a->number!=b->number || a->control!=b->control || a->session!=b->session ||
+           a->start!=b->start || a->end!=b->end || a->toc_end!=b->toc_end) {
+            media_changed=true;kui_log("Recovery: track %u differs; Resume required",i+1);return false;
+        }
+    }
+    kui_log("Recovery: layout matches; saved content anchors must be checked");
+    return true;
+}
+
+static enum kui_read_result read_raw(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out,
+    uint32_t read_ms,uint32_t abort_ms,bool allow_partial) {
     (void)ctx;
     struct optical_timing *t=&optical[optical_phase];
     uint64_t request_start=timer_us_gettime64(),start;
     enum kui_read_result result=KUI_READ_FATAL;
+    bool read_called=false;
     ++t->requests;
     if(!out || !sectors || sectors>KUI_CAPTURE_CHUNK || fad<150 || fad>0xffffff ||
        sectors>0x1000000u-fad || poisoned || media_changed || kui_cancelled()) {++t->refused;goto done;}
@@ -316,7 +568,10 @@ enum kui_read_result kui_disc_read_raw(void *ctx,uint32_t fad,unsigned sectors,u
         read_params=(cd_read_params_t){.start_sec=fad,.num_sec=sectors,.buffer=capture_raw[i].data,.is_test=0};
         t->buffers_us+=timer_us_gettime64()-start;
         struct command_timing *c=&t->read[i];active_command=c;
-        start=timer_us_gettime64();bool read_ok=command(CD_CMD_PIOREAD,&read_params,5000);
+        uint64_t aborts_before=c->aborts;
+        start=timer_us_gettime64();read_called=true;
+        enum kui_command_result command_result;
+        bool read_ok=command_run_deadlines(CD_CMD_PIOREAD,&read_params,read_ms,abort_ms,true,&command_result);
         uint64_t duration=timer_us_gettime64()-start;active_command=NULL;
         c->us+=duration;++c->calls;
         if(duration>c->max_us) {c->max_us=duration;c->max_fad=fad;c->max_sectors=sectors;}
@@ -330,7 +585,21 @@ enum kui_read_result kui_disc_read_raw(void *ctx,uint32_t fad,unsigned sectors,u
         if(!guard_ok) {
             ++t->guards;poisoned=true;kui_log("CAPTURE GUARD CORRUPTION: RESET REQUIRED");goto done;
         }
-        if(!read_ok) {result=media_changed || kui_cancelled()?KUI_READ_FATAL:KUI_READ_RETRY;goto done;}
+        if(!read_ok) {
+            result=media_changed || kui_cancelled()?KUI_READ_FATAL:KUI_READ_RETRY;
+            /* An ordinary terminal medium error has released this freshly
+             * filled guarded buffer. Preserve its tentative bytes for the
+             * salvage core's exact per-sector FAD/EDC/PQ checks. The firmware's
+             * reported size is not a trusted prefix length. Timeout/abort,
+             * submission failure and all fatal states keep their old policy. */
+            if(allow_partial && result==KUI_READ_RETRY &&
+               command_result==KUI_CMD_FAILED && c->aborts==aborts_before &&
+               last_poll_status==-1 && detail.err1==3) {
+                start=timer_us_gettime64();memcpy(out,capture_raw[i].data,bytes);
+                t->buffers_us+=timer_us_gettime64()-start;result=KUI_READ_PARTIAL;
+            }
+            goto done;
+        }
         /* KOS defines status.size as transferred bytes. This check detects a
          * reported short transfer without rereading CDDA or guessing from its
          * contents (legitimate audio can match any buffer fill pattern). */
@@ -352,7 +621,27 @@ enum kui_read_result kui_disc_read_raw(void *ctx,uint32_t fad,unsigned sectors,u
         t->bytes+=bytes;result=KUI_READ_OK;
     }
 done:
+    if(result!=KUI_READ_OK) {
+        kui_log("RAW %s FAD=%" PRIu32 " sectors=%u elapsed_ms=%" PRIu64,
+            result==KUI_READ_FATAL?"fatal":result==KUI_READ_PARTIAL?"partial":"retry",fad,sectors,
+            (timer_us_gettime64()-request_start)/1000u);
+        if(read_called) {
+            kui_log("  read_ms=%" PRIu32 " abort_ms=%" PRIu32 " poll=%d",read_ms,abort_ms,last_poll_status);
+            kui_log("  sense=%" PRId32 "/%" PRId32 " size=%lu ATA=%d",
+                detail.err1,detail.err2,(unsigned long)detail.size,detail.ata);
+        } else kui_log("  read_ms=%" PRIu32 " abort_ms=%" PRIu32 "; no read command issued",read_ms,abort_ms);
+    }
     ++t->result[result];t->us+=timer_us_gettime64()-request_start;return result;
+}
+enum kui_read_result kui_disc_read_raw(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out) {
+    return read_raw(ctx,fad,sectors,out,5000,1000,false);
+}
+enum kui_read_result kui_disc_read_salvage(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out) {
+    /* Damaged media can keep firmware internally retrying beyond the normal
+     * capture deadline. Give it a longer bounded window to return an ordinary
+     * error, plus time to confirm an abort. Never reuse a buffer after an
+     * unconfirmed abort or downgrade the poisoned/guard/media fatal paths. */
+    return read_raw(ctx,fad,sectors,out,30000,5000,true);
 }
 
 /* --- bench-only optical probe ------------------------------------------------
@@ -481,13 +770,12 @@ static struct kui_command_async dma_async;
 static unsigned dma_failures;   /* consecutive DMA reads that failed on an unchanged disc */
 static uint8_t *dma_target;
 static size_t dma_target_bytes;
-static bool dma_in_flight;
 
 bool kui_disc_stop(void) {
     /* In particular do not reset/init after failed recovery: static firmware
      * objects may still be owned. An unfinished DMA must be ended by its owner
      * before STOP can safely share the command detail/parameter workspace. */
-    if(poisoned || dma_in_flight) return false;
+    if(poisoned || g1_probe_active || dma_in_flight) return false;
     if(!initialized) {kui_drive_init_bus();initialized=true;}
     /* This only initializes the BIOS dispatcher workspace. Disc INIT (24),
      * which discovers/spins media, remains exclusive to explicit preparation. */
@@ -517,6 +805,7 @@ bool kui_disc_read_begin(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out) {
 }
 bool kui_disc_read_pending(void *ctx) {
     (void)ctx;
+    if(g1_probe_active)return true;
     if(!dma_in_flight) return false;
     struct kui_command_ops ops={NULL,now,pause_worker,cancelled,submit,poll,abort_command};
     return !kui_command_ready(&ops,&dma_async);

@@ -14,6 +14,7 @@ import copy
 import hashlib
 import json
 from pathlib import Path
+from native_runtime_layout import LEASE_BYTES, STACK_OFFSET, STACK_END, layout_for
 import struct
 import sys
 
@@ -26,7 +27,7 @@ from test_vmu_native_sdk_poll_execution import PollSH
 from profile_vmu_native_record_worker_sh import OWNER_STACK, RETURN
 
 ONE = (1, 0, 0, 0xfff1)
-LEASE = 0x60000
+LEASE = LEASE_BYTES
 STATS = ('prepared', 'completed', 'advertisements', 'replies', 'backend_calls',
          'devinfo', 'allinfo', 'media', 'reads', 'failures', 'flags',
          'last_request', 'last_reply', 'last_rx')
@@ -66,7 +67,16 @@ class IsolationWorker(RecordWorker):
         self.submission_delay = submission_delay
         self.post_start_delay = post_start_delay
         self.split_controller = split_controller
-        require(not split_controller or (tick_off and not any((wait_capture,maple_bypass,maple_delay,
+        stage, worker = read_elf(build/'stage.elf'), read_elf(build/'native-worker.elf')
+        self.general = '__kui_native_general_lean_worker_layout' in worker[4]
+        if self.general:
+            from check_native_general_lean_profile import stage_profile, worker_profile
+            require(stage_profile(stage) and worker_profile(worker),
+                    'General SDK replay requires its paired complete lean profiles')
+            require(split_controller and not tick_off and not any((wait_capture,maple_bypass,maple_delay,
+                        cached_metadata,completion_delay,submission_delay,post_start_delay)),
+                    'General SDK replay requires its real split callbacks and enabled Prefetch TICK')
+        require(self.general or not split_controller or (tick_off and not any((wait_capture,maple_bypass,maple_delay,
                     cached_metadata,completion_delay,submission_delay,post_start_delay))),
                 'Split controller requires TICK off and real callbacks without other diagnostics')
         require(not(completion_delay and submission_delay), 'Select only one Maple delay side')
@@ -89,7 +99,6 @@ class IsolationWorker(RecordWorker):
         self.last_aux_arguments = None
         self.loan_boundary = None
         super().__init__(startup, build, handoff, record)
-        stage, worker = read_elf(build/'stage.elf'), read_elf(build/'native-worker.elf')
         require(cached_metadata is (variant == 'metadata_cache'),
                 'Cached metadata must use its explicit combined variant')
         require(split_controller is (variant == 'split_controller'),
@@ -98,7 +107,7 @@ class IsolationWorker(RecordWorker):
         for image, role in ((stage,'stage'),(worker,'worker')):
             require(image[4].get(marker+role) == ONE, 'Isolation marker differs: '+role)
             require(image[4].get('__kui_native_isolation_lease_bytes') ==
-                    (LEASE,0,0,0xfff1), 'Isolation lease is not exact compiled384KiB')
+                    (layout_for(image[4]).LEASE_BYTES,0,0,0xfff1), 'Isolation lease is not its exact compiled layout')
             require(image[4].get('__kui_native_bottom_heap_'+role) == ONE,
                     'Isolation lacks current bottom placement: '+role)
             for other in {'reader_only', 'standard_vmu', 'metadata_cache', 'split_controller'} - {variant}:
@@ -141,8 +150,8 @@ class IsolationWorker(RecordWorker):
             marker=image[4].get('__kui_native_maple_delay_post_start_isolation_'+role)
             require(marker == ONE if post_start_delay else marker is None,
                     'Maple post-start delay marker differs: '+role)
-        self.lease_bytes = LEASE
-        self.worker_physical_high = self.worker_physical_low+LEASE
+        self.lease_bytes = layout_for(self.symbols).LEASE_BYTES
+        self.worker_physical_high = self.worker_physical_low+self.lease_bytes
         self.lease_geometry_source = 'Paired actual absolute isolation lease and bottom markers'
         self.build_inputs['stage.elf'] = (build/'stage.elf').read_bytes()
         self.tracked_entries = {self.symbols[name][0]:name for name in BACKENDS if name in self.symbols}
@@ -212,14 +221,15 @@ class IsolationWorker(RecordWorker):
         require(self.variant in ('reader_only','metadata_cache','split_controller'),
                 'Only New reader has an auxiliary boundary')
         lease=self.actual_heap_payload&0x1fffffff|0x80000000
-        manifest=lease+0x20000;region=lease+0x20400;aux=(lease+0x21000)|0x20000000
-        self.tick_region=region;self.tick_entry=lease+0x22000
+        g=layout_for(self.symbols)
+        manifest=lease+g.MAP_OFFSET;region=lease+g.REGION_OFFSET;aux=(lease+g.AUX_OFFSET)|0x20000000
+        self.tick_region=region;self.tick_entry=lease+g.AUX_OFFSET+0x1000
         context=aux+64
         self.write(manifest+44,1);self.write(manifest+48,1)
         self.write(region+0x27c,manifest);self.write(region+0x530,0x53434931)
         values=(0x4b524131,1,64,self.tick_entry,self.tick_entry+2,context,
-                lease+0x24000,(lease+0x27000)|0x20000000,
-                (lease+0x28000)|0x20000000,(lease+0x28000)|0x20000000,0,0,0,0,0,0)
+                lease+g.STACK_OFFSET,(lease+g.STACK_OFFSET)|0x20000000,
+                (lease+g.STACK_END)|0x20000000,(lease+g.STACK_END)|0x20000000,0,0,0,0,0,0)
         self.store_block(aux,struct.pack('<16I',*values))
         self.write(region+0x500,self.tick_entry);self.write(region+0x504,context)
 
@@ -535,7 +545,7 @@ def run_variant(startup, record_path, build, variant, tick_off=False, wait_captu
         capture=cpu.symbols['_diagnostic_phase'][0]+24
         attempts,valid=struct.unpack('<2I',cpu.block(capture,8))
         ready=cpu.read(capture+52)
-        normal=cpu.read(cpu.symbols['_config'][0]+2296)
+        normal=cpu.read(cpu.symbols['_config'][0]+2300)
         require(attempts==valid==ready==cpu.tick_calls==normal==0,
                 'Normal pre-gesture polling captured contexts, dispatched TICK, or changed diagnostics')
         pre_gesture=dict(polls=8,capture_attempts=attempts,captured_contexts=valid,
@@ -650,7 +660,7 @@ def run_variant(startup, record_path, build, variant, tick_off=False, wait_captu
                 normal_pre_gesture=pre_gesture,artifact_sha256={name:sha((build/name).read_bytes()) for name in
                     ('entry.elf','stage.elf','native-worker.elf','native-worker.bin','native-worker.reloc','resident-sci.elf','resident-sci.bin')},
                 original_source_sha256=sha(source),record_sha256=sha(record.wire),program_extent=extent,
-                lease_bytes=cpu.lease_bytes,worker_bytes=0x20000,placement='bottom',heap_calls=cpu.heap_calls,
+                lease_bytes=cpu.lease_bytes,worker_bytes=layout_for(cpu.symbols).WORKER_BYTES,placement='bottom',heap_calls=cpu.heap_calls,
                 sdk_initializer=initializer,natural_rounds=rounds,final_overlay=stats,
                 natural_backend_calls=dict(cpu.calls),tick_calls=cpu.tick_calls,
                 actual_maple_c_callbacks=dict(cpu.c_callback_calls),

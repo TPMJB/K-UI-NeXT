@@ -102,6 +102,14 @@ int main(void) {
         put16(image,pc,original);
     }
     CHECK(decode(image,IMAGE));
+    /* The shared single-caller proof must preserve SP as well as its
+     * target. Coordinated MOV.L/JSR changes through R15 evade a mutation
+     * of either instruction alone and would corrupt the leaf's PR save. */
+    for(unsigned reg=0;reg<16u;reg++) {
+        fixture(image);put16(image,CALLER,load(reg,CALLER,0x80u));
+        put16(image,CALLER+2u,(uint16_t)(0x400bu|(reg<<8)));
+        CHECK(decode(image,IMAGE)==(reg!=15u));
+    }
     /* The single caller: a load through one register, a call through the
      * same register, a no-op delay; no other image word names the leaf. */
     fixture(image);put16(image,CALLER+2u,0x410bu);CHECK(!decode(image,IMAGE));

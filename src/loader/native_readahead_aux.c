@@ -3,6 +3,7 @@
  * owner of demand completion, guest destinations, retries and card adoption.
  * This module runs only through its separately guarded private-stack entry. */
 #include "native_readahead_aux_internal.h"
+#include "kui/vmu_native_background.h"
 #include "kui/toy_pilot_clock.h"
 #include <string.h>
 
@@ -22,6 +23,10 @@ __asm__(".global __kui_native_readahead_diagnostic_auxiliary\n"
         ".set __kui_native_readahead_pio_auxiliary,1\n"
         ".global __kui_native_readahead_pio_pair_auxiliary\n"
         ".set __kui_native_readahead_pio_pair_auxiliary,1\n");
+#if KUI_NATIVE_GENERAL_LEAN_LAYOUT
+__asm__(".global __kui_native_general_lean_auxiliary\n"
+        ".set __kui_native_general_lean_auxiliary,1\n");
+#endif
 #define C kui_native_readahead_aux_context
 struct kui_native_readahead_aux_context kui_native_readahead_aux_context
     __attribute__((section(".data.native_ra_context"),aligned(32)))={0};
@@ -76,7 +81,7 @@ static bool config_valid(const struct kui_native_ra_config *c) {
        p>UINT32_C(0x0d000000)-KUI_NATIVE_RA_LEASE_BYTES ||
        (uintptr_t)&C<(p|UINT32_C(0xa0000000))+KUI_NATIVE_RA_AUX_OFFSET+64u ||
        (uintptr_t)&C>(p|UINT32_C(0xa0000000))+KUI_NATIVE_RA_AUX_OFFSET+4096u-sizeof(C) ||
-       (uintptr_t)c->region!=(p|UINT32_C(0x80000000))+UINT32_C(0x20400) ||
+       (uintptr_t)c->region!=(p|UINT32_C(0x80000000))+KUI_VMU_NATIVE_BACKGROUND_REGION_OFFSET ||
        (uintptr_t)c->data!=(p|UINT32_C(0xa0000000))+KUI_NATIVE_RA_DATA_OFFSET ||
        (ops&3u) || ops<UINT32_C(0x8c004028) ||
        ops>UINT32_C(0x8c007ba0)-sizeof(*c->ops))return false;

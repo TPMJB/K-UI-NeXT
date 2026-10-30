@@ -2,6 +2,7 @@
 #ifndef KUI_APPS_H
 #define KUI_APPS_H
 #include "kui/probe.h"
+#include "kui/vmu_image.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -35,6 +36,14 @@ struct kui_vmu_view {
 struct kui_vmu_backup_entry {
     char name[16],folder[16],path[KUI_VMU_BACKUP_PATH_CAP];
     uint32_t bytes;
+    /* GUI-only unified catalog metadata; never part of a native module ABI. */
+    char label[49],games[193];
+    /* Display-only context. titles is based on exact game assignments and
+     * checked title-cache headers; contents describes saves, not ownership. */
+    char titles[193],contents[97];
+    unsigned free_blocks,users;
+    bool active,readable,custom_label;
+    uint8_t identity[16];
 };
 struct kui_vmu_backup_view {
     struct kui_app_status status;
@@ -82,12 +91,28 @@ void kui_vmu_copy_all_run(unsigned source_slot,unsigned destination_slot,bool co
 /* Creates a new managed 200-block virtual card on SD. Selected copy preserves
  * only the exact selected file; all preserves every source save. Preview pins
  * the source and commit rechecks it. Existing cards and physical VMUs are never
- * written. Stored cards can be browsed/extracted; game activation is pending. */
+ * written. Stored cards can be browsed/extracted or assigned through the wizard. */
 void kui_vmu_collection_copy_run(unsigned source_slot,unsigned page,unsigned selected,
     bool all,bool commit,struct kui_vmu_view *out,
     kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
+/* Captures every save from a freshly selected physical slot into a separate
+ * canonical 128KiB image. Source metadata, device identity and payloads are
+ * reread and checked. No prior explorer listing or SD mount is required.
+ * Never writes a physical VMU or accesses SD. Caller owns disjoint image,
+ * summary and view; image is usable only when true/status.passed is returned.
+ * Opaque protection/reserved metadata and payloads remain byte-exact except
+ * for relocated allocation pointers. Existing dirty/ambiguous cards refuse.
+ */
+bool kui_vmu_capture_run(unsigned source_slot,void *image,size_t bytes,
+    struct kui_vmu_image_summary *summary,struct kui_vmu_view *out,
+    kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
 void kui_vmu_collection_run(unsigned page,struct kui_vmu_backup_view *out,
     kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
+/* Changes display metadata only, then refreshes the unified virtual-card list.
+ * The selected identity is rechecked before any name is written. */
+void kui_vmu_collection_rename_run(const char *path,const char *label,const uint8_t identity[16],
+    unsigned page,struct kui_vmu_backup_view *out,kui_log_fn log,kui_cancel_fn cancel,
+    kui_app_progress_fn progress);
 /* Caller owns an already connected/mounted SD filesystem. Creates one new
  * organizational A1-NNNN verified backup bundle, never accesses a physical VMU,
  * and never mounts/unmounts storage. Inputs remain caller-owned. out is reset;

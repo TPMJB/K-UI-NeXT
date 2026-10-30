@@ -4,6 +4,7 @@
  * profile; the stage still admits everything again at boot. */
 #include "kui/vmu_game_card_service.h"
 #include "kui/vmu_persist_profile.h"
+#include "kui/hash.h"
 #include "diskio.h"
 #include <stdarg.h>
 #include <stdio.h>
@@ -246,6 +247,108 @@ static int card_create(struct kui_vmu_game_card_work *w,const struct kui_vmu_gam
     choice->created=true;
     return KUI_VMU_GAME_CARD_READY;
 }
+/* Only canonical pNNNN names reserve a pair, including incomplete folders
+ * left by interrupted creation. Such folders are never overwritten. */
+static int card_list_pairs(struct kui_vmu_game_card_work *w,struct kui_vmu_game_card_choice *choice) {
+    memset(w->used,0,sizeof(w->used));w->pair_count=0;
+    DIR dir;FILINFO info;
+    FRESULT opened=f_opendir(&dir,KUI_VMU_GAME_CARD_ROOT);
+    if(opened==FR_OK) {
+        FRESULT r;
+        while((r=f_readdir(&dir,&info))==FR_OK && info.fname[0]) {
+            unsigned n=kui_vmu_game_card_pair_number(info.fname);
+            if(!n) continue;
+            w->used[n/8u]|=(uint8_t)(1u<<(n%8u));
+            if(info.fattrib&AM_DIR) w->pairs[w->pair_count++]=(uint16_t)n;
+        }
+        if(f_closedir(&dir)!=FR_OK || r!=FR_OK) return card_refuse(choice,"cannot list %s",KUI_VMU_GAME_CARD_ROOT+2);
+    } else if(opened!=FR_NO_PATH && opened!=FR_NO_FILE) return card_refuse(choice,"cannot open %s",KUI_VMU_GAME_CARD_ROOT+2);
+    return KUI_VMU_GAME_CARD_READY;
+}
+
+#define CARD_ASSIGN_A KUI_VMU_GAME_CARD_ROOT "/assign-a.bin"
+#define CARD_ASSIGN_B KUI_VMU_GAME_CARD_ROOT "/assign-b.bin"
+#define CARD_IMPORT_READY "import.bin"
+static const char *const card_assignment_paths[2]={CARD_ASSIGN_A,CARD_ASSIGN_B};
+/* Read both independent slots, selecting the complete highest sequence. A
+ * torn inactive slot leaves the previous complete set usable. Equal sequence
+ * numbers with different contents are ambiguous and refuse selection. */
+static int card_assignments_load(struct kui_vmu_game_card_work *w,int *active,
+    struct kui_vmu_game_card_choice *choice) {
+    bool present=false,valid=false;*active=-1;w->assignment_valid_slots=0;
+    memset(&w->assignments,0,sizeof(w->assignments));
+    for(unsigned i=0;i<2u;i++) {
+        FILINFO info;FRESULT r=f_stat(card_assignment_paths[i],&info);
+        if(r==FR_NO_FILE || r==FR_NO_PATH) continue;
+        if(r!=FR_OK) return card_refuse(choice,"cannot inspect VMU game assignments");
+        present=true;
+        if((info.fattrib&AM_DIR) || info.fsize!=KUI_VMU_GAME_ASSIGN_WIRE_BYTES ||
+           !card_read_exact(card_assignment_paths[i],w->assignment_wire,sizeof(w->assignment_wire)) ||
+           !kui_vmu_game_assign_decode(w->assignment_wire,sizeof(w->assignment_wire),&w->assignment_candidate)) continue;
+        w->assignment_valid_slots|=(uint8_t)(1u<<i);
+        if(valid && w->assignment_candidate.sequence==w->assignments.sequence &&
+           memcmp(&w->assignment_candidate,&w->assignments,sizeof(w->assignments)))
+            return card_refuse(choice,"VMU game assignment slots disagree");
+        if(!valid || w->assignment_candidate.sequence>w->assignments.sequence) {
+            w->assignments=w->assignment_candidate;*active=(int)i;valid=true;
+        }
+    }
+    if(present && !valid) return card_refuse(choice,"VMU game assignments are damaged; restore their backup");
+    return KUI_VMU_GAME_CARD_READY;
+}
+/* Complete imported cards carry a small identity-pinned marker written only
+ * after the image, zero journal and identity were synced and reread. It does
+ * not hash a live card: game saves are expected to change its image later. */
+/* A dead/reset clock can repeat the caller's salt after reboot. Never
+ * recreate a deleted folder with an identity still pinned by either valid
+ * generation: either generation may become the recovery choice later. */
+static bool card_identity_unpinned(struct kui_vmu_game_card_work *w,unsigned pair,const uint8_t identity[16]) {
+    for(unsigned slot=0;slot<2u;slot++) {
+        if(!(w->assignment_valid_slots&(1u<<slot))) continue;
+        if(!card_read_exact(card_assignment_paths[slot],w->assignment_wire,sizeof(w->assignment_wire)) ||
+           !kui_vmu_game_assign_decode(w->assignment_wire,sizeof(w->assignment_wire),&w->assignment_candidate)) return false;
+        for(unsigned i=0;i<w->assignment_candidate.count;i++)
+            if(w->assignment_candidate.entries[i].pair==pair &&
+               !memcmp(w->assignment_candidate.entries[i].identity,identity,16u)) return false;
+    }
+    return true;
+}
+static bool card_import_ready(struct kui_vmu_game_card_work *w,unsigned pair,const uint8_t identity[16]) {
+    uint8_t marker[64],expected[64]={0};
+    memcpy(expected,"KUIVMUI1",8u);memcpy(expected+16u,identity,16u);
+    uint32_t crc=kui_crc32(0,expected,60u);
+    for(unsigned i=0;i<4u;i++) expected[60u+i]=(uint8_t)(crc>>(8u*i));
+    return card_path(w->path,pair,CARD_IMPORT_READY) && card_read_exact(w->path,marker,sizeof(marker)) &&
+        !memcmp(marker,expected,sizeof(marker));
+}
+static bool card_import_target(struct kui_vmu_game_card_work *w,unsigned pair,const uint8_t identity[16]) {
+    uint8_t actual[16];
+    if(!card_path(w->path,pair,"identity.bin") || !card_read_exact(w->path,actual,sizeof(actual)) ||
+       memcmp(actual,identity,sizeof(actual)) || !card_import_ready(w,pair,identity)) return false;
+    for(unsigned role=0;role<2u;role++) {
+        FILINFO info;
+        if(!card_path(w->path,pair,card_leaves[role]) || f_stat(w->path,&info)!=FR_OK ||
+           (info.fattrib&AM_DIR) || info.fsize!=card_file_bytes[role]) return false;
+    }
+    return true;
+}
+
+int kui_vmu_game_card_assignment(const char *product,struct kui_vmu_game_card_work *w,
+    struct kui_vmu_game_card_choice *choice,kui_cancel_fn cancel) {
+    if(!choice) return KUI_VMU_GAME_CARD_FAILED;
+    memset(choice,0,sizeof(*choice));
+    if(!w) return card_refuse(choice,"VMU game assignment arguments");
+    if(!kui_vmu_game_card_key(product,choice->key)) return KUI_VMU_GAME_CARD_UNBOUND;
+    if(card_stopped(cancel)) return KUI_VMU_GAME_CARD_CANCELLED;
+    int active,result=card_assignments_load(w,&active,choice);
+    if(result) return result;
+    const struct kui_vmu_game_assignment *entry=kui_vmu_game_assign_find(&w->assignments,choice->key);
+    if(!entry) return KUI_VMU_GAME_CARD_UNBOUND;
+    choice->pair=entry->pair;
+    if(!card_import_target(w,entry->pair,entry->identity))
+        return card_refuse(choice,"assigned p%04u is missing or its identity changed",entry->pair);
+    return card_stopped(cancel)?KUI_VMU_GAME_CARD_CANCELLED:KUI_VMU_GAME_CARD_READY;
+}
 int kui_vmu_game_card_select(const char *product,uint64_t partition_first,uint64_t partition_end,
     const struct kui_vmu_fs_range *forbidden,size_t forbidden_count,
     const struct kui_vmu_game_card_platform *platform,struct kui_vmu_game_card_work *w,
@@ -260,21 +363,19 @@ int kui_vmu_game_card_select(const char *product,uint64_t partition_first,uint64
         return card_refuse(choice,"game card arguments");
     if(!kui_vmu_game_card_key(product,choice->key)) return KUI_VMU_GAME_CARD_UNBOUND;
     if(card_stopped(cancel)) return KUI_VMU_GAME_CARD_CANCELLED;
-    memset(w->used,0,sizeof(w->used));w->pair_count=0;
-    DIR dir;FILINFO info;
-    FRESULT opened=f_opendir(&dir,KUI_VMU_GAME_CARD_ROOT);
-    if(opened==FR_OK) {
-        FRESULT r;
-        while((r=f_readdir(&dir,&info))==FR_OK && info.fname[0]) {
-            unsigned n=kui_vmu_game_card_pair_number(info.fname);
-            if(!n) continue;
-            w->used[n/8u]|=(uint8_t)(1u<<(n%8u));
-            if(info.fattrib&AM_DIR) w->pairs[w->pair_count++]=(uint16_t)n;
-        }
-        if(f_closedir(&dir)!=FR_OK || r!=FR_OK) return card_refuse(choice,"cannot list %s",KUI_VMU_GAME_CARD_ROOT+2);
-    } else if(opened!=FR_NO_PATH && opened!=FR_NO_FILE) return card_refuse(choice,"cannot open %s",KUI_VMU_GAME_CARD_ROOT+2);
+    int listed=card_list_pairs(w,choice);
+    if(listed) return listed;
+    int active;
+    int assignments=card_assignments_load(w,&active,choice);
+    if(assignments) return assignments;
+    const struct kui_vmu_game_assignment *assigned=kui_vmu_game_assign_find(&w->assignments,choice->key);
     unsigned pair=0;
-    for(unsigned i=0;i<w->pair_count;i++) {
+    if(assigned) {
+        pair=assigned->pair;
+        if(!card_import_target(w,pair,assigned->identity))
+            return card_refuse(choice,"assigned p%04u is missing or its identity changed",pair);
+    }
+    for(unsigned i=0;!assigned && i<w->pair_count;i++) {
         uint8_t binding[KUI_VMU_GAME_CARD_BINDING_BYTES];char key[KUI_VMU_GAME_CARD_KEY_BYTES];
         if(!card_path(w->path,w->pairs[i],KUI_VMU_GAME_CARD_BINDING_NAME)) return card_refuse(choice,"card path");
         if(!card_read_exact(w->path,binding,sizeof(binding)) ||
@@ -311,5 +412,148 @@ int kui_vmu_game_card_select(const char *product,uint64_t partition_first,uint64
     if(result) return result;
     memcpy(wire,w->wire,KUI_VMU_PERSIST_PROFILE_WIRE_BYTES);
     log("Virtual card: p%04u for %s (%s)",pair,choice->key,choice->created?"new blank card":"re-mapped");
+    return KUI_VMU_GAME_CARD_READY;
+}
+
+static int card_memory_read(void *context,uint16_t block,void *out) {
+    if(block>=KUI_VMU_IMAGE_BLOCKS) return -1;
+    memcpy(out,(const uint8_t *)context+(size_t)block*512u,512u);return 0;
+}
+/* Stream a large image rather than allocating another 128 KiB mirror. The
+ * final durable file is reread byte for byte before its ready marker exists. */
+static bool card_write_image(const char *path,const uint8_t *image,struct kui_vmu_game_card_work *w) {
+    FIL file;UINT done=0;bool ok=true;
+    if(f_open(&file,path,FA_CREATE_NEW|FA_WRITE)!=FR_OK) return false;
+    for(unsigned block=0;ok && block<KUI_VMU_IMAGE_BLOCKS;block++)
+        ok=f_write(&file,image+(size_t)block*512u,512u,&done)==FR_OK && done==512u;
+    ok=f_sync(&file)==FR_OK && ok;ok=f_close(&file)==FR_OK && ok;
+    if(!ok || f_open(&file,path,FA_READ)!=FR_OK) return false;
+    ok=f_size(&file)==KUI_VMU_IMAGE_BYTES;
+    for(unsigned block=0;ok && block<KUI_VMU_IMAGE_BLOCKS;block++) {
+        UINT got=0;
+        ok=f_read(&file,w->sector,512u,&got)==FR_OK && got==512u &&
+            !memcmp(w->sector,image+(size_t)block*512u,512u);
+    }
+    return f_close(&file)==FR_OK && ok;
+}
+int kui_vmu_game_card_import_publish(const void *image,size_t bytes,const uint8_t salt[16],
+    struct kui_vmu_game_card_work *w,struct kui_vmu_game_card_choice *choice,
+    uint8_t identity[16],kui_log_fn log,kui_cancel_fn cancel) {
+    if(identity) memset(identity,0,16u);
+    if(!choice) return KUI_VMU_GAME_CARD_FAILED;
+    memset(choice,0,sizeof(*choice));
+    if(!image || bytes!=KUI_VMU_IMAGE_BYTES || !salt || !w || !identity || !log)
+        return card_refuse(choice,"imported card arguments");
+    if(card_stopped(cancel)) return KUI_VMU_GAME_CARD_CANCELLED;
+    struct kui_vmu_image_summary summary;
+    const struct kui_vmu_image_io io={(void *)image,card_memory_read,NULL,NULL};
+    if(kui_vmu_image_validate(&io,bytes,&w->image,&summary))
+        return card_refuse(choice,"the imported image is not a valid standard VMU card");
+    int active;
+    int result=card_assignments_load(w,&active,choice);
+    if(result) return result;
+    result=card_list_pairs(w,choice);
+    if(result) return result;
+    result=card_existing_allocated(w,choice);
+    if(result) return result;
+    unsigned pair=0;
+    for(unsigned n=2u;n<=KUI_VMU_GAME_CARD_PAIRS_MAX;n++)
+        if(!(w->used[n/8u]&(1u<<(n%8u)))) {pair=n;break;}
+    if(!pair) return card_refuse(choice,"all pair folders p0002-p9999 are in use");
+    uint8_t fresh[16];char imported[KUI_VMU_GAME_CARD_KEY_BYTES]={0};
+    memcpy(imported,"IMPORT",6u);kui_vmu_game_card_identity(imported,pair,salt,fresh);
+    if(!card_identity_unpinned(w,pair,fresh))
+        return card_refuse(choice,"p%04u identity would repeat an older assignment; retry the import",pair);
+    static const char *const parents[]={"0:/KUI",KUI_VMU_GAME_CARD_ROOT};
+    for(unsigned i=0;i<2u;i++) {
+        FRESULT made=f_mkdir(parents[i]);
+        if(made!=FR_OK && made!=FR_EXIST) return card_refuse(choice,"cannot create %s",parents[i]+2);
+    }
+    for(;pair<=KUI_VMU_GAME_CARD_PAIRS_MAX;pair++) {
+        if(w->used[pair/8u]&(1u<<(pair%8u))) continue;
+        if(!card_path(w->path,pair,NULL)) return card_refuse(choice,"card path");
+        FRESULT made=f_mkdir(w->path);
+        if(made==FR_OK) break;
+        if(made!=FR_EXIST) return card_refuse(choice,"cannot create p%04u",pair);
+    }
+    if(pair>KUI_VMU_GAME_CARD_PAIRS_MAX) return card_refuse(choice,"no free pair folder remains");
+    kui_vmu_game_card_identity(imported,pair,salt,fresh);
+    if(!card_identity_unpinned(w,pair,fresh))
+        return card_refuse(choice,"p%04u identity would repeat an older assignment; retry the import",pair);
+    choice->pair=pair;
+    log("VMU import: writing %u saves to new p%04u; keep power on",summary.files,pair);
+    if(card_stopped(cancel)) return KUI_VMU_GAME_CARD_CANCELLED;
+    if(!card_path(w->path,pair,"card.vmd") || !card_write_image(w->path,image,w))
+        return card_refuse(choice,"cannot write and verify imported p%04u",pair);
+    memset(w->wire,0,1024u);
+    if(card_stopped(cancel)) return KUI_VMU_GAME_CARD_CANCELLED;
+    if(!card_path(w->path,pair,"card.journal") || !card_write_new(w->path,w->wire,1024u,w->check))
+        return card_refuse(choice,"cannot write the p%04u journal",pair);
+    if(card_stopped(cancel)) return KUI_VMU_GAME_CARD_CANCELLED;
+    if(!card_path(w->path,pair,"identity.bin") || !card_write_new(w->path,fresh,16u,w->check))
+        return card_refuse(choice,"cannot write the p%04u identity",pair);
+    uint8_t marker[64]={0};memcpy(marker,"KUIVMUI1",8u);memcpy(marker+16u,fresh,16u);
+    uint32_t crc=kui_crc32(0,marker,60u);
+    for(unsigned i=0;i<4u;i++) marker[60u+i]=(uint8_t)(crc>>(8u*i));
+    if(card_stopped(cancel)) return KUI_VMU_GAME_CARD_CANCELLED;
+    if(!card_path(w->path,pair,CARD_IMPORT_READY) || !card_write_new(w->path,marker,sizeof(marker),w->check) ||
+       !card_import_target(w,pair,fresh))
+        return card_refuse(choice,"cannot finish imported p%04u",pair);
+    memcpy(identity,fresh,16u);choice->created=true;
+    log("VMU import: p%04u verified; choose its games",pair);
+    return KUI_VMU_GAME_CARD_READY;
+}
+/* The older valid slot is never modified until the entire alternate slot
+ * has synced and passed an exact reread. Failure may leave the previous set
+ * or the complete new set, never a partly updated collection of games. */
+static bool card_assignments_write(const char *path,struct kui_vmu_game_card_work *w) {
+    FIL file;UINT done=0;
+    if(f_open(&file,path,FA_CREATE_ALWAYS|FA_WRITE)!=FR_OK) return false;
+    bool ok=f_write(&file,w->assignment_wire,sizeof(w->assignment_wire),&done)==FR_OK &&
+        done==sizeof(w->assignment_wire);
+    ok=f_sync(&file)==FR_OK && ok;ok=f_close(&file)==FR_OK && ok;
+    if(!ok || f_open(&file,path,FA_READ)!=FR_OK) return false;
+    ok=f_size(&file)==sizeof(w->assignment_wire);
+    for(size_t offset=0;ok && offset<sizeof(w->assignment_wire);offset+=512u) {
+        UINT got=0;
+        ok=f_read(&file,w->sector,512u,&got)==FR_OK && got==512u &&
+            !memcmp(w->sector,w->assignment_wire+offset,512u);
+    }
+    return f_close(&file)==FR_OK && ok;
+}
+int kui_vmu_game_card_assignments_apply(const struct kui_vmu_game_assignment *entries,size_t count,
+    struct kui_vmu_game_card_work *w,struct kui_vmu_game_card_choice *choice,
+    kui_log_fn log,kui_cancel_fn cancel) {
+    if(!choice) return KUI_VMU_GAME_CARD_FAILED;
+    memset(choice,0,sizeof(*choice));
+    if(!entries || !count || count>KUI_VMU_GAME_ASSIGN_MAX || !w || !log)
+        return card_refuse(choice,"VMU game assignment arguments");
+    if(card_stopped(cancel)) return KUI_VMU_GAME_CARD_CANCELLED;
+    int active,result=card_assignments_load(w,&active,choice);
+    if(result) return result;
+    if(w->assignments.sequence==UINT64_MAX)
+        return card_refuse(choice,"VMU game assignment sequence is exhausted");
+    if(!kui_vmu_game_assign_update(&w->assignments,entries,count))
+        return card_refuse(choice,"invalid, duplicate or too many game assignments");
+    /* Validate all retained targets too: never publish a table that quietly
+     * keeps a stale pin from a card deleted/recreated outside this wizard. */
+    for(unsigned i=0;i<w->assignments.count;i++) {
+        const struct kui_vmu_game_assignment *e=&w->assignments.entries[i];
+        if(!card_import_target(w,e->pair,e->identity))
+            return card_refuse(choice,"assigned p%04u is incomplete or its identity changed",e->pair);
+    }
+    result=card_list_pairs(w,choice);
+    if(result) return result;
+    result=card_existing_allocated(w,choice);
+    if(result) return result;
+    ++w->assignments.sequence;
+    if(!kui_vmu_game_assign_encode(&w->assignments,w->assignment_wire))
+        return card_refuse(choice,"cannot encode VMU game assignments");
+    if(card_stopped(cancel)) return KUI_VMU_GAME_CARD_CANCELLED;
+    unsigned target=active==0?1u:0u;
+    log("VMU import: assigning %u games; keep power on",(unsigned)count);
+    if(!card_assignments_write(card_assignment_paths[target],w))
+        return card_refuse(choice,"game assignments did not finish; reopen the wizard before retrying");
+    log("VMU import: %u game assignments saved",(unsigned)count);
     return KUI_VMU_GAME_CARD_READY;
 }

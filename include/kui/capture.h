@@ -39,7 +39,11 @@ bool kui_capture_retry_limit_valid(unsigned retry_limit);
  * capture_fad from another disc's layout may not be on this disc at all. Pure; the console
  * passes the TOC it already read. */
 const char *kui_bench_fad_note(const struct kui_toc sessions[2], uint32_t fad, bool audio);
-enum kui_read_result { KUI_READ_OK, KUI_READ_RETRY, KUI_READ_FATAL };
+enum kui_read_result { KUI_READ_OK, KUI_READ_RETRY, KUI_READ_FATAL,
+    /* Salvage-only tentative bytes from a released, guard-clean medium-error
+     * command. Not transport success: only independently validated data sectors
+     * may be retained. Audio and ordinary capture require KUI_READ_OK. */
+    KUI_READ_PARTIAL };
 enum kui_capture_mode { KUI_CAPTURE_NEW, KUI_CAPTURE_RESUME, KUI_CAPTURE_VERIFY };
 #define KUI_CAPTURE_INTERNAL_GDI ".capture.gdi"
 enum kui_capture_result { KUI_CAPTURE_FAILED, KUI_CAPTURE_STOPPED, KUI_CAPTURE_COMPLETE };
@@ -138,6 +142,13 @@ struct kui_capture_ops {
     enum kui_read_result (*read_end)(void *);
     const struct kui_capture_options *options;   /* NULL = defaults */
     struct kui_capture_stats *stats;             /* NULL = not wanted */
+    /* Explicit recovery workers only. Called after a completed read returned
+     * RETRY, or between recovery passes; never while a split read is live.
+     * true means bounded drive reinitialization finished and its fresh TOC
+     * matches expected. The worker must then recheck its exact saved content
+     * anchors before changing saved bytes. false stops the operation. A failed
+     * abort/poisoned adapter must remain unavailable until console reset. */
+    bool (*recover)(void *,const struct kui_capture_plan *expected);
 };
 struct kui_checkpoint {
     uint64_t sequence;

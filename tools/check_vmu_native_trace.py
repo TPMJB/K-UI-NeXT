@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
 """Execute inserted SH gateways against the exact original Evolution code."""
-import argparse, hashlib, json, struct
+import argparse, hashlib, json, re, struct
 from pathlib import Path
 from check_vmu_native_stage_stack import Machine, canonical
 from check_vmu_native_worker_gateway import read_elf, symbol_bytes, MASK
@@ -12,6 +12,59 @@ GATES=(
  ('_kui_vmu_native_trace_wait_loop',0x42,0x8c166422,0x8c166436),
  ('_kui_vmu_native_trace_wait_before',0x43,0x8c1cd000,0x8c1cd000),
  ('_kui_vmu_native_trace_wait_after',0x44,0x8c166454,0x8c166464))
+
+def general_elision(directory,self_test=False):
+ """Bind NORMAL-only elision to actual linked leaves and compiler calls.
+
+ The original SH gateways and shared coherence table retain their ABI. The
+ separate cold-arm/source-corpus checks still establish NORMAL-only admission;
+ this audit proves that the optional sampler cannot run in that worker.
+ """
+ directory=Path(directory);worker=read_elf(directory/'native-worker.elf')
+ symbols=worker[4];one=(1,0,0,0xfff1)
+ assert symbols.get('__kui_native_general_trace_elided_worker')==one
+ assert symbols.get('__kui_native_split_controller_general_worker')==one
+ assert '_trace' not in symbols and '_hex_font' not in symbols and '_evolution_digest' not in symbols
+ game='_kui_vmu_native_trace_game'
+ _,body,owner=symbol_bytes(worker,game,2)
+ assert owner[2]&7==6 and body==bytes.fromhex('0b000900'), 'General trace callback is not a read/write-free return'
+ cases=0
+ def leaf(code):
+  nonlocal cases
+  for seed in range(32):
+   for mask in (0,6,15):
+    run=Machine(worker,game,seed,mask,0xac11ff00,body=code).run()
+    assert (run.r,run.pr,run.mach,run.macl,run.gbr,run.sr,run.fpscr,run.fr)==run.before
+    assert not run.mem and not run.published and not run.calls
+    cases+=1
+ leaf(body)
+ # No ordinary C callback may still call a trace API. Assembly-only trace
+ # gateways keep their own separately checked owner-frame replay contract.
+ graphs=list((directory/'native').rglob('*.ci'))
+ assert graphs, 'General trace elision lacks emitted compiler call graphs'
+ for path in graphs:
+  assert not re.search(r'edge:\s*\{[^\n]*targetname:\s*"kui_vmu_native_trace_',path.read_text()), str(path)
+ for name in ('_kui_vmu_native_trace_image','_kui_vmu_native_trace_init',
+              '_kui_vmu_native_trace_point','_kui_vmu_native_trace_failure',
+              '_kui_vmu_native_trace_enabled','_kui_vmu_native_trace_report'):
+  assert name not in symbols, 'Unreferenced General trace C entry was retained: '+name
+ _,table,section=symbol_bytes(worker,'_kui_vmu_native_trace_exports',1)
+ assert section[2]&7==2 and len(table)==40
+ fields=struct.unpack('<10I',table)
+ assert fields[:7]==(0x4b545231,2,40,*(symbols[name][0] for name,*_ in GATES))
+ assert fields[7:]==(symbols['_kui_vmu_native_sdk_coherence_uniform_gate'][0]+0x20000000,
+                     symbols['_kui_vmu_native_sdk_coherence_variable_gate'][0]+0x20000000,
+                     symbols['_kui_vmu_native_sdk_coherence_state'][0])
+ mutations=0
+ if self_test:
+  for changed in (bytes.fromhex('0b000174'),bytes.fromhex('0b004224'),bytes.fromhex('09000900')):
+   try:leaf(changed)
+   except (AssertionError,ValueError,KeyError,struct.error):mutations+=1
+   else:raise ValueError('General trace leaf mutation accepted')
+ return dict(schema='kui.native.general-trace-elision.v1',cases=cases,mutation_rejections=mutations,
+             callback_bytes=4,compiler_callgraphs=len(graphs),ordinary_c_trace_calls=0,
+             trace_state_retained=False,exports_bytes=40,shared_coherence_descriptor_preserved=True,
+             instruction_sha256=hashlib.sha256(body).hexdigest())
 
 class ExceptionReader(Machine):
  def __init__(self,worker,seed,mask,*,body=None):
@@ -151,12 +204,18 @@ def check(directory,startup,self_test=False):
      TraceGate(worker,game,gate,7,6,body=changed).run().equivalent(ref)
     except (ValueError,AssertionError,KeyError,struct.error):mutations+=1
     else:raise ValueError('trace gateway mutation accepted')
- return dict(original_instruction_equivalence_cases=cases,mutation_rejections=mutations,
+ result=dict(original_instruction_equivalence_cases=cases,mutation_rejections=mutations,
    original_sha256=DIGEST,all_integer_sr_pr_mac_gbr_preserved=True,
    common_path_owner_writes='private gateway frame and original replay stores only',
    arbitrary_stall_pc_capture=False,saved_exception_reader=exception_reader(worker,self_test),
    original_video_witness=video_witness(game))
+ if '__kui_native_general_trace_elided_worker' in worker[4]:
+  result['normal_only_trace_elision']=general_elision(directory,self_test)
+ return result
 
 if __name__=='__main__':
- p=argparse.ArgumentParser();p.add_argument('directory');p.add_argument('startup');p.add_argument('--self-test',action='store_true')
- a=p.parse_args();print(json.dumps(check(a.directory,a.startup,a.self_test),indent=2))
+ p=argparse.ArgumentParser();p.add_argument('directory');p.add_argument('startup',nargs='?');p.add_argument('--self-test',action='store_true')
+ p.add_argument('--general-elision',action='store_true')
+ a=p.parse_args()
+ if not a.general_elision and a.startup is None:p.error('startup is required for the original gateway comparison')
+ print(json.dumps(general_elision(a.directory,a.self_test) if a.general_elision else check(a.directory,a.startup,a.self_test),indent=2))

@@ -11,12 +11,27 @@ import struct
 
 SEED_BYTES=1120
 RECORD_BYTES=1024
-DETECTOR_EPOCH=4
+DETECTOR_EPOCH=6
+RECORD_PAYLOAD_BYTES=752
+EXIT_VERSION=2
+EXIT_BYTES=52
 
 def require(condition,message):
     if not condition:raise ValueError(message)
 
 def _word(data,offset):return struct.unpack_from('<I',data,offset)[0]
+
+def exit_schema(wire,load,image_bytes):
+    """Mirror the versioned C descriptor's family/count/unused-slot rules."""
+    family,count=_word(wire,708),_word(wire,720)
+    return (tuple(_word(wire,n) for n in (700,704,712,716))==
+            (EXIT_VERSION,EXIT_BYTES,load,image_bytes) and
+            ((family in (1,2,3) and count==3 and not _word(wire,736)) or
+             (family==4 and count==2 and not _word(wire,732) and
+              not _word(wire,736) and not _word(wire,744)) or
+             (family==5 and count==3 and _word(wire,732) and
+              not _word(wire,736) and _word(wire,744)) or
+             (family==6 and count==4 and _word(wire,736))))
 
 def template_seed():
     return b'KUINVS01'+struct.pack('<4I',1,SEED_BYTES,0,RECORD_BYTES)+bytes(SEED_BYTES-24)
@@ -26,7 +41,7 @@ def record_metadata(wire,expected_digest=None):
     require(len(wire)==RECORD_BYTES,'Native cache record must be exactly 1024 bytes')
     require(wire[:8]==b'KUINVR01' and tuple(_word(wire,n) for n in (8,12,16,20))==
             (1,RECORD_BYTES,DETECTOR_EPOCH,1),'Native cache record version/epoch/schema differs')
-    require(not any(wire[748:992]),'Native cache record reserved bytes are not zero')
+    require(not any(wire[RECORD_PAYLOAD_BYTES:992]),'Native cache record reserved bytes are not zero')
     digest=hashlib.sha256(wire[:992]).digest()
     require(wire[992:]==digest,'Native cache record digest mismatch')
     if expected_digest is not None:
@@ -48,12 +63,7 @@ def record_metadata(wire,expected_digest=None):
             'Native cache layout schema differs')
     require(tuple(_word(wire,n) for n in (608,612,616,620,624,628))==
             (1,72,1,1,image_bytes,load),'Native cache allocator schema differs')
-    family,count=_word(wire,708),_word(wire,720)
-    require(tuple(_word(wire,n) for n in (700,704,712,716))==(1,48,load,image_bytes) and
-            ((family in (1,2,3) and count==3) or
-             (family==4 and count==2 and not _word(wire,732) and not _word(wire,740)) or
-             (family==5 and count==3 and _word(wire,732) and _word(wire,740))),
-            'Native cache exit schema differs')
+    require(exit_schema(wire,load,image_bytes),'Native cache exit schema differs')
     return dict(detector_epoch=DETECTOR_EPOCH,record_bytes=RECORD_BYTES,
         record_digest=digest.hex(),record_sha256=hashlib.sha256(wire).hexdigest(),
         image_sha256=wire[32:64].hex(),image_bytes=image_bytes,load_address=f'{load:08x}')

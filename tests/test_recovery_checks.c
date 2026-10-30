@@ -76,6 +76,21 @@ static void make_sector(uint8_t out[KUI_RECOVERY_RAW_BYTES],unsigned index) {
     memcpy(out+2064,sector_vectors[index].trailer,288);
     assert(kui_crc32(0,out,KUI_RECOVERY_RAW_BYTES)==sector_vectors[index].crc);
 }
+static void test_mode2(void) {
+    uint8_t data[2352];memcpy(data,mode2_vector,sizeof(data));
+    assert(!kui_recovery_cd_sector_check(data,sizeof(data),150));
+    assert(kui_recovery_sector_check(data,sizeof(data),150)==KUI_RECOVERY_SECTOR_UNSUPPORTED);
+    assert(kui_recovery_cd_sector_check(data,sizeof(data),151)==KUI_RECOVERY_SECTOR_ADDRESS);
+    const unsigned offsets[]={1,16,20,24,2072,2076,2248,2351};
+    for(unsigned i=0;i<sizeof(offsets)/sizeof(offsets[0]);++i) {
+        memcpy(data,mode2_vector,sizeof(data));data[offsets[i]]^=1;
+        assert(kui_recovery_cd_sector_check(data,sizeof(data),150));
+    }
+    memcpy(data,mode2_vector,sizeof(data));data[18]|=0x20;data[22]|=0x20;
+    assert(kui_recovery_cd_sector_check(data,sizeof(data),150)==KUI_RECOVERY_SECTOR_UNSUPPORTED);
+    assert(kui_recovery_cd_sector_check(NULL,2352,150)==KUI_RECOVERY_SECTOR_INPUT);
+    assert(kui_recovery_cd_sector_check(data,2351,150)==KUI_RECOVERY_SECTOR_INPUT);
+}
 static void test_sector(void) {
     uint8_t sector[KUI_RECOVERY_RAW_BYTES],saved[sizeof(sector)];
     for(unsigned i=0;i<sizeof(sector_vectors)/sizeof(sector_vectors[0]);++i) {
@@ -134,7 +149,7 @@ static void test_sector(void) {
                   (KUI_RECOVERY_SECTOR_ADDRESS|KUI_RECOVERY_SECTOR_EDC|KUI_RECOVERY_SECTOR_ECC));
 }
 int main(void) {
-    test_replacement();test_sector();
-    puts("PASS recovery helpers: full-data CRC replacements, 64-bit suffix oracles, independent Mode 1 vectors and corruption checks");
+    test_replacement();test_sector();test_mode2();
+    puts("PASS recovery helpers: full-data CRC replacements, 64-bit suffix oracles, independent Mode1/Mode2 Form1 vectors and corruption checks");
     return 0;
 }

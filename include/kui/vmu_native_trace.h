@@ -18,6 +18,16 @@ static inline void kui_vmu_native_trace_point(uint32_t c,const struct kui_vmu_na
 static inline int kui_vmu_native_trace_enabled(void) {return 0;}
 static inline void kui_vmu_native_trace_failure(const struct kui_vmu_native_trace_failure *f) {(void)f;}
 static inline void kui_vmu_native_trace_report(uint32_t c,uint32_t v,uint32_t a,uint32_t b) {(void)c;(void)v;(void)a;(void)b;__builtin_trap();}
+#elif KUI_NATIVE_SPLIT_CONTROLLER_GENERAL && !defined(KUI_VMU_NATIVE_TRACE_IMPLEMENTATION)
+/* General admits NORMAL only. Keep optional Evolution sampling out of its
+ * retained callback path; dedicated diagnostic profiles retain the sampler. */
+static inline bool kui_vmu_native_trace_image(const struct kui_vmu_native_discovery *d) {(void)d;return false;}
+static inline void kui_vmu_native_trace_init(const struct kui_vmu_native_passive_config *c) {(void)c;}
+static inline void kui_vmu_native_trace_point(uint32_t c,const struct kui_vmu_native_passive_frame *f,uint32_t s,uint32_t n) {(void)c;(void)f;(void)s;(void)n;}
+static inline void kui_vmu_native_trace_game(uint32_t c,const struct kui_vmu_native_passive_frame *f) {(void)c;(void)f;}
+static inline int kui_vmu_native_trace_enabled(void) {return 0;}
+static inline void kui_vmu_native_trace_failure(const struct kui_vmu_native_trace_failure *f) {(void)f;}
+static inline __attribute__((noreturn)) void kui_vmu_native_trace_report(uint32_t c,uint32_t v,uint32_t a,uint32_t b) {kui_vmu_native_runtime_fault(c,v,a,b);}
 #else
 bool kui_vmu_native_trace_image(const struct kui_vmu_native_discovery *);
 void kui_vmu_native_trace_init(const struct kui_vmu_native_passive_config *);

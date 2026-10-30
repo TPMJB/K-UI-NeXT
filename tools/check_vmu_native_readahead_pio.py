@@ -9,6 +9,7 @@ admission and publication behavior, not card timing or console performance.
 import argparse
 import json
 from pathlib import Path
+from native_runtime_layout import LEASE_BYTES, AUX_LINK_BASE, layout_for
 import sys
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -60,7 +61,9 @@ def pio_cases(resident,aux,*,self_test=False):
             super().__init__(resident,aux,seed,bank,blocked)
             self.api=dict(zip(low_addresses,low_names));self.targets=set(self.api)
             self.operations=[];self.actual_writes=[];self.stub_writes=[]
-            self.data=0xac430000;self.block=self.region+0x20;self.next=0x123401
+            geometry=layout_for(aux[4])
+            self.lease=(AUX_LINK_BASE&0x1fffffff)-geometry.AUX_OFFSET
+            self.data=(self.lease|0xa0000000)+geometry.DATA_OFFSET;self.block=self.region+0x20;self.next=0x123401
             self.payload=bytes((i*37+seed*19)&255 for i in range(512))
             self.fetch_result=0;self.take_result=0;self.take_null=False
             self.fetch_results=None;self.take_results=None;self.last_fetch_lba=None
@@ -73,7 +76,7 @@ def pio_cases(resident,aux,*,self_test=False):
             self.timer=0x12345000;self.timer_step=97;self.timer_reads=0
             self.bad_clock=False;self.bad_after=False
             values={0:1,656:1,660:32,664:self.region,668:ops['address'],
-                    672:self.data,676:0x30000,680:0x0c400000,684:0x60000,
+                    672:self.data,676:0x30000,680:self.lease,684:layout_for(aux[4]).LEASE_BYTES,
                     688:self.data,692:self.next-1,696:0,700:1,704:self.next+1000,
                     708:1,720:1,900:2}
             for offset,value in values.items():self.write(self.context+offset,value)

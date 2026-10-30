@@ -149,6 +149,25 @@ static void known_call(size_t at,size_t slot,uint32_t target) {
     load_literal(at+4u,3u,slot,target);
     put16(at+6u,0x430bu);put16(at+8u,0x0009u);
 }
+static void caller_target_registers(void) {
+    /* Change the target load and JSR together: single-word mutation tests
+     * do not exercise coordinated register allocations or the R15 hazard. */
+    for(unsigned reg=0u;reg<16u;reg++) {
+        struct kui_vmu_native_heap h=call_fixture();
+        load_literal(0x400u,4u,0x600u,0x8c500020u);
+        load_literal(0x402u,5u,0x604u,0xafffe0u);
+        load_literal(0x404u,reg,0x700u,h.initializer_target);
+        put16(0x406u,(uint16_t)(0x400bu|(reg<<8)));put16(0x408u,0x0009u);
+        struct kui_vmu_native_heap_call got,before;
+        memset(&got,0xa5,sizeof(got));before=got;
+        bool found=kui_vmu_native_heap_call_discover(image,sizeof(image),&h,&got);
+        CHECK(found==(reg<4u));
+        if(found) {
+            CHECK(got.load==0x8c010404u && got.call==0x8c010406u && got.return_pr==0x8c01040au);
+            CHECK(got.entry_begin==0x8c500020u && got.entry_bytes==0xafffe0u);
+        } else CHECK(!memcmp(&got,&before,sizeof(got)));
+    }
+}
 static void exported_initializer_tests(void) {
     struct kui_vmu_native_heap h=call_fixture(),found;
     struct kui_vmu_native_heap_call call;
@@ -345,7 +364,7 @@ int main(int argc,char **argv) {
         CHECK(kui_vmu_native_heap_discover((void *)(uintptr_t)(aliases[a]|0x0c010000u),
             sizeof(image),0x8c010000u,(void *)(uintptr_t)(aliases[b]|0x0c010000u))==KUI_VMU_NATIVE_HEAP_INVALID);
     CHECK(kui_vmu_native_heap_discover(NULL,0u,0x8c010000u,&h)==KUI_VMU_NATIVE_HEAP_INVALID);
-    call_expression_tests();exported_initializer_tests();guarded_r0_call_tests();patch_dependency_tests();
+    call_expression_tests();caller_target_registers();exported_initializer_tests();guarded_r0_call_tests();patch_dependency_tests();
     if(argc==3) {owner(argv[1],true);owner(argv[2],false);} else CHECK(argc==1);
     printf("Native heap family / lease checks: %u passed; no allocator calls or lifetime authority\n",checks);
     return 0;

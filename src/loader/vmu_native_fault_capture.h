@@ -9,6 +9,8 @@
  * under IMASK15 after all ordinary worker admission has succeeded. No pointers
  * into the retired installer are retained. 0: disabled/different immutable
  * image; 1: installed; -1: unsupported or changed live owner, untouched. */
+/* The NORMAL-only General build has no vector installer: disabled calls
+ * return0, explicit enable requests return-1, and neither inspects the owner. */
 int kui_vmu_native_fault_capture_install(bool enabled,
     const struct kui_vmu_native_discovery *driver);
 

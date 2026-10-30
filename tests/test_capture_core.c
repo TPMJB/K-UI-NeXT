@@ -20,6 +20,38 @@ static uint32_t edc_reference(const uint8_t *p,size_t n) {
     return crc;
 }
 static void put32(uint8_t *p,uint32_t n) {for(unsigned i=0;i<4;i++) p[i]=(uint8_t)(n>>(i*8));}
+static uint32_t crc_reference(uint32_t previous,const uint8_t *data,size_t bytes) {
+    uint32_t crc=~previous;
+    for(size_t i=0;i<bytes;++i) {
+        crc^=data[i];
+        for(unsigned bit=0;bit<8u;++bit)crc=(crc&1u)?(crc>>1)^UINT32_C(0xedb88320):crc>>1;
+    }
+    return ~crc;
+}
+static void capture_crc(void) {
+    static uint8_t data[KUI_CAPTURE_CHUNK*KUI_RAW_BYTES+3u];uint32_t random=0x7f2a91bdu;
+    for(unsigned i=0;i<sizeof(data);++i) {random^=random<<13;random^=random>>17;random^=random<<5;data[i]=(uint8_t)random;}
+    const size_t sizes[]={0,1,2,3,7,16,31,32,33,255,256,511,512,2048,2352,KUI_CAPTURE_CHUNK*KUI_RAW_BYTES};
+    const uint32_t initials[]={0,1,0xffffffffu,0x39a17c02u};
+    assert(kui_crc32_capture(0,"123456789",9)==UINT32_C(0xcbf43926));
+    assert(kui_crc32_capture(0,NULL,0)==0 && kui_crc32_capture(0xa1b2c3d4u,NULL,0)==0xa1b2c3d4u);
+    for(unsigned initial=0;initial<sizeof(initials)/sizeof(initials[0]);++initial)
+        for(unsigned n=0;n<sizeof(sizes)/sizeof(sizes[0]);++n)
+            for(unsigned alignment=0;alignment<4u;++alignment) {
+                const uint8_t *p=data+alignment;size_t bytes=sizes[n];
+                uint32_t expected=crc_reference(initials[initial],p,bytes);
+                assert(kui_crc32_capture(initials[initial],p,bytes)==expected);
+                assert(kui_crc32(initials[initial],p,bytes)==expected);
+                size_t split=bytes/3u;
+                uint32_t part=kui_crc32_capture(initials[initial],p,split);
+                assert(kui_crc32_capture(part,p+split,bytes-split)==expected);
+            }
+    for(unsigned n=0;n<32u;++n) {
+        random^=random<<13;random^=random>>17;random^=random<<5;size_t bytes=random%sizeof(data);
+        assert(kui_crc32_capture(random,data,bytes)==crc_reference(random,data,bytes));
+    }
+    puts("PASS capture byte-table CRC: independent bitwise oracle, legacy equality, seeded/incremental/unaligned/random and full GD chunks");
+}
 static void seal(uint8_t *record) {put32(record+4092,kui_crc32(0,record,4092));}
 static struct {const struct kui_capture_plan *plan;const char *cue;size_t size;} cue_fixture;
 static enum kui_game_result cue_stat(void *ctx,const char *name,uint64_t *bytes) {
@@ -94,6 +126,7 @@ static void cd_profile(void) {
     puts("PASS CD INDEX01 intervals, single/audio/mixed tracks, independent CUE geometry and bounded retry policy");
 }
 int main(void) {
+    capture_crc();
     cd_profile();
     digest("",0,1,"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
     digest("abc",3,1,"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
@@ -104,8 +137,21 @@ int main(void) {
     uint8_t raw[2352]={0};memset(raw+1,255,10);raw[15]=1;
     for(unsigned i=16;i<2064;i++) raw[i]=(uint8_t)i;
     put32(raw+2064,edc_reference(raw,2064));assert(kui_sector_edc_valid(raw));
+    /* Cheap acquisition address validation rejects an otherwise valid nearby
+     * sector even with parity checks disabled. Extended GD minutes retain the
+     * established representation rather than imposing a 99-minute CD bound. */
+    const uint32_t addresses[]={150u,45150u,549150u,719999u};
+    for(unsigned n=0;n<sizeof(addresses)/sizeof(addresses[0]);++n) {
+        uint32_t fad=addresses[n];unsigned fields[3]={fad/4500u,(fad/75u)%60u,fad%75u};
+        for(unsigned i=0;i<3u;i++)raw[12u+i]=(uint8_t)((fields[i]/10u)*16u+fields[i]%10u);
+        put32(raw+2064,edc_reference(raw,2064));
+        assert(kui_sector_edc_valid_at(raw,fad));
+        assert(!kui_sector_edc_valid_at(raw,fad-1u) && !kui_sector_edc_valid_at(raw,fad+1u));
+    }
+    assert(!kui_sector_edc_valid_at(raw,0u) && !kui_sector_edc_valid_at(raw,720000u));
     raw[31]^=1;assert(!kui_sector_edc_valid(raw));raw[31]^=1;
     memset(raw+16,0,8);raw[15]=2;put32(raw+2072,edc_reference(raw+16,2056));assert(kui_sector_edc_valid(raw));
+    assert(kui_sector_edc_valid_at(raw,150u)); /* Mode 2 retains its existing rule. */
     raw[18]=raw[22]=0x20;assert(!kui_sector_edc_valid(raw));
     assert(kui_cd_edc((const uint8_t *)million,sizeof(million))==edc_reference((const uint8_t *)million,sizeof(million)));
     struct kui_toc sessions[2]={ {.tracks={{1,4,150,650},{2,0,650,950}},.count=2},

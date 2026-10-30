@@ -241,6 +241,41 @@ static void staging_failures_are_atomic(void) {
     fresh();card.faulted=1u;completion_refused(2u);assert(calls==1u);
 }
 
+static void full_read_batch_at_every_parent_position(void) {
+    uint8_t expected[512];
+    for(unsigned parent=0u;parent<32u;parent++) for(unsigned fail=0u;fail<2u;fail++) {
+        fresh();
+        for(unsigned i=0u;i<32u;i++)
+            frame(i,11u,1u,2u,0x02000000u,i<<24);
+        frame(parent,9u,32u,1u,0x01000000u,0u);
+        physical(9u,0u);
+        if(parent) {
+            rx[parent][0]=rx[0][0];rx[parent][1]=rx[0][1];
+            rx[0][0]=UINT32_MAX;
+        }
+        capture();assert(!prepare(32u));
+        if(fail) {
+            fail_call=31u;
+            assert(kui_vmu_readonly_overlay_complete(&overlay)==KUI_VMU_OVERLAY_HANDLER);
+            unchanged();assert(calls==31u && !overlay.stats.replies && !overlay.stats.advertisements);
+            continue;
+        }
+        assert(!kui_vmu_readonly_overlay_complete(&overlay));
+        assert(calls==31u && overlay.stats.reads==31u && overlay.stats.replies==31u);
+        for(unsigned i=0u;i<32u;i++) {
+            if(i==parent) {
+                assert(rx[i][0]==(before[i][0]|0x00010000u));
+                assert(!memcmp(rx[i]+1,before[i]+1,1020u));
+            } else {
+                assert(!kui_vmu_image_blank_block((uint16_t)i,expected));
+                assert(rx[i][0]==0x82010008u && rx[i][2]==i<<24);
+                assert(!memcmp((uint8_t *)rx[i]+12u,expected,sizeof(expected)));
+                assert(!memcmp((uint8_t *)rx[i]+524u,(uint8_t *)before[i]+524u,500u));
+            }
+        }
+    }
+}
+
 static void bounded_batch_and_terminal_state(void) {
     fresh();for(unsigned i=1u;i<32u;i++) frame(i,11u,1u,2u,0x02000000u,i<<24);
     capture();assert(!prepare(32u));assert(!kui_vmu_readonly_overlay_complete(&overlay));
@@ -451,14 +486,86 @@ static void filtered_backend_retry_replies(void) {
     assert(calls==2u && !overlay.stats.replies && !overlay.stats.advertisements);
 }
 
+static uint8_t batch_write_snapshots[32][128];
+static int snapshot_batch_handler(void *context,const uint8_t *request,size_t request_bytes,
+    uint8_t *reply,size_t capacity,size_t *reply_bytes) {
+    ++calls;assert(!memcmp(rx,before,sizeof(rx)));
+    unsigned cmd=request[0],block=request_bytes>=12u?request[11]:0u;
+    if(cmd==12u) {
+        assert(request_bytes==140u);
+        for(unsigned i=0u;i<128u;i++) assert(request[12u+i]==(uint8_t)(block*7u+i));
+    }
+    if(calls==fail_call) return 0;
+    if(cmd==3u || cmd==12u || cmd==13u || (cmd==11u && (block&1u))) {
+        assert(capacity>=4u);
+        reply[0]=(uint8_t)((cmd!=3u && (block&1u))?0xfcu:7u);
+        reply[1]=0u;reply[2]=request[1];reply[3]=0u;*reply_bytes=4u;
+        return 1;
+    }
+    return kui_vmu_readonly_handle(context,request,request_bytes,reply,capacity,reply_bytes);
+}
+static void full_write_and_mixed_batches_at_every_parent_position(void) {
+    const unsigned mixed[]={11u,12u,1u,2u,10u,13u,3u};
+    for(unsigned parent=0u;parent<32u;parent++) for(unsigned mode=0u;mode<2u;mode++)
+        for(unsigned fail=0u;fail<2u;fail++) {
+        fresh();assert(!kui_vmu_readonly_overlay_init_backend(&overlay,snapshot_batch_handler,
+            filtered_admit,&card));
+        unsigned commands[32];
+        for(unsigned i=0u;i<32u;i++) {
+            unsigned cmd=mode?mixed[i%7u]:12u;commands[i]=cmd;
+            unsigned words=cmd==12u?34u:(cmd==10u || cmd==11u || cmd==13u)?2u:0u;
+            uint32_t location=(cmd==11u || cmd==12u || cmd==13u)?i<<24:0u;
+            if(cmd==13u) location|=4u<<8;
+            frame(i,cmd,1u,words,0x02000000u,location);
+            if(cmd==12u) {
+                for(unsigned j=0u;j<128u;j++) batch_write_snapshots[i][j]=(uint8_t)(i*7u+j);
+                frames[i].write_payload=batch_write_snapshots[i];
+            }
+        }
+        frame(parent,9u,32u,1u,0x01000000u,0u);physical(9u,0u);
+        if(parent) {
+            rx[parent][0]=rx[0][0];rx[parent][1]=rx[0][1];rx[0][0]=UINT32_MAX;
+        }
+        capture();
+        assert(!kui_vmu_readonly_overlay_prepare(&overlay,frames,32u,
+            0x0c100000u,8192u,0x0cfcffe0u,0x10020u));
+        memset(batch_write_snapshots,0xee,sizeof(batch_write_snapshots));
+        memset(frames,0xff,sizeof(frames)); /* Neither caller source remains live. */
+        if(fail) {
+            fail_call=31u;
+            assert(kui_vmu_readonly_overlay_complete(&overlay)==KUI_VMU_OVERLAY_HANDLER);
+            unchanged();assert(calls==31u && !overlay.stats.replies && !overlay.stats.advertisements);
+            continue;
+        }
+        assert(!kui_vmu_readonly_overlay_complete(&overlay));
+        assert(calls==31u && overlay.stats.replies==31u && overlay.stats.advertisements==1u);
+        for(unsigned i=0u;i<32u;i++) {
+            unsigned bytes;
+            if(i==parent) {
+                assert(rx[i][0]==(before[i][0]|0x00010000u));bytes=4u;
+            } else {
+                unsigned cmd=commands[i],response;
+                if(cmd==3u || cmd==12u || cmd==13u || (cmd==11u && (i&1u))) {
+                    bytes=4u;response=(cmd!=3u && (i&1u))?0xfcu:7u;
+                } else {
+                    bytes=cmd==1u?116u:cmd==2u?196u:cmd==10u?32u:524u;
+                    response=cmd==1u?5u:cmd==2u?6u:8u;
+                }
+                assert(rx[i][0]==(response|0x00010000u|((bytes/4u-1u)<<24)));
+            }
+            assert(!memcmp((uint8_t *)rx[i]+bytes,(uint8_t *)before[i]+bytes,1024u-bytes));
+        }
+    }
+}
+
 int main(void) {
     discovery_and_all_blank_reads();request_reply_rx_telemetry_stays_correlated();
     a2_preserves_a1_and_conflicts_only_with_a2();
     strict_request_and_capacity_guards();
     span_alias_and_full_source_guards();physical_conflicts_and_parent_reply_guards();
-    staging_failures_are_atomic();bounded_batch_and_terminal_state();
+    staging_failures_are_atomic();full_read_batch_at_every_parent_position();bounded_batch_and_terminal_state();
     filtered_absent_publication();absent_publication_guards_are_atomic();
-    filtered_backend_retry_replies();
+    filtered_backend_retry_replies();full_write_and_mixed_batches_at_every_parent_position();
     puts("VMU read-only overlay: atomic batches, blank-card reads and conflict guards passed");
     return 0;
 }

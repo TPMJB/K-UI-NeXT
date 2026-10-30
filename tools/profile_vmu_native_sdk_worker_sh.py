@@ -50,7 +50,9 @@ class WorkerSH(PollSH):
   relocation_delta=self.worker_physical_low-0xc100000
   super().__init__(startup.read_bytes(),2,1,None)
   elf=read_elf(build/'native-worker.elf')
-  self.symbols={n:((v[0]+relocation_delta)&MASK,*v[1:]) for n,v in elf[4].items()}
+  # SHN_ABS profile/geometry constants are not addresses and never relocate.
+  self.symbols={n:(v[0] if v[3]==0xfff1 else (v[0]+relocation_delta)&MASK,*v[1:])
+                for n,v in elf[4].items()}
   self.objects=sorted((a,a+z,n) for n,(a,z,t,_) in self.symbols.items() if t==1 and z)
   self.functions=all_functions(elf,relocation_delta);self.function_starts=[lo for lo,_,_ in self.functions]
   self.stack_physical_low=self.symbols['__vmu_native_worker_stack_bottom'][0]&0x1fffffff;self.stack_physical_high=self.symbols['__vmu_native_worker_stack_top'][0]&0x1fffffff
@@ -105,7 +107,7 @@ class WorkerSH(PollSH):
  def cword(self,off,v):self.write(CFG+off,v)
  def prepare(self):
   cache=(ROOT/'tests/fixtures/native-cache/evolution1.nvr').read_bytes()
-  driver=cache[64:168];layout=cache[168:608];heap=cache[608:680];exits=cache[700:748]
+  driver=cache[64:168];layout=cache[168:608];heap=cache[608:680];exits=cache[700:752]
   hw=list(struct.unpack('<18I',heap))
   init,alloc=hw[6],hw[9]
   self.heap_initializer_instructions=SH.run(self,init,[0x8c35e200,0xca1e00],0x8c00e000)[2]
@@ -116,8 +118,8 @@ class WorkerSH(PollSH):
   # calculate free units independently, matching full heap allocation.
   lease[-1]=0xca1e00//32-0x1801
   runtime=[1,236,0x8cfd0000,0x30000,32,0x20000,0,0,0,0,0]+[0]*48
-  blob=struct.pack('<3I',1,2300,0xac248420)+driver+struct.pack('<29I',*lease)+layout+struct.pack('<59I',*runtime)+bytes(56)+self.handoff+struct.pack('<3I',0x8c004100,0x8c004200,0x8c004300)+exits+struct.pack('<I',0)
-  assert len(blob)==2300,len(blob)
+  blob=struct.pack('<3I',1,2304,0xac248420)+driver+struct.pack('<29I',*lease)+layout+struct.pack('<59I',*runtime)+bytes(56)+self.handoff+struct.pack('<3I',0x8c004100,0x8c004200,0x8c004300)+exits+struct.pack('<I',0)
+  assert len(blob)==2304,len(blob)
   self.store_block(CFG,blob)
   for name,value in [('_kui_vmu_native_passive_resume',0x8c1dae44),('_kui_vmu_native_passive_consumer',0x8c1daf4e),('_kui_vmu_native_readonly_release_resume',hw[10]+20)]:self.write(self.symbols[name][0],value)
   bottom=self.symbols['__vmu_native_worker_stack_bottom'][0]
@@ -126,7 +128,7 @@ class WorkerSH(PollSH):
   self.install(hw,driver,exits)
 
  def install(self,hw,driver,exits):
-  d=list(struct.unpack('<18I',driver[:72]));e=list(struct.unpack('<12I',exits))
+  d=list(struct.unpack('<18I',driver[:72]));e=list(struct.unpack('<13I',exits))
   exports=self.symbols['_kui_vmu_native_worker_exports'][0]
   hooks=[(d[6],self.read(exports+16)),(hw[10],self.read(exports+56)),(hw[6],0x8c004200)]
   hooks += [(a,0x8c004200) for a in e[6:6+e[5]]]
@@ -181,9 +183,9 @@ class WorkerSH(PollSH):
   bottom=self.symbols['__vmu_native_worker_stack_bottom'][0];top=self.symbols['__vmu_native_worker_stack_top'][0]
   if bottom<=a<top:return 'private_stack'
   cfg=self.symbols['_config'][0]
-  if cfg<=a<cfg+2300:
+  if cfg<=a<cfg+2304:
    off=a-cfg
-   for label,end in [('header',12),('driver',116),('lease',232),('layout',672),('runtime',908),('display',964),('durable',2236),('callbacks',2248),('exits',2296),('diagnostics',2300)]:
+   for label,end in [('header',12),('driver',116),('lease',232),('layout',672),('runtime',908),('display',964),('durable',2236),('callbacks',2248),('exits',2300),('diagnostics',2304)]:
     if off<end:return 'config.'+label
   for lo,hi,label in self.objects:
    if lo<=a<hi:return label
@@ -331,7 +333,7 @@ def main():
   assert all(int(item['pc'],16)&0xe0000000==0xa0000000 for item in cpu.flat_ocbp)
   cpu.coherence_installation.update(actual_gate_executed=True,successful_handoffs=1)
  if args.reference:
-  cpu.write(cpu.symbols['_config'][0]+2296,4)
+  cpu.write(cpu.symbols['_config'][0]+2300,4)
  history=[]
  for i in range(args.rounds):
   orig_submit=cpu.original_call(SUBMIT)

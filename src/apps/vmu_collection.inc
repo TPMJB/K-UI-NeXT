@@ -93,7 +93,7 @@ static bool collection_payloads(struct collection_source *source,const struct sn
 static bool collection_capture(struct collection_source *source,
     const struct snapshot *snap,struct snapshot *check,bool all,unsigned row,
     uint8_t image[IMAGE_BYTES],struct kui_vmu_image_workspace *workspace,
-    struct kui_vmu_image_summary *summary) {
+    struct kui_vmu_image_summary *summary,bool strict_metadata) {
     struct session *s=source->session;unsigned count=all?snap->count:1u,blocks=0;
     if(!healthy_metadata(s,snap)) return false;
     for(unsigned i=0;i<count;i++)
@@ -109,7 +109,7 @@ static bool collection_capture(struct collection_source *source,
     size_t offset=0;
     for(unsigned i=0;i<count;i++) {
         const uint8_t *entry=snap->directory+snap->entries[all?i:row]*32u;
-        if((entry[1]!=0 && entry[1]!=0xff) || entry[28] || entry[29] || entry[30] || entry[31]) {
+        if(strict_metadata && ((entry[1]!=0 && entry[1]!=0xff) || entry[28] || entry[29] || entry[30] || entry[31])) {
             char message[128];snprintf(message,sizeof(message),
                 "Source entry %u rejected: protection %02x reserved %02x%02x%02x%02x",
                 (unsigned)snap->entries[all?i:row],entry[1],entry[28],entry[29],entry[30],entry[31]);
@@ -146,6 +146,47 @@ static bool collection_capture(struct collection_source *source,
     ok=collection_same_source(source);
 done:
     free(payload);free(files);return ok;
+}
+
+bool kui_vmu_capture_run(unsigned source_slot,void *image,size_t bytes,
+    struct kui_vmu_image_summary *summary,struct kui_vmu_view *out,
+    kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
+    if(!out) return false;
+    memset(out,0,sizeof(*out));out->slot=source_slot;
+    struct session source={out,log?log:quiet_log,cancel,progress,NULL,source_slot/2u,source_slot%2u+1u,false};
+    struct snapshot *snap=NULL,*check=NULL;
+    struct kui_vmu_image_workspace *workspace=NULL;
+    struct collection_source physical={.session=&source};
+    bool ok=false;
+    if(!image || !summary || bytes!=IMAGE_BYTES || source_slot>=8u) {
+        fail(&source,"Choose a valid physical VMU and capture buffer");goto done;
+    }
+    memset(summary,0,sizeof(*summary));
+    if(cancelled(&source)) goto done;
+    source.device=maple_enum_dev((int)source.port,(int)source.unit);
+    if(!source.device || !source.device->valid || !(source.device->info.functions&MAPLE_FUNC_MEMCARD)) {
+        fail(&source,"No physical VMU in the selected source slot");goto done;
+    }
+    physical.functions=source.device->info.functions;
+    memcpy(&physical.info,&source.device->info,sizeof(physical.info));
+    snap=malloc(sizeof(*snap));check=malloc(sizeof(*check));workspace=malloc(sizeof(*workspace));
+    if(!snap || !check || !workspace) {fail(&source,"Not enough RAM for checked source capture");goto done;}
+    if(!collection_snapshot(&physical,snap)) goto done;
+    fill_view(&source,snap,0);out->present=true;
+    if(!snap->count) {fail(&source,"Source VMU has no saves to import");goto done;}
+    status(&source,"Reading and checking all source saves...");
+    if(!collection_capture(&physical,snap,check,true,0,image,workspace,summary,false)) goto done;
+    out->bulk_total=out->bulk_completed=summary->files;
+    out->free_blocks=summary->free_blocks;
+    out->status.done=out->status.total=(uint64_t)summary->used_blocks*BLOCK_BYTES;
+    status(&source,"Captured %u saves using %u of 200 blocks",summary->files,summary->used_blocks);
+    ok=true;
+done:
+    free(workspace);free(check);free(snap);
+    if(!ok && summary) memset(summary,0,sizeof(*summary));
+    out->status.complete=ok;out->status.passed=ok;
+    if(progress) progress(&out->status);
+    return ok;
 }
 
 static struct {
@@ -198,7 +239,7 @@ void kui_vmu_collection_copy_run(unsigned source_slot,unsigned page,unsigned sel
     }
     status(&source,"Capturing checked source saves; physical VMU stays read only...");
     unsigned row=all?0u:out->page*KUI_VMU_ROWS+selected;
-    if(!collection_capture(&physical,snap,check,all,row,image,workspace,&summary)) goto done;
+    if(!collection_capture(&physical,snap,check,all,row,image,workspace,&summary,true)) goto done;
     collection_digest(image,IMAGE_BYTES,sha256);
     if(commit && (collection_preview.device!=source.device ||
        collection_preview.functions!=physical.functions || collection_preview.fingerprint!=snap->fingerprint ||
@@ -243,8 +284,8 @@ void kui_vmu_collection_copy_run(unsigned source_slot,unsigned page,unsigned sel
     if(strlen(card.path)>=sizeof(out->backup_path)) {fail(&source,"Created virtual-card path is too long");goto done;}
     strcpy(out->backup_path,card.path);out->bulk_completed=summary.files;out->bulk_remaining=0u;
     out->status.done=out->status.total;out->free_blocks=card.summary.free_blocks;
-    status(&source,"Stored %u saves in v%04u; game activation pending",summary.files,card.id);
-    source.log("VMU collection verified v%04u: %u saves, %u free blocks; source %c%u read only; game activation pending",
+    status(&source,"Stored %u saves; use Assign games in Virtual VMUs",summary.files);
+    source.log("VMU collection verified v%04u: %u saves, %u free blocks; source %c%u read only; assign games from Virtual VMUs",
         card.id,summary.files,card.summary.free_blocks,'A'+source.port,source.unit);
     ok=true;
 done:
@@ -256,40 +297,26 @@ done:
     if(progress) progress(&out->status);
 }
 
+#include "kui/vmu_library.h"
+
 void kui_vmu_collection_run(unsigned page,struct kui_vmu_backup_view *out,
     kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
     if(!out) return;
     memset(out,0,sizeof(*out));out->page=page;
     struct kui_vmu_view view={0};
     struct session s={&view,log?log:quiet_log,cancel,progress,NULL,0,1,true};
-    struct kui_vmu_collection_page *cards=NULL;
     FATFS fs;bool connected=false,mounted=false,ok=false;
     if(cancelled(&s)) goto done;
-    cards=malloc(sizeof(*cards));
-    if(!cards) {fail(&s,"Not enough RAM for virtual-card collection");goto done;}
     kui_sd_set_params(KUI_STORAGE_AUTO,true);
-    if(!kui_sd_connect()) {fail(&s,"Cannot connect SD for virtual cards");goto done;}
+    if(!kui_sd_connect()) {fail(&s,"Cannot connect SD for virtual VMUs");goto done;}
     connected=true;
-    if(!kui_mount(&fs,s.log)) {fail(&s,"Cannot mount SD for virtual cards");goto done;}
-    mounted=true;status(&s,"Checking stored virtual save-set cards...");
-    if(kui_vmu_collection_list(page,cards,s.log,cancel)) {
-        if(!cancelled(&s)) fail(&s,"Cannot read verified virtual-card collection");
-        goto done;
-    }
-    out->page=cards->page;out->total=cards->total;out->count=cards->count;
-    for(unsigned i=0;i<cards->count && i<KUI_VMU_ROWS;i++) {
-        const struct kui_vmu_collection_card *card=&cards->entries[i];
-        struct kui_vmu_backup_entry *row=&out->entries[i];
-        snprintf(row->name,sizeof(row->name),"%.15s",card->label);
-        snprintf(row->folder,sizeof(row->folder),"v%04u",card->id);
-        snprintf(row->path,sizeof(row->path),"%s",card->path);
-        row->bytes=card->summary.used_blocks*BLOCK_BYTES;
-    }
-    status(&s,cards->total?"%u stored virtual cards; game activation pending":"No virtual cards; copy selected or all saves from a physical VMU",cards->total);
-    ok=true;
-done:
+    if(!kui_mount(&fs,s.log)) {fail(&s,"Cannot mount SD for virtual VMUs");goto done;}
+    mounted=true;status(&s,"Reading virtual cards and game assignments...");
+    ok=kui_vmu_library_list(page,out,s.log,cancel)==KUI_VMU_LIBRARY_OK;
+    view.status=out->status;
+ done:
     if(mounted && f_mount(NULL,"0:",0)!=FR_OK) {fail(&s,"Cannot unmount virtual-card filesystem");ok=false;}
     if(connected) kui_sd_disconnect();
-    free(cards);view.status.complete=view.status.passed=ok;out->status=view.status;
+    view.status.complete=true;view.status.passed=ok;out->status=view.status;
     if(progress) progress(&out->status);
 }

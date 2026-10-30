@@ -21,8 +21,8 @@ bool kui_vmu_native_patch_no_interiors(const void *image,size_t bytes,uint32_t l
     const struct kui_vmu_native_patch_window *windows,size_t count) {
     if(!image || bytes>0xc00000u || bytes<2u ||
        bytes>UINTPTR_MAX-(uintptr_t)image || !ram(load,(uint32_t)bytes) ||
-       !windows || !count || count>8u || (load&1u)) return false;
-    uint32_t begins[8],ends[8],first=UINT32_MAX,last=0u;
+       !windows || !count || count>9u || (load&1u)) return false;
+    uint32_t begins[9],ends[9],first=UINT32_MAX,last=0u;
     for(size_t i=0;i<count;i++) {
         uint32_t begin=windows[i].begin,span=windows[i].bytes;
         if(!ram(begin,span) || ((begin|span)&1u) || span<2u ||

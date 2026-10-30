@@ -4,16 +4,44 @@
 # response check remains; other admitted native games use the same split path.
 BUILD ?= build/native-isolation-split-controller-general
 include Makefile.vmu-native-isolation-split-controller
-FLAGS += -DKUI_NATIVE_SPLIT_CONTROLLER_GENERAL=1
-NATIVE_FLAGS += -DKUI_NATIVE_SPLIT_CONTROLLER_GENERAL=1
+FLAGS += -DKUI_NATIVE_SPLIT_CONTROLLER_GENERAL=1 -DKUI_NATIVE_GENERAL_LEAN_LAYOUT=1
+NATIVE_FLAGS += -DKUI_NATIVE_SPLIT_CONTROLLER_GENERAL=1 -DKUI_NATIVE_GENERAL_LEAN_LAYOUT=1
+# General has no opt-in profiler state and fits a separately checked 112 KiB
+# worker. Diagnostic profiles keep the original 128 KiB linker contract.
+NATIVE_LAYOUT := src/loader/vmu_native_general_lean.ld
+NATIVE_SPAN := 0x1c000
+$(BUILD)/native-worker.elf: src/loader/vmu_native_general_lean.ld
 
-.PHONY: split-controller-general-host-tests
-split-controller-general-host-tests:
+.PHONY: split-controller-general-host-tests general-trace-host-tests general-fault-capture-host-tests
+general-fault-capture-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_NATIVE_SPLIT_CONTROLLER_GENERAL=1 \
+	 -DKUI_NATIVE_GENERAL_LEAN_LAYOUT=1 \
+	 tests/test_vmu_native_general_fault_capture.c src/loader/vmu_native_fault_capture.c \
+	 -o $(BUILD)/test-general-fault-capture
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-general-fault-capture
+general-trace-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -O2 -DKUI_NATIVE_SPLIT_CONTROLLER_GENERAL=1 \
+	 -DKUI_VMU_NATIVE_PERSISTENT_PROBE=1 -DKUI_VMU_NATIVE_READONLY_PROBE=1 \
+	 tests/test_vmu_native_general_trace.c src/loader/vmu_native_trace.c \
+	 -o $(BUILD)/test-general-trace-linked
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-general-trace-linked
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -O2 -DKUI_NATIVE_SPLIT_CONTROLLER_GENERAL=1 \
+	 -DKUI_VMU_NATIVE_PERSISTENT_PROBE=1 -DKUI_VMU_NATIVE_READONLY_PROBE=1 -DKUI_TEST_TRACE_HEADER=1 \
+	 tests/test_vmu_native_general_trace.c -o $(BUILD)/test-general-trace-header
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-general-trace-header
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_trace.c -o $(BUILD)/test-trace-default
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-trace-default
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_trace_report.c -o $(BUILD)/test-trace-report-default
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-trace-report-default
+split-controller-general-host-tests: general-trace-host-tests general-fault-capture-host-tests
 	@mkdir -p $(BUILD)
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_EXPERIMENTAL=1 \
 	 -DKUI_VMU_NATIVE_PERSISTENT_PROBE=1 -DKUI_VMU_NATIVE_CACHED_CODE=1 \
 	 -DKUI_NATIVE_DUAL_READERS=1 -DKUI_NATIVE_RA_TICK_OFF_ISOLATION=1 \
 	 -DKUI_NATIVE_SPLIT_CONTROLLER_ISOLATION=1 -DKUI_NATIVE_SPLIT_CONTROLLER_GENERAL=1 \
+	 -DKUI_NATIVE_GENERAL_LEAN_LAYOUT=1 \
 	 tests/test_vmu_native_split_controller.c \
 	 $(COMPAT_WORKER_HOST_SRC) -Wl,--gc-sections -o $(BUILD)/test-split-controller-general
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-split-controller-general

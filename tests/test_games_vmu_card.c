@@ -20,7 +20,7 @@ bool kui_sd_vmu_profile_identity(struct kui_vmu_sd_identity *out);
 #include "../src/apps/games_vmu_card.inc"
 
 static struct {
-    int result,mounts,unmounts,raw_reads;bool mounted,identity_fails,volume_moves,salts_differ;
+    int result,mounts,unmounts,raw_reads,assignment_result,assignment_reads;bool mounted,identity_fails,volume_moves,salts_differ;
     char problem[96];uint8_t fill;
     const struct kui_retail_manifest *map;
 } mock;
@@ -50,6 +50,14 @@ bool kui_clock_now(struct kui_datetime *out) {memset(out,0,sizeof(*out));return 
 bool kui_clock_to_seconds(const struct kui_datetime *value,int64_t *out) {(void)value;*out=0;return false;}
 static void log_line(const char *format,...) {(void)format;}
 static bool never(void) {return false;}
+
+int kui_vmu_game_card_assignment(const char *product,struct kui_vmu_game_card_work *work,
+    struct kui_vmu_game_card_choice *choice,kui_cancel_fn cancel) {
+    CHECK(work && choice && cancel==never && !strcmp(product,mock.map->product));
+    ++mock.assignment_reads;memset(choice,0,sizeof(*choice));choice->pair=23u;
+    snprintf(choice->problem,sizeof(choice->problem),"%s",mock.problem);
+    return mock.assignment_result;
+}
 
 int kui_vmu_game_card_select(const char *product,uint64_t partition_first,uint64_t partition_end,
     const struct kui_vmu_fs_range *forbidden,size_t forbidden_count,
@@ -94,6 +102,60 @@ static bool prepare(const char **problem) {
     *problem=NULL;
     return games_card_prepare(&map,&package,&mounted_fs,problem,log_line,never);
 }
+static void mode_put32(uint8_t *p,uint32_t value) {
+    for(unsigned i=0;i<4u;i++) p[i]=(uint8_t)(value>>(8u*i));
+}
+static void toggle_capability(uint8_t *wire) {
+    static const uint32_t words[8]={KUI_VMU_NATIVE_TOGGLE_MAGIC0,KUI_VMU_NATIVE_TOGGLE_MAGIC1,
+        1u,32u,7u,0x51000u,0x30000u,1u};
+    for(unsigned i=0;i<8u;i++) mode_put32(wire+i*4u,words[i]);
+}
+static void toggle_mode(uint8_t *wire,unsigned mode) {
+    memset(wire,0,32u);memcpy(wire,"KUINVM01",8u);
+    mode_put32(wire+8u,1u);mode_put32(wire+12u,32u);mode_put32(wire+16u,mode);
+}
+static void emulation_mode_controls(void) {
+    const char *problem=NULL;
+    struct kui_runtime_image package={.data=payload,.info={.payload_bytes=sizeof(payload)}};
+    static uint8_t before[sizeof(payload)];
+    memset(payload,0xa5,sizeof(payload));memcpy(before,payload,sizeof(before));
+    CHECK(games_card_emulation_mode(&package,true,&problem));
+    CHECK(!memcmp(payload,before,sizeof(payload)));
+    CHECK(!games_card_emulation_mode(&package,false,&problem) && strstr(problem,"matching toggle-capable"));
+    CHECK(!memcmp(payload,before,sizeof(payload)));
+    toggle_capability(payload+1024u);memcpy(before,payload,sizeof(before));
+    CHECK(!games_card_emulation_mode(&package,false,&problem) && strstr(problem,"mode is missing"));
+    CHECK(!memcmp(payload,before,sizeof(payload)));
+    toggle_mode(payload+2048u,KUI_VMU_NATIVE_MODE_NORMAL);
+    /* A raw magic constant is not a second canonical launch-mode record. */
+    memcpy(payload+512u,"KUINVM01",8u);
+    memcpy(payload+8192u,template_wire,sizeof(template_wire));
+    memcpy(before,payload,sizeof(before));problem=NULL;
+    int lookups=mock.assignment_reads,reads=mock.raw_reads;
+    CHECK(games_card_emulation_mode(&package,false,&problem) && !problem);
+    for(size_t i=0;i<sizeof(payload);i++)
+        CHECK(payload[i]==(i==2064u?7u:before[i]));
+    CHECK(mock.assignment_reads==lookups && mock.raw_reads==reads);
+    CHECK(!memcmp(payload+8192u,template_wire,sizeof(template_wire)));
+    CHECK(games_card_emulation_mode(&package,false,&problem));
+    CHECK(games_card_emulation_mode(&package,true,&problem));
+    CHECK(!memcmp(payload,before,sizeof(payload)));
+    /* Every refusal leaves the complete module and stored-card profile alone. */
+    toggle_mode(payload+4096u,KUI_VMU_NATIVE_MODE_NORMAL);memcpy(before,payload,sizeof(before));
+    CHECK(!games_card_emulation_mode(&package,false,&problem) && strstr(problem,"ambiguous"));
+    CHECK(!memcmp(payload,before,sizeof(payload)));
+    memset(payload+4096u,0xa5,32u);toggle_capability(payload+4096u);memcpy(before,payload,sizeof(before));
+    CHECK(!games_card_emulation_mode(&package,false,&problem));
+    CHECK(!games_card_emulation_mode(&package,true,&problem));
+    CHECK(!memcmp(payload,before,sizeof(payload)));
+    memset(payload+4096u,0xa5,32u);toggle_mode(payload+2048u,KUI_VMU_NATIVE_MODE_PROFILE);
+    memcpy(before,payload,sizeof(before));
+    CHECK(!games_card_emulation_mode(&package,false,&problem) && strstr(problem,"damaged or ambiguous"));
+    CHECK(!memcmp(payload,before,sizeof(payload)));
+    toggle_mode(payload+2048u,0u);payload[2068u]=1u;memcpy(before,payload,sizeof(before));
+    CHECK(!games_card_emulation_mode(&package,false,&problem));CHECK(!memcmp(payload,before,sizeof(payload)));
+    puts("PASS native VMU launch toggle: exact capability/mode, old-module refusal, preserved reader/cache/profile bytes and zero card I/O");
+}
 int main(int argc,char **argv) {
     if(argc!=2) {fprintf(stderr,"Usage: %s TEMPLATE\n",argv[0]);return 2;}
     FILE *file=fopen(argv[1],"rb");CHECK(file && fread(template_wire,1,4096u,file)==4096u && !fclose(file));
@@ -103,6 +165,28 @@ int main(int argc,char **argv) {
     map.slots[4].extent=(struct kui_retail_extent){.card_lba=600000u,.blocks=128u};
     mock.map=&map;mounted_fs.fs_type=FS_EXFAT;mounted_fs.last_clst=77u;
     const char *problem;
+    emulation_mode_controls();
+
+    /* Unassigned games retain standalone/Legacy behavior. An explicit
+     * import can only run through combined virtual A2, never silently fall
+     * back to physical saving. Combined-ready continues into preparation. */
+    mock.assignment_result=KUI_VMU_GAME_CARD_UNBOUND;
+    CHECK(games_card_route(&map,true,false,true,&problem,never));
+    CHECK(games_card_route(&map,true,false,false,&problem,never));
+    mock.assignment_result=KUI_VMU_GAME_CARD_READY;
+    CHECK(!games_card_route(&map,true,false,true,&problem,never) && strstr(problem,"standalone New"));
+    CHECK(!games_card_route(&map,true,false,false,&problem,never) && strstr(problem,"combined New reader"));
+    int lookups=mock.assignment_reads;
+    CHECK(games_card_route(&map,false,false,false,&problem,never) && mock.assignment_reads==lookups);
+    CHECK(games_card_route(&map,false,false,true,&problem,never) && mock.assignment_reads==lookups);
+    CHECK(games_card_route(&map,false,true,false,&problem,never) && mock.assignment_reads==lookups);
+    CHECK(games_card_route(&map,true,true,false,&problem,never) && mock.assignment_reads==lookups);
+    snprintf(mock.problem,sizeof(mock.problem),"VMU game assignments are damaged");
+    mock.assignment_result=KUI_VMU_GAME_CARD_FAILED;
+    CHECK(!games_card_route(&map,true,false,false,&problem,never) && strstr(problem,"assignments are damaged"));
+    mock.assignment_result=KUI_VMU_GAME_CARD_CANCELLED;
+    CHECK(!games_card_route(&map,true,false,true,&problem,never) && strstr(problem,"cancelled"));
+    memset(mock.problem,0,sizeof(mock.problem));
 
     /* A module without a profile slot cannot carry a card. */
     memset(payload,0xa5,sizeof(payload));
