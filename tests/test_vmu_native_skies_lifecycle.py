@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Compare split/full submit over identical uniform-RX callback/save lifecycles."""
+"""Compare 72/112 KiB split/full uniform-RX callback/save lifecycles."""
 from pathlib import Path
 import os
 import re
@@ -26,19 +26,22 @@ FLAGS=('-std=c11','-O1','-g','-Wall','-Wextra','-Werror','-Wpedantic',
 
 with tempfile.TemporaryDirectory(prefix='kui-skies-lifecycle-') as temporary:
     results=[]
-    for enabled in (0,1):
-        output=Path(temporary)/('lifecycle-'+str(enabled))
+    for span,lite,enabled in ((0x12000,1,0),(0x12000,1,1),(0x1c000,0,0),(0x1c000,0,1)):
+        variant=f'{span//1024}k-'+('full' if enabled else 'split')
+        output=Path(temporary)/('lifecycle-'+variant)
         subprocess.run([*shlex.split(os.environ.get('HOST_CC','cc')),*FLAGS,
+            '-DKUI_NATIVE_VMU_LITE='+str(lite),
+            '-DKUI_SKIES_TEST_LEASE_BYTES='+str(span),
             '-DKUI_NATIVE_VMU_ONLY_FULL_SUBMIT='+str(enabled),
             'tests/test_vmu_native_skies_lifecycle.c',*SOURCES,'-Wl,--gc-sections','-o',str(output)],
             cwd=ROOT,check=True)
         result=subprocess.run([str(output)],cwd=ROOT,text=True,capture_output=True,
             env=dict(os.environ,ASAN_OPTIONS='detect_leaks=0'))
         if result.returncode:
-            raise RuntimeError('Lifecycle mode '+str(enabled)+' failed:\n'+result.stdout+result.stderr)
+            raise RuntimeError('Lifecycle variant '+variant+' failed:\n'+result.stdout+result.stderr)
         print(result.stdout,end='')
-        match=re.search(r'mode=(\d+) polls=(\d+) callbacks=(\d+) durable_roundtrips=(\d+) digest=([0-9a-f]{8})',result.stdout)
-        assert match and int(match[1])==enabled and tuple(map(int,match.group(2,3,4)))==(54,54,6),result.stdout
-        results.append(match[5])
-    assert results[0]==results[1], 'Split/full submit changed physical RX or durable card bytes'
-print('Split and full submit produced byte-identical physical/virtual responses and durable saved blocks')
+        match=re.search(r'lease=(\d+) mode=(\d+) polls=(\d+) callbacks=(\d+) durable_roundtrips=(\d+) digest=([0-9a-f]{8})',result.stdout)
+        assert match and tuple(map(int,match.group(1,2)))==(span,enabled) and tuple(map(int,match.group(3,4,5)))==(54,54,6),result.stdout
+        results.append(match[6])
+    assert len(set(results))==1, 'Allocation size or submit mode changed physical RX or durable card bytes'
+print('All four 72/112 KiB split/full variants produced byte-identical physical/virtual responses and durable saved blocks')

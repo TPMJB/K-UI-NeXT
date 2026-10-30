@@ -1,0 +1,44 @@
+{
+  "schema": "kui.native.skies.owner-read-stop.v1",
+  "owner_report": {
+    "game": "Skies of Arcadia Disc 1",
+    "display_build": "4edbc56c295b",
+    "reason": "IMAGE READ FAILED",
+    "function": 2,
+    "command": 17,
+    "reject_reason": 0,
+    "sp": "0x8c00f258",
+    "parameter": "0x00000000",
+    "pr": "0x8c29c75a",
+    "s20": "0x00000000",
+    "s36": "0x00000000",
+    "s60": "0x00000000"
+  },
+  "source_interpretation": {
+    "function": "GD_EXEC",
+    "command": "DMAREAD",
+    "accepted_request": true,
+    "image_callback_failed": true,
+    "generic_request_rejection_heading_is_misleading": true,
+    "exec_parameter_and_owner_stack_words_were_not_sampled": true,
+    "pr_is_caller_return_address_not_exception_pc": true,
+    "specific_storage_or_image_failure_not_identified_by_old_screen": true
+  },
+  "next_candidate": {
+    "main_commit": "944a93d109705ec90ef9a1a6fe3a0679ebcc7e8b",
+    "main_features": [
+      "saved Games catalogue",
+      "multi-disc grouping"
+    ],
+    "vmulite_upstream_commit": "0b9dcb4bcd41724fe48011f74081590d4c1672d6",
+    "baseline_lease_bytes": 73728,
+    "lite_maximum_chain_bytes": 4096,
+    "lite_replaces_default": true,
+    "console_execution_verified": false,
+    "skies_crash_fixed": false,
+    "missing_save_explained": false,
+    "card_inventory_pending": true,
+    "reference_lease_bytes": 114688,
+    "baseline_selected_by_owner": true
+  }
+}

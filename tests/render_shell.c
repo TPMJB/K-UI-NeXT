@@ -371,6 +371,28 @@ int main(int argc,char **argv) {
         for(unsigned i=0;i<8;i++) snprintf(shell.games_listing.entries[i].name,sizeof(shell.games_listing.entries[i].name),"%s",names[i]);
         shell.games_listing.entries[0].directory=true;shell.games_selected=1;
         strcpy(shell.games_listing.message,"Choose a game image to inspect.");
+    } else if(!strcmp(argv[1],"games-disc-groups") || !strcmp(argv[1],"games-discs")) {
+        library(&shell,KUI_GAMES_VIEW_LIST);
+        bool discs=!strcmp(argv[1],"games-discs");
+        shell.games_listing.count=discs?2:4;shell.games_listing.total=shell.games_listing.count;
+        shell.games_listing.has_more=false;shell.games_selected=discs?1:2;
+        const char *names[]={"Grandia II","Resident Evil - Code Veronica","Skies of Arcadia","Sonic Adventure 2"};
+        for(unsigned i=0;i<shell.games_listing.count;i++) {
+            struct kui_games_entry *e=&shell.games_listing.entries[i];
+            memset(e,0,sizeof(*e));
+            const char *name=discs?(i?"SKIES_OF_ARCADIA_D2":"SKIES_OF_ARCADIA_D1"):names[i];
+            snprintf(e->name,sizeof(e->name),"%s",name);
+            snprintf(e->title,sizeof(e->title),"%s",discs?(i?"Disc 2":"Disc 1"):names[i]);
+            snprintf(e->path,sizeof(e->path),"/Games/%s/disc.gdi",name);
+            if(discs)e->disc=i+1;
+            else if(i==1 || i==2)snprintf(e->group,sizeof(e->group),"%032u",i);
+        }
+        if(discs) {
+            strcpy(shell.games_group,"00000000000000000000000000000002");
+            strcpy(shell.games_listing.group,shell.games_group);
+            strcpy(shell.games_listing.group_name,"Skies of Arcadia");
+            strcpy(shell.games_listing.message,"Choose a disc.");
+        }
     } else if(!strcmp(argv[1],"games-list-art")) library(&shell,KUI_GAMES_VIEW_LIST);
     else if(!strcmp(argv[1],"games-art-loading")) {
         library(&shell,KUI_GAMES_VIEW_LIST);shell.games_listing.entries[shell.games_selected].cover=false;

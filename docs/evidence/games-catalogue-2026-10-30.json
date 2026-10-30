@@ -1,0 +1,44 @@
+{
+  "base_commit": "9dcf2ced7ae4e7622ebf9ee55e38d1c33d3f9b23",
+  "scope": "GUI-only saved Games catalogue and explicit multi-disc grouping",
+  "console_acceptance": "pending",
+  "validation": {
+    "legacy_games_fat32_exfat_cases": 230,
+    "covers_fat32_exfat_cases": 28,
+    "new_library_fat32_exfat_unique_cases": 32,
+    "uppercase_corrupt_ledger_recovery": "passed on FAT32 and exFAT",
+    "shell": "full suite passed with AddressSanitizer and UndefinedBehaviorSanitizer",
+    "group_parser": "passed with AddressSanitizer and UndefinedBehaviorSanitizer",
+    "installer_packager": "30 tests passed",
+    "sh4_build": "passed with warnings treated as errors; no undefined symbols"
+  },
+  "host_io_evidence": {
+    "cold_saved_catalogue": {
+      "directory_opens": 0,
+      "directory_read_calls": 0,
+      "stat_calls": 0,
+      "game_image_opens": 0,
+      "writes": 0
+    },
+    "warm_page_and_disc_chooser": {
+      "media_block_reads": 0,
+      "file_opens": 0,
+      "writes": 0
+    }
+  },
+  "runtime_envelope": {
+    "baseline_payload_bytes": 2590432,
+    "payload_bytes": 2616008,
+    "baseline_memory_bytes": 6732240,
+    "memory_bytes": 6759696,
+    "fixed_gui_memory_increase_bytes": 27456,
+    "catalogue_heap": "compact records and derived group tables; legacy listing heap dropped after admission; catalogue freed before game handoff"
+  },
+  "limits": [
+    "Console menu latency and successful launches need hardware testing.",
+    "Grouping requires explicit matching Disc/Disk/CD/D1 markers; no metadata-only or playlist grouping.",
+    "Computer edits require an explicit scan.",
+    "Card replacement requires refresh; volume binding is a consistency check, not a detector of all external edits.",
+    "In-game disc swapping is outside this update."
+  ]
+}

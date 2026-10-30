@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Package both audited compact VMU-only transports and complete offline source."""
+"""Package both audited compact VMU-only (or VMU-lite) transports and complete offline source."""
 import argparse
 import csv
 import hashlib
@@ -23,7 +23,15 @@ ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = 'kui.native.vmu-only.delivery.v1'
 SPAN = 0x1c000
 TRANSPORTS = {'sci': 1, 'scif': 0}
-ARTIFACTS = ('retail-maple-observe.kui', 'retail-native-vmu-only.kui',
+# VMU-lite packages the same way. Each linked audit must confirm the selected
+# variant and its own span; the selection never relabels a build.
+VARIANTS = {
+    'vmu-only': dict(span=SPAN, alias='retail-native-vmu-only.kui', makefile='Makefile.vmu-native-vmu-only',
+                     build='native-vmu-only', readme='docs/native-vmu-only-test.md', zip='K-UI-VMU-Only-'),
+    'vmu-lite': dict(span=0x12000, alias='retail-native-vmu-lite.kui', makefile='Makefile.vmu-native-vmu-lite',
+                     build='native-vmu-lite', readme='docs/native-vmu-lite-test.md', zip='K-UI-VMU-Lite-'),
+}
+ARTIFACTS = ('retail-maple-observe.kui',
              'entry.elf', 'entry.map', 'entry.compile.json', 'stage.elf', 'stage.bin', 'stage.map',
              'resident-sci.elf', 'resident-sci.bin', 'resident-sci.map',
              'native-worker.elf', 'native-worker.bin', 'native-worker.map', 'native-worker.reloc',
@@ -47,10 +55,10 @@ def git(*arguments):
     return subprocess.check_output(['git', *arguments], cwd=ROOT, text=True).strip()
 
 
-def bind_profile(build, commit):
+def bind_profile(build, commit, alias=VARIANTS['vmu-only']['alias']):
     """Derive the only personalized span from its exact read-only linked owner."""
     module = (build/'retail-maple-observe.kui').read_bytes()
-    require((build/'retail-native-vmu-only.kui').read_bytes() == module,
+    require((build/alias).read_bytes() == module,
             'VMU-only published alias differs from the audited runtime')
     stage_data = (build/'stage.elf').read_bytes()
     stage = inspect_elf(stage_data, 0x8ce00000, 0x8cfe0000)
@@ -105,7 +113,7 @@ print('Verified offline VMU-only source',item['source_commit'],dest)
 '''
 
 
-def test_matrix():
+def test_matrix(variant='vmu-only'):
     stream = io.StringIO(newline='')
     writer = csv.writer(stream)
     writer.writerow(('transport', 'order', 'game', 'test', 'result', 'notes'))
@@ -118,13 +126,17 @@ def test_matrix():
         ('Grandia II', 'FMV; gameplay; save/load'),
         ('Skies of Arcadia (optional)', 'Load; gameplay; save/load'),
     )
+    if variant == 'vmu-lite':
+        cases += (('Power Stone 2 (optional)',
+                   'Second controller with its own physical VMU: 2-player match; save/load'),)
     for name in TRANSPORTS:
         for order, (game, test) in enumerate(cases, 1):
             writer.writerow((name.upper(), order, game, test, '', ''))
     return stream.getvalue().encode()
 
 
-def source_guide(commit):
+def source_guide(commit, variant='vmu-only'):
+    selected = VARIANTS[variant]
     return f'''# Complete source checkpoint
 
 Runtime source commit: `{commit}`.
@@ -143,8 +155,8 @@ dirty checkout, a symlink destination, or an unrelated directory.
 With the existing `sh-elf` toolchain on PATH, rebuild the two transports:
 
 ```sh
-make -C restored-source -f Makefile.vmu-native-vmu-only -j4 BUILD=build/native-vmu-only-sci VMU_TRANSPORT=1
-make -C restored-source -f Makefile.vmu-native-vmu-only -j4 BUILD=build/native-vmu-only-scif VMU_TRANSPORT=0
+make -C restored-source -f {selected['makefile']} -j4 BUILD=build/{selected['build']}-sci VMU_TRANSPORT=1
+make -C restored-source -f {selected['makefile']} -j4 BUILD=build/{selected['build']}-scif VMU_TRANSPORT=0
 ```
 
 Run `tools/check_native_vmu_only.py` with the corresponding build directory and
@@ -153,36 +165,39 @@ compiled ELF files are under `artifacts/sci/` and `artifacts/scif/`.
 '''.encode()
 
 
-def package(sci_build, scif_build, output=None, evidence=()):
+def package(sci_build, scif_build, output=None, evidence=(), variant='vmu-only'):
+    selected = VARIANTS[variant]
+    span = selected['span']
     commit, tree = git('rev-parse', 'HEAD'), git('rev-parse', 'HEAD^{tree}')
     require(not git('status', '--porcelain'), 'Commit source changes before packaging')
     revision = commit[:12]
     files = {}
-    metadata = dict(schema=SCHEMA, source_commit=commit, build=revision, lease_bytes=SPAN, variants={})
+    metadata = dict(schema=SCHEMA, source_commit=commit, build=revision, lease_bytes=span, variants={})
     candidate = dict(schema='kui.native.vmu-only.candidate.v1', source_commit=commit,
-        source_tree=tree, build=revision, lease_bytes=SPAN, virtual_a2=True,
+        source_tree=tree, build=revision, variant=variant, lease_bytes=span, virtual_a2=True,
         background_reader_enabled=False, prefetch_enabled=False, console_execution_verified=False,
         variants={})
     builds = {'sci': Path(sci_build).resolve(strict=True), 'scif': Path(scif_build).resolve(strict=True)}
     for name, build in builds.items():
         report = audit(build, transport=TRANSPORTS[name], allow_dirty=False, self_test=True)
         require(report.get('schema') == 'kui.native.vmu-only.linked.v1' and
-                report.get('transport') == TRANSPORTS[name] and report.get('lease_bytes') == SPAN and
-                report.get('worker_span') == SPAN and report.get('background_reader_enabled') is False and
+                report.get('variant') == variant and
+                report.get('transport') == TRANSPORTS[name] and report.get('lease_bytes') == span and
+                report.get('worker_span') == span and report.get('background_reader_enabled') is False and
                 report.get('prefetch_enabled') is False and report.get('console_execution_verified') is False and
                 report.get('source_provenance', {}).get('commit') == commit and
                 report['source_provenance'].get('source_dirty') is False,
                 'Linked audit differs from this clean compact runtime: '+name)
         report_wire = wire(report)
         (build/'vmu-only-audit.json').write_bytes(report_wire)
-        module, manifest = bind_profile(build, commit)
+        module, manifest = bind_profile(build, commit, selected['alias'])
         require(report.get('module_sha256') == sha(module), 'Linked audit module binding differs: '+name)
         prefix = 'variants/'+name
         files[prefix+'/base/KUI/apps/games/retail-boot.kui'] = module
         files[prefix+'/base/native-persistent-personalization.json'] = wire(manifest)
         metadata['variants'][name] = dict(directory=prefix, transport=TRANSPORTS[name], module_sha256=sha(module))
         artifact_hashes = {}
-        for artifact in ARTIFACTS:
+        for artifact in (ARTIFACTS[0], selected['alias'], *ARTIFACTS[1:]):
             data = (build/artifact).read_bytes()
             files['artifacts/'+name+'/'+artifact] = data
             artifact_hashes[artifact] = sha(data)
@@ -200,12 +215,12 @@ def package(sci_build, scif_build, output=None, evidence=()):
                        ('personalize.py', 'tools/personalize_vmu_native_persistent.py'),
                        ('tools/runtime_package.py', 'tools/runtime_package.py'),
                        ('tools/vmu_persist_profile.py', 'tools/vmu_persist_profile.py'),
-                       ('README-FIRST.md', 'docs/native-vmu-only-test.md'),
+                       ('README-FIRST.md', selected['readme']),
                        ('LICENSE', 'LICENSE'), ('THIRD_PARTY.md', 'THIRD_PARTY.md')):
         files[name] = (ROOT/path).read_bytes()
     files['vmu-only.json'] = wire(metadata)
-    files['test-results.csv'] = test_matrix()
-    files['SOURCE.md'] = source_guide(commit)
+    files['test-results.csv'] = test_matrix(variant)
+    files['SOURCE.md'] = source_guide(commit, variant)
     for source in evidence:
         source = Path(source).resolve(strict=True)
         require(source.is_file() and not source.is_symlink(), 'Evidence must be an ordinary file')
@@ -230,7 +245,7 @@ def package(sci_build, scif_build, output=None, evidence=()):
     files['SHA256SUMS.txt'] = ''.join(sha(data)+'  '+name+'\n'
         for name, data in sorted(files.items())).encode()
     if output is None:
-        output = ROOT.parent/'delivery'/('K-UI-VMU-Only-'+revision+'.zip')
+        output = ROOT.parent/'delivery'/(selected['zip']+revision+'.zip')
     output = Path(output).resolve()
     require(not output.is_relative_to(ROOT), 'Save the deliverable outside the source checkout')
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -257,13 +272,16 @@ def package(sci_build, scif_build, output=None, evidence=()):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--sci-build', type=Path, default=ROOT/'build/native-vmu-only-sci')
-    parser.add_argument('--scif-build', type=Path, default=ROOT/'build/native-vmu-only-scif')
+    parser.add_argument('--variant', choices=tuple(VARIANTS), default='vmu-only')
+    parser.add_argument('--sci-build', type=Path)
+    parser.add_argument('--scif-build', type=Path)
     parser.add_argument('--output', type=Path)
     parser.add_argument('--evidence', type=Path, action='append', default=[])
     args = parser.parse_args()
+    build = ROOT/'build'/VARIANTS[args.variant]['build']
     try:
-        package(args.sci_build, args.scif_build, args.output, args.evidence)
+        package(args.sci_build or Path(str(build)+'-sci'), args.scif_build or Path(str(build)+'-scif'),
+                args.output, args.evidence, args.variant)
     except (OSError, ValueError, AssertionError, KeyError, TypeError, subprocess.CalledProcessError) as error:
         parser.exit(2, 'VMU-only package refused: '+str(error)+'\n')
 

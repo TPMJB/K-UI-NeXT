@@ -18,6 +18,10 @@ struct kui_games_entry {
     /* What lists show: a cached disc title, else the folder/file name.
      * Empty from kui_games_list itself. cover is selected artwork only. */
     char title[KUI_COVER_TITLE_CAP];
+    /* A virtual disc set keeps its real root and representative image path.
+     * Empty for ordinary rows. Disc members retain their own exact paths. */
+    char group[33];
+    unsigned disc;
     bool directory, disabled, cover;
 };
 struct kui_games_page {
@@ -30,6 +34,7 @@ struct kui_games_page {
     unsigned view;
     bool has_more, artwork;
     char root[KUI_DEST_ROOT_CAP], message[128];
+    char group[33],group_name[KUI_DEST_NAME_CAP];
 };
 enum kui_game_cdda_compatibility {
     KUI_GAME_CDDA_UNTESTED = 0,
@@ -77,6 +82,10 @@ bool kui_games_find(const char *root,const char *name,unsigned *offset,
  * refresh must clear both this cache and kui_games_covers_cache_clear().
  * No filesystem handles are retained. */
 void kui_games_cache_clear(void);
+/* RAM-only completeness fence for a persistent catalogue build. False while
+ * discovery/filtering needed a retry, exceeded its cache bound, or a folder
+ * still needs a successful resolution. Ordinary browsing stays fail-soft. */
+bool kui_games_cache_complete(const char *root);
 /* Runs while the card is still mounted: after a successful listing, or after
  * an inspection whether or not the image was valid. It may read any file and
  * write under KUI/, and must leave no file or folder open. */

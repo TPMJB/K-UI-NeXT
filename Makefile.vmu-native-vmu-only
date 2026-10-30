@@ -20,10 +20,11 @@ NATIVE_LAYOUT := src/loader/vmu_native_general_lean.ld
 NATIVE_SPAN := 0x1c000
 $(BUILD)/vmu-only-config: force-mode-config
 	@mkdir -p $(BUILD)
-	@printf '%s\n' 'VMU_TRANSPORT=$(VMU_TRANSPORT)' 'FULL_SUBMIT=$(VMU_ONLY_FULL_SUBMIT)' > $@.tmp
+	@printf '%s\n' 'VMU_TRANSPORT=$(VMU_TRANSPORT)' 'FULL_SUBMIT=$(VMU_ONLY_FULL_SUBMIT)' \
+	 'NATIVE_LAYOUT=$(NATIVE_LAYOUT)' 'NATIVE_SPAN=$(NATIVE_SPAN)' > $@.tmp
 	@cmp -s $@.tmp $@ || cp $@.tmp $@
 	@rm -f $@.tmp
-$(RESIDENT_OBJ) $(STAGE_OBJ) $(NATIVE_OBJ): $(BUILD)/vmu-only-config
+$(RESIDENT_OBJ) $(STAGE_OBJ) $(NATIVE_OBJ) $(WORKER_OBJ): $(BUILD)/vmu-only-config
 $(BUILD)/native-worker.elf: src/loader/vmu_native_general_lean.ld
 $(BUILD)/retail-native-vmu-only.kui: $(BUILD)/retail-maple-observe.kui
 	cp $< $@

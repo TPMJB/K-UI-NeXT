@@ -224,6 +224,8 @@ struct kui_shell {
     struct kui_cd_audio_status cd_audio;
     unsigned cd_selected;
     char games_path[KUI_DEST_ROOT_CAP], games_selected_path[KUI_GAMES_FILE_CAP];
+    char games_group[33];
+    unsigned games_parent_page,games_parent_selected;
     struct kui_games_selection games_last;
     char games_seek_name[KUI_DEST_NAME_CAP];
     bool games_seek;
@@ -244,6 +246,7 @@ struct kui_shell {
     /* Explicit refresh rebuilds worker-owned directory discovery; entering,
      * page and view changes reuse its read-only snapshot. */
     bool games_refresh;
+    bool games_rebuild;
     /* Reader enum plus explicit launch options from games_retail.h.
      * Each accepted launch replaces the preceding choice. */
     unsigned games_retail_reader;

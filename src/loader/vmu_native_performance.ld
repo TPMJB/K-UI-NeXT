@@ -5,7 +5,8 @@
 OUTPUT_FORMAT("elf32-shl")
 OUTPUT_ARCH(sh)
 ENTRY(_kui_vmu_native_passive_arm)
-__kui_native_worker_span = DEFINED(__kui_native_general_lean_worker_layout) ? 0x1c000 : 0x20000;
+__kui_native_worker_span = DEFINED(__kui_native_vmu_lite_worker_layout) ? 0x12000 :
+    DEFINED(__kui_native_general_lean_worker_layout) ? 0x1c000 : 0x20000;
 __kui_native_worker_stack_limit = 0xac100000 + __kui_native_worker_span - 0x1000;
 PHDRS {
     exports PT_LOAD FLAGS(4);

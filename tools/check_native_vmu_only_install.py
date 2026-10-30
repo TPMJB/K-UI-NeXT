@@ -24,7 +24,8 @@ def require(condition,message):
 class Install(Machine):
     instruction_limit=100000
 
-    def __init__(self,stage,low,worker,binary,wire,seed=7,*,failure=None,body=None):
+    def __init__(self,stage,low,worker,binary,wire,seed=7,*,failure=None,body=None,span=SPAN):
+        self.span=span
         stack=stage[4]['_native_installer_stack'][0]+65536-32
         super().__init__(stage,'_native_passive_run',seed,15,stack,body=body)
         self.stage,self.low,self.worker=stage,low,worker
@@ -34,8 +35,8 @@ class Install(Machine):
             if kind==1:self.raw_write(va,stage[0][offset:offset+size])
         self.lease=0x8c900000;self.payload=0x0c600020
         self.dest=self.payload|0xa0000000;self.load=self.payload|0x80000000
-        self.raw_write(self.dest,b'\xa5'*SPAN)
-        self.words(self.lease,[1,116,2,1]+[0]*18+[0x0c600000,0x80000,SPAN,0x0c600000,self.payload,SPAN//32+1,0x2000])
+        self.raw_write(self.dest,b'\xa5'*self.span)
+        self.words(self.lease,[1,116,2,1]+[0]*18+[0x0c600000,0x80000,self.span,0x0c600000,self.payload,self.span//32+1,0x2000])
         self.r[4]=self.lease
         self.events=[];self.purges=[];self.armed=False;self.published_worker=False;self.did_relocate=False
         self.aborted=False;self.post_arm_mutation=False
@@ -88,7 +89,7 @@ class Install(Machine):
         require(not address&3,'Unaligned installer write')
         physical=address&0x1fffffff
         ranges=[(self.start_sp-8192,self.start_sp),
-                (self.dest&0x1fffffff,(self.dest&0x1fffffff)+SPAN),
+                (self.dest&0x1fffffff,(self.dest&0x1fffffff)+self.span),
                 (self.control&0x1fffffff,(self.control&0x1fffffff)+56),
                 (0x0c030200,0x0c030204)]
         require(any((a&0x1fffffff)<=physical<physical+4<=(b&0x1fffffff) for a,b in ranges),
@@ -118,7 +119,7 @@ class Install(Machine):
             self.raw_write(address,struct.pack('<H',self.r[m]&0xffff));return
         if word&0xf0ff==0x00a3:
             address=self.r[n]&~31
-            if self.load<=address<self.load+SPAN:
+            if self.load<=address<self.load+self.span:
                 require(not self.did_relocate,'Worker lease purge after P2 relocation')
                 self.purges.append(address)
             return
@@ -141,9 +142,9 @@ class Install(Machine):
         elif name=='_kui_vmu_persist_stage_handoff_matches':result=0
         elif name=='_memset':
             destination,value,count=self.r[4:7]
-            require(count<=SPAN,'Installer memset exceeds known bound')
+            require(count<=self.span,'Installer memset exceeds known bound')
             if destination==self.dest+len(self.binary):
-                require(self.did_relocate and count==SPAN-len(self.binary) and value==0,
+                require(self.did_relocate and count==self.span-len(self.binary) and value==0,
                         'Worker BSS/stack zero fill differs from exact lease tail')
                 self.events.append(('zero',destination,count))
                 self.sites['zero']=self.pc
@@ -159,14 +160,14 @@ class Install(Machine):
         elif name=='_kui_vmu_native_relocate':
             args=self.r[4:8]+[self.read(self.r[15]+4*i) for i in range(3)]
             expected=[self.stage[4]['__native_worker_blob_begin'][0],len(self.binary),
-                      self.stage[4]['__native_worker_reloc_begin'][0],len(self.wire),self.dest,SPAN,self.load]
+                      self.stage[4]['__native_worker_reloc_begin'][0],len(self.wire),self.dest,self.span,self.load]
             require(args==expected,'Compiled relocation arguments differ from complete worker/lease')
-            require(self.purges==list(range(self.load,self.load+SPAN,32)),
+            require(self.purges==list(range(self.load,self.load+self.span,32)),
                     'Complete P1 lease must be purged before P2 relocation')
             if self.failure=='relocate':result=1
             else:
                 self.raw_write(self.dest,relocated(self.binary,self.wire,self.dest))
-                self.did_relocate=True;self.events.append(('relocate',self.dest,SPAN))
+                self.did_relocate=True;self.events.append(('relocate',self.dest,self.span))
         elif name=='_passive_entry':
             entry,dest,count=self.r[4:7]
             result=int(dest==self.dest and count==len(self.binary) and
@@ -176,7 +177,7 @@ class Install(Machine):
             if begin==self.load:
                 require(self.did_relocate and not self.armed,'Worker publication precedes relocation or follows arm')
                 require(end==self.load+len(self.binary),'Worker publication wrong initialized byte span')
-                require(('zero',self.dest+len(self.binary),SPAN-len(self.binary)) in self.events,
+                require(('zero',self.dest+len(self.binary),self.span-len(self.binary)) in self.events,
                         'Worker publication precedes complete BSS/stack zero fill')
                 self.published_worker=True;self.events.append(('publish_worker',begin,end))
                 self.sites['publish']=self.pc
@@ -187,7 +188,7 @@ class Install(Machine):
         elif name=='_kui_vmu_native_worker_call':
             require(self.published_worker,'Worker arm precedes code/cache publication')
             entry,top,config,result_pointer=self.r[4:8]
-            require(entry==self.read(self.dest+12) and top==self.dest+SPAN,
+            require(entry==self.read(self.dest+12) and top==self.dest+self.span,
                     'Worker gateway uses incorrect relocated entry or private stack')
             cfg=self.raw_read(config,2304)
             require(struct.unpack_from('<2I',cfg)==(1,2304),'Worker config ABI differs')
@@ -197,7 +198,7 @@ class Install(Machine):
                     self.read(self.read(self.dest+52))==0x8c020200 and
                     self.read(self.read(self.dest+60))==0x8c025014,
                     'Worker resume/consumer/release cells not initialized before arm')
-            require(self.raw_read(self.dest+SPAN-4096,64)==struct.pack('<16I',*([0x4b535431]*16)),
+            require(self.raw_read(self.dest+self.span-4096,64)==struct.pack('<16I',*([0x4b535431]*16)),
                     'Worker stack canaries not initialized before arm')
             self.armed=self.failure!='arm';self.events.append(('arm',entry,top));result=1 if self.failure=='arm' else 0
         elif name=='_readonly_release_replay_valid':result=1
@@ -229,7 +230,7 @@ class Install(Machine):
             require(self.armed and self.published_worker,'Installer returned without worker arm/publication')
             require(self.read(self.control)==self.read(self.control+4)==0 and self.read(self.control+8)==4,
                     'Installer retained high-stage callback/stack or failed live status publication')
-            require(self.read(self.control+12)==self.payload and self.read(self.control+32)==self.dest+SPAN and
+            require(self.read(self.control+12)==self.payload and self.read(self.control+32)==self.dest+self.span and
                     self.read(self.control+40)==self.read(self.dest+24) and
                     self.read(self.control+52)==self.read(self.dest+64),'Installed control does not pin relocated VMU entries')
             require(self.read(0x0c030200)==self.read(self.dest+20),'SDK completion slot lacks relocated hook')
@@ -239,13 +240,13 @@ class Install(Machine):
         return self
 
 
-def audit(stage,low,worker,binary,wire):
+def audit(stage,low,worker,binary,wire,span=SPAN):
     success=refusals=0
     for seed in range(8):
-        Install(stage,low,worker,binary,wire,seed).check();success+=1
+        Install(stage,low,worker,binary,wire,seed,span=span).check();success+=1
     for failure in ('lease','relocate','arm'):
-        Install(stage,low,worker,binary,wire,11,failure=failure).check();refusals+=1
-    reference=Install(stage,low,worker,binary,wire).check()
+        Install(stage,low,worker,binary,wire,11,failure=failure,span=span).check();refusals+=1
+    reference=Install(stage,low,worker,binary,wire,span=span).check()
     mutations=0
     for site in ('zero','publish'):
         body=bytearray(reference.blob)
@@ -253,12 +254,12 @@ def audit(stage,low,worker,binary,wire):
         opcode=struct.unpack_from('<H',body,at)[0]
         require(opcode&0xf0ff==0x400b,'Installer mutation site is not its actual JSR')
         struct.pack_into('<H',body,at,9)
-        try:Install(stage,low,worker,binary,wire,body=bytes(body)).check()
+        try:Install(stage,low,worker,binary,wire,body=bytes(body),span=span).check()
         except (ValueError,AssertionError):mutations+=1
         else:raise ValueError('Installer accepted missing '+site+' call')
     return {'actual_installer_instruction_cases':success,'injected_callee_refusals':refusals,
             'actual_jsr_mutation_rejections':mutations,
-            'p1_purge_bytes':SPAN,'exact_shipped_relocation_bytes_applied':True,
+            'p1_purge_bytes':span,'exact_shipped_relocation_bytes_applied':True,
             'complete_worker_tail_zeroed_before_arm':True,'cache_publisher_before_arm':True,
             'sdk_hooks_after_arm':True,'live_control_pinned_after_hooks':True,
             'stage_pointers_absent_from_copied_config':True,'finite_authored_abi_callees':True,

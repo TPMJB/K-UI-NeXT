@@ -509,7 +509,8 @@ static void clear_game_choice(struct kui_shell *s) {
     s->games_variant_selected=0;
 }
 static void games_remember(struct kui_shell *s) {
-    if(s->page!=KUI_SHELL_GAMES || s->games_loading || strcmp(s->games_path,s->games_listing.root))return;
+    if(s->page!=KUI_SHELL_GAMES || s->games_loading || s->games_group[0] ||
+       strcmp(s->games_path,s->games_listing.root))return;
     struct kui_games_selection last={0};snprintf(last.root,sizeof(last.root),"%s",s->games_path);
     if(s->games_selected<s->games_listing.count && !s->games_listing.entries[s->games_selected].disabled)
         snprintf(last.name,sizeof(last.name),"%s",s->games_listing.entries[s->games_selected].name);
@@ -539,7 +540,8 @@ const char *kui_shell_games_variant_label(const struct kui_shell *s) {
 }
 void kui_shell_set_games_listing(struct kui_shell *s,const struct kui_games_page *page) {
     if(!s || !page || s->page!=KUI_SHELL_GAMES ||
-       !memchr(page->root,0,sizeof(page->root)) || strcmp(page->root,s->games_path)) return;
+       !memchr(page->root,0,sizeof(page->root)) || strcmp(page->root,s->games_path) ||
+       !memchr(page->group,0,sizeof(page->group)) || strcmp(page->group,s->games_group)) return;
     clear_game_choice(s);
     s->games_listing=*page;
     s->games_loading=false;s->games_art_loading=false;s->games_turning=false;
@@ -547,8 +549,12 @@ void kui_shell_set_games_listing(struct kui_shell *s,const struct kui_games_page
     if(page->view<KUI_GAMES_VIEW_COUNT) s->games_view=page->view;
     if(s->games_listing.count>KUI_GAMES_ROWS) s->games_listing.count=KUI_GAMES_ROWS;
     s->games_listing.message[sizeof(s->games_listing.message)-1]=0;
+    s->games_listing.group_name[sizeof(s->games_listing.group_name)-1]=0;
     for(unsigned i=0;i<s->games_listing.count;i++) {
         struct kui_games_entry *e=&s->games_listing.entries[i];
+        if(!memchr(e->group,0,sizeof(e->group)) || (s->games_group[0] && e->group[0])) {
+            e->group[0]=0;e->disabled=true;
+        }
         e->title[sizeof(e->title)-1]=0;
         if(!memchr(e->name,0,sizeof(e->name))) {
             snprintf(e->name,sizeof(e->name),"[Name too long]");e->disabled=true;e->title[0]=0;
@@ -558,7 +564,7 @@ void kui_shell_set_games_listing(struct kui_shell *s,const struct kui_games_page
         }
         /* An invalid alternate cannot turn a valid Original into a pair.
          * The original remains accessible through the normal single flow. */
-        if(e->disabled || e->directory ||
+        if(e->disabled || e->directory || e->group[0] ||
            !games_path_in_root(s,e->variant_2048_path,sizeof(e->variant_2048_path)) ||
            !strcmp(e->path,e->variant_2048_path)) e->variant_2048_path[0]=0;
         if(e->directory) {
@@ -580,7 +586,8 @@ bool kui_shell_set_games_rows(struct kui_shell *s,const struct kui_games_page *p
     if(!s || !page || s->page!=KUI_SHELL_GAMES || s->games_generation!=generation ||
        s->games_page>UINT_MAX/KUI_GAMES_ROWS || s->games_page*KUI_GAMES_ROWS!=offset ||
        s->games_view!=requested_view || !memchr(page->root,0,sizeof(page->root)) ||
-       strcmp(page->root,s->games_path)) return false;
+       strcmp(page->root,s->games_path) || !memchr(page->group,0,sizeof(page->group)) ||
+       strcmp(page->group,s->games_group)) return false;
     kui_shell_set_games_listing(s,page);
     return true;
 }
@@ -588,11 +595,12 @@ bool kui_shell_set_games_titles(struct kui_shell *s,const struct kui_games_page 
     if(!s || !page || s->page!=KUI_SHELL_GAMES || s->games_loading ||
        s->games_page>UINT_MAX/KUI_GAMES_ROWS || s->games_page*KUI_GAMES_ROWS!=offset ||
        !memchr(page->root,0,sizeof(page->root)) || strcmp(page->root,s->games_listing.root)) return false;
+    if(!memchr(page->group,0,sizeof(page->group)) || strcmp(page->group,s->games_group))return false;
     bool changed=false;
     for(unsigned i=0;i<s->games_listing.count && i<page->count && i<KUI_GAMES_ROWS;i++) {
         struct kui_games_entry *e=&s->games_listing.entries[i];
         const struct kui_games_entry *found=&page->entries[i];
-        if(e->disabled || e->directory || !memchr(found->name,0,sizeof(found->name)) ||
+        if(e->disabled || e->directory || e->group[0] || e->disc || !memchr(found->name,0,sizeof(found->name)) ||
            !memchr(found->path,0,sizeof(found->path)) || !memchr(found->title,0,sizeof(found->title)) ||
            strcmp(e->name,found->name) || strcmp(e->path,found->path) ||
            !found->title[0] || !strcmp(e->title,found->title)) continue;
@@ -603,11 +611,14 @@ bool kui_shell_set_games_titles(struct kui_shell *s,const struct kui_games_page 
 bool kui_shell_set_games_found_rows(struct kui_shell *s,const struct kui_games_page *page,
     unsigned generation,unsigned offset,unsigned view,unsigned selected) {
     char root[KUI_DEST_ROOT_CAP];
-    if(!s || !page || s->page!=KUI_SHELL_GAMES || !s->games_seek ||
+    if(!s || !page || s->page!=KUI_SHELL_GAMES ||
+       (!s->games_seek && !(s->games_group[0] && !page->group[0])) ||
        s->games_generation!=generation || s->games_view!=view || selected>=KUI_GAMES_ROWS || offset%KUI_GAMES_ROWS ||
        !memchr(page->root,0,sizeof(page->root)) || !kui_destination_normalize(root,page->root) || strcmp(root,page->root) ||
-       (strcmp(root,s->games_path) && strcmp(root,"/Games")))return false;
+       (strcmp(root,s->games_path) && strcmp(root,"/Games")) ||
+       !memchr(page->group,0,sizeof(page->group)))return false;
     snprintf(s->games_path,sizeof(s->games_path),"%s",root);
+    snprintf(s->games_group,sizeof(s->games_group),"%s",page->group);
     s->games_page=offset/KUI_GAMES_ROWS;s->games_selected=selected;s->games_seek=false;s->games_seek_name[0]=0;
     return kui_shell_set_games_rows(s,page,generation,offset,view);
 }
@@ -643,7 +654,7 @@ bool kui_shell_set_games_art(struct kui_shell *s,const struct kui_shell_games_ar
     for(unsigned i=0;i<s->games_listing.count;i++) s->games_listing.entries[i].cover=false;
     struct kui_games_entry *e=&s->games_listing.entries[current.row];
     e->cover=result->cover;
-    if(result->title[0]) memcpy(e->title,result->title,sizeof(e->title));
+    if(result->title[0] && !e->group[0] && !e->disc) memcpy(e->title,result->title,sizeof(e->title));
     if(result->cover) s->games_listing.artwork=true;
     s->games_art_loading=false;
     return true;
@@ -866,12 +877,12 @@ static enum kui_shell_action games_launch_choice(struct kui_shell *s) {
 }
 static enum kui_shell_action list_games(struct kui_shell *s,bool first) {
     clear_game_choice(s);
-    s->games_refresh=false;
+    s->games_refresh=false;s->games_rebuild=false;
     ++s->games_generation;s->games_loading=true;s->games_art_loading=false;
     if(first) s->games_page=0;
     if(!s->games_turning || first) {
         s->games_turning=false;
-        snprintf(s->games_listing.message,sizeof(s->games_listing.message),"Reading SD directory...");
+        snprintf(s->games_listing.message,sizeof(s->games_listing.message),"Loading game library...");
     }
     s->games_selected=0;
     return KUI_SHELL_GAMES_LIST;
@@ -1898,6 +1909,12 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             s->page=KUI_SHELL_HOME;return KUI_SHELL_NONE;
         }
         if(s->page==KUI_SHELL_GAMES) {
+            if(s->games_group[0]) {
+                s->games_group[0]=0;
+                snprintf(s->games_seek_name,sizeof(s->games_seek_name),"%s",s->games_last.name);
+                s->games_seek=true;s->games_page=s->games_parent_page;
+                return list_games(s,false);
+            }
             char parent[KUI_DEST_ROOT_CAP];
             if(strcmp(s->games_path,"/Games") &&
                kui_destination_parent(parent,s->games_path) && strcmp(parent,s->games_path)) {
@@ -2133,6 +2150,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             if(s->page==KUI_SHELL_VMU_TOOLS) return emulation_request(s,false);
             if(s->page==KUI_SHELL_MUSIC) return list_music(s,true);
             if(s->page==KUI_SHELL_GAMES) {
+                s->games_group[0]=0;
                 snprintf(s->games_path,sizeof(s->games_path),"%s",s->games_last.root);
                 snprintf(s->games_seek_name,sizeof(s->games_seek_name),"%s",s->games_last.name);
                 s->games_seek=true;
@@ -2152,6 +2170,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             break;
         }
         if(buttons&KUI_SHELL_X) {
+            s->games_group[0]=0;
             snprintf(s->games_seek_name,sizeof(s->games_seek_name),"%s",s->games_last.name);
             s->games_seek=true;
             enum kui_shell_action action=list_games(s,false);
@@ -2193,6 +2212,12 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
                 snprintf(s->games_listing.message,sizeof(s->games_listing.message),
                     "This entry cannot be opened; check its name and path.");
                 break;
+            }
+            if(entry->group[0]) {
+                s->games_parent_page=s->games_page;s->games_parent_selected=s->games_selected;
+                snprintf(s->games_group,sizeof(s->games_group),"%s",entry->group);
+                s->games_seek_name[0]=0;s->games_seek=false;
+                return list_games(s,true);
             }
             if(entry->directory) {
                 char normalized[KUI_DEST_ROOT_CAP];
@@ -2257,13 +2282,25 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         }
         break;
     case KUI_SHELL_GAMES_ADVANCED:
-        s->games_advanced_selected=move_count(s->games_advanced_selected,buttons,4);
+        s->games_advanced_selected=move_count(s->games_advanced_selected,buttons,6);
         if(buttons&KUI_SHELL_A) {
+            if(s->games_advanced_selected>=4) {
+                bool rebuild=s->games_advanced_selected==5;
+                s->games_group[0]=0;s->games_seek=false;s->games_seek_name[0]=0;
+                s->page=KUI_SHELL_GAMES;
+                snprintf(s->games_path,sizeof(s->games_path),"/Games");
+                enum kui_shell_action action=list_games(s,true);
+                s->games_refresh=true;s->games_rebuild=rebuild;
+                snprintf(s->games_listing.message,sizeof(s->games_listing.message),"%s",
+                    rebuild?"Rebuilding game library...":"Scanning for game changes...");
+                return action;
+            }
             if(s->games_advanced_selected==3) {
                 s->games_tests_from_options=false;s->game_tests_selected=1;
                 s->page=KUI_SHELL_GAMES_TESTS;break;
             }
             if(s->games_advanced_selected==2) {
+                s->games_group[0]=0;
                 s->page=KUI_SHELL_GAMES;
                 snprintf(s->games_path,sizeof(s->games_path),"/Games");
                 list_games(s,true);
@@ -2272,6 +2309,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
                 return KUI_SHELL_GAMES_SCAN;
             }
             snprintf(s->games_path,sizeof(s->games_path),"%s",s->games_advanced_selected?"/":"/Games");
+            s->games_group[0]=0;s->games_seek=false;s->games_seek_name[0]=0;
             s->page=KUI_SHELL_GAMES;return list_games(s,true);
         }
         break;

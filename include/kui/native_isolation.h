@@ -69,6 +69,18 @@
 #define KUI_VMU_ONLY_TRANSPORT_STRING(x) KUI_VMU_ONLY_TRANSPORT_STRING_(x)
 #define KUI_VMU_ONLY_TRANSPORT_TEXT KUI_VMU_ONLY_TRANSPORT_STRING(KUI_NATIVE_VMU_ONLY_TRANSPORT)
 #endif
+/* VMU-lite: the same A2 service with bounded batch buffers. A2 owns one
+ * receive slot per bank and the chain parser refuses a repeated slot, so a
+ * batch stages at most one virtual reply; its chain copies hold 4 KiB. */
+#ifndef KUI_NATIVE_VMU_LITE
+#define KUI_NATIVE_VMU_LITE 0
+#endif
+#if KUI_NATIVE_VMU_LITE != 0 && KUI_NATIVE_VMU_LITE != 1
+#error "VMU-lite selector must be exactly zero or one"
+#endif
+#if KUI_NATIVE_VMU_LITE && !KUI_NATIVE_VMU_ONLY
+#error "VMU-lite refines the VMU-only service"
+#endif
 /* The general split controller with the controller prefetch TICK restored.
  * TICK was turned off only to isolate Evolution 1, which still failed
  * without it; the split controller then passed with TICK still off. */

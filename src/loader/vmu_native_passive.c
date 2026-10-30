@@ -37,7 +37,16 @@ __asm__(".global __kui_native_standard_vmu_isolation_worker\n"
         ".set __kui_native_standard_vmu_isolation_worker,1\n");
 #endif
 #if KUI_NATIVE_STANDARD_VMU_ISOLATION || KUI_NATIVE_READER_ONLY_ISOLATION || KUI_NATIVE_METADATA_CACHE_ISOLATION || KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION
-#if KUI_NATIVE_VMU_ONLY
+#if KUI_NATIVE_VMU_LITE
+_Static_assert(KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES==UINT32_C(0x12000),
+    "VMU-lite allocation contains exactly its worker and stack");
+__asm__(".global __kui_native_vmu_only_worker\n"
+        ".set __kui_native_vmu_only_worker,1\n"
+        ".global __kui_native_vmu_lite_worker\n"
+        ".set __kui_native_vmu_lite_worker,1\n"
+        ".global __kui_native_isolation_lease_bytes\n"
+        ".set __kui_native_isolation_lease_bytes,0x12000\n");
+#elif KUI_NATIVE_VMU_ONLY
 _Static_assert(KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES==UINT32_C(0x1c000),
     "VMU-only allocation contains exactly its worker and stack");
 __asm__(".global __kui_native_vmu_only_worker\n"
@@ -141,7 +150,15 @@ __asm__(".global __kui_native_general_unbounded_pairs_worker\n"
 #define NATIVE_HOT_LIVE live_plan
 #endif
 #define GUARD UINT32_C(0x4b535431)
+#if KUI_NATIVE_VMU_LITE
+/* The SDK bank stays 12 KiB; only this capture and the issued copy shrink.
+ * chain() refuses a longer list, which stops the game instead of handling it. */
+#define TX_WORDS (KUI_VMU_NATIVE_LITE_CHAIN_BYTES/4u)
+#define ISSUED_CHAIN_BYTES KUI_VMU_NATIVE_LITE_CHAIN_BYTES
+#else
 #define TX_WORDS (KUI_VMU_NATIVE_TX_BANK_BYTES/4u)
+#define ISSUED_CHAIN_BYTES KUI_VMU_VOLATILE_CHAIN_PASSTHROUGH_BYTES
+#endif
 extern const struct kui_vmu_native_passive_exports kui_vmu_native_worker_exports;
 extern uint32_t kui_vmu_native_passive_resume,kui_vmu_native_passive_consumer;
 extern uint32_t stack_bottom[] __asm__("__vmu_native_worker_stack_bottom");
@@ -163,7 +180,7 @@ static uint32_t receivers[48];
 #if KUI_VMU_NATIVE_READONLY_PROBE || KUI_VMU_NATIVE_PERSISTENT_PROBE
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
 static struct kui_vmu_durable durable_card;
-static _Alignas(32) uint8_t issued_chain[KUI_VMU_VOLATILE_CHAIN_PASSTHROUGH_BYTES];
+static _Alignas(32) uint8_t issued_chain[ISSUED_CHAIN_BYTES];
 static struct kui_vmu_volatile_chain_frame chain_frames[KUI_VMU_VOLATILE_CHAIN_FRAMES];
 static struct kui_vmu_volatile_chain_plan issued_plan;
 static struct kui_vmu_native_passive_frame completion_frame;

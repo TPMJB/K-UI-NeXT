@@ -2,10 +2,18 @@
 /* Authored SDK roles exercise Skies' uniform receive layout and its observed
  * late TMU callback registration through the actual compact worker. Original
  * game instructions are not embedded; this is a lifecycle regression, not a
- * complete Skies execution or timing model. Both submit builds run the same
- * packets and durable card transactions. */
+ * complete Skies execution or timing model. Both allocation sizes and submit
+ * builds run the same packets and durable card transactions. */
 #define KUI_SPLIT_CONTROLLER_TEST_MAIN retained_split_reference_main
 #include "test_vmu_native_split_controller.c"
+
+#ifndef KUI_SKIES_TEST_LEASE_BYTES
+#error "Supply the expected delivered lease size for this lifecycle variant"
+#endif
+_Static_assert(KUI_VMU_NATIVE_PASSIVE_SPAN==KUI_SKIES_TEST_LEASE_BYTES,
+    "Exercise the expected delivered allocation size");
+_Static_assert(KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES==KUI_SKIES_TEST_LEASE_BYTES,
+    "The complete lease matches the delivered worker allocation");
 
 static uint32_t output_digest;
 static unsigned polling_pairs,registered_callbacks,storage_roundtrips;
@@ -32,7 +40,7 @@ static void skies_lifecycle_setup(void) {
     CHECK(kui_vmu_native_heap_bottom_ready(&input.lease,read_heap,NULL,1u));
     arm();install_hooks();
     CHECK(split_controller_geometry() && !live_plan.ready &&
-        config.lease.lease_bytes==UINT32_C(0x1c000) &&
+        config.lease.lease_bytes==KUI_VMU_NATIVE_PASSIVE_SPAN &&
         config.lease.payload==config.lease.begin+32u);
 }
 
@@ -159,8 +167,8 @@ int main(void) {
         skies_save_read_reopen(0x63u+a*2u+timer);
     }
     skies_bad_callback_preserves_physical_rx();
-    printf("Skies uniform lifecycle: mode=%u polls=%u callbacks=%u durable_roundtrips=%u digest=%08x checks=%u\n",
-        (unsigned)KUI_NATIVE_VMU_ONLY_FULL_SUBMIT,polling_pairs,registered_callbacks,
+    printf("Skies uniform lifecycle: lease=%u mode=%u polls=%u callbacks=%u durable_roundtrips=%u digest=%08x checks=%u\n",
+        (unsigned)KUI_VMU_NATIVE_PASSIVE_SPAN,(unsigned)KUI_NATIVE_VMU_ONLY_FULL_SUBMIT,polling_pairs,registered_callbacks,
         storage_roundtrips,output_digest,checks);
     return 0;
 }

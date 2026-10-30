@@ -14,7 +14,12 @@
  * reservation while leaving reader/cache workspace unused. Auxiliary code,
  * stack and cache have disjoint owned spans.
  * Keep the region cache-line aligned. */
-#if KUI_NATIVE_GENERAL_LEAN_LAYOUT
+#if KUI_NATIVE_VMU_LITE
+#define KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES UINT32_C(0x12000)
+#define KUI_VMU_NATIVE_BACKGROUND_REGION_OFFSET UINT32_C(0x12400)
+/* Bounded copies of one admitted Maple chain; a longer chain stops. */
+#define KUI_VMU_NATIVE_LITE_CHAIN_BYTES UINT32_C(0x1000)
+#elif KUI_NATIVE_GENERAL_LEAN_LAYOUT
 #define KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES UINT32_C(0x1c000)
 #define KUI_VMU_NATIVE_BACKGROUND_REGION_OFFSET UINT32_C(0x1c400)
 #else

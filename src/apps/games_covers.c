@@ -155,6 +155,17 @@ static void page_view(void *ctx,kui_log_fn log,kui_cancel_fn cancel) {
     job->view=job->requested<KUI_GAMES_VIEW_COUNT?job->requested:saved;
     if(!stopped(cancel) && job->view!=saved) view_save(job->view,log);
 }
+unsigned kui_games_library_view(unsigned view,kui_log_fn log,kui_cancel_fn cancel) {
+    if(stopped(cancel))return KUI_GAMES_VIEW_SAVED;
+    if(view_known && (view==KUI_GAMES_VIEW_SAVED || view==saved_view))return saved_view;
+    if(kui_games_storage_open(log)!=KUI_GAMES_STORAGE_OK)return KUI_GAMES_VIEW_SAVED;
+    struct view_job job={view,KUI_GAMES_VIEW_LIST};
+    page_view(&job,log,cancel);
+    bool ok=!stopped(cancel);
+    if(!kui_games_storage_done(ok))ok=false;
+    if(!ok)return KUI_GAMES_VIEW_SAVED;
+    saved_view=job.view;view_known=true;return saved_view;
+}
 bool kui_games_list_rows(const char *root,unsigned offset,unsigned view,
     struct kui_games_page *out,kui_log_fn log,kui_cancel_fn cancel) {
     struct view_job job={view,view<KUI_GAMES_VIEW_COUNT?view:saved_view};

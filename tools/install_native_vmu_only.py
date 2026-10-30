@@ -20,6 +20,8 @@ PARENT = Path('KUI/native-vmu-only')
 BACKUP = PARENT/'backup'
 STATE = PARENT/'state.json'
 LEASE_BYTES = 0x1c000
+# The VMU-lite package installs the same way with its smaller audited lease.
+LITE_LEASE_BYTES = 0x12000
 TRANSPORTS = {'sci': 1, 'scif': 0}
 LIMIT = 16*1024*1024+64
 
@@ -82,8 +84,8 @@ def load_package(package):
     metadata = json.loads(p.read_regular(package/'vmu-only.json', package, maximum=16384))
     require(isinstance(metadata, dict) and set(metadata) ==
             {'schema', 'source_commit', 'build', 'lease_bytes', 'variants'} and
-            metadata['schema'] == SCHEMA and metadata['lease_bytes'] == LEASE_BYTES and
-            type(metadata['lease_bytes']) is int and
+            metadata['schema'] == SCHEMA and type(metadata['lease_bytes']) is int and
+            metadata['lease_bytes'] in (LEASE_BYTES, LITE_LEASE_BYTES) and
             isinstance(metadata['source_commit'], str) and
             re.fullmatch('[0-9a-f]{40}', metadata['source_commit']) and
             metadata['build'] == metadata['source_commit'][:12] and
@@ -137,10 +139,11 @@ def read_backup(p, root, package_sha):
     record = json.loads(p.read_regular(root/BACKUP/'manifest.json', root, maximum=16384))
     require(isinstance(record, dict) and set(record) ==
             {'schema', 'package_sha256', 'destination', 'original_bytes', 'original_sha256'} and
-            record['schema'] == BACKUP_SCHEMA and record['package_sha256'] == package_sha and
-            record['destination'] == str(DESTINATION) and
+            record['schema'] == BACKUP_SCHEMA and record['destination'] == str(DESTINATION) and
             type(record['original_bytes']) is int and 68 <= record['original_bytes'] <= LIMIT and
             digest(record['original_sha256']), 'Backup provenance differs from this package')
+    require(record['package_sha256'] == package_sha,
+            'Another VMU test package is installed; restore it with its own installer first')
     original = p.read_regular(root/BACKUP/'original.kui', root, expected=record['original_bytes'])
     require(sha(original) == record['original_sha256'], 'Original loader backup checksum differs')
     p.verify(original)
@@ -227,7 +230,7 @@ def install(root, package, transport=None, profile=None, restore=False):
         target = p.personalize_bytes(module, manifest, info, selected['wire'], runtime_mode=0)
         active = transport
     final = make_state(package_sha, original, [sha(target)], active, False)
-    result = dict(build=metadata['build'], transport=active, lease_bytes=LEASE_BYTES,
+    result = dict(build=metadata['build'], transport=active, lease_bytes=metadata['lease_bytes'],
                   destination=str(DESTINATION), module_sha256=sha(target), already_installed=current == target)
     if selected:
         result.update(profile=str(selected['path'].relative_to(root)), pair_path=selected['summary']['pair_path'])

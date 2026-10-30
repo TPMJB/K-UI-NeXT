@@ -181,7 +181,7 @@ static void footer(struct paint *p, const struct kui_shell *s,
             "B Disc tools   START Advanced   L/R Songs") :
         s->page==KUI_SHELL_VMU ? "A Open   X Actions   LEFT/RIGHT VMU   R Backups   B Tools" :
         s->page==KUI_SHELL_GAMES ? (kui_shell_games_view(s)==KUI_GAMES_VIEW_LIST?
-            "A Open   Y View   LEFT/RIGHT Page   START More":"A Open   Y View   D-pad Move   START More") :
+            "A Open   X Scan   Y View   B Back   START More":"A Open   X Scan   Y View   B Back   START More") :
         s->page==KUI_SHELL_GAMES_VARIANTS ? "D-pad Select   A Inspect   B Games" :
         s->page==KUI_SHELL_GAMES_DETAIL ? (kui_shell_games_retail_ready(s)?
             (s->games_from_files?"A Launch   Y Options   B Files":kui_shell_games_variant_label(s)?
@@ -1885,8 +1885,8 @@ static void games_scan(struct paint *p,const struct kui_shell_view *v) {
 static void games(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
     const struct kui_games_page *l=&s->games_listing;
     unsigned view=kui_shell_games_view(s),count=l->count<KUI_GAMES_ROWS?l->count:KUI_GAMES_ROWS;
-    title(p,40,108,"Games");
-    char line[180];snprintf(line,sizeof(line),"SD: %s",s->games_path);
+    title(p,40,108,s->games_group[0]?"Discs":"Games");
+    char line[180];snprintf(line,sizeof(line),"%s",s->games_group[0]?l->group_name:s->games_path);
     words(p,150,116,392,CYAN,line,false);
     unsigned pages=l->total?(l->total+KUI_GAMES_ROWS-1)/KUI_GAMES_ROWS:0;
     unsigned page=shown_page(s);
@@ -1905,7 +1905,7 @@ static void games(struct paint *p,const struct kui_shell *s,const struct kui_she
             if(i==chosen) panel(p,x,y,284,58,SELECTED);
             entry_art(p,s,v,i,x+4,y+1,KUI_COVER_SMALL);
             words(p,x+70,y+10,x+280,ink,entry_text(e),false);
-            words(p,x+70,y+32,x+280,MUTED,e->directory?"Folder":e->variant_2048_path[0]?
+            words(p,x+70,y+32,x+280,MUTED,e->group[0]?"Choose a disc":e->directory?"Folder":e->variant_2048_path[0]?
                 "Original / 2048-byte copy":strcmp(entry_text(e),e->name)?e->name:"Disc image",false);
         } else if(view==KUI_GAMES_VIEW_GALLERY) {
             unsigned x=32+(i%4)*144,y=134+(i/4)*130;
@@ -1915,8 +1915,9 @@ static void games(struct paint *p,const struct kui_shell *s,const struct kui_she
         } else {
             unsigned y=146+i*30;
             if(i==chosen) panel(p,32,y-5,388,28,SELECTED);
-            words(p,44,y,e->directory?368:412,ink,entry_text(e),false);
+            words(p,44,y,e->directory || e->group[0]?368:412,ink,entry_text(e),false);
             if(e->directory) words(p,378,y,412,MUTED,"DIR",false);
+            else if(e->group[0]) words(p,372,y,412,MUTED,"DISCS",false);
         }
     }
     if(view==KUI_GAMES_VIEW_LIST && count) {
@@ -1928,7 +1929,8 @@ static void games(struct paint *p,const struct kui_shell *s,const struct kui_she
             s->games_art_loading?"Loading box art...":l->artwork?"No box art found":"No box art yet");
     }
     if(!count && !v->busy) label(p,40,210,MUTED,"No selectable disc images or folders in this view.");
-    label(p,40,398,v->busy?CYAN:AMBER,!v->busy && count && l->entries[chosen].variant_2048_path[0]?
+    label(p,40,398,v->busy?CYAN:AMBER,!v->busy && count && l->entries[chosen].group[0]?
+        "A chooses a disc. X scans for library changes.":!v->busy && count && l->entries[chosen].variant_2048_path[0]?
         "A chooses Original or 2048-byte copy.":!v->busy && count && !l->artwork?
         "No box art yet: press START, then Scan box art.":l->message);
 }
@@ -2022,13 +2024,15 @@ static void games_information(struct paint *p,const struct kui_shell *s) {
 static void games_advanced(struct paint *p,const struct kui_shell *s) {
     title(p,40,108,"Games / Advanced");
     label(p,40,142,CYAN,"Source: SD card");
-    const char *names[]={"Game library","Browse SD folders","Scan box art","Developer tests"};
+    const char *names[]={"Game library","Browse SD folders","Scan box art","Developer tests",
+        "Scan for changes","Rebuild library"};
     const char *details[]={"Open /Games","Find a disc image elsewhere on the card",
-        "Covers and titles for every game in /Games","Image and loader read tests"};
-    for(unsigned i=0;i<4;i++) {
-        unsigned y=166+i*56;
-        panel(p,32,y,576,50,s->games_advanced_selected==i?SELECTED:PANEL);
-        label(p,48,y+6,WHITE,names[i]);label(p,48,y+27,MUTED,details[i]);
+        "Covers and titles for every game in /Games","Image and loader read tests",
+        "Find added, moved or removed games","Build a fresh saved list; keep game settings"};
+    for(unsigned i=0;i<6;i++) {
+        unsigned y=156+i*38;
+        panel(p,32,y,576,35,s->games_advanced_selected==i?SELECTED:PANEL);
+        label(p,48,y+2,WHITE,names[i]);label(p,48,y+18,MUTED,details[i]);
     }
     label(p,40,396,MUTED,"IDE / CF sources are not available yet.");
 }

@@ -113,6 +113,17 @@ void kui_games_cache_clear(void) {
     for(unsigned i=0;i<CATALOG_ROOTS;i++) entries_free(catalogues[i].entries,catalogues[i].count);
     memset(catalogues,0,sizeof(catalogues));catalogue_active=catalogue_clock=0;
 }
+bool kui_games_cache_complete(const char *root) {
+    if(!root)return false;
+    for(unsigned i=0;i<CATALOG_ROOTS;i++)if(catalogues[i].valid && !strcmp(catalogues[i].root,root)) {
+        for(unsigned j=0;j<catalogues[i].count;j++) {
+            const struct cached_entry *entry=&catalogues[i].entries[j];
+            if(entry->folder && !entry->disabled && !entry->resolved)return false;
+        }
+        return true;
+    }
+    return false;
+}
 static void catalogue_select(const char *root) {
     unsigned chosen=CATALOG_ROOTS;
     for(unsigned i=0;i<CATALOG_ROOTS;i++) if(!strcmp(catalogues[i].root,root)) {chosen=i;break;}

@@ -249,6 +249,39 @@ class VmuOnlyInstallTests(unittest.TestCase):
             self.run_variant('sci')
         self.assertEqual(self.snapshot(), self.original)
 
+    def test_lite_package_installs_and_restores(self):
+        self.metadata['lease_bytes'] = installer.LITE_LEASE_BYTES
+        self.write_metadata()
+        self.assertEqual(self.run_variant('sci')['lease_bytes'], 0x12000)
+        self.run_variant('scif')
+        self.run_variant(restore=True)
+        self.assertEqual((self.card/installer.DESTINATION).read_bytes(), self.original[str(installer.DESTINATION)])
+        self.assert_protected()
+
+    def test_unknown_lease_refuses_before_backup(self):
+        for lease in (0x20000, 0x12001, True):
+            self.metadata['lease_bytes'] = lease
+            self.write_metadata()
+            with self.assertRaisesRegex(ValueError, 'compact'):
+                self.run_variant('sci')
+            self.assertEqual(self.snapshot(), self.original)
+            self.assertFalse((self.card/installer.PARENT).exists())
+
+    def test_other_installed_package_refuses_until_its_restore(self):
+        self.run_variant('sci')
+        installed = self.metadata
+        self.metadata = dict(installed, lease_bytes=installer.LITE_LEASE_BYTES)
+        self.write_metadata()
+        before = self.snapshot()
+        for transport, restore in (('sci', False), (None, True)):
+            with self.assertRaisesRegex(ValueError, 'Another VMU test package'):
+                self.run_variant(transport, restore)
+            self.assertEqual(self.snapshot(), before)
+        self.metadata = installed
+        self.write_metadata()
+        self.run_variant(restore=True)
+        self.assertEqual((self.card/installer.DESTINATION).read_bytes(), self.original[str(installer.DESTINATION)])
+
     def test_real_cli_in_extracted_package_installs_switches_and_restores(self):
         for arguments in (('--transport', 'sci'), ('--transport', 'scif'), ('--restore',)):
             result = subprocess.run([sys.executable, str(self.package/'install.py'), str(self.card),

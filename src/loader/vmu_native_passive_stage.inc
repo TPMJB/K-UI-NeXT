@@ -492,7 +492,11 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
 #elif KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION
 #if KUI_NATIVE_VMU_ONLY
     retail_display_line("STANDARD READER / VIRTUAL A2 ON");
+#if KUI_NATIVE_VMU_LITE
+    retail_display_line("72 KIB VMU LITE / BACKGROUND OFF");
+#else
     retail_display_line("112 KIB VMU / BACKGROUND OFF");
+#endif
 #if KUI_NATIVE_VMU_ONLY_FULL_SUBMIT
     retail_display_line("FULL SUBMIT CONTROL");
 #endif

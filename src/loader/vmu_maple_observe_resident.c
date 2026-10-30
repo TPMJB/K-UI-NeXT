@@ -40,6 +40,10 @@ __asm__(".global __kui_native_vmu_only_resident\n"
         ".global __kui_native_vmu_only_transport_resident\n"
         ".set __kui_native_vmu_only_transport_resident," KUI_VMU_ONLY_TRANSPORT_TEXT "\n");
 #endif
+#if KUI_NATIVE_VMU_LITE
+__asm__(".global __kui_native_vmu_lite_resident\n"
+        ".set __kui_native_vmu_lite_resident,1\n");
+#endif
 
 #if !KUI_RETAIL_GD_REJECTION_DETAILS
 #error Observer I/O telemetry requires the standard native diagnostic fields
