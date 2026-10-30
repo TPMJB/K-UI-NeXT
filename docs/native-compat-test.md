@@ -7,7 +7,7 @@ This package adds seven games to the Background reader. Four are early Shinobi
 
 | Game | Route after this update |
 |---|---|
-| Sword of the Berserk | Background New (X) **with** Virtual VMU |
+| Sword of the Berserk | Background New (X). Its virtual card is in A2, but the game saves only to A1, so it cannot save yet |
 | Crazy Taxi | Background New (X) through the standalone New module, no virtual VMU yet |
 | Zombie Revenge | Background New (X) through the standalone New module, no virtual VMU yet |
 | Sonic Adventure | **New in this test:** Background New (X) through the standalone New module, no virtual VMU yet |
@@ -27,25 +27,10 @@ standalone module's late bind differ.
 
 ## Install
 
-Extract the whole ZIP on the computer. If the first compatibility test
-(`K-UI-Compat-Test-8a5a4aa9de80`) is still installed, restore it first with its
-own installer, from its folder:
-
-```sh
-python3 install.py /path/to/SD --restore
-```
-
-This installer refuses to run while another test package is installed, and
-changes nothing in that case. Once the first test is restored, this installer
-removes the record it left, as long as all three files are exactly the
-originals it recorded. Then, with the Dreamcast microSD mounted, from this
-extracted folder (replace `/path/to/SD`):
-
-```sh
-python3 install.py /path/to/SD
-```
-
-The installer changes exactly three files:
+Copy the `KUI` folder from this ZIP onto the root of the Dreamcast microSD,
+merging it with the `KUI` folder already there (on macOS, hold Option while
+dragging and choose Merge; Windows and Linux merge by default). It replaces
+exactly three files, whatever an earlier test put there:
 
 - `KUI/runtime.kui` — the GUI. It is your current Games/VMU-tools GUI plus the
   new detection.
@@ -54,10 +39,11 @@ The installer changes exactly three files:
 - `KUI/apps/games/retail-native-standalone.kui` — the standalone New reader,
   used automatically when the Background module cannot attach the VMU.
 
-It keeps an exact backup of each, under `KUI/native-compat-test/`. Your cards,
-saves, game assignments, settings, the Standard loader
+Your cards, saves, game assignments, settings, the Standard loader
 (`retail-boot.kui`) and the VMU-Off loader (`retail-physical.kui`) are not
-touched. Safely eject before booting.
+touched. A `KUI/native-compat-test` folder left by the first test's installer is
+no longer used and can be deleted. Safely eject before booting. Everything
+else in the ZIP (`details/`) is evidence and source, not needed on the card.
 
 ## Settings for this test
 
@@ -65,7 +51,7 @@ touched. Safely eject before booting.
 |---|---|
 | Storage | SCI |
 | Reader | **Background, New (X)** |
-| Virtual VMU | On for Berserk (its own game card is created on first launch) |
+| Virtual VMU | Off, or On for a game that already worked |
 | CD music | Off |
 | RAM patches | Off |
 | Physical A2 | Empty when testing the virtual VMU |
@@ -81,30 +67,15 @@ to save in them.
    stage loads, cutscenes and the Adventure Fields; House of the Dead 2: chapter
    loads and the cutscenes between rooms). Note any loading stutter, audio or
    video skips, or a hang.
-2. **Sword of the Berserk** (New, Virtual VMU On), if not already done with the
-   first test. It should show `72 KIB VMU / 284 KIB BACKGROUND` and
-   `NEW READER / VIRTUAL A2 ON`. Play through the opening, check that the game
-   sees a memory card, save, power off after the save finishes, boot again and
-   load it.
-3. **Crazy Taxi** and **Zombie Revenge** (New), if not already done: boot, play
-   a few rounds or into the first stages, note stutter.
-4. **One regression check:** a game that already worked (for example Skies or
+2. **Crazy Taxi**, **Zombie Revenge** and **Sword of the Berserk** (New), if not
+   already done: boot, play a few rounds or into the first stages, note
+   stutter. Berserk asks for a card in A1 only; its virtual card needs A1
+   support, which is not in this test.
+3. **One regression check:** a game that already worked (for example Skies or
    Sonic Adventure 2) on New with Virtual VMU On. It should behave as before.
 
 Record results in `test-results.csv` or tell me in chat. For any failure, a
 photo of the whole screen with every number on it is the most useful thing.
-
-## Restore
-
-From the same extracted folder:
-
-```sh
-python3 install.py /path/to/SD --restore
-```
-
-This puts back the exact three files that were there before, then removes this
-test's backup record, so any other test package can be installed next. Each
-installer refuses to overwrite a file another package has changed since.
 
 ## What was and was not verified before delivery
 
@@ -114,9 +85,8 @@ installer refuses to overwrite a file another package has changed since.
   - the early-family test, once with each of the five early games as fixture
     (368,993 cases each);
   - the standalone structural (69,808 cases) and demand-model tests;
-  - the launcher-cache test (39,135 cases), the installer tests (14 cases,
-    including the switch from the first test) and the structural audit of all
-    21 library startups.
+  - the launcher-cache test (39,135 cases) and the structural audit of all 21
+    library startups.
 - The complete compact Background audit, except its original-allocator section.
   That section needs the eight reviewed originals, including Grandia II and
   Lodoss, which were not available here.

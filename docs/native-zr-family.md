@@ -44,9 +44,16 @@ does not affect them.
 
 | Title | SCI family (New reader) | Maple layout | Heap | Combined VMU route |
 |---|---|---|---|---|
-| Sword of the Berserk | admitted | variable, zero-mode root | call proved | all structural gates pass |
+| Sword of the Berserk | admitted | variable, zero-mode root | call proved | all structural gates pass, but the game saves only to A1 (see below) |
 | Crazy Taxi | admitted | uniform, R5 continuation | no initializer slot | needs a fixed arena (RAM map), as Crazy Taxi 2 did |
 | Zombie Revenge | admitted | variable root with 6 inputs (TX bank 6 KiB) | no SDK allocator found | needs a 6-input layout and its own heap route |
+
+Console test: Berserk asked for a memory card in A1 and showed none in A2. Its
+save code calls the backup library's drive-status check and its file check for
+`BERSERK_DATA` with drive 0 (A1) loaded as an immediate. Both library entries
+validate that argument as a drive number and index per-drive tables with it.
+The combined module's virtual card is A2 and A1 stays physical, so Berserk
+needs a virtual A1 to save.
 
 With the SCI family admitted, the launcher's New route selects the standalone
 New module for Crazy Taxi and Zombie Revenge (no virtual VMU) once the combined

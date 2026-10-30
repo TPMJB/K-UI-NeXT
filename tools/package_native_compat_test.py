@@ -2,9 +2,11 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Package a native compatibility test: GUI, compact Background and standalone New.
 
-The three runtimes must carry this clean checkpoint's build identifier. Audit
-reports and host logs are attached as evidence; the package records which
-checks ran and which did not, and makes no console claim.
+The three runtimes must carry this clean checkpoint's build identifier. They
+sit at their card paths under KUI/, so the test installs by copying that folder
+over the card's. Audit reports and host logs are attached as evidence under
+details/; the package records which checks ran and which did not, and makes no
+console claim.
 """
 import argparse
 import csv
@@ -18,13 +20,19 @@ import tempfile
 import zipfile
 
 from check_vmu_native_worker_gateway import read_elf
-from install_native_compat_test import SCHEMA, TARGETS
 from native_runtime_layout import BACKGROUND_COMPACT, layout_for
 from package_native_vmu_only import checkout_script
 from package_vmu_native_dual_delivery import offline_source_recovery_check
 from runtime_package import verify
 
 ROOT = Path(__file__).resolve().parents[1]
+SCHEMA = 'kui.native.compat-test.manifest.v2'
+# Card paths: copying the package's KUI folder over the card's replaces these.
+TARGETS = {
+    'gui': 'KUI/runtime.kui',
+    'background': 'KUI/apps/games/retail-native-dual.kui',
+    'standalone': 'KUI/apps/games/retail-native-standalone.kui',
+}
 ARTIFACTS = {
     'background': ('stage.elf', 'stage.map', 'native-worker.elf', 'native-worker.map', 'native-worker.reloc',
                    'resident-sci.elf', 'resident-sci.map', 'resident-legacy.elf', 'resident-legacy.map',
@@ -84,7 +92,7 @@ def test_sheet():
                 ('The House of the Dead 2', 'Background New (X)', 'standalone, none'),
                 ('Time Stalkers', 'Background New (X)', 'standalone, none'),
                 ('Elemental Gimmick Gear', 'Background New (X)', 'standalone, none'),
-                ('Sword of the Berserk', 'Background New (X)', 'On'),
+                ('Sword of the Berserk', 'Background New (X)', 'none (saves only to A1)'),
                 ('Crazy Taxi', 'Background New (X)', 'standalone, none'),
                 ('Zombie Revenge', 'Background New (X)', 'standalone, none'),
                 ('Regression: a game that already worked', 'Background New (X)', 'On')):
@@ -100,31 +108,28 @@ def package(background_build, standalone_build, gui, output=None, evidence=(), v
     standalone_build = Path(standalone_build).resolve(strict=True)
     modules = {'gui': runtime(gui, revision), 'background': background_module(background_build, revision),
                'standalone': standalone_module(standalone_build, revision)}
-    paths = {'gui': 'gui/runtime.kui', 'background': 'modules/retail-native-dual.kui',
-             'standalone': 'modules/retail-native-standalone.kui'}
-    require(set(modules) == set(TARGETS), 'Package components differ from the installer targets')
-    files = {paths[name]: data for name, data in modules.items()}
+    require(set(modules) == set(TARGETS), 'Package components differ from the card targets')
+    files = {TARGETS[name]: data for name, data in modules.items()}
     metadata = dict(schema=SCHEMA, source_commit=commit, build=revision,
-                    files={name: dict(path=paths[name], sha256=sha(data)) for name, data in modules.items()})
-    files['compat-test.json'] = wire(metadata)
+                    files={name: dict(path=TARGETS[name], sha256=sha(data)) for name, data in modules.items()})
+    files['details/compat-test.json'] = wire(metadata)
     for name, build in (('background', background_build), ('standalone', standalone_build)):
         for artifact in ARTIFACTS[name]:
-            files['artifacts/'+name+'/'+artifact] = (build/artifact).read_bytes()
+            files['details/artifacts/'+name+'/'+artifact] = (build/artifact).read_bytes()
     for source in evidence:
         source = Path(source).resolve(strict=True)
         require(source.is_file() and not source.is_symlink(), 'Evidence must be an ordinary file')
-        target = 'evidence/'+source.name
+        target = 'details/evidence/'+source.name
         require(target not in files, 'Duplicate evidence filename: '+source.name)
         files[target] = source.read_bytes()
-    for name, source in (('install.py', 'tools/install_native_compat_test.py'),
-                         ('README-FIRST.md', 'docs/native-compat-test.md'),
-                         ('ZR-FAMILY.md', 'docs/native-zr-family.md'),
-                         ('LICENSE', 'LICENSE'), ('THIRD_PARTY.md', 'THIRD_PARTY.md')):
+    for name, source in (('README-FIRST.md', 'docs/native-compat-test.md'),
+                         ('details/ZR-FAMILY.md', 'docs/native-zr-family.md'),
+                         ('details/LICENSE', 'LICENSE'), ('details/THIRD_PARTY.md', 'THIRD_PARTY.md')):
         files[name] = (ROOT/source).read_bytes()
     files['test-results.csv'] = test_sheet()
     candidate = dict(schema='kui.native.compat-test.candidate.v1', source_commit=commit, source_tree=tree,
                      build=revision, console_execution_verified=False,
-                     targets={name: dict(destination=str(TARGETS[name]), sha256=sha(data))
+                     targets={name: dict(destination=TARGETS[name], sha256=sha(data))
                               for name, data in modules.items()},
                      verification=verification or {})
     with tempfile.TemporaryDirectory(prefix='kui-compat-test-source-') as temporary:
@@ -134,14 +139,14 @@ def package(background_build, standalone_build, gui, output=None, evidence=(), v
         subprocess.run(['git', 'bundle', 'verify', str(bundle)], cwd=ROOT, check=True,
                        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         bundle_data = bundle.read_bytes()
-    candidate['source_full_bundle'] = dict(path='source/native-source-full.bundle', bytes=len(bundle_data),
+    candidate['source_full_bundle'] = dict(path='details/source/native-source-full.bundle', bytes=len(bundle_data),
                                            sha256=sha(bundle_data), full_history=True, prerequisites=[])
     script = checkout_script()
     candidate['offline_source_recovery'] = offline_source_recovery_check(candidate, script, bundle_data)
     require(git('rev-parse', 'HEAD') == commit and not git('status', '--porcelain'), 'Source changed while packaging')
-    files['source/native-source-full.bundle'] = bundle_data
-    files['source/checkout-source.py'] = script
-    files['CANDIDATE.json'] = wire(candidate)
+    files['details/source/native-source-full.bundle'] = bundle_data
+    files['details/source/checkout-source.py'] = script
+    files['details/CANDIDATE.json'] = wire(candidate)
     files['SHA256SUMS.txt'] = ''.join(sha(data)+'  '+name+'\n' for name, data in sorted(files.items())).encode()
     output = Path(output or ROOT.parent/'delivery'/('K-UI-Compat-Test-'+revision+'.zip')).resolve()
     require(not output.is_relative_to(ROOT), 'Save the package outside the source checkout')
