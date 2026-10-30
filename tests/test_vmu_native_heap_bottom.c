@@ -9,7 +9,10 @@
 
 static unsigned checks;
 #define CHECK(x) do {++checks;assert(x);} while(0)
-enum {LEASE=0x60000u};
+#ifndef KUI_NATIVE_HEAP_TEST_LEASE_BYTES
+#define KUI_NATIVE_HEAP_TEST_LEASE_BYTES 0x60000u
+#endif
+enum {LEASE=KUI_NATIVE_HEAP_TEST_LEASE_BYTES};
 struct cell {uint32_t address,value;};
 struct memory {struct cell cell[64];unsigned count,reads;uint32_t fail;};
 static uint32_t phys(uint32_t a) {return a&UINT32_C(0x1fffffff);}
@@ -163,7 +166,7 @@ static void transition_refusals(void) {
     struct kui_vmu_native_heap h=owner(0x80000000u);
     fresh_state(&m,&h,0x8c400000u,0x100000u);
     CHECK(kui_vmu_native_heap_fresh(&h,read_word,&m,0x8c400000u,0x100000u,1u,LEASE,&l));
-    CHECK(l.payload==0x8c4a0000u);
+    CHECK(l.payload==0x8c500000u-LEASE);
     struct kui_vmu_native_heap_lease trial=l;
     CHECK(!kui_vmu_native_heap_bottom_placeholder(&trial,read_word,&m,1u,placeholder(&trial)));
     put(&m,l.begin+4u,l.remaining);put(&m,l.header+4u,l.units);

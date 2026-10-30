@@ -44,7 +44,28 @@ HISTORICAL = SimpleNamespace(**{**vars(DIAGNOSTIC),
     'AUX_STACK_TOP': 0xac428000, 'STACK_OFFSET': 0x27000,
     'STACK_END': 0x28000, 'DATA_OFFSET': 0x30000})
 
+# Standalone virtual-A2 service owns only the measured worker and private
+# stack. An exact compiled marker, never a caller-selected byte count, selects
+# this geometry. No retained disc map, read-ahead auxiliary or cache exists.
+VMU_ONLY = SimpleNamespace(**{**vars(GENERAL),
+    'LEASE_BYTES': 0x1c000, 'WORKER_BYTES': 0x1c000,
+    'MAP_OFFSET': 0, 'REGION_OFFSET': 0, 'AUX_OFFSET': 0, 'AUX_SPAN': 0,
+    'STACK_OFFSET': 0x1b000, 'STACK_END': 0x1c000,
+    'DATA_OFFSET': 0, 'DATA_BYTES': 0})
+
 def layout_for(symbols):
+    compact = [symbols[name] for name in ('__kui_native_vmu_only_worker',
+        '__kui_native_vmu_only_stage', '__kui_native_vmu_only_resident') if name in symbols]
+    if compact:
+        if any(value != (1, 0, 0, 0xfff1) for value in compact):
+            raise ValueError('Malformed VMU-only runtime geometry marker')
+        lease = symbols.get('__kui_native_isolation_lease_bytes')
+        if lease is not None and lease != (VMU_ONLY.LEASE_BYTES, 0, 0, 0xfff1):
+            raise ValueError('VMU-only lease conflicts with its exact compiled profile')
+        if any(name in symbols for name in ('__kui_native_readahead_stage',
+                '__kui_native_readahead_worker', '__kui_native_readahead_resident')):
+            raise ValueError('VMU-only runtime cannot retain read-ahead machinery')
+        return VMU_ONLY
     markers = ('__kui_native_general_lean_stage_layout',
                '__kui_native_general_lean_worker_layout',
                '__kui_native_general_lean_auxiliary',

@@ -21,7 +21,11 @@ static int vmu_persist_stage_overlap(const void *a,size_t an,const void *b,size_
 int kui_vmu_persist_stage_admit(const struct kui_vmu_persist_profile *p,
     const struct kui_retail_manifest *m) {
     if(kui_vmu_persist_profile_validate(p) || kui_retail_manifest_validate(m)!=KUI_GAME_OK ||
+#if KUI_NATIVE_VMU_ONLY
+       (m->storage_transport!=KUI_STORAGE_SCI && m->storage_transport!=KUI_STORAGE_SCIF) ||
+#else
        m->storage_transport!=KUI_STORAGE_SCI ||
+#endif
 #if KUI_VMU_NATIVE_BACKGROUND
        (m->reader!=KUI_RETAIL_READER_ASYNC && m->reader!=KUI_RETAIL_READER_ASYNC_EAGER) ||
 #else

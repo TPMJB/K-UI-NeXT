@@ -44,5 +44,13 @@ enum kui_loader_sd_result kui_retail_sd_read_run(struct kui_loader_sd *card,
     uint8_t out[512]);
 enum kui_loader_sd_result kui_retail_sd_acquire(void);
 void kui_retail_sd_release(void);
+#if KUI_NATIVE_VMU_ONLY
+/* VMU-only runtime: checked pin ownership while borrowed, and a persistent
+ * restoration fault after release. Acquire/adopt preserve a latched fault;
+ * only an explicit fresh init on an idle port clears it. Neither query
+ * claims the serial pins. */
+bool kui_retail_sd_healthy(void);
+bool kui_retail_sd_faulted(void);
+#endif
 
 #endif

@@ -13,6 +13,11 @@
  * between requests. The existing sd_reader.c remains the read-only protocol.
  */
 #include "retail_sd.h"
+#if KUI_NATIVE_VMU_ONLY && (!defined(KUI_RETAIL_TRANSPORT) || KUI_RETAIL_TRANSPORT == 0)
+#define KUI_NATIVE_VMU_SCIF_BUS_CONTRACT 1
+#else
+#define KUI_NATIVE_VMU_SCIF_BUS_CONTRACT 0
+#endif
 
 #if defined(KUI_ON_CONSOLE) || defined(KUI_RETAIL_SD_TEST)
 
@@ -50,11 +55,20 @@ static struct {
     uint32_t work;
     uint16_t saved_scr, saved_fcr, saved_ptr, pins;
     bool acquired;
+#if KUI_NATIVE_VMU_ONLY
+    bool fault;
+#endif
 } port;
 
 enum kui_loader_sd_result kui_retail_sd_acquire(void) {
     if(port.acquired)
         return KUI_LOADER_SD_NOT_READY;
+#if KUI_NATIVE_VMU_ONLY
+    /* A failed restoration is a persistent session fault, including for
+     * ordinary GD reads between VMU transactions. Only a fresh init clears
+     * it; another acquire or a copied prepared descriptor cannot do so. */
+    if(port.fault) return KUI_LOADER_SD_NOT_READY;
+#endif
 
     uint16_t scr = read16(SC_SCR);
     if((scr & SC_ACTIVE) || (read16(SC_FDR) & SC_FIFO_COUNTS))
@@ -75,6 +89,17 @@ enum kui_loader_sd_result kui_retail_sd_acquire(void) {
     return KUI_LOADER_SD_OK;
 }
 
+#if KUI_NATIVE_VMU_ONLY
+bool kui_retail_sd_healthy(void) {
+    if(!port.acquired || port.fault) return false;
+    if(read16(SC_SCR)!=0u ||
+       read16(SC_FCR)!=(port.saved_fcr & (uint16_t)~SC_MODEM) ||
+       (read16(SC_FDR)&SC_FIFO_COUNTS)) port.fault=true;
+    return !port.fault;
+}
+bool kui_retail_sd_faulted(void) {return port.fault;}
+#endif
+
 void kui_retail_sd_release(void) {
     if(!port.acquired)
         return;
@@ -85,6 +110,14 @@ void kui_retail_sd_release(void) {
     write16(SC_PTR, port.saved_ptr);
     write16(SC_FCR, port.saved_fcr);
     write16(SC_SCR, port.saved_scr);
+#if KUI_NATIVE_VMU_ONLY
+    /* SPB2DT is the input data pin and can change independently. Check only
+     * the five pin direction/output controls we borrowed, plus both serial
+     * controls. Readback never clears FIFO/status or resets the interface. */
+    const uint16_t pin_mask=PIN_RTSIO|PIN_RTSDT|PIN_CTSIO|PIN_CTSDT|PIN_SPB2IO;
+    if(read16(SC_SCR)!=port.saved_scr || read16(SC_FCR)!=port.saved_fcr ||
+       (read16(SC_PTR)&pin_mask)!=(port.saved_ptr&pin_mask)) port.fault=true;
+#endif
     port.acquired = false;
 }
 
@@ -99,8 +132,12 @@ static void bus_end(void *context) {
 
 static void bus_select(void *context, bool selected) {
     (void)context;
-    if(!port.acquired)
+    if(!port.acquired) {
+#if KUI_NATIVE_VMU_ONLY
+        port.fault=true;
+#endif
         return;
+    }
     if(selected)
         port.pins &= (uint16_t)~PIN_RTSDT;
     else
@@ -129,8 +166,12 @@ static uint8_t bus_transfer(void *context, uint8_t data, bool slow) {
      * ready/data and 200,000 bytes for init/read work. They provide finite work
      * limits only: no timeout here is claimed to measure elapsed seconds. */
     port.work += 125;
-    if(!port.acquired)
+    if(!port.acquired) {
+#if KUI_NATIVE_VMU_ONLY
+        port.fault=true;
+#endif
         return 0xff;
+    }
     uint16_t pins = port.pins & (uint16_t)~(PIN_CTSDT | PIN_SPB2DT);
     uint8_t received = 0;
     /* Payload/token/CRC reads transmit all ones. Keep MOSI high and compute
@@ -166,15 +207,34 @@ static uint32_t bus_ticks(void *context) {
     return port.work;
 }
 
+#if KUI_NATIVE_VMU_SCIF_BUS_CONTRACT
+/* Auditable seven-word SH-4 bus contract. The SCIF backend has no block/DMA
+ * callback: prepared-card writes use its bounded byte transfer only. */
+const struct kui_loader_sd_bus kui_native_vmu_scif_bus
+    __attribute__((used,section(".rodata.native_vmu_scif_bus")))={
+    .ctx=NULL,.begin=bus_begin,.end=bus_end,.select=bus_select,
+    .transfer=bus_transfer,.ticks=bus_ticks,.transfer_block=NULL
+};
+#endif
+
 enum kui_loader_sd_result kui_retail_sd_adopt(struct kui_loader_sd *card,
     const struct kui_loader_sd *prepared) {
     if(!card || !prepared || card == prepared)
         return KUI_LOADER_SD_ARGUMENT;
-    if(port.acquired || !prepared->ready || prepared->slow || !prepared->blocks)
+    if(port.acquired ||
+#if KUI_NATIVE_VMU_ONLY
+       port.fault ||
+#endif
+       !prepared->ready || prepared->slow || !prepared->blocks)
         return KUI_LOADER_SD_NOT_READY;
     *card = (struct kui_loader_sd){
-        .bus = {.ctx = NULL, .begin = bus_begin, .end = bus_end,
+        .bus =
+#if KUI_NATIVE_VMU_SCIF_BUS_CONTRACT
+            *(const volatile struct kui_loader_sd_bus *)&kui_native_vmu_scif_bus,
+#else
+            {.ctx = NULL, .begin = bus_begin, .end = bus_end,
                 .select = bus_select, .transfer = bus_transfer, .ticks = bus_ticks},
+#endif
         .blocks = prepared->blocks, .high_capacity = prepared->high_capacity,
         .ready = true, .slow = false,
         .last_command = prepared->last_command, .last_response = prepared->last_response
@@ -186,14 +246,22 @@ enum kui_loader_sd_result kui_retail_sd_init(struct kui_loader_sd *card) {
     if(!card)
         return KUI_LOADER_SD_ARGUMENT;
     card->ready = false;
+#if KUI_NATIVE_VMU_ONLY
+    if(port.acquired) return KUI_LOADER_SD_NOT_READY;
+    port.fault=false;
+#endif
     enum kui_loader_sd_result result = kui_retail_sd_acquire();
     if(result != KUI_LOADER_SD_OK)
         return result;
+#if KUI_NATIVE_VMU_SCIF_BUS_CONTRACT
+    result = kui_loader_sd_init_bus(card,&kui_native_vmu_scif_bus);
+#else
     const struct kui_loader_sd_bus bus = {
         .ctx = NULL, .begin = bus_begin, .end = bus_end,
         .select = bus_select, .transfer = bus_transfer, .ticks = bus_ticks
     };
     result = kui_loader_sd_init_bus(card, &bus);
+#endif
     /* Failure may have called bus.end already; release is idempotent. Success
      * retains ready/capacity/CRC mode while returning the serial pin controls. */
     kui_retail_sd_release();
@@ -210,6 +278,10 @@ enum kui_loader_sd_result kui_retail_sd_acquire(void) {
     return KUI_LOADER_SD_UNSUPPORTED;
 }
 void kui_retail_sd_release(void) {}
+#if KUI_NATIVE_VMU_ONLY
+bool kui_retail_sd_healthy(void) {return false;}
+bool kui_retail_sd_faulted(void) {return true;}
+#endif
 
 enum kui_loader_sd_result kui_retail_sd_adopt(struct kui_loader_sd *card,
     const struct kui_loader_sd *prepared) {

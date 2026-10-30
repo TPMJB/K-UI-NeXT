@@ -157,7 +157,7 @@ class Machine(CPU):
 
     def run(self):
         self.published = []
-        for _ in range(1200):
+        for _ in range(getattr(self, 'instruction_limit', 1200)):
             if self.pc == self.stop_pc:
                 return self
             pc = self.pc; word = struct.unpack("<H", self.code(pc, 2))[0]
@@ -272,7 +272,11 @@ class ArmRoute(Machine):
         self.program_bytes=self.source_bytes-(0x8000 if normalized else 0)
         self.mem[self.exec_address] = self.source_bytes
         manifest = self.symbols["_manifest"][0]
-        self.mem.update({manifest + 44: 1,
+        compact_transport=self.symbols.get('__kui_native_vmu_only_transport_stage')
+        if compact_transport is not None:
+            require(compact_transport in ((0,0,0,0xfff1),(1,0,0,0xfff1)),
+                    'VMU-only stage transport marker differs')
+        self.mem.update({manifest + 44: compact_transport[0] if compact_transport is not None else 1,
                          manifest + 48: (self.selected_reader if self.selected_callbacks else
                                          1 if '_native_background_boot_region' in self.symbols else 0),
                          manifest + 52: 0})
@@ -566,7 +570,8 @@ def check(stage, resident, *, worker=None, self_test=False):
     require(owner_low-52>0x0c007d00+32,'Inherited owner save frame overlaps retained low stack')
     # The separate actual mode-helper proof covers Background's refused1/3
     # before this relay can be entered. Exercise all reachable live modes.
-    modes = ((0,2,4,5,6) if background else (0,1,2,3,4,5,6)) if "_native_runtime_mode" in stage[4] else (0,)
+    modes = ((0,) if '__kui_native_vmu_only_stage' in stage[4] else
+             ((0,2,4,5,6) if background else (0,1,2,3,4,5,6))) if "_native_runtime_mode" in stage[4] else (0,)
     for seed in range(12):
         for mask in range(16):
             for outcome in (False, True):

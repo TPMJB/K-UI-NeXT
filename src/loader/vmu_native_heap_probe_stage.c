@@ -45,7 +45,16 @@ const struct kui_vmu_native_toggle_capability kui_vmu_native_toggle_capability
 #endif
 #endif
 #if KUI_NATIVE_STANDARD_VMU_ISOLATION || KUI_NATIVE_READER_ONLY_ISOLATION || KUI_NATIVE_METADATA_CACHE_ISOLATION || KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION
-#if KUI_NATIVE_GENERAL_LEAN_LAYOUT
+#if KUI_NATIVE_VMU_ONLY
+__asm__(".global __kui_native_vmu_only_transport_stage\n"
+        ".set __kui_native_vmu_only_transport_stage," KUI_VMU_ONLY_TRANSPORT_TEXT "\n");
+_Static_assert(KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES==UINT32_C(0x1c000),
+    "VMU-only allocation contains exactly its worker and stack");
+__asm__(".global __kui_native_vmu_only_stage\n"
+        ".set __kui_native_vmu_only_stage,1\n"
+        ".global __kui_native_isolation_lease_bytes\n"
+        ".set __kui_native_isolation_lease_bytes,0x1c000\n");
+#elif KUI_NATIVE_GENERAL_LEAN_LAYOUT
 _Static_assert(KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES==UINT32_C(0x51000),
     "General isolation owns its exact compact lease");
 __asm__(".global __kui_native_isolation_lease_bytes\n"
@@ -508,7 +517,11 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
         retail_display_line("NATIVE VMU CONTROL / NO VIRTUAL CARD");
         return;
     }
-    if(manifest.storage_transport!=KUI_STORAGE_SCI ||
+    if((manifest.storage_transport!=KUI_STORAGE_SCI
+#if KUI_NATIVE_VMU_ONLY
+        && manifest.storage_transport!=KUI_STORAGE_SCIF
+#endif
+       ) ||
 #if KUI_VMU_NATIVE_BACKGROUND
        (manifest.reader!=KUI_RETAIL_READER_ASYNC && manifest.reader!=KUI_RETAIL_READER_ASYNC_EAGER) ||
 #else

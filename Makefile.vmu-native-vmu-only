@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Independent virtual A2 service. Synchronous disc reads; no asynchronous
+# reader, read-ahead auxiliary/cache, or retained disc map in the VMU lease.
+BUILD ?= build/native-vmu-only-sci
+VMU_TRANSPORT ?= 1
+ifneq ($(filter $(VMU_TRANSPORT),0 1),$(VMU_TRANSPORT))
+$(error VMU_TRANSPORT must be 0 (SCIF) or 1 (SCI))
+endif
+override VMU_READER_PROFILE := standard
+include Makefile.vmu-native-compat
+FLAGS += -DKUI_NATIVE_VMU_ONLY=1 -DKUI_NATIVE_SPLIT_CONTROLLER_ISOLATION=1 \
+ -DKUI_NATIVE_SPLIT_CONTROLLER_GENERAL=1 -DKUI_NATIVE_GENERAL_LEAN_LAYOUT=1 \
+ -DKUI_NATIVE_VMU_ONLY_TRANSPORT=$(VMU_TRANSPORT)
+NATIVE_FLAGS += -DKUI_NATIVE_VMU_ONLY=1 -DKUI_NATIVE_SPLIT_CONTROLLER_ISOLATION=1 \
+ -DKUI_NATIVE_SPLIT_CONTROLLER_GENERAL=1 -DKUI_NATIVE_GENERAL_LEAN_LAYOUT=1
+RESIDENT_FLAGS = $(FLAGS) -fno-tree-scev-cprop -flto -mrelax \
+ -DKUI_RETAIL_TRANSPORT=$(VMU_TRANSPORT) -DKUI_RETAIL_MANIFEST_SLOTS=64
+NATIVE_LAYOUT := src/loader/vmu_native_general_lean.ld
+NATIVE_SPAN := 0x1c000
+$(BUILD)/vmu-only-config: force-mode-config
+	@mkdir -p $(BUILD)
+	@printf '%s\n' 'VMU_TRANSPORT=$(VMU_TRANSPORT)' > $@.tmp
+	@cmp -s $@.tmp $@ || cp $@.tmp $@
+	@rm -f $@.tmp
+$(RESIDENT_OBJ) $(STAGE_OBJ) $(NATIVE_OBJ): $(BUILD)/vmu-only-config
+$(BUILD)/native-worker.elf: src/loader/vmu_native_general_lean.ld
+$(BUILD)/retail-native-vmu-only.kui: $(BUILD)/retail-maple-observe.kui
+	cp $< $@
+all: $(BUILD)/retail-native-vmu-only.kui
+
+VMU_ONLY_HOST_FLAGS = -DKUI_VMU_EXPERIMENTAL=1 -DKUI_VMU_NATIVE_PERSISTENT_PROBE=1 \
+ -DKUI_VMU_NATIVE_CACHED_CODE=1 -DKUI_NATIVE_VMU_ONLY=1 \
+ -DKUI_NATIVE_SPLIT_CONTROLLER_ISOLATION=1 -DKUI_NATIVE_SPLIT_CONTROLLER_GENERAL=1 \
+ -DKUI_NATIVE_GENERAL_LEAN_LAYOUT=1
+.PHONY: vmu-only-host-tests
+vmu-only-host-tests:
+	python3 tests/test_native_vmu_only.py
+	python3 tests/test_vmu_only_scif_transport.py
+	python3 tests/test_vmu_only_persist_stage.py
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) $(VMU_ONLY_HOST_FLAGS) \
+	 tests/test_vmu_native_vmu_only_worker.c $(COMPAT_WORKER_HOST_SRC) \
+	 -Wl,--gc-sections -o $(BUILD)/test-vmu-only-worker
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-vmu-only-worker

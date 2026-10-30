@@ -490,6 +490,10 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     retail_display_line("READER SUPPORT HOOKS RETAINED");
 #endif
 #elif KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION
+#if KUI_NATIVE_VMU_ONLY
+    retail_display_line("STANDARD READER / VIRTUAL A2 ON");
+    retail_display_line("112 KIB VMU / BACKGROUND OFF");
+#else
     retail_display_line(native_runtime_mode()==KUI_VMU_NATIVE_MODE_READER_ONLY?
         "NEW READER / VIRTUAL A2 OFF":"NEW READER / VIRTUAL A2 ON");
 #if KUI_NATIVE_SPLIT_CONTROLLER_STREAM_GUARD
@@ -500,6 +504,7 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     retail_display_line("PREFETCH OFF / SPLIT CONTROLLER ALL");
 #else
     retail_display_line("PREFETCH OFF / SPLIT CONTROLLER");
+#endif
 #endif
     retail_display_line("REAL MAPLE CALLBACKS ON");
 #elif KUI_NATIVE_METADATA_CACHE_ISOLATION

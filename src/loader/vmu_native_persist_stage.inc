@@ -5,6 +5,9 @@
 #include "kui/vmu_backing.h"
 #include "../dreamcast/sci_sd_storage.h"
 #include "sci_sd_bus.h"
+#if KUI_NATIVE_VMU_ONLY
+#include "vmu_native_transport.h"
+#endif
 #ifndef KUI_VMU_SD_PROFILE_BIN
 #error Native persistence requires an explicitly prepared per-card profile
 #endif
@@ -25,8 +28,15 @@ static int native_persist_identity(void *context,struct kui_vmu_persist_session_
 }
 static bool native_persist_healthy(void *context) {
     struct kui_retail_storage *storage=context;
-    return storage->transport==KUI_STORAGE_SCI && storage->device.sd.ready &&
+    return
+#if KUI_NATIVE_VMU_ONLY
+        kui_native_vmu_transport_supported(storage->transport) && storage->device.sd.ready &&
+        !storage->stream.active && kui_native_vmu_transport_healthy(storage->transport) &&
+        !kui_native_vmu_transport_faulted(storage->transport);
+#else
+        storage->transport==KUI_STORAGE_SCI && storage->device.sd.ready &&
         !storage->stream.active && kui_sci_sd_healthy() && !kui_sci_sd_faulted();
+#endif
 }
 static int native_persist_read(void *context,uint64_t lba,void *out) {
     struct kui_retail_storage *storage=context;if(lba>UINT32_MAX) return -1;
@@ -50,6 +60,12 @@ static int native_persist_sync(void *context) {
     return last_card_result==KUI_LOADER_SD_OK?0:-1;
 }
 static enum kui_loader_sd_result __attribute__((noipa)) native_persist_storage_init(struct kui_retail_storage *storage,uint32_t selected) {
+#if KUI_NATIVE_VMU_ONLY && defined(KUI_NATIVE_VMU_ONLY_TRANSPORT)
+    /* The high stage can reach both buses; its selected low resident cannot.
+     * Reject a mismatched test variant before decoding or recovering a card. */
+    if(selected!=KUI_NATIVE_VMU_ONLY_TRANSPORT)
+        stopped("VMU ONLY TRANSPORT DOES NOT MATCH",selected);
+#endif
     /* Control never decodes or acquires the prepared pair, recovers a journal,
      * writes a checkpoint or publishes a durable handoff. Only ordinary game
      * storage is initialized. A malformed mode stops before this decision. */
@@ -63,8 +79,14 @@ static enum kui_loader_sd_result __attribute__((noipa)) native_persist_storage_i
         stopped("NATIVE VMU PREPARED PROFILE / GAME MAP REFUSED",(uint32_t)bytes);
     enum kui_loader_sd_result result=kui_retail_storage_init(storage,selected);
     if(result!=KUI_LOADER_SD_OK) return result;
-    if(selected!=KUI_STORAGE_SCI || storage->transport!=KUI_STORAGE_SCI || storage->stream.active)
+    if(
+#if KUI_NATIVE_VMU_ONLY
+       !kui_native_vmu_transport_supported(selected) || storage->transport!=selected || storage->stream.active)
+        stopped("NATIVE VMU REQUIRES STANDARD SD STORAGE",selected);
+#else
+       selected!=KUI_STORAGE_SCI || storage->transport!=KUI_STORAGE_SCI || storage->stream.active)
         stopped("NATIVE VMU REQUIRES STANDARD SCI STORAGE",selected);
+#endif
     result=kui_retail_storage_acquire(storage);if(result!=KUI_LOADER_SD_OK) return result;
     retail_display_line("NATIVE VMU: LIVE OWNERSHIP / RECOVERY - KEEP POWER ON");
     const struct kui_vmu_persist_session_ops ops={storage,native_persist_identity,
@@ -73,7 +95,12 @@ static enum kui_loader_sd_result __attribute__((noipa)) native_persist_storage_i
         &native_persist_work,&native_persist_handoff);
     enum kui_loader_sd_result stopped_stream=kui_retail_storage_stop(storage);
     bool healthy=native_persist_healthy(storage);kui_retail_storage_release(storage);
-    healthy=healthy && storage->device.sd.ready && !storage->stream.active && !kui_sci_sd_faulted();
+    healthy=healthy && storage->device.sd.ready && !storage->stream.active &&
+#if KUI_NATIVE_VMU_ONLY
+        !kui_native_vmu_transport_faulted(storage->transport);
+#else
+        !kui_sci_sd_faulted();
+#endif
     if(prepared || stopped_stream!=KUI_LOADER_SD_OK || !healthy) {
         /* Capture the original failure before poisoning a previously healthy
          * session. Start a fresh bounded page: the preceding launch messages

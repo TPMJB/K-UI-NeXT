@@ -4,6 +4,9 @@
  * This entry is called from the worker stack, never from the low GD stack. */
 #include "kui/vmu_sd_lease.h"
 #include "sci_sd_bus.h"
+#if KUI_NATIVE_VMU_ONLY
+#include "vmu_native_transport.h"
+#endif
 
 #ifdef KUI_VMU_SD_LEASE_HOST_TEST
 extern uint32_t kui_vmu_sd_lease_test_sr(void);
@@ -47,10 +50,21 @@ int __attribute__((noipa,section(".vmu_sd_lease"))) kui_vmu_observe_sd_lease(
 #endif
        ) return KUI_VMU_SD_LEASE_FAULT;
     if(kui_retail_hook_active) return KUI_VMU_SD_LEASE_BUSY;
-    if(card.transport!=KUI_STORAGE_SCI) return KUI_VMU_SD_LEASE_FAULT;
+    if(
+#if KUI_NATIVE_VMU_ONLY
+       !kui_native_vmu_transport_supported(card.transport)
+#else
+       card.transport!=KUI_STORAGE_SCI
+#endif
+       ) return KUI_VMU_SD_LEASE_FAULT;
     if(card.stream.active ||
        !card.device.sd.ready || card.device.sd.slow || !card.device.sd.blocks ||
-       kui_sci_sd_faulted()) {
+#if KUI_NATIVE_VMU_ONLY
+       kui_native_vmu_transport_faulted(card.transport)
+#else
+       kui_sci_sd_faulted()
+#endif
+       ) {
         card.device.sd.ready=false;
         return KUI_VMU_SD_LEASE_FAULT;
     }
@@ -68,9 +82,21 @@ int __attribute__((noipa,section(".vmu_sd_lease"))) kui_vmu_observe_sd_lease(
     }
     struct kui_loader_sd loan=card.device.sd;
     result=callback(context,&loan);
-    if(!loan.ready || !kui_sci_sd_healthy()) result=KUI_VMU_SD_LEASE_FAULT;
+    if(!loan.ready ||
+#if KUI_NATIVE_VMU_ONLY
+       !kui_native_vmu_transport_healthy(card.transport)
+#else
+       !kui_sci_sd_healthy()
+#endif
+       ) result=KUI_VMU_SD_LEASE_FAULT;
     kui_retail_storage_release(&card);
-    if(kui_sci_sd_faulted()) result=KUI_VMU_SD_LEASE_FAULT;
+    if(
+#if KUI_NATIVE_VMU_ONLY
+       kui_native_vmu_transport_faulted(card.transport)
+#else
+       kui_sci_sd_faulted()
+#endif
+       ) result=KUI_VMU_SD_LEASE_FAULT;
     if(result) card.device.sd.ready=false;
     kui_retail_hook_active=0u;
     return result?KUI_VMU_SD_LEASE_FAULT:KUI_VMU_SD_LEASE_OK;
