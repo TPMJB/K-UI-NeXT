@@ -82,3 +82,38 @@ module refuses them.
      power-cycle and reload.
    - Crazy Taxi and Zombie Revenge on Background (New): boot and play through
      loading-heavy sections.
+
+# Early Shinobi (1.41-1.43) titles
+
+Sonic Adventure, The House of the Dead 2, Time Stalkers, Elemental Gimmick Gear
+and Silver share one earlier interrupt family. Every byte that matters is
+identical across all five:
+
+- Two 0x34-byte stubs. The EXPEVT one is copied to VBR+0x100 and +0x400, the
+  INTEVT one to VBR+0x600. Each records its event code in one word and jumps to
+  one common handler (0x14c bytes) that saves the FPU in round-toward-zero.
+- The handler table is the full family's: VBR+0x200+(code-0x200)/8, filled by
+  the same reviewed initializer, with SCI ERI/RXI at VBR+0x25c/+0x260.
+- The default handler has no debug helper. It unwinds the common frame and
+  takes the same system return path (0xac000010) the full family's default takes
+  after its helper. Forwarding a foreign SCI event therefore behaves as the
+  original SDK does.
+
+`early_family()` in `native_sdk_sci_family.inc` admits it only when no
+full/compact vector exists. It requires a unique INTEVT stub, its adjacent
+EXPEVT stub, the common handler and the default, each matching its reviewed
+fingerprint. Their event/common/default literal relations must agree, and the
+table initializer must be unique. The live route additionally checks the copied
+INTEVT stub (only its R0 scratch may differ), the live common and default code,
+and both still-default SCI slots. The standalone New resident's late bind
+compares the 13-word early stub (scratch 11, common 12) instead of the 24-word
+full vector.
+
+Blue Stinger (Shinobi 1.28) has the same stubs and handler but another table
+initializer, so it is still refused. Silver also fails its executable-extent
+proof before the launcher's New fallback is considered.
+
+With this, the New route can use the standalone reader for Sonic Adventure,
+House of the Dead 2, Time Stalkers and Elemental Gimmick Gear (no virtual VMU
+yet). The combined VMU route still needs their Maple layout (pd 1.46),
+allocator (syMalloc 1.35) and terminal exits.

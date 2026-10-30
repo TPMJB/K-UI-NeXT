@@ -89,3 +89,72 @@ static bool literal_at(const uint8_t *p,uint32_t address,size_t instruction,
     return (op&0xff00u)==(uint16_t)(0xd000u|(reg<<8)) &&
         (((address+(uint32_t)instruction+4u)&~3u)+4u*(op&255u))==address+wanted;
 }
+/* The early Shinobi (1.41-1.43) interrupt family. Two 0x34-byte stubs, the
+ * EXPEVT one copied to VBR+0x100/+0x400 and the INTEVT one to VBR+0x600,
+ * record their event code in one word and jump to a single common handler.
+ * That handler saves the FPU and dispatches through the full family's table
+ * (VBR+0x200+(code-0x200)/8), filled by the same reviewed initializer. The
+ * default has no debug helper: it unwinds the common frame and enters the
+ * same system return path the full family's default takes after its helper.
+ * FPSCR is round-toward-zero throughout. Every instruction is fingerprinted;
+ * only the event, R0 scratch, common and event-relative literals are holes. */
+static const uint8_t early_expevt[32]={
+    0x1c,0x2c,0x17,0xac,0x31,0xcf,0xf3,0x95,0x91,0x8a,0x7e,0x21,0x6e,0x07,0xc0,0x53,
+    0xb6,0x7b,0x15,0xf2,0x83,0xf1,0x80,0x15,0x6c,0x90,0x5f,0x28,0xe6,0x00,0xbd,0x22};
+static const uint8_t early_intevt[32]={
+    0xb5,0x19,0x32,0x94,0x3f,0xb6,0x9d,0xf8,0x2c,0x16,0x2d,0xec,0x6b,0x15,0x72,0xe9,
+    0xef,0xf8,0x5e,0x21,0x86,0xb0,0xba,0x06,0x9e,0xe7,0xad,0x59,0x69,0xde,0xb1,0x9c};
+static const uint8_t early_common[32]={
+    0x8b,0xff,0xd9,0xdf,0x8f,0x7a,0x4b,0x54,0x44,0x08,0x89,0xdf,0x44,0xd5,0x96,0x72,
+    0xbf,0xea,0x16,0x30,0xc6,0xfa,0xcb,0x4c,0xf1,0x65,0x47,0xca,0x89,0x57,0xf4,0xbd};
+static const uint8_t early_default[32]={
+    0x1f,0xdf,0x9e,0xd9,0x98,0x1b,0xc3,0xcb,0xcd,0x9e,0x6f,0x7e,0xba,0x89,0x36,0x00,
+    0x4e,0x85,0x4d,0xb0,0xb0,0xe6,0x86,0xf5,0xaa,0x01,0x98,0x21,0x65,0x78,0xca,0xec};
+#define EARLY_STUB_BYTES 0x34u
+#define EARLY_SCRATCH_WORD 11u
+#define EARLY_COMMON_BYTES 0x14cu
+#define EARLY_EVENT_OFFSET 0x2d4u
+#define EARLY_DEFAULT_BYTES 0xc4u
+struct early_family {size_t stub_at,default_at;uint32_t stub,common,original,event;};
+/* Image-only roles of the early family: 1 found, 0 none, -1 malformed or
+ * ambiguous. Callers try it only when no full/compact vector prefix exists. */
+static int early_family(const uint8_t *p,size_t n,uint32_t load,struct early_family *out) {
+    static const uint16_t early_stub_holes[]={0x28u,0x2cu,0x30u};
+    static const uint16_t early_common_hole[]={0x148u};
+    static const uint16_t early_default_holes[]={0xb8u,0xbcu,0xc0u};
+    static const uint16_t early_init_holes[]={0x2au};
+    size_t stub_at=0u;unsigned stubs=0u;
+    for(size_t at=EARLY_STUB_BYTES;at<n && n-at>=2u*EARLY_STUB_BYTES+EARLY_COMMON_BYTES;at+=4u) {
+        if(u32(p+at)!=UINT32_C(0x00090009) || u16(p+at+0xau)!=0x2f16u ||
+           !normalized(p+at,EARLY_STUB_BYTES,early_stub_holes,3u,early_intevt))continue;
+        stub_at=at;if(++stubs>1u)return -1;
+    }
+    if(!stubs)return 0;
+    size_t expevt_at=stub_at-EARLY_STUB_BYTES,common_at=stub_at+EARLY_STUB_BYTES;
+    const uint8_t *s=p+stub_at,*x=p+expevt_at,*c=p+common_at;
+    uint32_t event=u32(s+0x28u),area=event&UINT32_C(0xe0000000);
+    uint32_t common=((load+(uint32_t)common_at)&UINT32_C(0x1fffffff))|area;
+    uint32_t raw_event=((load+(uint32_t)common_at+EARLY_EVENT_OFFSET)&UINT32_C(0x1fffffff))|area;
+    if((area!=0u && area!=UINT32_C(0x80000000)) || event!=raw_event ||
+       n-common_at<EARLY_EVENT_OFFSET+4u ||
+       !normalized(x,EARLY_STUB_BYTES,early_stub_holes,3u,early_expevt) ||
+       u32(x+0x28u)!=event || u32(x+0x2cu) || u32(s+0x2cu) ||
+       u32(x+0x30u)!=common || u32(s+0x30u)!=common ||
+       !normalized(c,EARLY_COMMON_BYTES,early_common_hole,1u,early_common) || u32(c+0x148u)!=event)return -1;
+    unsigned initializers=0u;bool bound=false;uint32_t original=0u;
+    for(size_t at=0u;at<n && n-at>=0x2eu;at+=2u) {
+        if(u16(p+at)!=0x9511u || u16(p+at+2u)!=0x9411u ||
+           !normalized(p+at,0x2eu,early_init_holes,1u,family_init))continue;
+        if(++initializers>1u)return -1;
+        bound=literal_at(p+at,load+(uint32_t)at,4u,7u,0x2au);
+        original=u32(p+at+0x2au);
+    }
+    size_t default_at;
+    if(initializers!=1u || !bound || (original&3u) ||
+       !owner_span(original,EARLY_DEFAULT_BYTES,area,load,n,&default_at))return -1;
+    const uint8_t *d=p+default_at;
+    if(!normalized(d,EARLY_DEFAULT_BYTES,early_default_holes,3u,early_default) ||
+       u32(d+0xb8u)!=event+4u || u32(d+0xbcu)!=event-8u || u32(d+0xc0u)!=event-4u)return -1;
+    *out=(struct early_family){stub_at,default_at,load+(uint32_t)stub_at,common,original,event};
+    return 1;
+}

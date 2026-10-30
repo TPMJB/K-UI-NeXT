@@ -160,7 +160,26 @@ int kui_native_sdk_sci_route_discover(const void *image,size_t image_bytes,uint3
            !fingerprint(p+at,64u,family_vector_prefix))continue;
         vector_at=at;if(++vectors>1u)return -1;
     }
-    if(!vectors)return 0;
+    if(!vectors) {
+        struct early_family early;int found=early_family(p,image_bytes,load,&early);
+        if(found!=1)return found;
+        /* The live INTEVT copy must still name the one reviewed common
+         * handler; only its R0 scratch word may differ. */
+        for(unsigned i=0u;i<EARLY_STUB_BYTES/4u;i++) {
+            uint32_t word;
+            if(i==EARLY_SCRATCH_WORD)continue;
+            if(!read(context,current_vbr+0x600u+4u*i,&word) ||
+               word!=u32(p+early.stub_at+4u*i))return -1;
+        }
+        uint32_t common_code=(early.common&UINT32_C(0x1fffffff))|UINT32_C(0x80000000),eri,rxi;
+        if(!live_words(read,context,common_code,p+(common_code-load),EARLY_COMMON_BYTES) ||
+           !live_words(read,context,load+(uint32_t)early.default_at,p+early.default_at,EARLY_DEFAULT_BYTES) ||
+           !read(context,current_vbr+0x25cu,&eri) || !read(context,current_vbr+0x260u,&rxi) ||
+           eri!=early.original || rxi!=early.original)return -1;
+        *out=(struct kui_native_sdk_sci_route_plan){KUI_NATIVE_SDK_SCI_ROUTE_VERSION,sizeof(*out),
+            current_vbr,early.common,current_vbr+0x25cu,current_vbr+0x260u,callback,eri};
+        return 1;
+    }
     if(image_bytes-vector_at<96u)return -1;
     uint32_t vector=load+(uint32_t)vector_at;
     /* The event word selects the full, compact-FPU or round-toward-zero

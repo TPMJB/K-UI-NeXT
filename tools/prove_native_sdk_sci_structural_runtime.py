@@ -229,9 +229,22 @@ def family_tables(stage):
         (0,0x34,'56fb7aca2af823e85502ad444fd1df4130a93b58536037fd856605b7b35c1423'),
         (0x120,12,'524235e1c936937f199fda4316661a5e48c51116261c205cd9eca3b471feee78'),
         (0x224,20,'fe0a08ca04e79c38dc469e8221aa20f3991dbdb49d8f3df7b78b115392c05940')))
+    # Round-toward-zero handlers and the early Shinobi family, reviewed offline
+    # from Crazy Taxi/Berserk/Zombie Revenge and five early-SDK originals.
+    expected.update({
+        '_zero_normal':bytes.fromhex('5cc14cfca08395677491b8c1052833820d257f60a168ca24e19fa02f69ecf037'),
+        '_zero_fpu':bytes.fromhex('1afeb9b8504704b39c104e7205508d99360e442811acc826c1f271f71aa6524b'),
+        '_early_expevt':bytes.fromhex('1c2c17ac31cff395918a7e216e07c053b67b15f283f180156c905f28e600bd22'),
+        '_early_intevt':bytes.fromhex('b51932943fb69df82c162dec6b1572e9eff85e2186b0ba069ee7ad5969deb19c'),
+        '_early_common':bytes.fromhex('8bffd9df8f7a4b54440889df44d59672bfea1630c6facb4cf16547ca8957f4bd'),
+        '_early_default':bytes.fromhex('1fdf9ed9981bc3cbcd9e6f7eba8936004e854db0b0e686f5aa0198216578caec')})
     for base,wire in (('_vector_holes',struct.pack('<2H',0x4c,0x58)),
                       ('_default_holes',struct.pack('<5H',0xe8,0xec,0xf0,0xf4,0xf8)),
-                      ('_init_holes',struct.pack('<H',0x2a))):
+                      ('_init_holes',struct.pack('<H',0x2a)),
+                      ('_early_stub_holes',struct.pack('<3H',0x28,0x2c,0x30)),
+                      ('_early_common_hole',struct.pack('<H',0x148)),
+                      ('_early_default_holes',struct.pack('<3H',0xb8,0xbc,0xc0)),
+                      ('_early_init_holes',struct.pack('<H',0x2a))):
         matches=[name for name in stage[4] if name==base or name.startswith(base+'.')]
         require(len(matches)==1,'structural SDK typed literal metadata missing/ambiguous: '+base)
         expected[matches[0]]=wire
@@ -246,7 +259,7 @@ def family_tables(stage):
         require(section[2]&7==2 and 0x8ce00000<=address<address+len(body)<=0x8cfe0000 and body==wire,
                 'structural SDK immutable family/role metadata differs: '+name)
         result[name]=dict(address=hex(address),bytes=len(body),sha256=hashlib.sha256(body).hexdigest())
-    return dict(enabled=True,families=[family['name'] for family in FAMILIES],
+    return dict(enabled=True,families=[family['name'] for family in FAMILIES]+['round-toward-zero','early'],
         full_instruction_windows_separately_fingerprinted=True,
         only_named_literal_holes_normalized=True,arbitrary_ram_pointer_wildcards=False,
         tables=result)

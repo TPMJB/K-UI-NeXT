@@ -37,7 +37,11 @@ int kui_native_sdk_sci_family_find(const void *image,size_t image_bytes,uint32_t
            !fingerprint(p+at,64u,family_vector_prefix))continue;
         vector_at=at;if(++vectors>1u)return -1;
     }
-    if(!vectors)return 0;
+    if(!vectors) {
+        struct early_family early;int found=early_family(p,image_bytes,load,&early);
+        if(found==1)*out=(struct kui_native_sdk_sci_family){early.stub,early.common,early.common,early.original};
+        return found;
+    }
     if(image_bytes-vector_at<96u)return -1;
     uint32_t vector=load+(uint32_t)vector_at;
     /* The event word selects the full, compact-FPU or round-toward-zero
