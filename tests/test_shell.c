@@ -1588,58 +1588,16 @@ static void round_five_controls(void) {
     cd.count=0;kui_shell_set_cd_audio(&s,&cd);assert(s.cd_selected==0);
     assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_MUSIC);
     reset(KUI_SHELL_NETWORK);assert(press(KUI_SHELL_X,false)==KUI_SHELL_NETWORK_CONNECT);
-    reset(KUI_SHELL_ADVANCED);s.advanced_selected=6;
+    reset(KUI_SHELL_ADVANCED);s.advanced_selected=KUI_SHELL_RIPPER_TOOL_SALVAGE;
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_SALVAGE);
-    assert(s.salvage_passes==0);
+    assert(s.salvage_selected==KUI_SHELL_RECOVERY_CONTINUE && s.salvage_passes==0);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_RESUME);
+    s.salvage_selected=KUI_SHELL_RECOVERY_NEW;
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.confirm_salvage);
     assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && !s.confirm_salvage);
-    s.salvage_selected=3;press(KUI_SHELL_RIGHT,false);assert(s.salvage_passes==1);
-    press(KUI_SHELL_RIGHT,false);assert(s.salvage_passes==5);
-    press(KUI_SHELL_RIGHT,false);assert(s.salvage_passes==10);
-    press(KUI_SHELL_RIGHT,false);assert(s.salvage_passes==20);
-    press(KUI_SHELL_RIGHT,false);assert(s.salvage_passes==50);
-    press(KUI_SHELL_RIGHT,false);assert(s.salvage_passes==0);
-    press(KUI_SHELL_LEFT,false);assert(s.salvage_passes==50);
-    press(KUI_SHELL_RIGHT,false);assert(s.salvage_passes==0);
-    assert(!s.salvage_verify_files);
-    press(KUI_SHELL_DOWN,false);assert(s.salvage_selected==4);
-    press(KUI_SHELL_RIGHT,false);assert(s.salvage_verify_files);
-    press(KUI_SHELL_LEFT,false);assert(!s.salvage_verify_files);
-    press(KUI_SHELL_A,false);assert(s.salvage_verify_files);
-    press(KUI_SHELL_DOWN,false);assert(s.salvage_selected==5);
-    press(KUI_SHELL_DOWN,false);assert(s.salvage_selected==0);
-    press(KUI_SHELL_LEFT,false);assert(s.salvage_passes==0);
-    press(KUI_SHELL_UP,false);assert(s.salvage_selected==5);
-    s.salvage_selected=0;press(KUI_SHELL_A,false);
+    press(KUI_SHELL_A,false);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_NEW && !s.confirm_salvage);
-    s.salvage_selected=1;assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_RESUME);
-    assert(press(KUI_SHELL_Y,true)==KUI_SHELL_NONE && !s.confirm_salvage && !s.confirm_salvage_defer);
-    assert(press(KUI_SHELL_A|KUI_SHELL_Y,false)==KUI_SHELL_NONE && !s.confirm_salvage);
-    assert(press(KUI_SHELL_Y|KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && s.salvage_selected==1);
-    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.confirm_salvage && s.confirm_salvage_defer);
-    assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && s.salvage_selected==1 && s.confirm_salvage_defer);
-    assert(press(KUI_SHELL_A|KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.confirm_salvage_defer);
-    assert(press(KUI_SHELL_A|KUI_SHELL_START,false)==KUI_SHELL_NONE && s.confirm_salvage_defer);
-    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_RESUME_DEFER && !s.confirm_salvage && !s.confirm_salvage_defer);
-    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_RESUME);
-    press(KUI_SHELL_Y,false);
-    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && !s.confirm_salvage && !s.confirm_salvage_defer && s.page==KUI_SHELL_SALVAGE);
-    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_RESUME);
-    press(KUI_SHELL_Y,false);
-    assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && !s.confirm_salvage && !s.confirm_salvage_defer);
-    press(KUI_SHELL_Y,false);
-    assert(press(KUI_SHELL_B,true)==KUI_SHELL_STOP && !s.confirm_salvage && !s.confirm_salvage_defer);
-    for(unsigned row=0;row<6;++row)if(row!=1) {
-        s.salvage_selected=row;
-        assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && !s.confirm_salvage && !s.confirm_salvage_defer);
-    }
-    s.salvage_selected=1;press(KUI_SHELL_Y,false);
-    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_RESUME_DEFER);
-    s.salvage_selected=0;press(KUI_SHELL_A,false);
-    assert(s.confirm_salvage && !s.confirm_salvage_defer);
-    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_NEW);
-    s.salvage_selected=2;assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_RECOVER);
-    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_ADVANCED);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_DISC_TOOLS);
     assert(kui_shell_progress_tenths(1,0)==0);
     assert(kui_shell_progress_tenths(1,3)==333);
     assert(kui_shell_progress_tenths(99,100)==990);
@@ -1649,71 +1607,136 @@ static void round_five_controls(void) {
 }
 static void salvage_drive_controls(void) {
     reset(KUI_SHELL_SALVAGE);
-    assert(s.salvage_drive_options.speed==0 && s.salvage_drive_options.retries==0 && !s.salvage_trial_requested);
-    s.salvage_selected=5;
-    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_SALVAGE);
-    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_SALVAGE_DRIVE);
-    assert(!s.confirm_salvage && s.salvage_drive_selected==0);
-    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_NONE && s.salvage_drive_options.speed==8);
-    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE && s.salvage_drive_options.speed==0);
-    for(unsigned i=1;i<KUI_DRIVE_SPEED_CHOICES;++i) {
-        assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.salvage_drive_options.speed==i);
-    }
-    press(KUI_SHELL_RIGHT,false);assert(s.salvage_drive_options.speed==0);
-    press(KUI_SHELL_LEFT|KUI_SHELL_RIGHT,false);assert(s.salvage_drive_options.speed==0);
-    press(KUI_SHELL_RIGHT,true);assert(s.salvage_drive_options.speed==0);
-    press(KUI_SHELL_DOWN,false);assert(s.salvage_drive_selected==1);
-    press(KUI_SHELL_LEFT,false);assert(s.salvage_drive_options.retries==5);
-    press(KUI_SHELL_RIGHT,false);assert(s.salvage_drive_options.retries==0);
-    for(unsigned i=1;i<KUI_DRIVE_RETRY_CHOICES;++i) {
-        assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.salvage_drive_options.retries==i);
-    }
-    press(KUI_SHELL_RIGHT,false);assert(s.salvage_drive_options.retries==0);
-    press(KUI_SHELL_RIGHT,false);assert(s.salvage_drive_options.retries==1);
-    press(KUI_SHELL_UP,false);press(KUI_SHELL_RIGHT,false);
-    assert(s.salvage_drive_options.speed==1 && s.salvage_drive_options.retries==1);
-    press(KUI_SHELL_UP,false);assert(s.salvage_drive_selected==3);
-    press(KUI_SHELL_RIGHT,false);assert(s.page==KUI_SHELL_SALVAGE_DRIVE);
-    press(KUI_SHELL_A,false);assert(s.page==KUI_SHELL_SALVAGE && s.salvage_selected==5);
-    press(KUI_SHELL_A,false);assert(s.page==KUI_SHELL_SALVAGE_DRIVE);
-    assert(press(KUI_SHELL_B|KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_SALVAGE);
-    assert(s.salvage_drive_options.speed==1 && s.salvage_drive_options.retries==1);
-    press(KUI_SHELL_A,false);assert(press(KUI_SHELL_B,true)==KUI_SHELL_STOP);
-    assert(s.page==KUI_SHELL_SALVAGE_DRIVE);
-    s.salvage_drive_selected=2;
-    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_NONE && !s.salvage_trial_requested);
-    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE && !s.salvage_trial_requested);
-    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && !s.salvage_trial_requested);
-    assert(press(KUI_SHELL_A|KUI_SHELL_B,true)==KUI_SHELL_STOP && !s.salvage_trial_requested);
-    assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_SALVAGE);
-    assert(!s.salvage_trial_requested);
-    press(KUI_SHELL_A,false);assert(s.page==KUI_SHELL_SALVAGE_DRIVE);
-    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_RECOVER);
-    assert(s.page==KUI_SHELL_SALVAGE && s.salvage_trial_requested && s.salvage_trial_result);
-    assert(s.salvage_drive_options.speed==1 && s.salvage_drive_options.retries==1);
-    s.salvage_trial_requested=false; /* Main consumes the one-shot request. */
-    unsigned selected=s.salvage_selected;
-    assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && s.salvage_selected==selected);
+    assert(!s.salvage_details && press(KUI_SHELL_Y,true)==KUI_SHELL_NONE && s.salvage_details);
+    assert(press(KUI_SHELL_A|KUI_SHELL_Y,true)==KUI_SHELL_NONE && s.salvage_details);
+    assert(press(KUI_SHELL_Y|KUI_SHELL_B,true)==KUI_SHELL_STOP && s.salvage_details);
+    s.salvage_trial_result=true;
+    assert(press(KUI_SHELL_Y,true)==KUI_SHELL_NONE && s.salvage_details);
+    s.salvage_trial_result=false;
+    assert(press(KUI_SHELL_Y,true)==KUI_SHELL_NONE && !s.salvage_details);
+    s.salvage_details=true;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_RESUME && !s.salvage_details);
+    reset(KUI_SHELL_DISC_TOOLS);s.disc_tools_selected=1;
+    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_DISC_TOOLS);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_SALVAGE);
+    assert(s.salvage_selected==KUI_SHELL_RECOVERY_CONTINUE);
     assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && !s.confirm_salvage);
-    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_SALVAGE_DRIVE);
-    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_SALVAGE && s.salvage_trial_result);
-    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_ADVANCED && !s.salvage_trial_result);
-    s.page=KUI_SHELL_SALVAGE;s.salvage_trial_requested=true;
-    /* An ordinary action must never inherit a previous trial request. */
-    s.salvage_selected=2;
-    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_RECOVER && !s.salvage_trial_requested);
-    s.salvage_trial_requested=true;s.salvage_selected=1;
-    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_RESUME && !s.salvage_trial_requested);
-    s.salvage_trial_requested=true;s.salvage_selected=0;
-    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.confirm_salvage && !s.salvage_trial_requested);
-    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_NEW);
-    s.salvage_trial_requested=true;s.salvage_selected=1;
-    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.confirm_salvage_defer && !s.salvage_trial_requested);
-    press(KUI_SHELL_B,false);s.salvage_selected=5;press(KUI_SHELL_A,false);
-    s.salvage_drive_selected=3;press(KUI_SHELL_DOWN,false);assert(s.salvage_drive_selected==0);
-    press(KUI_SHELL_UP,false);assert(s.salvage_drive_selected==3);
-    reset(KUI_SHELL_SALVAGE);
-    assert(s.salvage_drive_options.speed==0 && s.salvage_drive_options.retries==0 && !s.salvage_trial_requested);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_RESUME);
+    s.salvage_selected=KUI_SHELL_RECOVERY_OPTIONS;press(KUI_SHELL_A,false);
+    assert(s.page==KUI_SHELL_SALVAGE_OPTIONS && !s.salvage_drive_options.retries && !s.salvage_drive_options.speed);
+    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_NONE && s.salvage_drive_options.retries==KUI_DRIVE_RETRY_CHOICES-1u);
+    press(KUI_SHELL_RIGHT,false);assert(!s.salvage_drive_options.retries);
+    for(unsigned i=1;i<KUI_DRIVE_RETRY_CHOICES;++i) {
+        press(KUI_SHELL_A,false);assert(s.salvage_drive_options.retries==i);
+    }
+    s.salvage_options_selected=KUI_SHELL_RECOVERY_PASSES;
+    static const unsigned limits[]={1,5,10,20,50,0};
+    for(unsigned i=0;i<6;++i) {press(KUI_SHELL_RIGHT,false);assert(s.salvage_passes==limits[i]);}
+    press(KUI_SHELL_LEFT,false);assert(s.salvage_passes==50);
+    press(KUI_SHELL_A,false);assert(!s.salvage_passes);
+    s.salvage_options_selected=KUI_SHELL_RECOVERY_VERIFY;
+    assert(!s.salvage_verify_files);press(KUI_SHELL_RIGHT,false);assert(s.salvage_verify_files);
+    press(KUI_SHELL_LEFT,false);assert(!s.salvage_verify_files);
+    press(KUI_SHELL_A,false);assert(s.salvage_verify_files);
+    s.salvage_options_selected=KUI_SHELL_RECOVERY_SPEED;
+    press(KUI_SHELL_LEFT,false);assert(s.salvage_drive_options.speed==KUI_DRIVE_SPEED_CHOICES-1u);
+    press(KUI_SHELL_RIGHT,false);assert(!s.salvage_drive_options.speed);
+    press(KUI_SHELL_LEFT|KUI_SHELL_RIGHT,false);assert(!s.salvage_drive_options.speed);
+    for(unsigned i=1;i<KUI_DRIVE_SPEED_CHOICES;++i) {press(KUI_SHELL_A,false);assert(s.salvage_drive_options.speed==i);}
+    press(KUI_SHELL_RIGHT,true);assert(s.salvage_drive_options.speed==KUI_DRIVE_SPEED_CHOICES-1u);
+    s.salvage_options_selected=KUI_SHELL_RECOVERY_DEFER;
+    press(KUI_SHELL_RIGHT,false);assert(!s.confirm_salvage);
+    press(KUI_SHELL_A,false);assert(s.confirm_salvage && s.confirm_salvage_defer);
+    press(KUI_SHELL_DOWN,false);assert(s.salvage_options_selected==KUI_SHELL_RECOVERY_DEFER);
+    press(KUI_SHELL_A|KUI_SHELL_Y,false);assert(s.confirm_salvage_defer);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_SALVAGE_OPTIONS && !s.confirm_salvage);
+    press(KUI_SHELL_A,false);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_RESUME_DEFER && s.page==KUI_SHELL_SALVAGE);
+    s.salvage_selected=KUI_SHELL_RECOVERY_OPTIONS;press(KUI_SHELL_A,false);
+    s.salvage_options_selected=KUI_SHELL_RECOVERY_OPTIONS_RETURN;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_SALVAGE);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_DISC_TOOLS);
+    /* Verification opens folder selection, with both result and picker Back
+     * returning to Disc tools; no read operation starts on entry. */
+    s.disc_tools_selected=2;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_DEST_LIST && s.page==KUI_SHELL_DESTINATION && s.browse_for_scan);
+    assert(s.scan_return==KUI_SHELL_DISC_TOOLS && !s.recovery_operation);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_DISC_TOOLS);
+    press(KUI_SHELL_A,false);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_DISC_TOOLS);
+    press(KUI_SHELL_A,false);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_ADVANCED_CRC && s.page==KUI_SHELL_CRC_SCAN);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_DISC_TOOLS);
+    s.disc_tools_selected=3;press(KUI_SHELL_A,false);assert(s.page==KUI_SHELL_GD_PLAY);
+    press(KUI_SHELL_B,false);s.disc_tools_selected=3;press(KUI_SHELL_DOWN,false);assert(!s.disc_tools_selected);
+    press(KUI_SHELL_UP,false);assert(s.disc_tools_selected==3);
+}
+static void salvage_speed_probe_controls(void) {
+    const unsigned rows[]={KUI_SHELL_RECOVERY_TRIAL,KUI_SHELL_RECOVERY_SPEED_PROBE};
+    for(unsigned n=0;n<2;++n) {
+        reset(KUI_SHELL_SALVAGE_DRIVE);s.salvage_drive_selected=rows[n];
+        assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_NONE && !s.salvage_trial_requested && !s.salvage_speed_probe_requested);
+        assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE && !s.salvage_trial_requested && !s.salvage_speed_probe_requested);
+        assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE);
+        assert(press(KUI_SHELL_A|KUI_SHELL_B,true)==KUI_SHELL_STOP);
+        assert(!s.salvage_trial_requested && !s.salvage_speed_probe_requested);
+        s.salvage_diagnostic_requested=KUI_SALVAGE_DIAGNOSTIC_G1_MODE;
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_RECOVER);
+        assert(s.page==KUI_SHELL_SALVAGE && s.salvage_trial_result);
+        assert(s.salvage_trial_requested==(n==0) && s.salvage_speed_probe_requested==(n==1));
+        assert(s.salvage_diagnostic_requested==KUI_SALVAGE_DIAGNOSTIC_NONE);
+        assert(s.salvage_result_return==KUI_SHELL_SALVAGE_DRIVE);
+        unsigned keep=s.salvage_selected;press(KUI_SHELL_DOWN,false);assert(s.salvage_selected==keep);
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_SALVAGE_DRIVE);
+        assert(!s.salvage_trial_requested && !s.salvage_speed_probe_requested && !s.salvage_trial_result);
+        assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_SALVAGE);
+        assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_DISC_TOOLS);
+    }
+    for(unsigned row=0;row<KUI_SHELL_RECOVERY_COUNT;++row) {
+        reset(KUI_SHELL_SALVAGE);s.salvage_selected=row;
+        s.salvage_trial_requested=s.salvage_speed_probe_requested=true;
+        s.salvage_diagnostic_requested=KUI_SALVAGE_DIAGNOSTIC_SAVED_READS;
+        assert(press(KUI_SHELL_A,false)==(row==KUI_SHELL_RECOVERY_CONTINUE?KUI_SHELL_SALVAGE_RESUME:KUI_SHELL_NONE));
+        assert(!s.salvage_trial_requested && !s.salvage_speed_probe_requested && !s.salvage_trial_result);
+        assert(s.salvage_diagnostic_requested==KUI_SALVAGE_DIAGNOSTIC_NONE);
+    }
+}
+static void salvage_read_probe_controls(void) {
+    const unsigned rows[]={KUI_SHELL_RECOVERY_SAVED_READS,KUI_SHELL_RECOVERY_G1_MODE,KUI_SHELL_RECOVERY_REVALIDATE};
+    const enum kui_salvage_diagnostic modes[]={KUI_SALVAGE_DIAGNOSTIC_SAVED_READS,KUI_SALVAGE_DIAGNOSTIC_G1_MODE,KUI_SALVAGE_DIAGNOSTIC_REVALIDATE};
+    for(unsigned n=0;n<3;++n) {
+        reset(KUI_SHELL_SALVAGE_DRIVE);s.salvage_drive_selected=rows[n];
+        press(KUI_SHELL_A,true);assert(!s.confirm_salvage_check && s.salvage_diagnostic_requested==KUI_SALVAGE_DIAGNOSTIC_NONE);
+        press(KUI_SHELL_LEFT,false);press(KUI_SHELL_RIGHT,false);
+        s.salvage_trial_requested=s.salvage_speed_probe_requested=true;
+        enum kui_shell_action result=press(KUI_SHELL_A,false);
+        if(n==2) {
+            assert(result==KUI_SHELL_NONE && s.confirm_salvage_check && !s.salvage_trial_result);
+            assert(s.salvage_diagnostic_requested==KUI_SALVAGE_DIAGNOSTIC_NONE);
+            assert(press(KUI_SHELL_A|KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.confirm_salvage_check);
+            assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && !s.confirm_salvage_check && s.page==KUI_SHELL_SALVAGE_DRIVE);
+            press(KUI_SHELL_A,false);result=press(KUI_SHELL_A,false);
+        }
+        assert(result==KUI_SHELL_SALVAGE_RECOVER && s.salvage_diagnostic_requested==modes[n]);
+        assert(!s.salvage_trial_requested && !s.salvage_speed_probe_requested && s.salvage_trial_result);
+        assert(s.page==KUI_SHELL_SALVAGE && s.salvage_result_return==KUI_SHELL_SALVAGE_DRIVE);
+        assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_SALVAGE_DRIVE && !s.salvage_trial_result);
+        assert(s.salvage_diagnostic_requested==KUI_SALVAGE_DIAGNOSTIC_NONE);
+    }
+    reset(KUI_SHELL_SALVAGE);s.salvage_dashboard.known=s.salvage_dashboard.blocked=true;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.confirm_salvage_check);
+    assert(!s.salvage_trial_result && s.salvage_diagnostic_requested==KUI_SALVAGE_DIAGNOSTIC_NONE);
+    press(KUI_SHELL_DOWN,false);assert(s.salvage_selected==KUI_SHELL_RECOVERY_CONTINUE);
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && !s.confirm_salvage_check);
+    press(KUI_SHELL_A,false);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_RECOVER && s.salvage_diagnostic_requested==KUI_SALVAGE_DIAGNOSTIC_REVALIDATE);
+    assert(s.salvage_result_return==KUI_SHELL_SALVAGE);
+    press(KUI_SHELL_A,false);assert(s.page==KUI_SHELL_SALVAGE && !s.salvage_trial_result);
+    s.salvage_dashboard.blocked=false;assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_RESUME);
+    s.salvage_dashboard.known=false;s.salvage_dashboard.blocked=true;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SALVAGE_RESUME); /* stale cache does not gate authority */
+    s.salvage_dashboard.known=true;press(KUI_SHELL_A,false);assert(s.confirm_salvage_check);
+    assert(press(KUI_SHELL_B,true)==KUI_SHELL_STOP && !s.confirm_salvage_check);
 }
 static void round_five_rendering(void) {
     struct kui_shell_view v={.busy=true,.inserted_title="Dead or Alive 2",.done=7,.total=10,
@@ -1738,42 +1761,41 @@ static void round_five_rendering(void) {
     s.cd_audio.tracks[1].number=4;s.cd_audio.tracks[1].seconds=61;
     s.cd_audio.playing=true;s.cd_audio.current=4;render(&v);
     assert(strstr(drawn,"Audio CD player") && strstr(drawn,"Track 04  <") && strstr(drawn,"3:05"));
+    reset(KUI_SHELL_DISC_TOOLS);render(&v);
+    assert(strstr(drawn,"Copy a disc") && strstr(drawn,"Recover a damaged disc"));
+    assert(strstr(drawn,"Verify a saved dump") && strstr(drawn,"Play inserted disc"));
     reset(KUI_SHELL_SALVAGE);render(&v);
-    assert(strstr(drawn,"Recovery pass limit") && strstr(drawn,"Until stopped") && strstr(drawn,"retry holes automatically") && !strstr(drawn,"Zero-fill"));
-    assert(strstr(drawn,"Read back recovered files") && strstr(drawn,"Catalogue check follows every resolved job"));
-    assert(strstr(drawn,"Damaged disc controls"));
-    s.salvage_selected=5;render(&v);
-    assert(strstr(drawn,"read speed and drive retry settings") && strstr(drawn,"choices reset on restart"));
+    assert(strstr(drawn,"Continue recovery") && strstr(drawn,"Start a new recovery"));
+    assert(strstr(drawn,"Recovery options") && strstr(drawn,"Diagnostics"));
+    assert(!strstr(drawn,"Retry unresolved sectors") && !strstr(drawn,"Firmware retries"));
+    assert(strstr(drawn,"Saved progress is checked when you continue."));
+    s.salvage_dashboard=(struct kui_salvage_dashboard){.known=true,.counts_known=true,.targets=7017,.recovered=6190,.remaining=827};
+    strcpy(s.salvage_dashboard.title,"POWER STONE");render(&v);
+    assert(strstr(drawn,"POWER STONE") && strstr(drawn,"Repairs saved: 6190") && strstr(drawn,"Sectors remaining: 827"));
+    s.salvage_dashboard.blocked=true;render(&v);
+    assert(strstr(drawn,"Check saved progress") && !strstr(drawn,"Continue recovery\n"));
     press(KUI_SHELL_A,false);render(&v);
-    assert(strstr(drawn,"Read speed") && strstr(drawn,"Drive retries") && strstr(drawn,"Return to salvage") && strstr(drawn,"Run bounded control trial"));
-    assert(strstr(drawn,kui_drive_speed_name(0)) && strstr(drawn,kui_drive_retry_name(0)));
-    assert(strstr(drawn,"Speed settings are optional") && strstr(drawn,"Actual speed needs measurement"));
-    s.salvage_drive_options.speed=8;s.salvage_drive_options.retries=1;
-    s.salvage_drive_selected=1;render(&v);
-    assert(strstr(drawn,kui_drive_speed_name(8)) && strstr(drawn,kui_drive_retry_name(1)));
-    assert(strstr(drawn,"Firmware decoding retries per command") && strstr(drawn,"Recovery passes and application attempts are separate"));
-    assert(strstr(drawn,"Choices reset when the console restarts"));
-    s.salvage_drive_selected=2;render(&v);
-    assert(strstr(drawn,"Existing collected job; unresolved data sectors only"));
-    assert(strstr(drawn,"Up to 8 sectors, 4 profiles, 32 comparison reads"));
-    assert(strstr(drawn,"5 min soft limit; active command finishes first"));
-    assert(strstr(drawn,"Fixed profiles ignore the manual choices above"));
-    assert(strstr(drawn,"All validated repairs are saved immediately"));
-    assert(strstr(drawn,"A Run trial   B Salvage"));
-    s.salvage_drive_selected=3;render(&v);
-    assert(strstr(drawn,"does not start disc reads"));
-    press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_SALVAGE);
-    s.salvage_selected=1;render(&v);
-    assert(strstr(drawn,"Y Resume past next range") && strstr(drawn,"32 next sectors as unresolved zeros"));
-    assert(strstr(drawn,"Restart first if drive reset is required"));
-    press(KUI_SHELL_Y,false);render(&v);
-    assert(strstr(drawn,"RESUME PAST THE NEXT RANGE?") && strstr(drawn,"committed prefix of the latest matching job"));
-    assert(strstr(drawn,"32 uncommitted sectors") && strstr(drawn,"as unresolved zeros"));
-    assert(strstr(drawn,"later optical repair") && strstr(drawn,"restart the console first"));
-    assert(strstr(drawn,"A Resume past range") && !strstr(drawn,"START A DAMAGED-DISC"));
-    press(KUI_SHELL_B,false);s.salvage_selected=0;
-    s.confirm_salvage=true;render(&v);
-    assert(strstr(drawn,"Skips bad sectors") && strstr(drawn,"until resolved or you press B") && strstr(drawn,"Unresolved holes stay incomplete"));
+    assert(strstr(drawn,"CHECK ALL SAVED RECOVERY DATA?") && strstr(drawn,"40-50 minutes"));
+    assert(strstr(drawn,"Every saved track byte is read twice") && strstr(drawn,"A Start full check"));
+    press(KUI_SHELL_B,false);s.salvage_dashboard.blocked=false;
+    s.salvage_selected=KUI_SHELL_RECOVERY_OPTIONS;press(KUI_SHELL_A,false);render(&v);
+    assert(strstr(drawn,"Firmware retries") && strstr(drawn,"Recovery pass limit") && strstr(drawn,"Until stopped"));
+    assert(strstr(drawn,"Verify completed files") && strstr(drawn,"Read speed") && strstr(drawn,"Skip next unread range"));
+    s.salvage_options_selected=KUI_SHELL_RECOVERY_SPEED;render(&v);
+    assert(strstr(drawn,"some drives ignore requested speed changes"));
+    s.salvage_options_selected=KUI_SHELL_RECOVERY_DEFER;press(KUI_SHELL_A,false);render(&v);
+    assert(strstr(drawn,"RESUME PAST THE NEXT RANGE?") && strstr(drawn,"32 uncommitted sectors"));
+    assert(strstr(drawn,"as unresolved zeros") && strstr(drawn,"later optical repair"));
+    press(KUI_SHELL_B,false);press(KUI_SHELL_B,false);
+    s.salvage_selected=KUI_SHELL_RECOVERY_DIAGNOSTICS;press(KUI_SHELL_A,false);render(&v);
+    assert(strstr(drawn,"Recovery diagnostics") && strstr(drawn,"Full saved progress check"));
+    assert(strstr(drawn,"Saved read comparison") && strstr(drawn,"Bounded recovery trial"));
+    assert(strstr(drawn,"Speed support test") && strstr(drawn,"Direct G1 probe"));
+    s.salvage_drive_selected=KUI_SHELL_RECOVERY_SAVED_READS;render(&v);
+    assert(strstr(drawn,"this cannot unblock recovery"));
+    press(KUI_SHELL_B,false);s.salvage_selected=KUI_SHELL_RECOVERY_NEW;press(KUI_SHELL_A,false);render(&v);
+    assert(strstr(drawn,"START A NEW DISC RECOVERY?") && strstr(drawn,"keeps existing recovery jobs"));
+    assert(strstr(drawn,"until resolved or you press B") && strstr(drawn,"Unresolved holes stay incomplete"));
     s.salvage_passes=50;render(&v);assert(strstr(drawn,"up to 50 recovery passes"));
     s.confirm_salvage=false;v.busy=true;
     struct kui_app_status state;
@@ -1786,7 +1808,9 @@ static void round_five_rendering(void) {
     kui_salvage_display_status(&state,&progress);
     s.salvage_drive_options=(struct kui_drive_options){0,0};
     v.app_status=&state;render(&v);
-    assert(strstr(drawn,"Separate recovery jobs; normal captures remain untouched.") && !strstr(drawn,"Requested speed:"));
+    assert(!strstr(drawn,"FAD") && !strstr(drawn,"Sector attempt") && strstr(drawn,"Y Details"));
+    s.salvage_details=true;render(&v);
+    assert(strstr(drawn,"Disc recovery") && !strstr(drawn,"Requested speed:"));
     assert(strstr(drawn,"left 7") && strstr(drawn,"pass 2/5") && !strstr(drawn,"New salvage job"));
     assert(strstr(drawn,"Sector attempt 1/1") && strstr(drawn,"Last issue FAD 45149: 2/2; deferred") && !strstr(drawn,"291"));
     s.salvage_drive_options=(struct kui_drive_options){8,0};render(&v);
@@ -1810,13 +1834,58 @@ static void round_five_rendering(void) {
     v.salvage_control_trial=true;s.salvage_trial_result=true;v.busy=false;v.app_status=&trial_state;
     render(&v);
     assert(strstr(drawn,"Bounded trial: up to 8 sectors; fixed comparison profiles"));
-    assert(strstr(drawn,"A Drive controls   B Advanced") && !strstr(drawn,"New salvage job"));
+    assert(strstr(drawn,"A Diagnostics   B Diagnostics") && !strstr(drawn,"New salvage job"));
     for(unsigned i=0;i<7;++i) {
         char line[32];snprintf(line,sizeof(line),"Trial result line %u",i+1);assert(strstr(drawn,line));
     }
+    struct kui_app_status speed_state={.complete=true,.passed=true,.line_count=9};
+    strcpy(speed_state.message,"Drive speed support probe finished");
+    for(unsigned i=0;i<9;++i)snprintf(speed_state.lines[i],KUI_APP_LINE_CAP,"Speed profile %u: matched 3/3, read 1000 ms",i+1);
+    v.salvage_control_trial=false;v.salvage_speed_probe=true;v.app_status=&speed_state;
+    render(&v);
+    assert(strstr(drawn,"Drive speed support probe"));
+    assert(strstr(drawn,"Read-only disc test; saved recovery jobs unchanged"));
+    assert(strstr(drawn,"A Diagnostics   B Diagnostics") && !strstr(drawn,"New salvage job"));
+    for(unsigned i=0;i<9;++i) {
+        char line[32];snprintf(line,sizeof(line),"Speed profile %u:",i+1);assert(strstr(drawn,line));
+    }
+    speed_state.complete=false;v.busy=true;render(&v);
+    assert(strstr(drawn,"Speed profile 9:") && strstr(drawn,"B Stop safely"));
+    speed_state.complete=true;v.busy=false;
+    /* A consumed worker flag can outlive the result after Back/Advanced.
+     * Reopening the idle menu must restore its ordinary title and actions. */
+    s.salvage_trial_result=false;render(&v);
+    assert(strstr(drawn,"Recover a damaged disc\n") && strstr(drawn,"Start a new recovery") && strstr(drawn,"Continue recovery"));
+    s.salvage_trial_result=true;render(&v);
+    assert(strstr(drawn,"Drive speed support probe\n") && !strstr(drawn,"New salvage job"));
+    v.salvage_speed_probe=false;v.salvage_control_trial=true;v.app_status=&trial_state;
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_SALVAGE_DRIVE);
-    press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_SALVAGE && s.salvage_trial_result);
-    press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_ADVANCED && !s.salvage_trial_result);
+    press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_SALVAGE && !s.salvage_trial_result);
+    press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_DISC_TOOLS && !s.salvage_trial_result);
+    struct kui_app_status diagnostic_state={.complete=true,.line_count=9};
+    strcpy(diagnostic_state.message,"Example read-only diagnostic result");
+    for(unsigned i=0;i<9;++i)snprintf(diagnostic_state.lines[i],KUI_APP_LINE_CAP,"Diagnostic observation %u",i+1);
+    for(unsigned mode=KUI_SALVAGE_DIAGNOSTIC_SAVED_READS;mode<=KUI_SALVAGE_DIAGNOSTIC_REVALIDATE;++mode) {
+        s.page=KUI_SHELL_SALVAGE;s.salvage_trial_result=true;
+        v.salvage_control_trial=v.salvage_speed_probe=false;v.salvage_diagnostic=mode;v.app_status=&diagnostic_state;
+        const char *title=mode==KUI_SALVAGE_DIAGNOSTIC_SAVED_READS?"Saved repair read comparison":
+            mode==KUI_SALVAGE_DIAGNOSTIC_G1_MODE?"Direct G1 drive settings":"Saved salvage revalidation";
+        const char *detail=mode==KUI_SALVAGE_DIAGNOSTIC_SAVED_READS?
+            "Read-only SD test; saved repairs remain blocked":mode==KUI_SALVAGE_DIAGNOSTIC_G1_MODE?
+            "Bypass BIOS; verify mode requests and restoration":"Full saved-data check; recovery starts separately";
+        render(&v);assert(strstr(drawn,title) && strstr(drawn,detail));
+        assert(strstr(drawn,"Diagnostic observation 9") && !strstr(drawn,"Retry unresolved sectors"));
+        diagnostic_state.complete=false;v.busy=true;render(&v);
+        assert(strstr(drawn,title) && strstr(drawn,"Diagnostic observation 9") && strstr(drawn,"B Stop safely"));
+        diagnostic_state.complete=true;v.busy=false;s.salvage_trial_result=false;render(&v);
+        assert(strstr(drawn,"Recover a damaged disc\n") && strstr(drawn,"Continue recovery"));
+        assert(!strstr(drawn,title) && !strstr(drawn,detail));
+        s.salvage_trial_result=true;
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_SALVAGE_DRIVE);
+        assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && !s.salvage_trial_result);
+        render(&v);assert(strstr(drawn,"Recover a damaged disc\n") && !strstr(drawn,title));
+    }
+    v.salvage_diagnostic=KUI_SALVAGE_DIAGNOSTIC_NONE;
     s.page=KUI_SHELL_SALVAGE;v.app_status=&state;v.salvage_control_trial=false;
     state.line_count=7;state.complete=true;state.passed=true;state.done=state.total;v.busy=false;
     strcpy(state.lines[1],"Targets 12  recovered 12  remaining 0");
@@ -1825,7 +1894,12 @@ static void round_five_rendering(void) {
     strcpy(state.lines[4],"TOSEC: FULL TRACK MATCH");
     strcpy(state.lines[5],"SWORD OF THE BERSERK");
     strcpy(state.lines[6],"/KUI/salvage/job-0001");
-    render(&v);assert(strstr(drawn,"remaining 0") && strstr(drawn,"Saved bytes: every track") && strstr(drawn,"FULL TRACK MATCH"));
+    s.salvage_dashboard=(struct kui_salvage_dashboard){.known=true,.counts_known=true,.targets=12,.recovered=12,.remaining=0};
+    strcpy(s.salvage_dashboard.title,"SWORD OF THE BERSERK");
+    render(&v);assert(strstr(drawn,"Sectors remaining: 0") && strstr(drawn,"All targets resolved; every saved track byte verified") && strstr(drawn,"FULL TRACK MATCH"));
+    state.passed=false;state.errors=1;
+    strcpy(state.message,"Saved candidate reads differ; recovery remains blocked");render(&v);
+    assert(strstr(drawn,"Saved candidate reads differ") && strstr(drawn,"recovery remains blocked"));
 }
 static struct kui_games_detail launch_detail(bool ce, bool cd) {
     struct kui_games_detail detail={.valid=true,.format=cd?KUI_GAME_IMAGE_CUE:KUI_GAME_IMAGE_GDI,
@@ -4713,10 +4787,10 @@ static void vmu_menu_cleanup_controls(void) {
     assert(kui_shell_startup_page(UINT_MAX)==KUI_SHELL_HOME);
     reset(KUI_SHELL_HOME);s.home_selected=home_index(KUI_SHELL_DISC_TOOLS);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_DISC_TOOLS);
-    press(KUI_SHELL_DOWN,false);
+    press(KUI_SHELL_UP,false);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GD_PLAY);
     assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_DISC_TOOLS);
-    press(KUI_SHELL_UP,false);
+    press(KUI_SHELL_DOWN,false);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_RIPPER);
     assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_DISC_TOOLS);
     assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_HOME);
@@ -4830,7 +4904,7 @@ static void game_vmu_card_info_controls(void) {
 
 int main(int argc,char **argv) {
     if(argc==2 && !strcmp(argv[1],"--salvage-drive")) {
-        round_five_controls();salvage_drive_controls();round_five_rendering();
+        round_five_controls();salvage_drive_controls();salvage_speed_probe_controls();salvage_read_probe_controls();round_five_rendering();
         puts("PASS salvage drive settings: default, navigation, wrap, busy guard, boot reset and rendering");return 0;
     }
     vmu_menu_cleanup_controls();game_vmu_card_info_controls();
@@ -4866,7 +4940,7 @@ int main(int argc,char **argv) {
     ripper_saved_job_controls();ripper_folder_label_controls();ripper_label_keyboard_purpose_controls();
     ripper_saved_job_rendering();
     rendering_semantics(); reference_and_destination_rendering(); new_pages_rendering();
-    music_and_boot_controls(); music_and_boot_rendering(); round_four_rendering(); round_five_controls(); salvage_drive_controls(); round_five_rendering();
+    music_and_boot_controls(); music_and_boot_rendering(); round_four_rendering(); round_five_controls(); salvage_drive_controls(); salvage_speed_probe_controls(); salvage_read_probe_controls(); round_five_rendering();
     files_controls(); files_rendering();
     ftp_controls(); ftp_rendering();
     wifi_controls(); wifi_rendering(); wifi_update_controls(); wifi_update_rendering();

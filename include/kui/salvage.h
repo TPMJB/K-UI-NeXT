@@ -28,6 +28,7 @@ enum kui_salvage_sd_phase { KUI_SALVAGE_SD_NONE, KUI_SALVAGE_SD_JOURNAL,
 struct kui_salvage_status {
     enum kui_salvage_result result;
     bool first_pass_complete, complete, collection_active;
+    bool session_reused, session_retained; /* Same-boot lease; never persistent authority. */
     enum kui_salvage_sd_phase sd_phase;
     uint64_t sd_done, sd_total;
     unsigned track, tracks, pass, pass_limit;
@@ -93,7 +94,18 @@ struct kui_salvage_options {
      * immediately and comparison reads never replace it. */
     bool control_trial;
     int (*trial_select)(void *ctx,unsigned profile);
+    /* Optional exclusive-worker session lease. Zero/NULL preserves the full
+     * historical replay/reconciliation path. The caller supplies a nonzero
+     * ownership epoch and exact 32-byte immutable physical-card fingerprint,
+     * invalidating the lease after other job mutations, untracked storage activity, media change,
+     * storage errors, or uncertain drive cleanup. Never derive this from a
+     * displayed title or from persistent cache metadata. */
+    uint64_t session_epoch;
+    const uint8_t *session_card;
 };
+/* Single-worker/idle use only. Erases the private RAM receipt; no files or
+ * persistent settings are changed. Reboot also starts without a receipt. */
+void kui_salvage_session_invalidate(void);
 /* NEW finds identity with one probe per prospective candidate (two matching
  * reads for audio), then collects readable sectors and records holes durably.
  * The stronger exact saved-anchor retry budget applies to Resume/latest.

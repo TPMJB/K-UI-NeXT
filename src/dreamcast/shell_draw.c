@@ -120,7 +120,9 @@ static void footer(struct paint *p, const struct kui_shell *s,
     rule(p,416);
     bool song_page=s->page==KUI_SHELL_HOME || s->page==KUI_SHELL_RIPPER;
     const char *controls=v->video_trial ? "A Keep mode   B Revert" :
-        v->busy ? (s->page==KUI_SHELL_WIFI && s->wifi.firmware_committing?"Finishing update; keep the console powered on":
+        v->busy ? (s->page==KUI_SHELL_SALVAGE && !s->salvage_trial_result?
+            (s->salvage_details?"Y Overview   B Stop safely":"Y Details   B Stop safely"):
+            s->page==KUI_SHELL_WIFI && s->wifi.firmware_committing?"Finishing update; keep the console powered on":
             song_page?"B Stop safely   L/R Songs":s->page==KUI_SHELL_FTP?"B Stop the server":"B Stop safely") :
         s->confirm_gd_boot ? "A Exit to BIOS   B Cancel" :
         s->confirm_quick_resume ? "A Quick resume   B Cancel" :
@@ -135,7 +137,8 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->confirm_music_clear ? "A Clear music cache   B Cancel" :
         s->confirm_restart ? "A Restart console   B Cancel" :
         s->confirm_repair_in_place ? "A Repair in place   B Cancel" :
-        s->confirm_salvage ? (s->confirm_salvage_defer?"A Resume past range   B Cancel":"A Start salvage   B Cancel") :
+        s->confirm_salvage_check ? "A Start full check   B Cancel" :
+        s->confirm_salvage ? (s->confirm_salvage_defer?"A Resume past range   B Cancel":"A Start recovery   B Cancel") :
         s->confirm_storage_test ? "A Start test   B Cancel" :
         s->confirm_wifi_forget ? "A Forget the network   B Cancel" :
         s->confirm_wifi_update ? "A Update firmware   B Cancel" :
@@ -144,6 +147,7 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->page==KUI_SHELL_SETTINGS ? "A Save / Open   B Back / discard" :
         s->page==KUI_SHELL_RIPPER_SETTINGS ? "A Save   B Back / discard" :
         s->page==KUI_SHELL_CLOCK ? "A Set clock   X Reload   B Settings" :
+        s->page==KUI_SHELL_CRC_SCAN && s->scan_return==KUI_SHELL_DISC_TOOLS ? "A Verify saved dump   B Disc tools" :
         s->page==KUI_SHELL_CRC_SCAN ? (s->recovery_operation==4u?"A Start new copy   B Advanced":s->recovery_operation==1u || s->recovery_operation==3u?
             "A Repair / Resume   B Advanced":s->recovery_operation==2u?
             "A Reread again   B Advanced":"A Scan again   B Advanced") :
@@ -164,11 +168,10 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->page==KUI_SHELL_VMU_IMPORT ? (s->confirm_vmu_import?"A Stage SD backup   B SD backups":
             s->vmu_import_staged?"B SD backups":"A Check again   B SD backups") :
         s->page==KUI_SHELL_SALVAGE ? (s->salvage_trial_result?
-            "A Drive controls   B Advanced":s->salvage_selected==1?
-            "A Resume   Y Resume past next range   B Advanced":"A Start / Open   B Advanced") :
-        s->page==KUI_SHELL_SALVAGE_DRIVE ? (s->salvage_drive_selected==2?
-            "UP/DOWN Select   A Run trial   B Salvage":s->salvage_drive_selected==3?
-            "UP/DOWN Select   A Return   B Salvage":"UP/DOWN Select   LEFT/RIGHT or A Change   B Salvage") :
+            (s->salvage_result_return==KUI_SHELL_SALVAGE?"A Recovery   B Recovery":"A Diagnostics   B Diagnostics"):
+            "D-pad Select   A Start / Open   B Disc tools") :
+        s->page==KUI_SHELL_SALVAGE_OPTIONS ? "UP/DOWN Select   A Change / Open   B Recovery" :
+        s->page==KUI_SHELL_SALVAGE_DRIVE ? "D-pad Select   A Run / Open   B Recovery" :
         s->page==KUI_SHELL_SYSTEM_TOOLS ? "D-pad Select   A Open   B Settings" :
         s->page==KUI_SHELL_VMU_RESTORE ? "UP/DOWN Scroll   B Back   LEFT/RIGHT Target   START Page" :
         s->page==KUI_SHELL_DESTINATION ? "B Parent   START Cancel   LEFT/RIGHT Page" :
@@ -230,8 +233,8 @@ static void footer(struct paint *p, const struct kui_shell *s,
  * All icons are embedded RGB565 assets with separate list-sized artwork. */
 struct home_app {enum kui_shell_page page;const char *name,*category,*details[3];unsigned art;};
 static const struct home_app home_apps[KUI_SHELL_HOME_APPS]={
-    {KUI_SHELL_DISC_TOOLS,"Disc tools","Rip or play a disc",
-        {"Rip discs and recover damaged reads.","Resume and verify saved dumps.","Or boot the disc through the BIOS."},KUI_ART_ICON_DISC_RIPPER},
+    {KUI_SHELL_DISC_TOOLS,"Disc tools","Copy, recover or play",
+        {"Copy discs or recover damaged reads.","Resume and verify saved dumps.","Or boot the disc through the BIOS."},KUI_ART_ICON_DISC_RIPPER},
     {KUI_SHELL_VMU_TOOLS,"VMU tools","Save files",
         {"Browse virtual and physical cards.","Import saves and assign game cards.","Back up or restore your saves."},KUI_ART_ICON_VMU_MANAGER},
     {KUI_SHELL_NETWORK,"Network","Connectivity",
@@ -291,15 +294,17 @@ static void disc_tools(struct paint *p,const struct kui_shell *s,const struct ku
     char inserted[160];snprintf(inserted,sizeof(inserted),"Inserted: %s",
         v->inserted_title&&v->inserted_title[0]?v->inserted_title:"No disc detected");
     label(p,40,140,CYAN,inserted);
-    const char *names[]={"Rip a disc","Play inserted disc"};
-    const char *details[]={"Capture, resume, verify and recover damaged reads.",
+    const char *names[]={"Copy a disc","Recover a damaged disc","Verify a saved dump","Play inserted disc"};
+    const char *details[]={"Make a normal copy, or resume one already started.",
+        "Keep readable data and work on damaged sectors.",
+        "Check an existing dump saved on the SD card.",
         "Leave K-UI and boot the disc through the console BIOS."};
-    for(unsigned i=0;i<2;i++) {
-        unsigned y=184+i*86;panel(p,32,y,576,72,i==s->disc_tools_selected?SELECTED:PANEL);
-        label(p,48,y+12,i==s->disc_tools_selected?WHITE:CYAN,names[i]);
-        label(p,48,y+40,MUTED,details[i]);
+    for(unsigned i=0;i<4;i++) {
+        unsigned y=164+i*58;panel(p,32,y,576,52,i==s->disc_tools_selected?SELECTED:PANEL);
+        label(p,48,y+7,i==s->disc_tools_selected?WHITE:CYAN,names[i]);
+        label(p,48,y+29,MUTED,details[i]);
     }
-    label(p,40,382,MUTED,"Ripping options and recovery jobs are inside Rip a disc.");
+    label(p,40,396,MUTED,"Choose what you want to do with the disc or saved copy.");
 }
 static void memory(struct paint *p, unsigned y, const struct kui_shell_view *v) {
     char text[73];
@@ -946,88 +951,179 @@ static void vmu_actions(struct paint *p,const struct kui_shell *s,const struct k
             "Backup card saved; assign games from Virtual VMUs.":status->message);
     } else label(p,40,386,status->complete&&!status->passed?AMBER:CYAN,status->message);
 }
+/* Keep complete operation messages visible without crowding the dashboard.
+ * Three short lines fit above the footer, including a full 127-byte error. */
+static unsigned recovery_outcome(struct paint *p,const char *message,uint16_t color) {
+    unsigned lines=0;
+    while(message && *message && lines<3) {
+        while(*message==' ')++message;
+        char text[160];snprintf(text,sizeof(text),"%s",message);
+        size_t count=strlen(text),take=count;
+        while(take && word_width(p,text,false)>568u)text[--take]=0;
+        if(take<count) {
+            size_t space=take;while(space && text[space-1]!=' ')--space;
+            if(space)take=space-1;
+            text[take]=0;
+        }
+        if(!take)break;
+        label(p,40,370+lines*15,color,text);++lines;message+=take;
+    }
+    return lines;
+}
 static void salvage(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
     const struct kui_app_status *status=v->app_status;
-    bool trial_result=v->salvage_control_trial && s->salvage_trial_result && status && status->complete;
-    title(p,40,108,"Damaged disc salvage");
-    if((v->busy || trial_result) && v->salvage_control_trial) {
+    bool diagnostic=v->salvage_diagnostic==KUI_SALVAGE_DIAGNOSTIC_SAVED_READS ||
+        v->salvage_diagnostic==KUI_SALVAGE_DIAGNOSTIC_G1_MODE ||
+        v->salvage_diagnostic==KUI_SALVAGE_DIAGNOSTIC_REVALIDATE;
+    bool trial_result=(v->salvage_control_trial || v->salvage_speed_probe || diagnostic) &&
+        s->salvage_trial_result && status && status->complete;
+    bool showing=v->busy || trial_result;
+    title(p,40,108,showing && v->salvage_diagnostic==KUI_SALVAGE_DIAGNOSTIC_SAVED_READS?
+        "Saved repair read comparison":showing && v->salvage_diagnostic==KUI_SALVAGE_DIAGNOSTIC_G1_MODE?
+        "Direct G1 drive settings":showing && v->salvage_diagnostic==KUI_SALVAGE_DIAGNOSTIC_REVALIDATE?
+        "Saved salvage revalidation":showing && v->salvage_speed_probe?
+        "Drive speed support probe":showing?"Disc recovery":"Recover a damaged disc");
+    if(showing && v->salvage_diagnostic==KUI_SALVAGE_DIAGNOSTIC_SAVED_READS) {
+        label(p,40,138,MUTED,"Read-only SD test; saved repairs remain blocked");
+    } else if(showing && v->salvage_diagnostic==KUI_SALVAGE_DIAGNOSTIC_G1_MODE) {
+        label(p,40,138,MUTED,"Bypass BIOS; verify mode requests and restoration");
+    } else if(showing && v->salvage_diagnostic==KUI_SALVAGE_DIAGNOSTIC_REVALIDATE) {
+        label(p,40,138,MUTED,"Full saved-data check; recovery starts separately");
+    } else if(showing && v->salvage_speed_probe) {
+        label(p,40,138,MUTED,"Read-only disc test; saved recovery jobs unchanged");
+    } else if((v->busy || trial_result) && v->salvage_control_trial) {
         label(p,40,138,MUTED,"Bounded trial: up to 8 sectors; fixed comparison profiles");
-    } else if(v->busy && (s->salvage_drive_options.speed || s->salvage_drive_options.retries)) {
+    } else if(v->busy && s->salvage_details && (s->salvage_drive_options.speed || s->salvage_drive_options.retries)) {
         char requested[96];
         snprintf(requested,sizeof(requested),"Requested speed: %s; drive retries: %s",
             kui_drive_speed_name(s->salvage_drive_options.speed),
             kui_drive_retry_name(s->salvage_drive_options.retries));
         label(p,40,138,MUTED,requested);
-    } else label(p,40,138,MUTED,"Separate recovery jobs; normal captures remain untouched.");
-    if((v->busy || trial_result) && status && status->line_count) {
+    } else if(showing) label(p,40,138,MUTED,v->disc_title && v->disc_title[0]?v->disc_title:
+        v->inserted_title && v->inserted_title[0]?v->inserted_title:"Recovery keeps checked data and retries missing sectors.");
+    if((v->busy || trial_result) && status) {
         panel(p,32,160,576,240,PANEL);
-        app_status(p,status,v->busy,170);
-        unsigned count=status->line_count<KUI_APP_LINES?status->line_count:KUI_APP_LINES;
-        for(unsigned i=0;i<count && i<7;i++) label(p,40,224+i*23,MUTED,status->lines[i]);
+        if(diagnostic || v->salvage_speed_probe || v->salvage_control_trial || s->salvage_details) {
+            app_status(p,status,v->busy,170);
+            unsigned count=status->line_count<KUI_APP_LINES?status->line_count:KUI_APP_LINES;
+            bool compact=v->salvage_speed_probe || diagnostic;
+            unsigned limit=compact?9u:7u,spacing=compact?19u:23u;
+            for(unsigned i=0;i<count && i<limit;i++) label(p,40,224+i*spacing,MUTED,status->lines[i]);
+        } else {
+            label(p,40,170,MUTED,"Collection / saved-data check progress");
+            app_status(p,status,v->busy,194);
+            const struct kui_salvage_dashboard *saved=&s->salvage_dashboard;
+            char text[96];
+            if(saved->known && saved->counts_known) {
+                snprintf(text,sizeof(text),"Repairs saved: %lu",(unsigned long)saved->recovered);
+                label(p,40,258,WHITE,text);
+                snprintf(text,sizeof(text),"Sectors still unresolved: %lu",(unsigned long)saved->remaining);
+                label(p,40,288,WHITE,text);
+            } else {
+                label(p,40,258,WHITE,"Checking the matching disc and saved recovery job.");
+                label(p,40,288,MUTED,"Repair counts appear after saved progress is checked.");
+            }
+            label(p,40,336,MUTED,"Copied data and checked repairs are counted separately.");
+            label(p,40,364,CYAN,"B stops safely and keeps saved progress.");
+            label(p,40,384,MUTED,"Y shows sector addresses and detailed read results.");
+        }
         return;
     }
-    const char *names[]={"New salvage job","Resume latest salvage","Retry unresolved sectors","Recovery pass limit","Read back recovered files","Damaged disc controls"};
-    for(unsigned i=0;i<6;i++) {
-        unsigned y=160+i*25;panel(p,32,y,576,23,i==s->salvage_selected?SELECTED:PANEL);
-        label(p,48,y+3,i==s->salvage_selected?WHITE:MUTED,names[i]);
-        if(i==3) {
-            char value[16];
-            if(s->salvage_passes) snprintf(value,sizeof(value),"%u",s->salvage_passes);
-            else snprintf(value,sizeof(value),"Until stopped");
-            label(p,468,y+3,CYAN,value);
-        }
-        if(i==4)label(p,548,y+3,CYAN,s->salvage_verify_files?"On":"Off");
+    const struct kui_salvage_dashboard *saved=&s->salvage_dashboard;
+    const char *disc=saved->known && saved->title[0]?saved->title:
+        v->inserted_title && v->inserted_title[0]?v->inserted_title:"Insert the disc you want to recover";
+    label(p,40,140,CYAN,disc);
+    panel(p,32,160,576,66,PANEL);
+    char summary[112];
+    if(saved->known && saved->counts_known) {
+        snprintf(summary,sizeof(summary),"Repairs saved: %lu     Sectors remaining: %lu",
+            (unsigned long)saved->recovered,(unsigned long)saved->remaining);
+        label(p,48,170,WHITE,summary);
+    } else label(p,48,170,WHITE,saved->known?"Saved job found; its data is checked when work starts.":
+        "Saved progress is checked when you continue.");
+    label(p,48,198,v->drive_reset_required || (saved->known && saved->blocked) || (status && status->errors)?AMBER:MUTED,
+        v->drive_reset_required?"The drive needs a restart before recovery can continue.":
+        status && status->errors?"The last recovery attempt ended with an error; see below.":
+        saved->known && saved->blocked?"Check saved progress before continuing recovery.":
+        status && status->stopped?"Stopped safely; saved progress is kept.":
+        saved->known?"Last checked progress; the disc and job are checked again on start.":
+        "Continue finds the matching job and keeps its saved progress.");
+    const char *names[]={saved->known && saved->blocked?"Check saved progress":"Continue recovery",
+        "Start a new recovery","Recovery options","Diagnostics"};
+    for(unsigned i=0;i<KUI_SHELL_RECOVERY_COUNT;i++) {
+        unsigned y=240+i*32;panel(p,32,y,576,27,i==s->salvage_selected?SELECTED:PANEL);
+        label(p,48,y+6,i==s->salvage_selected?WHITE:MUTED,names[i]);
     }
-    if(s->salvage_selected==1) {
-        label(p,40,318,CYAN,"Y Resume past next range (confirmation)");
-        label(p,40,340,MUTED,"Marks up to 32 next sectors as unresolved zeros.");
-        label(p,40,362,MUTED,"Progress kept. Restart first if drive reset is required.");
-    } else if(s->salvage_selected==5) {
-        label(p,40,318,CYAN,"A opens read speed and drive retry settings.");
-        label(p,40,340,MUTED,"Applies to salvage only; choices reset on restart.");
-        label(p,40,362,MUTED,"Drive support for requested settings can vary.");
-    } else if(status && status->complete && status->line_count>4) {
-        label(p,40,318,MUTED,status->lines[1]);
-        label(p,40,340,MUTED,status->lines[3]);
-        label(p,40,362,status->passed?CYAN:AMBER,status->lines[4]);
+    static const char *const help[][2]={
+        {"Continue collecting data, then retry the remaining sectors.","Your saved repairs and existing recovery job are kept."},
+        {"Start a separate recovery job for the inserted disc.","Existing recovery jobs are kept; confirmation follows."},
+        {"Set drive retries, recovery passes and final verification.","Advanced recovery actions are here too."},
+        {"Check saved progress or investigate drive and SD problems.","Tests explain their scope before they start."}
+    };
+    unsigned selected=s->salvage_selected<KUI_SHELL_RECOVERY_COUNT?s->salvage_selected:0;
+    if(v->drive_reset_required) {
+        recovery_outcome(p,"Restart the console before continuing recovery. Your saved progress is kept.",AMBER);
+    } else if(status && (status->complete || status->stopped || status->errors) && status->message[0]) {
+        unsigned lines=recovery_outcome(p,status->message,status->stopped?MUTED:status->errors?AMBER:status->passed?CYAN:AMBER);
+        if(status->passed && !status->errors && !status->stopped && status->line_count>4 && lines<3)
+            label(p,40,370+lines*15,CYAN,status->lines[4]);
+    } else if(selected==KUI_SHELL_RECOVERY_CONTINUE && saved->known && saved->blocked) {
+        label(p,40,380,CYAN,"Saved progress needs verification before recovery.");
+        label(p,40,398,MUTED,"Review the estimated duration before starting the check.");
     } else {
-        label(p,40,318,MUTED,"Collect good data, then retry holes automatically.");
-        label(p,40,340,MUTED,"Catalogue check follows every resolved job.");
-        label(p,40,362,MUTED,"Readback checks all saved bytes; it takes extra time.");
+        label(p,40,380,CYAN,help[selected][0]);label(p,40,398,MUTED,help[selected][1]);
     }
-    app_status(p,v->app_status,v->busy,390);
+
+}
+static void salvage_options(struct paint *p,const struct kui_shell *s) {
+    title(p,40,108,"Recovery options");
+    label(p,40,138,MUTED,"Settings apply when recovery starts; changing them starts no reads.");
+    const char *names[]={"Firmware retries","Recovery pass limit","Verify completed files","Read speed",
+        "Skip next unread range","Return to recovery"};
+    for(unsigned i=0;i<KUI_SHELL_RECOVERY_OPTIONS_COUNT;++i) {
+        unsigned y=164+i*27;panel(p,32,y,576,24,i==s->salvage_options_selected?SELECTED:PANEL);
+        label(p,48,y+4,i==s->salvage_options_selected?WHITE:MUTED,names[i]);
+        if(i==KUI_SHELL_RECOVERY_RETRIES)label(p,460,y+4,CYAN,kui_drive_retry_name(s->salvage_drive_options.retries));
+        if(i==KUI_SHELL_RECOVERY_SPEED)label(p,460,y+4,CYAN,kui_drive_speed_name(s->salvage_drive_options.speed));
+        if(i==KUI_SHELL_RECOVERY_VERIFY)label(p,548,y+4,CYAN,s->salvage_verify_files?"On":"Off");
+        if(i==KUI_SHELL_RECOVERY_PASSES) {
+            char value[24];if(s->salvage_passes)snprintf(value,sizeof(value),"%u",s->salvage_passes);
+            else snprintf(value,sizeof(value),"Until stopped");
+            label(p,460,y+4,CYAN,value);
+        }
+    }
+    static const char *const help[][3]={
+        {"The drive's own decoding retries for each read command.","Recovery passes retry the remaining sectors separately.","Requested settings are checked when recovery starts."},
+        {"How many sweeps to make through unresolved sectors.","Until stopped keeps trying until complete or you press B.","Each sweep retains repairs that pass their checks."},
+        {"After all sectors recover, read back every saved track.","This takes extra time and checks the stored files.","Catalogue comparisons remain separate from saved-byte checks."},
+        {"Optional: some drives ignore requested speed changes.","A requested speed is not a measured physical speed.","Leave this unchanged unless testing your drive."},
+        {"Advanced: continue past up to 32 uncommitted sectors.","They remain unresolved and need later disc recovery.","Requires confirmation; restart first if the drive requires it."},
+        {"Return with these choices ready for recovery.","Choices reset when the console restarts.","Drive settings are restored when recovery stops safely."}
+    };
+    unsigned selected=s->salvage_options_selected<KUI_SHELL_RECOVERY_OPTIONS_COUNT?s->salvage_options_selected:0;
+    for(unsigned i=0;i<3;++i)label(p,40,342+i*24,i?MUTED:CYAN,help[selected][i]);
 }
 static void salvage_drive(struct paint *p,const struct kui_shell *s) {
-    title(p,40,108,"Damaged disc controls");
-    label(p,40,138,MUTED,"Salvage only; defaults leave drive settings unchanged.");
-    const char *names[]={"Read speed","Drive retries","Run bounded control trial","Return to salvage"};
-    for(unsigned i=0;i<4;++i) {
-        unsigned y=160+i*30;
-        panel(p,32,y,576,28,i==s->salvage_drive_selected?SELECTED:PANEL);
-        label(p,48,y+6,i==s->salvage_drive_selected?WHITE:MUTED,names[i]);
-        if(i==0)label(p,460,y+6,CYAN,kui_drive_speed_name(s->salvage_drive_options.speed));
-        if(i==1)label(p,460,y+6,CYAN,kui_drive_retry_name(s->salvage_drive_options.retries));
+    title(p,40,108,"Recovery diagnostics");
+    label(p,40,138,MUTED,"Saved-data checks and optional drive tests.");
+    const char *names[]={"Full saved progress check","Saved read comparison","Bounded recovery trial",
+        "Speed support test","Direct G1 probe","Return to recovery"};
+    for(unsigned i=0;i<KUI_SHELL_RECOVERY_DIAGNOSTICS_COUNT;++i) {
+        unsigned y=164+i*27;panel(p,32,y,576,24,i==s->salvage_drive_selected?SELECTED:PANEL);
+        label(p,48,y+4,i==s->salvage_drive_selected?WHITE:MUTED,names[i]);
     }
-    if(s->salvage_drive_selected==0) {
-        label(p,40,302,CYAN,"Speed settings are optional; drives may ignore them.");
-        label(p,40,326,MUTED,"Actual speed needs measurement on your drive.");
-    } else if(s->salvage_drive_selected==1) {
-        label(p,40,302,CYAN,"Firmware decoding retries per command.");
-        label(p,40,326,MUTED,"Recovery passes and application attempts are separate.");
-    } else if(s->salvage_drive_selected==2) {
-        label(p,40,302,CYAN,"Existing collected job; unresolved data sectors only.");
-        label(p,40,324,MUTED,"Up to 8 sectors, 4 profiles, 32 comparison reads.");
-        label(p,40,346,MUTED,"5 min soft limit; active command finishes first.");
-        label(p,40,368,MUTED,"Fixed profiles ignore the manual choices above.");
-        label(p,40,390,MUTED,"All validated repairs are saved immediately.");
-        return;
-    } else {
-        label(p,40,302,CYAN,"A returns with these choices ready for salvage.");
-        label(p,40,326,MUTED,"Changing a choice here does not start disc reads.");
-    }
-    label(p,40,366,MUTED,"Choices reset when the console restarts.");
-    label(p,40,390,MUTED,"Drive settings are restored when salvage stops safely.");
+    static const char *const help[][3]={
+        {"Check the journal, repair records and every saved track byte.","A full pass can unblock consistent saved progress.","May take 40-50 minutes for a GD-ROM; confirmation follows."},
+        {"Compare saved repair reads using four SD transfer profiles.","Saved job files are read-only; this cannot unblock recovery.","Send the saved diagnostic report when it finishes."},
+        {"Compare recovery settings on up to 8 unresolved sectors.","Checked repairs are saved; active reads finish before Stop.","Fixed profiles and a five-minute soft limit."},
+        {"Test speed settings through the BIOS and restore them.","No saved job is needed or changed; no sectors are repaired.","Read times alone do not establish physical drive speed."},
+        {"Test mode commands directly over G1, bypassing the BIOS.","Checks accepted settings and original restoration.","No sector repairs or saved recovery job changes."},
+        {"Return to the recovery dashboard.","Starting recovery remains a separate action.","Keep reports when investigating an error."}
+    };
+    unsigned selected=s->salvage_drive_selected<KUI_SHELL_RECOVERY_DIAGNOSTICS_COUNT?s->salvage_drive_selected:0;
+    for(unsigned i=0;i<3;++i)label(p,40,342+i*24,i?MUTED:CYAN,help[selected][i]);
 }
+
 static void system_tools(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
     title(p,40,108,"System tools");
     words(p,40,138,608,MUTED,s->system_compare_path[0]?s->system_compare_path:
@@ -1194,7 +1290,7 @@ static void vmu_import(struct paint *p,const struct kui_shell *s,const struct ku
     label(p,40,396,MUTED,"Creates an SD backup only; restore separately from backups.");
 }
 static void crc_scan(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
-    title(p,40,108,s->recovery_operation==4u?"Start a new repair copy":s->recovery_operation==3u?"Repair / resume in place":s->recovery_operation==1u?"Repair / resume a separate copy":s->recovery_operation==2u?
+    title(p,40,108,s->scan_return==KUI_SHELL_DISC_TOOLS && !s->recovery_operation?"Verify a saved dump":s->recovery_operation==4u?"Start a new repair copy":s->recovery_operation==3u?"Repair / resume in place":s->recovery_operation==1u?"Repair / resume a separate copy":s->recovery_operation==2u?
         "Suspect-sector reread evidence":"Advanced CRC scan");
     words(p,40,138,608,CYAN,s->browse_path,false);
     label(p,40,160,MUTED,s->recovery_operation==4u?"New transaction; source and previous repair jobs retained.":s->recovery_operation==3u?"Targeted original-track changes; durable backups retained.":s->recovery_operation==1u?"Matching disc required; original dump files are read-only.":
@@ -1230,6 +1326,14 @@ static void app_confirmation(struct paint *p,const struct kui_shell *s) {
         label(p,72,276,MUTED,"Original sectors and repair evidence are retained.");
         label(p,72,302,AMBER,"B stops and keeps checked progress for Resume.");
         label(p,72,334,CYAN,"A Repair in place");
+    } else if(s->confirm_salvage_check) {
+        label(p,72,188,WHITE,"CHECK ALL SAVED RECOVERY DATA?");
+        label(p,72,222,MUTED,"Checks the journal, repair records and saved tracks.");
+        label(p,72,248,MUTED,"Every saved track byte is read twice and compared.");
+        label(p,72,276,AMBER,"Allow roughly 40-50 minutes for a full GD-ROM.");
+        label(p,72,302,MUTED,"B stops safely. An incomplete check keeps recovery blocked.");
+        label(p,72,328,MUTED,"After a pass, continue recovery as a separate action.");
+        label(p,72,356,CYAN,"A Start full check");
     } else if(s->confirm_salvage) {
         char line[96];
         if(s->confirm_salvage_defer) {
@@ -1241,9 +1345,9 @@ static void app_confirmation(struct paint *p,const struct kui_shell *s) {
             label(p,72,328,MUTED,"If drive reset is required, restart the console first.");
             label(p,72,356,CYAN,"A Resume past range");
         } else {
-            label(p,72,188,WHITE,"START A DAMAGED-DISC SALVAGE JOB?");
-            label(p,72,222,MUTED,"Collects good data in /KUI/salvage.");
-            label(p,72,248,MUTED,"Skips bad sectors and records each missing address.");
+            label(p,72,188,WHITE,"START A NEW DISC RECOVERY?");
+            label(p,72,222,MUTED,"Collects readable data and keeps existing recovery jobs.");
+            label(p,72,248,MUTED,"Records missing sectors so they can be retried later.");
             if(s->salvage_passes) snprintf(line,sizeof(line),"Then retries holes for up to %u recovery passes.",s->salvage_passes);
             else snprintf(line,sizeof(line),"Then retries holes until resolved or you press B.");
             label(p,72,276,CYAN,line);
@@ -1251,7 +1355,7 @@ static void app_confirmation(struct paint *p,const struct kui_shell *s) {
             label(p,72,328,MUTED,s->salvage_verify_files?
                 "After recovery: full readback and catalogue check.":
                 "After recovery: catalogue check; saved readback off.");
-            label(p,72,356,CYAN,"A Start salvage");
+            label(p,72,356,CYAN,"A Start recovery");
         }
     } else if(s->confirm_wifi_update) {
         char line[96],bytes[16];
@@ -1345,7 +1449,7 @@ static void app_confirmation(struct paint *p,const struct kui_shell *s) {
         label(p,72,302,MUTED,"Existing saves are never overwritten.");
         label(p,72,346,CYAN,"A Restore save");
     }
-    label(p,384,s->confirm_salvage?356:s->confirm_vmu_restore?346:334,WHITE,"B Cancel");
+    label(p,384,(s->confirm_salvage || s->confirm_salvage_check)?356:s->confirm_vmu_restore?346:334,WHITE,"B Cancel");
 }
 static void video_trial(struct paint *p,const struct kui_shell_view *v) {
     box(p,32,132,576,284,NAVY);
@@ -2618,6 +2722,7 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     case KUI_SHELL_VMU_ACTIONS: vmu_actions(&p,s,v); break;
     case KUI_SHELL_SALVAGE: salvage(&p,s,v); break;
     case KUI_SHELL_SALVAGE_DRIVE: salvage_drive(&p,s); break;
+    case KUI_SHELL_SALVAGE_OPTIONS: salvage_options(&p,s); break;
     case KUI_SHELL_SYSTEM_TOOLS: system_tools(&p,s,v); break;
     case KUI_SHELL_VMU_RESTORE: vmu_restore(&p,s,v); break;
     case KUI_SHELL_VMU_COLLECTION: vmu_collection(&p,s,v); break;
@@ -2658,7 +2763,7 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     if(s->confirm_gd_boot) gd_boot_confirmation(&p);
     if(s->confirm_storage_test) storage_test_confirmation(&p,s,v);
     if(s->confirm_clock || s->confirm_defaults || s->confirm_vmu_restore || s->confirm_vmu_delete ||
-       s->confirm_vmu_copy || s->confirm_vmu_copy_all || s->confirm_music_clear || s->confirm_restart || s->confirm_salvage || s->confirm_repair_in_place ||
+       s->confirm_vmu_copy || s->confirm_vmu_copy_all || s->confirm_music_clear || s->confirm_restart || s->confirm_salvage || s->confirm_salvage_check || s->confirm_repair_in_place ||
        s->confirm_wifi_forget || s->confirm_wifi_update) app_confirmation(&p,s);
     if(v->video_trial) video_trial(&p,v);
 }

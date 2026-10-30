@@ -31,8 +31,12 @@ void kui_sd_disconnect(void);
  * Contains no write/sync callbacks; invalid immediately after disconnect. */
 struct kui_media_ops;
 bool kui_sd_raw_read_ops(struct kui_media_ops *out);
-#if KUI_VMU_PROFILE_PREP || KUI_VMU_GAME_CARDS
 struct kui_vmu_sd_identity;
+/* GUI runtime only, while exclusively connected to unmounted healthy SCI.
+ * Read-only CRC-checked card CID/capacity identity; unsupported transports
+ * return false. A protocol failure is not silently retried. */
+bool kui_sd_card_identity(struct kui_vmu_sd_identity *out);
+#if KUI_VMU_PROFILE_PREP || KUI_VMU_GAME_CARDS
 /* Card preparation only: the import tool, and the Games launcher while it
  * maps a game's own card with FatFs unmounted. Caller exclusively owns
  * connected SCI storage, with no filesystem request/optical read running.
@@ -86,6 +90,15 @@ bool kui_disc_controls_end(void);
  * prior verified tuple restored, or -1 unavailable/fatal. */
 bool kui_disc_controls_trial_begin(void);
 int kui_disc_controls_trial_select(void *ctx,unsigned profile);
+/* Original speed, then all eight optional wire codes; one firmware retry.
+ * Returns 1 verified, 0 safely rolled back, -1 ownership/restore unavailable. */
+int kui_disc_controls_speed_select(void *ctx,unsigned selection);
+/* Exclusive opt-in raw G1 diagnostic gate. No BIOS optical entry may run
+ * between begin/end. The caller restores and verifies all raw mode bytes;
+ * end additionally checks the BIOS tuple. Uncertain ownership/restoration
+ * poisons normal drive use until a console restart. */
+bool kui_disc_g1_probe_begin(void);
+bool kui_disc_g1_probe_end(bool restored);
 /* Explicit salvage/repair only. Refuses poisoned, media-changed, cancelled or
  * command-owned state; never clears poison or rearms disabled DMA. Reinitializes
  * with bounded commands and checks the fresh profile/layout against expected.

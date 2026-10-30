@@ -1,0 +1,52 @@
+{
+  "console_build": "49d0a68d2827",
+  "sources": {
+    "G1 Diag.txt": "b878952d29ffcc0b9aae5f68fb85d3300a4ba1ab226793bd74bf72904e906b17",
+    "Saved repair diag.txt": "4e16209d074402e6c27ccd8adcb09cc63b530a2c56fb00e3cd8f437485f2ccf8"
+  },
+  "g1": {
+    "complete": true,
+    "commands": 33,
+    "elapsed_us": 43805,
+    "set_codes": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "set_protocol_completions": "status=50 reason=03 error=00 for every code",
+    "raw_reply_for_all_codes": "0000000000b419000008",
+    "fixed_codes_retained": [],
+    "difference_for_codes_1_through_7": "raw byte 2 only (mask 004)",
+    "all_eight_original_raw_restores_verified": true,
+    "final_bios_tuple_matches": true,
+    "lease_released": true,
+    "restart_required": false,
+    "limit": "No optical sector reads or physical-speed measurement; no verified fixed speeds through the documented BIOS or direct G1 paths tested."
+  },
+  "saved_read": {
+    "candidate_records": 6190,
+    "bulk_aligned_complete": true,
+    "bulk_aligned_read_ms": 31766,
+    "bulk_aligned_sha256": "d6dd83fde8028ac48fde5b2ed14c8a848fabcb83accb78ad8231020a969801fe",
+    "next_profile": "512-byte aligned",
+    "photo_completed_records": 3896,
+    "first_error": {
+      "fatfs": 1,
+      "meaning": "FR_DISK_ERR",
+      "request_bytes": 512,
+      "returned_bytes": 0
+    },
+    "close_error_after_read_failure": true,
+    "complete": false,
+    "budget_expired": false,
+    "record_inconsistency_observed": false,
+    "quarantine_unchanged": true,
+    "underlying_transport_reason": "not logged by this build; not established"
+  },
+  "next_test": "Unaligned/PIO profiles before aligned profiles, with native failure reason and per-profile bus counters. No protocol changes or repair authority."
+}

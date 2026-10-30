@@ -1,0 +1,63 @@
+{
+  "test_build": "ee4af2a4f936",
+  "report": "diagnostics(10).txt",
+  "report_sha256": "0f3f65d363893b2bdabe3162c370b3232a86b5df57266a892ed2b3f8715676d2",
+  "job": "/KUI/salvage/job-0003",
+  "stage": "saved-candidate reconciliation before unresolved-sector recovery",
+  "counts": {
+    "targets": 7017,
+    "repaired": 6190,
+    "unresolved": 827
+  },
+  "candidate": {
+    "target": 5903,
+    "slot": 5324,
+    "file_offset": 27258880,
+    "record_bytes": 5120,
+    "fad": 306949,
+    "first_read": {
+      "record_crc32": "0d25621d",
+      "payload_crc32": "e49c5061",
+      "first_different_byte": 2417,
+      "byte_value": "00"
+    },
+    "fresh_512_byte_reads": {
+      "record_crc32": "5ae4b529",
+      "payload_crc32": "167abcf8",
+      "byte_value": "ff",
+      "all_candidate_checks_passed": true
+    },
+    "prior_uploaded_record": {
+      "sha256": "4929c08d195d3b72a509df165d99eab7740c900bbb4e133b94ddb830e8683840",
+      "record_crc32": "5ae4b529",
+      "payload_crc32": "167abcf8",
+      "matches_fresh_reported_fields_and_crcs": true
+    }
+  },
+  "crc_delta_analysis": {
+    "initial_xor_expected_record": "57c1d734",
+    "payload_delta_after_348_byte_suffix": "57c1d734",
+    "meaning": "Consistent with differences confined to the 2352-byte payload; not proof of exact changed extent."
+  },
+  "io_shape": {
+    "card_cluster_bytes": 131072,
+    "candidate_offset_in_cluster": 126976,
+    "initial_read_split_sectors": [
+      8,
+      2
+    ],
+    "fresh_reads_are_still_cmd18_and_can_use_dma": true
+  },
+  "outcome": {
+    "repair_stopped": true,
+    "quarantine_published": true,
+    "drive_settings_restored_and_verified": true
+  },
+  "limitations": [
+    "The failing initial record bytes were not retained beyond the reported first difference and CRCs.",
+    "The original upload establishes a matching valid reference, not current consistency of every track byte.",
+    "This does not identify the card, DMA, filesystem or post-read memory as the root cause.",
+    "Generic Advanced CRC does not validate or clear this unfinished salvage job; preserve quarantine."
+  ],
+  "next_diagnostic": "Compare fresh-handle bulk and sector-sized reads with DMA and forced PIO; retain full mismatch evidence and keep repair blocked."
+}

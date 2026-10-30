@@ -29,10 +29,14 @@ also blocks continuation. Normal Resume, Quick Resume, Verify and existing
 salvage continuation refuse a quarantined job. Optical read failures and
 ordinary disagreements between optical candidates do not create this marker.
 
-To clear a quarantine, run Advanced CRC on the same saved job and allow the
-full consistent repeat-read to finish. Cancellation, a partial scan or a few
-matching suspect samples cannot clear it. A valid marker for a different
-folder/volume or a corrupt published marker is refused. The explicit repair
+For ordinary capture jobs admitted by Advanced CRC, run it on the same saved
+job and allow the full consistent repeat-read to finish to clear quarantine.
+Unfinished salvage jobs currently have no supported consistency scan to clear
+their quarantine; the ordinary scanner does not validate salvage journal and
+candidate evidence. Preserve those jobs and markers for diagnosis.
+Cancellation, a partial scan or a few matching suspect samples cannot clear
+quarantine. A valid marker for a different folder/volume or a corrupt published
+marker is refused. The explicit repair
 worker can also clear a quarantine after two complete, matching source
 fingerprints under its validated layout/identity contract. For a partial normal
 capture, only its trusted committed prefix is used; its uncommitted tail is

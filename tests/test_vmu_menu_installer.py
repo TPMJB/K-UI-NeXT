@@ -95,7 +95,7 @@ class MenuInstaller(unittest.TestCase):
 
     def test_install_reinstall_and_restore_exact_gui(self):
         result = self.cli()
-        self.assertIn('Home > VMU tools > Virtual VMUs', result.stdout)
+        self.assertIn('GUI update installed.', result.stdout)
         self.assertEqual(self.gui(), self.new)
         backup = json.loads((self.checkpoint()/'backup.json').read_bytes())
         self.assertEqual(backup['native_sha256'], installer.native_hashes(installer.native_files(self.card)))
@@ -380,7 +380,7 @@ class MenuPackager(unittest.TestCase):
         self.source = '0123456789ab'+'0'*28
         self.output = self.work/'delivery'
 
-    def invoke(self, status=''):
+    def invoke(self, status='', name=None):
         # Bundle creation is mocked here; final delivery separately verifies
         # the real complete source bundle and actual compiled GUI.
         def git(*args):
@@ -389,36 +389,48 @@ class MenuPackager(unittest.TestCase):
             Path(arguments[5]).write_bytes(b'mocked source bundle for packaging tests')
             return subprocess.CompletedProcess(arguments, 0)
         args = ['package_vmu_menu.py', '--gui', str(self.gui), '--output', str(self.output)]
+        if name is not None:
+            args.extend(['--name', name])
         with mock.patch.object(packager, 'ROOT', self.root), mock.patch.object(packager, 'git', git), \
              mock.patch.object(packager.subprocess, 'run', bundle), mock.patch.object(sys, 'argv', args):
             packager.main()
 
     def test_gui_only_package_manifest_covers_every_member(self):
         import zipfile
-        self.invoke()
-        archive = next(self.output.glob('*.zip'))
-        with zipfile.ZipFile(archive) as z:
-            prefix = 'K-UI-VMU-Menus-0123456789ab/'
-            members = {name.removeprefix(prefix) for name in z.namelist()}
-            expected = set()
-            for line in z.read(prefix+'SHA256SUMS.txt').decode().splitlines():
-                digest, name = line.split('  ', 1)
-                self.assertEqual(installer.sha(z.read(prefix+name)), digest)
-                expected.add(name)
-            self.assertEqual(members, expected|{'SHA256SUMS.txt'})
-            self.assertFalse(any('retail-native' in name for name in members))
-            metadata = json.loads(z.read(prefix+'menu.json'))
-            self.assertEqual(metadata['replaces'], ['KUI/runtime.kui'])
-            self.assertTrue(metadata['native_runtime_unchanged'])
-            self.assertFalse(metadata['console_compatibility_verified'])
-            self.assertEqual(metadata['source_commit'], self.source)
-            z.extractall(self.work/'extracted')
-        package = self.work/'extracted'/prefix.rstrip('/')
-        _, record, gui, _ = installer.package_data(package)
-        self.assertEqual(gui, self.gui.read_bytes())
-        self.assertEqual(record['build'], '0123456789ab')
+        for name in (None, 'K-UI-Drive-Speed-Probe'):
+            with self.subTest(name=name):
+                prefix = name or 'K-UI-GUI-Update'
+                self.output = self.work/prefix
+                self.invoke(name=name)
+                archive = next(self.output.glob('*.zip'))
+                self.assertEqual(archive.name, prefix+'-0123456789ab.zip')
+                package = self.work/'extracted'/prefix
+                with zipfile.ZipFile(archive) as z:
+                    members = set(z.namelist())
+                    self.assertIn('install.py', members)
+                    self.assertIn('README-FIRST.md', members)
+                    expected = set()
+                    for line in z.read('SHA256SUMS.txt').decode().splitlines():
+                        digest, member = line.split('  ', 1)
+                        self.assertEqual(installer.sha(z.read(member)), digest)
+                        expected.add(member)
+                    self.assertEqual(members, expected|{'SHA256SUMS.txt'})
+                    self.assertFalse(any('retail-native' in member for member in members))
+                    metadata = json.loads(z.read('menu.json'))
+                    self.assertEqual(metadata['replaces'], ['KUI/runtime.kui'])
+                    self.assertTrue(metadata['native_runtime_unchanged'])
+                    self.assertFalse(metadata['console_compatibility_verified'])
+                    self.assertEqual(metadata['source_commit'], self.source)
+                    z.extractall(package)
+                _, record, gui, _ = installer.package_data(package)
+                self.assertEqual(gui, self.gui.read_bytes())
+                self.assertEqual(record['build'], '0123456789ab')
 
     def test_dirty_source_refuses_before_creating_package(self):
+        for name in ('../update', '/tmp/update', 'two words', ''):
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, 'Package name'):
+                self.invoke(name=name)
+            self.assertFalse(self.output.exists())
         with self.assertRaisesRegex(ValueError, 'Commit source changes'):
             self.invoke(' M src/example.c')
         self.assertFalse(self.output.exists())

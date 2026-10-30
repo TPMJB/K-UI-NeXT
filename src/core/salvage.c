@@ -2,6 +2,8 @@
 #include "kui/salvage.h"
 #include "kui/recovery_checks.h"
 #include "kui/recovery_guard.h"
+#include "kui/media.h"
+#include "diskio.h"
 #include <inttypes.h>
 #include <limits.h>
 #include <stdio.h>
@@ -39,7 +41,10 @@ struct salvage {
     bool track_open,packed_open,track_write,packed_write;
     unsigned open_track;
     DWORD track_map_small[32],*track_map_heap;
-    uint8_t header[HEADER_BYTES], event[EVENT_BYTES], patch[PATCH_BYTES];
+    uint8_t header[HEADER_BYTES], event[EVENT_BYTES];
+    /* calloc need not return a 32-byte-aligned object. Align the candidate
+     * buffer inside owned padding, including when heap placement changes. */
+    uint8_t patch_storage[PATCH_BYTES+31u], *patch;
     /* Reconciliation stages a sector-aligned SD window into a 32-byte-aligned
      * address inside data; leading/trailing SD bytes and pointer rounding fit
      * in this bounded padding without a separate allocation. */
@@ -154,8 +159,9 @@ _Static_assert(sizeof(struct salvage)+sizeof(((struct salvage *)0)->data)+
     sizeof(((struct salvage *)0)->scratch)+SALVAGE_TRACK_MAP_WORDS*sizeof(DWORD)<=256u*1024u,
     "Salvage worker, retained acquisition bytes and largest track map must remain bounded");
 /* The target index is a disposable, bounded-RAM acceleration file. The
- * immutable header and ordered journal are the authority; every resume
- * rebuilds this file before using it. Records carry their own checksums so a
+ * immutable header and ordered journal are the authority; cold resumes
+ * rebuild this file. A same-boot exclusive session may reuse only the exact
+ * index bound to its checked RAM receipt. Records carry their own checksums so a
  * bad cache read cannot authorize a repair of another sector. */
 static bool target_put(struct salvage *s,unsigned index,const struct target *t) {
     uint8_t b[TARGET_BYTES]={0};memcpy(b,"KUITGT2",7);put32(b+8,index);
@@ -712,17 +718,75 @@ static bool first_pass(struct salvage *s) {
     s->ready=true;update(s,true);return true;
 }
 static unsigned patch_bytes(struct salvage *s) {return s->packed?PACKED_PATCH_BYTES:PATCH_BYTES;}
+static const char *patch_problem(struct salvage *s,unsigned index,const struct target *t) {
+    const uint8_t *p=s->patch;unsigned bytes=patch_bytes(s);
+    if(memcmp(p,s->packed?"KUISPAT2":"KUISPAT1",8))return "magic/version";
+    if(get32(p+8)!=index)return "target index";
+    if(get32(p+12)!=t->track)return "track";
+    if(get32(p+16)!=t->sector)return "sector";
+    if(get32(p+20)!=(s->plan->tracks[t->track].control==4?1u:2u))return "evidence type";
+    if(memcmp(p+32,s->identity,32))return "job identity";
+    if(get32(p+bytes-4)!=kui_crc32(0,p,bytes-4))return "record CRC";
+    for(unsigned i=64;i<64+KUI_RAW_BYTES;++i)if(p[i])return "nonzero baseline";
+    if(get32(p+24)!=kui_crc32(0,p+64,KUI_RAW_BYTES))return "baseline CRC";
+    if(get32(p+28)!=kui_crc32(0,p+64+KUI_RAW_BYTES,KUI_RAW_BYTES))return "payload CRC";
+    for(unsigned i=64+2*KUI_RAW_BYTES;i<bytes-4;++i)if(p[i])return "reserved bytes";
+    if(s->plan->tracks[t->track].control==4 && sector_check(s,p+64+KUI_RAW_BYTES,s->plan->tracks[t->track].start+t->sector))return "sector validation";
+    return NULL;
+}
+static void patch_report(struct salvage *s,unsigned index,const struct target *t,const char *phase,const char *problem) {
+    const uint8_t *p=s->patch;unsigned bytes=patch_bytes(s);char expected[65],observed[65];
+    kui_hex(s->identity,32,expected);kui_hex(p+32,32,observed);
+    s->ops->log("Salvage candidate %s: target=%u slot=%" PRIu32 " offset=%" PRIu64 " FAD=%" PRIu32 " problem=%s",
+        phase,index,t->patch_slot,(uint64_t)t->patch_slot*PACKED_PATCH_BYTES,
+        s->plan->tracks[t->track].start+t->sector,problem?problem:"none");
+    s->ops->log("Candidate fields expected index/track/sector/type=%u/%" PRIu32 "/%" PRIu32 "/%u got=%" PRIu32 "/%" PRIu32 "/%" PRIu32 "/%" PRIu32,
+        index,t->track,t->sector,s->plan->tracks[t->track].control==4?1u:2u,
+        get32(p+8),get32(p+12),get32(p+16),get32(p+20));
+    s->ops->log("Candidate CRC record stored=%08" PRIx32 " read=%08" PRIx32 " payload stored=%08" PRIx32 " read=%08" PRIx32 " journal=%08" PRIx32,
+        get32(p+bytes-4),kui_crc32(0,p,bytes-4),get32(p+28),kui_crc32(0,p+64+KUI_RAW_BYTES,KUI_RAW_BYTES),t->crc);
+    s->ops->log("Candidate identity expected=%s got=%s; buffer alignment=%u",
+        expected,observed,(unsigned)((uintptr_t)p&31u));
+}
 static bool patch_valid(struct salvage *s,unsigned index) {
     struct target target;if(!target_get(s,index,&target))return false;
-    const struct target *t=&target;const uint8_t *p=s->patch;unsigned bytes=patch_bytes(s);
-    if(memcmp(p,s->packed?"KUISPAT2":"KUISPAT1",8) || get32(p+8)!=index || get32(p+12)!=t->track || get32(p+16)!=t->sector ||
-       get32(p+20)!=(s->plan->tracks[t->track].control==4?1u:2u) || memcmp(p+32,s->identity,32) ||
-       get32(p+bytes-4)!=kui_crc32(0,p,bytes-4))return fail(s,"Invalid published sector backup/candidate; refusing repair");
-    for(unsigned i=64;i<64+KUI_RAW_BYTES;++i)if(p[i])return fail(s,"Sector backup disagrees with the immutable zero baseline");
-    if(get32(p+24)!=kui_crc32(0,p+64,KUI_RAW_BYTES) || get32(p+28)!=kui_crc32(0,p+64+KUI_RAW_BYTES,KUI_RAW_BYTES))return fail(s,"Sector backup CRC mismatch");
-    for(unsigned i=64+2*KUI_RAW_BYTES;i<bytes-4;++i)if(p[i])return fail(s,"Unknown sector backup fields");
-    if(s->plan->tracks[t->track].control==4 && sector_check(s,p+64+KUI_RAW_BYTES,s->plan->tracks[t->track].start+t->sector))return fail(s,"Stored repair candidate no longer passes Mode 1 checks");
+    const char *problem=patch_problem(s,index,&target);
+    if(problem) {
+        patch_report(s,index,&target,"validation",problem);
+        return fail(s,"Invalid published sector backup/candidate; refusing repair");
+    }
     return true;
+}
+/* A successful I/O with invalid evidence is diagnosed once through a fresh
+ * read-only handle and sector-sized, aligned reads. This is never an alternate
+ * admission route: even a fully valid reread stops this invocation. Differing
+ * saved bytes retain the existing full-repeat-scan quarantine requirement. */
+static bool diagnose_packed_candidate(struct salvage *s,unsigned index,const struct target *t,const char *problem) {
+    patch_report(s,index,t,"initial",problem);
+    memcpy(s->repair_data,s->patch,PACKED_PATCH_BYTES);
+    s->packed_open=false;s->packed_write=false;
+    if(!io_close(s,&s->packed_file,true) || stop(s))return false;
+    FIL *f=cached_packed(s,false);if(!f)return false;
+    uint64_t offset=(uint64_t)t->patch_slot*PACKED_PATCH_BYTES;
+    if(f_size(f)<offset+PACKED_PATCH_BYTES)return fail(s,"Published candidate file shortened during diagnostic reread");
+    if(!seek(s,f,offset))return false;
+    for(unsigned at=0;at<PACKED_PATCH_BYTES;at+=512u) {
+        if(stop(s) || !read_exact(s,f,s->patch+at,512u))return false;
+    }
+    if(stop(s))return false;
+    const char *again=patch_problem(s,index,t);
+    if(!again && get32(s->patch+28)!=t->crc)again="journal candidate CRC";
+    patch_report(s,index,t,"fresh sector reread",again);
+    unsigned changed=0;
+    while(changed<PACKED_PATCH_BYTES && s->patch[changed]==s->repair_data[changed])++changed;
+    if(changed<PACKED_PATCH_BYTES) {
+        s->ops->log("Saved candidate reads differ at record byte=%u first=%02x reread=%02x; repair remains stopped",
+            changed,(unsigned)s->repair_data[changed],(unsigned)s->patch[changed]);
+        if(!kui_recovery_guard_mark(s->status->job,s->ops->log))
+            return fail(s,"Saved candidate reads differ; cannot save quarantine; preserve this job");
+        return fail(s,"Saved candidate reads differ; repair blocked; preserve job and see Diagnostics");
+    }
+    return fail(s,"Invalid published sector backup/candidate; fresh reread agrees; refusing repair");
 }
 static bool reconcile_patch_tail(struct salvage *s) {
     if(!s->packed)return true;
@@ -742,7 +806,15 @@ static bool load_patch(struct salvage *s,unsigned index,bool *exists) {
         *exists=t.patch_slot!=NO_PATCH;if(!*exists)return true;
         FIL *f=cached_packed(s,false);if(!f)return false;
         bool ok=seek(s,f,(uint64_t)t.patch_slot*PACKED_PATCH_BYTES) && read_exact(s,f,s->patch,PACKED_PATCH_BYTES);
-        if(ok)ok=patch_valid(s,index) && get32(s->patch+28)==t.crc;
+        if(ok) {
+            struct target checked;if(!target_get(s,index,&checked))return false;
+            if(checked.track!=t.track || checked.sector!=t.sector || checked.patch_slot!=t.patch_slot ||
+               checked.crc!=t.crc || checked.repaired!=t.repaired)
+                return fail(s,"Derived candidate target changed during saved read");
+            const char *problem=patch_problem(s,index,&checked);
+            if(!problem && get32(s->patch+28)!=checked.crc)problem="journal candidate CRC";
+            if(problem)return diagnose_packed_candidate(s,index,&checked,problem);
+        }
         if(!ok && !s->failed)fail(s,"Packed candidate differs from its durable publication");
         return ok;
     }
@@ -1080,8 +1152,203 @@ static bool finish(struct salvage *s) {
     }
     return ok;
 }
+/* This private receipt is an exclusive-worker, same-boot acceleration only.
+ * It is never serialized. Ordinary callers retain the historical cold path.
+ * A full small-index digest binds derived records to the last checked state;
+ * file fences, the fresh header/anchors/guard and caller ownership lease must
+ * all match before the journal and durable-target scans can be omitted. */
+#define SESSION_INDEX_LIMIT (1024u*1024u)
+#define SESSION_HASH_BYTES 32768u
+#define SESSION_FILES 103u
+struct session_file {
+    uint64_t bytes;
+    uint32_t cluster;
+    uint16_t date,time;
+    uint8_t attributes,present;
+};
+struct salvage_session {
+    uint64_t epoch,sequence;
+    uint32_t target_count,recovered_count,patch_count;
+    uint32_t sectors[99],crc[99],baseline[99];
+    bool baselined[99];
+    uint8_t card[32],volume[32],identity[32],index_hash[32],tail_hash[32];
+    char job[KUI_DEST_JOB_CAP];
+    struct session_file files[SESSION_FILES];
+    uint8_t seal[32];
+    bool valid;
+};
+static struct salvage_session session;
+_Static_assert(sizeof(session)<=8192u,"A stopped recovery retains only a compact RAM receipt");
+void kui_salvage_session_invalidate(void) {memset(&session,0,sizeof(session));}
+static void session_seal(uint8_t digest[32]) {
+    struct kui_sha256 hash;kui_sha256_init(&hash);
+    kui_sha256_update(&hash,&session,offsetof(struct salvage_session,seal));
+    kui_sha256_digest(&hash,digest);
+}
+static bool session_volume(struct salvage *s,uint8_t digest[32]) {
+    const struct kui_volume *v=kui_media_volume();uint8_t extent[8];
+    if(!v || !v->count || disk_read(0,s->scratch,0,1)!=RES_OK)
+        return fail(s,"Cannot confirm the saved session volume");
+    if(s->scratch[510]!=0x55 || s->scratch[511]!=0xaa)return false;
+    put32(extent,v->start);put32(extent+4,v->count);
+    struct kui_sha256 hash;kui_sha256_init(&hash);kui_sha256_update(&hash,extent,sizeof(extent));
+    if(!memcmp(s->scratch+3,"EXFAT   ",8)) {
+        kui_sha256_update(&hash,s->scratch+3,8);kui_sha256_update(&hash,s->scratch+64,42);
+        uint8_t active_fat=s->scratch[106]&1u;kui_sha256_update(&hash,&active_fat,1);
+        kui_sha256_update(&hash,s->scratch+108,4); /* dirty/usage are mutable */
+    } else {
+        kui_sha256_update(&hash,"FAT32",5);kui_sha256_update(&hash,s->scratch+11,53);
+        kui_sha256_update(&hash,s->scratch+67,4);
+    }
+    kui_sha256_digest(&hash,digest);return true;
+}
+/* A clean metadata mismatch is a cache miss. Transport/short/close failures
+ * remain operational failures and must never trigger a silent read retry. */
+static int session_file(struct salvage *s,unsigned index,struct session_file *out) {
+    char name[32];uint64_t expected=0;bool optional=false;
+    if(index==0) {snprintf(name,sizeof(name),"header.bin");expected=HEADER_BYTES;}
+    else if(index==1) {snprintf(name,sizeof(name),"journal.bin");expected=s->sequence*EVENT_BYTES;}
+    else if(index==2) {snprintf(name,sizeof(name),"targets.cache");expected=(uint64_t)s->target_count*TARGET_BYTES;}
+    else if(index==3) {snprintf(name,sizeof(name),"patches.bin");expected=(uint64_t)s->patch_count*PACKED_PATCH_BYTES;optional=!expected;}
+    else {
+        unsigned ti=index-4u;const struct kui_capture_track *t=&s->plan->tracks[ti];
+        snprintf(name,sizeof(name),"track%02u.%s",ti+1,t->control==4?"bin":"raw");
+        expected=(uint64_t)(t->end-t->start)*KUI_RAW_BYTES;
+    }
+    memset(out,0,sizeof(*out));path(s,name);FILINFO info;FRESULT result=f_stat(s->path,&info);
+    if(result==FR_NO_FILE)return optional?1:0;
+    if(result!=FR_OK) {fail(s,"Cannot inspect a saved session source");return -1;}
+    if((info.fattrib&AM_DIR) || info.fsize!=expected)return 0;
+    FIL file;result=f_open(&file,s->path,FA_READ);
+    if(result==FR_NO_FILE)return 0;
+    if(result!=FR_OK) {fail(s,"Cannot open a saved session source");return -1;}
+    bool same=f_size(&file)==expected;
+    if(same) {
+        out->bytes=expected;out->cluster=file.obj.sclust;
+        out->date=info.fdate;out->time=info.ftime;out->attributes=info.fattrib;out->present=1;
+    }
+    if(!io_close(s,&file,true))return -1;
+    return same?1:0;
+}
+static int session_tail(struct salvage *s,uint8_t digest[32]) {
+    if(!s->sequence)return 0;
+    path(s,"journal.bin");FIL file;FRESULT result=f_open(&file,s->path,FA_READ);
+    if(result==FR_NO_FILE)return 0;
+    if(result!=FR_OK) {fail(s,"Cannot check the saved session journal tail");return -1;}
+    bool ok=f_size(&file)==s->sequence*EVENT_BYTES;
+    if(ok)ok=seek(s,&file,(s->sequence-1u)*EVENT_BYTES) && read_exact(s,&file,s->event,EVENT_BYTES);
+    if(!io_close(s,&file,true))return -1;
+    if(s->failed)return -1;
+    if(!ok || memcmp(s->event,"KUISJNL1",8) || get64(s->event+8)!=s->sequence ||
+       get32(s->event+508)!=kui_crc32(0,s->event,508) || memcmp(s->event+40,s->identity,32))return 0;
+    struct kui_sha256 hash;kui_sha256_init(&hash);kui_sha256_update(&hash,s->event,EVENT_BYTES);kui_sha256_digest(&hash,digest);
+    return 1;
+}
+static int session_index(struct salvage *s,uint8_t digest[32],bool cancelling) {
+    uint64_t bytes=(uint64_t)s->target_count*TARGET_BYTES;
+    if(!bytes || bytes>SESSION_INDEX_LIMIT)return 0;
+    path(s,"targets.cache");FIL file;FRESULT result=f_open(&file,s->path,FA_READ);
+    if(result==FR_NO_FILE)return 0;
+    if(result!=FR_OK) {fail(s,"Cannot check the saved session index");return -1;}
+    uint8_t *window=(uint8_t *)(((uintptr_t)s->data+31u)&~(uintptr_t)31u);
+    uint8_t *slots=window+SESSION_HASH_BYTES;size_t slot_bytes=(s->patch_count+7u)/8u;
+    if(slot_bytes>SESSION_INDEX_LIMIT/TARGET_BYTES/8u) {io_close(s,&file,true);return 0;}
+    memset(slots,0,slot_bytes);
+    bool ok=f_size(&file)==bytes;unsigned index=0,repaired=0,previous_track=0;uint32_t previous_sector=0;
+    struct kui_sha256 hash;kui_sha256_init(&hash);
+    for(uint64_t at=0;ok && at<bytes;) {
+        if(!cancelling && stop(s)) {ok=false;break;}
+        unsigned n=bytes-at>SESSION_HASH_BYTES?SESSION_HASH_BYTES:(unsigned)(bytes-at);
+        if(!read_exact(s,&file,window,n)) {ok=false;break;}
+        kui_sha256_update(&hash,window,n);
+        for(unsigned off=0;off<n;off+=TARGET_BYTES,++index) {
+            const uint8_t *b=window+off;uint32_t flags=get32(b+20),track=flags&0x7fffffffu,sector=get32(b+12),slot=get32(b+24);
+            bool done=(flags&0x80000000u)!=0;
+            if(memcmp(b,"KUITGT2",8) || get32(b+8)!=index || get32(b+28)!=kui_crc32(0,b,28) ||
+               track>=s->plan->count || sector>=s->plan->tracks[track].end-s->plan->tracks[track].start ||
+               (index && (track<previous_track || (track==previous_track && sector<=previous_sector))) ||
+               (done?(slot>=s->patch_count):(slot!=NO_PATCH || get32(b+16)))) {ok=false;break;}
+            if(done) {
+                uint8_t bit=(uint8_t)(1u<<(slot&7u));if(slots[slot>>3]&bit) {ok=false;break;}
+                slots[slot>>3]|=bit;++repaired;
+            }
+            previous_track=track;previous_sector=sector;
+        }
+        at+=n;
+    }
+    if(!io_close(s,&file,true) || s->failed)return -1;
+    if(!ok || index!=s->target_count || repaired!=s->recovered_count || repaired!=s->patch_count)return 0;
+    kui_sha256_digest(&hash,digest);return 1;
+}
+static void session_restore(struct salvage *s) {
+    memcpy(s->sectors,session.sectors,sizeof(s->sectors));memcpy(s->crc,session.crc,sizeof(s->crc));
+    memcpy(s->baseline,session.baseline,sizeof(s->baseline));memcpy(s->baselined,session.baselined,sizeof(s->baselined));
+    s->sequence=session.sequence;s->target_count=session.target_count;s->recovered_count=session.recovered_count;
+    s->patch_count=session.patch_count;s->ready=true;s->completed=false;
+}
+static void session_state_clear(struct salvage *s) {
+    memset(s->sectors,0,sizeof(s->sectors));memset(s->crc,0,sizeof(s->crc));memset(s->baseline,0,sizeof(s->baseline));
+    memset(s->baselined,0,sizeof(s->baselined));s->sequence=0;s->target_count=0;s->recovered_count=0;s->patch_count=0;
+    s->ready=s->completed=false;
+}
+static bool session_try(struct salvage *s,bool available,enum kui_salvage_action action) {
+    const struct kui_salvage_options *o=s->options;uint8_t digest[32];
+    if(!available || !o->session_epoch || !o->session_card || action!=KUI_SALVAGE_RESUME || o->defer_next_range || o->control_trial)return false;
+    session_seal(digest);
+    if(memcmp(digest,session.seal,32) || o->session_epoch!=session.epoch || memcmp(o->session_card,session.card,32) ||
+       strcmp(s->status->job,session.job) || memcmp(s->identity,session.identity,32)) {
+        s->ops->log("Salvage session miss: ownership, card, job, identity or RAM receipt changed");return false;
+    }
+    if(!session_volume(s,digest) || memcmp(digest,session.volume,32)) {
+        s->ops->log("Salvage session miss: volume fingerprint changed or could not be read");return false;
+    }
+    session_restore(s);bool matched=true;
+    for(unsigned i=0;i<4u+s->plan->count && matched;++i) {
+        struct session_file current;int result=session_file(s,i,&current);
+        matched=result==1 && !memcmp(&current,&session.files[i],sizeof(current));
+        if(!matched)s->ops->log("Salvage session miss: saved source %u metadata/length changed or read failed",i);
+    }
+    if(matched) {
+        matched=session_tail(s,digest)==1 && !memcmp(digest,session.tail_hash,32);
+        if(!matched)s->ops->log("Salvage session miss: journal tail changed or could not be read");
+    }
+    if(matched) {
+        matched=session_index(s,digest,false)==1 && !memcmp(digest,session.index_hash,32);
+        if(!matched)s->ops->log("Salvage session miss: checked target index changed or could not be read");
+    }
+    if(!matched || stop(s) || s->failed) {session_state_clear(s);return false;}
+    path(s,"journal.bin");
+    if(f_open(&s->journal,s->path,FA_READ|FA_WRITE)!=FR_OK)return fail(s,"Cannot reopen the checked session journal");
+    s->journal_open=true;
+    if(f_size(&s->journal)!=s->sequence*EVENT_BYTES || s->journal.obj.sclust!=session.files[1].cluster)
+        return fail(s,"Checked journal changed before session continuation");
+    path(s,"targets.cache");
+    if(f_open(&s->index,s->path,FA_READ|FA_WRITE)!=FR_OK)return fail(s,"Cannot reopen the checked session index");
+    s->index_open=true;
+    if(f_size(&s->index)!=(uint64_t)s->target_count*TARGET_BYTES || s->index.obj.sclust!=session.files[2].cluster ||
+       !seek(s,&s->journal,s->sequence*EVENT_BYTES))return fail(s,"Checked index changed before session continuation");
+    s->status->session_reused=true;
+    snprintf(s->status->message,sizeof(s->status->message),"Reusing checked saved progress from this session");update(s,true);
+    s->ops->log("Salvage session reused: checked journal=%" PRIu64 " records targets=%u recovered=%u; no replay or durable-target rescan",
+        s->sequence,s->target_count,s->recovered_count);
+    return true;
+}
+static bool session_capture(struct salvage *s) {
+    memset(&session,0,sizeof(session));const struct kui_salvage_options *o=s->options;
+    session.epoch=o->session_epoch;session.sequence=s->sequence;session.target_count=s->target_count;
+    session.recovered_count=s->recovered_count;session.patch_count=s->patch_count;
+    memcpy(session.card,o->session_card,32);memcpy(session.identity,s->identity,32);
+    snprintf(session.job,sizeof(session.job),"%s",s->status->job);
+    memcpy(session.sectors,s->sectors,sizeof(session.sectors));memcpy(session.crc,s->crc,sizeof(session.crc));
+    memcpy(session.baseline,s->baseline,sizeof(session.baseline));memcpy(session.baselined,s->baselined,sizeof(session.baselined));
+    if(!session_volume(s,session.volume))return false;
+    for(unsigned i=0;i<4u+s->plan->count;++i)if(session_file(s,i,&session.files[i])!=1)return false;
+    if(session_tail(s,session.tail_hash)!=1 || session_index(s,session.index_hash,true)!=1)return false;
+    session_seal(session.seal);return true;
+}
 enum kui_salvage_result kui_salvage_run(const struct kui_capture_plan *plan,const struct kui_capture_ops *ops,
     const struct kui_salvage_options *options,enum kui_salvage_action action,struct kui_salvage_status *status) {
+    bool session_available=session.valid;session.valid=false;
     if(!status)return KUI_SALVAGE_FAILED;
     memset(status,0,sizeof(*status));
     if(!plan_valid(plan) || !ops || !ops->read || !ops->log || !options || action<KUI_SALVAGE_NEW || action>KUI_SALVAGE_RECOVER ||
@@ -1091,18 +1358,23 @@ enum kui_salvage_result kui_salvage_run(const struct kui_capture_plan *plan,cons
         snprintf(status->message,sizeof(status->message),"Invalid salvage request or pass limit");return status->result;
     }
     struct salvage *s=calloc(1,sizeof(*s));if(!s) {snprintf(status->message,sizeof(status->message),"Not enough memory for bounded salvage state");return status->result;}
+    s->patch=(uint8_t *)(((uintptr_t)s->patch_storage+31u)&~(uintptr_t)31u);
     s->plan=plan;s->ops=ops;s->options=options;s->status=status;status->tracks=plan->count;status->total=plan->bytes;status->pass_limit=options->passes;
     s->started=ops->now_ms?ops->now_ms(ops->ctx):0;
-    FATFS fs;bool mounted=false,ok=false,ready_at_admission=false;
+    FATFS fs;bool mounted=false,ok=false,ready_at_admission=false,warm=false,checked=false,repair_entered=false,retained=false;
     if(stop(s))goto done;
     if(action==KUI_SALVAGE_NEW && !make_header(s))goto done;
     if(!kui_mount(&fs,ops->log)) {fail(s,"Cannot mount SD card for salvage");goto done;}mounted=true;
     if(action==KUI_SALVAGE_NEW) {if(!make_job(s))goto done;identity(s);}
     else {if(!job_path(s,options->job) || !exact_file(s,"header.bin",s->header,HEADER_BYTES) || !validate_header(s))goto done;identity(s);}
     if(action!=KUI_SALVAGE_NEW && !kui_recovery_guard_check(status->job,ops->log)) {
-        fail(s,"Saved storage reads were unstable; complete reread evidence before salvage resumes");goto done;
+        fail(s,"Saved storage reads were unstable; salvage blocked; preserve job and see Diagnostics");goto done;
     }
-    if(stop(s) || !open_journal(s,action==KUI_SALVAGE_NEW) || !check_lengths(s))goto done;
+    if(stop(s))goto done;
+    warm=session_try(s,session_available,action);
+    if(s->failed || stop(s))goto done;
+    if(!warm && !open_journal(s,action==KUI_SALVAGE_NEW))goto done;
+    if(!check_lengths(s))goto done;
     /* An already collected job resumes with targeted singleton reads. An
      * invocation that still needs collection keeps the initial opportunity to
      * rescue neighboring sectors together before harder singleton work. */
@@ -1117,8 +1389,9 @@ enum kui_salvage_result kui_salvage_run(const struct kui_capture_plan *plan,cons
     ops->log("Salvage format: version=%u; candidates=%s",header_version(s),s->packed?"packed":"legacy files");
     if(options->passes)ops->log("Salvage: automatic recovery, up to %u alternating passes",options->passes);
     else ops->log("Salvage: automatic alternating recovery passes until resolved or stopped");
-    if(action==KUI_SALVAGE_RECOVER && !s->ready) {fail(s,"First pass is incomplete; Resume it before targeted recovery");goto done;}
-    if(!reconcile(s))goto done;
+    if(action==KUI_SALVAGE_RECOVER && !s->ready) {fail(s,"First pass is incomplete; use Continue recovery before targeted trials");goto done;}
+    if(!warm && !reconcile(s))goto done;
+    checked=ready_at_admission;
     if(!s->ready) {
         s->collection_base=committed_bytes(s);
         s->collection_started=ops->now_ms?ops->now_ms(ops->ctx):0;status->collection_active=true;
@@ -1126,6 +1399,7 @@ enum kui_salvage_result kui_salvage_run(const struct kui_capture_plan *plan,cons
         s->read_failures=0; /* Collection failures do not seed repair reinitialization. */
         if(!collected || !sync_file(s,&s->index))goto done;
     }
+    repair_entered=true;
     if(!(options->control_trial?control_trial(s):repair(s)) || !close_salvage_files(s))goto done;
     if(stop(s) || !finish(s))goto done;
     ok=true;
@@ -1133,7 +1407,24 @@ done:
     if(!close_salvage_files(s))ok=false;
     if(s->index_open && !io_close(s,&s->index,true))ok=false;
     if(s->journal_open && !io_close(s,&s->journal,true))ok=false;
+    if(mounted && checked && repair_entered && action==KUI_SALVAGE_RESUME && s->packed && s->ready && !s->completed && !s->failed &&
+       !options->control_trial && !options->defer_next_range && options->session_epoch && options->session_card &&
+       !s->pending_count && s->patch_count==s->recovered_count && s->target_count>s->recovered_count &&
+       (uint64_t)s->target_count*TARGET_BYTES<=SESSION_INDEX_LIMIT)
+        retained=session_capture(s);
     if(mounted && f_mount(NULL,"0:",0)!=FR_OK) {fail(s,"Card unmount failed; operation is not successful");ok=false;}
+    session.valid=retained && !s->failed;
+    status->session_retained=session.valid;
+    if(session.valid)s->ops->log("Salvage session retained: journal=%" PRIu64 " records targets=%u recovered=%u; same-boot Continue may reuse checked state",
+        s->sequence,s->target_count,s->recovered_count);
+    else s->ops->log("Salvage session not retained: %s",
+        s->failed?"operation or cleanup failed":!options->session_epoch || !options->session_card?"no physical-card session lease":
+        !checked?"full ready-job reconciliation was not completed":!repair_entered?"recovery did not begin":
+        action!=KUI_SALVAGE_RESUME || options->control_trial || options->defer_next_range?"not ordinary Continue recovery":
+        !s->packed || !s->ready?"job is not a collected packed job":s->completed || s->target_count==s->recovered_count?"no unresolved recovery remains":
+        s->pending_count || s->patch_count!=s->recovered_count?"an interrupted publication needs cold reconciliation":
+        (uint64_t)s->target_count*TARGET_BYTES>SESSION_INDEX_LIMIT?"derived index exceeds bounded session limit":
+        "saved source fences were not confirmed");
     update(s,true);
     if(s->failed)status->result=KUI_SALVAGE_FAILED;
     else if(!ok)status->result=stop(s)?KUI_SALVAGE_STOPPED:KUI_SALVAGE_FAILED;
@@ -1144,7 +1435,7 @@ done:
     else if(status->result==KUI_SALVAGE_UNRESOLVED && (status->trial_complete || status->trial_budget_expired))
         snprintf(status->message,sizeof(status->message),"Drive trial %s; %" PRIu32 " unresolved sectors; saved repairs retained",
             status->trial_budget_expired?"budget reached":"finished",status->remaining);
-    else if(status->result==KUI_SALVAGE_UNRESOLVED)snprintf(status->message,sizeof(status->message),"%" PRIu32 " unresolved sectors after %u passes; Retry unresolved runs more",status->remaining,status->pass);
+    else if(status->result==KUI_SALVAGE_UNRESOLVED)snprintf(status->message,sizeof(status->message),"%" PRIu32 " unresolved sectors after %u passes; Continue recovery to retry",status->remaining,status->pass);
     ops->log("Salvage: %s; targets=%u recovered=%u remaining=%u",status->message,status->targets,status->recovered,status->remaining);
     update(s,true);enum kui_salvage_result result=status->result;free(s);return result;
 }

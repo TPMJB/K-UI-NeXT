@@ -25,7 +25,7 @@ VMU_MANAGEMENT += src/core/vmu_library.c src/core/vmu_game_assign.c src/core/vmu
 include config/lwext4.mk
 LWEXT4_HOST_OBJECTS := $(patsubst %.c,build/host/%.o,$(LWEXT4_SOURCES))
 
-.PHONY: test test-recovery test-images deps diagnostic clean
+.PHONY: test test-recovery test-images deps diagnostic clean test-recovery-dashboard
 .PHONY: test-armada-ce-excerpt
 .PHONY: test-armada-ce-stream
 test-armada-ce-stream: build/test-armada-ce-stream-model build/test-armada-ce-stream-native build/test-armada-ce-stream-api build/test-armada-ce-stream-transport build/test-armada-ce-stream-boot build/test-armada-ce-stream-entry build/test-armada-ce-stream-player build/test-armada-ce-stream-owner-word build/test-armada-ce-stream-initial-word build/test-armada-ce-stream-discover-owner build/test-armada-ce-excerpt-prepare
@@ -151,7 +151,7 @@ build/test-armada-ce-excerpt-entry: tests/test_armada_ce_excerpt_entry.c src/loa
 build/test-armada-ce-excerpt: tests/test_armada_ce_excerpt.c src/loader/armada_ce_excerpt.c include/kui/armada_ce_excerpt.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -fno-pie -no-pie $< -o $@
-test: build/test-drive-controls build/test-salvage-display
+test: build/test-drive-controls build/test-drive-speed-probe build/test-g1-mode-probe build/test-g1-mode-probe-native build/test-salvage-display
 test: build/test-vmu-lcd build/test-vmu-save-format
 test: build/test-recovery-manifest build/scan-fixtures/.stamp build/test-music-ogg-seek build/music-asset-check
 test: build/test-games-selection build/test-zso build/test-lzo1x build/test-retail-zso build/test-retail-lzo build/test-game-launch-settings build/test-game-launch-settings-file build/test-game-ram-patches build/test-game-launch-report build/test-retail-relay-patches
@@ -244,6 +244,9 @@ test: build/test-storage-errors build/test-cd-audio build/test-network-probe bui
 	./build/test-music-ogg-seek
 	./build/test-capture-display
 	./build/test-drive-controls
+	./build/test-drive-speed-probe
+	./build/test-g1-mode-probe
+	./build/test-g1-mode-probe-native
 	./build/test-salvage-display
 	./build/test-viewport
 	./build/test-clock
@@ -677,7 +680,7 @@ build/storage-test-store-image: tests/storage_test_store_image.c $(CORE) $(STORA
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(STORAGE_TEST_MODEL) src/core/storage_test_store.c $(FATFS) tests/storage_test_store_image.c -o $@
 
-test-images: build/vmu-import-image build/test-wifi-update build/storage-test-image build/storage-test-store-image build/ftp-image build/files-image build/games-retail build/games-image-probe build/loader-probe-image build/games-image build/games-covers-image build/salvage-image build/maintenance-image build/recovery-scan-image build/clock-image build/test-vmu-app build/system-settings-image build/destination-image build/storage-image build/runtime-image build/capture-image build/test-recovery-manifest build/report-image build/bench-image build/settings-image
+test-images: build/vmu-import-image build/test-wifi-update build/storage-test-image build/storage-test-store-image build/ftp-image build/files-image build/games-retail build/games-image-probe build/loader-probe-image build/games-image build/games-covers-image build/salvage-image build/salvage-session-image build/maintenance-image build/recovery-scan-image build/clock-image build/test-vmu-app build/system-settings-image build/destination-image build/storage-image build/runtime-image build/capture-image build/test-recovery-manifest build/report-image build/bench-image build/settings-image
 	python3 tests/test_wifi_update_images.py
 	python3 tests/test_storage_test_images.py
 	python3 tests/test_storage_test_store_images.py
@@ -689,6 +692,7 @@ test-images: build/vmu-import-image build/test-wifi-update build/storage-test-im
 	python3 tests/test_files_images.py
 	python3 tests/test_ftp_images.py
 	python3 tests/test_salvage_images.py
+	python3 tests/test_salvage_session_images.py
 	python3 tests/test_maintenance_images.py
 	python3 tests/test_recovery_scan_images.py
 	python3 tests/test_clock_images.py
@@ -878,7 +882,29 @@ build/maintenance-image: tests/maintenance_image.c $(CORE) $(FATFS) src/core/sto
 
 build/salvage-image: tests/salvage_image.c tests/salvage_trial_fixture.inc src/core/salvage_control_trial.inc tests/salvage_legacy_narrow.inc tests/salvage_defer_fixture.inc tests/salvage_partial_fixture.inc tests/salvage_burst_fixture.inc tests/salvage_legacy_index_fixture.inc $(CORE) $(FATFS) src/core/salvage.c src/core/salvage_files.inc src/core/recovery_guard.c src/core/destination.c src/core/recovery_crc.c src/core/recovery_sector.c src/core/hash.c src/core/storage_probe.c include/kui/salvage.h include/kui/capture.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) src/core/salvage.c src/core/recovery_guard.c src/core/destination.c src/core/recovery_crc.c src/core/recovery_sector.c src/core/hash.c src/core/storage_probe.c tests/salvage_image.c -Wl,--wrap=f_write,--wrap=f_sync,--wrap=f_read,--wrap=f_rename,--wrap=f_stat,--wrap=f_opendir,--wrap=f_readdir,--wrap=f_closedir -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) src/core/salvage.c src/core/recovery_guard.c src/core/destination.c src/core/recovery_crc.c src/core/recovery_sector.c src/core/hash.c src/core/storage_probe.c tests/salvage_image.c -Wl,--wrap=f_write,--wrap=f_sync,--wrap=f_read,--wrap=f_open,--wrap=f_rename,--wrap=f_stat,--wrap=f_opendir,--wrap=f_readdir,--wrap=f_closedir -o $@
+
+.PHONY: test-salvage-session
+build/salvage-session-image: tests/salvage_session_image.c $(CORE) $(FATFS) src/core/salvage.c src/core/salvage_files.inc src/core/recovery_guard.c src/core/destination.c src/core/recovery_crc.c src/core/recovery_sector.c src/core/hash.c src/core/storage_probe.c include/kui/salvage.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) src/core/salvage.c src/core/recovery_guard.c src/core/destination.c src/core/recovery_crc.c src/core/recovery_sector.c src/core/hash.c src/core/storage_probe.c tests/salvage_session_image.c -Wl,--wrap=f_open,--wrap=f_close,--wrap=f_read,--wrap=f_write,--wrap=f_mount -o $@
+
+test-salvage-session: build/salvage-session-image test-salvage-session-policy
+	ASAN_OPTIONS=detect_leaks=0 python3 tests/test_salvage_session_images.py
+
+.PHONY: test-salvage-session-policy
+test: test-salvage-session-policy
+build/test-salvage-session-policy: tests/test_salvage_session_policy.c include/kui/salvage_session_policy.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude $< -o $@
+
+build/test-storage-card-identity: tests/test_storage_card_identity.c tests/test_storage_errors.c src/dreamcast/sd.c src/core/storage_error.c src/core/storage_policy.c include/kui/storage_error.h src/dreamcast/sci_sd_storage.h src/loader/sci_sd_bus.h tests/storage_stubs/dc/sd.h tests/storage_stubs/kos/sem.h include/kui/ata.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_VMU_GAME_CARDS=1 -Itests/storage_stubs -Itests/stubs -Itests/apps_stubs $(INCLUDES) src/dreamcast/sd.c src/core/storage_error.c src/core/storage_policy.c tests/test_storage_card_identity.c -o $@
+
+test-salvage-session-policy: build/test-salvage-session-policy build/test-storage-card-identity
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-salvage-session-policy
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-storage-card-identity
 
 build/salvage-completion-image: tests/salvage_completion_image.c src/core/salvage_control_trial.inc $(CORE) $(FATFS) src/core/salvage.c src/core/salvage_files.inc src/core/recovery_guard.c src/core/destination.c src/core/salvage_completion.c src/core/known_dumps.c src/core/recovery_crc.c src/core/recovery_sector.c src/core/hash.c src/core/storage_probe.c include/kui/salvage.h include/kui/salvage_completion.h
 	@mkdir -p $(@D)
@@ -1280,6 +1306,42 @@ build/saved-identity-image: tests/saved_identity_image.c include/kui/saved_ident
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) src/core/saved_identity.c src/core/capture_plan.c src/core/recovery_sector.c src/core/hash.c src/core/destination.c src/core/storage_probe.c tests/saved_identity_image.c -Wl,--wrap=f_read -o $@
 
 .PHONY: test-drive-controls
+build/test-drive-speed-probe: tests/test_drive_speed_probe.c src/core/drive_speed_probe.c include/kui/drive_speed_probe.h src/core/recovery_sector.c src/core/hash.c src/core/data.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) tests/test_drive_speed_probe.c src/core/drive_speed_probe.c src/core/recovery_sector.c src/core/hash.c src/core/data.c -Wl,--wrap=malloc,--wrap=free -o $@
+
+.PHONY: test-drive-speed-probe
+test-drive-speed-probe: build/test-drive-speed-probe
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-drive-speed-probe
+
+build/test-g1-mode-probe: tests/test_g1_mode_probe.c src/core/g1_mode_probe.c include/kui/g1_mode_probe.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) tests/test_g1_mode_probe.c src/core/g1_mode_probe.c -o $@
+
+.PHONY: test-g1-mode-probe test-saved-read-probe
+test-g1-mode-probe: build/test-g1-mode-probe build/test-g1-mode-probe-native
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-g1-mode-probe
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-g1-mode-probe-native
+
+build/test-g1-mode-probe-native: tests/test_g1_mode_probe_native.c src/dreamcast/g1_mode_probe.c include/kui/g1_mode_probe.h src/dreamcast/platform.h $(wildcard tests/g1_stubs/dc/*.h tests/g1_stubs/kos/*.h tests/stubs/kos/*.h)
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -DKUI_G1_MODE_PROBE_NATIVE_TEST=1 -Itests/g1_stubs -Itests/stubs $(INCLUDES) -Isrc/dreamcast src/dreamcast/g1_mode_probe.c tests/test_g1_mode_probe_native.c -o $@
+
+build/saved-read-probe-image: tests/saved_read_probe_image.c src/core/saved_read_probe.c include/kui/saved_read_probe.h $(CORE) $(FATFS) src/core/hash.c src/core/destination.c src/core/recovery_sector.c src/core/storage_probe.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) tests/saved_read_probe_image.c src/core/saved_read_probe.c $(CORE) $(FATFS) src/core/hash.c src/core/destination.c src/core/recovery_sector.c src/core/storage_probe.c -Wl,--wrap=f_read,--wrap=f_open,--wrap=f_close,--wrap=malloc,--wrap=calloc -o $@
+
+test-saved-read-probe: build/saved-read-probe-image
+	ASAN_OPTIONS=detect_leaks=0 python3 tests/test_saved_read_probe_images.py
+
+.PHONY: test-salvage-revalidate
+build/salvage-revalidate-image: tests/salvage_revalidate_image.c src/core/salvage_revalidate.c include/kui/salvage_revalidate.h $(CORE) $(FATFS) src/core/hash.c src/core/destination.c src/core/recovery_sector.c src/core/recovery_guard.c src/core/storage_probe.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) tests/salvage_revalidate_image.c src/core/salvage_revalidate.c $(CORE) $(FATFS) src/core/hash.c src/core/destination.c src/core/recovery_sector.c src/core/recovery_guard.c src/core/storage_probe.c -Wl,--wrap=f_read,--wrap=f_write,--wrap=f_open,--wrap=f_close,--wrap=f_stat,--wrap=f_unlink,--wrap=f_mount -o $@
+
+test-salvage-revalidate: build/salvage-revalidate-image
+	ASAN_OPTIONS=detect_leaks=0 python3 tests/test_salvage_revalidate_images.py
+
 test-drive-controls: build/test-drive-controls build/test-disc
 	./build/test-drive-controls
 	./build/test-disc
@@ -1287,3 +1349,10 @@ test-drive-controls: build/test-drive-controls build/test-disc
 build/test-drive-controls: tests/test_drive_controls.c $(DRIVE_CONTROLS)
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/drive_controls.c tests/test_drive_controls.c -o $@
+
+test: test-recovery-dashboard
+build/test-recovery-dashboard: tests/test_recovery_dashboard.c include/kui/recovery_dashboard.h include/kui/shell.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) tests/test_recovery_dashboard.c -o $@
+test-recovery-dashboard: build/test-recovery-dashboard
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-recovery-dashboard

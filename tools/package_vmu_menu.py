@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Package a source-bound GUI-only VMU menu update; no native modules change."""
+"""Package a source-bound GUI-only update; no native modules change."""
 import argparse
 import hashlib
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import zipfile
@@ -32,16 +33,20 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--gui', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--name', default='K-UI-GUI-Update',
+                        help='Archive name prefix; the source build is appended')
     parser.add_argument('--readme', type=Path, default=ROOT/'docs/vmu-menu-test.md')
     parser.add_argument('--evidence', type=Path, action='append', default=[])
     args = parser.parse_args()
+    require(re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*', args.name),
+            'Package name must be a filename prefix using letters, digits, dots, underscores or hyphens')
     source = git('rev-parse', 'HEAD')
     require(not git('status', '--porcelain', '--untracked-files=all'),
             'Commit source changes before packaging')
     runtime = args.gui.read_bytes()
     build = verify(runtime)['build']
     require(build == source[:12], 'GUI build identifier differs from committed source')
-    name = 'K-UI-VMU-Menus-'+build
+    name = args.name+'-'+build
     folder = args.output/name
     require(not folder.exists(), 'Output folder already exists: '+str(folder))
     (folder/'gui').mkdir(parents=True)
@@ -74,7 +79,7 @@ def main():
     archive = args.output/(name+'.zip')
     with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as output:
         for path in sorted(path for path in folder.rglob('*') if path.is_file()):
-            output.write(path, (Path(name)/path.relative_to(folder)).as_posix())
+            output.write(path, path.relative_to(folder).as_posix())
     require(archive.stat().st_size < 50 * 1024 * 1024, 'Package exceeds the 50 MiB delivery limit')
     print(json.dumps(dict(package=str(archive), bytes=archive.stat().st_size,
                          sha256=sha(archive.read_bytes()), **metadata), indent=2))

@@ -24,6 +24,8 @@ static int scif_result;
 static bool healthy=true,disc_busy;
 static bool stress_mode,stress_cancel,heartbeat_available=true,heartbeat_lost;
 static bool speed_mode,speed_file;
+static bool filesystem_read;
+static unsigned filesystem_single_calls;
 static unsigned quantum_calls,multi_blocks;
 /* CMD18 measurement mocks: calls, injected outcome and one corrupt block. */
 static unsigned capture_calls,resume_calls;
@@ -79,6 +81,7 @@ int sd_write_blocks(uint32_t block,size_t count,const uint8_t *data) {
 }
 const struct kui_loader_sd_bus *kui_sci_sd_bus(void) {return &bus;}
 bool kui_sci_sd_healthy(void) {return healthy;}
+void kui_sci_sd_fault_get(struct kui_sci_sd_fault *out) {*out=(struct kui_sci_sd_fault){0};}
 enum kui_loader_sd_result kui_sci_sd_acquire(void) {return fail_reacquire?KUI_LOADER_SD_UNSUPPORTED:KUI_LOADER_SD_OK;}
 void kui_sci_sd_release(void) {}
 enum kui_loader_sd_result kui_loader_sd_init_bus(struct kui_loader_sd *card,
@@ -93,7 +96,7 @@ void kui_loader_sd_shutdown(struct kui_loader_sd *card) {card->ready=false;}
 const char *kui_loader_sd_result_name(enum kui_loader_sd_result result) {return result==KUI_LOADER_SD_TIMEOUT?"card timeout":"test";}
 enum kui_loader_sd_result kui_loader_sd_read_multi(struct kui_loader_sd *card,
     uint32_t block,uint32_t count,void *out) {
-    if(speed_mode) {
+    if(speed_mode || filesystem_read) {
         assert(!async_opens && count && count<=128u);
         for(uint32_t i=0;i<count;++i) memset((uint8_t *)out+(size_t)i*512u,sector_byte(block+i),512);
         multi_blocks+=count;
@@ -126,6 +129,14 @@ void kui_ata_shutdown(struct kui_ata *ata) {ata->ready=false;}
 
 enum kui_loader_sd_result kui_loader_sd_read(struct kui_loader_sd *card,
         uint32_t lba,uint32_t count,void *out) {
+    if(filesystem_read) {
+        assert(card->ready && (uint64_t)lba<card->blocks && count==1 && out && !async_opens);
+        ++filesystem_single_calls;++read_calls;card->last_command=17;card->last_response=0;
+        enum kui_loader_sd_result result=!fail_read_call || read_calls==fail_read_call?
+            read_result:KUI_LOADER_SD_OK;
+        if(result==KUI_LOADER_SD_OK) memset(out,sector_byte(lba),512);
+        return result;
+    }
     assert(card->ready && (uint64_t)lba<card->blocks && count==1 && out && unmounts);
     if(!stress_mode) assert(lba==0);
     if(stress_mode && !async_opens && (single_calls%2u)==0 && baseline_seen<KUI_SD_ASYNC_STRESS_SECTORS)
@@ -276,9 +287,31 @@ static void prepare(void) {
     heartbeat_available=true;async_opens=async_begins=async_polls=async_finishes=async_cancels=async_closes=0;
     yield_calls=work_calls=cancel_at_poll=cancel_at_baseline=baseline_seen=0;mock_now=0;
     speed_mode=speed_file=false;quantum_calls=multi_blocks=read_calls=0;
+    filesystem_read=false;filesystem_single_calls=0;
+    read_result=KUI_LOADER_SD_OK;fail_read_call=0;
     capture_calls=resume_calls=capture_lba=resume_lba=0;
     capture_result=KUI_SCI_ASYNC_OK;capture_corrupt=false;
     stream_left=stream_index=stream_runs=stream_corrupt_lba=0;stream_dst=NULL;
+}
+static void test_filesystem_reads(void) {
+    uint8_t data[129u*512u];
+    prepare();filesystem_read=true;
+    assert(media.read(NULL,97,1,data)==0);
+    assert(filesystem_single_calls==1 && read_calls==1 && !single_calls && !multi_blocks);
+    for(unsigned i=0;i<512;++i) assert(data[i]==sector_byte(97));
+    assert(media.read(NULL,97,129,data)==0);
+    assert(filesystem_single_calls==2 && read_calls==3 && !single_calls && multi_blocks==128);
+    for(unsigned i=0;i<129;++i)
+        for(unsigned j=0;j<512;++j) assert(data[(size_t)i*512u+j]==sector_byte(97+i));
+    read_result=KUI_LOADER_SD_TIMEOUT;fail_read_call=read_calls+2u;
+    memset(data,0xa5,sizeof(data));
+    assert(media.read(NULL,97,129,data)==-1);
+    assert(filesystem_single_calls==3 && read_calls==5 && !single_calls && multi_blocks==256);
+    struct kui_storage_errors errors;kui_storage_errors_get(&errors);
+    assert(errors.last_lba==225 && errors.last_count==1 && errors.sd_command==17 &&
+        errors.last_result==KUI_STORAGE_ERROR_TIMEOUT);
+    for(unsigned j=0;j<512;++j) assert(data[128u*512u+j]==0xa5);
+    kui_storage_errors_reset();prepare();
 }
 /* The same blocks through both readers: the file's first cluster when found,
  * otherwise the data area. Matching CRCs are required for a pass. */
@@ -400,6 +433,7 @@ int main(int argc,char **argv) {
     /* Discover SCI once, then ensure wrapper/recovery never falls back. */
     scif_result=-1;kui_sd_set_params(KUI_STORAGE_AUTO,true);
     assert(kui_sd_connect() && kui_storage_selected()==KUI_STORAGE_SCI);
+    test_filesystem_reads();
     struct kui_sd_async_result out;
     prepare();kui_sd_async_probe(&out,cancelled,NULL);
     assert(out.baseline_verified && out.recovery_verified && !out.restart_required);

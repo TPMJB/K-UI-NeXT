@@ -55,7 +55,36 @@ enum kui_shell_page { KUI_SHELL_HOME, KUI_SHELL_RIPPER,
     KUI_SHELL_GAMES_LAUNCH_OPTIONS, KUI_SHELL_GAMES_EXTRA_OPTIONS,
     KUI_SHELL_GAMES_TESTS, KUI_SHELL_GAMES_INFO, KUI_SHELL_GAMES_PATCHES, KUI_SHELL_GAMES_CODEC, KUI_SHELL_GAMES_CHECK, KUI_SHELL_VMU_IMAGE, KUI_SHELL_VMU_IMPORT,
     KUI_SHELL_VMU_COLLECTION, KUI_SHELL_VMU_TOOLS, KUI_SHELL_VMU_WIZARD,
-    KUI_SHELL_DISC_TOOLS, KUI_SHELL_VMU_CARD, KUI_SHELL_SALVAGE_DRIVE };
+    KUI_SHELL_DISC_TOOLS, KUI_SHELL_VMU_CARD, KUI_SHELL_SALVAGE_DRIVE,
+    KUI_SHELL_SALVAGE_OPTIONS };
+enum kui_shell_recovery_row {
+    KUI_SHELL_RECOVERY_CONTINUE, KUI_SHELL_RECOVERY_NEW, KUI_SHELL_RECOVERY_OPTIONS,
+    KUI_SHELL_RECOVERY_DIAGNOSTICS, KUI_SHELL_RECOVERY_COUNT
+};
+enum kui_shell_recovery_option {
+    KUI_SHELL_RECOVERY_RETRIES, KUI_SHELL_RECOVERY_PASSES, KUI_SHELL_RECOVERY_VERIFY,
+    KUI_SHELL_RECOVERY_SPEED, KUI_SHELL_RECOVERY_DEFER, KUI_SHELL_RECOVERY_OPTIONS_RETURN,
+    KUI_SHELL_RECOVERY_OPTIONS_COUNT
+};
+enum kui_shell_recovery_diagnostic {
+    KUI_SHELL_RECOVERY_REVALIDATE, KUI_SHELL_RECOVERY_SAVED_READS, KUI_SHELL_RECOVERY_TRIAL,
+    KUI_SHELL_RECOVERY_SPEED_PROBE, KUI_SHELL_RECOVERY_G1_MODE,
+    KUI_SHELL_RECOVERY_DIAGNOSTICS_RETURN, KUI_SHELL_RECOVERY_DIAGNOSTICS_COUNT
+};
+/* Display cache only. Every action still performs normal disc/job admission. */
+struct kui_salvage_dashboard {
+    bool known, counts_known, blocked;
+    uint32_t targets, recovered, remaining;
+    char title[96], job[KUI_DEST_JOB_CAP];
+};
+/* Saved-data checks and drive diagnostics share the existing worker action,
+ * never its repair admission. Main consumes the one-shot request before work. */
+enum kui_salvage_diagnostic {
+    KUI_SALVAGE_DIAGNOSTIC_NONE,
+    KUI_SALVAGE_DIAGNOSTIC_SAVED_READS,
+    KUI_SALVAGE_DIAGNOSTIC_G1_MODE,
+    KUI_SALVAGE_DIAGNOSTIC_REVALIDATE
+};
 enum kui_shell_game_option {
     KUI_SHELL_GAME_OPTION_READER, KUI_SHELL_GAME_OPTION_CDDA,
     KUI_SHELL_GAME_OPTION_ADVANCED, KUI_SHELL_GAME_OPTION_CODEC, KUI_SHELL_GAME_OPTION_COUNT
@@ -145,14 +174,18 @@ struct kui_shell {
     bool vmu_emulation_enabled,vmu_emulation_known,vmu_emulation_loading,vmu_emulation_requested;
     unsigned vmu_emulation_generation;
     char vmu_emulation_notice[128];
-    bool confirm_salvage, confirm_salvage_defer, confirm_repair_in_place;
-    bool salvage_verify_files;
-    unsigned salvage_selected, salvage_passes;
+    bool confirm_salvage, confirm_salvage_defer, confirm_salvage_check, confirm_repair_in_place;
+    bool salvage_verify_files, salvage_details;
+    unsigned salvage_selected, salvage_passes, salvage_options_selected;
+    struct kui_salvage_dashboard salvage_dashboard;
+    enum kui_shell_page salvage_result_return, scan_return;
     /* Salvage choices last for this boot only; they are never saved in jobs. */
     struct kui_drive_options salvage_drive_options;
     unsigned salvage_drive_selected;
     /* One queued RECOVER action only; main copies and clears this request. */
     bool salvage_trial_requested;
+    bool salvage_speed_probe_requested;
+    enum kui_salvage_diagnostic salvage_diagnostic_requested;
     bool salvage_trial_result; /* Keep trial results visible until dismissed. */
     unsigned vmu_action_selected, vmu_copy_slot;
     bool clock_valid;
@@ -458,6 +491,8 @@ struct kui_shell_view {
     const struct kui_app_status *app_status;
     bool busy, saving, cancel_requested, saved_verified, memory_valid;
     bool salvage_control_trial; /* Busy salvage uses fixed trial profiles. */
+    bool salvage_speed_probe; /* Read-only speed support test; no saved job admission. */
+    enum kui_salvage_diagnostic salvage_diagnostic;
     bool log_truncated, reference_checked, video_trial, drive_reset_required;
     bool dma_degraded;
     bool music_enabled, music_playing, music_paused, music_change_pending;

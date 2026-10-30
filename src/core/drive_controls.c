@@ -32,16 +32,38 @@ static bool valid_mode(const struct kui_drive_mode *mode) {
     return mode->speed<=7 && mode->standby<=65535 &&
         mode->read_flags<=255 && mode->read_retry<=255;
 }
+static void attempt_begin(struct kui_drive_controls *state,const struct kui_drive_mode *mode) {
+    state->attempt_requested=*mode;
+    memset(&state->attempt_observed,0,sizeof(state->attempt_observed));
+    state->attempt_observed_valid=false;
+    state->attempt_result=KUI_DRIVE_CONTROL_INVALID;
+}
+static enum kui_drive_control_result apply_mode(struct kui_drive_controls *state,
+    const struct kui_drive_control_ops *ops,const struct kui_drive_mode *mode,bool remember) {
+    if(remember)attempt_begin(state,mode);
+    enum kui_drive_control_result result;
+    if(!ops->safe(ops->ctx))result=KUI_DRIVE_CONTROL_UNSAFE;
+    else {
+        /* Even a rejected command can have partially changed a setting. The
+         * entry snapshot remains restoration authority until the session ends. */
+        state->modified=true;
+        if(!ops->set(ops->ctx,mode))result=KUI_DRIVE_CONTROL_SET_FAILED;
+        else if(!ops->safe(ops->ctx))result=KUI_DRIVE_CONTROL_UNSAFE;
+        else if(!ops->query(ops->ctx,&state->observed))result=KUI_DRIVE_CONTROL_QUERY_FAILED;
+        else {
+            if(remember) {
+                state->attempt_observed=state->observed;
+                state->attempt_observed_valid=true;
+            }
+            result=equal(mode,&state->observed)?KUI_DRIVE_CONTROL_OK:KUI_DRIVE_CONTROL_MISMATCH;
+        }
+    }
+    if(remember)state->attempt_result=result;
+    return result;
+}
 static enum kui_drive_control_result apply(struct kui_drive_controls *state,
     const struct kui_drive_control_ops *ops,const struct kui_drive_mode *mode) {
-    if(!ops->safe(ops->ctx))return KUI_DRIVE_CONTROL_UNSAFE;
-    /* Even a rejected command can have partially changed a setting. The entry
-     * snapshot remains restoration authority until the session ends. */
-    state->modified=true;
-    if(!ops->set(ops->ctx,mode))return KUI_DRIVE_CONTROL_SET_FAILED;
-    if(!ops->safe(ops->ctx))return KUI_DRIVE_CONTROL_UNSAFE;
-    if(!ops->query(ops->ctx,&state->observed))return KUI_DRIVE_CONTROL_QUERY_FAILED;
-    return equal(mode,&state->observed)?KUI_DRIVE_CONTROL_OK:KUI_DRIVE_CONTROL_MISMATCH;
+    return apply_mode(state,ops,mode,true);
 }
 static struct kui_drive_mode selected_mode(const struct kui_drive_controls *state,
     const struct kui_drive_options *options) {
@@ -55,9 +77,14 @@ enum kui_drive_control_result kui_drive_controls_trial_begin(struct kui_drive_co
     if(!state || state->active || !valid_ops(ops))return KUI_DRIVE_CONTROL_INVALID;
     if(!ops->safe(ops->ctx))return KUI_DRIVE_CONTROL_UNSAFE;
     memset(state,0,sizeof(*state));
+    state->attempt_result=KUI_DRIVE_CONTROL_QUERY_FAILED;
     if(!ops->query(ops->ctx,&state->original) || !valid_mode(&state->original))
         return KUI_DRIVE_CONTROL_QUERY_FAILED;
     state->requested=state->observed=state->original;
+    attempt_begin(state,&state->original);
+    state->attempt_observed=state->original;
+    state->attempt_observed_valid=true;
+    state->attempt_result=KUI_DRIVE_CONTROL_OK;
     state->active=state->snapshot_valid=state->verified=state->trial=true;
     return KUI_DRIVE_CONTROL_OK;
 }
@@ -68,7 +95,13 @@ enum kui_drive_control_result kui_drive_controls_select(struct kui_drive_control
         return KUI_DRIVE_CONTROL_INVALID;
     if(!ops->safe(ops->ctx)) {state->verified=false;return KUI_DRIVE_CONTROL_UNSAFE;}
     struct kui_drive_mode desired=selected_mode(state,options),previous=state->requested;
-    if(equal(&desired,&previous))return KUI_DRIVE_CONTROL_OK;
+    if(equal(&desired,&previous)) {
+        attempt_begin(state,&desired);
+        state->attempt_observed=state->observed;
+        state->attempt_observed_valid=true;
+        state->attempt_result=KUI_DRIVE_CONTROL_OK;
+        return KUI_DRIVE_CONTROL_OK;
+    }
     state->verified=false;
     enum kui_drive_control_result result=apply(state,ops,&desired);
     if(result==KUI_DRIVE_CONTROL_OK) {
@@ -76,7 +109,7 @@ enum kui_drive_control_result kui_drive_controls_select(struct kui_drive_control
     }
     /* SET failure may have partially changed the firmware. No caller may skip
      * this profile and read under the previous policy until rollback verifies. */
-    if(!ops->safe(ops->ctx) || apply(state,ops,&previous)!=KUI_DRIVE_CONTROL_OK)
+    if(!ops->safe(ops->ctx) || apply_mode(state,ops,&previous,false)!=KUI_DRIVE_CONTROL_OK)
         return KUI_DRIVE_CONTROL_UNSAFE;
     state->verified=true;
     return result;
@@ -87,8 +120,12 @@ enum kui_drive_control_result kui_drive_controls_begin(struct kui_drive_controls
         return KUI_DRIVE_CONTROL_INVALID;
     if(!ops->safe(ops->ctx))return KUI_DRIVE_CONTROL_UNSAFE;
     memset(state,0,sizeof(*state));
+    state->attempt_result=KUI_DRIVE_CONTROL_QUERY_FAILED;
     /* The historical default path issues neither REQ_MODE nor SET_MODE. */
-    if(!options->speed && !options->retries) {state->active=state->verified=true;return KUI_DRIVE_CONTROL_OK;}
+    if(!options->speed && !options->retries) {
+        state->attempt_result=KUI_DRIVE_CONTROL_OK;
+        state->active=state->verified=true;return KUI_DRIVE_CONTROL_OK;
+    }
     if(!ops->query(ops->ctx,&state->original))return KUI_DRIVE_CONTROL_QUERY_FAILED;
     if(!valid_mode(&state->original))return KUI_DRIVE_CONTROL_QUERY_FAILED;
     state->requested=selected_mode(state,options);

@@ -46,6 +46,11 @@ def main():
                                   "sha" if case in ("sha", "named-sha") else "clean")
                 output = run(BINARY, str(image), str(fixture), case)
                 assert f"PASS Advanced CRC {case}; original files unchanged" in output
+                if case.startswith("guard-"):
+                    guards=[line for line in output.splitlines() if line.startswith("Saved reads previously disagreed in ")]
+                    assert guards and all(line.startswith("Saved reads previously disagreed in /Games/SCAN TEST; ") for line in guards)
+                    assert all("complete Advanced CRC repeat-read scan before continuing" in line for line in guards)
+                    assert "salvage blocked" not in output
                 if case not in ("write-fail", "sync-fail", "final-sync-fail"):
                     run("fsck.fat" if kind == "fat32" else "fsck.exfat", "-n", str(image))
                 image.unlink()

@@ -37,6 +37,7 @@ void kui_shell_init(struct kui_shell *s, const struct kui_settings *p) {
     s->vmu_emulation_enabled=s->vmu_emulation_requested=true;
     s->vmu_collection_return=s->vmu_backups_return=s->vmu_wizard_return=KUI_SHELL_VMU_TOOLS;
     s->salvage_passes=0; /* Keep retrying unresolved sectors until complete or stopped. */
+    s->salvage_result_return=KUI_SHELL_SALVAGE_DRIVE;s->scan_return=KUI_SHELL_ADVANCED;
     kui_storage_test_defaults(&s->storage_test_request);
     const struct kui_settings initial = {true, false, true,KUI_CAPTURE_FORMAT_GDI,0,false};
     kui_shell_set_preferences(s, p ? p : &initial);
@@ -1669,6 +1670,25 @@ static void edit_clock(struct kui_shell *s,unsigned buttons) {
     while(d->day>1 && !kui_datetime_valid(d)) --d->day;
     s->clock_notice[0]=0;
 }
+static void recovery_requests_clear(struct kui_shell *s) {
+    s->salvage_trial_requested=s->salvage_speed_probe_requested=s->salvage_trial_result=false;
+    s->salvage_details=false;
+    s->salvage_diagnostic_requested=KUI_SALVAGE_DIAGNOSTIC_NONE;
+}
+static enum kui_shell_action recovery_diagnostic(struct kui_shell *s,
+        enum kui_salvage_diagnostic mode,bool trial,bool speed) {
+    enum kui_shell_page origin=s->page;
+    recovery_requests_clear(s);
+    s->salvage_result_return=origin==KUI_SHELL_SALVAGE_DRIVE?origin:KUI_SHELL_SALVAGE;
+    s->salvage_diagnostic_requested=mode;s->salvage_trial_requested=trial;
+    s->salvage_speed_probe_requested=speed;s->salvage_trial_result=true;
+    s->page=KUI_SHELL_SALVAGE;return KUI_SHELL_SALVAGE_RECOVER;
+}
+static void recovery_pass_limit(struct kui_shell *s,bool previous) {
+    static const unsigned limits[]={0,1,5,10,20,50};unsigned index=0;
+    while(index<5 && limits[index]!=s->salvage_passes)++index;
+    s->salvage_passes=limits[(index+(previous?5u:1u))%6u];
+}
 enum kui_shell_action kui_shell_input(struct kui_shell *s,
         unsigned buttons, bool busy) {
     if(!s) return KUI_SHELL_NONE;
@@ -1691,7 +1711,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             s->confirm_clock=false;s->confirm_defaults=false;s->confirm_vmu_restore=false;
             s->confirm_vmu_delete=false;s->confirm_vmu_copy=false;s->confirm_vmu_copy_all=false;
             s->confirm_vmu_import=false;s->confirm_music_clear=false;s->confirm_restart=false;s->confirm_salvage=false;
-            s->confirm_salvage_defer=false;
+            s->confirm_salvage_defer=false;s->confirm_salvage_check=false;
             s->confirm_repair_in_place=false;s->confirm_wifi_forget=false;
             s->confirm_wifi_update=false;
             return KUI_SHELL_STOP;
@@ -1729,9 +1749,18 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             s->page=KUI_SHELL_STORAGE_TESTS;s->storage_test_show_result=false;
             return KUI_SHELL_NONE;
         }
+        if(s->confirm_salvage_check) {s->confirm_salvage_check=false;return KUI_SHELL_NONE;}
         if(s->confirm_salvage) {s->confirm_salvage=false;s->confirm_salvage_defer=false;return KUI_SHELL_NONE;}
-        if(s->page==KUI_SHELL_SALVAGE_DRIVE) {s->salvage_trial_requested=false;s->page=KUI_SHELL_SALVAGE;return KUI_SHELL_NONE;}
-        if(s->page==KUI_SHELL_SALVAGE) {s->salvage_trial_requested=false;s->salvage_trial_result=false;s->confirm_salvage_defer=false;s->page=KUI_SHELL_ADVANCED;return KUI_SHELL_NONE;}
+        if(s->page==KUI_SHELL_SALVAGE_DRIVE || s->page==KUI_SHELL_SALVAGE_OPTIONS) {
+            recovery_requests_clear(s);s->page=KUI_SHELL_SALVAGE;return KUI_SHELL_NONE;
+        }
+        if(s->page==KUI_SHELL_SALVAGE) {
+            enum kui_shell_page destination=s->salvage_trial_result?s->salvage_result_return:KUI_SHELL_DISC_TOOLS;
+            recovery_requests_clear(s);s->confirm_salvage_defer=false;
+            s->page=destination==KUI_SHELL_SALVAGE_DRIVE?destination:
+                destination==KUI_SHELL_SALVAGE?destination:KUI_SHELL_DISC_TOOLS;
+            return KUI_SHELL_NONE;
+        }
         if(s->confirm_restart) {s->confirm_restart=false;return KUI_SHELL_NONE;}
         if(s->page==KUI_SHELL_SYSTEM_TOOLS) {s->page=KUI_SHELL_SETTINGS;return KUI_SHELL_NONE;}
         if(s->page==KUI_SHELL_FTP) {s->page=KUI_SHELL_NETWORK;return KUI_SHELL_NONE;}
@@ -1778,7 +1807,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(s->confirm_vmu_restore) {s->confirm_vmu_restore=false;return KUI_SHELL_NONE;}
         if(s->page==KUI_SHELL_CD_AUDIO) {s->page=KUI_SHELL_MUSIC;return KUI_SHELL_NONE;}
         if(s->page==KUI_SHELL_CLOCK) {s->page=KUI_SHELL_SETTINGS;return KUI_SHELL_NONE;}
-        if(s->page==KUI_SHELL_CRC_SCAN) {s->page=KUI_SHELL_ADVANCED;return KUI_SHELL_NONE;}
+        if(s->page==KUI_SHELL_CRC_SCAN) {s->page=s->scan_return;return KUI_SHELL_NONE;}
         if(s->page==KUI_SHELL_VMU_IMAGE) {
             s->page=s->vmu_image_collection?KUI_SHELL_VMU_CARD:KUI_SHELL_VMU_RESTORE;
             return KUI_SHELL_NONE;
@@ -1898,6 +1927,10 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             return KUI_SHELL_NONE;
         }
         if(s->page == KUI_SHELL_DESTINATION) {
+            if(s->browse_for_scan && s->scan_return==KUI_SHELL_DISC_TOOLS &&
+               !strcmp(s->browse_path,s->destination)) {
+                s->page=KUI_SHELL_DISC_TOOLS;s->browse_for_scan=false;return KUI_SHELL_NONE;
+            }
             char parent[KUI_DEST_ROOT_CAP];
             if(kui_destination_parent(parent,s->browse_path) &&
                strcmp(parent,s->browse_path)) {
@@ -1907,6 +1940,8 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             if(s->browse_for_capture_job) {
                 s->browse_for_capture_job=false;s->page=KUI_SHELL_ADVANCED;
                 s->destination_notice[0]=0;
+            } else if(s->browse_for_scan) {
+                s->page=s->scan_return;s->browse_for_scan=false;
             }
             return KUI_SHELL_NONE;
         }
@@ -1932,7 +1967,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     bool song_page=s->page==KUI_SHELL_HOME || s->page==KUI_SHELL_RIPPER;
     bool confirming=s->confirm_new || s->confirm_quick_resume || s->confirm_gd_boot ||
         s->confirm_storage_test || s->confirm_clock || s->confirm_defaults || s->confirm_vmu_restore ||
-        s->confirm_vmu_delete || s->confirm_vmu_copy || s->confirm_vmu_copy_all || s->confirm_vmu_import || s->confirm_music_clear || s->confirm_restart || s->confirm_salvage ||
+        s->confirm_vmu_delete || s->confirm_vmu_copy || s->confirm_vmu_copy_all || s->confirm_vmu_import || s->confirm_music_clear || s->confirm_restart || s->confirm_salvage || s->confirm_salvage_check ||
         s->confirm_repair_in_place || s->confirm_wifi_forget || s->confirm_wifi_update || s->confirm_vmu_wizard_reset || s->page==KUI_SHELL_GAMES_PROBE_CONFIRM || s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ||
         s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM || s->page==KUI_SHELL_GAMES_LAUNCH_OPTIONS ||
         s->page==KUI_SHELL_GAMES_VARIANTS || s->page==KUI_SHELL_FILES_CONFIRM;
@@ -1945,6 +1980,9 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
        (busy || (s->page!=KUI_SHELL_VMU && s->page!=KUI_SHELL_MUSIC &&
                  s->page!=KUI_SHELL_DIAGNOSTICS)) && !confirming) return KUI_SHELL_MSTATS;
     if(busy) {
+        if(s->page==KUI_SHELL_SALVAGE && !s->salvage_trial_result && !confirming && buttons==KUI_SHELL_Y) {
+            s->salvage_details=!s->salvage_details;return KUI_SHELL_NONE;
+        }
         if(s->page == KUI_SHELL_DIAGNOSTICS) scroll(s, buttons);
         return KUI_SHELL_NONE;
     }
@@ -1968,10 +2006,18 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(buttons&KUI_SHELL_A) {s->confirm_repair_in_place=false;return KUI_SHELL_REPAIR_IN_PLACE;}
         return KUI_SHELL_NONE;
     }
+    if(s->confirm_salvage_check) {
+        if(buttons==KUI_SHELL_A) {
+            s->confirm_salvage_check=false;
+            return recovery_diagnostic(s,KUI_SALVAGE_DIAGNOSTIC_REVALIDATE,false,false);
+        }
+        return KUI_SHELL_NONE;
+    }
     if(s->confirm_salvage) {
         if(buttons&KUI_SHELL_A) {
             if(s->confirm_salvage_defer && buttons!=KUI_SHELL_A)return KUI_SHELL_NONE;
             bool defer=s->confirm_salvage_defer;s->confirm_salvage=false;s->confirm_salvage_defer=false;
+            s->page=KUI_SHELL_SALVAGE;
             return defer?KUI_SHELL_SALVAGE_RESUME_DEFER:KUI_SHELL_SALVAGE_NEW;
         }
         return KUI_SHELL_NONE;
@@ -2060,9 +2106,17 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     }
     switch(s->page) {
     case KUI_SHELL_DISC_TOOLS:
-        s->disc_tools_selected=move_count(s->disc_tools_selected,buttons,2);
-        if(buttons&KUI_SHELL_A) {
-            s->page=s->disc_tools_selected?KUI_SHELL_GD_PLAY:KUI_SHELL_RIPPER;
+        s->disc_tools_selected=move_count(s->disc_tools_selected,buttons,4);
+        if(buttons==KUI_SHELL_A) {
+            if(s->disc_tools_selected==1) {
+                recovery_requests_clear(s);s->salvage_selected=KUI_SHELL_RECOVERY_CONTINUE;
+                s->page=KUI_SHELL_SALVAGE;
+            } else if(s->disc_tools_selected==2) {
+                s->recovery_operation=0;s->scan_return=KUI_SHELL_DISC_TOOLS;
+                s->browse_for_scan=true;s->browse_for_capture_job=false;s->page=KUI_SHELL_DESTINATION;
+                snprintf(s->browse_path,sizeof(s->browse_path),"%s",s->destination);
+                return list_destination(s,true);
+            } else s->page=s->disc_tools_selected==3?KUI_SHELL_GD_PLAY:KUI_SHELL_RIPPER;
             return KUI_SHELL_NONE;
         }
         break;
@@ -2389,7 +2443,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
                 s->recovery_operation=s->advanced_selected==KUI_SHELL_RIPPER_TOOL_REPAIR?1u:
                     s->advanced_selected==KUI_SHELL_RIPPER_TOOL_REPAIR_IN_PLACE?3u:
                     s->advanced_selected==KUI_SHELL_RIPPER_TOOL_REPAIR_NEW_COPY?4u:2u;
-                s->browse_for_scan=true;s->browse_for_capture_job=false;s->page=KUI_SHELL_DESTINATION;
+                s->scan_return=KUI_SHELL_ADVANCED;s->browse_for_scan=true;s->browse_for_capture_job=false;s->page=KUI_SHELL_DESTINATION;
                 snprintf(s->browse_path,sizeof(s->browse_path),"%s",s->destination);
                 return list_destination(s,true);
             }
@@ -2403,7 +2457,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
                 if(buttons==KUI_SHELL_A) capture_label_keyboard(s);
                 break;
             }
-            if(s->advanced_selected==6) {s->page=KUI_SHELL_SALVAGE;return KUI_SHELL_NONE;}
+            if(s->advanced_selected==6) {recovery_requests_clear(s);s->salvage_selected=KUI_SHELL_RECOVERY_CONTINUE;s->page=KUI_SHELL_SALVAGE;return KUI_SHELL_NONE;}
             if(s->advanced_selected<2) {
                 s->page=KUI_SHELL_RIPPER;
                 return s->advanced_selected?KUI_SHELL_RESUME:KUI_SHELL_VERIFY;
@@ -2412,7 +2466,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
                 s->confirm_quick_resume=true; return KUI_SHELL_NONE;
             }
             if(s->advanced_selected==4 || s->advanced_selected==5) {
-                s->recovery_operation=0;
+                s->recovery_operation=0;s->scan_return=KUI_SHELL_ADVANCED;
                 s->browse_for_scan=s->advanced_selected==5;
                 s->browse_for_capture_job=false;
                 s->page=KUI_SHELL_DESTINATION;
@@ -2429,7 +2483,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
            buttons!=KUI_SHELL_Y && buttons!=KUI_SHELL_A && buttons!=KUI_SHELL_UP &&
            buttons!=KUI_SHELL_DOWN && buttons!=KUI_SHELL_LEFT && buttons!=KUI_SHELL_RIGHT) break;
         if(buttons & KUI_SHELL_START) {
-            s->page=s->browse_for_scan || s->browse_for_capture_job?KUI_SHELL_ADVANCED:KUI_SHELL_RIPPER;
+            s->page=s->browse_for_scan?s->scan_return:s->browse_for_capture_job?KUI_SHELL_ADVANCED:KUI_SHELL_RIPPER;
             s->browse_for_capture_job=false;
             snprintf(s->browse_path,sizeof(s->browse_path),"%s",s->destination);
             s->destination_notice[0]=0;
@@ -2817,61 +2871,66 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         return wifi_input(s,buttons);
     case KUI_SHELL_SALVAGE: {
         if(s->salvage_trial_result) {
-            if(buttons&KUI_SHELL_A)s->page=KUI_SHELL_SALVAGE_DRIVE;
-            return KUI_SHELL_NONE;
-        }
-        if(buttons&KUI_SHELL_Y) {
-            if(buttons==KUI_SHELL_Y && s->salvage_selected==1) {
-                s->salvage_trial_requested=false;
-                s->confirm_salvage=true;s->confirm_salvage_defer=true;
+            if(buttons==KUI_SHELL_A) {
+                enum kui_shell_page destination=s->salvage_result_return;
+                recovery_requests_clear(s);
+                s->page=destination==KUI_SHELL_SALVAGE_DRIVE?destination:KUI_SHELL_SALVAGE;
             }
             return KUI_SHELL_NONE;
         }
-        s->salvage_selected=move_count(s->salvage_selected,buttons,6);
-        unsigned horizontal=buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT);
-        if(horizontal==KUI_SHELL_LEFT || horizontal==KUI_SHELL_RIGHT) {
-            if(s->salvage_selected==3) {
-                static const unsigned limits[]={0,1,5,10,20,50};unsigned index=0;
-                while(index<5 && limits[index]!=s->salvage_passes) ++index;
-                index=(index+(horizontal==KUI_SHELL_LEFT?5:1))%6;
-                s->salvage_passes=limits[index];
-            }
-            if(s->salvage_selected==4)s->salvage_verify_files=!s->salvage_verify_files;
-        }
-        if(buttons&KUI_SHELL_A) {
-            s->confirm_salvage_defer=false;
-            if(s->salvage_selected<3)s->salvage_trial_requested=s->salvage_trial_result=false;
-            if(s->salvage_selected==0) s->confirm_salvage=true;
-            if(s->salvage_selected==1) return KUI_SHELL_SALVAGE_RESUME;
-            if(s->salvage_selected==2) return KUI_SHELL_SALVAGE_RECOVER;
-            if(s->salvage_selected==4)s->salvage_verify_files=!s->salvage_verify_files;
-            if(s->salvage_selected==5)s->page=KUI_SHELL_SALVAGE_DRIVE;
-        }
+        s->salvage_selected=move_count(s->salvage_selected,buttons,KUI_SHELL_RECOVERY_COUNT);
+        if(buttons!=KUI_SHELL_A)break;
+        recovery_requests_clear(s);s->confirm_salvage_defer=false;
+        if(s->salvage_selected==KUI_SHELL_RECOVERY_CONTINUE) {
+            if(s->salvage_dashboard.known && s->salvage_dashboard.blocked) s->confirm_salvage_check=true;
+            else return KUI_SHELL_SALVAGE_RESUME;
+        } else if(s->salvage_selected==KUI_SHELL_RECOVERY_NEW)s->confirm_salvage=true;
+        else if(s->salvage_selected==KUI_SHELL_RECOVERY_OPTIONS)s->page=KUI_SHELL_SALVAGE_OPTIONS;
+        else if(s->salvage_selected==KUI_SHELL_RECOVERY_DIAGNOSTICS)s->page=KUI_SHELL_SALVAGE_DRIVE;
         break;
     }
-    case KUI_SHELL_SALVAGE_DRIVE: {
-        s->salvage_drive_selected=move_count(s->salvage_drive_selected,buttons,4);
+    case KUI_SHELL_SALVAGE_OPTIONS: {
+        s->salvage_options_selected=move_count(s->salvage_options_selected,buttons,KUI_SHELL_RECOVERY_OPTIONS_COUNT);
         unsigned horizontal=buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT);
         bool previous=horizontal==KUI_SHELL_LEFT;
-        if(previous || horizontal==KUI_SHELL_RIGHT || (buttons&KUI_SHELL_A)) {
-            if(s->salvage_drive_selected==0) {
-                unsigned value=s->salvage_drive_options.speed%KUI_DRIVE_SPEED_CHOICES;
-                s->salvage_drive_options.speed=(value+(previous?KUI_DRIVE_SPEED_CHOICES-1:1))%KUI_DRIVE_SPEED_CHOICES;
-            } else if(s->salvage_drive_selected==1) {
-                unsigned value=s->salvage_drive_options.retries%KUI_DRIVE_RETRY_CHOICES;
-                s->salvage_drive_options.retries=(value+(previous?KUI_DRIVE_RETRY_CHOICES-1:1))%KUI_DRIVE_RETRY_CHOICES;
-            } else if(buttons&KUI_SHELL_A) {
-                if(s->salvage_drive_selected==2) {
-                    s->salvage_trial_requested=true;
-                    s->salvage_trial_result=true;s->salvage_selected=5;
-                    s->page=KUI_SHELL_SALVAGE;
-                    return KUI_SHELL_SALVAGE_RECOVER;
-                }
-                s->salvage_trial_requested=false;s->page=KUI_SHELL_SALVAGE;
+        bool change=previous || horizontal==KUI_SHELL_RIGHT || buttons==KUI_SHELL_A;
+        if(!change)break;
+        switch(s->salvage_options_selected) {
+        case KUI_SHELL_RECOVERY_RETRIES:
+            s->salvage_drive_options.retries=(s->salvage_drive_options.retries+
+                (previous?KUI_DRIVE_RETRY_CHOICES-1u:1u))%KUI_DRIVE_RETRY_CHOICES;break;
+        case KUI_SHELL_RECOVERY_PASSES:recovery_pass_limit(s,previous);break;
+        case KUI_SHELL_RECOVERY_VERIFY:s->salvage_verify_files=!s->salvage_verify_files;break;
+        case KUI_SHELL_RECOVERY_SPEED:
+            s->salvage_drive_options.speed=(s->salvage_drive_options.speed+
+                (previous?KUI_DRIVE_SPEED_CHOICES-1u:1u))%KUI_DRIVE_SPEED_CHOICES;break;
+        case KUI_SHELL_RECOVERY_DEFER:
+            if(buttons==KUI_SHELL_A) {
+                recovery_requests_clear(s);s->confirm_salvage=true;s->confirm_salvage_defer=true;
             }
+            break;
+        case KUI_SHELL_RECOVERY_OPTIONS_RETURN:
+            if(buttons==KUI_SHELL_A) {recovery_requests_clear(s);s->page=KUI_SHELL_SALVAGE;}
+            break;
+        default:break;
         }
         break;
     }
+    case KUI_SHELL_SALVAGE_DRIVE:
+        s->salvage_drive_selected=move_count(s->salvage_drive_selected,buttons,KUI_SHELL_RECOVERY_DIAGNOSTICS_COUNT);
+        if(buttons!=KUI_SHELL_A)break;
+        if(s->salvage_drive_selected==KUI_SHELL_RECOVERY_REVALIDATE) {
+            recovery_requests_clear(s);s->confirm_salvage_check=true;
+        } else if(s->salvage_drive_selected==KUI_SHELL_RECOVERY_SAVED_READS)
+            return recovery_diagnostic(s,KUI_SALVAGE_DIAGNOSTIC_SAVED_READS,false,false);
+        else if(s->salvage_drive_selected==KUI_SHELL_RECOVERY_TRIAL)
+            return recovery_diagnostic(s,KUI_SALVAGE_DIAGNOSTIC_NONE,true,false);
+        else if(s->salvage_drive_selected==KUI_SHELL_RECOVERY_SPEED_PROBE)
+            return recovery_diagnostic(s,KUI_SALVAGE_DIAGNOSTIC_NONE,false,true);
+        else if(s->salvage_drive_selected==KUI_SHELL_RECOVERY_G1_MODE)
+            return recovery_diagnostic(s,KUI_SALVAGE_DIAGNOSTIC_G1_MODE,false,false);
+        else {recovery_requests_clear(s);s->page=KUI_SHELL_SALVAGE;}
+        break;
     case KUI_SHELL_SYSTEM_TOOLS:
         s->tools_selected=move_count(s->tools_selected,buttons,6);
         if(buttons&KUI_SHELL_X) return KUI_SHELL_FLASH_BACKUP;

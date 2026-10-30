@@ -34,8 +34,9 @@ static struct {
     struct kui_drive_mode *mode_destination;
     unsigned mode_queries,mode_sets,mode_guard,mode_short,mode_fail_command;
     unsigned mode_ignore_sets,mode_timeout_command,mode_fail_on_set,mode_fail_on_query;
+    unsigned mode_ignore_speed_on_set,mode_change_flags_on_set;
     unsigned mode_format_change;
-    bool mode_init_reset,controls_during_command;
+    bool mode_init_reset,controls_during_command,g1_during_command;
     char log[32768];size_t used;
 } fake;
 char test_cache_log[64];unsigned test_cache_n;uintptr_t test_cache_start[16];size_t test_cache_bytes[16];
@@ -88,6 +89,11 @@ int syscall_gdrom_send_command(cd_cmd_code_t code,void *params) {
         const struct kui_drive_options options={.speed=1};unsigned sends=fake.sends;
         assert(!kui_disc_controls_begin(&options) && fake.sends==sends);
         fake.controls_during_command=false;
+    }
+    if(fake.g1_during_command) {
+        unsigned sends=fake.sends,queries=fake.mode_queries;
+        assert(!kui_disc_g1_probe_begin() && fake.sends==sends && fake.mode_queries==queries);
+        fake.g1_during_command=false;
     }
     if(fake.submit_busy || fake.submit_always_busy) {fake.submit_busy=false;return 0;}
     fake.polls=0;fake.abort_started=false;fake.command_started=fake.us;
@@ -182,7 +188,12 @@ int syscall_gdrom_check_command(int handle,cd_cmd_chk_status_t *detail) {
         detail->size=fake.mode_short==(unsigned)fake.command?9u:10u;return 2;
     }
     if(fake.command==CD_CMD_SET_MODE) {
-        if(!fake.mode_ignore_sets || fake.mode_sets>fake.mode_ignore_sets)fake.hardware_mode=fake.set_mode;
+        if(!fake.mode_ignore_sets || fake.mode_sets>fake.mode_ignore_sets) {
+            uint32_t prior_speed=fake.hardware_mode.speed;
+            fake.hardware_mode=fake.set_mode;
+            if(fake.mode_sets==fake.mode_ignore_speed_on_set)fake.hardware_mode.speed=prior_speed;
+            if(fake.mode_sets==fake.mode_change_flags_on_set)fake.hardware_mode.read_flags^=1u;
+        }
         detail->size=fake.mode_short==(unsigned)fake.command?9u:10u;return 2;
     }
     if(fake.command==CD_CMD_GETTOC2) {return_toc();detail->size=sizeof(cd_toc_t);return 2;}
@@ -752,6 +763,225 @@ static void trial_control_subprocesses(void) {
         int status;assert(waitpid(child,&status,0)==child && WIFEXITED(status) && WEXITSTATUS(status)==0);
     }
 }
+static int run_speed_control_probe(const char *mode) {
+    static _Alignas(32) uint8_t out[32*KUI_RAW_BYTES];
+    const struct kui_drive_mode original={6,12345,0xd9,8};
+    struct kui_toc sessions[2];reset();assert(kui_disc_prepare(sessions));fake.toc_count=0;
+    fake.hardware_mode=original;capture_phase();
+    assert(kui_disc_controls_trial_begin());
+    unsigned sends=fake.sends;
+    if(!strcmp(mode,"speed-native-all")) {
+        for(unsigned selection=0;selection<KUI_DRIVE_SPEED_CHOICES;++selection) {
+            struct kui_drive_mode expected=original;
+            expected.speed=selection?selection-1u:original.speed;expected.read_retry=1;
+            assert(kui_disc_controls_speed_select(NULL,selection)==1);
+            assert(same_mode(&fake.hardware_mode,&expected));
+            unsigned reads=fake.reads,queries=fake.mode_queries;
+            assert(kui_disc_read_raw(NULL,45150+selection,1,out)==KUI_READ_OK);
+            assert(fake.reads==reads+1 && fake.mode_queries==queries+1);
+            assert(same_mode(&fake.hardware_mode,&expected));
+        }
+        expect("SPEED mode selection=8 label=12x requested result=verified");
+        expect("diff_mask=0 (speed=1 standby=2 flags=4 retries=8)");
+        fake.stop=true;assert(kui_disc_controls_end() && same_mode(&fake.hardware_mode,&original));
+    } else if(!strcmp(mode,"speed-native-invalid")) {
+        assert(kui_disc_controls_speed_select(NULL,KUI_DRIVE_SPEED_CHOICES)==-1 && fake.sends==sends);
+        assert(kui_disc_controls_end() && same_mode(&fake.hardware_mode,&original));
+    } else if(!strcmp(mode,"speed-native-cancel")) {
+        fake.stop=true;
+        assert(kui_disc_controls_speed_select(NULL,4)==-1 && fake.sends==sends);
+        assert(kui_disc_controls_end() && same_mode(&fake.hardware_mode,&original));
+    } else if(!strcmp(mode,"speed-native-owned")) {
+        assert(kui_disc_read_begin(NULL,45150,32,out));sends=fake.sends;
+        assert(kui_disc_controls_speed_select(NULL,4)==-1 && fake.sends==sends);
+        assert(kui_disc_read_end(NULL)==KUI_READ_OK && kui_disc_controls_end());
+        assert(same_mode(&fake.hardware_mode,&original));
+    } else if(!strcmp(mode,"speed-native-cancel-during-select")) {
+        fake.complete_after_us=20000;fake.cancel_on_sleep=true;
+        assert(kui_disc_controls_speed_select(NULL,4)==1 && fake.stop);
+        sends=fake.sends;
+        assert(kui_disc_read_raw(NULL,45150,1,out)==KUI_READ_FATAL && fake.sends==sends && !fake.reads);
+        assert(kui_disc_controls_end() && same_mode(&fake.hardware_mode,&original));
+    } else if(!strcmp(mode,"speed-native-media-change")) {
+        assert(kui_disc_controls_speed_select(NULL,0)==1);
+        fake.changed=true;
+        assert(kui_disc_read_raw(NULL,45150,1,out)==KUI_READ_FATAL);sends=fake.sends;
+        fake.changed=false;
+        assert(kui_disc_controls_speed_select(NULL,4)==-1 && fake.sends==sends);
+        assert(!kui_disc_controls_end() && fake.sends==sends);
+    } else if(!strcmp(mode,"speed-native-rollback-fatal")) {
+        fake.mode_fail_command=CD_CMD_SET_MODE;
+        assert(kui_disc_controls_speed_select(NULL,4)==-1);sends=fake.sends;
+        fake.mode_fail_command=0;
+        assert(kui_disc_controls_speed_select(NULL,0)==-1 && !kui_disc_controls_end());
+        assert(kui_disc_read_raw(NULL,45150,1,out)==KUI_READ_FATAL && fake.sends==sends);
+        expect("SPEED rollback unavailable: RESET REQUIRED");
+    } else {
+        assert(kui_disc_controls_speed_select(NULL,0)==1);
+        struct kui_drive_mode previous=original;previous.read_retry=1;
+        fake.used=0;fake.log[0]=0;
+        if(!strcmp(mode,"speed-native-ignored-speed"))fake.mode_ignore_speed_on_set=fake.mode_sets+1;
+        else if(!strcmp(mode,"speed-native-changed-flags"))fake.mode_change_flags_on_set=fake.mode_sets+1;
+        else if(!strcmp(mode,"speed-native-query-failure"))fake.mode_fail_on_query=fake.mode_queries+1;
+        else {assert(!strcmp(mode,"speed-native-set-failure"));fake.mode_fail_on_set=fake.mode_sets+1;}
+        unsigned sets=fake.mode_sets;
+        assert(kui_disc_controls_speed_select(NULL,4)==0 && same_mode(&fake.hardware_mode,&previous));
+        assert(fake.mode_sets==sets+2);
+        expect("Drive attempt requested speed_code=3 standby=12345 flags=d9 retries=1");
+        if(!strcmp(mode,"speed-native-ignored-speed")) {
+            expect("Drive attempt returned before rollback speed_code=6 standby=12345 flags=d9 retries=1");
+            expect("diff_mask=1 (speed=1 standby=2 flags=4 retries=8)");
+        } else if(!strcmp(mode,"speed-native-changed-flags")) {
+            expect("Drive attempt returned before rollback speed_code=3 standby=12345 flags=d8 retries=1");
+            expect("diff_mask=4 (speed=1 standby=2 flags=4 retries=8)");
+        } else {
+            expect("no valid returned tuple");
+            assert(!strstr(fake.log,"Drive attempt returned before rollback"));
+        }
+        expect("Drive speed probe verified rollback speed_code=6 standby=12345 flags=d9 retries=1");
+        fake.mode_ignore_speed_on_set=fake.mode_change_flags_on_set=0;
+        fake.mode_fail_on_query=fake.mode_fail_on_set=0;
+        assert(kui_disc_read_raw(NULL,45150,1,out)==KUI_READ_OK);
+        assert(kui_disc_controls_speed_select(NULL,4)==1);
+        assert(fake.hardware_mode.speed==3 && fake.hardware_mode.read_retry==1);
+        assert(kui_disc_controls_end() && same_mode(&fake.hardware_mode,&original));
+    }
+    printf("PASS native speed probe controls: %s\n",mode);return 0;
+}
+static void speed_control_subprocesses(void) {
+    const char *cases[]={"speed-native-all","speed-native-ignored-speed","speed-native-changed-flags",
+        "speed-native-query-failure","speed-native-set-failure","speed-native-rollback-fatal",
+        "speed-native-cancel","speed-native-cancel-during-select","speed-native-owned",
+        "speed-native-media-change","speed-native-invalid"};
+    for(unsigned i=0;i<sizeof(cases)/sizeof(*cases);++i) {
+        pid_t child=fork();assert(child>=0);
+        if(!child) {int result=run_speed_control_probe(cases[i]);assert(fflush(stdout)==0);_exit(result);}
+        int status;assert(waitpid(child,&status,0)==child && WIFEXITED(status) && WEXITSTATUS(status)==0);
+    }
+}
+static void g1_gate_poisoned(uint8_t *out) {
+    struct kui_toc sessions[2];
+    const struct kui_drive_options options={.retries=2};
+    unsigned sends=fake.sends,modes=fake.modes,bus=fake.bus_inits;
+    fake.stop=false;
+    assert(!kui_disc_g1_probe_begin());
+    assert(!kui_disc_prepare(sessions) && !kui_disc_stop());
+    assert(!kui_disc_controls_begin(&options) && !kui_disc_controls_trial_begin());
+    assert(!kui_disc_read_begin(NULL,45150,32,out));
+    assert(kui_disc_read_raw(NULL,45150,1,out)==KUI_READ_FATAL);
+    assert(fake.sends==sends && fake.modes==modes && fake.bus_inits==bus);
+}
+static int run_g1_gate(const char *mode) {
+    static _Alignas(32) uint8_t out[32*KUI_RAW_BYTES];
+    const struct kui_drive_mode original={6,12345,0xd9,8};
+    struct kui_toc sessions[2];
+    reset();
+    if(!strcmp(mode,"g1-gate-uninitialized")) {
+        assert(!kui_disc_g1_probe_begin() && !kui_disc_g1_probe_end(true));
+        assert(!fake.sends && !fake.bus_inits && !kui_disc_read_pending(NULL));
+        printf("PASS native direct G1 gate: %s\n",mode);return 0;
+    }
+    assert(kui_disc_prepare(sessions));fake.toc_count=0;fake.hardware_mode=original;
+    unsigned sends=fake.sends,queries=fake.mode_queries;
+    if(!strcmp(mode,"g1-gate-command-owned")) {
+        fake.g1_during_command=true;
+        assert(kui_disc_read_raw(NULL,45150,1,out)==KUI_READ_OK);
+        assert(!fake.g1_during_command && fake.mode_queries==queries);
+        assert(kui_disc_g1_probe_begin() && kui_disc_g1_probe_end(true));
+    } else if(!strcmp(mode,"g1-gate-dma-owned")) {
+        assert(kui_disc_read_begin(NULL,45150,32,out));sends=fake.sends;
+        assert(!kui_disc_g1_probe_begin() && fake.sends==sends && fake.mode_queries==queries);
+        assert(kui_disc_read_end(NULL)==KUI_READ_OK);
+        assert(kui_disc_g1_probe_begin() && kui_disc_g1_probe_end(true));
+    } else if(!strcmp(mode,"g1-gate-controls-owned")) {
+        const struct kui_drive_options unchanged_options={0};
+        assert(kui_disc_controls_begin(&unchanged_options));
+        assert(!kui_disc_g1_probe_begin() && fake.sends==sends && fake.mode_queries==queries);
+        assert(kui_disc_controls_end());
+        assert(kui_disc_g1_probe_begin() && kui_disc_g1_probe_end(true));
+    } else if(!strcmp(mode,"g1-gate-entry-cancel")) {
+        fake.stop=true;
+        assert(!kui_disc_g1_probe_begin() && fake.sends==sends && fake.mode_queries==queries);
+        fake.stop=false;
+        assert(kui_disc_g1_probe_begin() && kui_disc_g1_probe_end(true));
+    } else if(!strcmp(mode,"g1-gate-entry-query-failure")) {
+        fake.mode_fail_on_query=queries+1;
+        assert(!kui_disc_g1_probe_begin() && fake.mode_queries==queries+1 && !fake.mode_sets);
+        fake.mode_fail_on_query=0;
+        assert(kui_disc_read_raw(NULL,45150,1,out)==KUI_READ_OK);
+        assert(kui_disc_g1_probe_begin() && kui_disc_g1_probe_end(true));
+    } else {
+        assert(kui_disc_g1_probe_begin() && fake.mode_queries==queries+1 && !fake.mode_sets);
+        assert(same_mode(&fake.hardware_mode,&original));
+        sends=fake.sends;queries=fake.mode_queries;
+        if(!strcmp(mode,"g1-gate-exclusive")) {
+            unsigned modes=fake.modes,bus=fake.bus_inits,drive_queries=fake.drive_queries;
+            unsigned polls=fake.total_polls;
+            const struct kui_drive_options options={.speed=4,.retries=2};
+            const struct kui_capture_plan plan=recovery_plan(false,false);
+            const uint8_t *probe_data=NULL;struct kui_probe_stats stats={0};bool is_cd=true;
+            memset(out,0xd3,sizeof(out));
+            assert(kui_disc_read_pending(NULL));
+            assert(!kui_disc_g1_probe_begin());
+            assert(!kui_disc_prepare(sessions) && !kui_disc_prepare_capture(sessions,&is_cd));
+            assert(!kui_disc_stop() && !kui_disc_recover(NULL,&plan));
+            assert(!kui_disc_controls_begin(&options) && !kui_disc_controls_trial_begin());
+            assert(kui_disc_controls_trial_select(NULL,0)==-1);
+            assert(kui_disc_controls_speed_select(NULL,0)==-1);
+            assert(kui_disc_read_raw(NULL,45150,1,out)==KUI_READ_FATAL);
+            assert(kui_disc_read_salvage(NULL,45150,1,out)==KUI_READ_FATAL);
+            assert(!kui_disc_read_begin(NULL,45150,32,out));
+            assert(kui_disc_read_end(NULL)==KUI_READ_FATAL);
+            assert(kui_disc_read_probe(NULL,45150,1,0,&probe_data,&stats)==KUI_READ_FATAL);
+            assert(!probe_data);
+#ifdef KUI_EXPERIMENTAL_DMA
+            assert(kui_disc_read_probe_dma(NULL,45150,2,&probe_data,&stats)==KUI_READ_FATAL);
+            assert(!probe_data);
+#endif
+            unchanged(out,sizeof(out));
+            assert(fake.sends==sends && fake.mode_queries==queries && fake.modes==modes &&
+                   fake.bus_inits==bus && fake.drive_queries==drive_queries && fake.total_polls==polls);
+            assert(kui_disc_g1_probe_end(true));
+            assert(!kui_disc_read_pending(NULL) && fake.mode_queries==queries+1 && !fake.mode_sets);
+            assert(!kui_disc_g1_probe_end(true));
+            assert(same_mode(&fake.hardware_mode,&original));
+            assert(kui_disc_read_raw(NULL,45150,1,out)==KUI_READ_OK);
+            assert(kui_disc_read_begin(NULL,45152,32,out));
+            assert(kui_disc_read_end(NULL)==KUI_READ_OK);
+        } else if(!strcmp(mode,"g1-gate-end-cancel")) {
+            fake.stop=true;
+            assert(kui_disc_g1_probe_end(true) && fake.mode_queries==queries+1);
+            fake.stop=false;
+            assert(!kui_disc_read_pending(NULL));
+            assert(kui_disc_read_raw(NULL,45150,1,out)==KUI_READ_OK);
+        } else {
+            bool restored=strcmp(mode,"g1-gate-unrestored")!=0;
+            if(!strcmp(mode,"g1-gate-end-speed"))fake.hardware_mode.speed=5;
+            else if(!strcmp(mode,"g1-gate-end-standby"))fake.hardware_mode.standby^=1;
+            else if(!strcmp(mode,"g1-gate-end-flags"))fake.hardware_mode.read_flags^=1;
+            else if(!strcmp(mode,"g1-gate-end-retries"))fake.hardware_mode.read_retry^=1;
+            else if(!strcmp(mode,"g1-gate-end-query-failure"))fake.mode_fail_on_query=queries+1;
+            else assert(!strcmp(mode,"g1-gate-unrestored"));
+            assert(!kui_disc_g1_probe_end(restored));
+            assert(fake.mode_queries==queries+(restored?1u:0u));
+            if(!restored)assert(fake.sends==sends);
+            fake.mode_fail_on_query=0;fake.hardware_mode=original;
+            g1_gate_poisoned(out);
+        }
+    }
+    printf("PASS native direct G1 gate: %s\n",mode);return 0;
+}
+static void g1_gate_subprocesses(void) {
+    const char *cases[]={"g1-gate-uninitialized","g1-gate-exclusive","g1-gate-command-owned",
+        "g1-gate-dma-owned","g1-gate-controls-owned","g1-gate-entry-cancel","g1-gate-entry-query-failure",
+        "g1-gate-end-cancel","g1-gate-unrestored","g1-gate-end-speed","g1-gate-end-standby",
+        "g1-gate-end-flags","g1-gate-end-retries","g1-gate-end-query-failure"};
+    for(unsigned i=0;i<sizeof(cases)/sizeof(*cases);++i) {
+        pid_t child=fork();assert(child>=0);
+        if(!child) {int result=run_g1_gate(cases[i]);assert(fflush(stdout)==0);_exit(result);}
+        int status;assert(waitpid(child,&status,0)==child && WIFEXITED(status) && WEXITSTATUS(status)==0);
+    }
+}
 static int run_controls(const char *mode) {
     static _Alignas(32) uint8_t out[32*KUI_RAW_BYTES];
     struct kui_toc sessions[2];struct kui_drive_options options={.speed=4,.retries=3};
@@ -918,7 +1148,9 @@ int main(int argc,char **argv) {
     if(argc==2 && !strncmp(argv[1],"dma",3)) return run_dma(argv[1]);
     if(argc==2 && !strncmp(argv[1],"controls-",9))return run_controls(argv[1]);
     if(argc==2 && !strncmp(argv[1],"trial-native-",13))return run_control_trial(argv[1]);
-    if(argc==1) {prepare_subprocess();recovery_subprocesses();salvage_policy_subprocesses();controls_subprocesses();trial_control_subprocesses();}
+    if(argc==2 && !strncmp(argv[1],"speed-native-",13))return run_speed_control_probe(argv[1]);
+    if(argc==2 && !strncmp(argv[1],"g1-gate-",8))return run_g1_gate(argv[1]);
+    if(argc==1) {prepare_subprocess();recovery_subprocesses();salvage_policy_subprocesses();controls_subprocesses();trial_control_subprocesses();speed_control_subprocesses();g1_gate_subprocesses();}
     memset(out,0xd3,sizeof(out));reset();
     if(argc==2) {
         capture_phase();

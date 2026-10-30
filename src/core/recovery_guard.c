@@ -10,6 +10,10 @@
 #define GUARD_BYTES 512u
 static const char guard_name[]=".kui-readback-unstable";
 static const char part_name[]=".kui-readback-unstable.part";
+/* A failed publication/unlink/sync can leave directory state uncertain even if the marker
+ * is no longer visible through FatFs. Never interpret that absence as repair
+ * authority later in this boot. Re-marking below is best effort only. */
+static bool clear_uncertain;
 static uint32_t get32(const uint8_t *p) {return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24;}
 static void put32(uint8_t *p,uint32_t n) {for(unsigned i=0;i<4;++i)p[i]=(uint8_t)(n>>(8*i));}
 static bool paths(const char *directory,char folder[KUI_DEST_JOB_CAP],char final[KUI_DEST_PATH_CAP],char part[KUI_DEST_PATH_CAP]) {
@@ -56,14 +60,33 @@ static bool valid_marker(const uint8_t data[GUARD_BYTES],const uint8_t identity[
     for(unsigned i=80;i<508;++i)if(data[i])return false;
     return true;
 }
+static bool salvage_folder(const char *folder) {
+    /* The ordinary scanner cannot admit unfinished salvage metadata or check
+     * its journal/candidates, so it must not be offered as an unblock action. */
+    static const char prefix[]="/kui/salvage/";
+    for(unsigned i=0;prefix[i];++i) {
+        unsigned char c=(unsigned char)folder[i];
+        if(c>='A' && c<='Z')c=(unsigned char)(c-'A'+'a');
+        if(c!=(unsigned char)prefix[i])return false;
+    }
+    return true;
+}
 bool kui_recovery_guard_check(const char *directory,kui_log_fn log) {
+    if(clear_uncertain) {
+        if(log)log("Recovery guard state uncertain; repair blocked until restart");
+        return false;
+    }
     char folder[KUI_DEST_JOB_CAP],final[KUI_DEST_PATH_CAP],part[KUI_DEST_PATH_CAP];bool a=false,b=false;
     if(!paths(directory,folder,final,part) || !present(final,&a) || !present(part,&b)) {
         if(log)log("Recovery guard: cannot inspect saved-read quarantine");
         return false;
     }
     if(a || b) {
-        if(log)log("Saved reads previously disagreed in %s; complete Advanced CRC repeat-read scan before continuing",folder+2);
+        if(log) {
+            if(salvage_folder(folder))
+                log("Saved reads previously disagreed in %s; salvage blocked; preserve this job and see Diagnostics",folder);
+            else log("Saved reads previously disagreed in %s; complete Advanced CRC repeat-read scan before continuing",folder);
+        }
         return false;
     }
     return true;
@@ -82,13 +105,17 @@ bool kui_recovery_guard_mark(const char *directory,kui_log_fn log) {
     if(f_close(&file)!=FR_OK)ok=false;
     if(!ok || !read_marker(part,saved) || memcmp(data,saved,GUARD_BYTES) || f_rename(part,final)!=FR_OK ||
        !read_marker(final,saved) || !valid_marker(saved,identity))goto failed;
-    if(log)log("Saved-read instability quarantined: %s",folder+2);
+    if(log)log("Saved-read instability quarantined: %s",folder);
     return true;
 failed:
     if(log)log("Cannot publish saved-read quarantine; operation must remain incomplete");
     return false;
 }
 bool kui_recovery_guard_validate(const char *directory,kui_log_fn log) {
+    if(clear_uncertain) {
+        if(log)log("Recovery guard state uncertain; restart before revalidation");
+        return false;
+    }
     char folder[KUI_DEST_JOB_CAP],final[KUI_DEST_PATH_CAP],part[KUI_DEST_PATH_CAP];bool a=false,b=false;uint8_t data[GUARD_BYTES],identity[64];
     if(!paths(directory,folder,final,part) || !present(final,&a) || !present(part,&b))return false;
     if(!a && !b)return true;
@@ -110,9 +137,17 @@ bool kui_recovery_guard_clear(const char *directory,kui_log_fn log) {
     if(!a && !b)return true;
     /* A torn .part is not authoritative. Only a caller's full, consistent
      * repeat-read permits removing that interrupted publication. */
-    if(b && f_unlink(part)!=FR_OK)return false;
-    if(a && f_unlink(final)!=FR_OK)return false;
-    if(disk_ioctl(0,CTRL_SYNC,NULL)!=RES_OK)return false;
-    if(log)log("Full consistent saved-data scan cleared quarantine: %s",folder+2);
+    if(b && f_unlink(part)!=FR_OK)goto uncertain;
+    if(a && f_unlink(final)!=FR_OK)goto uncertain;
+    if(disk_ioctl(0,CTRL_SYNC,NULL)!=RES_OK)goto uncertain;
+    if(log)log("Full consistent saved-data scan cleared quarantine: %s",folder);
     return true;
+uncertain:
+    kui_recovery_guard_reblock(directory,log);
+    return false;
+}
+void kui_recovery_guard_reblock(const char *directory,kui_log_fn log) {
+    clear_uncertain=true;
+    (void)kui_recovery_guard_mark(directory,log);
+    if(log)log("Recovery guard unconfirmed; repair blocked until restart; preserve this job");
 }

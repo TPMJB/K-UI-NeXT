@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Install the VMU menu UI, or restore its exact predecessor.
+"""Install a GUI-only update, or restore its exact predecessor.
 
 Only KUI/runtime.kui is replaced. Native game modules, VMU images/journals,
 profiles, settings and the General installer's backup/receipt are untouched.
@@ -371,7 +371,7 @@ def main():
     except (OSError, ValueError, KeyError, TypeError, UnicodeError, struct.error) as error:
         parser.exit(2, 'VMU menu installation refused: '+str(error)+'\n')
     print(json.dumps(result, indent=2))
-    print('Previous UI restored.' if args.restore else 'Installed. Home > VMU tools > Virtual VMUs.')
+    print('Previous UI restored.' if args.restore else 'GUI update installed.')
     print('Safely eject the card before booting the Dreamcast.')
 
 

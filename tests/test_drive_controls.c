@@ -6,7 +6,7 @@
 
 struct backend {
     struct kui_drive_mode mode;
-    unsigned queries,sets,fail_query,fail_set,poison_set,poison_query;
+    unsigned queries,sets,fail_query,fail_set,poison_set,poison_query,change_flags_set;
     bool unsafe,ignore_speed,change_flags;
 };
 static const struct kui_drive_mode original={6,12345,0x19,7};
@@ -28,7 +28,7 @@ static bool set(void *ctx,const struct kui_drive_mode *mode) {
     uint32_t speed=b->mode.speed;
     b->mode=*mode;
     if(b->ignore_speed)b->mode.speed=speed;
-    if(b->change_flags)b->mode.read_flags^=1;
+    if(b->change_flags || b->sets==b->change_flags_set)b->mode.read_flags^=1;
     if(b->sets==b->poison_set) {b->unsafe=true;return false;}
     return b->sets!=b->fail_set;
 }
@@ -48,21 +48,30 @@ static void all_choices(void) {
             assert(same(b.mode,desired));
             if(!speed && !retry) {
                 assert(!b.queries && !b.sets);
+                assert(s.attempt_result==KUI_DRIVE_CONTROL_OK && !s.attempt_observed_valid);
                 assert(kui_drive_controls_reapply(&s,&o)==KUI_DRIVE_CONTROL_OK);
                 assert(!b.queries && !b.sets);
             } else {
                 assert(b.queries==2 && b.sets==1);
+                assert(s.attempt_result==KUI_DRIVE_CONTROL_OK && s.attempt_observed_valid);
+                assert(same(s.attempt_requested,desired) && same(s.attempt_observed,desired));
                 /* INIT may reset every field. Reapplication retains the entry
                  * snapshot rather than adopting these reset defaults. */
                 b.mode=(struct kui_drive_mode){0,0,0,8};
                 assert(kui_drive_controls_reapply(&s,&o)==KUI_DRIVE_CONTROL_OK);
                 assert(same(b.mode,desired) && same(s.original,original));
+                assert(s.attempt_result==KUI_DRIVE_CONTROL_OK && s.attempt_observed_valid);
+                assert(same(s.attempt_requested,desired) && same(s.attempt_observed,desired));
                 unsigned sets=b.sets,queries=b.queries;
                 assert(kui_drive_controls_begin(&s,&o,&option)==KUI_DRIVE_CONTROL_INVALID);
                 assert(b.sets==sets && b.queries==queries && same(s.original,original));
             }
             assert(kui_drive_controls_end(&s,&o)==KUI_DRIVE_CONTROL_OK);
             assert(same(b.mode,original) && !s.active && !s.modified);
+            if(speed || retry) {
+                assert(s.attempt_result==KUI_DRIVE_CONTROL_OK && s.attempt_observed_valid);
+                assert(same(s.attempt_requested,original) && same(s.attempt_observed,original));
+            }
             unsigned sets=b.sets,queries=b.queries;
             assert(kui_drive_controls_end(&s,&o)==KUI_DRIVE_CONTROL_OK);
             assert(b.sets==sets && b.queries==queries);
@@ -250,9 +259,67 @@ static void trial_admission(void) {
     assert(kui_drive_controls_end(&s,&o)==KUI_DRIVE_CONTROL_OK);
     assert(b.sets==sets && b.queries==queries); /* query-only session changed nothing */
 }
+static void retained_attempts(void) {
+    const struct kui_drive_options changed={4,2},defaults={0,0};
+    const struct kui_drive_mode desired=trial_expected(changed);
+    for(unsigned which=0;which<6;++which) {
+        struct backend b={.mode=original};struct kui_drive_control_ops o=ops(&b);
+        struct kui_drive_controls s={0};
+        assert(kui_drive_controls_trial_begin(&s,&o)==KUI_DRIVE_CONTROL_OK);
+        assert(s.attempt_result==KUI_DRIVE_CONTROL_OK && s.attempt_observed_valid);
+        assert(same(s.attempt_requested,original) && same(s.attempt_observed,original));
+        enum kui_drive_control_result result=KUI_DRIVE_CONTROL_MISMATCH;
+        if(which==0)b.ignore_speed=true;
+        else if(which==1)b.change_flags_set=1; /* Only the rejected attempt changes flags. */
+        else if(which==2) {b.fail_query=2;result=KUI_DRIVE_CONTROL_QUERY_FAILED;}
+        else if(which==3) {b.fail_set=1;result=KUI_DRIVE_CONTROL_SET_FAILED;}
+        else if(which==4)b.change_flags=true; /* Rollback mismatches too. */
+        else {b.fail_query=2;b.fail_set=2;result=KUI_DRIVE_CONTROL_QUERY_FAILED;}
+        enum kui_drive_control_result returned=kui_drive_controls_select(&s,&o,&changed);
+        assert(returned==(which<4?result:KUI_DRIVE_CONTROL_UNSAFE));
+        /* These are the original rejected attempt, even after successful or
+         * failed rollback has replaced the ordinary observed mode. */
+        assert(same(s.attempt_requested,desired) && s.attempt_result==result);
+        assert(s.attempt_observed_valid==(which==0 || which==1 || which==4));
+        if(s.attempt_observed_valid) {
+            struct kui_drive_mode rejected=desired;
+            if(which==0)rejected.speed=original.speed;
+            else rejected.read_flags^=1;
+            assert(same(s.attempt_observed,rejected));
+        } else {
+            const struct kui_drive_mode empty={0};
+            assert(same(s.attempt_observed,empty));
+        }
+        if(which<4)assert(s.verified && same(s.observed,original));
+        else assert(!s.verified);
+        b.ignore_speed=b.change_flags=false;b.change_flags_set=0;
+        assert(kui_drive_controls_end(&s,&o)==KUI_DRIVE_CONTROL_OK);
+        assert(s.attempt_result==KUI_DRIVE_CONTROL_OK && s.attempt_observed_valid);
+        assert(same(s.attempt_requested,original) && same(s.attempt_observed,original));
+    }
+    struct backend b={.mode=original};struct kui_drive_control_ops o=ops(&b);
+    struct kui_drive_controls s={0};
+    assert(kui_drive_controls_trial_begin(&s,&o)==KUI_DRIVE_CONTROL_OK);
+    b.ignore_speed=true;
+    assert(kui_drive_controls_select(&s,&o,&changed)==KUI_DRIVE_CONTROL_MISMATCH);
+    unsigned queries=b.queries,sets=b.sets;
+    assert(kui_drive_controls_select(&s,&o,&defaults)==KUI_DRIVE_CONTROL_OK);
+    assert(b.queries==queries && b.sets==sets); /* Existing verified original mode. */
+    assert(s.attempt_result==KUI_DRIVE_CONTROL_OK && s.attempt_observed_valid);
+    assert(same(s.attempt_requested,original) && same(s.attempt_observed,original));
+    assert(kui_drive_controls_end(&s,&o)==KUI_DRIVE_CONTROL_OK);
+
+    b=(struct backend){.mode=original};s=(struct kui_drive_controls){0};
+    assert(kui_drive_controls_begin(&s,&o,&defaults)==KUI_DRIVE_CONTROL_OK);
+    assert(s.attempt_result==KUI_DRIVE_CONTROL_OK && !s.attempt_observed_valid);
+    assert(!b.queries && !b.sets); /* No fabricated readback for command-free defaults. */
+    assert(kui_drive_controls_reapply(&s,&o)==KUI_DRIVE_CONTROL_OK);
+    assert(!s.attempt_observed_valid && !b.queries && !b.sets);
+    assert(kui_drive_controls_end(&s,&o)==KUI_DRIVE_CONTROL_OK);
+}
 int main(void) {
     all_choices();errors();trial_switches();trial_rejection_and_rollback();
-    trial_unsafe_rollback();trial_admission();
-    puts("Drive controls: 54 setting combinations, 108 trial switches, rollback, original restoration and failure ownership passed");
+    trial_unsafe_rollback();trial_admission();retained_attempts();
+    puts("Drive controls: 54 setting combinations, 108 trial switches, rollback, retained attempt readbacks, original restoration and failure ownership passed");
     return 0;
 }

@@ -29,6 +29,12 @@ enum kui_drive_control_result {
 };
 struct kui_drive_controls {
     struct kui_drive_mode original, requested, observed;
+    /* Most recent admitted mode attempt, retained across automatic rollback.
+     * observed_valid is false unless that attempt completed a mode query;
+     * stale or partial replies must never be reported as its readback. */
+    struct kui_drive_mode attempt_requested, attempt_observed;
+    enum kui_drive_control_result attempt_result;
+    bool attempt_observed_valid;
     bool active, modified, snapshot_valid, verified, trial;
 };
 const char *kui_drive_speed_name(unsigned selection);
