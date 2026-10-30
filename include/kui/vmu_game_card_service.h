@@ -105,8 +105,20 @@ int kui_vmu_game_card_assignment(const char *product,struct kui_vmu_game_card_wo
  * image must be an admitted standard 128 KiB image. Old cards are never
  * changed. The new folder may remain incomplete on failure and is never
  * reused. identity receives the pinned identity only on READY. No profile is
- * required here: ordinary launch prepares it after the game is assigned. */
+ * required here: ordinary launch prepares it after the game is assigned.
+ * Fresh imported and automatic blank cards also skip every pair number pinned
+ * by either valid v1 assignment generation, even if its folder was removed;
+ * an ordinary new card cannot close a later missing-reference repair path. */
 int kui_vmu_game_card_import_publish(const void *image,size_t bytes,const uint8_t salt[16],
+    struct kui_vmu_game_card_work *work,struct kui_vmu_game_card_choice *choice,
+    uint8_t identity[16],kui_log_fn log,kui_cancel_fn cancel);
+/* As above, reserving absent pair numbers while a confirmed legacy-reference
+ * repair is being prepared. Up to 256 numbers in 1..9999; duplicates are harmless.
+ * Reserved pairs are skipped after the real directory scan, never created or
+ * modified. This prevents this import from recreating a folder which the
+ * catalogue permission must still prove absent at its atomic publication. */
+int kui_vmu_game_card_import_publish_excluding(const void *image,size_t bytes,const uint8_t salt[16],
+    const uint16_t *excluded_pairs,size_t excluded_count,
     struct kui_vmu_game_card_work *work,struct kui_vmu_game_card_choice *choice,
     uint8_t identity[16],kui_log_fn log,kui_cancel_fn cancel);
 /* Atomically add/replace this entire batch of explicit game assignments,

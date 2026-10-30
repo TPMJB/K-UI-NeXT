@@ -193,7 +193,9 @@ compatibility or VMU-worker execution result is claimed.
 def test_sheet():
     stream=io.StringIO(newline='');writer=csv.writer(stream)
     writer.writerow(('check','game_product','source_or_version','new_pair','result','notes'))
-    for name in ('Import source preserved','Two games have distinct 200-block cards',
+    for name in ('Automatic save matches need no manual file picking','Only unresolved save sets ask for a game',
+                 'Import source preserved','Two games have distinct 200-block cards',
+                 'Separate PSO versions retain all companion files','Deleted legacy card reference asks before replacement',
                  'Source versions stay separate','Launch version choice/default',
                  'Save reboot and load','Unselected assignments preserved','Both Off uses physical Standard','Exact GUI/physical restore'):
         writer.writerow((name,'','','','',''))

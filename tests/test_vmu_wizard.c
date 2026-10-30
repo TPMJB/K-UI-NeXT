@@ -19,6 +19,7 @@
 static unsigned checks,captures,inspects,imports,assigns,visiting;
 static unsigned fail_import,fail_assign,scan_mode,cancel_after,cancel_calls;
 static bool mounted,capture_error;
+static unsigned automatic_fixture,excluded_publications;
 static unsigned cid=1;
 static struct kui_volume volume={2048,65536,true};
 static struct kui_vmu_game_assignment saved[KUI_VMU_GAME_ASSIGN_MAX];
@@ -27,7 +28,9 @@ static bool candidate_visit_error;
 static struct kui_vmu_game_assignment candidate_saved[KUI_VMU_GAME_CANDIDATES_MAX];
 static char labels[64][49];
 static unsigned archives,archive_calls,fail_archive,preflights;
-static bool preflight_full,late_archive_failure;
+static bool preflight_full,late_archive_failure,missing_old_card;
+static int preflight_failure;
+static unsigned repair_version=1,confirmed_preflights,confirmed_applies;
 static struct kui_vmu_collection_card archived[32];
 static struct kui_vmu_image_summary published[64];
 static uint32_t published_crc[64];
@@ -139,9 +142,9 @@ bool kui_games_visit_images(const char *root,kui_games_image_visit_fn visit,void
 bool kui_games_inspect(const char *path,struct kui_games_detail *detail,kui_log_fn log,kui_cancel_fn cancel) {
     (void)log;(void)cancel;CHECK(!visiting);++inspects;memset(detail,0,sizeof(*detail));
     detail->valid=true;detail->native_gd=true;
-    if(strstr(path,"alpha")) {strcpy(detail->product," alpha-1 ");strcpy(detail->title,"Alpha");}
+    if(strstr(path,"alpha")) {strcpy(detail->product," alpha-1 ");strcpy(detail->title,automatic_fixture==2?"Shared Adventure":"Alpha");}
     else if(strstr(path,"beta")) {strcpy(detail->product,"BETA-1");strcpy(detail->title,"Beta");detail->windows_ce=true;}
-    else if(strstr(path,"gamma")) {strcpy(detail->product,"GAMMA-1");strcpy(detail->title,"Gamma");}
+    else if(strstr(path,"gamma")) {strcpy(detail->product,"GAMMA-1");strcpy(detail->title,automatic_fixture==2?"Shared Adventure":"Gamma");}
     else if(strstr(path,"extra")) {
         unsigned n=0;CHECK(sscanf(strstr(path,"extra"),"extra%u",&n)==1);
         snprintf(detail->product,sizeof(detail->product),"EXTRA-%u",n);
@@ -154,6 +157,20 @@ bool kui_vmu_capture_run(unsigned slot,void *image,size_t bytes,struct kui_vmu_i
     (void)log;(void)cancel;(void)progress;++captures;memset(view,0,sizeof(*view));
     if(capture_error) {strcpy(view->status.message,"Source removed");view->status.errors=1;return false;}
     struct kui_vmu_image_file files[10]={0};uint8_t payload[10][512];unsigned count=slot==3?10u:1u;
+    if(automatic_fixture) {
+        count=slot==0?4u:3u;
+        for(unsigned i=0;i<count;i++) {
+            files[i].bytes=512;files[i].entry[0]=0x33;files[i].entry[24]=1;files[i].payload=payload[i];
+            memset(payload[i],slot==2?0x99:slot==1?0x22:0x11,512u);memset(payload[i],0,64u);
+            const char *name=i==0?"ALPHA-A":i==1?"ALPHA-B":i==2?"ODDFILE":"BETAFILE";
+            memcpy(files[i].entry+4,name,strlen(name));
+            const char *description=i<2?(automatic_fixture==2?"Shared Adventure":"ALPHA-1"):i==2?"Unknown save":"BETA-1";
+            memcpy(payload[i],description,strlen(description));
+            memcpy(payload[i]+48u,"SEGA",4u);
+        }
+        struct kui_vmu_image_workspace work;
+        CHECK(kui_vmu_image_pack(files,count,image,bytes,&work,summary)==KUI_VMU_IMAGE_OK);return true;
+    }
     for(unsigned i=0;i<count;i++) {
         memset(payload[i],slot==2?0x99:(slot==1?0x22:0x11),sizeof(payload[i]));
         files[i].bytes=512;files[i].entry[0]=0x33;files[i].entry[24]=1;files[i].payload=payload[i];
@@ -217,7 +234,22 @@ int kui_vmu_game_candidates_preflight(const struct kui_vmu_game_candidates_plan 
     const struct kui_vmu_game_candidates_storage *storage,kui_log_fn log,kui_cancel_fn cancel) {
     (void)log;(void)cancel;CHECK(mounted && storage->cid[0]==cid && count>0);++preflights;
     for(unsigned i=0;i<count;i++) CHECK(plans[i].key[0] && plans[i].additional<=8);
-    return preflight_full?KUI_VMU_GAME_CANDIDATES_FULL:KUI_VMU_GAME_CANDIDATES_OK;
+    return preflight_failure?preflight_failure:preflight_full?KUI_VMU_GAME_CANDIDATES_FULL:KUI_VMU_GAME_CANDIDATES_OK;
+}
+int kui_vmu_game_candidates_preflight_repair(const struct kui_vmu_game_candidates_plan *plans,size_t count,
+    const struct kui_vmu_game_candidates_storage *storage,struct kui_vmu_game_candidates_repair *out,
+    kui_log_fn log,kui_cancel_fn cancel) {
+    memset(out,0,sizeof(*out));int r=kui_vmu_game_candidates_preflight(plans,count,storage,log,cancel);
+    if(r || !missing_old_card) return r;
+    out->storage=*storage;out->catalogue_sequence=repair_version;out->legacy_sequence=7;out->count=1;
+    memcpy(out->entries[0].key,plans[0].key,12);out->entries[0].pair=5;memset(out->entries[0].identity,0x55,16);
+    return KUI_VMU_GAME_CANDIDATES_MISSING;
+}
+int kui_vmu_game_candidates_preflight_confirmed(const struct kui_vmu_game_candidates_plan *plans,size_t count,
+    const struct kui_vmu_game_candidates_storage *storage,const struct kui_vmu_game_candidates_repair *repair,
+    kui_log_fn log,kui_cancel_fn cancel) {
+    (void)plans;(void)count;(void)log;(void)cancel;++confirmed_preflights;CHECK(mounted && storage->cid[0]==cid);
+    return repair->count==1 && repair->catalogue_sequence==repair_version?KUI_VMU_GAME_CANDIDATES_OK:KUI_VMU_GAME_CANDIDATES_STALE;
 }
 int kui_vmu_game_card_import_publish(const void *image,size_t bytes,const uint8_t salt[16],
     struct kui_vmu_game_card_work *work,struct kui_vmu_game_card_choice *choice,uint8_t identity[16],
@@ -232,6 +264,15 @@ int kui_vmu_game_card_import_publish(const void *image,size_t bytes,const uint8_
     ++imports;memset(choice,0,sizeof(*choice));
     if(fail_import && imports==fail_import) {strcpy(choice->problem,"Injected publication failure");return KUI_VMU_GAME_CARD_FAILED;}
     choice->pair=imports+1;choice->created=true;memset(identity,(int)choice->pair,16);return KUI_VMU_GAME_CARD_READY;
+}
+int kui_vmu_game_card_import_publish_excluding(const void *image,size_t bytes,const uint8_t salt[16],
+    const uint16_t *excluded,size_t excluded_count,struct kui_vmu_game_card_work *work,
+    struct kui_vmu_game_card_choice *choice,uint8_t identity[16],kui_log_fn log,kui_cancel_fn cancel) {
+    if(excluded_count) {CHECK(excluded_count==1 && excluded && excluded[0]==5);++excluded_publications;}
+    else CHECK(!excluded);
+    int r=kui_vmu_game_card_import_publish(image,bytes,salt,work,choice,identity,log,cancel);
+    if(r==KUI_VMU_GAME_CARD_READY) for(unsigned i=0;i<excluded_count;i++) CHECK(choice->pair!=excluded[i]);
+    return r;
 }
 int kui_vmu_game_card_assignments_apply(const struct kui_vmu_game_assignment *entries,size_t count,
     struct kui_vmu_game_card_work *work,struct kui_vmu_game_card_choice *choice,kui_log_fn log,kui_cancel_fn cancel) {
@@ -248,6 +289,12 @@ int kui_vmu_game_candidates_apply(const struct kui_vmu_game_assignment *entries,
         return KUI_VMU_GAME_CANDIDATES_IO;
     candidate_count=(unsigned)count;memcpy(candidate_saved,entries,count*sizeof(*entries));
     return KUI_VMU_GAME_CANDIDATES_OK;
+}
+int kui_vmu_game_candidates_apply_confirmed(const struct kui_vmu_game_assignment *entries,size_t count,
+    const struct kui_vmu_game_candidates_storage *storage,const struct kui_vmu_game_candidates_repair *repair,
+    kui_log_fn log,kui_cancel_fn cancel) {
+    CHECK(repair->count==1 && repair->catalogue_sequence==repair_version);++confirmed_applies;
+    int r=kui_vmu_game_candidates_apply(entries,count,storage,log,cancel);if(!r) missing_old_card=false;return r;
 }
 int kui_vmu_game_candidates_apply_selected(const struct kui_vmu_game_assignment *entries,size_t count,
     const struct kui_vmu_game_candidates_storage *storage,kui_log_fn log,kui_cancel_fn cancel) {
@@ -270,16 +317,130 @@ static void run(enum kui_vmu_wizard_op op) {
 static void init(void) {
     memset(&request,0,sizeof(request));strcpy(request.root,"/Games");run(KUI_VMU_WIZARD_RESET);
 }
+/* Retain the original explicit Advanced regression path. Its archive-only
+ * groups are answered through the real queue operations before review. */
+static void manual_games(void) {
+    unsigned page=request.page;run(KUI_VMU_WIZARD_LIST_GAMES);
+    if(!result.status.errors && !result.status.stopped && !result.existing_card &&
+       (result.stage==KUI_VMU_WIZARD_GROUPS || result.stage==KUI_VMU_WIZARD_REVIEW)) {
+        request.page=page;run(KUI_VMU_WIZARD_SHOW_GAMES);
+    }
+}
+static void manual_review(void) {
+    unsigned page=request.page,index=request.index,card=request.card;
+    if(!result.existing_card && result.automatic && !result.publication_started) {
+        request.page=0;run(KUI_VMU_WIZARD_SHOW_GROUPS);
+        while(result.unresolved_groups) {
+            request.page=result.groups_page;request.index=result.groups[0].index;run(KUI_VMU_WIZARD_SKIP_GROUP);
+            CHECK(!result.status.errors);
+        }
+        request.page=page;run(KUI_VMU_WIZARD_SHOW_GAMES);
+    }
+    request.page=page;request.index=index;request.card=card;run(KUI_VMU_WIZARD_SHOW_REVIEW);
+}
+static void skip_questions(void) {
+    if(result.stage!=KUI_VMU_WIZARD_GROUPS) {request.page=0;run(KUI_VMU_WIZARD_SHOW_GROUPS);}
+    while(result.unresolved_groups) {
+        request.page=result.groups_page;request.index=result.groups[0].index;run(KUI_VMU_WIZARD_SKIP_GROUP);
+        CHECK(!result.status.errors);
+    }
+}
+static unsigned question(unsigned source,const char *label) {
+    for(unsigned i=0;i<result.groups_count;i++) if(result.groups[i].source==source && strstr(result.groups[i].label,label)) return result.groups[i].index;
+    CHECK(false);return 0;
+}
+static void automatic_regressions(void) {
+    automatic_fixture=1;candidate_count=0;assignment_mode=0;init();run(KUI_VMU_WIZARD_CAPTURE);
+    request.slot=1;run(KUI_VMU_WIZARD_CAPTURE);unsigned before_inspects=inspects;
+    run(KUI_VMU_WIZARD_LIST_GAMES);
+    CHECK(!result.status.errors && result.automatic && result.stage==KUI_VMU_WIZARD_GROUPS);
+    CHECK(result.selected_games==1 && result.variants==2 && result.unresolved_groups==3 && result.groups_count==3);
+    CHECK(inspects==before_inspects+15);
+    unsigned first=question(0,"Unknown"),second=question(1,"Unknown");
+    run(KUI_VMU_WIZARD_SHOW_REVIEW);CHECK(result.stage==KUI_VMU_WIZARD_REVIEW && result.total==1 && result.count==1);
+    CHECK(result.games[0].index==0 && result.games[0].saves==4 && result.games[0].blocks==4 && !result.games[0].blank);
+    CHECK(result.games[0].free_min==198 && result.games[0].free_max==198);
+    unsigned previous=imports,old_archives=archives,old_assigns=assigns;
+    run(KUI_VMU_WIZARD_COMMIT);CHECK(result.status.errors && imports==previous && archives==old_archives && assigns==old_assigns && !result.publication_started);
+    request.page=0;run(KUI_VMU_WIZARD_SHOW_GROUPS);request.index=first;run(KUI_VMU_WIZARD_OPEN_GROUP);
+    CHECK(result.stage==KUI_VMU_WIZARD_GROUP_GAME && result.group_index==first && result.group_files==1 && result.total==13);
+    request.page=0;run(KUI_VMU_WIZARD_SHOW_GROUPS);request.index=second;run(KUI_VMU_WIZARD_OPEN_GROUP);
+    request.group_index=first;request.index=0;run(KUI_VMU_WIZARD_RESOLVE_GROUP);
+    CHECK(result.status.errors && result.group_index==second && result.unresolved_groups==3 && result.selected_games==1);
+    request.group_index=second;request.page=1;run(KUI_VMU_WIZARD_GROUP_GAME_PAGE);
+    CHECK(result.page==1 && result.games[4].index==12);request.index=12;run(KUI_VMU_WIZARD_RESOLVE_GROUP);
+    CHECK(!result.status.errors && result.selected_games==2 && result.variants==3 && result.unresolved_groups==2);
+    skip_questions();CHECK(result.stage==KUI_VMU_WIZARD_REVIEW && result.total==2 && result.games[1].index==12);
+    run(KUI_VMU_WIZARD_SHOW_SOURCES);request.slot=2;run(KUI_VMU_WIZARD_CAPTURE);unsigned after_inspects=inspects;
+    run(KUI_VMU_WIZARD_LIST_GAMES);
+    CHECK(result.selected_games==2 && result.variants==4 && result.unresolved_groups==1 && result.groups[0].source==2 && inspects==after_inspects);
+    unsigned stable=result.groups[0].index;run(KUI_VMU_WIZARD_LIST_GAMES);
+    CHECK(result.unresolved_groups==1 && result.groups[0].index==stable && result.variants==4);
+    skip_questions();CHECK(result.total==2 && result.count==2 && result.games[0].variants==3 && result.games[0].saves==6);
+    CHECK(result.games[0].free_min==198 && result.games[0].free_max==198 && result.games[1].free_min==199 && result.games[1].free_max==199);
+    request.page=99;run(KUI_VMU_WIZARD_REVIEW_PAGE);CHECK(result.page==0 && result.total==2);
+    static const struct {int code;const char *text;} failures[]={
+        {KUI_VMU_GAME_CANDIDATES_STALE,"missing or changed"},{KUI_VMU_GAME_CANDIDATES_IO,"SD I/O"},
+        {KUI_VMU_GAME_CANDIDATES_INVALID,"damaged"},{KUI_VMU_GAME_CANDIDATES_ARGUMENT,"invalid"},
+        {KUI_VMU_GAME_CANDIDATES_FULL,"Too many card choices"}};
+    for(unsigned i=0;i<sizeof(failures)/sizeof(*failures);i++) {
+        preflight_failure=failures[i].code;run(KUI_VMU_WIZARD_COMMIT);
+        CHECK(result.status.errors && strstr(result.status.message,failures[i].text));
+        CHECK(imports==previous && archives==old_archives && assigns==old_assigns && !result.publication_started);
+    }
+    preflight_failure=0;missing_old_card=true;run(KUI_VMU_WIZARD_COMMIT);
+    CHECK(!result.status.errors && result.missing_card_confirmation && result.missing_cards==1 && result.missing_pair==5 && !strcmp(result.missing_product,"ALPHA-1"));
+    CHECK(imports==previous && archives==old_archives && !result.publication_started);
+    unsigned old_preflights=preflights;run(KUI_VMU_WIZARD_COMMIT);
+    CHECK(result.missing_card_confirmation && !result.status.errors && preflights==old_preflights && !confirmed_preflights);
+    run(KUI_VMU_WIZARD_CANCEL_MISSING);CHECK(!result.missing_card_confirmation && result.stage==KUI_VMU_WIZARD_REVIEW && !result.publication_started);
+    run(KUI_VMU_WIZARD_COMMIT);CHECK(result.missing_card_confirmation);++repair_version;
+    run(KUI_VMU_WIZARD_CONFIRM_MISSING);CHECK(result.status.errors && !result.missing_card_confirmation && !result.publication_started && imports==previous);
+    run(KUI_VMU_WIZARD_COMMIT);CHECK(result.missing_card_confirmation);
+    request.page=0;run(KUI_VMU_WIZARD_SHOW_GAMES);request.index=2;run(KUI_VMU_WIZARD_TOGGLE_BLANK);
+    CHECK(!result.missing_card_confirmation);run(KUI_VMU_WIZARD_TOGGLE_BLANK);run(KUI_VMU_WIZARD_SHOW_REVIEW);
+    CHECK(result.selected_games==2);run(KUI_VMU_WIZARD_COMMIT);CHECK(result.missing_card_confirmation);
+    fail_import=previous+2u;run(KUI_VMU_WIZARD_CONFIRM_MISSING);
+    CHECK(result.status.errors && result.publication_started && imports==previous+2u && archives==old_archives+3u && excluded_publications==2);
+    CHECK(archived[old_archives].summary.files==4 && archived[old_archives+1u].summary.files==3 && archived[old_archives+2u].summary.files==3);
+    fail_import=0;fail_assign=1;run(KUI_VMU_WIZARD_COMMIT);
+    CHECK(result.status.errors && imports==previous+5u && confirmed_applies==1 && archives==old_archives+3u);
+    unsigned labels_before=label_calls;run(KUI_VMU_WIZARD_COMMIT);
+    CHECK(!result.status.errors && result.stage==KUI_VMU_WIZARD_DONE && !result.missing_card_confirmation && !missing_old_card);
+    CHECK(imports==previous+5u && archives==old_archives+3u && assigns==old_assigns+2u && label_calls==labels_before && confirmed_applies==2);
+    CHECK(saved_count==4 && !strcmp(saved[0].key,"ALPHA-1") && !strcmp(saved[1].key,"ALPHA-1") && !strcmp(saved[2].key,"ALPHA-1") && !strcmp(saved[3].key,"GAMMA-1"));
+    CHECK(saved[0].pair!=saved[1].pair && saved[1].pair!=saved[2].pair && saved[2].pair!=saved[3].pair);
+    CHECK(published[previous].files==2 && published[previous+2u].files==2 && published[previous+3u].files==2 && published[previous+4u].files==1);
+    automatic_fixture=0;init();run(KUI_VMU_WIZARD_CAPTURE);run(KUI_VMU_WIZARD_LIST_GAMES);
+    CHECK(!result.selected_games && result.unresolved_groups==1);skip_questions();CHECK(result.stage==KUI_VMU_WIZARD_REVIEW && !result.total);
+    previous=imports;old_archives=archives;old_assigns=assigns;run(KUI_VMU_WIZARD_COMMIT);
+    CHECK(!result.status.errors && result.stage==KUI_VMU_WIZARD_DONE && !result.variants && imports==previous && archives==old_archives+1u && assigns==old_assigns);
+    CHECK(strstr(result.status.message,"full source backups"));
+    automatic_fixture=2;init();run(KUI_VMU_WIZARD_CAPTURE);run(KUI_VMU_WIZARD_LIST_GAMES);
+    unsigned ambiguous=UINT32_MAX;for(unsigned i=0;i<result.groups_count;i++) if(result.groups[i].files==2) ambiguous=result.groups[i].index;
+    CHECK(ambiguous!=UINT32_MAX);request.index=ambiguous;request.page=0;run(KUI_VMU_WIZARD_OPEN_GROUP);
+    CHECK(result.total==2 && result.count==2 && result.games[0].index==11 && result.games[1].index==12);
+    request.group_index=result.group_index;request.page=99;run(KUI_VMU_WIZARD_GROUP_GAME_PAGE);CHECK(result.page==0);
+    request.page=0;request.index=1;run(KUI_VMU_WIZARD_RESOLVE_GROUP);CHECK(result.status.errors && !result.selected_games);
+    request.index=12;run(KUI_VMU_WIZARD_RESOLVE_GROUP);CHECK(!result.status.errors && result.selected_games==1);
+    skip_questions();CHECK(result.count==1 && result.games[0].index==12 && result.games[0].saves==2);
+    automatic_fixture=0;init();request.slot=3;run(KUI_VMU_WIZARD_CAPTURE);run(KUI_VMU_WIZARD_LIST_GAMES);
+    CHECK(result.unresolved_groups==10 && result.groups_count==8);request.index=8;run(KUI_VMU_WIZARD_OPEN_GROUP);CHECK(result.status.errors);
+    request.page=1;run(KUI_VMU_WIZARD_SHOW_GROUPS);CHECK(result.groups_count==2 && result.groups[0].index==8 && result.groups[1].index==9);
+    request.index=8;run(KUI_VMU_WIZARD_SKIP_GROUP);CHECK(result.unresolved_groups==9 && result.groups_page==1 && result.groups_count==1 && result.groups[0].index==9);
+    request.index=9;run(KUI_VMU_WIZARD_SKIP_GROUP);CHECK(result.unresolved_groups==8 && result.groups_page==0 && result.groups[0].index==0);
+    init();
+}
 int main(void) {
     init();CHECK(!result.cards);
-    run(KUI_VMU_WIZARD_LIST_GAMES);CHECK(result.status.errors && !inspects);
+    manual_games();CHECK(result.status.errors && !inspects);
     run(KUI_VMU_WIZARD_COMMIT);CHECK(result.status.errors && !imports);
     run(KUI_VMU_WIZARD_CAPTURE);CHECK(result.cards==1 && result.summary[0].files==1);
     request.slot=1;run(KUI_VMU_WIZARD_CAPTURE);CHECK(result.cards==2 && result.summary[0].files==1 && result.summary[1].files==1);
     request.slot=0;run(KUI_VMU_WIZARD_CAPTURE);CHECK(result.cards==3 && result.sources==3);
     request.slot=2;run(KUI_VMU_WIZARD_CAPTURE);CHECK(result.cards==4 && result.card==3);
     capture_error=true;run(KUI_VMU_WIZARD_CAPTURE);CHECK(result.status.errors && result.cards==4 && result.sources==4);capture_error=false;
-    request.card=0;run(KUI_VMU_WIZARD_LIST_GAMES);CHECK(result.stage==KUI_VMU_WIZARD_GAMES_STAGE && result.total==13);
+    request.card=0;manual_games();CHECK(result.stage==KUI_VMU_WIZARD_GAMES_STAGE && result.total==13);
     CHECK(strstr(result.status.message,"1 deeper folders not scanned"));
     CHECK(inspects==15 && !strcmp(result.games[0].title,"Alpha") && !result.games[1].supported);
     unsigned inspected=inspects;request.index=1;run(KUI_VMU_WIZARD_OPEN_SAVES);CHECK(result.status.errors && !result.selected_games);
@@ -295,12 +456,12 @@ int main(void) {
     request.index=0;run(KUI_VMU_WIZARD_OPEN_SAVES);run(KUI_VMU_WIZARD_ACCEPT_SAVES);
     CHECK(result.selected_games==1 && result.games[0].variants==2 && result.games[0].saves==2 && result.games[0].blocks==2);
     CHECK(result.summary[0].games==1 && result.summary[3].games==1);
-    request.page=1;run(KUI_VMU_WIZARD_LIST_GAMES);CHECK(result.page==1 && result.count==5);
+    request.page=1;manual_games();CHECK(result.page==1 && result.count==5);
     request.index=0;run(KUI_VMU_WIZARD_TOGGLE_BLANK);CHECK(result.status.errors && result.selected_games==1);
     request.index=12;run(KUI_VMU_WIZARD_TOGGLE_BLANK);CHECK(result.selected_games==2 && result.games[4].blank && result.variants==3);
-    run(KUI_VMU_WIZARD_SHOW_REVIEW);CHECK(result.stage==KUI_VMU_WIZARD_REVIEW && result.games[4].variants==1);
+    manual_review();CHECK(result.stage==KUI_VMU_WIZARD_REVIEW && result.count==2 && result.games[1].variants==1 && result.games[1].index==12);
     request.page=0;run(KUI_VMU_WIZARD_REVIEW_PAGE);CHECK(result.stage==KUI_VMU_WIZARD_REVIEW && result.page==0 && result.games[0].variants==2);
-    request.page=99;run(KUI_VMU_WIZARD_REVIEW_PAGE);CHECK(result.page==1 && result.games[4].blank && result.selected_games==2);
+    request.page=99;run(KUI_VMU_WIZARD_REVIEW_PAGE);CHECK(result.page==0 && result.total==2 && result.games[1].blank && result.selected_games==2);
     preflight_full=true;run(KUI_VMU_WIZARD_COMMIT);CHECK(result.status.errors && !imports && !archives && !result.publication_started);preflight_full=false;
     fail_archive=2;late_archive_failure=true;run(KUI_VMU_WIZARD_COMMIT);
     CHECK(result.status.errors && archives==2 && archive_calls==2 && !imports && !assigns && result.publication_started);
@@ -315,25 +476,25 @@ int main(void) {
     CHECK(strstr(labels[4],"Source B1 #4") && strstr(labels[5],"Blank"));
     CHECK(published[2].files==1 && published_crc[0]!=published_crc[2]);
     CHECK(!published[3].files && published[3].free_blocks==200);
-    run(KUI_VMU_WIZARD_LIST_GAMES);request.index=12;run(KUI_VMU_WIZARD_TOGGLE_BLANK);
-    CHECK(result.status.errors && result.selected_games==2);run(KUI_VMU_WIZARD_SHOW_REVIEW);
+    manual_games();request.index=12;run(KUI_VMU_WIZARD_TOGGLE_BLANK);
+    CHECK(result.status.errors && result.selected_games==2);manual_review();
     run(KUI_VMU_WIZARD_COMMIT);CHECK(!result.status.errors && result.stage==KUI_VMU_WIZARD_DONE && imports==4 && assigns==2 && archives==4);
     request.page=0;run(KUI_VMU_WIZARD_REVIEW_PAGE);CHECK(result.stage==KUI_VMU_WIZARD_DONE && result.page==0 && result.games[0].variants==2);
     CHECK(saved_count==3 && !strcmp(saved[0].key,"ALPHA-1") && !strcmp(saved[1].key,"ALPHA-1"));
     CHECK(saved[0].pair!=saved[1].pair && !strcmp(saved[2].key,"GAMMA-1") && saved[2].pair!=saved[0].pair);
     init();saved_count=0;run(KUI_VMU_WIZARD_CAPTURE);request.slot=2;run(KUI_VMU_WIZARD_CAPTURE);CHECK(result.cards==2);
-    request.card=0;run(KUI_VMU_WIZARD_LIST_GAMES);request.index=0;run(KUI_VMU_WIZARD_TOGGLE_BLANK);
-    run(KUI_VMU_WIZARD_SHOW_REVIEW);unsigned previous=imports,previous_archives=archives;
+    request.card=0;manual_games();request.index=0;run(KUI_VMU_WIZARD_TOGGLE_BLANK);
+    manual_review();unsigned previous=imports,previous_archives=archives;
     cancel_after=4;cancel_calls=0;run(KUI_VMU_WIZARD_COMMIT);CHECK(result.status.stopped && result.stage==KUI_VMU_WIZARD_REVIEW);
     cancel_after=0;run(KUI_VMU_WIZARD_COMMIT);
     CHECK(result.stage==KUI_VMU_WIZARD_DONE && imports==previous+1 && archives==previous_archives+2);
-    init();run(KUI_VMU_WIZARD_CAPTURE);cancel_after=4;cancel_calls=0;run(KUI_VMU_WIZARD_LIST_GAMES);
-    CHECK(result.status.stopped && !result.total);cancel_after=0;run(KUI_VMU_WIZARD_LIST_GAMES);CHECK(result.total==13);
-    init();run(KUI_VMU_WIZARD_CAPTURE);scan_mode=1;inspected=inspects;run(KUI_VMU_WIZARD_LIST_GAMES);
+    init();run(KUI_VMU_WIZARD_CAPTURE);cancel_after=4;cancel_calls=0;manual_games();
+    CHECK(result.status.stopped && !result.total);cancel_after=0;manual_games();CHECK(result.total==13);
+    init();run(KUI_VMU_WIZARD_CAPTURE);scan_mode=1;inspected=inspects;manual_games();
     CHECK(result.status.errors && !result.total && inspects==inspected);
-    scan_mode=0;run(KUI_VMU_WIZARD_LIST_GAMES);CHECK(result.total==13);
+    scan_mode=0;manual_games();CHECK(result.total==13);
     init();request.slot=3;run(KUI_VMU_WIZARD_CAPTURE);CHECK(result.summary[0].files==10);
-    run(KUI_VMU_WIZARD_LIST_GAMES);request.index=0;run(KUI_VMU_WIZARD_OPEN_SAVES);
+    manual_games();request.index=0;run(KUI_VMU_WIZARD_OPEN_SAVES);
     CHECK(result.saves_count==8 && result.saves_total==10 && result.saves[0].suggested && !result.saves[0].picked);
     request.index=8;run(KUI_VMU_WIZARD_TOGGLE_SAVE);CHECK(result.status.errors && !result.saves_selected_files);
     request.page=1;run(KUI_VMU_WIZARD_OPEN_SAVES);CHECK(result.saves_page==1 && result.saves_count==2);
@@ -341,9 +502,9 @@ int main(void) {
     request.page=0;run(KUI_VMU_WIZARD_OPEN_SAVES);request.index=0;run(KUI_VMU_WIZARD_TOGGLE_SAVE);
     CHECK(result.saves_selected_files==2 && result.saves_selected_blocks==2);
     run(KUI_VMU_WIZARD_ACCEPT_SAVES);CHECK(result.selected_games==1 && result.games[0].saves==2);
-    run(KUI_VMU_WIZARD_SHOW_REVIEW);previous=imports;run(KUI_VMU_WIZARD_COMMIT);
+    manual_review();previous=imports;run(KUI_VMU_WIZARD_COMMIT);
     CHECK(result.stage==KUI_VMU_WIZARD_DONE && imports==previous+1 && published[previous].files==2);
-    init();run(KUI_VMU_WIZARD_CAPTURE);run(KUI_VMU_WIZARD_LIST_GAMES);request.index=0;
+    init();run(KUI_VMU_WIZARD_CAPTURE);manual_games();request.index=0;
     run(KUI_VMU_WIZARD_OPEN_SAVES);run(KUI_VMU_WIZARD_ACCEPT_SAVES);
     CHECK(result.selected_games==1 && result.games[0].blank && result.games[0].variants==1);
     run(KUI_VMU_WIZARD_TOGGLE_BLANK);CHECK(!result.selected_games);
@@ -352,8 +513,8 @@ int main(void) {
     unsigned previous_captures_limit=captures;run(KUI_VMU_WIZARD_CAPTURE);
     CHECK(result.status.errors && result.cards==8 && captures==previous_captures_limit);
     init();card_kind=0;strcpy(request.card_path,"0:/KUI/vmu-test/p0042/card.vmd");
-    run(KUI_VMU_WIZARD_USE_CARD);request.index=0;run(KUI_VMU_WIZARD_TOGGLE);run(KUI_VMU_WIZARD_SHOW_REVIEW);
-    request.page=1;run(KUI_VMU_WIZARD_LIST_GAMES);request.index=12;run(KUI_VMU_WIZARD_TOGGLE);run(KUI_VMU_WIZARD_SHOW_REVIEW);
+    run(KUI_VMU_WIZARD_USE_CARD);request.index=0;run(KUI_VMU_WIZARD_TOGGLE);manual_review();
+    request.page=1;manual_games();request.index=12;run(KUI_VMU_WIZARD_TOGGLE);manual_review();
     previous=imports;unsigned previous_guard_assigns=assigns;run(KUI_VMU_WIZARD_COMMIT);
     CHECK(!result.status.errors && result.stage==KUI_VMU_WIZARD_DONE && imports==previous && assigns==previous_guard_assigns+1);
     CHECK(selected_applies==1 && saved_count==2 && saved[0].pair==42 && saved[1].pair==42);candidate_count=0;
@@ -364,8 +525,8 @@ int main(void) {
     CHECK(result.stage==KUI_VMU_WIZARD_GAMES_STAGE && result.cards==1 && result.summary[0].pair==42);
     CHECK(result.summary[0].files==0 && result.summary[0].blocks==0 && library_reads==previous_reads+1 && imports==previous);
     run(KUI_VMU_WIZARD_SHOW_SOURCES);run(KUI_VMU_WIZARD_CAPTURE);
-    CHECK(result.status.errors && !result.sources);run(KUI_VMU_WIZARD_LIST_GAMES);
-    request.index=0;run(KUI_VMU_WIZARD_TOGGLE);run(KUI_VMU_WIZARD_SHOW_REVIEW);
+    CHECK(result.status.errors && !result.sources);manual_games();
+    request.index=0;run(KUI_VMU_WIZARD_TOGGLE);manual_review();
     CHECK(strstr(result.status.message,"existing virtual VMU"));
     allocation_error=true;unsigned previous_assigns=assigns;run(KUI_VMU_WIZARD_COMMIT);allocation_error=false;
     CHECK(result.status.errors && imports==previous && assigns==previous_assigns && !result.publication_started);
@@ -380,7 +541,7 @@ int main(void) {
         previous=imports;run(KUI_VMU_WIZARD_USE_CARD);
         CHECK(!result.status.errors && result.copy_on_commit && result.existing_card && !result.summary[0].pair);
         CHECK(imports==previous && strstr(result.status.message,"new shared copy"));
-        request.index=0;run(KUI_VMU_WIZARD_TOGGLE);run(KUI_VMU_WIZARD_SHOW_REVIEW);
+        request.index=0;run(KUI_VMU_WIZARD_TOGGLE);manual_review();
         CHECK(strstr(result.status.message,"shared copy"));run(KUI_VMU_WIZARD_COMMIT);
         CHECK(!result.status.errors && imports==previous+1 && saved_count==1 && saved[0].pair!=42);
     }
@@ -406,13 +567,13 @@ int main(void) {
     CHECK(!strcmp(result.games[0].title,"Alpha") && !strcmp(result.games[1].title,"Unknown title: MISSING-1"));
     CHECK(imports==previous && assigns==previous_assigns && captures==previous_captures);
     request.view_only=false;request.index=0;run(KUI_VMU_WIZARD_TOGGLE);CHECK(result.status.errors && result.view_only);
-    run(KUI_VMU_WIZARD_SHOW_REVIEW);CHECK(result.status.errors && result.view_only);
+    manual_review();CHECK(result.status.errors && result.view_only);
     run(KUI_VMU_WIZARD_COMMIT);CHECK(result.status.errors && result.view_only);
     run(KUI_VMU_WIZARD_CAPTURE);CHECK(result.status.errors && result.view_only);
     CHECK(imports==previous && assigns==previous_assigns && captures==previous_captures);
-    run(KUI_VMU_WIZARD_LIST_GAMES);CHECK(!result.status.errors && result.total==2 && strstr(result.status.message,"read only"));
+    manual_games();CHECK(!result.status.errors && result.total==2 && strstr(result.status.message,"read only"));
     run(KUI_VMU_WIZARD_OPEN);CHECK(!result.view_only && !result.cards && result.stage==KUI_VMU_WIZARD_SOURCES);
-    init();assignment_mode=1;card_kind=0;run(KUI_VMU_WIZARD_CAPTURE);run(KUI_VMU_WIZARD_LIST_GAMES);
+    init();assignment_mode=1;card_kind=0;run(KUI_VMU_WIZARD_CAPTURE);manual_games();
     request.index=0;run(KUI_VMU_WIZARD_TOGGLE_BLANK);CHECK(result.cards==1 && result.selected_games==1);
     request.view_only=true;strcpy(request.card_path,"0:/KUI/vmu-test/p0042/card.vmd");run(KUI_VMU_WIZARD_USE_CARD);
     CHECK(result.view_only && result.total==2 && !result.selected_games);
@@ -459,5 +620,6 @@ int main(void) {
     CHECK(result.status.stopped && result.view_only && !result.total && imports==previous && assigns==previous_assigns);
     cancel_on_assignment=cancel_latched=false;
     assignment_mode=0;
+    automatic_regressions();
     init();printf("VMU wizard: %u checks passed\n",checks);return 0;
 }

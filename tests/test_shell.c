@@ -4825,7 +4825,7 @@ static void vmu_wizard_controls(void) {
     assert(press(KUI_SHELL_START,false)==KUI_SHELL_VMU_WIZARD_RUN);
     assert(s.vmu_wizard_request.op==KUI_VMU_WIZARD_LIST_GAMES && s.vmu_wizard_request.card==1);
     w.generation=s.vmu_wizard_generation;w.stage=KUI_VMU_WIZARD_GAMES_STAGE;w.total=17;w.count=8;
-    for(unsigned i=0;i<8;i++) {snprintf(w.games[i].title,sizeof(w.games[i].title),"Game %u",i);snprintf(w.games[i].product,sizeof(w.games[i].product),"T-%04u",i);w.games[i].supported=i!=0;}
+    for(unsigned i=0;i<8;i++) {w.games[i].index=i;snprintf(w.games[i].title,sizeof(w.games[i].title),"Game %u",i);snprintf(w.games[i].product,sizeof(w.games[i].product),"T-%04u",i);w.games[i].supported=i!=0;}
     kui_shell_set_vmu_wizard(&s,&w);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE); /* Unsupported launch cannot be selected. */
     press(KUI_SHELL_DOWN,false);
@@ -5171,13 +5171,68 @@ static void vmu_wizard_save_picker_controls(void) {
     puts("PASS per-game import picker: save ordinal identity, source switching, paging, explicit acceptance and blank/remove action");
 }
 
+
+static void vmu_automatic_import_controls(void) {
+    reset(KUI_SHELL_VMU_WIZARD);
+    struct kui_vmu_wizard_view w={.automatic=true,.stage=KUI_VMU_WIZARD_GROUPS,.cards=2,.sources=2,
+        .groups_count=8,.groups_total=10,.unresolved_groups=10,.selected_games=17,.variants=18};
+    for(unsigned i=0;i<8;i++) {w.groups[i].index=i+10;w.groups[i].source_slot=i%2;w.groups[i].files=2;
+        strcpy(w.groups[i].label,"Unidentified racing save");strcpy(w.groups[i].reason,"Choose between the installed releases.");}
+    kui_shell_set_vmu_wizard(&s,&w);struct kui_shell_view v={0};render(&v);
+    assert(strstr(drawn,"17 games ready") && strstr(drawn,"10 questions") && strstr(drawn,"Backup only"));
+    assert(!strstr(drawn,"Unchanged") && !strstr(drawn,"Blank/remove"));
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_WIZARD_RUN && s.vmu_wizard_request.op==KUI_VMU_WIZARD_OPEN_GROUP);
+    assert(s.vmu_wizard_request.index==10);
+    w.generation=s.vmu_wizard_generation;w.stage=KUI_VMU_WIZARD_GROUP_GAME;w.group_index=10;
+    strcpy(w.group_label,"PSO save data");w.group_files=2;w.group_blocks=30;w.total=w.count=2;
+    strcpy(w.games[0].title,"Phantasy Star Online");w.games[0].index=4;
+    strcpy(w.games[1].title,"Phantasy Star Online Version 2");w.games[1].index=11;
+    for(unsigned i=0;i<2;i++){w.games[i].supported=true;strcpy(w.games[i].product,"T-12345");}
+    kui_shell_set_vmu_wizard(&s,&w);render(&v);
+    assert(strstr(drawn,"Which game uses these saves?") && strstr(drawn,"Version 2") && !strstr(drawn,"Unchanged"));
+    press(KUI_SHELL_DOWN,false);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_WIZARD_RUN && s.vmu_wizard_request.op==KUI_VMU_WIZARD_RESOLVE_GROUP);
+    assert(s.vmu_wizard_request.index==11 && s.vmu_wizard_request.group_index==10);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    w.generation=s.vmu_wizard_generation;w.stage=KUI_VMU_WIZARD_GROUPS;kui_shell_set_vmu_wizard(&s,&w);
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_VMU_WIZARD_RUN && s.vmu_wizard_request.op==KUI_VMU_WIZARD_SKIP_GROUP);
+    w.generation=s.vmu_wizard_generation;w.groups_count=0;w.groups_total=0;w.unresolved_groups=0;
+    kui_shell_set_vmu_wizard(&s,&w);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_VMU_WIZARD_RUN && s.vmu_wizard_request.op==KUI_VMU_WIZARD_SHOW_REVIEW);
+    w.generation=s.vmu_wizard_generation;w.stage=KUI_VMU_WIZARD_REVIEW;w.selected_games=2;w.variants=3;
+    w.games[0].selected=w.games[1].selected=true;w.games[0].variants=1;w.games[0].blocks=10;w.games[0].free_min=w.games[0].free_max=190;w.games[1].variants=2;w.games[1].free_min=155;w.games[1].free_max=180;
+    kui_shell_set_vmu_wizard(&s,&w);render(&v);
+    assert(strstr(drawn,"190 / 200 free") && strstr(drawn,"2 cards:155-180 free") && !strstr(drawn,"Unchanged"));
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_WIZARD_RUN && s.vmu_wizard_request.op==KUI_VMU_WIZARD_COMMIT);
+    w.generation=s.vmu_wizard_generation;w.missing_card_confirmation=true;w.missing_cards=2;
+    kui_shell_set_vmu_wizard(&s,&w);render(&v);
+    assert(strstr(drawn,"An old card is missing") && strstr(drawn,"Use imported saves"));
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE); /* Hidden review cannot change under the question. */
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_VMU_WIZARD_RUN && s.vmu_wizard_request.op==KUI_VMU_WIZARD_CANCEL_MISSING);
+    w.generation=s.vmu_wizard_generation;kui_shell_set_vmu_wizard(&s,&w);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_WIZARD_RUN && s.vmu_wizard_request.op==KUI_VMU_WIZARD_CONFIRM_MISSING);
+    w.generation=s.vmu_wizard_generation;w.missing_card_confirmation=false;w.unresolved_groups=1;
+    kui_shell_set_vmu_wizard(&s,&w);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_WIZARD_RUN && s.vmu_wizard_request.op==KUI_VMU_WIZARD_SHOW_GROUPS);
+    /* Explicit backup-only answers can finish without manufacturing blank cards. */
+    w.generation=s.vmu_wizard_generation;w.stage=KUI_VMU_WIZARD_REVIEW;w.unresolved_groups=0;
+    w.count=w.total=w.selected_games=w.variants=0;w.skipped_groups=2;
+    kui_shell_set_vmu_wizard(&s,&w);render(&v);assert(strstr(drawn,"sources will be backed up"));
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_WIZARD_RUN && s.vmu_wizard_request.op==KUI_VMU_WIZARD_COMMIT);
+    w.generation=s.vmu_wizard_generation;w.stage=KUI_VMU_WIZARD_DONE;kui_shell_set_vmu_wizard(&s,&w);
+    s.vmu_emulation_known=true;s.vmu_emulation_enabled=false;render(&v);
+    assert(strstr(drawn,"Virtual VMU remains Off") && strstr(drawn,"Enable Virtual VMU"));
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_NONE);render(&v);assert(strstr(drawn,"Start a new import?"));
+    puts("PASS automatic import UI: only uncertain groups, narrowed game choices, stable answer IDs, per-game free space, missing-card consent and archive-only completion");
+}
+
 int main(int argc,char **argv) {
     if(argc==2 && !strcmp(argv[1],"--salvage-drive")) {
         round_five_controls();salvage_drive_controls();salvage_speed_probe_controls();salvage_read_probe_controls();round_five_rendering();
         puts("PASS salvage drive settings: default, navigation, wrap, busy guard, boot reset and rendering");return 0;
     }
     vmu_menu_cleanup_controls();game_vmu_card_info_controls();
-    game_vmu_version_picker_controls();vmu_wizard_save_picker_controls();
+    game_vmu_version_picker_controls();vmu_wizard_save_picker_controls();vmu_automatic_import_controls();
     vmu_emulation_controls();
     vmu_wizard_controls();vmu_wizard_library_scrolling();vmu_wizard_publication_lock();vmu_wizard_rendering();
     if(argc==2 && !strcmp(argv[1],"--vmu-wizard")) return 0;

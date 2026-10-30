@@ -9,11 +9,11 @@ The new plain Standard module serves Background Off / Virtual VMU Off without
 using an old VMU-only module's embedded card. It has no VMU worker or virtual-card
 reservation and supports the ordinary SCIF, SCI and IDE transports.
 
-The import wizard keeps captured source cards separate. For each selected game,
-you choose its save files and get a new 200-user-block virtual card. Selecting
-files from another source keeps that version on another card; versions are not
-merged. You can also explicitly choose a blank game card. Existing virtual cards
-and unselected game choices remain stored.
+The wizard matches captured saves to the games in `/Games` automatically.
+Each game gets a separate 200-user-block card containing its own related save
+files. Different physical sources retain separate versions, including two PSO
+characters. Only ambiguous, unsupported or unidentified save sets need an answer.
+Full source snapshots remain preserved, including backup-only files.
 
 ## Install the GUI
 
@@ -32,34 +32,42 @@ without game modules. It changes only those two target files and its own checkpo
 replaces the existing ordinary/VMU-only or Background module, prepares a game
 profile, changes a save, or changes reader settings. Safely eject before booting.
 
-## Import and review each game's files
+## Import automatically
 
-1. Open **Home → VMU tools → Import saves**. Choose the physical slot with
-   **L/R Slot**, then **A Import**. The physical VMU is read only. Add another
-   physical VMU if desired; each captured source stays separate, including
-   differing saves with the same internal filename.
-2. Press **START Games**. Select a game with **A Choose saves**. In **Choose
-   saves for this game**, use **A Pick save**, **L/R Source**, and **Left/Right
-   Page**. Review the filenames, descriptions and block counts. Suggestions are
-   hints only; they do not select files for you. Include related files together.
-3. Press **START Keep** to retain that game's choices. Each source with picked
-   files becomes a separate 200-user-block game card. For a new game without
-   imported progress, use **X Blank/remove** on the game list to choose a blank
-   card explicitly. Selecting another game creates its own card rather than
-   sharing the first game's capacity.
-4. Press **START Review**. Use **Left/Right** to check every review page: selected
-   games, version/card counts, picked saves and blank choices. Then confirm
-   **A Create and assign cards**. Sources are kept as
-   full archives. Fresh playable versions get new pairs; existing card data is
-   kept, and confirmed results can be reused on retry. No PC preparation command
-   is needed for supported combined-reader launches.
+1. Open **Home → VMU tools → Import saves**. Choose the physical VMU with
+   **L/R Slot**, then **A Import**. Add the other physical VMU the same way.
+   Reading never writes to the physical cards.
+2. Press **START Match saves**. The wizard identifies game names, reviewed save
+   families, product metadata and related files together. Most saves need no
+   manual selection. One game's saves never share another game's card capacity.
+3. If **Saves that need your help** appears, use **A Choose game** for a save
+   set. Choose its game by title; when two releases are plausible, only those
+   releases are listed. **X Backup only** keeps the files in the full source
+   backup without attaching them to a game. Repeat only for the remaining
+   questions. Nothing gets silently discarded.
+4. **Ready to import saves** shows only the planned game cards, their free
+   blocks, and separate version counts. It does not list unrelated games as
+   “Unchanged.” Use **Left/Right** for more review pages and **A Import saves**
+   to create the cards. **X Change matches** opens the optional manual editor.
 
-A session captures up to eight source cards and lists up to 256 distinct game
-products from `/Games`. Different disc images with the same product number use
-the same game's choices. Each version has its own 200-user-block capacity.
-Capacity errors or invalid mini-game combinations are reported before that
-card is published; at most one mini-game is allowed on a version. A blank card
-starts with all 200 user blocks free.
+A 10-block save leaves 190 blocks free for that game. Two PSO versions become
+two independent 200-block cards and remain selectable at launch. Games without
+imported saves can receive their own blank card on their first supported launch;
+the automatic import does not manufacture empty cards for every library entry.
+
+If a saved assignment refers to a removed virtual-card folder, the wizard asks
+**Use imported saves** before overriding that missing reference for selected
+games. **B Cancel** starts no publication. Present but damaged or identity-mismatched
+cards, storage errors, and damaged assignment records remain distinct errors;
+they are not reported as a full card-choice list. Existing cards, healthy
+choices, defaults, and the old assignment records are retained.
+
+A session captures up to eight source cards and scans up to 256 game products.
+All save-file grouping stays within its original physical source. Related files
+remain together; several installed regions or versions with indistinguishable
+metadata require a game choice. An unsupported game can remain backup-only.
+Choosing backup-only for every unresolved set can still save all full sources
+without creating playable cards.
 
 ## Choose a save version at launch
 

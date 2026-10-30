@@ -172,6 +172,7 @@ static enum kui_shell_action wizard_request(struct kui_shell *s,enum kui_vmu_wiz
     s->vmu_wizard_request=(struct kui_vmu_wizard_request){.op=op,
         .generation=s->vmu_wizard_generation,.slot=s->vmu_wizard_slot,
         .card=card,.page=page,.index=index};
+    s->vmu_wizard_request.group_index=s->vmu_wizard.group_index;
     snprintf(s->vmu_wizard_request.root,sizeof(s->vmu_wizard_request.root),"/Games");
     s->vmu_wizard_loading=true;s->vmu_wizard_select_last=false;
     s->confirm_vmu_wizard_reset=false;
@@ -186,7 +187,7 @@ void kui_shell_set_vmu_wizard(struct kui_shell *s,const struct kui_vmu_wizard_vi
     w->status.message[sizeof(w->status.message)-1]=0;
     if(w->status.line_count>KUI_APP_LINES) w->status.line_count=KUI_APP_LINES;
     for(unsigned i=0;i<w->status.line_count;i++) w->status.lines[i][KUI_APP_LINE_CAP-1]=0;
-    if((unsigned)w->stage>KUI_VMU_WIZARD_SAVES) w->stage=KUI_VMU_WIZARD_SOURCES;
+    if((unsigned)w->stage>KUI_VMU_WIZARD_GROUP_GAME) w->stage=KUI_VMU_WIZARD_SOURCES;
     if(w->cards>KUI_VMU_WIZARD_CARDS) w->cards=KUI_VMU_WIZARD_CARDS;
     if(w->card>=w->cards) w->card=0;
     if(w->slot<8) s->vmu_wizard_slot=w->slot;
@@ -218,7 +219,22 @@ void kui_shell_set_vmu_wizard(struct kui_shell *s,const struct kui_vmu_wizard_vi
         row->short_description[sizeof(row->short_description)-1]=0;
         row->long_description[sizeof(row->long_description)-1]=0;
     }
-    unsigned rows=w->stage==KUI_VMU_WIZARD_SAVES?w->saves_count:w->count;
+    w->group_label[sizeof(w->group_label)-1]=0;
+    w->missing_product[sizeof(w->missing_product)-1]=0;
+    if(w->groups_total>KUI_VMU_WIZARD_CARDS*KUI_VMU_IMAGE_DIRECTORY_ENTRIES)
+        w->groups_total=KUI_VMU_WIZARD_CARDS*KUI_VMU_IMAGE_DIRECTORY_ENTRIES;
+    if(w->groups_page>UINT_MAX/KUI_VMU_WIZARD_ROWS || w->groups_page*KUI_VMU_WIZARD_ROWS>=w->groups_total) {
+        w->groups_page=0;w->groups_count=0;
+    }
+    unsigned groups_remaining=w->groups_total-w->groups_page*KUI_VMU_WIZARD_ROWS;
+    if(w->groups_count>KUI_VMU_WIZARD_ROWS) w->groups_count=KUI_VMU_WIZARD_ROWS;
+    if(w->groups_count>groups_remaining) w->groups_count=groups_remaining;
+    for(unsigned i=0;i<w->groups_count;i++) {
+        w->groups[i].label[sizeof(w->groups[i].label)-1]=0;
+        w->groups[i].reason[sizeof(w->groups[i].reason)-1]=0;
+    }
+    unsigned rows=w->stage==KUI_VMU_WIZARD_GROUPS?w->groups_count:
+        w->stage==KUI_VMU_WIZARD_SAVES?w->saves_count:w->count;
     if(s->vmu_wizard_select_last && rows) s->vmu_wizard_selected=rows-1u;
     else if(s->vmu_wizard_selected>=rows) s->vmu_wizard_selected=0;
     s->vmu_wizard_select_last=false;s->vmu_wizard_loading=false;
@@ -1885,6 +1901,12 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(s->page==KUI_SHELL_VMU_WIZARD) {
             if(s->confirm_vmu_wizard_reset) {s->confirm_vmu_wizard_reset=false;return KUI_SHELL_NONE;}
             if(s->vmu_wizard_loading) return KUI_SHELL_STOP;
+            if(s->vmu_wizard.stage==KUI_VMU_WIZARD_REVIEW && s->vmu_wizard.missing_card_confirmation)
+                return wizard_request(s,KUI_VMU_WIZARD_CANCEL_MISSING,s->vmu_wizard.card,s->vmu_wizard.page,0);
+            if(s->vmu_wizard.stage==KUI_VMU_WIZARD_GROUP_GAME)
+                return wizard_request(s,KUI_VMU_WIZARD_SHOW_GROUPS,s->vmu_wizard.card,s->vmu_wizard.groups_page,0);
+            if(s->vmu_wizard.stage==KUI_VMU_WIZARD_GROUPS)
+                return wizard_request(s,KUI_VMU_WIZARD_SHOW_SOURCES,s->vmu_wizard.card,0,0);
             if(s->vmu_wizard.stage==KUI_VMU_WIZARD_SAVES)
                 return wizard_request(s,KUI_VMU_WIZARD_SHOW_GAMES,s->vmu_wizard.card,
                     s->vmu_wizard.game_index/KUI_VMU_WIZARD_ROWS,0);
@@ -1893,9 +1915,11 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
                 s->page=KUI_SHELL_VMU_CARD;return KUI_SHELL_NONE;
             }
             if(s->vmu_wizard.stage==KUI_VMU_WIZARD_GAMES_STAGE)
-                return wizard_request(s,KUI_VMU_WIZARD_SHOW_SOURCES,s->vmu_wizard.card,0,0);
+                return wizard_request(s,s->vmu_wizard.automatic?KUI_VMU_WIZARD_SHOW_REVIEW:KUI_VMU_WIZARD_SHOW_SOURCES,
+                    s->vmu_wizard.card,0,0);
             if(s->vmu_wizard.stage==KUI_VMU_WIZARD_REVIEW)
-                return wizard_request(s,KUI_VMU_WIZARD_LIST_GAMES,s->vmu_wizard.card,s->vmu_wizard.page,0);
+                return wizard_request(s,s->vmu_wizard.automatic?KUI_VMU_WIZARD_SHOW_GROUPS:KUI_VMU_WIZARD_LIST_GAMES,
+                    s->vmu_wizard.card,s->vmu_wizard.automatic?s->vmu_wizard.groups_page:s->vmu_wizard.page,0);
             s->page=s->vmu_wizard_return;
             return s->page==KUI_SHELL_VMU_TOOLS?emulation_request(s,false):KUI_SHELL_NONE;
         }
@@ -2797,6 +2821,11 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         break;
     case KUI_SHELL_VMU_WIZARD: {
         const struct kui_vmu_wizard_view *w=&s->vmu_wizard;
+        if(w->missing_card_confirmation) {
+            if(buttons==KUI_SHELL_A)
+                return wizard_request(s,KUI_VMU_WIZARD_CONFIRM_MISSING,w->card,w->page,0);
+            break;
+        }
         if(!w->existing_card && (w->stage==KUI_VMU_WIZARD_REVIEW || w->stage==KUI_VMU_WIZARD_DONE) &&
            ((buttons==KUI_SHELL_LEFT && w->page) ||
             (buttons==KUI_SHELL_RIGHT && (w->page+1u)*KUI_VMU_WIZARD_ROWS<w->total)))
@@ -2827,6 +2856,38 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             }
             if(buttons==KUI_SHELL_A && !w->publication_started)
                 return wizard_request(s,KUI_VMU_WIZARD_CAPTURE,w->card,0,0);
+        } else if(w->stage==KUI_VMU_WIZARD_GROUPS || w->stage==KUI_VMU_WIZARD_GROUP_GAME) {
+            bool groups=w->stage==KUI_VMU_WIZARD_GROUPS;
+            unsigned count=groups?w->groups_count:w->count;
+            unsigned page=groups?w->groups_page:w->page,total=groups?w->groups_total:w->total;
+            enum kui_vmu_wizard_op page_op=groups?KUI_VMU_WIZARD_SHOW_GROUPS:KUI_VMU_WIZARD_GROUP_GAME_PAGE;
+            if((buttons==KUI_SHELL_LEFT && page) ||
+               (buttons==KUI_SHELL_RIGHT && (page+1u)*KUI_VMU_WIZARD_ROWS<total)) {
+                s->vmu_wizard_selected=0;
+                return wizard_request(s,page_op,w->card,buttons==KUI_SHELL_LEFT?page-1u:page+1u,0);
+            }
+            if(buttons==KUI_SHELL_UP && !s->vmu_wizard_selected && page) {
+                enum kui_shell_action action=wizard_request(s,page_op,w->card,page-1u,0);
+                s->vmu_wizard_select_last=true;return action;
+            }
+            if(buttons==KUI_SHELL_DOWN && count && s->vmu_wizard_selected+1u==count &&
+               (page+1u)*KUI_VMU_WIZARD_ROWS<total) {
+                s->vmu_wizard_selected=0;return wizard_request(s,page_op,w->card,page+1u,0);
+            }
+            if(buttons==KUI_SHELL_UP && s->vmu_wizard_selected) --s->vmu_wizard_selected;
+            else if(buttons==KUI_SHELL_DOWN && s->vmu_wizard_selected+1u<count) ++s->vmu_wizard_selected;
+            if(!w->publication_started && buttons==KUI_SHELL_A && s->vmu_wizard_selected<count) {
+                if(groups) return wizard_request(s,KUI_VMU_WIZARD_OPEN_GROUP,w->card,page,
+                    w->groups[s->vmu_wizard_selected].index);
+                if(w->games[s->vmu_wizard_selected].supported)
+                    return wizard_request(s,KUI_VMU_WIZARD_RESOLVE_GROUP,w->card,page,
+                        w->games[s->vmu_wizard_selected].index);
+            }
+            if(!w->publication_started && buttons==KUI_SHELL_X && (!groups || s->vmu_wizard_selected<count))
+                return wizard_request(s,KUI_VMU_WIZARD_SKIP_GROUP,w->card,page,
+                    groups?w->groups[s->vmu_wizard_selected].index:w->group_index);
+            if(groups && buttons==KUI_SHELL_START)
+                return wizard_request(s,KUI_VMU_WIZARD_SHOW_REVIEW,w->card,0,0);
         } else if(w->stage==KUI_VMU_WIZARD_SAVES) {
             unsigned triggers=buttons&(KUI_SHELL_L|KUI_SHELL_R);
             if((triggers==KUI_SHELL_L || triggers==KUI_SHELL_R) && w->cards>1) {
@@ -2885,15 +2946,22 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             if(buttons==KUI_SHELL_A && !w->view_only && !w->publication_started && s->vmu_wizard_selected<w->count &&
                w->games[s->vmu_wizard_selected].supported)
                 return wizard_request(s,w->existing_card?KUI_VMU_WIZARD_TOGGLE:KUI_VMU_WIZARD_OPEN_SAVES,w->card,w->page,
-                    w->page*KUI_VMU_WIZARD_ROWS+s->vmu_wizard_selected);
+                    w->games[s->vmu_wizard_selected].index);
             if(buttons==KUI_SHELL_X && !w->existing_card && !w->view_only && !w->publication_started &&
                s->vmu_wizard_selected<w->count && w->games[s->vmu_wizard_selected].supported)
                 return wizard_request(s,KUI_VMU_WIZARD_TOGGLE_BLANK,w->card,w->page,
-                    w->page*KUI_VMU_WIZARD_ROWS+s->vmu_wizard_selected);
+                    w->games[s->vmu_wizard_selected].index);
             if(buttons==KUI_SHELL_START && !w->view_only && w->selected_games)
                 return wizard_request(s,KUI_VMU_WIZARD_SHOW_REVIEW,w->card,w->page,0);
-        } else if(w->stage==KUI_VMU_WIZARD_REVIEW && buttons==KUI_SHELL_A && w->selected_games)
-            return wizard_request(s,KUI_VMU_WIZARD_COMMIT,w->card,w->page,0);
+        } else if(w->stage==KUI_VMU_WIZARD_REVIEW) {
+            if(buttons==KUI_SHELL_A && w->missing_card_confirmation)
+                return wizard_request(s,KUI_VMU_WIZARD_CONFIRM_MISSING,w->card,w->page,0);
+            if(buttons==KUI_SHELL_A && (w->selected_games || w->automatic))
+                return wizard_request(s,w->unresolved_groups?KUI_VMU_WIZARD_SHOW_GROUPS:KUI_VMU_WIZARD_COMMIT,w->card,
+                    w->unresolved_groups?w->groups_page:w->page,0);
+            if(buttons==KUI_SHELL_X && w->automatic && !w->publication_started)
+                return wizard_request(s,KUI_VMU_WIZARD_SHOW_GAMES,w->card,0,0);
+        }
         break;
     }
     case KUI_SHELL_VMU_IMPORT:

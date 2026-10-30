@@ -53,6 +53,7 @@ RUNTIME_OBJECTS += build/dc/src/core/vmu_game_card.o build/dc/src/core/vmu_game_
 RUNTIME_OBJECTS += build/dc/src/core/vmu_emulation_settings.o
 RUNTIME_OBJECTS += build/dc/src/core/vmu_import_plan.o build/dc/src/core/vmu_game_candidates.o
 RUNTIME_OBJECTS += build/dc/src/core/native_vmu_standard.o
+RUNTIME_OBJECTS += build/dc/src/core/vmu_import_match.o
 RUNTIME_OBJECTS += build/dc/src/core/vmu_library.o
 RUNTIME_OBJECTS += build/dc/src/core/zso.o build/dc/src/core/lzo1x.o build/dc/src/core/retail_zso.o
 RUNTIME_OBJECTS += build/dc/src/core/game_cover.o build/dc/src/core/pvr_texture.o

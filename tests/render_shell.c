@@ -302,7 +302,28 @@ int main(int argc,char **argv) {
         .music_playing=true,.music_volume=75};
     struct kui_app_status status={.complete=true,.passed=true};
     view.music_cache_bytes=1111209;
-    if(!strcmp(argv[1],"vmu-pergame-saves") || !strcmp(argv[1],"vmu-pergame-review")) {
+    if(!strncmp(argv[1],"vmu-auto-",9)) {
+        shell.page=KUI_SHELL_VMU_WIZARD;shell.vmu_emulation_known=shell.vmu_emulation_enabled=true;
+        struct kui_vmu_wizard_view *w=&shell.vmu_wizard;w->automatic=true;w->cards=w->sources=2;
+        w->stage=KUI_VMU_WIZARD_REVIEW;w->selected_games=17;w->variants=18;w->total=17;w->count=8;
+        const char *names[]={"Skies of Arcadia","Phantasy Star Online","Toy Commander","Evolution","Evolution 2","Grandia II","Record of Lodoss War","Silver"};
+        for(unsigned i=0;i<8;i++) {strcpy(w->games[i].title,names[i]);w->games[i].supported=w->games[i].selected=true;
+            w->games[i].variants=1;w->games[i].free_min=w->games[i].free_max=190-i*3;}
+        w->games[1].variants=2;w->games[1].free_min=155;w->games[1].free_max=180;
+        if(!strcmp(argv[1],"vmu-auto-questions")) {
+            w->stage=KUI_VMU_WIZARD_GROUPS;w->unresolved_groups=w->groups_total=w->groups_count=2;
+            strcpy(w->groups[0].label,"Unidentified racing save");w->groups[0].source_slot=0;w->groups[0].files=2;
+            strcpy(w->groups[0].reason,"Two releases of this game are installed.");
+            strcpy(w->groups[1].label,"Web Favorites");w->groups[1].source_slot=1;w->groups[1].files=1;
+            strcpy(w->groups[1].reason,"No matching game found in /Games.");
+        } else if(!strcmp(argv[1],"vmu-auto-game")) {
+            w->stage=KUI_VMU_WIZARD_GROUP_GAME;strcpy(w->group_label,"Phantasy Star Online save data");
+            w->group_files=2;w->group_blocks=30;w->count=w->total=2;
+            strcpy(w->games[0].title,"Phantasy Star Online");strcpy(w->games[1].title,"Phantasy Star Online Version 2");
+        } else if(!strcmp(argv[1],"vmu-auto-missing")) {
+            w->missing_card_confirmation=true;w->missing_cards=2;
+        }
+    } else if(!strcmp(argv[1],"vmu-pergame-saves") || !strcmp(argv[1],"vmu-pergame-review")) {
         shell.page=KUI_SHELL_VMU_WIZARD;shell.vmu_emulation_known=true;shell.vmu_emulation_enabled=true;
         struct kui_vmu_wizard_view *w=&shell.vmu_wizard;
         w->sources=w->cards=2;w->total=4;w->count=4;w->selected_games=4;w->variants=5;

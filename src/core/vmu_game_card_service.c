@@ -274,7 +274,7 @@ static const char *const card_assignment_paths[2]={CARD_ASSIGN_A,CARD_ASSIGN_B};
  * torn inactive slot leaves the previous complete set usable. Equal sequence
  * numbers with different contents are ambiguous and refuse selection. */
 static int card_assignments_load(struct kui_vmu_game_card_work *w,int *active,
-    struct kui_vmu_game_card_choice *choice) {
+    struct kui_vmu_game_card_choice *choice,bool reserve_pairs) {
     bool present=false,valid=false;*active=-1;w->assignment_valid_slots=0;
     memset(&w->assignments,0,sizeof(w->assignments));
     for(unsigned i=0;i<2u;i++) {
@@ -286,6 +286,10 @@ static int card_assignments_load(struct kui_vmu_game_card_work *w,int *active,
            !card_read_exact(card_assignment_paths[i],w->assignment_wire,sizeof(w->assignment_wire)) ||
            !kui_vmu_game_assign_decode(w->assignment_wire,sizeof(w->assignment_wire),&w->assignment_candidate)) continue;
         w->assignment_valid_slots|=(uint8_t)(1u<<i);
+        if(reserve_pairs)for(unsigned j=0;j<w->assignment_candidate.count;j++) {
+            unsigned pair=w->assignment_candidate.entries[j].pair;
+            w->used[pair/8u]|=(uint8_t)(1u<<(pair%8u));
+        }
         if(valid && w->assignment_candidate.sequence==w->assignments.sequence &&
            memcmp(&w->assignment_candidate,&w->assignments,sizeof(w->assignments)))
             return card_refuse(choice,"VMU game assignment slots disagree");
@@ -340,7 +344,7 @@ int kui_vmu_game_card_assignment(const char *product,struct kui_vmu_game_card_wo
     if(!w) return card_refuse(choice,"VMU game assignment arguments");
     if(!kui_vmu_game_card_key(product,choice->key)) return KUI_VMU_GAME_CARD_UNBOUND;
     if(card_stopped(cancel)) return KUI_VMU_GAME_CARD_CANCELLED;
-    int active,result=card_assignments_load(w,&active,choice);
+    int active,result=card_assignments_load(w,&active,choice,false);
     if(result) return result;
     const struct kui_vmu_game_assignment *entry=kui_vmu_game_assign_find(&w->assignments,choice->key);
     if(!entry) return KUI_VMU_GAME_CARD_UNBOUND;
@@ -423,7 +427,7 @@ static int card_select(const char *product,const struct kui_vmu_game_candidate_t
     int listed=card_list_pairs(w,choice);
     if(listed) return listed;
     int active;
-    int assignments=explicit_candidates?0:card_assignments_load(w,&active,choice);
+    int assignments=explicit_candidates?0:card_assignments_load(w,&active,choice,true);
     if(assignments) return assignments;
     const struct kui_vmu_game_assignment *assigned=explicit_candidates?NULL:
         kui_vmu_game_assign_find(&w->assignments,choice->key);
@@ -517,24 +521,30 @@ static bool card_write_image(const char *path,const uint8_t *image,struct kui_vm
     }
     return f_close(&file)==FR_OK && ok;
 }
-int kui_vmu_game_card_import_publish(const void *image,size_t bytes,const uint8_t salt[16],
+int kui_vmu_game_card_import_publish_excluding(const void *image,size_t bytes,const uint8_t salt[16],
+    const uint16_t *excluded_pairs,size_t excluded_count,
     struct kui_vmu_game_card_work *w,struct kui_vmu_game_card_choice *choice,
     uint8_t identity[16],kui_log_fn log,kui_cancel_fn cancel) {
     if(identity) memset(identity,0,16u);
     if(!choice) return KUI_VMU_GAME_CARD_FAILED;
     memset(choice,0,sizeof(*choice));
-    if(!image || bytes!=KUI_VMU_IMAGE_BYTES || !salt || !w || !identity || !log)
+    if(!image || bytes!=KUI_VMU_IMAGE_BYTES || !salt || !w || !identity || !log ||
+       excluded_count>KUI_VMU_GAME_ASSIGN_MAX || (excluded_count && !excluded_pairs))
         return card_refuse(choice,"imported card arguments");
+    for(size_t i=0;i<excluded_count;i++)if(!excluded_pairs[i] || excluded_pairs[i]>KUI_VMU_GAME_CARD_PAIRS_MAX)
+        return card_refuse(choice,"invalid reserved pair number");
     if(card_stopped(cancel)) return KUI_VMU_GAME_CARD_CANCELLED;
     struct kui_vmu_image_summary summary;
     const struct kui_vmu_image_io io={(void *)image,card_memory_read,NULL,NULL};
     if(kui_vmu_image_validate(&io,bytes,&w->image,&summary))
         return card_refuse(choice,"the imported image is not a valid standard VMU card");
-    int active;
-    int result=card_assignments_load(w,&active,choice);
+    int result=card_list_pairs(w,choice);
     if(result) return result;
-    result=card_list_pairs(w,choice);
+    int active;result=card_assignments_load(w,&active,choice,true);
     if(result) return result;
+    for(size_t i=0;i<excluded_count;i++) {
+        unsigned pair=excluded_pairs[i];w->used[pair/8u]|=(uint8_t)(1u<<(pair%8u));
+    }
     result=card_existing_allocated(w,choice);
     if(result) return result;
     unsigned pair=0;
@@ -584,6 +594,11 @@ int kui_vmu_game_card_import_publish(const void *image,size_t bytes,const uint8_
     log("VMU import: p%04u verified; choose its games",pair);
     return KUI_VMU_GAME_CARD_READY;
 }
+int kui_vmu_game_card_import_publish(const void *image,size_t bytes,const uint8_t salt[16],
+    struct kui_vmu_game_card_work *w,struct kui_vmu_game_card_choice *choice,
+    uint8_t identity[16],kui_log_fn log,kui_cancel_fn cancel) {
+    return kui_vmu_game_card_import_publish_excluding(image,bytes,salt,NULL,0u,w,choice,identity,log,cancel);
+}
 /* The older valid slot is never modified until the entire alternate slot
  * has synced and passed an exact reread. Failure may leave the previous set
  * or the complete new set, never a partly updated collection of games. */
@@ -610,7 +625,7 @@ int kui_vmu_game_card_assignments_apply(const struct kui_vmu_game_assignment *en
     if(!entries || !count || count>KUI_VMU_GAME_ASSIGN_MAX || !w || !log)
         return card_refuse(choice,"VMU game assignment arguments");
     if(card_stopped(cancel)) return KUI_VMU_GAME_CARD_CANCELLED;
-    int active,result=card_assignments_load(w,&active,choice);
+    int active,result=card_assignments_load(w,&active,choice,false);
     if(result) return result;
     if(w->assignments.sequence==UINT64_MAX)
         return card_refuse(choice,"VMU game assignment sequence is exhausted");

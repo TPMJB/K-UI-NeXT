@@ -189,34 +189,114 @@ static int add(struct candidate_table *t,const struct kui_vmu_game_assignment *e
     memset(t->entries+at,0,sizeof(t->entries[0]));t->entries[at].target=*e;++t->count;
     return KUI_VMU_GAME_CANDIDATES_OK;
 }
-static int migrate(struct candidate_work *w,const char key[12],kui_cancel_fn cancel) {
+static int folder_state(const struct kui_vmu_game_assignment *e,kui_log_fn log) {
+    char path[64];FILINFO info;snprintf(path,sizeof(path),"0:/KUI/vmu-test/p%04u",(unsigned)e->pair);
+    FRESULT r=f_stat(path,&info);
+    if(r==FR_NO_FILE || r==FR_NO_PATH) {
+        if(log)log("Virtual VMU choices: legacy %s p%04u folder is absent (result %d)",
+            e->key,(unsigned)e->pair,KUI_VMU_GAME_CANDIDATES_MISSING);
+        return KUI_VMU_GAME_CANDIDATES_MISSING;
+    }
+    if(r!=FR_OK)return KUI_VMU_GAME_CANDIDATES_IO;
+    return (info.fattrib&AM_DIR)?KUI_VMU_GAME_CANDIDATES_OK:KUI_VMU_GAME_CANDIDATES_STALE;
+}
+static bool repair_entry(const struct kui_vmu_game_candidates_repair *repair,
+    const struct kui_vmu_game_assignment *e) {
+    if(repair)for(unsigned i=0;i<repair->count;i++)if(!memcmp(repair->entries+i,e,sizeof(*e)))return true;
+    return false;
+}
+static int migrate(struct candidate_work *w,const char key[12],
+    const struct kui_vmu_game_candidates_repair *repair,struct kui_vmu_game_candidates_repair *report,
+    kui_log_fn log,kui_cancel_fn cancel) {
     if(members(&w->table,key)) return KUI_VMU_GAME_CANDIDATES_OK;
     int r=legacy_load(w,cancel);if(r)return r;
     const struct kui_vmu_game_assignment *e=kui_vmu_game_assign_find(&w->legacy,key);
-    return e?add(&w->table,e):KUI_VMU_GAME_CANDIDATES_OK;
+    if(!e)return KUI_VMU_GAME_CANDIDATES_OK;
+    r=folder_state(e,log);
+    if(r==KUI_VMU_GAME_CANDIDATES_MISSING) {
+        if(report) {
+            if(report->count==KUI_VMU_GAME_CANDIDATES_PRODUCTS)return KUI_VMU_GAME_CANDIDATES_FULL;
+            report->entries[report->count++]=*e;return KUI_VMU_GAME_CANDIDATES_OK;
+        }
+        if(repair_entry(repair,e))return KUI_VMU_GAME_CANDIDATES_OK;
+    }
+    return r?r:add(&w->table,e);
 }
-static bool exact(const char *path,void *out,size_t bytes) {
-    bool present,sized;return !read_record(path,out,bytes,&present,&sized) && present && sized;
+static bool valid_repair(const struct kui_vmu_game_candidates_repair *repair) {
+    if(!repair || !valid_storage(&repair->storage) || !repair->legacy_sequence ||
+       !repair->count || repair->count>KUI_VMU_GAME_CANDIDATES_PRODUCTS)return false;
+    for(unsigned i=0;i<repair->count;i++) {
+        if(!valid_entry(repair->entries+i))return false;
+        for(unsigned j=0;j<i;j++)if(!memcmp(repair->entries[i].key,repair->entries[j].key,12u))return false;
+    }
+    return true;
 }
-static int target_valid(const struct kui_vmu_game_assignment *e,kui_cancel_fn cancel) {
+static bool repair_keys_selected(const struct kui_vmu_game_candidates_repair *repair,
+    const void *entries,size_t count,size_t stride) {
+    if(!repair)return true;
+    for(unsigned i=0;i<repair->count;i++) {
+        bool found=false;
+        for(size_t j=0;j<count;j++)if(!memcmp(repair->entries[i].key,(const uint8_t *)entries+j*stride,12u)) {found=true;break;}
+        if(!found)return false;
+    }
+    return true;
+}
+static int confirm_repair(struct candidate_work *w,const struct kui_vmu_game_candidates_storage *storage,
+    const struct kui_vmu_game_candidates_repair *repair,kui_log_fn log,kui_cancel_fn cancel) {
+    if(!repair)return KUI_VMU_GAME_CANDIDATES_OK;
+    if(!storage_equal(storage,&repair->storage) || w->table.sequence!=repair->catalogue_sequence)
+        return KUI_VMU_GAME_CANDIDATES_STALE;
+    int r=legacy_load(w,cancel);if(r)return r;
+    if(w->legacy.sequence!=repair->legacy_sequence)return KUI_VMU_GAME_CANDIDATES_STALE;
+    for(unsigned i=0;i<repair->count;i++) {
+        if(stopped(cancel))return KUI_VMU_GAME_CANDIDATES_CANCELLED;
+        const struct kui_vmu_game_assignment *expected=repair->entries+i;
+        const struct kui_vmu_game_assignment *current=kui_vmu_game_assign_find(&w->legacy,expected->key);
+        if(!current || memcmp(current,expected,sizeof(*current)))return KUI_VMU_GAME_CANDIDATES_STALE;
+        r=folder_state(current,log);
+        if(r!=KUI_VMU_GAME_CANDIDATES_MISSING)return r?r:KUI_VMU_GAME_CANDIDATES_STALE;
+    }
+    return KUI_VMU_GAME_CANDIDATES_OK;
+}
+static int required_record(const char *path,void *out,size_t bytes) {
+    bool present,sized;int r=read_record(path,out,bytes,&present,&sized);
+    return r?r:present && sized?KUI_VMU_GAME_CANDIDATES_OK:KUI_VMU_GAME_CANDIDATES_STALE;
+}
+static int target_valid(const struct kui_vmu_game_assignment *e,kui_log_fn log,kui_cancel_fn cancel) {
     if(stopped(cancel)) return KUI_VMU_GAME_CANDIDATES_CANCELLED;
     char path[96];uint8_t actual[64],marker[64]={0};
     snprintf(path,sizeof(path),"0:/KUI/vmu-test/p%04u/identity.bin",(unsigned)e->pair);
-    if(!exact(path,actual,16u) || memcmp(actual,e->identity,16u)) return KUI_VMU_GAME_CANDIDATES_STALE;
+    int r=required_record(path,actual,16u);
+    if(r || memcmp(actual,e->identity,16u)) {
+        if(log)log("Virtual VMU choices: %s p%04u identity %s (result %d)",e->key,(unsigned)e->pair,
+            r==KUI_VMU_GAME_CANDIDATES_IO?"could not be read":"is missing, malformed or changed",r?r:KUI_VMU_GAME_CANDIDATES_STALE);
+        return r?r:KUI_VMU_GAME_CANDIDATES_STALE;
+    }
     memcpy(marker,"KUIVMUI1",8u);memcpy(marker+16u,e->identity,16u);
     put32(marker+60u,kui_retail_crc32(0,marker,60u));
     snprintf(path,sizeof(path),"0:/KUI/vmu-test/p%04u/import.bin",(unsigned)e->pair);
-    if(!exact(path,actual,64u) || memcmp(actual,marker,64u)) return KUI_VMU_GAME_CANDIDATES_STALE;
+    r=required_record(path,actual,64u);
+    if(r || memcmp(actual,marker,64u)) {
+        if(log)log("Virtual VMU choices: %s p%04u import marker %s (result %d)",e->key,(unsigned)e->pair,
+            r==KUI_VMU_GAME_CANDIDATES_IO?"could not be read":"is missing, malformed or changed",r?r:KUI_VMU_GAME_CANDIDATES_STALE);
+        return r?r:KUI_VMU_GAME_CANDIDATES_STALE;
+    }
     static const char *const names[2]={"card.vmd","card.journal"};
     static const unsigned bytes[2]={131072u,1024u};
     for(unsigned i=0;i<2u;i++) {
         FILINFO info;snprintf(path,sizeof(path),"0:/KUI/vmu-test/p%04u/%s",(unsigned)e->pair,names[i]);
-        if(f_stat(path,&info)!=FR_OK || (info.fattrib&AM_DIR) || info.fsize!=bytes[i]) return KUI_VMU_GAME_CANDIDATES_STALE;
+        FRESULT stat=f_stat(path,&info);
+        if(stat!=FR_OK || (info.fattrib&AM_DIR) || info.fsize!=bytes[i]) {
+            r=stat!=FR_OK && stat!=FR_NO_FILE && stat!=FR_NO_PATH?KUI_VMU_GAME_CANDIDATES_IO:KUI_VMU_GAME_CANDIDATES_STALE;
+            if(log)log("Virtual VMU choices: %s p%04u %s %s (result %d)",e->key,(unsigned)e->pair,names[i],
+                r==KUI_VMU_GAME_CANDIDATES_IO?"could not be inspected":"is missing or has the wrong type/length",r);
+            return r;
+        }
     }
     return stopped(cancel)?KUI_VMU_GAME_CANDIDATES_CANCELLED:KUI_VMU_GAME_CANDIDATES_OK;
 }
-static int all_targets(const struct candidate_table *t,kui_cancel_fn cancel) {
-    for(unsigned i=0;i<t->count;i++) {int r=target_valid(&t->entries[i].target,cancel);if(r)return r;}
+static int all_targets(const struct candidate_table *t,kui_log_fn log,kui_cancel_fn cancel) {
+    for(unsigned i=0;i<t->count;i++) {int r=target_valid(&t->entries[i].target,log,cancel);if(r)return r;}
     return KUI_VMU_GAME_CANDIDATES_OK;
 }
 static bool verify_record(const char *path,const uint8_t *wire) {
@@ -292,7 +372,6 @@ static int publish(struct candidate_work *w,kui_log_fn log,kui_cancel_fn cancel)
 }
 int kui_vmu_game_candidates_list(const char *product,const struct kui_vmu_game_candidates_storage *storage,
     struct kui_vmu_game_candidates_view *out,kui_log_fn log,kui_cancel_fn cancel) {
-    (void)log;
     if(!out) return KUI_VMU_GAME_CANDIDATES_ARGUMENT;
     memset(out,0,sizeof(*out));out->default_index=KUI_VMU_GAME_CANDIDATES_NO_DEFAULT;
     char key[12];
@@ -301,7 +380,7 @@ int kui_vmu_game_candidates_list(const char *product,const struct kui_vmu_game_c
     int r=load(w,storage,cancel);
     if(!r) {
         unsigned at=first(&w->table,key),n=members(&w->table,key);
-        for(unsigned i=0;!r && i<n;i++)r=target_valid(&w->table.entries[at+i].target,cancel);
+        for(unsigned i=0;!r && i<n;i++)r=target_valid(&w->table.entries[at+i].target,log,cancel);
         if(!r) {
             memcpy(out->key,key,sizeof(key));storage_copy(&out->storage,storage);out->sequence=w->table.sequence;
             out->count=n;out->present=n!=0;
@@ -317,12 +396,11 @@ int kui_vmu_game_candidates_list(const char *product,const struct kui_vmu_game_c
 }
 int kui_vmu_game_candidates_visit(const struct kui_vmu_game_candidates_storage *storage,
     kui_vmu_game_candidates_visit_fn visit,void *context,kui_log_fn log,kui_cancel_fn cancel) {
-    (void)log;
     if((storage && !valid_storage(storage)) || !visit)return KUI_VMU_GAME_CANDIDATES_ARGUMENT;
     struct candidate_work *w=calloc(1,sizeof(*w));if(!w)return KUI_VMU_GAME_CANDIDATES_IO;
     int r=load(w,storage,cancel);
     if(!r && w->active<0)r=KUI_VMU_GAME_CANDIDATES_ABSENT;
-    if(!r)r=all_targets(&w->table,cancel);
+    if(!r)r=all_targets(&w->table,log,cancel);
     for(unsigned i=0;!r && i<w->table.count;i++) {
         if(stopped(cancel)) {r=KUI_VMU_GAME_CANDIDATES_CANCELLED;break;}
         const struct candidate_record *e=w->table.entries+i;
@@ -357,32 +435,86 @@ int kui_vmu_game_candidates_identity_unpinned(unsigned pair,const uint8_t identi
     if(!r && referenced)r=KUI_VMU_GAME_CANDIDATES_STALE;
     free(w);return r;
 }
-int kui_vmu_game_candidates_preflight(const struct kui_vmu_game_candidates_plan *plans,size_t count,
-    const struct kui_vmu_game_candidates_storage *storage,kui_log_fn log,kui_cancel_fn cancel) {
-    (void)log;
-    if(!valid_storage(storage) || count>KUI_VMU_GAME_CANDIDATES_PRODUCTS || (count && !plans))
+static int preflight(const struct kui_vmu_game_candidates_plan *plans,size_t count,
+    const struct kui_vmu_game_candidates_storage *storage,const struct kui_vmu_game_candidates_repair *repair,
+    struct kui_vmu_game_candidates_repair *report,kui_log_fn log,kui_cancel_fn cancel) {
+    if(!valid_storage(storage) || count>KUI_VMU_GAME_CANDIDATES_PRODUCTS || (count && !plans)) {
+        if(log)log("Virtual VMU choices preflight: invalid storage or plan count (result %d)",KUI_VMU_GAME_CANDIDATES_ARGUMENT);
         return KUI_VMU_GAME_CANDIDATES_ARGUMENT;
-    for(size_t i=0;i<count;i++) {
-        if(!valid_key(plans[i].key) || plans[i].additional>KUI_VMU_GAME_CANDIDATES_PER_GAME) return KUI_VMU_GAME_CANDIDATES_ARGUMENT;
-        for(size_t j=0;j<i;j++)if(!memcmp(plans[i].key,plans[j].key,12u))return KUI_VMU_GAME_CANDIDATES_ARGUMENT;
     }
-    struct candidate_work *w=calloc(1,sizeof(*w));if(!w)return KUI_VMU_GAME_CANDIDATES_IO;
+    for(size_t i=0;i<count;i++) {
+        if(!valid_key(plans[i].key) || plans[i].additional>KUI_VMU_GAME_CANDIDATES_PER_GAME) {
+            if(log)log("Virtual VMU choices preflight: invalid plan %u (result %d)",(unsigned)i,KUI_VMU_GAME_CANDIDATES_ARGUMENT);
+            return KUI_VMU_GAME_CANDIDATES_ARGUMENT;
+        }
+        for(size_t j=0;j<i;j++)if(!memcmp(plans[i].key,plans[j].key,12u)) {
+            if(log)log("Virtual VMU choices preflight: duplicate product %s (result %d)",plans[i].key,KUI_VMU_GAME_CANDIDATES_ARGUMENT);
+            return KUI_VMU_GAME_CANDIDATES_ARGUMENT;
+        }
+    }
+    if(repair && (!valid_repair(repair) || !repair_keys_selected(repair,plans,count,sizeof(*plans))))
+        return KUI_VMU_GAME_CANDIDATES_ARGUMENT;
+    struct candidate_work *w=calloc(1,sizeof(*w));
+    if(!w) {if(log)log("Virtual VMU choices preflight: not enough memory");return KUI_VMU_GAME_CANDIDATES_IO;}
     int r=load(w,storage,cancel);
-    if(!r && w->table.sequence==UINT64_MAX)r=KUI_VMU_GAME_CANDIDATES_INVALID;
-    for(size_t i=0;!r && i<count;i++)r=migrate(w,plans[i].key,cancel);
+    if(r && log)log("Virtual VMU choices preflight: catalogue read refused (result %d)",r);
+    if(!r)r=confirm_repair(w,storage,repair,log,cancel);
+    if(!r && w->table.sequence==UINT64_MAX) {
+        if(log)log("Virtual VMU choices preflight: catalogue generation exhausted");
+        r=KUI_VMU_GAME_CANDIDATES_INVALID;
+    }
+    for(size_t i=0;!r && i<count;i++) {
+        r=migrate(w,plans[i].key,repair,report,log,cancel);
+        if(r && log)log("Virtual VMU choices preflight: legacy product %s refused (result %d)",plans[i].key,r);
+    }
     uint32_t total=w->table.count;unsigned games=products(&w->table);
+    if(!r && log)log("Virtual VMU choices preflight: %u existing products, %lu candidates; %u planned products",
+        games,(unsigned long)total,(unsigned)count);
     for(size_t i=0;!r && i<count;i++) {
         unsigned n=members(&w->table,plans[i].key);
-        if(plans[i].additional>KUI_VMU_GAME_CANDIDATES_PER_GAME-n ||
-           plans[i].additional>KUI_VMU_GAME_CANDIDATES_MAX-total ||
-           (!n && plans[i].additional && ++games>KUI_VMU_GAME_CANDIDATES_PRODUCTS)) r=KUI_VMU_GAME_CANDIDATES_FULL;
-        else total+=plans[i].additional;
+        if(plans[i].additional>KUI_VMU_GAME_CANDIDATES_PER_GAME-n) {
+            if(log)log("Virtual VMU choices preflight: %s has %u candidates + %lu planned; per-game limit %u",
+                plans[i].key,n,(unsigned long)plans[i].additional,KUI_VMU_GAME_CANDIDATES_PER_GAME);
+            r=KUI_VMU_GAME_CANDIDATES_FULL;
+        } else if(plans[i].additional>KUI_VMU_GAME_CANDIDATES_MAX-total) {
+            if(log)log("Virtual VMU choices preflight: %lu candidates + %lu planned; total limit %u",
+                (unsigned long)total,(unsigned long)plans[i].additional,KUI_VMU_GAME_CANDIDATES_MAX);
+            r=KUI_VMU_GAME_CANDIDATES_FULL;
+        } else if(!n && plans[i].additional && ++games>KUI_VMU_GAME_CANDIDATES_PRODUCTS) {
+            if(log)log("Virtual VMU choices preflight: product %s exceeds the %u-product limit",
+                plans[i].key,KUI_VMU_GAME_CANDIDATES_PRODUCTS);
+            r=KUI_VMU_GAME_CANDIDATES_FULL;
+        } else total+=plans[i].additional;
     }
-    if(!r)r=all_targets(&w->table,cancel);
+    if(!r)r=all_targets(&w->table,log,cancel);
+    if(!r && report && report->count) {
+        storage_copy(&report->storage,storage);report->catalogue_sequence=w->table.sequence;
+        report->legacy_sequence=w->legacy.sequence;r=KUI_VMU_GAME_CANDIDATES_MISSING;
+    }
+    if(log)log("Virtual VMU choices preflight: result %d",r);
     free(w);return r;
 }
-static int apply(const struct kui_vmu_game_assignment *entries,size_t count,bool select,
+int kui_vmu_game_candidates_preflight(const struct kui_vmu_game_candidates_plan *plans,size_t count,
     const struct kui_vmu_game_candidates_storage *storage,kui_log_fn log,kui_cancel_fn cancel) {
+    return preflight(plans,count,storage,NULL,NULL,log,cancel);
+}
+int kui_vmu_game_candidates_preflight_repair(const struct kui_vmu_game_candidates_plan *plans,size_t count,
+    const struct kui_vmu_game_candidates_storage *storage,struct kui_vmu_game_candidates_repair *out,
+    kui_log_fn log,kui_cancel_fn cancel) {
+    if(!out)return KUI_VMU_GAME_CANDIDATES_ARGUMENT;
+    memset(out,0,sizeof(*out));int r=preflight(plans,count,storage,NULL,out,log,cancel);
+    if(r!=KUI_VMU_GAME_CANDIDATES_MISSING)memset(out,0,sizeof(*out));
+    return r;
+}
+int kui_vmu_game_candidates_preflight_confirmed(const struct kui_vmu_game_candidates_plan *plans,size_t count,
+    const struct kui_vmu_game_candidates_storage *storage,const struct kui_vmu_game_candidates_repair *repair,
+    kui_log_fn log,kui_cancel_fn cancel) {
+    if(!repair)return KUI_VMU_GAME_CANDIDATES_ARGUMENT;
+    return preflight(plans,count,storage,repair,NULL,log,cancel);
+}
+static int apply(const struct kui_vmu_game_assignment *entries,size_t count,bool select,
+    const struct kui_vmu_game_candidates_storage *storage,const struct kui_vmu_game_candidates_repair *repair,
+    kui_log_fn log,kui_cancel_fn cancel) {
     if(!valid_storage(storage) || !entries || !count || count>KUI_VMU_GAME_CANDIDATES_MAX)
         return KUI_VMU_GAME_CANDIDATES_ARGUMENT;
     if(select && count>KUI_VMU_GAME_CANDIDATES_PRODUCTS)return KUI_VMU_GAME_CANDIDATES_ARGUMENT;
@@ -390,11 +522,14 @@ static int apply(const struct kui_vmu_game_assignment *entries,size_t count,bool
         if(!valid_entry(entries+i))return KUI_VMU_GAME_CANDIDATES_ARGUMENT;
         if(select)for(size_t j=0;j<i;j++)if(!memcmp(entries[i].key,entries[j].key,12u))return KUI_VMU_GAME_CANDIDATES_ARGUMENT;
     }
+    if(repair && (!valid_repair(repair) || !repair_keys_selected(repair,entries,count,sizeof(*entries))))
+        return KUI_VMU_GAME_CANDIDATES_ARGUMENT;
     struct candidate_work *w=calloc(1,sizeof(*w));if(!w)return KUI_VMU_GAME_CANDIDATES_IO;
     int r=load(w,storage,cancel);
+    if(!r)r=confirm_repair(w,storage,repair,log,cancel);
     w->other=w->table;
     /* Migrate all affected legacy keys before adding new records. */
-    for(size_t i=0;!r && i<count;i++)r=migrate(w,entries[i].key,cancel);
+    for(size_t i=0;!r && i<count;i++)r=migrate(w,entries[i].key,repair,NULL,log,cancel);
     for(size_t i=0;!r && i<count;i++)r=add(&w->table,entries+i);
     for(size_t i=0;!r && select && i<count;i++) {
         unsigned at=first(&w->table,entries[i].key),n=members(&w->table,entries[i].key);
@@ -403,18 +538,24 @@ static int apply(const struct kui_vmu_game_assignment *entries,size_t count,bool
             e->flags=e->target.pair==entries[i].pair?DEFAULT_FLAG:0u;
         }
     }
-    if(!r)r=all_targets(&w->table,cancel);
+    if(!r)r=all_targets(&w->table,log,cancel);
     bool changed=memcmp(&w->table,&w->other,sizeof(w->table))!=0;
     if(!r && changed)r=publish(w,log,cancel);
     free(w);return r;
 }
 int kui_vmu_game_candidates_apply(const struct kui_vmu_game_assignment *entries,size_t count,
     const struct kui_vmu_game_candidates_storage *storage,kui_log_fn log,kui_cancel_fn cancel) {
-    return apply(entries,count,false,storage,log,cancel);
+    return apply(entries,count,false,storage,NULL,log,cancel);
+}
+int kui_vmu_game_candidates_apply_confirmed(const struct kui_vmu_game_assignment *entries,size_t count,
+    const struct kui_vmu_game_candidates_storage *storage,const struct kui_vmu_game_candidates_repair *repair,
+    kui_log_fn log,kui_cancel_fn cancel) {
+    if(!repair)return KUI_VMU_GAME_CANDIDATES_ARGUMENT;
+    return apply(entries,count,false,storage,repair,log,cancel);
 }
 int kui_vmu_game_candidates_apply_selected(const struct kui_vmu_game_assignment *entries,size_t count,
     const struct kui_vmu_game_candidates_storage *storage,kui_log_fn log,kui_cancel_fn cancel) {
-    return apply(entries,count,true,storage,log,cancel);
+    return apply(entries,count,true,storage,NULL,log,cancel);
 }
 int kui_vmu_game_candidates_set_default(const char *product,const struct kui_vmu_game_candidate_target *target,
     uint64_t expected_sequence,const struct kui_vmu_game_candidates_storage *storage,kui_log_fn log,kui_cancel_fn cancel) {
@@ -432,7 +573,7 @@ int kui_vmu_game_candidates_set_default(const char *product,const struct kui_vmu
         uint32_t flag=selected?DEFAULT_FLAG:0u;changed|=flag!=e->flags;e->flags=flag;
     }
     if(!r && !matched)r=KUI_VMU_GAME_CANDIDATES_STALE;
-    if(!r)r=all_targets(&w->table,cancel);
+    if(!r)r=all_targets(&w->table,log,cancel);
     if(!r && changed)r=publish(w,log,cancel);
     free(w);return r;
 }

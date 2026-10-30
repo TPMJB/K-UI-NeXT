@@ -17,6 +17,7 @@ static uint8_t physical_sources[2][KUI_VMU_IMAGE_BYTES];
 static uint8_t physical_hashes[2][32];
 static bool host_mounted,fail_catalog_once,cancel_at_catalog;
 static unsigned physical_reads,catalog_faults;
+static bool future_legacy_visible;
 static const char *wizard_test_phase="start";
 static unsigned wizard_test_cut;
 static struct kui_vmu_wizard_request wizard_request;
@@ -53,8 +54,8 @@ bool kui_sd_vmu_profile_identity(struct kui_vmu_sd_identity *out) {
 }
 bool kui_games_visit_images(const char *root,kui_games_image_visit_fn visit,void *context,kui_cancel_fn cancel) {
     CHECK(!strcmp(root,"/Games") && host_mounted);
-    static const char *const names[]={"alpha.gdi","beta.gdi","blank.gdi","pso.gdi","shared.gdi"};
-    for(unsigned i=0;i<5u;i++) {
+    static const char *const names[]={"alpha.gdi","beta.gdi","blank.gdi","pso.gdi","shared.gdi","legacy.gdi"};
+    for(unsigned i=0;i<(future_legacy_visible?6u:5u);i++) {
         if(cancel && cancel()) return false;
         if(!visit(context,names[i],false)) return false;
     }
@@ -63,9 +64,9 @@ bool kui_games_visit_images(const char *root,kui_games_image_visit_fn visit,void
 bool kui_games_inspect(const char *path,struct kui_games_detail *detail,kui_log_fn log,kui_cancel_fn cancel) {
     (void)log;if(cancel && cancel()) return false;memset(detail,0,sizeof(*detail));
     const char *key=strstr(path,"alpha")?"ALPHA-1":strstr(path,"beta")?"BETA-1":
-        strstr(path,"blank")?"BLANK-1":strstr(path,"shared")?"SHARED-1":"PSO-1";
-    const char *title=strstr(path,"alpha")?"Alpha":strstr(path,"beta")?"Beta":
-        strstr(path,"blank")?"Blank":strstr(path,"shared")?"Shared":"Phantasy Star Online";
+        strstr(path,"blank")?"BLANK-1":strstr(path,"shared")?"SHARED-1":strstr(path,"legacy")?"LEGACY001":"PSO-1";
+    const char *title=strstr(path,"alpha")?"Alpha Adventure":strstr(path,"beta")?"Beta Adventure":
+        strstr(path,"blank")?"Blank":strstr(path,"shared")?"Shared":strstr(path,"legacy")?"Legacy Adventure":"Phantasy Star Online";
     strcpy(detail->product,key);strcpy(detail->title,title);detail->valid=detail->native_gd=true;return true;
 }
 static int wizard_image_read(void *context,uint16_t block,void *out) {
@@ -99,24 +100,45 @@ static void wizard_ok(enum kui_vmu_wizard_op op) {
         fprintf(stderr,"Wizard op%u: %s\n",(unsigned)op,wizard_view.status.message);
     CHECK(!wizard_view.status.errors && !wizard_view.status.stopped);
 }
+/* Thirty-three authored VMS saves reproduce the two source-card occupancies
+ * in the hardware report. Each save has an actual VMS text header, ordinary
+ * data-file directory entry and distinct opaque payload bytes. */
 static void source_images(void) {
-    static const char *const names[2][5]={
-        {"PSO______SYS","PSO______GCD","ALPHA_SYS","ALPHA_SAVE","FILLER_ONE"},
-        {"PSO______SYS","PSO______GCD","BETA_SAVE","FILLER_TWO",NULL}};
-    static const unsigned sizes[2][5]={{15u,30u,1u,2u,148u},{15u,30u,3u,152u,0u}};
     for(unsigned source=0;source<2u;source++) {
-        struct kui_vmu_image_file files[5]={0};unsigned n=source?4u:5u;
+        struct kui_vmu_image_file files[20]={0};unsigned n=source?20u:13u;
         for(unsigned i=0;i<n;i++) {
-            files[i].entry[0]=0x33;memcpy(files[i].entry+4u,names[source][i],strlen(names[source][i]));
-            put16(files[i].entry+24u,sizes[source][i]);files[i].bytes=sizes[source][i]*512u;
+            char name[13],short_text[17],long_text[33];unsigned size;
+            if(i<2u) {
+                strcpy(name,i?"PSO______GCD":"PSO______SYS");size=i?30u:15u;
+                strcpy(short_text,"PSO");strcpy(long_text,i?"GUILD_CARD":"MAIN_DATA");
+            } else if(!source && i<4u) {
+                strcpy(name,i==2u?"ALPHA_SYS":"ALPHA_SAVE");size=i==2u?1u:2u;
+                strcpy(short_text,"Alpha Adventure");strcpy(long_text,"Alpha Adventure");
+            } else if(source && i==2u) {
+                strcpy(name,"BETA_SAVE");size=3u;
+                strcpy(short_text,"Beta Adventure");strcpy(long_text,"Beta Adventure");
+            } else if(i<(source?5u:6u)) {
+                unsigned at=i-(source?3u:4u);
+                strcpy(name,at?"MYSTERY_.002":"MYSTERY_.001");size=1u;
+                strcpy(short_text,"MYSTERY SET");strcpy(long_text,"Unidentified adventure saves");
+            } else {
+                snprintf(name,sizeof(name),"ARCHIVE%02u",i-(source?5u:6u)+1u);
+                size=source?10u:(i==12u?26u:20u);
+                strcpy(short_text,"ARCHIVE DATA");strcpy(long_text,"Archived unrecognized saves");
+            }
+            files[i].entry[0]=0x33;memcpy(files[i].entry+4u,name,strlen(name));
+            put16(files[i].entry+24u,size);files[i].bytes=size*512u;
             uint8_t *payload=malloc(files[i].bytes);CHECK(payload);
             memset(payload,(int)(0x11u+source*0x40u+i),files[i].bytes);
-            memcpy(payload,names[source][i],strlen(names[source][i]));
-            files[i].payload=payload;
+            memset(payload,0,64u);memcpy(payload,short_text,strlen(short_text));
+            memcpy(payload+16u,long_text,strlen(long_text));
+            /* Publisher IDs are deliberately generic: they must not merge
+             * unrelated games or resolve the unidentified sets by themselves. */
+            memcpy(payload+48u,"SEGA",4u);files[i].payload=payload;
         }
         struct kui_vmu_image_workspace scratch;struct kui_vmu_image_summary summary;
         CHECK(kui_vmu_image_pack(files,n,physical_sources[source],KUI_VMU_IMAGE_BYTES,&scratch,&summary)==KUI_VMU_IMAGE_OK);
-        CHECK(summary.used_blocks==(source?200u:196u));
+        CHECK(summary.files==n && summary.used_blocks==(source?200u:196u));
         wizard_hash(physical_sources[source],KUI_VMU_IMAGE_BYTES,physical_hashes[source]);
         for(unsigned i=0;i<n;i++) free((void *)files[i].payload);
     }
@@ -148,37 +170,118 @@ static struct kui_vmu_game_candidates_view candidates(const char *product) {
     if(result) fprintf(stderr,"Candidate list %s refused %d phase=%s cut=%u; last=%s\n",product,result,wizard_test_phase,wizard_test_cut,last_log);
     CHECK(result==KUI_VMU_GAME_CANDIDATES_OK);return out;
 }
-static void choose_save(const char *name) {
-    unsigned i=0;while(i<wizard_view.saves_count && strcmp(wizard_view.saves[i].name,name)) ++i;
-    CHECK(i<wizard_view.saves_count && !wizard_view.saves[i].picked);
-    wizard_request.index=wizard_view.saves[i].index;wizard_ok(KUI_VMU_WIZARD_TOGGLE_SAVE);
-}
-static void choose_game(unsigned index,const char *const *names,unsigned count) {
-    wizard_request.index=index;wizard_request.card=0;wizard_request.page=0;
-    wizard_ok(KUI_VMU_WIZARD_OPEN_SAVES);
-    for(unsigned i=0;i<wizard_view.saves_count;i++) CHECK(!wizard_view.saves[i].picked);
-    for(unsigned i=0;i<count;i++) choose_save(names[i]);
-    wizard_ok(KUI_VMU_WIZARD_ACCEPT_SAVES);
-}
 static void plans(void) {
     memset(&wizard_request,0,sizeof(wizard_request));strcpy(wizard_request.root,"/Games");
     wizard_ok(KUI_VMU_WIZARD_RESET);
     wizard_ok(KUI_VMU_WIZARD_CAPTURE);wizard_request.slot=1;wizard_ok(KUI_VMU_WIZARD_CAPTURE);
     CHECK(wizard_view.cards==2u && wizard_view.sources==2u && physical_reads==2u);
+    CHECK(wizard_view.summary[0].files==13u && wizard_view.summary[0].blocks==196u &&
+          wizard_view.summary[1].files==20u && wizard_view.summary[1].blocks==200u);
     wizard_request.card=0;wizard_request.page=0;wizard_ok(KUI_VMU_WIZARD_LIST_GAMES);
-    CHECK(wizard_view.total==5u && !wizard_view.selected_games);
-    for(unsigned i=0;i<5u;i++) CHECK(!wizard_view.games[i].selected);
-    static const char *const alpha[]={"ALPHA_SYS","ALPHA_SAVE"};choose_game(0u,alpha,2u);
-    wizard_request.index=3u;wizard_request.card=0;wizard_request.page=0;wizard_ok(KUI_VMU_WIZARD_OPEN_SAVES);
-    choose_save("PSO______SYS");choose_save("PSO______GCD");
-    wizard_request.card=1;wizard_ok(KUI_VMU_WIZARD_OPEN_SAVES);
-    choose_save("PSO______SYS");choose_save("PSO______GCD");wizard_ok(KUI_VMU_WIZARD_ACCEPT_SAVES);
-    wizard_request.index=1u;wizard_request.card=1;wizard_request.page=0;wizard_ok(KUI_VMU_WIZARD_OPEN_SAVES);
-    choose_save("BETA_SAVE");wizard_ok(KUI_VMU_WIZARD_ACCEPT_SAVES);
-    choose_game(2u,NULL,0u);
-    CHECK(wizard_view.selected_games==4u && wizard_view.variants==5u);
-    wizard_ok(KUI_VMU_WIZARD_SHOW_REVIEW);
+    CHECK(wizard_view.automatic && wizard_view.stage==KUI_VMU_WIZARD_GROUPS);
+    CHECK(wizard_view.total==5u && wizard_view.selected_games==3u && wizard_view.variants==4u);
+    unsigned unresolved=wizard_view.unresolved_groups,resolved=0,skipped=0;
+    CHECK(unresolved && !wizard_view.publication_started);
+    /* Commit cannot silently discard any unrecognized saves. */
+    wizard_call(KUI_VMU_WIZARD_COMMIT);CHECK(wizard_view.status.errors && !wizard_view.publication_started);
+    wizard_request.page=0;wizard_ok(KUI_VMU_WIZARD_SHOW_GROUPS);
+    while(wizard_view.unresolved_groups) {
+        CHECK(wizard_view.stage==KUI_VMU_WIZARD_GROUPS && wizard_view.groups_count);
+        struct kui_vmu_wizard_group group=wizard_view.groups[0];
+        wizard_request.index=group.index;wizard_request.page=wizard_view.groups_page;
+        if(strstr(group.label,"MYSTERY")) {
+            wizard_ok(KUI_VMU_WIZARD_OPEN_GROUP);
+            CHECK(wizard_view.stage==KUI_VMU_WIZARD_GROUP_GAME &&
+                  wizard_view.group_index==group.index && wizard_view.group_source==group.source);
+            const char *key=group.source?"BETA-1":"ALPHA-1";unsigned at=0;
+            while(at<wizard_view.count && strcmp(wizard_view.games[at].product,key)) ++at;
+            CHECK(at<wizard_view.count);
+            wizard_request.index=wizard_view.games[at].index;wizard_request.page=wizard_view.page;
+            wizard_request.group_index=wizard_view.group_index;
+            if(!resolved) {
+                unsigned selected=wizard_view.selected_games,variants=wizard_view.variants;
+                ++wizard_request.group_index;wizard_call(KUI_VMU_WIZARD_RESOLVE_GROUP);
+                CHECK(wizard_view.status.errors && wizard_view.stage==KUI_VMU_WIZARD_GROUP_GAME &&
+                      wizard_view.selected_games==selected && wizard_view.variants==variants);
+                wizard_request.group_index=group.index;
+            }
+            wizard_ok(KUI_VMU_WIZARD_RESOLVE_GROUP);resolved+=group.files;
+        } else {
+            wizard_ok(KUI_VMU_WIZARD_SKIP_GROUP);skipped+=group.files;
+        }
+        if(wizard_view.unresolved_groups) {wizard_request.page=0;wizard_ok(KUI_VMU_WIZARD_SHOW_GROUPS);}
+    }
+    CHECK(resolved==4u && skipped==22u && resolved+skipped+7u==33u);
+    CHECK(wizard_view.selected_games==3u && wizard_view.variants==4u && !wizard_view.publication_started);
+    if(wizard_view.stage!=KUI_VMU_WIZARD_REVIEW) wizard_ok(KUI_VMU_WIZARD_SHOW_REVIEW);
+    CHECK(wizard_view.stage==KUI_VMU_WIZARD_REVIEW && wizard_view.count==3u && wizard_view.total==3u);
+    CHECK(wizard_view.games[0].index==0u && wizard_view.games[1].index==1u && wizard_view.games[2].index==3u);
+    unsigned files=0,blocks=0;
+    for(unsigned i=0;i<wizard_view.count;i++) {
+        CHECK(wizard_view.games[i].selected && !wizard_view.games[i].blank);
+        files+=wizard_view.games[i].saves;blocks+=wizard_view.games[i].blocks;
+    }
+    CHECK(files==11u && blocks==100u && !writes); /* No file toggles, blank-card command or storage write. */
+    printf("Automatic import: 33 saves, two immutable sources (196/200 blocks); three matched games/four variants, four unresolved files explicitly resolved, 22 retained only in full archives\n");
 }
+static void legacy_records(uint8_t record[KUI_VMU_GAME_ASSIGN_WIRE_BYTES]) {
+    struct kui_vmu_game_assign_table table={.sequence=1u,.count=34u};
+    for(unsigned i=0;i<34u;i++) {
+        if(!i) strcpy(table.entries[i].key,"ALPHA-1");
+        else snprintf(table.entries[i].key,sizeof(table.entries[i].key),"LEGACY%03u",i);
+        table.entries[i].pair=5u;memset(table.entries[i].identity,0x35,16u);
+    }
+    CHECK(kui_vmu_game_assign_encode(&table,record));
+}
+/* A legacy assignment count is not a candidate capacity measurement. An
+ * existing card without its import proof is refused before publication with
+ * a stale-card diagnostic. A wholly deleted card is handled separately below. */
+static void legacy_missing_preflight(void) {
+    wizard_mount();wizard_unmount();uint8_t *seed=malloc(disk_bytes);CHECK(seed);memcpy(seed,disk,disk_bytes);
+    wizard_mount();CHECK(f_mkdir("0:/KUI")==FR_OK && f_mkdir("0:/KUI/vmu-test")==FR_OK);
+    uint8_t record[KUI_VMU_GAME_ASSIGN_WIRE_BYTES],after[KUI_VMU_GAME_ASSIGN_WIRE_BYTES];legacy_records(record);
+    file_write("0:/KUI/vmu-test/assign-a.bin",record,sizeof(record));
+    CHECK(f_mkdir("0:/KUI/vmu-test/p0005")==FR_OK);
+    file_write("0:/KUI/vmu-test/p0005/card.vmd",physical_sources[0],KUI_VMU_IMAGE_BYTES);
+    uint8_t journal[1024]={0},identity_bytes[16];memset(identity_bytes,0x35,16u);
+    file_write("0:/KUI/vmu-test/p0005/card.journal",journal,sizeof(journal));
+    file_write("0:/KUI/vmu-test/p0005/identity.bin",identity_bytes,16u);
+    wizard_unmount();writes=0;wizard_call(KUI_VMU_WIZARD_COMMIT);
+    if(!wizard_view.status.errors || strstr(wizard_view.status.message,"full"))
+        fprintf(stderr,"Missing legacy import proof diagnostic: %s\n",wizard_view.status.message);
+    CHECK(wizard_view.status.errors && !wizard_view.status.stopped && !wizard_view.publication_started && !writes);
+    CHECK(!strstr(wizard_view.status.message,"full") && !strstr(wizard_view.status.message,"Full"));
+    CHECK(strstr(wizard_view.status.message,"missing") || strstr(wizard_view.status.message,"changed") ||
+          strstr(wizard_view.status.message,"stale") || strstr(wizard_view.status.message,"Stale"));
+    wizard_mount();CHECK(pair_count()==1u);
+    CHECK(file_read("0:/KUI/vmu-test/assign-a.bin",after,sizeof(after))==sizeof(after) && !memcmp(record,after,sizeof(record)));
+    FILINFO info;FRESULT r=f_stat(KUI_VMU_GAME_CANDIDATES_PATH_A,&info);CHECK(r==FR_NO_FILE || r==FR_NO_PATH);
+    r=f_stat(KUI_VMU_GAME_CANDIDATES_PATH_B,&info);CHECK(r==FR_NO_FILE || r==FR_NO_PATH);
+    wizard_unmount();physical_unchanged();memcpy(disk,seed,disk_bytes);free(seed);
+    /* The user explicitly deleted the old p0005 folder and requested a fresh
+     * import. Recovery of this selected key must preserve every v1 byte and
+     * every unrelated old key; launch of those missing targets still refuses. */
+    wizard_mount();CHECK(f_mkdir("0:/KUI")==FR_OK && f_mkdir("0:/KUI/vmu-test")==FR_OK);
+    file_write("0:/KUI/vmu-test/assign-a.bin",record,sizeof(record));
+    protect("0:/KUI/vmu-test/assign-a.bin",sizeof(record));CHECK(!pair_count());
+    struct kui_vmu_game_candidates_storage storage=storage_snapshot();
+    struct kui_vmu_game_candidates_plan plan[3]={0};
+    strcpy(plan[0].key,"ALPHA-1");plan[0].additional=1u;
+    strcpy(plan[1].key,"BETA-1");plan[1].additional=1u;
+    strcpy(plan[2].key,"PSO-1");plan[2].additional=2u;
+    struct kui_vmu_game_candidates_repair repair,changed;writes=0;
+    CHECK(kui_vmu_game_candidates_preflight(plan,3u,&storage,log_line,cancelled)==KUI_VMU_GAME_CANDIDATES_MISSING);
+    CHECK(kui_vmu_game_candidates_preflight_repair(plan,3u,&storage,&repair,log_line,cancelled)==KUI_VMU_GAME_CANDIDATES_MISSING);
+    CHECK(repair.count==1u && !strcmp(repair.entries[0].key,"ALPHA-1") && repair.entries[0].pair==5u &&
+          repair.legacy_sequence==1u && !repair.catalogue_sequence && !writes);
+    CHECK(!kui_vmu_game_candidates_preflight_confirmed(plan,3u,&storage,&repair,log_line,cancelled));
+    changed=repair;++changed.entries[0].pair;
+    CHECK(kui_vmu_game_candidates_preflight_confirmed(plan,3u,&storage,&changed,log_line,cancelled)==KUI_VMU_GAME_CANDIDATES_STALE);
+    struct kui_vmu_game_candidates_storage foreign=storage;foreign.cid[0]^=1u;
+    CHECK(kui_vmu_game_candidates_preflight_confirmed(plan,3u,&foreign,&repair,log_line,cancelled)==KUI_VMU_GAME_CANDIDATES_STALE);
+    CHECK(!writes);protected_unchanged();wizard_unmount();
+}
+
 static void archive_check(bool remember) {
     struct kui_vmu_collection_page page;
     CHECK(!kui_vmu_collection_list(0u,&page,log_line,cancelled) && page.total==2u && page.count==2u);
@@ -226,22 +329,28 @@ static void check_card(const struct kui_vmu_game_candidate_target *target,const 
     }
 }
 static void result_cards(void) {
-    struct kui_vmu_game_candidates_view alpha=candidates("ALPHA-1"),beta=candidates("BETA-1"),blank=candidates("BLANK-1"),pso=candidates("PSO-1");
-    CHECK(alpha.count==1u && beta.count==1u && blank.count==1u && pso.count==2u);
+    struct kui_vmu_game_candidates_view alpha=candidates("ALPHA-1"),beta=candidates("BETA-1"),pso=candidates("PSO-1");
+    CHECK(alpha.count==1u && beta.count==1u && pso.count==2u);
+    struct kui_vmu_game_candidates_storage storage=storage_snapshot();struct kui_vmu_game_candidates_view blank;
+    CHECK(kui_vmu_game_candidates_list("BLANK-1",&storage,&blank,log_line,cancelled)==KUI_VMU_GAME_CANDIDATES_ABSENT);
     CHECK(pso.default_index==KUI_VMU_GAME_CANDIDATES_NO_DEFAULT);
-    static const char *const alpha_names[]={"ALPHA_SYS","ALPHA_SAVE"},*const beta_names[]={"BETA_SAVE"};
+    static const char *const alpha_names[]={"ALPHA_SYS","ALPHA_SAVE","MYSTERY_.001","MYSTERY_.002"},
+        *const beta_names[]={"BETA_SAVE","MYSTERY_.001","MYSTERY_.002"};
     static const char *const pso_names[]={"PSO______SYS","PSO______GCD"};
-    check_card(alpha.targets,physical_sources[0],alpha_names,2u,3u);
-    check_card(beta.targets,physical_sources[1],beta_names,1u,3u);check_card(blank.targets,NULL,NULL,0u,0u);
+    check_card(alpha.targets,physical_sources[0],alpha_names,4u,5u);
+    check_card(beta.targets,physical_sources[1],beta_names,3u,5u);
+    bool seen_sources[2]={false,false};
     for(unsigned n=0;n<2u;n++) {
         char path[96];uint8_t image[KUI_VMU_IMAGE_BYTES];pair_path(path,pso.targets[n].pair,"card.vmd");
         CHECK(file_read(path,image,sizeof(image))==sizeof(image));
         const uint8_t *entry=image+253u*512u;unsigned first=(unsigned)entry[2]|((unsigned)entry[3]<<8);
         unsigned source=image[first*512u+100u]==physical_sources[0][199u*512u+100u]?0u:1u;
+        CHECK(!seen_sources[source]);seen_sources[source]=true;
         check_card(pso.targets+n,physical_sources[source],pso_names,2u,45u);
     }
-    unsigned pairs[]={alpha.targets[0].pair,beta.targets[0].pair,blank.targets[0].pair,pso.targets[0].pair,pso.targets[1].pair};
-    for(unsigned i=0;i<5u;i++) {
+    CHECK(seen_sources[0] && seen_sources[1]);
+    unsigned pairs[]={alpha.targets[0].pair,beta.targets[0].pair,pso.targets[0].pair,pso.targets[1].pair};
+    for(unsigned i=0;i<4u;i++) {
         for(unsigned j=0;j<i;j++) CHECK(pairs[i]!=pairs[j]);
         protect_pair(pairs[i],false);char marker[96];pair_path(marker,pairs[i],"import.bin");protect(marker,64u);
     }
@@ -266,6 +375,10 @@ static void selector_and_defaults(void) {
     struct kui_vmu_game_candidates_view pso=candidates("PSO-1"),alpha=candidates("ALPHA-1"),beta=candidates("BETA-1");
     uint8_t wire[4096],before[32],after[32];struct kui_vmu_game_card_choice choice;
     unsigned count=pair_count();catalogue_hash(before);writes=0;
+    memset(wire,0xa5,sizeof(wire));
+    CHECK(kui_vmu_game_card_select("LEGACY001",volume.start,(uint64_t)volume.start+volume.count,
+        NULL,0,&platform,&work,wire,&choice,log_line,cancelled)==KUI_VMU_GAME_CARD_FAILED);
+    require_zero_wire(wire);CHECK(!writes && pair_count()==count);
     memset(wire,0xa5,sizeof(wire));
     CHECK(kui_vmu_game_card_select("PSO-1",volume.start,(uint64_t)volume.start+volume.count,
         NULL,0,&platform,&work,wire,&choice,log_line,cancelled)==KUI_VMU_GAME_CARD_CHOICE_REQUIRED);
@@ -335,8 +448,9 @@ static void shared_manual_path(void) {
     CHECK(shared.count==1u && shared.default_index==0u && alpha.default_index<alpha.count);
     CHECK(shared.targets[0].pair==alpha.targets[alpha.default_index].pair);
     uint8_t checked[KUI_VMU_IMAGE_BYTES];CHECK(file_read(path,checked,sizeof(checked))==sizeof(checked) && !memcmp(image,checked,sizeof(image)));
-    FILINFO info;CHECK(f_stat("0:/KUI/vmu-test/assign-a.bin",&info)==FR_NO_FILE &&
+    FILINFO info;CHECK(f_stat("0:/KUI/vmu-test/assign-a.bin",&info)==FR_OK && info.fsize==KUI_VMU_GAME_ASSIGN_WIRE_BYTES &&
         f_stat("0:/KUI/vmu-test/assign-b.bin",&info)==FR_NO_FILE);
+    protected_unchanged();
 }
 static unsigned candidate_visits;
 static bool abort_candidate_visit;
@@ -349,9 +463,9 @@ static void visitor_refusals(void) {
     struct kui_vmu_game_candidates_storage storage=storage_snapshot();
     candidate_visits=0;writes=0;
     CHECK(!kui_vmu_game_candidates_visit(&storage,candidate_visitor,&candidate_visits,log_line,cancelled));
-    CHECK(candidate_visits==5u && !writes);candidate_visits=0;
+    CHECK(candidate_visits==4u && !writes);candidate_visits=0;
     CHECK(!kui_vmu_game_candidates_visit(NULL,candidate_visitor,&candidate_visits,log_line,cancelled));
-    CHECK(candidate_visits==5u && !writes);candidate_visits=0;
+    CHECK(candidate_visits==4u && !writes);candidate_visits=0;
     struct kui_vmu_game_candidates_storage foreign=storage;foreign.cid[0]^=1u;
     CHECK(kui_vmu_game_candidates_visit(&foreign,candidate_visitor,&candidate_visits,log_line,cancelled)==KUI_VMU_GAME_CANDIDATES_STALE);
     CHECK(!candidate_visits && !writes);cancelled_flag=true;
@@ -377,7 +491,7 @@ static void visitor_refusals(void) {
     CHECK(!candidate_visits && !writes);
     for(unsigned i=0;i<2u;i++) {file_write(paths[i],records[i],KUI_VMU_GAME_CANDIDATES_WIRE_BYTES);free(records[i]);}
     candidate_visits=0;CHECK(!kui_vmu_game_candidates_visit(&storage,candidate_visitor,&candidate_visits,log_line,cancelled));
-    CHECK(candidate_visits==5u);
+    CHECK(candidate_visits==4u);
 }
 static void catalogue_power_cuts(void) {
     struct kui_vmu_game_candidates_view original=candidates("PSO-1");
@@ -407,15 +521,147 @@ static void catalogue_power_cuts(void) {
     printf("Candidate catalogue real filesystem: %u complete-write boundaries preserve exact old or new default\n",complete_writes+1u);
 }
 
+static void automatic_reimport_defaults(void) {
+    struct kui_vmu_game_candidates_storage storage=storage_snapshot();
+    struct kui_vmu_game_candidates_view old_pso=candidates("PSO-1"),old_alpha=candidates("ALPHA-1");
+    CHECK(old_pso.count==2u && old_alpha.count==1u);
+    CHECK(!kui_vmu_game_candidates_set_default("PSO-1",old_pso.targets+1u,old_pso.sequence,&storage,log_line,cancelled));
+    old_pso=candidates("PSO-1");CHECK(old_pso.default_index<2u);
+    unsigned original_pairs=pair_count();uint8_t before[32],after[32];catalogue_hash(before);
+    wizard_unmount();memset(&wizard_request,0,sizeof(wizard_request));strcpy(wizard_request.root,"/Games");
+    wizard_ok(KUI_VMU_WIZARD_RESET);wizard_ok(KUI_VMU_WIZARD_CAPTURE);wizard_ok(KUI_VMU_WIZARD_LIST_GAMES);
+    CHECK(wizard_view.automatic && wizard_view.selected_games==2u && wizard_view.variants==2u);
+    while(wizard_view.unresolved_groups) {
+        wizard_request.page=0;wizard_ok(KUI_VMU_WIZARD_SHOW_GROUPS);CHECK(wizard_view.groups_count);
+        wizard_request.index=wizard_view.groups[0].index;wizard_request.page=wizard_view.groups_page;
+        wizard_ok(KUI_VMU_WIZARD_SKIP_GROUP);
+    }
+    if(wizard_view.stage!=KUI_VMU_WIZARD_REVIEW) wizard_ok(KUI_VMU_WIZARD_SHOW_REVIEW);
+    CHECK(wizard_view.selected_games==2u && wizard_view.variants==2u);
+    fail_catalog_once=true;wizard_call(KUI_VMU_WIZARD_COMMIT);
+    CHECK(wizard_view.status.errors && !fail_catalog_once && catalog_faults==3u);
+    wizard_mount();unsigned prepared_pairs=pair_count();CHECK(prepared_pairs==original_pairs+2u);
+    catalogue_hash(after);CHECK(!memcmp(before,after,32u));protected_unchanged();wizard_unmount();
+    wizard_ok(KUI_VMU_WIZARD_COMMIT);CHECK(wizard_view.stage==KUI_VMU_WIZARD_DONE);
+    wizard_mount();CHECK(pair_count()==prepared_pairs);
+    struct kui_vmu_game_candidates_view pso=candidates("PSO-1"),alpha=candidates("ALPHA-1");
+    CHECK(pso.count==3u && pso.default_index<3u &&
+          pso.targets[pso.default_index].pair==old_pso.targets[old_pso.default_index].pair);
+    CHECK(alpha.count==2u && alpha.default_index<2u && old_alpha.default_index<1u &&
+          alpha.targets[alpha.default_index].pair==old_alpha.targets[old_alpha.default_index].pair);
+    static const char *const pso_names[]={"PSO______SYS","PSO______GCD"},
+        *const alpha_names[]={"ALPHA_SYS","ALPHA_SAVE"};
+    unsigned new_pso=0,new_alpha=0;
+    for(unsigned i=0;i<pso.count;i++) if(pso.targets[i].pair!=old_pso.targets[0].pair &&
+        pso.targets[i].pair!=old_pso.targets[1].pair) {
+        check_card(pso.targets+i,physical_sources[0],pso_names,2u,45u);++new_pso;
+    }
+    for(unsigned i=0;i<alpha.count;i++) if(alpha.targets[i].pair!=old_alpha.targets[0].pair) {
+        check_card(alpha.targets+i,physical_sources[0],alpha_names,2u,3u);++new_alpha;
+    }
+    CHECK(new_pso==1u && new_alpha==1u);protected_unchanged();physical_unchanged();
+    uint8_t wire[4096];struct kui_vmu_game_card_choice choice;writes=0;memset(wire,0xa5,sizeof(wire));
+    CHECK(kui_vmu_game_card_select("LEGACY001",volume.start,(uint64_t)volume.start+volume.count,
+        NULL,0,&platform,&work,wire,&choice,log_line,cancelled)==KUI_VMU_GAME_CARD_FAILED);
+    require_zero_wire(wire);CHECK(!writes && pair_count()==prepared_pairs);
+    FILINFO absent;FRESULT stat=f_stat("0:/KUI/vmu-test/p0005",&absent);CHECK(stat==FR_NO_FILE || stat==FR_NO_PATH);
+    printf("Automatic reimport: existing defaults and original cards preserved; confirmed new pairs reused after failed catalogue publication\n");
+}
+
+/* An unrelated ordinary import and an automatic blank must not take a deleted
+ * legacy number after the first repair. Keeping it absent lets the next old
+ * game independently confirm its own fresh import, with all old pins intact. */
+static void future_missing_legacy_workflow(void) {
+    struct kui_vmu_game_candidates_view old_pso=candidates("PSO-1"),old_alpha=candidates("ALPHA-1");
+    CHECK(old_pso.default_index<old_pso.count && old_alpha.default_index<old_alpha.count);
+    uint8_t catalogue_before[32],catalogue_after[32];catalogue_hash(catalogue_before);
+    unsigned initial_pairs=pair_count();uint8_t import_salt[16],import_identity[16];memset(import_salt,0xc9,sizeof(import_salt));
+    struct kui_vmu_game_card_choice imported,blank;char imported_path[96];uint8_t imported_image[KUI_VMU_IMAGE_BYTES];
+    CHECK(kui_vmu_game_card_import_publish(physical_sources[0],KUI_VMU_IMAGE_BYTES,import_salt,&work,&imported,
+        import_identity,log_line,cancelled)==KUI_VMU_GAME_CARD_READY);
+    CHECK(imported.created && imported.pair && imported.pair!=5u && pair_count()==initial_pairs+1u);
+    pair_path(imported_path,imported.pair,"card.vmd");
+    CHECK(file_read(imported_path,imported_image,sizeof(imported_image))==sizeof(imported_image) &&
+          !memcmp(imported_image,physical_sources[0],sizeof(imported_image)));
+    uint8_t wire[4096];
+    CHECK(kui_vmu_game_card_select("FRESH-1",volume.start,(uint64_t)volume.start+volume.count,
+        NULL,0,&platform,&work,wire,&blank,log_line,cancelled)==KUI_VMU_GAME_CARD_READY);
+    CHECK(blank.created && blank.pair && blank.pair!=5u && blank.pair!=imported.pair && pair_count()==initial_pairs+2u);
+    char blank_path[96];uint8_t blank_image[KUI_VMU_IMAGE_BYTES];pair_path(blank_path,blank.pair,"card.vmd");
+    CHECK(file_read(blank_path,blank_image,sizeof(blank_image))==sizeof(blank_image));
+    struct kui_vmu_image_summary summary=wizard_summary(blank_image);
+    CHECK(!summary.files && !summary.used_blocks && summary.free_blocks==200u);
+    protect_pair(blank.pair,true);pair_path(blank_path,blank.pair,KUI_VMU_GAME_CARD_BINDING_NAME);
+    protect(blank_path,KUI_VMU_GAME_CARD_BINDING_BYTES);
+    FILINFO absent;FRESULT stat=f_stat("0:/KUI/vmu-test/p0005",&absent);CHECK(stat==FR_NO_FILE || stat==FR_NO_PATH);
+    catalogue_hash(catalogue_after);CHECK(!memcmp(catalogue_before,catalogue_after,32u));protected_unchanged();
+    unsigned before_repair=pair_count();future_legacy_visible=true;wizard_unmount();
+    memset(&wizard_request,0,sizeof(wizard_request));strcpy(wizard_request.root,"/Games");
+    wizard_ok(KUI_VMU_WIZARD_RESET);wizard_ok(KUI_VMU_WIZARD_CAPTURE);wizard_ok(KUI_VMU_WIZARD_LIST_GAMES);
+    CHECK(wizard_view.automatic && wizard_view.selected_games==2u && wizard_view.variants==2u);
+    unsigned resolved=0;
+    while(wizard_view.unresolved_groups) {
+        wizard_request.page=0;wizard_ok(KUI_VMU_WIZARD_SHOW_GROUPS);CHECK(wizard_view.groups_count);
+        struct kui_vmu_wizard_group group=wizard_view.groups[0];wizard_request.index=group.index;
+        wizard_request.page=wizard_view.groups_page;
+        if(strstr(group.label,"MYSTERY")) {
+            wizard_ok(KUI_VMU_WIZARD_OPEN_GROUP);unsigned i=0;
+            while(i<wizard_view.count && strcmp(wizard_view.games[i].product,"LEGACY001")) ++i;
+            CHECK(i<wizard_view.count);wizard_request.index=wizard_view.games[i].index;
+            wizard_request.page=wizard_view.page;wizard_request.group_index=wizard_view.group_index;
+            wizard_ok(KUI_VMU_WIZARD_RESOLVE_GROUP);resolved+=group.files;
+        } else wizard_ok(KUI_VMU_WIZARD_SKIP_GROUP);
+    }
+    if(wizard_view.stage!=KUI_VMU_WIZARD_REVIEW) wizard_ok(KUI_VMU_WIZARD_SHOW_REVIEW);
+    CHECK(resolved==2u && wizard_view.selected_games==3u && wizard_view.variants==3u);
+    writes=0;wizard_ok(KUI_VMU_WIZARD_COMMIT);
+    CHECK(wizard_view.missing_card_confirmation && wizard_view.missing_cards==1u && wizard_view.missing_pair==5u &&
+          !strcmp(wizard_view.missing_product,"LEGACY001") && !wizard_view.publication_started && !writes);
+    wizard_ok(KUI_VMU_WIZARD_CONFIRM_MISSING);CHECK(wizard_view.stage==KUI_VMU_WIZARD_DONE);
+    wizard_mount();CHECK(pair_count()==before_repair+3u);
+    struct kui_vmu_game_candidates_view pso=candidates("PSO-1"),alpha=candidates("ALPHA-1"),legacy=candidates("LEGACY001");
+    CHECK(pso.count==old_pso.count+1u && pso.default_index<pso.count &&
+        pso.targets[pso.default_index].pair==old_pso.targets[old_pso.default_index].pair);
+    CHECK(alpha.count==old_alpha.count+1u && alpha.default_index<alpha.count &&
+        alpha.targets[alpha.default_index].pair==old_alpha.targets[old_alpha.default_index].pair);
+    CHECK(legacy.count==1u && legacy.targets[0].pair!=5u && legacy.default_index==KUI_VMU_GAME_CANDIDATES_NO_DEFAULT);
+    static const char *const names[]={"MYSTERY_.001","MYSTERY_.002"};
+    check_card(legacy.targets,physical_sources[0],names,2u,2u);
+    struct kui_vmu_game_card_choice chosen;
+    CHECK(kui_vmu_game_card_select("LEGACY001",volume.start,(uint64_t)volume.start+volume.count,
+        NULL,0,&platform,&work,wire,&chosen,log_line,cancelled)==KUI_VMU_GAME_CARD_READY);
+    CHECK(chosen.pair==legacy.targets[0].pair && !chosen.created);
+    writes=0;memset(wire,0xa5,sizeof(wire));
+    CHECK(kui_vmu_game_card_select("LEGACY002",volume.start,(uint64_t)volume.start+volume.count,
+        NULL,0,&platform,&work,wire,&chosen,log_line,cancelled)==KUI_VMU_GAME_CARD_FAILED);
+    require_zero_wire(wire);CHECK(!writes);
+    stat=f_stat("0:/KUI/vmu-test/p0005",&absent);CHECK(stat==FR_NO_FILE || stat==FR_NO_PATH);
+    CHECK(file_read(imported_path,imported_image,sizeof(imported_image))==sizeof(imported_image) &&
+          !memcmp(imported_image,physical_sources[0],sizeof(imported_image)));
+    protected_unchanged();physical_unchanged();
+    printf("Future repair: ordinary import and automatic blank skip old p0005; a different legacy game can confirm its own fresh import, preserving every v1 byte and healthy default\n");
+}
+
 int main(int argc,char **argv) {
     CHECK(argc==2);FILE *input=fopen(argv[1],"rb");CHECK(input && !fseek(input,0,SEEK_END));
     long bytes=ftell(input);CHECK(bytes>0 && !fseek(input,0,SEEK_SET));disk_bytes=(size_t)bytes;disk=malloc(disk_bytes);
     CHECK(disk && fread(disk,1,disk_bytes,input)==disk_bytes && !fclose(input));source_images();
-    wizard_mount();bool exfat=fs.fs_type==FS_EXFAT;wizard_unmount();plans();
+    wizard_mount();bool exfat=fs.fs_type==FS_EXFAT;wizard_unmount();plans();legacy_missing_preflight();
     cancelled_flag=true;wizard_call(KUI_VMU_WIZARD_COMMIT);CHECK(wizard_view.status.stopped);
-    cancelled_flag=false;fail_catalog_once=true;wizard_call(KUI_VMU_WIZARD_COMMIT);
+    cancelled_flag=false;writes=0;wizard_ok(KUI_VMU_WIZARD_COMMIT);
+    CHECK(wizard_view.missing_card_confirmation && wizard_view.missing_cards==1u && wizard_view.missing_pair==5u &&
+          !strcmp(wizard_view.missing_product,"ALPHA-1") && !wizard_view.publication_started && !writes);
+    wizard_ok(KUI_VMU_WIZARD_COMMIT);CHECK(wizard_view.missing_card_confirmation && !writes);
+    wizard_ok(KUI_VMU_WIZARD_CANCEL_MISSING);CHECK(!wizard_view.missing_card_confirmation && !writes);
+    wizard_call(KUI_VMU_WIZARD_CONFIRM_MISSING);CHECK(wizard_view.status.errors && !writes);
+    wizard_ok(KUI_VMU_WIZARD_COMMIT);CHECK(wizard_view.missing_card_confirmation && !writes);
+    fail_catalog_once=true;wizard_call(KUI_VMU_WIZARD_CONFIRM_MISSING);
+    if(!(wizard_view.status.errors && catalog_faults==1u && !fail_catalog_once))
+        fprintf(stderr,"Confirmed import: errors=%u faults=%u armed=%u last=%s\n",wizard_view.status.errors,catalog_faults,fail_catalog_once,last_log);
     CHECK(wizard_view.status.errors && catalog_faults==1u && !fail_catalog_once);
-    wizard_mount();unsigned retained=pair_count();CHECK(retained==5u);archive_check(true);wizard_unmount();
+    wizard_mount();unsigned retained=pair_count();CHECK(retained==4u);
+    FILINFO reserved;FRESULT reserved_status=f_stat("0:/KUI/vmu-test/p0005",&reserved);
+    CHECK(reserved_status==FR_NO_FILE || reserved_status==FR_NO_PATH);archive_check(true);wizard_unmount();
     cancel_at_catalog=true;wizard_call(KUI_VMU_WIZARD_COMMIT);
     CHECK(wizard_view.status.stopped && !cancel_at_catalog);cancelled_flag=false;
     wizard_mount();CHECK(pair_count()==retained);archive_check(false);protected_unchanged();
@@ -423,9 +669,11 @@ int main(int argc,char **argv) {
     CHECK(kui_vmu_game_candidates_list("PSO-1",&empty_storage,&empty,log_line,cancelled)==KUI_VMU_GAME_CANDIDATES_ABSENT);
     wizard_unmount();
     wizard_ok(KUI_VMU_WIZARD_COMMIT);CHECK(wizard_view.stage==KUI_VMU_WIZARD_DONE);
-    wizard_mount();CHECK(pair_count()==retained);result_cards();archive_check(false);protected_unchanged();
-    selector_and_defaults();visitor_refusals();catalogue_power_cuts();shared_manual_path();archive_check(false);protected_unchanged();wizard_unmount();physical_unchanged();
-    printf("VMU wizard real filesystems (%s): %u checks; exact source archives, explicit per-game files, separate PSO versions, blank200, interrupted catalogue retry retained pairs, real selector/defaults and manual shared path\n",exfat?"exFAT":"FAT32",checks);
+    wizard_mount();CHECK(pair_count()==retained);
+    reserved_status=f_stat("0:/KUI/vmu-test/p0005",&reserved);CHECK(reserved_status==FR_NO_FILE || reserved_status==FR_NO_PATH);
+    result_cards();archive_check(false);protected_unchanged();
+    selector_and_defaults();visitor_refusals();catalogue_power_cuts();shared_manual_path();archive_check(false);automatic_reimport_defaults();future_missing_legacy_workflow();protected_unchanged();wizard_unmount();physical_unchanged();
+    printf("VMU wizard real filesystems (%s): %u checks; 33-save automatic plan, unresolved-group picker, exact source archives, separate PSO versions, 200-block cards, interrupted catalogue retry retained pairs, real selector/defaults and manual shared path\n",exfat?"exFAT":"FAT32",checks);
     for(unsigned i=0;i<protected_count;i++) free(protected_files[i].data);
     free(disk);return 0;
 }

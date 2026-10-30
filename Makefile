@@ -1380,11 +1380,13 @@ test-vmu-per-game: build/test-shell build/test-vmu-game-candidates
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-shell --vmu-wizard
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-game-candidates
 	python3 tests/test_vmu_import_plan.py
+	python3 tests/test_vmu_import_match.py
+	python3 tests/test_vmu_import_match_adversarial.py
 	python3 tests/test_vmu_wizard.py
 	python3 tests/test_vmu_game_info.py
 	python3 tests/test_vmu_wizard_filesystems.py
 	python3 tests/test_vmu_wizard_installer.py
 
-build/test-vmu-game-candidates: tests/test_vmu_game_candidates.c src/core/vmu_game_candidates.c include/kui/vmu_game_candidates.h src/core/vmu_game_card.c src/core/retail_image.c
+build/test-vmu-game-candidates: tests/test_vmu_game_candidates.c src/core/vmu_game_candidates.c src/core/vmu_game_assign.c include/kui/vmu_game_candidates.h src/core/vmu_game_card.c src/core/retail_image.c
 	@mkdir -p build
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -ffunction-sections -fdata-sections $(INCLUDES) tests/test_vmu_game_candidates.c src/core/vmu_game_card.c src/core/retail_image.c -Wl,--gc-sections -o $@

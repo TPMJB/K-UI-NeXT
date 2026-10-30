@@ -54,7 +54,20 @@ enum kui_vmu_game_candidates_result {
     KUI_VMU_GAME_CANDIDATES_INVALID=-3,
     KUI_VMU_GAME_CANDIDATES_CANCELLED=-4,
     KUI_VMU_GAME_CANDIDATES_STALE=-5,
-    KUI_VMU_GAME_CANDIDATES_FULL=-6
+    KUI_VMU_GAME_CANDIDATES_FULL=-6,
+    KUI_VMU_GAME_CANDIDATES_MISSING=-7
+};
+/* Explicit repair permission for selected products' legacy v1 targets ONLY.
+ * A repair is offered only when each named pair's entire pNNNN directory is
+ * positively absent (FR_NO_FILE/FR_NO_PATH). A present but incomplete card,
+ * changed identity, corrupt record or I/O error never qualifies. No card file
+ * or v1 assignment is removed: the new atomic candidate generation covers the
+ * selected products without copying these dangling references into it. */
+struct kui_vmu_game_candidates_repair {
+    struct kui_vmu_game_candidates_storage storage;
+    uint64_t catalogue_sequence,legacy_sequence;
+    uint32_t count;
+    struct kui_vmu_game_assignment entries[KUI_VMU_GAME_CANDIDATES_PRODUCTS];
 };
 /* Read only, including current identity/import marker and card/journal lengths
  * for every returned target. ABSENT alone permits legacy assign-v1/default
@@ -91,6 +104,20 @@ int kui_vmu_game_candidates_identity_unpinned(unsigned pair,const uint8_t identi
  * v1 targets for previously absent products count towards capacity too. */
 int kui_vmu_game_candidates_preflight(const struct kui_vmu_game_candidates_plan *plans,size_t count,
     const struct kui_vmu_game_candidates_storage *storage,kui_log_fn log,kui_cancel_fn cancel);
+/* First attempt, read only: same checks as strict preflight. MISSING returns
+ * the exact eligible missing legacy references in out; every other result
+ * clears it. The caller must obtain explicit user confirmation of this repair.
+ * Input/output buffers must not overlap. */
+int kui_vmu_game_candidates_preflight_repair(const struct kui_vmu_game_candidates_plan *plans,size_t count,
+    const struct kui_vmu_game_candidates_storage *storage,struct kui_vmu_game_candidates_repair *out,
+    kui_log_fn log,kui_cancel_fn cancel);
+/* After confirmation: recheck the exact storage, catalogue/v1 generations,
+ * key/pair/identity records and still-absent folders before allowing this plan.
+ * Every permitted key must belong to the selected plan. Any change refuses;
+ * collect a fresh report and confirm it again. No files are written. */
+int kui_vmu_game_candidates_preflight_confirmed(const struct kui_vmu_game_candidates_plan *plans,size_t count,
+    const struct kui_vmu_game_candidates_storage *storage,const struct kui_vmu_game_candidates_repair *repair,
+    kui_log_fn log,kui_cancel_fn cancel);
 /* One atomic additive publication for the whole import. Repeating an identical
  * batch is a no-op. Retains all old candidates and explicit defaults. For an
  * affected v1-only product, its old identity-pinned target is migrated first
@@ -98,6 +125,13 @@ int kui_vmu_game_candidates_preflight(const struct kui_vmu_game_candidates_plan 
  * All retained and new targets must be completed imported playable cards. */
 int kui_vmu_game_candidates_apply(const struct kui_vmu_game_assignment *entries,size_t count,
     const struct kui_vmu_game_candidates_storage *storage,kui_log_fn log,kui_cancel_fn cancel);
+/* Same additive publication with an explicitly confirmed repair. Revalidates
+ * the permission afresh, then omits only those absent legacy targets in this
+ * one candidate publication. Existing candidate records/defaults and unrelated
+ * products are retained. This never cleans up or rewrites the old v1 files. */
+int kui_vmu_game_candidates_apply_confirmed(const struct kui_vmu_game_assignment *entries,size_t count,
+    const struct kui_vmu_game_candidates_storage *storage,const struct kui_vmu_game_candidates_repair *repair,
+    kui_log_fn log,kui_cancel_fn cancel);
 /* Explicit manual "Assign games" counterpart: one target per product. Adds
  * each target and selects it as that product's default in the SAME catalogue
  * generation, retaining every other candidate and unrelated default. A mixed

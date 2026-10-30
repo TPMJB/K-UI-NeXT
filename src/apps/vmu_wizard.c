@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/vmu_wizard.h"
 #include "kui/vmu_import_plan.h"
+#include "kui/vmu_import_match.h"
 #include "kui/vmu_game_candidates.h"
 #include "kui/vmu_collection.h"
 #include "kui/hash.h"
@@ -21,6 +22,8 @@
 struct wizard_card {
     uint8_t *image;
     struct kui_vmu_import_plan *plan;
+    struct kui_vmu_import_matches *matches;
+    uint8_t decisions[KUI_VMU_IMAGE_DIRECTORY_ENTRIES];
     struct kui_vmu_wizard_card summary;
     unsigned source_slot,archive_floor;
     bool archive_attempted;
@@ -33,7 +36,7 @@ struct wizard_output { unsigned pair;uint8_t identity[16];bool labelled; };
 struct wizard_game {
     char title[129],product[12];
     unsigned card; /* Zero is unselected, otherwise staged card index + 1. */
-    bool supported,accepted,blank;
+    bool supported,accepted,blank,manual;
     uint8_t picks[KUI_VMU_WIZARD_CARDS][WIZARD_PICK_BYTES];
     struct wizard_output outputs[KUI_VMU_WIZARD_CARDS];
 };
@@ -42,8 +45,10 @@ struct wizard_session {
     struct wizard_game *games;
     unsigned card_count,game_count,sources,card,page,slot,omitted_folders,unrecognized;
     enum kui_vmu_wizard_stage stage;
-    bool catalogued,publication_started,existing_card,copy_on_commit,view_only;
-    unsigned save_game,save_page;
+    bool catalogued,publication_started,existing_card,copy_on_commit,view_only,automatic;
+    unsigned save_game,save_page,group_page,group_index;
+    struct kui_vmu_game_candidates_repair *repair;
+    bool missing_question,repair_confirmed;
     unsigned source_pair;
     uint8_t source_identity[16];
     bool storage_pinned;
@@ -77,11 +82,14 @@ static bool fail(struct operation *s,const char *message) {
     return false;
 }
 static void discard_session(struct wizard_session *session) {
-    for(unsigned i=0;i<session->card_count;i++) {free(session->cards[i].image);free(session->cards[i].plan);}
-    free(session->games);memset(session,0,sizeof(*session));
+    for(unsigned i=0;i<session->card_count;i++) {free(session->cards[i].image);free(session->cards[i].plan);free(session->cards[i].matches);}
+    free(session->games);free(session->repair);memset(session,0,sizeof(*session));
 }
 static void reset(void) {
     discard_session(&wizard);discard_session(&suspended);suspended_valid=false;
+}
+static void clear_missing(void) {
+    free(wizard.repair);wizard.repair=NULL;wizard.missing_question=false;wizard.repair_confirmed=false;
 }
 static bool picked(const struct wizard_game *game,unsigned source,unsigned index) {
     return (game->picks[source][index/8u]&(1u<<(index%8u)))!=0;
@@ -110,6 +118,23 @@ static unsigned game_variants(const struct wizard_game *game,unsigned *files,uns
     if(blocks) *blocks=total;
     return count;
 }
+static void game_free(const struct wizard_game *game,unsigned *minimum,unsigned *maximum) {
+    *minimum=*maximum=0;
+    if(!game_variants(game,NULL,NULL)) return;
+    if(wizard.existing_card) {
+        unsigned used=wizard.cards[game->card-1u].summary.blocks;
+        *minimum=*maximum=KUI_VMU_IMAGE_USER_BLOCKS-used;return;
+    }
+    if(game->blank) {*minimum=*maximum=KUI_VMU_IMAGE_USER_BLOCKS;return;}
+    bool first=true;
+    for(unsigned i=0;i<wizard.card_count;i++) {
+        unsigned used=0;if(!picked_count(game,i,&used)) continue;
+        unsigned available=KUI_VMU_IMAGE_USER_BLOCKS-used;
+        if(first || available<*minimum) *minimum=available;
+        if(first || available>*maximum) *maximum=available;
+        first=false;
+    }
+}
 static void counts(void) {
     for(unsigned i=0;i<wizard.card_count;i++) wizard.cards[i].summary.games=0;
     for(unsigned i=0;i<wizard.game_count;i++) {
@@ -126,26 +151,97 @@ static unsigned selected_count(void) {
     for(unsigned i=0;i<wizard.game_count;i++) if(game_variants(&wizard.games[i],NULL,NULL)) ++count;
     return count;
 }
+enum { GROUP_PENDING,GROUP_ASSIGNED,GROUP_SKIPPED };
+static unsigned question_count(unsigned *skipped) {
+    unsigned pending=0,ignored=0;
+    for(unsigned i=0;i<wizard.card_count;i++) if(wizard.cards[i].matches)
+        for(unsigned j=0;j<wizard.cards[i].matches->group_count;j++) {
+            if(wizard.cards[i].decisions[j]==GROUP_PENDING) ++pending;
+            else if(wizard.cards[i].decisions[j]==GROUP_SKIPPED) ++ignored;
+        }
+    if(skipped) *skipped=ignored;
+    return pending;
+}
+static struct kui_vmu_import_match_group *group_at(unsigned index,struct wizard_card **source,unsigned *ordinal) {
+    unsigned card=index/KUI_VMU_IMAGE_DIRECTORY_ENTRIES,at=index%KUI_VMU_IMAGE_DIRECTORY_ENTRIES;
+    if(card>=wizard.card_count || !wizard.cards[card].matches || at>=wizard.cards[card].matches->group_count) return NULL;
+    if(source) *source=wizard.cards+card;
+    if(ordinal) *ordinal=at;
+    return wizard.cards[card].matches->groups+at;
+}
+static bool picker_allows(const struct kui_vmu_import_match_group *group,unsigned game) {
+    return group && (!group->candidate_count || (group->candidates[game/8u]&(1u<<(game%8u))));
+}
+static unsigned picker_count(const struct kui_vmu_import_match_group *group) {
+    unsigned total=0;for(unsigned i=0;i<wizard.game_count;i++) if(picker_allows(group,i)) ++total;return total;
+}
+static bool picker_visible(const struct kui_vmu_import_match_group *group,unsigned game,unsigned page) {
+    if(game>=wizard.game_count || !picker_allows(group,game)) return false;
+    unsigned position=0;for(unsigned i=0;i<game;i++) if(picker_allows(group,i)) ++position;
+    return position/KUI_VMU_WIZARD_ROWS==page;
+}
+static void group_reason(const struct kui_vmu_import_match_group *group,char out[96]) {
+    const char *reason=group->reasons&KUI_VMU_IMPORT_MATCH_CONFLICT?"Save metadata names different games; choose its game":
+        group->reasons&KUI_VMU_IMPORT_MATCH_AMBIGUOUS?"More than one game matches; choose the right release":
+        group->reasons&KUI_VMU_IMPORT_MATCH_UNSUPPORTED?"The matching game cannot use this native virtual VMU":
+        group->reasons&KUI_VMU_IMPORT_MATCH_TRUNCATED?"The saved title is incomplete; choose its game":
+        group->state==KUI_VMU_IMPORT_MATCH_AUTO?"This game's choices were edited; review this additional source":
+        "No unique game match; choose its game or keep only the backup";
+    snprintf(out,96,"%s",reason);
+}
 static void view(struct operation *s,unsigned generation) {
     struct kui_vmu_wizard_view *out=s->out;
     counts();out->generation=generation;out->stage=wizard.stage;
-    out->publication_started=wizard.publication_started;
+    out->publication_started=wizard.publication_started;out->automatic=wizard.automatic;
+    out->missing_card_confirmation=wizard.missing_question;
+    if(wizard.missing_question && wizard.repair && wizard.repair->count) {
+        out->missing_cards=wizard.repair->count;out->missing_pair=wizard.repair->entries[0].pair;
+        memcpy(out->missing_product,wizard.repair->entries[0].key,sizeof(out->missing_product));
+    }
     out->existing_card=wizard.existing_card;out->copy_on_commit=wizard.copy_on_commit;
     out->view_only=wizard.view_only;
     out->slot=wizard.slot;out->card=wizard.card;out->cards=wizard.card_count;
-    out->sources=wizard.sources;out->page=wizard.page;out->total=wizard.game_count;
+    out->sources=wizard.sources;out->page=wizard.page;
     out->selected_games=selected_count();
+    bool focused=!wizard.existing_card && (wizard.stage==KUI_VMU_WIZARD_REVIEW || wizard.stage==KUI_VMU_WIZARD_DONE);
+    const struct kui_vmu_import_match_group *picker=wizard.stage==KUI_VMU_WIZARD_GROUP_GAME?group_at(wizard.group_index,NULL,NULL):NULL;
+    out->total=picker?picker_count(picker):focused?out->selected_games:wizard.game_count;
     for(unsigned i=0;i<wizard.card_count;i++) out->summary[i]=wizard.cards[i].summary;
     for(unsigned i=0;i<wizard.game_count;i++) out->variants+=game_variants(&wizard.games[i],NULL,NULL);
-    unsigned start=wizard.page*KUI_VMU_WIZARD_ROWS;
-    for(unsigned i=start;i<wizard.game_count && out->count<KUI_VMU_WIZARD_ROWS;i++) {
-        struct kui_vmu_wizard_game *row=&out->games[out->count++];
-        const struct wizard_game *game=&wizard.games[i];
-        memcpy(row->title,game->title,sizeof(row->title));
+    unsigned start=wizard.page*KUI_VMU_WIZARD_ROWS,position=0;
+    for(unsigned i=0;i<wizard.game_count && out->count<KUI_VMU_WIZARD_ROWS;i++) {
+        const struct wizard_game *game=wizard.games+i;unsigned variants=game_variants(game,NULL,NULL);
+        if((focused && !variants) || (picker && !picker_allows(picker,i))) continue;
+        if(position++<start) continue;
+        struct kui_vmu_wizard_game *row=out->games+out->count++;
+        row->index=i;memcpy(row->title,game->title,sizeof(row->title));
         memcpy(row->product,game->product,sizeof(row->product));
         row->variants=game_variants(game,&row->saves,&row->blocks);
+        game_free(game,&row->free_min,&row->free_max);
         row->selected=wizard.existing_card?game->card==wizard.card+1:row->variants!=0;
         row->supported=game->supported;row->blank=game->accepted && game->blank;
+    }
+    out->unresolved_groups=question_count(&out->skipped_groups);
+    out->groups_total=out->unresolved_groups;out->groups_page=wizard.group_page;
+    position=0;start=wizard.group_page*KUI_VMU_WIZARD_ROWS;
+    for(unsigned i=0;i<wizard.card_count;i++) if(wizard.cards[i].matches)
+        for(unsigned j=0;j<wizard.cards[i].matches->group_count && out->groups_count<KUI_VMU_WIZARD_ROWS;j++) {
+            if(wizard.cards[i].decisions[j]!=GROUP_PENDING) continue;
+            if(position++<start) continue;
+            const struct kui_vmu_import_match_group *group=wizard.cards[i].matches->groups+j;
+            struct kui_vmu_wizard_group *row=out->groups+out->groups_count++;
+            row->index=i*KUI_VMU_IMAGE_DIRECTORY_ENTRIES+j;row->source=i;row->source_slot=wizard.cards[i].source_slot;
+            row->files=group->files;row->blocks=group->blocks;memcpy(row->label,group->label,sizeof(row->label));
+            group_reason(group,row->reason);
+        }
+    if(wizard.stage==KUI_VMU_WIZARD_GROUP_GAME) {
+        struct wizard_card *source=NULL;
+        const struct kui_vmu_import_match_group *group=group_at(wizard.group_index,&source,NULL);
+        if(group) {
+            out->group_index=wizard.group_index;out->group_source=wizard.group_index/KUI_VMU_IMAGE_DIRECTORY_ENTRIES;
+            out->group_source_slot=source->source_slot;out->group_files=group->files;out->group_blocks=group->blocks;
+            memcpy(out->group_label,group->label,sizeof(out->group_label));
+        }
     }
     if(wizard.stage==KUI_VMU_WIZARD_SAVES && wizard.save_game<wizard.game_count && wizard.card<wizard.card_count) {
         const struct wizard_game *game=&wizard.games[wizard.save_game];
@@ -195,6 +291,7 @@ static bool capture(struct operation *s,const struct kui_vmu_wizard_request *req
     int inspected=kui_vmu_import_plan_inspect(incoming,KUI_VMU_IMAGE_BYTES,NULL,NULL,work,plan);
     free(work);
     if(inspected!=KUI_VMU_IMAGE_OK) {free(plan);free(incoming);return fail(s,"Captured saves could not be safely inspected");}
+    clear_missing();
     unsigned card=wizard.card_count++;
     wizard.cards[card].image=incoming;wizard.cards[card].plan=plan;
     wizard.cards[card].source_slot=request->slot;
@@ -319,6 +416,11 @@ static bool catalogue(struct operation *s,const char *root) {
         return false;
     }
     qsort(games,count,sizeof(*games),game_order);
+    for(unsigned i=0;i<wizard.card_count;i++) {
+        free(wizard.cards[i].matches);wizard.cards[i].matches=NULL;
+        memset(wizard.cards[i].decisions,0,sizeof(wizard.cards[i].decisions));
+    }
+    clear_missing();wizard.automatic=false;wizard.group_page=0;
     free(wizard.games);wizard.games=games;wizard.game_count=count;
     wizard.catalogued=true;memcpy(wizard.root,normalized,sizeof(wizard.root));wizard.page=0;
     wizard.omitted_folders=scan.omitted_folders;wizard.unrecognized=unrecognized;
@@ -546,6 +648,113 @@ static bool use_card(struct operation *s,const struct kui_vmu_wizard_request *re
         "Choose games; a new shared copy after review keeps the original and other assignments.");
     return true;
 }
+static bool match_partition(const struct kui_vmu_import_plan *plan,const struct kui_vmu_import_matches *matches) {
+    if(matches->group_count>plan->entry_count) return false;
+    uint8_t seen[WIZARD_PICK_BYTES]={0};
+    for(unsigned i=0;i<matches->group_count;i++) {
+        const struct kui_vmu_import_match_group *group=matches->groups+i;unsigned files=0,blocks=0;
+        if(!memchr(group->label,0,sizeof(group->label))) return false;
+        unsigned candidates=0;
+        for(unsigned j=0;j<KUI_VMU_IMPORT_MATCH_MAX_GAMES;j++) if(group->candidates[j/8u]&(1u<<(j%8u))) {
+            if(j>=wizard.game_count) return false;
+            ++candidates;
+        }
+        if(candidates!=group->candidate_count) return false;
+        if(group->state==KUI_VMU_IMPORT_MATCH_AUTO) {
+            if(candidates!=1 || group->game_index>=wizard.game_count || !picker_allows(group,group->game_index) ||
+               !wizard.games[group->game_index].supported) return false;
+        } else if(group->state!=KUI_VMU_IMPORT_MATCH_CHOOSE_GAME || group->game_index!=KUI_VMU_IMPORT_MATCH_NO_GAME) return false;
+        for(unsigned j=0;j<KUI_VMU_IMAGE_DIRECTORY_ENTRIES;j++) if(group->members[j/8u]&(1u<<(j%8u))) {
+            if(j>=plan->entry_count || (seen[j/8u]&(1u<<(j%8u)))) return false;
+            seen[j/8u]|=(uint8_t)(1u<<(j%8u));++files;blocks+=plan->entries[j].blocks;
+        }
+        if(!files || files!=group->files || blocks!=group->blocks || blocks>KUI_VMU_IMAGE_USER_BLOCKS) return false;
+    }
+    for(unsigned i=0;i<plan->entry_count;i++) if(!(seen[i/8u]&(1u<<(i%8u)))) return false;
+    return true;
+}
+static void assign_match(unsigned source,struct kui_vmu_import_match_group *group,unsigned game_index) {
+    struct wizard_game *game=wizard.games+game_index;
+    for(unsigned i=0;i<WIZARD_PICK_BYTES;i++) game->picks[source][i]|=group->members[i];
+    game->accepted=true;game->blank=false;group->game_index=game_index;
+}
+static bool automatic_plan(struct operation *s) {
+    struct kui_vmu_import_match_game *games=calloc(wizard.game_count?wizard.game_count:1u,sizeof(*games));
+    struct kui_vmu_import_matches *fresh[KUI_VMU_WIZARD_CARDS]={0};
+    if(!games) return fail(s,"Not enough memory to match the imported saves");
+    for(unsigned i=0;i<wizard.game_count;i++) {
+        memcpy(games[i].title,wizard.games[i].title,sizeof(games[i].title));
+        memcpy(games[i].product,wizard.games[i].product,sizeof(games[i].product));
+        games[i].native_eligible=wizard.games[i].supported;
+    }
+    bool ok=true;
+    for(unsigned i=0;i<wizard.card_count;i++) if(!wizard.cards[i].matches) {
+        if(stop(s)) {ok=false;break;}
+        fresh[i]=malloc(sizeof(*fresh[i]));
+        if(!fresh[i]) {ok=fail(s,"Not enough memory to group the imported saves");break;}
+        if(kui_vmu_import_match(wizard.cards[i].plan,games,wizard.game_count,fresh[i]) ||
+           !match_partition(wizard.cards[i].plan,fresh[i])) {ok=fail(s,"Imported saves could not be safely matched");break;}
+    }
+    free(games);
+    if(!ok) {for(unsigned i=0;i<wizard.card_count;i++) free(fresh[i]);return false;}
+    for(unsigned i=0;i<wizard.card_count;i++) if(fresh[i]) {
+        clear_missing();wizard.cards[i].matches=fresh[i];
+        for(unsigned j=0;j<fresh[i]->group_count;j++) {
+            struct kui_vmu_import_match_group *group=fresh[i]->groups+j;
+            if(group->state==KUI_VMU_IMPORT_MATCH_AUTO && !wizard.games[group->game_index].manual) {
+                assign_match(i,group,group->game_index);wizard.cards[i].decisions[j]=GROUP_ASSIGNED;
+            }
+        }
+    }
+    wizard.automatic=true;
+    return true;
+}
+static void group_page(unsigned requested) {
+    unsigned pending=question_count(NULL),pages=pending?(pending-1u)/KUI_VMU_WIZARD_ROWS+1u:1u;
+    wizard.group_page=requested<pages?requested:pages-1u;
+}
+static bool visible_question(unsigned index,unsigned page) {
+    if(page!=wizard.group_page) return false;
+    unsigned position=0;
+    for(unsigned i=0;i<wizard.card_count;i++) if(wizard.cards[i].matches)
+        for(unsigned j=0;j<wizard.cards[i].matches->group_count;j++) if(wizard.cards[i].decisions[j]==GROUP_PENDING) {
+            if(i*KUI_VMU_IMAGE_DIRECTORY_ENTRIES+j==index) return position/KUI_VMU_WIZARD_ROWS==page;
+            ++position;
+        }
+    return false;
+}
+static void after_question(struct operation *s) {
+    group_page(wizard.group_page);wizard.page=0;
+    wizard.stage=question_count(NULL)?KUI_VMU_WIZARD_GROUPS:KUI_VMU_WIZARD_REVIEW;
+    notice(s,"%u games ready; %u save groups need a game",selected_count(),question_count(NULL));
+}
+static bool resolve_group(struct operation *s,const struct kui_vmu_wizard_request *request,bool skip) {
+    if(wizard.publication_started || !wizard.automatic || wizard.existing_card)
+        return fail(s,"Save choices are locked; retry the import or start a new import");
+    unsigned index=wizard.group_index;
+    if(skip && wizard.stage==KUI_VMU_WIZARD_GROUPS) {
+        if(!visible_question(request->index,request->page)) return fail(s,"Refresh the save groups before choosing this row");
+        index=request->index;
+    } else if(wizard.stage!=KUI_VMU_WIZARD_GROUP_GAME)
+        return fail(s,"Open a save group before choosing its game");
+    else if(request->group_index!=wizard.group_index)
+        return fail(s,"This answer belongs to another save group; refresh the game picker");
+    struct wizard_card *source=NULL;unsigned ordinal=0;
+    struct kui_vmu_import_match_group *group=group_at(index,&source,&ordinal);
+    if(!group || source->decisions[ordinal]!=GROUP_PENDING) return fail(s,"This save group has already been answered");
+    if(skip) {clear_missing();source->decisions[ordinal]=GROUP_SKIPPED;}
+    else {
+        if(request->page!=wizard.page || !picker_visible(group,request->index,wizard.page))
+            return fail(s,"Refresh the game picker before selecting this row");
+        struct wizard_game *game=wizard.games+request->index;
+        if(!game->supported) return fail(s,"This loader is not eligible for native virtual VMU assignments");
+        if(game->manual && !game->accepted) for(unsigned i=0;i<wizard.card_count;i++) if(picked_count(game,i,NULL))
+            return fail(s,"Finish this game's advanced save choices before assigning another group");
+        clear_missing();assign_match(index/KUI_VMU_IMAGE_DIRECTORY_ENTRIES,group,request->index);
+        source->decisions[ordinal]=GROUP_ASSIGNED;
+    }
+    after_question(s);return true;
+}
 static bool editable_game(struct operation *s,const struct kui_vmu_wizard_request *request) {
     if(wizard.publication_started) return fail(s,"Assignments are locked; retry the import or start a new import");
     if(wizard.stage!=KUI_VMU_WIZARD_GAMES_STAGE || !wizard.card_count ||
@@ -593,7 +802,7 @@ static bool toggle_save(struct operation *s,const struct kui_vmu_wizard_request 
         game->picks[wizard.card][request->index/8u]^=(uint8_t)(1u<<(request->index%8u));
         return fail(s,"These saves exceed one 200-block card");
     }
-    game->accepted=false;game->blank=false;
+    clear_missing();game->accepted=false;game->blank=false;game->manual=true;
     notice(s,"Save choices are a draft; accept after reviewing every source");
     return true;
 }
@@ -607,7 +816,13 @@ static bool accept_saves(struct operation *s) {
         if(blocks>KUI_VMU_IMAGE_USER_BLOCKS) return fail(s,"These saves exceed one 200-block card");
         if(count) ++variants;
     }
-    game->accepted=true;game->blank=variants==0;
+    clear_missing();game->accepted=true;game->blank=variants==0;game->manual=true;
+    if(!game->blank) for(unsigned i=0;i<wizard.card_count;i++) if(wizard.cards[i].matches)
+        for(unsigned j=0;j<wizard.cards[i].matches->group_count;j++) if(wizard.cards[i].decisions[j]==GROUP_PENDING) {
+            struct kui_vmu_import_match_group *group=wizard.cards[i].matches->groups+j;bool complete=true;
+            for(unsigned k=0;k<WIZARD_PICK_BYTES;k++) if((game->picks[i][k]&group->members[k])!=group->members[k]) complete=false;
+            if(complete) {group->game_index=wizard.save_game;wizard.cards[i].decisions[j]=GROUP_ASSIGNED;}
+        }
     wizard.stage=KUI_VMU_WIZARD_GAMES_STAGE;
     wizard.page=wizard.save_game/KUI_VMU_WIZARD_ROWS;
     notice(s,variants?"%s: %u separate card choices accepted":"%s: a new blank 200-block card accepted",game->title,variants);
@@ -616,7 +831,19 @@ static bool accept_saves(struct operation *s) {
 static void candidates_storage(struct kui_vmu_game_candidates_storage *out) {
     memset(out,0,sizeof(*out));memcpy(out->cid,wizard.storage.cid,16);
     out->card_sectors=wizard.storage.sectors;out->high_capacity=wizard.storage.high_capacity;
-    out->partition_first=wizard.volume.start;out->partition_end=wizard.volume.start+wizard.volume.count;
+    out->partition_first=wizard.volume.start;out->partition_end=(uint64_t)wizard.volume.start+wizard.volume.count;
+}
+static bool candidates_error(struct operation *s,int result,const char *message);
+static bool preflight_error(struct operation *s,int result) {
+    const char *message=result==KUI_VMU_GAME_CANDIDATES_FULL?
+        "Too many card choices: at most 32 per game and 2048 in total":
+        result==KUI_VMU_GAME_CANDIDATES_STALE?"An existing game card is missing or changed; inspect Virtual VMUs":
+        result==KUI_VMU_GAME_CANDIDATES_MISSING?"An old virtual-card folder is missing; review the imported saves instead":
+        result==KUI_VMU_GAME_CANDIDATES_INVALID?"Saved game-card choices are damaged; inspect their backup":
+        result==KUI_VMU_GAME_CANDIDATES_IO?"SD I/O failed while checking game-card choices; retry after checking the card":
+        result==KUI_VMU_GAME_CANDIDATES_ARGUMENT?"The game-card plan is invalid; start a new import":
+        "Game-card choices could not be checked";
+    return candidates_error(s,result,message);
 }
 static bool commit_shared(struct operation *s) {
     if(wizard.stage!=KUI_VMU_WIZARD_REVIEW || !selected_count())
@@ -650,7 +877,7 @@ static bool commit_shared(struct operation *s) {
     if(ok && candidate_batch) {
         int r=kui_vmu_game_candidates_preflight(plans,planned,&storage,s->log,s->cancel);
         if(r==KUI_VMU_GAME_CANDIDATES_CANCELLED) {s->out->status.stopped=true;notice(s,"Assignment stopped; no cards were published");ok=false;}
-        else if(r!=KUI_VMU_GAME_CANDIDATES_OK) ok=fail(s,"Game card choices are full or could not be checked; no new cards were published");
+        else if(r!=KUI_VMU_GAME_CANDIDATES_OK) ok=preflight_error(s,r);
     }
     if(ok) ok=same_storage(s,false);
     if(ok && kui_vmu_library_check_allocation(s->cancel)!=KUI_VMU_LIBRARY_OK) {
@@ -764,15 +991,37 @@ static bool archive_source(struct operation *s,struct wizard_card *card) {
     card->summary.pair=card->archive.id;
     return true;
 }
+static bool import_preflight(struct operation *s,const struct kui_vmu_game_candidates_plan *plans,unsigned count,
+    const struct kui_vmu_game_candidates_storage *storage,bool *confirmed) {
+    *confirmed=false;
+    struct kui_vmu_game_candidates_repair *fresh=malloc(sizeof(*fresh));
+    if(!fresh) return fail(s,"Not enough memory to verify the existing game-card choices");
+    int r=kui_vmu_game_candidates_preflight_repair(plans,count,storage,fresh,s->log,s->cancel);
+    if(r==KUI_VMU_GAME_CANDIDATES_OK) {free(fresh);clear_missing();return true;}
+    if(r==KUI_VMU_GAME_CANDIDATES_MISSING) {
+        if(wizard.repair_confirmed && wizard.repair) {
+            free(fresh);
+            r=kui_vmu_game_candidates_preflight_confirmed(plans,count,storage,wizard.repair,s->log,s->cancel);
+            if(r==KUI_VMU_GAME_CANDIDATES_OK) {*confirmed=true;return true;}
+        } else {
+            clear_missing();wizard.repair=fresh;wizard.missing_question=true;
+            notice(s,"Old virtual-card folder missing; use imported saves instead?");return false;
+        }
+    } else free(fresh);
+    if(r!=KUI_VMU_GAME_CANDIDATES_IO && r!=KUI_VMU_GAME_CANDIDATES_CANCELLED) clear_missing();
+    return preflight_error(s,r);
+}
 static bool commit_import(struct operation *s) {
-    if(wizard.stage!=KUI_VMU_WIZARD_REVIEW || !selected_count())
-        return fail(s,"Review at least one game before creating separate cards");
+    if(wizard.stage!=KUI_VMU_WIZARD_REVIEW || (!selected_count() && !wizard.automatic))
+        return fail(s,"Review imported saves before creating separate cards");
+    if(question_count(NULL)) return fail(s,"Choose a game or Keep backup only for every unresolved save group");
+    if(wizard.missing_question) {notice(s,"Old virtual-card folder missing; confirm Use imported saves or go back");return false;}
     if(stop(s)) return false;
     unsigned variants=0;
     for(unsigned i=0;i<wizard.game_count;i++) variants+=game_variants(wizard.games+i,NULL,NULL);
     if(variants>KUI_VMU_GAME_CANDIDATES_MAX) return fail(s,"Too many card choices; select fewer games");
     struct kui_vmu_game_card_work *work=malloc(sizeof(*work));
-    struct kui_vmu_game_assignment *entries=calloc(variants,sizeof(*entries));
+    struct kui_vmu_game_assignment *entries=calloc(variants?variants:1u,sizeof(*entries));
     struct kui_vmu_game_candidates_plan *plans=calloc(KUI_VMU_WIZARD_GAMES,sizeof(*plans));
     uint8_t *image=malloc(KUI_VMU_IMAGE_BYTES);
     if(!work || !entries || !plans || !image) {
@@ -801,15 +1050,15 @@ static bool commit_import(struct operation *s) {
         }
         ++planned;
     }
-    if(ok) {
-        int r=kui_vmu_game_candidates_preflight(plans,planned,&storage,s->log,s->cancel);
-        if(r!=KUI_VMU_GAME_CANDIDATES_OK) ok=candidates_error(s,r,"Game card choices are full or could not be checked; no new cards were published");
-    }
+    bool confirmed=false;
+    if(ok && planned) ok=import_preflight(s,plans,planned,&storage,&confirmed);
     if(ok && kui_vmu_library_check_allocation(s->cancel)!=KUI_VMU_LIBRARY_OK) {
         if(!stop(s)) fail(s,"VMU file allocation could not be verified; check the SD card before importing");
         ok=false;
     }
     if(ok) ok=same_storage(s,false);
+    uint16_t excluded[KUI_VMU_GAME_CANDIDATES_PRODUCTS];unsigned excluded_count=0;
+    if(ok && confirmed) for(unsigned i=0;i<wizard.repair->count;i++) excluded[excluded_count++]=(uint16_t)wizard.repair->entries[i].pair;
     if(ok) wizard.publication_started=true;
     for(unsigned i=0;ok && i<wizard.card_count;i++) {
         if(stop(s) || !same_storage(s,false)) {ok=false;break;}
@@ -834,7 +1083,8 @@ static bool commit_import(struct operation *s) {
                 }
                 notice(s,"Creating separate card for %s, source %u",game->title,j+1u);
                 uint8_t fresh[16];salt(fresh,i*KUI_VMU_WIZARD_CARDS+j);
-                int r=kui_vmu_game_card_import_publish(image,KUI_VMU_IMAGE_BYTES,fresh,work,&choice,out->identity,s->log,s->cancel);
+                int r=kui_vmu_game_card_import_publish_excluding(image,KUI_VMU_IMAGE_BYTES,fresh,
+                    excluded_count?excluded:NULL,excluded_count,work,&choice,out->identity,s->log,s->cancel);
                 if(r!=KUI_VMU_GAME_CARD_READY) {
                     if(r==KUI_VMU_GAME_CARD_CANCELLED) {s->out->status.stopped=true;notice(s,"Import stopped; prepared game cards are retained for retry");}
                     else fail(s,choice.problem[0]?choice.problem:"Could not publish this game's separate card");
@@ -874,18 +1124,19 @@ static bool commit_import(struct operation *s) {
     }
     if(ok && stop(s)) ok=false;
     if(ok) ok=same_storage(s,false);
-    if(ok) {
+    if(ok && count) {
         notice(s,"Saving %u game assignments together",count);
-        int r=kui_vmu_game_candidates_apply(entries,count,&storage,s->log,s->cancel);
+        int r=confirmed?kui_vmu_game_candidates_apply_confirmed(entries,count,&storage,wizard.repair,s->log,s->cancel):
+            kui_vmu_game_candidates_apply(entries,count,&storage,s->log,s->cancel);
         if(r!=KUI_VMU_GAME_CANDIDATES_OK) ok=candidates_error(s,r,"Could not publish game card choices; prepared cards are retained for retry");
-        if(ok) ok=same_storage(s,false);
+        if(ok) {clear_missing();ok=same_storage(s,false);}
     }
     if(!kui_games_storage_release()) {ok=false;fail(s,"Could not release the SD card; choices may be saved, retry to confirm");}
     free(image);free(plans);free(entries);free(work);
     if(ok) {
         wizard.stage=KUI_VMU_WIZARD_DONE;
         for(unsigned i=0;i<wizard.card_count;i++) {free(wizard.cards[i].image);wizard.cards[i].image=NULL;}
-        notice(s,"Ready: full sources archived; separate game cards and choices saved");
+        notice(s,count?"Ready: full sources archived; separate game cards and choices saved":"Ready: full source backups saved; no game cards were created");
     }
     return ok;
 }
@@ -904,7 +1155,9 @@ void kui_vmu_wizard_run(const struct kui_vmu_wizard_request *request,
        request->op==KUI_VMU_WIZARD_SHOW_SOURCES || request->op==KUI_VMU_WIZARD_SHOW_REVIEW ||
        request->op==KUI_VMU_WIZARD_COMMIT || request->op==KUI_VMU_WIZARD_OPEN_SAVES ||
        request->op==KUI_VMU_WIZARD_TOGGLE_SAVE || request->op==KUI_VMU_WIZARD_ACCEPT_SAVES ||
-       request->op==KUI_VMU_WIZARD_TOGGLE_BLANK)) {
+       request->op==KUI_VMU_WIZARD_TOGGLE_BLANK || request->op==KUI_VMU_WIZARD_OPEN_GROUP ||
+       request->op==KUI_VMU_WIZARD_RESOLVE_GROUP || request->op==KUI_VMU_WIZARD_SKIP_GROUP ||
+       request->op==KUI_VMU_WIZARD_CONFIRM_MISSING || request->op==KUI_VMU_WIZARD_CANCEL_MISSING)) {
         fail(&s,"This game list is read only; use Assign games to change card choices");view(&s,request->generation);return;
     }
     switch(request->op) {
@@ -931,20 +1184,28 @@ void kui_vmu_wizard_run(const struct kui_vmu_wizard_request *request,
         (void)capture(&s,request);break;
     case KUI_VMU_WIZARD_USE_CARD:
         (void)use_card(&s,request);break;
-    case KUI_VMU_WIZARD_LIST_GAMES:
+    case KUI_VMU_WIZARD_LIST_GAMES: {
+        bool advanced=wizard.automatic && wizard.stage==KUI_VMU_WIZARD_GAMES_STAGE;
         if(wizard.stage==KUI_VMU_WIZARD_DONE) {fail(&s,"Start a new import before choosing games");break;}
         if(!wizard.card_count) {fail(&s,"Import a physical VMU before choosing games");break;}
         if(catalogue(&s,request->root)) {
-            wizard.stage=KUI_VMU_WIZARD_GAMES_STAGE;
-            unsigned pages=wizard.game_count?(wizard.game_count-1)/KUI_VMU_WIZARD_ROWS+1:1;
-            wizard.page=request->page<pages?request->page:pages-1;
+            if(wizard.existing_card || advanced) {
+                wizard.stage=KUI_VMU_WIZARD_GAMES_STAGE;
+                unsigned pages=wizard.game_count?(wizard.game_count-1)/KUI_VMU_WIZARD_ROWS+1:1;
+                wizard.page=request->page<pages?request->page:pages-1;
+            } else if(automatic_plan(&s)) {
+                group_page(0);wizard.page=0;
+                wizard.stage=question_count(NULL)?KUI_VMU_WIZARD_GROUPS:KUI_VMU_WIZARD_REVIEW;
+                notice(&s,"%u games ready; %u save groups need a game",selected_count(),question_count(NULL));
+            }
         }
         break;
+    }
     case KUI_VMU_WIZARD_TOGGLE: {
         if(!wizard.existing_card) {fail(&s,"Open this game's save choices or choose a blank card");break;}
         if(!editable_game(&s,request)) break;
         struct wizard_game *game=&wizard.games[request->index];
-        game->card=game->card==wizard.card+1?0:wizard.card+1;
+        clear_missing();game->card=game->card==wizard.card+1?0:wizard.card+1;
         notice(&s,game->card?"%s will use card %u":"%s keeps its previous card",game->title,wizard.card+1);
         break;
     }
@@ -959,10 +1220,38 @@ void kui_vmu_wizard_run(const struct kui_vmu_wizard_request *request,
         if(!editable_game(&s,request)) break;
         struct wizard_game *game=&wizard.games[request->index];
         bool selected=game->accepted && game->blank;
-        memset(game->picks,0,sizeof(game->picks));game->accepted=!selected;game->blank=!selected;
+        clear_missing();memset(game->picks,0,sizeof(game->picks));game->accepted=!selected;game->blank=!selected;game->manual=true;
         notice(&s,selected?"%s keeps its previous card":"%s: a new blank 200-block card selected",game->title);
         break;
     }
+    case KUI_VMU_WIZARD_SHOW_GROUPS:
+        if(!wizard.automatic || wizard.existing_card || wizard.stage==KUI_VMU_WIZARD_DONE)
+            fail(&s,"Scan imported saves before opening the unresolved groups");
+        else {
+            wizard.stage=KUI_VMU_WIZARD_GROUPS;group_page(request->page);
+            notice(&s,"%u save groups need a game; matched games are already ready",question_count(NULL));
+        }
+        break;
+    case KUI_VMU_WIZARD_OPEN_GROUP:
+        if(wizard.publication_started || wizard.stage!=KUI_VMU_WIZARD_GROUPS || !visible_question(request->index,request->page))
+            fail(&s,"Refresh the save groups before choosing this row");
+        else {
+            wizard.group_index=request->index;wizard.page=0;wizard.stage=KUI_VMU_WIZARD_GROUP_GAME;
+            notice(&s,"Choose the game for this complete save group, or keep only its backup");
+        }
+        break;
+    case KUI_VMU_WIZARD_RESOLVE_GROUP:
+        (void)resolve_group(&s,request,false);break;
+    case KUI_VMU_WIZARD_SKIP_GROUP:
+        (void)resolve_group(&s,request,true);break;
+    case KUI_VMU_WIZARD_GROUP_GAME_PAGE:
+        if(wizard.stage!=KUI_VMU_WIZARD_GROUP_GAME) fail(&s,"Open a save group before changing its game page");
+        else {
+            unsigned total=picker_count(group_at(wizard.group_index,NULL,NULL));
+            unsigned pages=total?(total-1u)/KUI_VMU_WIZARD_ROWS+1u:1u;
+            wizard.page=request->page<pages?request->page:pages-1u;
+        }
+        break;
     case KUI_VMU_WIZARD_SHOW_GAMES:
         if(!wizard.catalogued || wizard.stage==KUI_VMU_WIZARD_DONE) fail(&s,"Choose games before opening this list");
         else {
@@ -976,7 +1265,8 @@ void kui_vmu_wizard_run(const struct kui_vmu_wizard_request *request,
         if(wizard.stage!=KUI_VMU_WIZARD_REVIEW && wizard.stage!=KUI_VMU_WIZARD_DONE)
             fail(&s,"Review game choices before changing the review page");
         else {
-            unsigned pages=wizard.game_count?(wizard.game_count-1u)/KUI_VMU_WIZARD_ROWS+1u:1u;
+            unsigned total=wizard.existing_card?wizard.game_count:selected_count();
+            unsigned pages=total?(total-1u)/KUI_VMU_WIZARD_ROWS+1u:1u;
             wizard.page=request->page<pages?request->page:pages-1u;
         }
         break;
@@ -985,12 +1275,22 @@ void kui_vmu_wizard_run(const struct kui_vmu_wizard_request *request,
         else {wizard.stage=KUI_VMU_WIZARD_SOURCES;notice(&s,"Add another physical VMU or choose games");}
         break;
     case KUI_VMU_WIZARD_SHOW_REVIEW:
-        if(wizard.stage!=KUI_VMU_WIZARD_GAMES_STAGE || !selected_count())
+        if((wizard.stage!=KUI_VMU_WIZARD_GAMES_STAGE && wizard.stage!=KUI_VMU_WIZARD_GROUPS &&
+            wizard.stage!=KUI_VMU_WIZARD_GROUP_GAME) || (!selected_count() && !wizard.automatic))
             fail(&s,"Choose at least one eligible game before reviewing");
-        else {wizard.stage=KUI_VMU_WIZARD_REVIEW;notice(&s,wizard.existing_card?
+        else {wizard.stage=KUI_VMU_WIZARD_REVIEW;wizard.page=0;notice(&s,wizard.existing_card?
             (wizard.copy_on_commit?"Confirm to create a shared copy and assign the selected games":
              "Confirm to assign the selected games to this existing virtual VMU"):
             "Confirm to archive sources and create separate cards for the selected games");}
+        break;
+    case KUI_VMU_WIZARD_CONFIRM_MISSING:
+        if(wizard.stage!=KUI_VMU_WIZARD_REVIEW || !wizard.missing_question || !wizard.repair || !wizard.repair->count || wizard.publication_started)
+            fail(&s,"Review the missing old card before choosing imported saves");
+        else {wizard.missing_question=false;wizard.repair_confirmed=true;(void)commit(&s);}
+        break;
+    case KUI_VMU_WIZARD_CANCEL_MISSING:
+        if(!wizard.missing_question || wizard.publication_started) fail(&s,"There is no missing-card question to dismiss");
+        else {clear_missing();wizard.stage=KUI_VMU_WIZARD_REVIEW;notice(&s,"Import not started; source saves and previous cards are unchanged");}
         break;
     case KUI_VMU_WIZARD_COMMIT:
         (void)commit(&s);break;

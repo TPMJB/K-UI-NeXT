@@ -16,7 +16,7 @@ spec=importlib.util.spec_from_file_location('library_filesystem_fixture',ROOT/'t
 library=importlib.util.module_from_spec(spec);spec.loader.exec_module(library)
 SOURCES=('tests/test_vmu_wizard_filesystems.c',*library.SOURCES[1:],
     'src/apps/vmu_wizard.c','src/core/vmu_image_pack.c','src/core/vmu_image_subset.c',
-    'src/core/vmu_image_merge.c','src/core/vmu_import_plan.c')
+    'src/core/vmu_image_merge.c','src/core/vmu_import_plan.c','src/core/vmu_import_match.c')
 
 
 class WizardFilesystems(unittest.TestCase):
