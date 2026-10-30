@@ -3,10 +3,12 @@
 """Install or restore a native compatibility test: GUI, Background and standalone New.
 
 Only these three files change. Cards, journals, profiles, assignments, settings,
-the Standard loaders and earlier package backups are preserved. The first
+the Standard loaders and other packages' backups are preserved. The first
 install keeps an exact backup of each target (or records that it was absent);
-restore returns exactly those bytes. A target changed by anything else since
-installation is refused before any write.
+restore returns exactly those bytes, then retires the record. A target changed
+by anything else since installation is refused before any write. A record that
+another compatibility package left after completing its own restore is retired
+too, but only while every target still holds exactly the originals it recorded.
 """
 import argparse
 import hashlib
@@ -225,6 +227,33 @@ def read_state(root, package_sha):
     return state
 
 
+def retire(root):
+    """Remove the whole record with one rename, so no installer sees half of it."""
+    parent = root/PARENT
+    for index in range(100):
+        retired = parent.with_name('.'+parent.name+'-retired-%d' % index)
+        if not retired.exists() and not retired.is_symlink():
+            break
+    else:
+        raise ValueError('Too many retired compatibility test records; nothing was changed')
+    os.rename(parent, retired)
+    sync_directory(parent.parent)
+    # Nothing reads a retired record; a leftover after an interruption is inert.
+    shutil.rmtree(retired, ignore_errors=True)
+
+
+def finished_record(root, package_sha):
+    """Originals of another package's record whose own restore completed."""
+    record = json.loads(read(root/BACKUP/'manifest.json', root, 16384))
+    owner = record.get('package_sha256') if isinstance(record, dict) else None
+    if not digest(owner) or owner == package_sha:
+        return None
+    state = read_state(root, owner)
+    if state is None or state['pending'] or state['active'] != 'restored':
+        return None
+    return read_backup(root, owner)
+
+
 def install(root, package, restore=False):
     require(type(restore) is bool, 'Restore must be a boolean')
     root = Path(root).resolve(strict=True)
@@ -242,6 +271,14 @@ def install(root, package, restore=False):
         if path.exists() or path.is_symlink():
             ordinary(path, root, directory=True)
     have_backup = (root/BACKUP).exists()
+    theirs = finished_record(root, package_sha) if have_backup and not restore else None
+    if theirs is not None:
+        # Its restore completed and every target still holds its exact
+        # originals, so retiring its record loses nothing.
+        require(all(current[name] == theirs[name] for name in TARGETS),
+                'Another compatibility test package is installed; restore it with its own installer first')
+        retire(root)
+        have_backup = False
     require(have_backup or maybe_read(root/STATE, root, 16384) is None,
             'Compatibility test receipt has no exact backup; nothing was changed')
     require(have_backup or not restore, 'No compatibility test backup exists; nothing was changed')
@@ -257,6 +294,8 @@ def install(root, package, restore=False):
                    already=current[name] == final[name]) for name in TARGETS})
     if all(current[name] == final[name] for name in TARGETS) and state is not None and not state['pending'] and \
             state['active'] == ('restored' if restore else 'installed'):
+        if restore:
+            retire(root)
         return result
     if not have_backup:
         create_backup(root, package_sha, originals)
@@ -270,6 +309,8 @@ def install(root, package, restore=False):
             require(maybe_read(root/target, root) == final[name], 'Installed file readback differs: '+str(target))
     publish(root/STATE, wire(dict(schema=STATE_SCHEMA, package_sha256=package_sha,
                                   active='restored' if restore else 'installed', pending=False)))
+    if restore:
+        retire(root)
     return result
 
 

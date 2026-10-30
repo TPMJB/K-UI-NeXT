@@ -57,6 +57,25 @@ class CompatTestInstall(unittest.TestCase):
     def run_install(self, restore=False):
         return installer.install(self.card, self.package, restore)
 
+    def other_package(self):
+        """Switch to another build of the same three targets."""
+        self.metadata['source_commit'] = 'f'*40
+        self.metadata['build'] = 'f'*12
+        for name in installer.TARGETS:
+            data = module('new '+name, 'f'*12)
+            (self.package/'files'/(name+'.kui')).write_bytes(data)
+            self.metadata['files'][name]['sha256'] = installer.sha(data)
+            self.files[name] = data
+        self.write_metadata()
+
+    def leave_restored_record(self):
+        """Install and restore as earlier installers did, keeping the record."""
+        self.run_install()
+        with patch.object(installer, 'retire'):
+            self.run_install(restore=True)
+        self.assertEqual(json.loads((self.card/installer.STATE).read_text())['active'], 'restored')
+        self.assertEqual(self.snapshot(), self.original)
+
     def test_install_reinstall_and_exact_restore(self):
         self.run_install()
         after = self.snapshot()
@@ -112,17 +131,74 @@ class CompatTestInstall(unittest.TestCase):
 
     def test_another_package_backup_refuses(self):
         self.run_install()
-        self.metadata['source_commit'] = 'f'*40
-        self.metadata['build'] = 'f'*12
-        for name in installer.TARGETS:
-            data = module('new '+name, 'f'*12)
-            (self.package/'files'/(name+'.kui')).write_bytes(data)
-            self.metadata['files'][name]['sha256'] = installer.sha(data)
-        self.write_metadata()
+        self.other_package()
+        before = self.snapshot()
+        for restore in (False, True):
+            with self.assertRaisesRegex(ValueError, 'Another compatibility test package'):
+                self.run_install(restore)
+            self.assertEqual(self.snapshot(), before)
+
+    def test_restore_retires_the_record(self):
+        self.run_install()
+        self.run_install(restore=True)
+        self.assertFalse((self.card/installer.PARENT).exists())
+        self.assertFalse([p for p in (self.card/'KUI').iterdir() if p.name.startswith('.')])
+        with self.assertRaisesRegex(ValueError, 'No compatibility test backup'):
+            self.run_install(restore=True)
+        self.other_package()
+        self.run_install()
+        self.assertEqual(self.snapshot()[str(installer.TARGETS['gui'])], self.files['gui'])
+        self.run_install(restore=True)
+        self.assertEqual(self.snapshot(), self.original)
+        self.assertFalse((self.card/installer.PARENT).exists())
+
+    def test_record_left_by_a_completed_restore_is_retired(self):
+        self.leave_restored_record()
+        self.other_package()
+        with self.assertRaisesRegex(ValueError, 'Another compatibility test package'):
+            self.run_install(restore=True)
+        self.assertTrue((self.card/installer.STATE).exists())
+        self.run_install()
+        after = self.snapshot()
+        for name, target in installer.TARGETS.items():
+            self.assertEqual(after[str(target)], self.files[name])
+        self.assertEqual(json.loads((self.card/installer.STATE).read_text())['package_sha256'],
+                         installer.sha(installer.wire(self.metadata)))
+        self.run_install(restore=True)
+        self.assertEqual(self.snapshot(), self.original)
+        self.assertFalse((self.card/installer.PARENT).exists())
+
+    def test_completed_restore_record_is_kept_when_a_target_changed(self):
+        self.leave_restored_record()
+        (self.card/installer.TARGETS['gui']).write_bytes(module('someone else', 'abcdefabcdef'))
+        self.other_package()
         before = self.snapshot()
         with self.assertRaisesRegex(ValueError, 'Another compatibility test package'):
             self.run_install()
         self.assertEqual(self.snapshot(), before)
+        self.assertTrue((self.card/installer.STATE).exists())
+
+    def test_unfinished_restore_record_is_kept(self):
+        self.leave_restored_record()
+        state = json.loads((self.card/installer.STATE).read_text())
+        state['pending'] = True
+        (self.card/installer.STATE).write_text(json.dumps(state))
+        self.other_package()
+        with self.assertRaisesRegex(ValueError, 'Another compatibility test package'):
+            self.run_install()
+        self.assertEqual(self.snapshot(), self.original)
+        self.assertTrue(json.loads((self.card/installer.STATE).read_text())['pending'])
+
+    def test_inert_retired_leftover_is_ignored(self):
+        leftover = self.card/'KUI'/('.'+installer.PARENT.name+'-retired-0')
+        leftover.mkdir()
+        (leftover/'state.json').write_text('{}')
+        before = self.snapshot()
+        self.run_install()
+        self.run_install(restore=True)
+        self.assertEqual(self.snapshot(), before)
+        self.assertFalse((self.card/installer.PARENT).exists())
+        self.assertEqual((leftover/'state.json').read_text(), '{}')
 
     def test_missing_gui_or_symlink_refuses(self):
         gui = self.card/installer.TARGETS['gui']

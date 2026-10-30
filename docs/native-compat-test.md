@@ -36,8 +36,10 @@ python3 install.py /path/to/SD --restore
 ```
 
 This installer refuses to run while another test package is installed, and
-changes nothing in that case. Then, with the Dreamcast microSD mounted, from
-this extracted folder (replace `/path/to/SD`):
+changes nothing in that case. Once the first test is restored, this installer
+removes the record it left, as long as all three files are exactly the
+originals it recorded. Then, with the Dreamcast microSD mounted, from this
+extracted folder (replace `/path/to/SD`):
 
 ```sh
 python3 install.py /path/to/SD
@@ -100,9 +102,9 @@ From the same extracted folder:
 python3 install.py /path/to/SD --restore
 ```
 
-This puts back the exact three files that were there before. If you later want
-to restore an older test package, restore this one first. Each installer
-refuses to overwrite a file another package has changed since.
+This puts back the exact three files that were there before, then removes this
+test's backup record, so any other test package can be installed next. Each
+installer refuses to overwrite a file another package has changed since.
 
 ## What was and was not verified before delivery
 
@@ -112,8 +114,9 @@ refuses to overwrite a file another package has changed since.
   - the early-family test, once with each of the five early games as fixture
     (368,993 cases each);
   - the standalone structural (69,808 cases) and demand-model tests;
-  - the launcher-cache test (39,135 cases), the installer tests and the
-    structural audit of all 21 library startups.
+  - the launcher-cache test (39,135 cases), the installer tests (14 cases,
+    including the switch from the first test) and the structural audit of all
+    21 library startups.
 - The complete compact Background audit, except its original-allocator section.
   That section needs the eight reviewed originals, including Grandia II and
   Lodoss, which were not available here.
