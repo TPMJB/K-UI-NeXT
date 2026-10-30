@@ -165,6 +165,10 @@ enum kui_vmu_native_heap_result kui_vmu_native_heap_discover(
 static bool call_expression(const uint8_t *p,size_t n,const struct kui_vmu_native_heap *h,
     size_t begin,size_t target_load,size_t call,unsigned target,uint32_t *first,uint32_t *bytes) {
     uint32_t value[16]={0},known=0;bool condition=false,condition_known=false,target_loaded=false;
+    /* Words this window itself stored at @(disp,R15). R15 never changes in
+     * the window and no call precedes the target call, so a later load of
+     * the same slot can only return the known value that was stored there. */
+    uint32_t spill[16]={0},spilled=0;
     for(size_t at=begin;at<=call+2u;at+=2u) {
         if(at==call) {
             if(!target_loaded || !(known&(1u<<target)) || value[target]!=h->initializer_target) return false;
@@ -181,7 +185,19 @@ static bool call_expression(const uint8_t *p,size_t n,const struct kui_vmu_nativ
          * the transport itself, not just the original computed target: a
          * later mask/add could otherwise transform the replacement pointer. */
         if(at>target_load && at<call && r==target && (op&0xff00u)!=0x1f00u) return false;
-        if((op&0xf000u)==0xd000u) {
+        if((op&0xf000u)==0x9000u) {
+            /* MOV.W @(disp,PC),Rn: a sign-extended immutable image halfword. */
+            uint32_t pool=h->load+(uint32_t)at+4u+2u*(op&255u);size_t slot;
+            if((target_loaded && r==target) || phys(pool)-phys(h->initializer_slot)<4u ||
+               !index(pool&~3u,h->load,n,4u,&slot)) return false;
+            slot+=pool&2u;
+            value[r]=(uint32_t)(int32_t)(int16_t)h16(p+slot);known|=bit;
+        } else if((op&0xf0f0u)==0x50f0u || (op&0xf0ffu)==0x60f2u) {
+            /* MOV.L @(disp,R15),Rn or MOV.L @R15,Rn of a slot this window spilled. */
+            unsigned disp=(op&0xf000u)==0x5000u?op&15u:0u;
+            if((target_loaded && r==target) || !(spilled&(1u<<disp))) return false;
+            value[r]=spill[disp];known|=bit;
+        } else if((op&0xf000u)==0xd000u) {
             uint32_t pool=((h->load+(uint32_t)at+4u)&~3u)+4u*(op&255u);
             /* The selected word changes to the hook at installation. No
              * earlier/other read may feed arguments or a conditional from
@@ -214,9 +230,11 @@ static bool call_expression(const uint8_t *p,size_t n,const struct kui_vmu_nativ
              * MOV.L Rm,@R15 is exactly the zero-displacement encoding of
              * MOV.L Rm,@(0,R15); neither encoding changes R15. The same
              * known-source and no-replacement-target rules apply to both.
-             * No stack loads are accepted, so this cannot supply knowledge
-             * to the argument expression or follow an unproved pointer. */
+             * A later load accepts only a slot spilled earlier in this same
+             * window, so the stack never supplies unknown or caller state. */
             if((target_loaded && m==target) || !(known&other)) return false;
+            unsigned disp=(op&0xff00u)==0x1f00u?op&15u:0u;
+            spill[disp]=value[m];spilled|=1u<<disp;
         } else if((op&0xf00fu)==0x2008u) {
             if(target_loaded && (r==target || m==target)) return false;
             if((known&(bit|other))!=(bit|other)) return false;

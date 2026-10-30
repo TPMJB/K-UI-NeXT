@@ -204,7 +204,7 @@ static bool variable_leaf_root(const uint8_t *p,size_t n,uint32_t base,size_t s,
  * immediately by the combined API or replayed by the strict cached API.
  * `leaf` also admits the leaf root; see layout_from_bound. */
 static bool variable_from_bound(const void *image,size_t n,
-    const struct kui_vmu_native_discovery *d,struct kui_vmu_native_layout *out,bool leaf) {
+    const struct kui_vmu_native_discovery *d,struct kui_vmu_native_layout *out,bool leaf,bool zero) {
     uint32_t base=d->load_address;
     const uint8_t *p=image;size_t init;
     if(!at(d->initializer+0x11cu,base,n,0x148u,&init) || !variable(p,n,base,init,d)) return false;
@@ -255,6 +255,19 @@ static bool variable_from_bound(const void *image,size_t n,
         uint32_t a,b,c,k;
         if(!variable_leaf_root(p,n,base,s,base+(uint32_t)upper_site,&a,&b,&c,&k)) continue;
         input=a;index=b;tx=c;count=k;r.initializer_call=base+(uint32_t)s+14u;++found;
+    }
+    /* `zero` is the final fallback (see layout_from_bound): the same
+     * three literal pointers and pushed immediate count, with R2/R3 swapped,
+     * mode zero in the delay slot, straight after a JSR whose delay slot is a
+     * NOP. No value is forwarded from the caller. */
+    if(zero && !found) for(size_t s=16u;s<n && n-s>=4u;s+=2u) {
+        uint32_t a,b,c;
+        if(u16(p+s)!=0x430bu || u16(p+s+2u)!=0xe400u || u16(p+s-2u)!=0x2f26u ||
+           (u16(p+s-10u)&0xff00u)!=0xe200u || (u16(p+s-16u)&0xf0ffu)!=0x400bu ||
+           u16(p+s-14u)!=0x0009u || !target(p,n,base,s-6u,3u,base+(uint32_t)upper_site) ||
+           !literal(p,n,base,s-12u,6u,&a) || !literal(p,n,base,s-8u,5u,&b) ||
+           !literal(p,n,base,s-4u,7u,&c)) continue;
+        input=a;index=b;tx=c;count=u16(p+s-10u)&255u;r.initializer_call=base+(uint32_t)s;++found;
     }
     /* This runtime family uses two 0x3000 TX banks; the variable initializer
      * computes the bank distance as input count * 1024. */
@@ -318,7 +331,7 @@ static bool uniform_initializer(const uint8_t *p,size_t n,uint32_t base,
 }
 static bool uniform_root_registers(const uint8_t *p,size_t n,uint32_t base,size_t call,
     uint32_t upper,uint32_t *rx_slot,uint32_t *rx,uint32_t *tx_slot,uint32_t *tx,
-    unsigned targets) {
+    unsigned targets,bool after_r5) {
     if(call<8u || call>n || n-call<4u || (u16(p+call)&0xf0ffu)!=0x400bu) return false;
     unsigned target_reg=(u16(p+call)>>8)&15u;
     /* RX/TX/mode remain R5/R6/R4. The caller selects reviewed target
@@ -334,8 +347,11 @@ static bool uniform_root_registers(const uint8_t *p,size_t n,uint32_t base,size_
      * In particular this cannot manufacture a second root after a loop. */
     static const struct witness entry[]={{0,0x2fe6},{2,0x2fd6},{4,0x2fc6},
         {6,0x2fb6},{8,0x2fa6},{10,0x2f96},{12,0x2f86},{14,0x4f22}};
+    /* after_r5 also admits a prior JSR whose delay slot only loads an
+     * immediate into R5, which this root's own RX literal then replaces. */
     bool after_call=call>=10u && (u16(p+call-10u)&0xf0ffu)==0x400bu &&
-        (u16(p+call-8u)&0xfff0u)==0x54f0u;
+        ((u16(p+call-8u)&0xfff0u)==0x54f0u ||
+         (after_r5 && (u16(p+call-8u)&0xff00u)==0xe500u));
     bool after_entry=call>=22u && WORDS(p,n,call-22u,entry);
     if((after_call || after_entry) && u16(p+call+2u)==0xe400u &&
        target(p,n,base,call-6u,target_reg,upper) &&
@@ -367,14 +383,20 @@ static bool uniform_root_registers(const uint8_t *p,size_t n,uint32_t base,size_
 }
 static bool uniform_root(const uint8_t *p,size_t n,uint32_t base,size_t call,
     uint32_t upper,uint32_t *rx_slot,uint32_t *rx,uint32_t *tx_slot,uint32_t *tx) {
-    return uniform_root_registers(p,n,base,call,upper,rx_slot,rx,tx_slot,tx,0xdu);
+    return uniform_root_registers(p,n,base,call,upper,rx_slot,rx,tx_slot,tx,0xdu,false);
 }
 /* Same self-contained argument transport with the independently reviewed R1
  * target allocation. Keep it as a final fallback so previous complete roots
  * retain their exact metadata and ambiguity checks. */
 static bool uniform_r1_root(const uint8_t *p,size_t n,uint32_t base,size_t call,
     uint32_t upper,uint32_t *rx_slot,uint32_t *rx,uint32_t *tx_slot,uint32_t *tx) {
-    return uniform_root_registers(p,n,base,call,upper,rx_slot,rx,tx_slot,tx,2u);
+    return uniform_root_registers(p,n,base,call,upper,rx_slot,rx,tx_slot,tx,2u,false);
+}
+/* Round-toward-zero startups: the reviewed root after a JSR whose delay slot
+ * sets R5. Only the final fallback in layout_from_bound tries it. */
+static bool uniform_r5_root(const uint8_t *p,size_t n,uint32_t base,size_t call,
+    uint32_t upper,uint32_t *rx_slot,uint32_t *rx,uint32_t *tx_slot,uint32_t *tx) {
+    return uniform_root_registers(p,n,base,call,upper,rx_slot,rx,tx_slot,tx,0xdu,true);
 }
 /* A reviewed uniform entry is a pure tail thunk: its three literal loads
  * supply the upper wrapper, RX and TX; JMP samples R3 before the zero-mode
@@ -392,7 +414,7 @@ static bool uniform_tail_root(const uint8_t *p,size_t n,uint32_t base,size_t cal
     return true;
 }
 static bool uniform_from_bound(const void *image,size_t n,
-    const struct kui_vmu_native_discovery *d,struct kui_vmu_native_layout *out,bool tail,bool r1) {
+    const struct kui_vmu_native_discovery *d,struct kui_vmu_native_layout *out,bool tail,bool r1,bool r5) {
     const uint8_t *p=image;uint32_t base=d->load_address;
     if(!uniform_initializer(p,n,base,d)) return false;
     static const struct witness wrap[]={
@@ -444,6 +466,13 @@ static bool uniform_from_bound(const void *image,size_t n,
     if(!found && r1) for(size_t s=8u;s<n && n-s>=4u;s+=2u) {
         uint32_t rx_at=0,raw_rx=0,tx_at=0,raw_tx=0;
         if(!uniform_r1_root(p,n,base,s,base+(uint32_t)upper_site,
+           &rx_at,&raw_rx,&tx_at,&raw_tx)) continue;
+        r.input_array=rx_at;rx=raw_rx;r.index_array=tx_at;tx=raw_tx;
+        r.initializer_call=base+(uint32_t)s;if(++found>1u) return false;
+    }
+    if(!found && r5) for(size_t s=8u;s<n && n-s>=4u;s+=2u) {
+        uint32_t rx_at=0,raw_rx=0,tx_at=0,raw_tx=0;
+        if((u16(p+s)&0xf0ffu)!=0x400bu || !uniform_r5_root(p,n,base,s,base+(uint32_t)upper_site,
            &rx_at,&raw_rx,&tx_at,&raw_tx)) continue;
         r.input_array=rx_at;rx=raw_rx;r.index_array=tx_at;tx=raw_tx;
         r.initializer_call=base+(uint32_t)s;if(++found>1u) return false;
@@ -509,17 +538,23 @@ static bool source_buffers(const uint8_t *p,size_t n,const struct kui_vmu_native
 static bool layout_from_bound(const void *image,size_t n,
     const struct kui_vmu_native_discovery *d,struct kui_vmu_native_layout *out) {
     struct kui_vmu_native_layout variable_layout,uniform_layout;
-    bool variable_found=variable_from_bound(image,n,d,&variable_layout,false);
-    bool uniform_found=uniform_from_bound(image,n,d,&uniform_layout,false,false);
+    bool variable_found=variable_from_bound(image,n,d,&variable_layout,false,false);
+    bool uniform_found=uniform_from_bound(image,n,d,&uniform_layout,false,false,false);
     /* The leaf root is tried only where no reviewed family resolves. Every
      * image with an earlier proof keeps exactly that proof, so cached
      * records stay current without a detector-epoch change. */
     if(!variable_found && !uniform_found)
-        variable_found=variable_from_bound(image,n,d,&variable_layout,true);
+        variable_found=variable_from_bound(image,n,d,&variable_layout,true,false);
     if(!variable_found && !uniform_found)
-        uniform_found=uniform_from_bound(image,n,d,&uniform_layout,true,false);
+        uniform_found=uniform_from_bound(image,n,d,&uniform_layout,true,false,false);
     if(!variable_found && !uniform_found)
-        uniform_found=uniform_from_bound(image,n,d,&uniform_layout,false,true);
+        uniform_found=uniform_from_bound(image,n,d,&uniform_layout,false,true,false);
+    /* The zero-mode roots of the round-toward-zero startups come last, so
+     * every image with an earlier proof keeps exactly that proof. */
+    if(!variable_found && !uniform_found)
+        variable_found=variable_from_bound(image,n,d,&variable_layout,false,true);
+    if(!variable_found && !uniform_found)
+        uniform_found=uniform_from_bound(image,n,d,&uniform_layout,false,false,true);
     if(variable_found==uniform_found) return false;
     struct kui_vmu_native_layout chosen=variable_found?variable_layout:uniform_layout;bool infile;
     if(!source_buffers(image,n,d,&chosen,&infile)) return false;

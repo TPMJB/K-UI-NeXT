@@ -1,0 +1,84 @@
+# Round-toward-zero ("zr") SDK titles
+
+Crazy Taxi, Sword of the Berserk and Zombie Revenge were linked with Shinobi
+1.62zr (`pd Ver 1.50zr`, `syHw Ver 1.07zr`). Every structural gate refused them
+before any game-specific code ran.
+
+## What "zr" changes
+
+The SDK interrupt handlers load FPSCR with `0x40001` (round toward zero)
+instead of `0x40000`. Each of the four FPSCR set-ups gains one `ADD #1,R0`, so:
+
+- the integer and FPU common handlers grow by 4 bytes each (0x16c/0x1a0);
+- the event word moves from vector+0x398 to +0x3a0;
+- their three event-literal loads move to handler offsets 0x94, 0x140 and 0x172.
+
+An instruction-by-instruction comparison against the full family showed no
+other difference. Every opcode, branch target and literal role is the same;
+only the event address and PC-relative displacements move. The vector prefix,
+vector, default handler, table initializer and helper windows match the
+existing fingerprints exactly, in all three games. The loader's SCI callbacks
+are integer code built with the FPU registers reserved, so the rounding mode
+does not affect them.
+
+## Source changes
+
+- `native_sdk_sci_family.c` / `native_sdk_sci_route.c`: a third layout beside
+  the full and compact families, with its own two handler fingerprints
+  (`zero_normal`, `zero_fpu`). All other roles keep the full family's checks.
+- `vmu_native_layout.c`: two final-fallback roots, tried only when every
+  reviewed root, leaf, tail and R1 root has failed:
+  - a variable root with R3 target, R2 count and mode zero, directly after a
+    `JSR`/`NOP` (Berserk);
+  - the uniform root directly after a `JSR` whose delay slot only loads an
+    immediate into R5, which the root's own RX literal then replaces
+    (Crazy Taxi).
+  Every image that resolved before keeps exactly the same record (all ten
+  existing `.nvr` records are byte-identical).
+- `vmu_native_heap.c`: the bounded argument evaluator also accepts
+  `MOV.W @(disp,PC)` literals and reloads of a stack slot spilled earlier in
+  the same window. R15 cannot change in the window and no call precedes the
+  target, so a reload only returns the known value stored there.
+
+## Status per title
+
+| Title | SCI family (New reader) | Maple layout | Heap | Combined VMU route |
+|---|---|---|---|---|
+| Sword of the Berserk | admitted | variable, zero-mode root | call proved | all structural gates pass |
+| Crazy Taxi | admitted | uniform, R5 continuation | no initializer slot | needs a fixed arena (RAM map), as Crazy Taxi 2 did |
+| Zombie Revenge | admitted | variable root with 6 inputs (TX bank 6 KiB) | no SDK allocator found | needs a 6-input layout and its own heap route |
+
+With the SCI family admitted, the launcher's New route selects the standalone
+New module for Crazy Taxi and Zombie Revenge (no virtual VMU) once the combined
+module refuses them.
+
+## Verification
+
+- SDK SCI discovery with the Crazy Taxi executable as fixture: 815,966 checks,
+  including byte/bit mutations of every window, cross-family body swaps in both
+  directions (zr/full, zr/compact) and live-model admission of all 21 library
+  startups (the 15 earlier-family admissions are unchanged).
+- Corpus audit: the same ten titles pass and Berserk is added; Crazy Taxi now
+  stops at the heap slot and Zombie Revenge at its layout.
+- Bottom-reservation execution of Berserk's original allocator passes.
+- Compact Background build: worker, both residents and the read-ahead
+  auxiliary are byte-identical. In the stage, only the six edited discovery
+  functions changed instructions. All 204 other changed bodies differ only by
+  relocated symbol or string addresses, checked word by word. The 35
+  compact-profile pins were updated from that review.
+- The complete compact audit passes with only the private-corpus bottom-heap
+  section skipped. That section needs the eight reviewed originals, including
+  Grandia II and Lodoss, so it must run where those files are.
+
+## Delivery steps
+
+1. Rebuild the compact Background module, the standalone New module and the
+   GUI from this commit.
+2. Run `tools/audit_vmu_native_corpus.py` and
+   `tools/prove_vmu_native_bottom_corpus_heap.py` with the eight reviewed
+   originals. Then run `tools/check_native_background_compact.py` on the build.
+3. Console checks:
+   - Berserk on Background (New) with Virtual VMU On: boot, play, save,
+     power-cycle and reload.
+   - Crazy Taxi and Zombie Revenge on Background (New): boot and play through
+     loading-heavy sections.

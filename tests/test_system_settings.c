@@ -28,7 +28,7 @@ int main(void) {
     assert(!strcmp(kui_system_video_name(99),"Invalid"));
     assert(!strcmp(kui_system_startup_name(KUI_STARTUP_HOME),"Home"));
     assert(!strcmp(kui_system_startup_name(KUI_STARTUP_RIPPER),"Disc Ripper"));
-    assert(!strcmp(kui_system_startup_name(KUI_STARTUP_VMU),"VMU Manager"));
+    assert(!strcmp(kui_system_startup_name(KUI_STARTUP_VMU),"VMU tools"));
     assert(!strcmp(kui_system_startup_name(KUI_STARTUP_MUSIC),"Music"));
     assert(!strcmp(kui_system_startup_name(KUI_STARTUP_DIAGNOSTICS),"Diagnostics"));
     assert(!strcmp(kui_system_startup_name(KUI_STARTUP_APP_COUNT),"Invalid"));

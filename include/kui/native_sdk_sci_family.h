@@ -3,7 +3,7 @@
 #define KUI_NATIVE_SDK_SCI_FAMILY_H
 #include <stddef.h>
 #include <stdint.h>
-/* Roles of the one reviewed full/compact-FPU SDK interrupt family in an
+/* Roles of the one reviewed full/compact-FPU/round-toward-zero SDK interrupt family in an
  * immutable executable. vector is the source vector's canonical P1 address
  * in the loaded image; normal, fpu and original keep the raw pointer values
  * that the copied vector and the SDK callback slots hold (P1 or U0 RAM). */

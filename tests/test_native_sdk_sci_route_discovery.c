@@ -91,24 +91,29 @@ static void fixture(const uint8_t *source,size_t n) {
     uint32_t original_vector,original_init,source_default;
     if(n==1578116u) {original_vector=0x8c15ab44u;original_init=0x8c135492u;source_default=0x8c1351e4u;
         normal_bytes=0x138u;fpu_bytes=0x16cu;fpu_delta=0x1c4u;event_delta=0x338u;default_bytes=0xfcu;}
+    /* Crazy Taxi: the round-toward-zero build of the full family. */
+    else if(n==1468208u) {original_vector=0x8c16bbb8u;original_init=0x8c15ebe2u;source_default=original_vector-0x130u;
+        normal_bytes=0x16cu;fpu_bytes=0x1a0u;fpu_delta=0x1f8u;event_delta=0x3a0u;}
     else if(n==2143652u) {original_vector=UINT32_C(0x8c1da080);original_init=UINT32_C(0x8c1b0e56);source_default=original_vector-0x130u;}
     else {CHECK(n==4057056u);original_vector=UINT32_C(0x8c1ade3c);original_init=UINT32_C(0x8c17e7c2);source_default=original_vector-0x130u;}
     uint8_t digest[32];struct kui_sha256 h;kui_sha256_init(&h);kui_sha256_update(&h,source,n);kui_sha256_digest(&h,digest);
-    static const uint8_t expected[3][32]={
+    static const uint8_t expected[4][32]={
         {0xff,0xb5,0xa8,0xe5,0xff,0x55,0x47,0x02,0x6d,0x93,0x64,0x9e,0x1f,0x90,0x58,0xb7,
          0xee,0x5e,0x29,0xd8,0xd0,0xff,0x8a,0x89,0x33,0x57,0x01,0xf7,0xe9,0x64,0x7f,0x35},
         {0x16,0xb4,0x5f,0xcc,0x84,0x99,0x2a,0x60,0xd5,0xa6,0x4b,0xf6,0x4b,0xf2,0x2b,0x69,
          0x9b,0x27,0x30,0x6b,0x95,0xf1,0x77,0xba,0x3d,0x97,0x30,0xca,0x38,0x00,0x69,0xae},
         {0x69,0x19,0xed,0x8b,0xc9,0x67,0x82,0xd0,0x41,0xbe,0x41,0xba,0x86,0xf9,0x0b,0xf8,
-         0x6d,0x99,0x63,0x2b,0x8b,0x77,0x87,0x39,0x19,0x69,0x72,0x1b,0xc0,0x99,0x17,0x36}};
-    CHECK(!memcmp(digest,expected[n==2143652u?0u:n==1578116u?2u:1u],32u));
+         0x6d,0x99,0x63,0x2b,0x8b,0x77,0x87,0x39,0x19,0x69,0x72,0x1b,0xc0,0x99,0x17,0x36},
+        {0x67,0xda,0xaa,0xbc,0x74,0x3a,0xd6,0xda,0x05,0x15,0xcc,0x25,0x36,0x3e,0xaf,0x5e,
+         0x66,0x24,0xfb,0xa9,0x35,0x3c,0xda,0x4d,0xab,0xfe,0x2e,0xe5,0xc6,0x10,0xc0,0x44}};
+    CHECK(!memcmp(digest,expected[n==2143652u?0u:n==1578116u?2u:n==1468208u?3u:1u],32u));
     bytes=FIXTURE_BYTES;vector_at=VECTOR_AT;vbr=UINT32_C(0x8c00e000);
     default_at=VECTOR_AT-0x130u;original_default=LOAD+(uint32_t)default_at;
     owner_area=UINT32_C(0x80000000);
     image=calloc(1u,bytes);live=malloc(bytes);CHECK(image && live);
     memcpy(image+VECTOR_AT,source+original_vector-LOAD,event_delta+8u);
     memcpy(image+VECTOR_AT-0x130u,source+source_default-LOAD,default_bytes);
-    uint32_t helper=word(source+source_default-LOAD+0xf4u);
+    uint32_t helper=(word(source+source_default-LOAD+0xf4u)&UINT32_C(0x1fffffff))|UINT32_C(0x80000000);
     memcpy(image+HELPER_AT,source+helper-LOAD,0x238u);
     memcpy(image+INIT_AT,source+original_init-LOAD,0x2eu);
     memcpy(init_template,source+original_init-LOAD,sizeof(init_template));
@@ -180,16 +185,20 @@ static void nop_padding_checks(void) {
 }
 static void cross_family_checks(const char *path) {
     size_t n;uint8_t *source=file_bytes(path,&n);
-    bool other_compact=n==1578116u;
-    if((default_bytes==0xfcu)==other_compact ||
-       (n!=1578116u && n!=2143652u && n!=4057056u)) {free(source);return;}
-    uint32_t other_vector=other_compact?0x8c15ab44u:n==2143652u?0x8c1da080u:0x8c1ade3cu;
+    bool other_compact=n==1578116u,other_toward_zero=n==1468208u;
+    bool compact=default_bytes==0xfcu,toward_zero=event_delta==0x3a0u;
+    if((compact==other_compact && toward_zero==other_toward_zero) ||
+       (n!=1578116u && n!=1468208u && n!=2143652u && n!=4057056u)) {free(source);return;}
+    uint32_t other_vector=other_compact?0x8c15ab44u:other_toward_zero?0x8c16bbb8u:n==2143652u?0x8c1da080u:0x8c1ade3cu;
     uint32_t other_default=other_compact?0x8c1351e4u:other_vector-0x130u;
-    const unsigned lengths[]={other_compact?0x138u:0x168u,other_compact?0x16cu:0x19cu,
-        other_compact?0xfcu:0xf8u};
+    const unsigned lengths[]={other_compact?0x138u:other_toward_zero?0x16cu:0x168u,
+        other_compact?0x16cu:other_toward_zero?0x1a0u:0x19cu,other_compact?0xfcu:0xf8u};
     const size_t targets[]={VECTOR_AT+0x8cu,VECTOR_AT+fpu_delta,default_at};
-    const uint32_t sources[]={other_vector+0x8cu,other_vector+(other_compact?0x1c4u:0x1f4u),other_default};
+    const uint32_t sources[]={other_vector+0x8cu,
+        other_vector+(other_compact?0x1c4u:other_toward_zero?0x1f8u:0x1f4u),other_default};
     for(unsigned kind=0u;kind<3u;kind++) {
+        /* The full and round-toward-zero builds share their default. */
+        if(kind==2u && compact==other_compact)continue;
         uint8_t saved[512];CHECK(sources[kind]>=LOAD && sources[kind]-LOAD+lengths[kind]<=n);
         memcpy(saved,image+targets[kind],sizeof(saved));
         memcpy(image+targets[kind],source+sources[kind]-LOAD,lengths[kind]);
@@ -307,7 +316,10 @@ static void probe(const char *path) {
     for(size_t at=0u;at<n && n-at>=0x2eu;at+=2u)
         if(!memcmp(p+at,init_template,sizeof(init_template)))original_default=word(p+at+0x2au);
     owner_area=original_default&UINT32_C(0xe0000000);
-    if(found==1u && n-vector_at>=96u)fpu_delta=((word(p+vector_at+0x4cu)&0x1fffffffu)==((LOAD+(uint32_t)vector_at)&0x1fffffffu)+0x338u)?0x1c4u:0x1f4u;
+    if(found==1u && n-vector_at>=96u) {
+        uint32_t event=(word(p+vector_at+0x4cu)&0x1fffffffu)-((LOAD+(uint32_t)vector_at)&0x1fffffffu);
+        fpu_delta=event==0x338u?0x1c4u:event==0x3a0u?0x1f8u:0x1f4u;
+    }
     vbr=UINT32_C(0x8c00f400);struct kui_native_sdk_sci_route_plan out;
     if(found==1u && n-vector_at>=0x3a0u)seed(true);
     else {memcpy(live,image,bytes);memset(vector,0,sizeof(vector));reads=fail_read=0u;}
