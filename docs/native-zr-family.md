@@ -122,7 +122,11 @@ proof before the launcher's New fallback is considered.
 
 With this, the New route can use the standalone reader for Sonic Adventure,
 House of the Dead 2, Time Stalkers and Elemental Gimmick Gear (no virtual VMU
-yet).
+yet). On console all four play normally on it: the first three since
+compatibility test 2, and Elemental Gimmick Gear since a fresh rip in test 4b.
+Its earlier "Invalid or unsupported data sector" came from a damaged copy of
+track03.bin on the card, where the executable occupies the track's last 486
+sectors.
 
 ## Virtual VMU route for the early titles (not yet admitted)
 
