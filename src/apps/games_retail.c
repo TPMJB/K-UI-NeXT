@@ -282,6 +282,20 @@ static enum map_result map_track(struct files *files,FATFS *fs,const struct kui_
     free(allocated);
     return result;
 }
+/* After a background map refusal, count the separate pieces of each data
+ * track's file on the card: audio is dropped before the refusal, so a data
+ * file in more pieces than the map holds is the cause. Only counts; the
+ * caller rebuilds or abandons the map. */
+static void fragmented_data_track(struct files *files,FATFS *fs,const struct kui_volume *volume,
+    const struct kui_game_image *image,struct kui_retail_manifest *map,unsigned *track,uint32_t *pieces) {
+    *track=0u;*pieces=0u;
+    for(unsigned i=0;i<image->count && !stopped(files);i++) {
+        if(!image->tracks[i].control) continue;
+        struct map_stats stats={.complete=true};
+        if(map_track(files,fs,volume,&image->tracks[i],map,i,0u,true,&stats)==MAP_FAILED) continue;
+        if(stats.max_track_extents>*pieces) {*pieces=stats.max_track_extents;*track=i+1u;}
+    }
+}
 static enum map_result map_cdda_tracks(struct files *files,FATFS *fs,const struct kui_volume *volume,
     const struct kui_game_image *image,struct kui_retail_manifest *map,uint32_t capacity,
     struct map_stats *stats) {
@@ -802,8 +816,17 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     } else if(background) {
         mapped=map_tracks(&files,&fs,&volume,image,map,KUI_RETAIL_ASYNC_SLOTS,&audio);
         if(mapped==MAP_FULL) {
-            if(ce) {problem="Windows CE background map exceeds 64 slots; defragment or use cooked tracks";goto done;}
-            if(native_dual) {problem="native X/Y virtual-A2 map exceeds 64 slots; defragment or use supported cooked tracks";goto done;}
+            static char refusal[128];
+            unsigned track;uint32_t pieces;
+            fragmented_data_track(&files,&fs,&volume,image,map,&track,&pieces);
+            if(track) {
+                log("Retail boot: track %u is in %u pieces on the card; copying the game folder off the card and back makes it contiguous",
+                    track,(unsigned)pieces);
+                snprintf(refusal,sizeof(refusal),"%s map exceeds 64 slots: track %u is in %u pieces; recopy the game folder",
+                    ce?"Windows CE background":"Background",track,(unsigned)pieces);
+            }
+            if(ce) {problem=track?refusal:"Windows CE background map exceeds 64 slots; defragment or use cooked tracks";goto done;}
+            if(native_dual) {problem=track?refusal:"Background map exceeds 64 slots; defragment or use supported cooked tracks";goto done;}
             log("Retail boot: the map needs more than the background reader's %u slots; using the standard reader",
                 KUI_RETAIL_ASYNC_SLOTS);
             background=false;

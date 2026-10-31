@@ -88,14 +88,12 @@ def test_sheet():
     writer = csv.writer(stream)
     writer.writerow(('game', 'reader', 'virtual_vmu', 'boots', 'gameplay', 'loading_stutter',
                      'memory_card_seen', 'save', 'power_cycle_load', 'failure_screen', 'notes'))
-    for row in (('Sonic Adventure', 'Background New (X)', 'standalone, none'),
-                ('The House of the Dead 2', 'Background New (X)', 'standalone, none'),
-                ('Time Stalkers', 'Background New (X)', 'standalone, none'),
-                ('Elemental Gimmick Gear', 'Background New (X)', 'standalone, none'),
-                ('Sword of the Berserk', 'Background New (X)', 'none (saves only to A1)'),
-                ('Crazy Taxi', 'Background New (X)', 'standalone, none'),
-                ('Zombie Revenge', 'Background New (X)', 'standalone, none'),
-                ('Regression: a game that already worked', 'Background New (X)', 'On')):
+    for row in (('Sword of the Berserk', 'Background New (X)', 'On (A1)'),
+                ('Regression: a game that already saved', 'Background New (X)', 'On (A1)'),
+                ('Sonic Adventure (RAM map: note the four numbers)', 'Background New (X)', 'standalone, none'),
+                ('The House of the Dead 2 (RAM map)', 'Background New (X)', 'standalone, none'),
+                ('Time Stalkers (RAM map)', 'Background New (X)', 'standalone, none'),
+                ('Elemental Gimmick Gear (RAM map, after recopying)', 'Background New (X)', 'standalone, none')):
         writer.writerow((*row, '', '', '', '', '', '', '', ''))
     return stream.getvalue().encode()
 
