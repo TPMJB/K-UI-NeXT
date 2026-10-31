@@ -21,7 +21,8 @@ combined module refuses on a **New (X)** launch.
   screen shows `RAM MAP TEST - FREE PAGES MARKED`.
 - **On menu return or a GD stop.** After the usual rows, the resident purges
   each cache line (OCBP), reads all 16 MiB uncached and shows one row,
-  `RAM UNUSED`, of four words. Bit `i` of word `w` is the page at
+  `RAM` (`RAM UNUSED` before the early-family standalone left no room for the
+  longer label), of four words. Bit `i` of word `w` is the page at
   `0x8c000000 + (32w + i) * 0x20000`; it is set only if every word of the page
   still holds the pattern.
 - `tools/decode_native_ram_map.py` turns the four words into address ranges.

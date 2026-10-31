@@ -270,7 +270,7 @@ static void run_report(uint32_t expected[4]) {
     unsigned long before=purges;
     shown[0]=0;
     run(report,UINT32_C(0x8c007cf0));
-    CHECK(!strcmp(shown,"RAM UNUSED") && shown_count==4u);
+    CHECK(!strcmp(shown,"RAM") && shown_count==4u);
     CHECK(purges-before==RAM_BYTES/4u);
     for(unsigned k=0;k<4u;k++) CHECK(shown_values[k]==expected[k]);
 }

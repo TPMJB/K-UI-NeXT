@@ -58,8 +58,8 @@ Gimmick Gear:
 2. Play the way you normally would, but cover as much as you can: stage loads,
    cutscenes, menus, the attract mode. Twenty minutes or more is ideal.
 3. Finish with **A+B+X+Y+Start**. If that only takes you to the title screen,
-   press it again there. The return screen shows `RAM UNUSED` with four
-   eight-digit numbers for about 15 seconds. **Photograph it.**
+   press it again there. The return screen shows a row labelled `RAM` with
+   four eight-digit numbers for about 15 seconds. **Photograph it.**
 4. Two or three sessions per game, covering different parts, are best. A part
    of RAM only counts as free if every session leaves it unused.
 
