@@ -48,8 +48,9 @@ the card.
    slot left at A2: the loader shows `NEW READER / VIRTUAL A2 ON` and it loads
    and saves as before.
 3. **Elemental Gimmick Gear:** if it still stops with "Invalid or unsupported
-   data sector", press Y on the Diagnostics page to save the log. The log has
-   two lines starting `Retail boot: executable sector LBA`. Send a photo of
+   data sector", press Y on the Diagnostics page to save the log. Just above
+   that error the log has a line starting `Retail boot: executable sector LBA`
+   and one starting `Retail boot: its first 24 raw bytes`. Send a photo of
    them or the saved log, plus the text of EGG's `.gdi` file (open it in any
    text editor; it is a few short lines).
 4. **Optional, Sonic Adventure's boot time.** Do this last. From pressing A on
