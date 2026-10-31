@@ -511,7 +511,9 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     if(!patches) patches=&off;
     if(!kui_game_ram_patches_valid(patches)) {log("RAM patches: invalid address or duplicate target");return false;}
     const bool patched=kui_game_ram_patches_enabled(patches);
-    const uint32_t requested_options=reader;
+    /* The virtual card's slot chooses the module; it is not a launch option.
+     * An A1 game takes the same preparation, proofs and card as A2. */
+    const uint32_t requested_options=reader&~KUI_GAMES_RETAIL_VIRTUAL_A1;
     struct kui_game_ram_patches applied_patches={0};
     const bool zso=zso_path(path);
     const enum kui_zso_codec codec=(reader&KUI_GAMES_RETAIL_LZO)?KUI_ZSO_LZO1X:KUI_ZSO_LZ4;
@@ -885,8 +887,8 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     if(background) {
         map->reader=reader;
         if(ce) log("Retail boot reader: background SCI stream (test, Windows CE interrupts)");
-        else if(native_dual)log("Retail boot reader: %s with virtual A2; SDK families are checked at startup",
-            reader==KUI_RETAIL_READER_ASYNC?"New background (X)":"Legacy background (Y)");
+        else if(native_dual)log("Retail boot reader: %s with virtual %s; SDK families are checked at startup",
+            reader==KUI_RETAIL_READER_ASYNC?"New background (X)":"Legacy background (Y)",dual_a1?"A1":"A2");
         else log("Retail boot reader: background SCI stream (test, %s)",
             reader==KUI_RETAIL_READER_ASYNC_EAGER?"25 blocks per call":"20 blocks per call");
     }

@@ -1,7 +1,13 @@
-# Compatibility test 4: a virtual card slot for each game
+# Compatibility test 4b: a virtual card slot for each game
 
 Sword of the Berserk saved in A1 with test 3. This test makes the slot a
-per-game choice instead of a module swap:
+per-game choice instead of a module swap.
+
+**4b fixes test 4's A1 launch.** Test 4's GUI skipped the executable check for
+a game set to A1, so its card was never prepared and the loader stopped with
+`NATIVE VMU PREPARED PROFILE / GAME MAP REFUSED`. Only the GUI changed; the
+three modules are test 4's code, rebuilt with this build number. A game you
+already set to A1 stays set.
 
 | File | What it is |
 |---|---|
@@ -48,11 +54,11 @@ the card.
    slot left at A2: the loader shows `NEW READER / VIRTUAL A2 ON` and it loads
    and saves as before.
 3. **Elemental Gimmick Gear:** if it still stops with "Invalid or unsupported
-   data sector", press Y on the Diagnostics page to save the log. Just above
-   that error the log has a line starting `Retail boot: executable sector LBA`
-   and one starting `Retail boot: its first 24 raw bytes`. Send a photo of
-   them or the saved log, plus the text of EGG's `.gdi` file (open it in any
-   text editor; it is a few short lines).
+   data sector", press UP a few times on the Diagnostics page. Just above
+   that error are a line starting `Retail boot: executable sector LBA` and one
+   starting `Retail boot: its first 24 raw bytes`. Photograph both, or press Y
+   to save the log and send the file. Also send the text of EGG's `.gdi` file
+   (open it in any text editor; it is a few short lines).
 4. **Optional, Sonic Adventure's boot time.** Do this last. From pressing A on
    the game, time two moments with a phone stopwatch: when the loader's screen
    says `ENTERING OWNER BOOTSTRAP 2`, and when the SEGA logo appears. Then do the

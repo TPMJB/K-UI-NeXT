@@ -48,13 +48,13 @@ NATIVE_DUAL_CASES = ("native-dual-x", "native-dual-y", "native-dual-x-report", "
     "native-dual-scif", "native-dual-too-many", "native-dual-patches",
     "native-dual-fallback-report", "native-dual-retry-report", "native-dual-x-cooked-report", "native-dual-cancel-source",
     "native-dual-standalone-report", "native-dual-standalone-y-report", "native-dual-standalone-absent-report",
-    "native-dual-standalone-nofamily-report", "native-dual-standalone-badcap")
+    "native-dual-standalone-nofamily-report", "native-dual-standalone-badcap", "native-dual-x-a1-report")
 # Only the first standalone case is a New launch whose combined proof refuses,
 # whose executable has the SDK family and whose standalone module is installed.
 NATIVE_STANDALONE_SELECTED = "native-dual-standalone-report"
 NATIVE_DUAL_SUCCESS = NATIVE_DUAL_CASES[:4] + ("native-dual-fallback-report", "native-dual-retry-report", "native-dual-x-cooked-report",
     "native-dual-standalone-report", "native-dual-standalone-y-report", "native-dual-standalone-absent-report",
-    "native-dual-standalone-nofamily-report")
+    "native-dual-standalone-nofamily-report", "native-dual-x-a1-report")
 NATIVE_STANDARD_CASES = ("native-standard-report", "native-standard-cooked-report",
     "native-standard-retry-report", "native-standard-short-report", "native-standard-cancel-source",
     "native-standard-crc-fail", "native-standard-seed-absent-report",
@@ -293,6 +293,8 @@ def make_retail_fixture(folder, case, dual_lease=0x51000):
         ram_seed=case in LAUNCH_CASES and case != "launch-patch-old-package", dual=cache_seed))
     (folder / "ce-probe.kui").write_bytes(synthetic_package(ce=True))
     (folder / "retail-native-dual.kui").write_bytes(dual_package(case, dual_lease))
+    if "-a1" in case:
+        (folder / "retail-native-dual-a1.kui").write_bytes(dual_package(case, dual_lease))
     if "-standalone" in case and "-absent" not in case:
         (folder / "retail-native-standalone.kui").write_bytes(standalone_package(case))
 
@@ -495,7 +497,9 @@ def main():
                         if "-cap-" in case: assert "module capability missing or ambiguous" in output
                         if case in reasons: assert reasons[case] in output
                         selected = case == NATIVE_STANDALONE_SELECTED
-                        module = "retail-native-standalone.kui" if selected else "retail-native-dual.kui"
+                        module = ("retail-native-standalone.kui" if selected else
+                            "retail-native-dual-a1.kui" if "-a1" in case else "retail-native-dual.kui")
+                        assert ("Virtual card in A1 for this game" in output) == ("-a1" in case)
                         if case in NATIVE_DUAL_SUCCESS:
                             assert f"Native dual prepared: package={module}" in output
                             assert ("using standalone New without virtual VMU" in output) == selected
@@ -509,6 +513,7 @@ def main():
                             print(f"Native source I/O {kind} {case}: reads={count[1]}, max={count[2]} bytes", flush=True)
                             names = ["retail-boot.kui", "ce-probe.kui", "retail-native-dual.kui", "disc.gdi", "track01.bin", "music track02.raw", "track03.bin"]
                             if "-standalone" in case and "-absent" not in case: names.append("retail-native-standalone.kui")
+                            if "-a1" in case: names.append("retail-native-dual-a1.kui")
                             for name in names:
                                 assert (fixture / ("after-" + name)).read_bytes() == (fixture / name).read_bytes()
                             data = (fixture / "after-last-launch-a.txt").read_bytes()
