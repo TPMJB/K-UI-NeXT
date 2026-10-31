@@ -34,7 +34,8 @@ needed on the card. Safely eject before booting.
 ## Controller setup
 
 - **A1 (the front slot of the controller in port A) must be empty.** The virtual
-  card lives there now. A real device in A1 makes the card refuse to start.
+  card lives there now. A real device in A1 stops the game on a failure screen
+  at its first memory card check, before anything is saved.
 - A real VMU in A2 still works.
 - **No jump pack.** Vibration is not passed through yet, in any slot. The first
   rumble would stop the game on a failure screen.

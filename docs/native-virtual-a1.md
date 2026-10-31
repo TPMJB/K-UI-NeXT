@@ -43,7 +43,8 @@ slots exchanged.
 ## Limits
 
 - A1 must be physically empty, just as A2 must be for the default build. A real
-  device in the virtual slot stops the card before any storage access.
+  device in the virtual slot stops the game on the resident's failure screen,
+  before any storage access.
 - A2 can hold a real VMU; its memory, LCD and clock traffic pass through.
 - Vibration commands are not passed through yet, in any slot or port, in the
   default build either. With a jump pack plugged in, the game's first
