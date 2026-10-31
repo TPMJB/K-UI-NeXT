@@ -292,7 +292,7 @@ extern void kui_vmu_native_passive_test_terminal(uint32_t,uint32_t) __attribute_
 #define KUI_VMU_NATIVE_TEST_SELF_ADDRESS UINT32_C(0xac700000)
 #endif
 #define SELF_ADDRESS KUI_VMU_NATIVE_TEST_SELF_ADDRESS
-#define STACK_LOW (SELF_ADDRESS+WORKER_SPAN-UINT32_C(0x1000))
+#define STACK_LOW (SELF_ADDRESS+WORKER_SPAN-KUI_VMU_NATIVE_PASSIVE_STACK_BYTES)
 #define STACK_HIGH (SELF_ADDRESS+WORKER_SPAN)
 static uint32_t current_sr(void) {return kui_vmu_native_passive_test_sr();}
 static uint32_t current_sp(void) {return kui_vmu_native_passive_test_sp();}
@@ -407,7 +407,7 @@ static inline __attribute__((always_inline)) bool read_heap_proved(void *unused,
 #endif
 static bool stack_valid(void) {
     uint32_t sp=current_sp(),low=active_stack_low();
-    if(((current_sr()>>4)&15u)!=15u || sp<low+256u || sp>=low+0x1000u) return false;
+    if(((current_sr()>>4)&15u)!=15u || sp<low+256u || sp>=low+KUI_VMU_NATIVE_PASSIVE_STACK_BYTES) return false;
     for(unsigned i=0;i<16u;i++) if(guard(sp,i)!=GUARD) return false;
     return true;
 }
@@ -1027,7 +1027,7 @@ int kui_vmu_native_passive_arm(const struct kui_vmu_native_passive_config *c,voi
        c->lease.lease_bytes!=KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES ||
        !ram(c->lease.payload,c->lease.lease_bytes,32u) ||
        SELF_ADDRESS!=(physical(c->lease.payload)|UINT32_C(0xa0000000)) ||
-       STACK_LOW!=SELF_ADDRESS+WORKER_SPAN-0x1000u || STACK_HIGH!=SELF_ADDRESS+WORKER_SPAN ||
+       STACK_LOW!=SELF_ADDRESS+WORKER_SPAN-KUI_VMU_NATIVE_PASSIVE_STACK_BYTES || STACK_HIGH!=SELF_ADDRESS+WORKER_SPAN ||
        !stack_valid() || c->runtime.version!=1u || c->runtime.bytes!=sizeof(c->runtime) ||
        !ram(c->runtime.lease_address,c->runtime.lease_bytes,32u) ||
        physical(c->runtime.lease_address)!=physical(c->lease.payload) || c->runtime.lease_bytes!=c->lease.lease_bytes ||
@@ -1377,7 +1377,8 @@ static bool transfer_context_valid(const struct kui_vmu_native_passive_frame *f,
         uint32_t sr=current_sr(),sp=current_sp(),low=active_stack_low();
         if(((sr>>4)&15u)!=15u) return context_reject(1u,0u,sr,0xf0u);
         if(sp<low+256u) return context_reject(2u,sp,sp,low+256u);
-        if(sp>=low+0x1000u) return context_reject(3u,sp,sp,low+0x1000u);
+        if(sp>=low+KUI_VMU_NATIVE_PASSIVE_STACK_BYTES)
+            return context_reject(3u,sp,sp,low+KUI_VMU_NATIVE_PASSIVE_STACK_BYTES);
         for(unsigned i=0;i<16u;i++) {
             uint32_t value=guard(sp,i);
             if(value!=GUARD) return context_reject(4u,low+i*4u,value,GUARD);

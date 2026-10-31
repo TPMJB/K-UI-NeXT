@@ -278,8 +278,10 @@ def worker_profile(worker):
             'Lean worker trace ABI callback is not the proved inert leaf')
     _, header, _ = symbol_bytes(worker, '_kui_vmu_native_worker_exports', 1)
     fields = struct.unpack('<20I', header)
+    from native_runtime_layout import BACKGROUND_COMPACT, GENERAL
+    stack_bytes = (BACKGROUND_COMPACT if compact else GENERAL).WORKER_STACK_BYTES
     require(fields[:3] == (0x4b4e5031, 4, 80) and
-            fields[9:12] == (0xac100000 + worker_bytes - 4096,
+            fields[9:12] == (0xac100000 + worker_bytes - stack_bytes,
                               0xac100000 + worker_bytes,
                               0xac100000 + worker_bytes),
             'Lean worker does not retain its exact private stack/header geometry')
@@ -363,6 +365,8 @@ def prepared_objects(worker):
     compact=compact_profile(worker)
     expected=compact_objects if compact else MUTABLE_OBJECTS
     worker_bytes=0x12000 if compact else WORKER_BYTES
+    from native_runtime_layout import BACKGROUND_COMPACT, GENERAL
+    stack_bytes=(BACKGROUND_COMPACT if compact else GENERAL).WORKER_STACK_BYTES
     require(expected, 'Lean mutable-object inventory has not been reviewed')
     from check_vmu_native_persistent import prepared_symbol_records
     records = prepared_symbol_records(worker)
@@ -375,7 +379,7 @@ def prepared_objects(worker):
             continue
         require(name not in actual and section[1] in (1, 8) and
                 section[3] <= address < address + count <= section[3] + section[5] and
-                0xac100000 <= address < address + count <= 0xac100000 + worker_bytes - 4096,
+                0xac100000 <= address < address + count <= 0xac100000 + worker_bytes - stack_bytes,
                 'Lean mutable object lacks unique private state ownership: ' + name)
         actual[name] = (section[1], count)
     require(actual == expected, 'Lean complete mutable-object inventory changed')
@@ -395,6 +399,8 @@ def profile_mutation_checks(stage, worker, resident, legacy):
     compact=compact_profile(worker)
     expected_objects=compact_objects if compact else MUTABLE_OBJECTS
     worker_bytes=0x12000 if compact else WORKER_BYTES
+    from native_runtime_layout import BACKGROUND_COMPACT, GENERAL
+    stack_bytes=(BACKGROUND_COMPACT if compact else GENERAL).WORKER_STACK_BYTES
     counts = dict(marker_mutations=0, header_mutations=0,
                   mutable_inventory_mutations=0, unknown_role_mutations=0)
 
@@ -487,7 +493,7 @@ def profile_mutation_checks(stage, worker, resident, legacy):
             # Removing an object, changing its size, or moving it across the
             # private-stack boundary must change the complete inventory.
             for at, changed in ((8, 0), (8, size + 4),
-                                (4, 0xac100000 + worker_bytes - 4096)):
+                                (4, 0xac100000 + worker_bytes - stack_bytes)):
                 data = bytearray(worker[0]); struct.pack_into('<I', data, offset + at, changed)
                 refused(prepared_objects, (bytes(data), *worker[1:]),
                         'Lean mutable inventory accepts a changed object: ' + qualified)

@@ -42,6 +42,14 @@ enum kui_vmu_native_diagnostics {
 #define KUI_VMU_NATIVE_PASSIVE_VERSION 1u
 #define KUI_VMU_NATIVE_PASSIVE_SPAN 0x10000u
 #endif
+/* The worker's owned stack: the last bytes of its span. The compact
+ * Background worker's deepest linked call path needs under 2 KiB with every
+ * audited margin, so it owns 3 KiB and leaves the fourth to code and state. */
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE && KUI_NATIVE_BACKGROUND_COMPACT
+#define KUI_VMU_NATIVE_PASSIVE_STACK_BYTES 0xc00u
+#else
+#define KUI_VMU_NATIVE_PASSIVE_STACK_BYTES 0x1000u
+#endif
 struct kui_vmu_native_passive_exports {
     uint32_t magic,version,bytes,arm,submit_hook,complete_hook,terminal;
     uint32_t bss_begin,bss_end,stack_bottom,stack_top,memory_end;

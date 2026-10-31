@@ -21,6 +21,9 @@ STACK_OFFSET = 0x20000
 STACK_END = 0x21000
 DATA_OFFSET = 0x21000
 DATA_BYTES = 0x30000
+# The worker's own private stack, the last bytes of WORKER_BYTES (distinct from
+# the auxiliary/runtime stack at STACK_OFFSET inside the lease).
+WORKER_STACK_BYTES = 0x1000
 
 assert AUX_OFFSET + AUX_SPAN == STACK_END == DATA_OFFSET
 assert STACK_END - STACK_OFFSET == 0x1000
@@ -64,7 +67,10 @@ VMU_LITE = SimpleNamespace(**{**vars(VMU_ONLY),
 BACKGROUND_COMPACT = SimpleNamespace(**{**vars(GENERAL),
     'LEASE_BYTES': 0x47000, 'WORKER_BYTES': 0x12000, 'MAP_OFFSET': 0x12000,
     'REGION_OFFSET': 0x12400, 'AUX_OFFSET': 0x13000,
-    'STACK_OFFSET': 0x16000, 'STACK_END': 0x17000, 'DATA_OFFSET': 0x17000})
+    'STACK_OFFSET': 0x16000, 'STACK_END': 0x17000, 'DATA_OFFSET': 0x17000,
+    # Its deepest linked worker path is under 2 KiB with every audited
+    # margin; 3 KiB leaves the fourth to code and state.
+    'WORKER_STACK_BYTES': 0xc00})
 
 def layout_for(symbols):
     combined_names=('__kui_native_background_compact_stage',

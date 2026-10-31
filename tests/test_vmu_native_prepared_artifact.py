@@ -56,7 +56,9 @@ class PreparedArtifact(unittest.TestCase):
         records=audit.prepared_symbol_records(self.worker)
         bottom=self.worker[4]["__vmu_native_worker_stack_bottom"]
         top=self.worker[4]["__vmu_native_worker_stack_top"]
-        self.assertIn((".stack.cached",bottom[0]-0x20000000,4096,3,bottom[3]),records)
+        from native_runtime_layout import layout_for
+        stack_bytes=layout_for(self.worker[4]).WORKER_STACK_BYTES
+        self.assertIn((".stack.cached",bottom[0]-0x20000000,stack_bytes,3,bottom[3]),records)
         self.assertIn(("__vmu_native_worker_stack_bottom.cached",bottom[0]-0x20000000,0,0,bottom[3]),records)
         self.assertIn(("__vmu_native_worker_stack_top.cached",top[0]-0x20000000,0,0,top[3]),records)
         for name in ("__vmu_native_worker_stack_bottom", "__vmu_native_worker_stack_top"):

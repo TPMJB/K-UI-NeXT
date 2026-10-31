@@ -67,7 +67,7 @@ def audit(directory,*,allow_dirty=False,self_test=True):
                 not any(name.startswith(('_feed_read','_dma_block')) for name in image[4]),
                 'Combined Background unexpectedly contains the Standard RX DMA feeder')
     full=check_persistent(directory,self_test=self_test)
-    require(full.get('worker_span')==0x12000 and full.get('worker_stack_bytes')==4096 and
+    require(full.get('worker_span')==0x12000 and full.get('worker_stack_bytes')==geometry.WORKER_STACK_BYTES==0xc00 and
             full.get('stage_embedded_worker_verified') is True and
             full.get('maple_interception_installed') is True and
             full.get('scoped_sci_transactions') is True and
@@ -99,7 +99,7 @@ def audit(directory,*,allow_dirty=False,self_test=True):
     return dict(schema=SCHEMA,source_provenance=source,runtime=full['runtime'],
         module_sha256=full['module_sha256'],transport=1,controller_submit='split',
         geometry=dict(worker_bytes=geometry.WORKER_BYTES,lease_bytes=geometry.LEASE_BYTES,
-                      cache_bytes=geometry.DATA_BYTES,worker_stack_bytes=4096),
+                      cache_bytes=geometry.DATA_BYTES,worker_stack_bytes=geometry.WORKER_STACK_BYTES),
         matching_immutable_component_markers=True,
         component_markers=dual['compact_background'],
         background_reader_enabled=True,prefetch_enabled=True,prefetch_mode='auto',

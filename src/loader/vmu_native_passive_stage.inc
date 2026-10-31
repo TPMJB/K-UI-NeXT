@@ -286,7 +286,8 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     uint32_t load=(lease->payload&UINT32_C(0x1fffffff))|UINT32_C(0x80000000),dest=load+UINT32_C(0x20000000);
     uint32_t bytes=(uint32_t)(__native_worker_blob_end-__native_worker_blob_begin);
     uint32_t reloc_bytes=(uint32_t)(__native_worker_reloc_end-__native_worker_reloc_begin);
-    if(bytes<sizeof(struct kui_vmu_native_passive_exports) || bytes>=span-0x1000u || (native_driver.submit&3u) ||
+    if(bytes<sizeof(struct kui_vmu_native_passive_exports) || bytes>=span-KUI_VMU_NATIVE_PASSIVE_STACK_BYTES ||
+       (native_driver.submit&3u) ||
        !kui_vmu_native_heap_lease_valid(lease,native_read,NULL,1u)) native_report(8u,1u);
     struct kui_vmu_native_passive_config cfg;memset(&cfg,0,sizeof(cfg));
     cfg.version=1u;cfg.bytes=sizeof(cfg);cfg.driver=native_driver;cfg.lease=*lease;
@@ -371,7 +372,8 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
        !passive_entry(e->arm,dest,bytes) || !passive_entry(e->submit_hook,dest,bytes) ||
        !passive_entry(e->complete_hook,dest,bytes) || !passive_entry(e->terminal,dest,bytes) ||
        e->bss_begin!=dest+bytes || e->bss_end<e->bss_begin || e->bss_end>e->stack_bottom ||
-       e->stack_bottom!=dest+span-0x1000u || e->stack_top!=dest+span || e->memory_end!=e->stack_top ||
+       e->stack_bottom!=dest+span-KUI_VMU_NATIVE_PASSIVE_STACK_BYTES || e->stack_top!=dest+span ||
+       e->memory_end!=e->stack_top ||
        (e->resume_cell&3u) || (e->consumer_cell&3u) || e->resume_cell==e->consumer_cell ||
        e->resume_cell<dest+64u || e->resume_cell>dest+bytes-4u ||
        e->consumer_cell<dest+64u || e->consumer_cell>dest+bytes-4u)

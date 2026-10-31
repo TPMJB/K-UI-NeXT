@@ -8,7 +8,11 @@ ENTRY(_kui_vmu_native_passive_arm)
 __kui_native_worker_span = (DEFINED(__kui_native_vmu_lite_worker_layout) ||
     DEFINED(__kui_native_background_compact_worker_layout)) ? 0x12000 :
     DEFINED(__kui_native_general_lean_worker_layout) ? 0x1c000 : 0x20000;
-__kui_native_worker_stack_limit = 0xac100000 + __kui_native_worker_span - 0x1000;
+/* The compact Background worker owns a 3 KiB stack (its deepest linked path
+ * is under 2 KiB with every audited margin); the other layouts keep 4 KiB.
+ * KUI_VMU_NATIVE_PASSIVE_STACK_BYTES selects the same bytes in C. */
+__kui_native_worker_stack_limit = 0xac100000 + __kui_native_worker_span -
+    (DEFINED(__kui_native_background_compact_worker_layout) ? 0xc00 : 0x1000);
 PHDRS {
     exports PT_LOAD FLAGS(4);
     code PT_LOAD FLAGS(5);
@@ -39,11 +43,11 @@ SECTIONS {
         . = ALIGN(32);
         __vmu_native_worker_bss_end = .;
     } :state
-    ASSERT(.<=__kui_native_worker_stack_limit,"Native persistent state overlaps its owned4KiB stack")
+    ASSERT(.<=__kui_native_worker_stack_limit,"Native persistent state overlaps its owned stack")
     . = __kui_native_worker_stack_limit;
     .stack (NOLOAD) : AT(ADDR(.stack) - 0x20000000) {
         __vmu_native_worker_stack_bottom = .;
-        . += 4096;
+        . += 0xac100000 + __kui_native_worker_span - __kui_native_worker_stack_limit;
         __vmu_native_worker_stack_top = .;
     } :state
     __vmu_native_worker_end = .;

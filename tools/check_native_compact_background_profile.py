@@ -50,6 +50,10 @@ GENERAL_MARKERS = {
 # exit loop is unchanged. Every other changed body differs solely by relocated
 # addresses, the build label or _chain's renumbered switch table; residents
 # and auxiliary are unchanged.
+# Re-pinned for the 3 KiB worker stack: stack_valid and the transfer-context
+# check change only their stack-size literal (0x1000 to 0xc00) and the relocated
+# stack bottom; arm's raw bytes change only by that bottom's address; in the
+# stage only native_passive_run's two placement literals (span less the stack).
 STAGE_PINS = {
     'cache_gateway': {'_native_resolution_replay': (284,
         '8d093469928be74cad29fd153a5f632042e6bf240b563126bedf118560ee9dfd')},
@@ -58,7 +62,7 @@ STAGE_PINS = {
         '_native_dual_reader_bind': (68, 'fa7ab32f86100edf17aa30471b61fbbbd72c98e096161f27f81706e66b924867'),
         '_select_resident': (272, '96e1040f9d0cd026d4d4b5e036e9a8f35215ad08aa05a7455be4a62755ca6a55'),
     },
-    'installer': frozenset({(2068, 'a53927dc26e13ef08e15af5ff0db4136df70f34d49cb899d4bf2e73411e7095d')}),
+    'installer': frozenset({(2068, 'f43fe896967795eb7822bb5fe656d4586287c1a16694e89210cf544bc0f3c5e2')}),
     'read_ahead': {
         '_kui_vmu_native_background_map_address': (92, '14f07de519d8e507e8d2a6d69cdce033ce605aae4773114e5cbfb3fdad56163c'),
         '_native_readahead_bind': (1244, '54fd162b1790cd34bf459150f9b2d55981a162740a36ff8bc46c55a6eb9dfac3'),
@@ -75,7 +79,7 @@ STAGE_PINS = {
     },
     'timeline_binder': ('69d76e28a24ed21b8e8a356683086eab775eca277983d8eac8133d3c426a91cc', 180),
     'toggle': {
-        '_native_passive_run': (2068, 'a53927dc26e13ef08e15af5ff0db4136df70f34d49cb899d4bf2e73411e7095d'),
+        '_native_passive_run': (2068, 'f43fe896967795eb7822bb5fe656d4586287c1a16694e89210cf544bc0f3c5e2'),
         '_native_persist_storage_init': (720, '9096cfdca3648ddf59facc801fb5155c6ea465f9335d13ddf637c6963fe3f637'),
         '_native_runtime_diagnostics': (44, 'a344c3cf9a8cbda49e18ce32789131b56a0769e746fbc6df3d440576afb29b62'),
         '_native_runtime_mode': (88, '991602f6ecb450c2a38ccf16db276c6b684161c0ec6f6b863a66c0a0757ded42'),
@@ -162,8 +166,8 @@ WORKER_PINS = {'dual': {'_reader_capture_region': (100, '348d48974842bd4fd97259d
               '_readonly_overlay_target_response_bytes': ('4b38d95dfa7ff193118d30455a04e211fa54b7343e9beb12bdd72645835ad036',
                                                           216),
               '_report': ('b792f785d42437bf256924b076c33195d2e47ab832d14ffc03cbb418fd7b5ffe', 340),
-              '_stack_valid': ('f5e81a00f19db27641f67958161041e8a865061f49fd71fbe114b165b2666db6', 116),
-              '_transfer_context_valid': ('f4d6f6fabdf3e2bfa6c1a6e2b1a5904b52adfbc4874c07b12dc87b6320c764fa',
+              '_stack_valid': ('dd348cfbf4d1379d905dcd08aed813db8e2df61b1ce3cf76edfee604bc5d5d26', 116),
+              '_transfer_context_valid': ('157869c251dd3280e882ab4c410b1ef7ddfe9a011863bbaa291141fe7cbb2892',
                                           1208)},
  'read_ahead': {'_reader_capture_region': (100,
                                            '348d48974842bd4fd97259d535072d96babb744545d1fb9ac887beafba00d456'),
@@ -171,7 +175,7 @@ WORKER_PINS = {'dual': {'_reader_capture_region': (100, '348d48974842bd4fd97259d
                                                 '940ce158ac039e9ad6e2003df0195bd57505bd5355d1a61ab7328f28093aed62'),
                 '_reader_streaming': (120, '8587a92b2a7d3c237bf5f8f022595c2823c660a1db7534a03a9dfd75a6116aae')},
  'toggle': {'_kui_vmu_native_passive_arm': (2608,
-                                            'd786aa7b629cc07831c1ca415516adccb88eef8147d51059d179dbc463cef7bd'),
+                                            '51180b30930b7e6206dd260f14be605f048c297a5bdcad39fec756aed459ca02'),
             '_kui_vmu_native_passive_complete': (3828,
                                                  '3141da0e57c269fa52b6270b53eb69621b1a110ac68c58d7e8782e28ece779e6'),
             '_kui_vmu_native_passive_submit': (1272,
@@ -211,7 +215,7 @@ WORKER_PINS = {'dual': {'_reader_capture_region': (100, '348d48974842bd4fd97259d
                                              '940ce158ac039e9ad6e2003df0195bd57505bd5355d1a61ab7328f28093aed62'),
              '_reader_streaming': (120, '8587a92b2a7d3c237bf5f8f022595c2823c660a1db7534a03a9dfd75a6116aae'),
              '_readonly_rx.constprop.0': (76, '8ae835afcc6563c32e1756bbe4979d5caf8c18cb54be8755beb897429d5300a9'),
-             '_stack_valid': (116, 'dcdf7892a62ef1f7538d7232cb9f390c9b703c94f9b5fa4abba1107d9295ab16'),
+             '_stack_valid': (116, '7425c66159380db62d72963b03ef54c323b1bbd49ad7bc3db2fce6538106bca2'),
              '_timer_runtime_in': (26, 'a0ff5d4d27ccbf7b073b8bc6f0e6b26659e6b729763f7b02d49aa124ea023824'),
              '_timer_runtime_ram': (104, '4fb7919a6f74ec1c9aa3f434e446b352f7961eb7c565580f0c4e2e52a3eff415')}}
 # Offline comparison to the complete same-source 112 KiB reference proved

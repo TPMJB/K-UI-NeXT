@@ -207,8 +207,13 @@ then jumps through the same cell with R4=2. They share one literal pool.
   branches into the windows; Sonic Adventure because it also loads 0x8c008300
   in its executable loader; Silver because it has more consumers of the vector
   cell, including a 0xac0000e0 alias.
-- Size: the compact worker now fills its 72 KiB exactly. Its state ends at
-  the owned 4 KiB stack, so the next worker change has to free room first.
+- Size: with the exit pair the compact worker filled its 72 KiB exactly, so
+  its owned stack went from 4 KiB to 3 KiB. The linked call-graph audit puts
+  the deepest path (the split submit) at 1912 bytes including its 256-byte
+  guard border and 80-byte assembly allowance, leaving 1160 bytes spare, and
+  executes the compiled stack check at the new bounds. The 72 KiB worker, the
+  284 KiB lease and the 192 KiB cache are unchanged; 1 KiB is now free for
+  code and state. Other profiles keep 4 KiB stacks.
 
 ### Remaining
 
