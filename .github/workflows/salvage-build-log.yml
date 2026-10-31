@@ -14,7 +14,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh run view 41149231443 --repo TPMJB/K-UI-NeXT --job 124381500841 --log > "$RUNNER_TEMP/sdk.log"
+          gh run view 41149231346 --repo TPMJB/K-UI-NeXT --job 124381500869 --log > "$RUNNER_TEMP/sdk.log"
           python3 - <<'PY'
           import os,re
           from pathlib import Path
@@ -26,5 +26,5 @@ jobs:
           PY
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: salvage-sdk-failure
+          name: salvage-host-failure
           path: ${{ runner.temp }}/sdk-failure.txt
