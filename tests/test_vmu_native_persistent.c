@@ -79,6 +79,9 @@ void kui_vmu_native_persistent_test_clock(struct kui_vmu_native_profile_sample *
 void kui_vmu_native_passive_test_terminal(uint32_t phase,uint32_t error) {terminal_phase=phase;terminal_error=error;longjmp(terminal,1);}
 static struct kui_vmu_native_passive_config input;
 static struct kui_vmu_native_passive_frame frame;
+/* Inherited SR of the server's submit and completion: IMASK 6 and 15 by
+ * default, or a caller's level for the pd 1.46 server. */
+static uint32_t submit_sr,complete_sr;
 static void runtime_phase(unsigned phase) {
     put(0x0c3010b4u,4u,phase);put(0x0c3010b8u,4u,phase);put(0x0c300fc0u,4u,phase?0u:1u);
     frame.sr=phase?0xf0u:0x60u;frame.pr=0x0c012226u;
@@ -91,7 +94,7 @@ static void fixture(void) {
     used=bus_reads=fail_read=0u;refuse_rx_map=false;live_sr=0xf0u;live_sp=SELF_ADDRESS+WORKER_SPAN-0x100u;bad_guard=0u;terminal_phase=terminal_error=0u;
     test_clock=(struct kui_vmu_native_profile_sample){0xe0au,UINT32_MAX,2u,1u,UINT32_MAX};
     test_ccr=0x105u;clock_reads=0u;
-    corrupt_on_restore=0u;
+    corrupt_on_restore=0u;submit_sr=0x60000161u;complete_sr=0x600001f1u;
     input.version=1u;input.bytes=sizeof(input);input.tx_base=0xac400000u;
     input.driver=(struct kui_vmu_native_discovery){.version=1u,.bytes=sizeof(input.driver),.family=1u,
         .image_bytes=0x200000u,.load_address=0x8c010000u,.requirements=7u,
@@ -179,7 +182,7 @@ static void stage_batch(unsigned command,unsigned block) {
     uint32_t source=physical(input.tx_base)+packet_bank*0x3000u;
     put(0xa05f6c04u,4u,source);put(0x0c3010b0u,4u,source|0xa0000000u);
     put(0x0c3010b4u,4u,packet_bank);put(0x0c3010b8u,4u,packet_bank);
-    put(0x0c300fc0u,4u,1u);frame.sr=0x60000161u;frame.pr=0x0c012226u;
+    put(0x0c300fc0u,4u,1u);frame.sr=submit_sr;frame.pr=0x0c012226u;
     memset(memory+source-0x0c000000u,0,0x3000u);
     memset(rx_bytes(0),0xa5,1024u);memset(rx_bytes(VIRTUAL),0xa5,1024u);memset(rx_bytes(6),0xa5,1024u);
     /* Main A controller polling is kept physical. */
@@ -198,7 +201,7 @@ static void stage_batch(unsigned command,unsigned block) {
 }
 static void physical_complete(void) {
     put(0x0c3010b4u,4u,packet_bank^1u);put(0x0c3010b8u,4u,packet_bank^1u);put(0x0c300fc0u,4u,0u);
-    frame.sr=0x600001f1u;
+    frame.sr=complete_sr;
     put(rx_at(0),4u,0x03200008u);put(rx_at(0)+4u,4u,0x01000000u);
     put(rx_at(6),4u,0x1c604005u);put(rx_at(6)+4u,4u,0x01000000u);
     put(0xa05f6c18u,4u,0u);
@@ -323,8 +326,11 @@ static void prepare_handoff(void) {
 static void install_hooks(void) {
     const uint32_t entries[]={input.driver.submit,input.lease.owner.release,
         input.lease.owner.initializer,input.exits.entries[0],input.exits.entries[1],input.exits.entries[2],input.exits.entries[3]};
+    /* An arena lease has no release or initializer entry. */
+    const bool arena=input.lease.owner.family==KUI_VMU_NATIVE_HEAP_ARENA;
     for(unsigned i=0;i<sizeof(entries)/sizeof(entries[0]);i++) {
         if(i>=3u+input.exits.count) break;
+        if(arena && (i==1u || i==2u)) continue;
         uint32_t target=i==0u?kui_vmu_native_worker_exports.submit_hook:
             i==1u?kui_vmu_native_worker_exports.release_hook:input.low_terminal;
         uint16_t patch[6];CHECK(kui_vmu_native_patch_encode(entries[i],target,patch));
@@ -771,6 +777,132 @@ static void early_pair_hook_witnesses(void) {
     }
     printf("Early exit pair: %u joint byte/bit mutations\n",mutations);
 }
+/* A no-allocator arena lease (The House of the Dead 2): the reviewed fixed
+ * arena is the whole lease. The worker hooks the submit entry, the borrowed
+ * literal, the completion slot and the exits, never a release or initializer
+ * entry; it admits no free, and its poll witnesses the arena's first words. */
+static void arena_setup(void) {
+    model_reset();fixture();prepare_handoff();model_card.bus.transfer_block=block_transfer;
+    lease_calls=block_callbacks=0u;corrupt_before_loan=corrupt_after_loan=0u;release_saw_unpublished=false;
+    const struct kui_vmu_native_heap owner={.version=KUI_VMU_NATIVE_HEAP_VERSION,.bytes=sizeof(owner),
+        .family=KUI_VMU_NATIVE_HEAP_ARENA,.image_bytes=input.driver.image_bytes,
+        .load=input.driver.load_address,.initializer_slot=0x8c0133f0u};
+    CHECK(kui_vmu_native_heap_arena_lease(&owner,input.lease.payload,input.lease.lease_bytes,
+        input.lease.lease_bytes,&input.lease));
+    /* The stage writes release+20 as for every lease; nothing jumps there. */
+    kui_vmu_native_readonly_release_resume=input.lease.owner.release+20u;
+    for(unsigned i=0;i<8u;i++) put(input.lease.payload+4u*i,4u,0x4b554900u+i);
+}
+static void arena_lease_mode(void) {
+    uint8_t next[512];memset(next,0x5a,sizeof(next));
+    unsigned mutations=0u,refusals=0u;
+    arena_setup();arm();install_hooks();
+    CHECK(installed_hooks_valid() && hook_witness_count==5u+3u*input.exits.count);
+    for(unsigned i=0;i<hook_witness_count;i++)
+        CHECK(physical(hook_witness[i].address)>=physical(input.driver.load_address) &&
+              physical(hook_witness[i].address)<physical(input.driver.load_address)+input.driver.image_bytes);
+    /* Every bit of the borrowed literal is witnessed. */
+    for(unsigned byte=0;byte<4u;byte++) for(unsigned bit=0;bit<8u;bit++) {
+        uint32_t address=input.lease.owner.initializer_slot+byte;
+        uint8_t old=memory[physical(address)-UINT32_C(0x0c000000)];
+        put(address,1u,old^(1u<<bit));CHECK(!installed_hooks_valid());
+        put(address,1u,old);CHECK(installed_hooks_valid());++mutations;
+    }
+    /* The virtual card reads and saves as on an allocator lease. */
+    transfer_batch(1u,0u,0u,NULL);transfer_batch(10u,0u,0u,NULL);
+    CHECK(overlay.stats.devinfo==1u && overlay.stats.media==1u);
+    stage_block(42u,next);transfer_batch(13u,42u,4u,NULL);
+    CHECK(durable_card.commits==1u && !memcmp(sd.media[image_lba(42u)],next,512u));
+    read_compare(42u,next);
+    /* The poll stops on any change to the arena's first eight words. */
+    CHECK(lease_valid() && poll_lease_valid());
+    for(unsigned word=0;word<8u;word++) for(unsigned bit=0;bit<32u;bit++) {
+        uint32_t address=input.lease.payload+4u*word,old=value_at(address);
+        put(address,4u,old^(UINT32_C(1)<<bit));CHECK(!poll_lease_valid() && lease_valid());
+        put(address,4u,old);CHECK(poll_lease_valid());++mutations;
+    }
+    /* No free is admitted, whatever its payload. */
+    const uint32_t payloads[]={0u,input.lease.payload,input.lease.payload+input.lease.lease_bytes,0x0c200020u};
+    for(unsigned i=0;i<4u;i++) {
+        frame.r4=payloads[i];
+        if(setjmp(terminal)==0) {kui_vmu_native_readonly_release_check(&frame);CHECK(false);}
+        CHECK(terminal_error==0x30u);terminal_error=0u;
+    }
+    /* Arm refuses an allocator role, another resume cell, or a protected SDK
+     * word inside the arena. */
+    for(unsigned invalid=0u;invalid<15u;invalid++) {
+        arena_setup();
+        struct kui_vmu_native_heap *h=&input.lease.owner;
+        uint32_t *roles[]={&h->layout,&h->initializer,&h->initializer_target,&h->allocate,&h->release,
+            &h->dispatch_cell,&h->dispatch_table,&h->sentinel,&h->cursor_cell,&h->begin_cell,
+            &h->bytes_cell,&h->begin_copy_cell};
+        int expected=-2;
+        if(invalid<12u) {*roles[invalid]=0x8c013400u;if(roles[invalid]==&h->release)
+            kui_vmu_native_readonly_release_resume=h->release+20u;}
+        else if(invalid==12u) {kui_vmu_native_readonly_release_resume=0u;expected=-3;}
+        else if(invalid==13u) {input.layout.gun_flag=input.lease.payload+0x100u;expected=-3;}
+        else {input.lease.owner.family=1u;}
+        CHECK(kui_vmu_native_passive_arm(&input,NULL)==expected && !state.armed);++refusals;
+    }
+    printf("Arena lease: %u witness bit mutations, %u arm refusals\n",mutations,refusals);
+}
+/* The House of the Dead 2's combination through the worker: the pd 1.46
+ * driver, whose lock cell keeps the image's cached pointer and whose server
+ * may run at its caller's level, the early exit pair, and the arena lease.
+ * The card reads and saves at every level while the server holds its lock;
+ * the pd 1.50 driver still refuses the levels other than 6 and 15. */
+static void early_arena_setup(uint32_t family) {
+    arena_setup();input.driver.family=family;
+    put(input.driver.lock_cell,4u,kui_vmu_native_lock_pointer(&input.driver));
+    input.exits.family=KUI_VMU_NATIVE_EXIT_EARLY_PAIR;input.exits.count=2u;
+    input.exits.entries[0]=0x8c013000u;input.exits.entries[1]=0x8c013008u;
+    input.exits.entries[2]=input.exits.exec_thunk=0u;
+    arm();install_hooks();
+    uint16_t patch[4];CHECK(kui_vmu_native_patch_encode_head(input.exits.entries[0],patch));
+    for(unsigned byte=0;byte<8u;byte++)
+        put(input.exits.entries[0]+byte,1u,(patch[byte/2u]>>(8u*(byte&1u)))&255u);
+    CHECK(installed_hooks_valid() && hook_witness_count==10u);
+}
+static void early_arena_session(void) {
+    volatile unsigned sessions=0u;
+    for(unsigned level=0u;level<16u;level++) {
+        uint8_t next[512];memset(next,(int)(0x31u+level),sizeof(next));
+        early_arena_setup(KUI_VMU_NATIVE_FAMILY_EARLY_V1);
+        submit_sr=0x60000101u|(level<<4);complete_sr=0x60000101u|(((level*7u)&15u)<<4);
+        transfer_batch(1u,0u,0u,NULL);transfer_batch(10u,0u,0u,NULL);
+        CHECK(overlay.stats.devinfo==1u && overlay.stats.media==1u && !lease_calls);
+        stage_block(42u,next);transfer_batch(13u,42u,4u,NULL);
+        CHECK(durable_card.commits==1u && !memcmp(sd.media[image_lba(42u)],next,512u));
+        read_compare(42u,next);transfer_batch(0u,0u,0u,NULL);++sessions;
+        protect_media();
+    }
+    /* Without the held lock, or with the P2 lock pointer only the pd 1.50
+     * initializer stores, the early server is refused at level 0; and the
+     * pd 1.50 server runs only at 6 or 15. Each holds for the full proof of
+     * a first transfer and for the live check once one has bound it. */
+    for(volatile unsigned bound=0u;bound<2u;bound++)
+        for(volatile unsigned level=0u;level<18u;level++) {
+            if(level==6u || level==15u) continue;
+            uint32_t family=level<16u?KUI_VMU_NATIVE_FAMILY_UNIFORM_V1:KUI_VMU_NATIVE_FAMILY_EARLY_V1;
+            early_arena_setup(family);
+            if(bound) {transfer_batch(1u,0u,0u,NULL);CHECK(live_plan.ready && state.submitted==1u);}
+            volatile int32_t expected=KUI_VMU_NATIVE_RUNTIME_CONTEXT;
+            submit_sr=0x60000101u|((level&15u)<<4);
+            if(level==16u) {
+                put(kui_vmu_native_lock_pointer(&input.driver),1u,0u);
+                expected=KUI_VMU_NATIVE_RUNTIME_STATE;
+            } else if(level==17u) {
+                put(input.driver.lock_cell,4u,
+                    ((input.driver.lock_cell+4u)&UINT32_C(0x1fffffff))|UINT32_C(0xa0000000));
+                expected=bound?KUI_VMU_NATIVE_RUNTIME_STATE:KUI_VMU_NATIVE_RUNTIME_POINTER;
+            }
+            stage_batch(1u,0u);
+            if(setjmp(terminal)==0) {kui_vmu_native_passive_submit(&frame);CHECK(false);}
+            CHECK(terminal_error && !state.pending && state.submitted==bound && !state.proof);
+            CHECK(state.runtime_result==(uint32_t)expected);
+        }
+    printf("Early driver on the arena lease: %u sessions at every inherited level\n",(unsigned)sessions);
+}
 static void external_boundary_mutations(void) {
     uint8_t next[512],before[1024];memset(next,0x73,sizeof(next));
     for(unsigned write=0;write<2u;write++) for(unsigned after=0;after<2u;after++)
@@ -1040,6 +1172,7 @@ int main(void) {
     CHECK(!durable_card.commits && durable_card.faulted && !memcmp(target,rx_bytes(VIRTUAL),sizeof(target)));
     CHECK(!memcmp(sd.media[image_lba(42u)],next,512u));
     bounded_controller_work();external_boundary_mutations();halfword_exit_hooks();prepared_hook_witnesses();early_pair_hook_witnesses();
+    arena_lease_mode();early_arena_session();
     polling_ownership_scope();gameplay_diagnostics();hooks_only_has_no_virtual_card_or_io();raw_chain_preserves_original_dma();completion_context_failures();
 #if !KUI_NATIVE_SPLIT_CONTROLLER_GENERAL
     diagnostic_pair_budget();

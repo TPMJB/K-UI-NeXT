@@ -824,10 +824,14 @@ static bool prepare_sdk_coherence_hook(void) {
 #endif
 static bool prepare_installed_hooks(void) {
     hook_witness_ready=0u;hook_witness_count=0u;
+    /* An arena lease has no allocator, hence no release or initializer entry
+     * to hook; its borrowed literal still holds the low heap hook. */
+    bool allocator=config.lease.owner.family!=KUI_VMU_NATIVE_HEAP_ARENA;
     if((config.driver.submit|config.lease.owner.release|config.lease.owner.initializer)&3u ||
        !prepare_hook_entry(config.driver.submit,kui_vmu_native_worker_exports.submit_hook,12u) ||
-       !prepare_hook_entry(config.lease.owner.release,kui_vmu_native_worker_exports.release_hook,12u) ||
-       !prepare_hook_entry(config.lease.owner.initializer,config.low_terminal,12u) ||
+       (allocator &&
+        (!prepare_hook_entry(config.lease.owner.release,kui_vmu_native_worker_exports.release_hook,12u) ||
+         !prepare_hook_entry(config.lease.owner.initializer,config.low_terminal,12u))) ||
        !hook_word(config.lease.owner.initializer_slot,config.low_heap_hook,UINT32_MAX) ||
        !hook_word(config.driver.completion_slot,kui_vmu_native_worker_exports.complete_hook,UINT32_MAX)) return false;
     for(unsigned i=0;i<config.exits.count;i++)
@@ -1145,8 +1149,10 @@ void kui_vmu_native_readonly_release_check(const struct kui_vmu_native_passive_f
     state.fault_at=f?f->r4:0u;state.fault_value=state.fault_at;
     state.fault_expect=config.lease.payload;
     /* Normal game frees can occur while Maple DMA is pending. They may
-     * proceed only if their exact allocated chunk cannot touch this lease. */
+     * proceed only if their exact allocated chunk cannot touch this lease.
+     * An arena lease never hooks a release, so none can reach this. */
     if(!state.armed || !f || !stack_valid() ||
+       config.lease.owner.family==KUI_VMU_NATIVE_HEAP_ARENA ||
        kui_vmu_native_readonly_release_resume!=config.lease.owner.release+20u ||
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
        !installed_hooks_valid() ||

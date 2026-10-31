@@ -235,9 +235,25 @@ the exact executable (bytes and SHA-256), like Crazy Taxi 2's plan:
   first eight header words at the arena's start, so the per-transfer poll stops
   the worker if anything overwrites the arena's beginning; no protected SDK span
   may lie inside the arena.
-- Still to do: the worker's arena mode (no release or initializer hooks), the
-  stage (discovery, installer without allocator calls), the native cache record
-  and the GUI's routing.
+- Worker: with an arena lease it hooks the submit entry, the borrowed
+  literal (it must hold the low heap hook), the completion slot and the exits,
+  and no release or initializer entry. Its release check refuses an arena
+  lease outright. The release resume cell holds release+20 as for every lease,
+  which is 20 here; nothing jumps to it. With the early exit pair and no
+  allocator hooks the worker witnesses 10 words instead of 16.
+- Early driver, live path: the worker's live check, used for every transfer
+  after the first, still required IMASK 6 or 15, unlike the full proof. The
+  House of the Dead 2 would have stopped at its second transfer whenever its
+  server ran at another level. It now takes the same pd 1.46 exception and
+  still requires the held lock byte. A host session runs the early driver,
+  the exit pair and the arena lease together at all 16 inherited levels, and
+  checks that the pd 1.50 driver is still refused at levels other than 6
+  and 15, and that an unheld lock or a P2 lock pointer is refused, by both
+  the full proof and the live check.
+- Controller-only frames of the early driver always take the full submit:
+  the split capture requires the P2 lock pointer, which only pd 1.50 stores.
+- Still to do: the stage (discovery, installer without allocator calls), the
+  native cache record and the GUI's routing.
 
 ### Remaining
 
