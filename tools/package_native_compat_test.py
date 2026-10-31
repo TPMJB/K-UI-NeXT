@@ -96,8 +96,10 @@ def test_sheet():
     for row in (('A game that already saved (Sonic Adventure 2, Jet Grind Radio or Skies)', 'Background New (X)', 'On (A2)'),
                 ('Sword of the Berserk (Virtual card slot A1)', 'Background New (X)', 'On (A1)'),
                 ('Crazy Taxi 2 (optional)', 'Background New (X)', 'On (A2)'),
-                ('The House of the Dead 2 or Sonic Adventure (no card yet)', 'Background New (X)', 'standalone, none'),
-                ('Elemental Gimmick Gear after the re-rip (optional)', 'Background New (X)', 'standalone, none')):
+                ('The House of the Dead 2, RAM map session 1: the story (note the four numbers)',
+                 'Background New (X)', 'standalone RAM map, none'),
+                ('The House of the Dead 2, RAM map session 2: the other modes (note the four numbers)',
+                 'Background New (X)', 'standalone RAM map, none')):
         writer.writerow((*row, '', '', '', '', '', '', '', ''))
     return stream.getvalue().encode()
 
