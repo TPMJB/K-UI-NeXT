@@ -92,7 +92,7 @@ static size_t codec(struct cursor *c,struct kui_vmu_native_resolution *r) {
 static bool schema(const struct kui_vmu_native_resolution *r) {
     const struct kui_vmu_native_discovery *d=&r->driver;
     return d->version==KUI_VMU_NATIVE_DISCOVERY_VERSION && d->bytes==sizeof(*d) &&
-        d->family==KUI_VMU_NATIVE_FAMILY_UNIFORM_V1 && d->requirements==KUI_VMU_NATIVE_REQUIREMENTS &&
+        kui_vmu_native_family_valid(d->family) && d->requirements==KUI_VMU_NATIVE_REQUIREMENTS &&
         d->image_bytes>=0x300u && d->image_bytes<=UINT32_C(0xc00000) &&
         (d->gate_register==12u || d->gate_register==13u) &&
         (r->layout.version==KUI_VMU_NATIVE_LAYOUT_VERSION ||

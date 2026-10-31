@@ -15,7 +15,7 @@ int kui_vmu_native_sdk_coherence_prepare(const struct kui_vmu_native_passive_con
      * before redirecting the wrapper's call-target literal to a cold gate. */
     if(!c || c->version!=1u || c->bytes!=sizeof(*c) ||
        c->driver.version!=KUI_VMU_NATIVE_DISCOVERY_VERSION || c->driver.bytes!=sizeof(c->driver) ||
-       c->driver.family!=KUI_VMU_NATIVE_FAMILY_UNIFORM_V1 ||
+       !kui_vmu_native_family_valid(c->driver.family) ||
        c->driver.requirements!=KUI_VMU_NATIVE_REQUIREMENTS ||
        (c->layout.version!=KUI_VMU_NATIVE_LAYOUT_VERSION &&
         c->layout.version!=KUI_VMU_NATIVE_LAYOUT_INFILE_VERSION) || c->layout.bytes!=sizeof(c->layout) ||
@@ -34,6 +34,9 @@ int kui_vmu_native_sdk_coherence_prepare(const struct kui_vmu_native_passive_con
        c->layout.initializer!=c->driver.initializer+
            (c->layout.rx_layout==KUI_VMU_NATIVE_RX_EXPLICIT48?0x11cu:0u) ||
        kui_vmu_native_sdk_coherence_state[7]) return 0;
+    /* pd 1.46 keeps the image's cached lock pointer, so there is no P2 alias
+     * for this gate to retire; no gate is prepared or installed for it. */
+    if(c->driver.family==KUI_VMU_NATIVE_FAMILY_EARLY_V1) return 1;
     uint32_t lock=(c->driver.lock_cell&UINT32_C(0x1fffffff))|UINT32_C(0x80000000);
     kui_vmu_native_sdk_coherence_state[0]=lock;
     kui_vmu_native_sdk_coherence_state[1]=c->driver.manager_cell;

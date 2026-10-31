@@ -18,7 +18,7 @@ static void fields(uint32_t v[18],const struct kui_vmu_native_discovery *r) {
 }
 static bool schema(const struct kui_vmu_native_discovery *r) {
     return r->version==KUI_VMU_NATIVE_DISCOVERY_VERSION && r->bytes==sizeof(*r) &&
-        r->family==KUI_VMU_NATIVE_FAMILY_UNIFORM_V1 &&
+        kui_vmu_native_family_valid(r->family) &&
         r->requirements==KUI_VMU_NATIVE_REQUIREMENTS &&
         r->image_bytes>=2u && r->image_bytes<=0xc00000u &&
         (r->gate_register==12u || r->gate_register==13u);

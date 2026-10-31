@@ -146,11 +146,44 @@ across all five:
   the completion hook, then runs at the caller's interrupt level, while the
   resident accepts only levels 6 and 15 and refuses others.
 
-With the constructor, wrapper and gun-flag variants accepted in a scratch
-build, the upper wrapper, root and timers resolve in all five titles. The
-remaining gates are a heap allocator family (syMalloc 1.35 does not match the
-reviewed allocator), a terminal exit family, and Silver's program extent, which
-depends on the allocator proof.
+### Driver support (done)
+
+Discovery now tells the two drivers apart. `KUI_VMU_NATIVE_FAMILY_EARLY_V1` is
+chosen only when the exact pd 1.46 server entry (completion_call-0x3a) and its
+lock helper are present: the helper returns -3 or -1 unless the driver is idle
+and Maple DMA has stopped, then takes the lock with `tas.b` (-2 if it was
+held). Both are byte-identical in all five titles. Every other image keeps
+`UNIFORM_V1`, and the corpus probe output of the 16 other recognized titles is
+unchanged.
+
+- Layout: the early constructor (its loop reaches the upper 24 slots through
+  manager+0x1048), the 44-byte wrapper without the P2 lock store, and the
+  gun-flag wrapper calling completion_call-0x3a. The layout now resolves in all
+  five titles; the SH transport model runs each real initializer path and
+  finds the same 48 slots.
+- Runtime: the early lock cell keeps the image's own cached pointer
+  (`kui_vmu_native_lock_pointer`), U0 in The House of the Dead 2 and P1 in Sonic
+  Adventure. The early server runs at its caller's interrupt level: an
+  interrupt-time run that finds the lock held sets manager+0x10e8, and the
+  next API call runs the server inline. The runtime proof and the resident
+  therefore accept any inherited IMASK for this family and rely on the lock
+  byte, which they already require to be held. The hook gateway still raises
+  IMASK to 15 for the worker's own work.
+- The SDK coherence gate (it retires stale P1 lines of pd 1.50's P2 lock
+  alias) is neither prepared nor installed for the early family.
+
+### Remaining
+
+- Lease. The House of the Dead 2 does not link syMalloc at all: it manages
+  its own memory, so its lease needs a fixed arena outside any allocator, a new
+  lease mode. Sonic Adventure, Time Stalkers, Elemental Gimmick Gear and Silver
+  link syMalloc 1.35, which the heap model does not know yet.
+- Exits. The early SDK has two adjacent BIOS exits: an 8-byte one (r4=1) and a
+  cleanup one (r4=2) right after it, both through the literal 0x8c0000e0. An
+  8-byte joint head at the first, loading its target from the second's
+  standard veneer, covers both. Sonic Adventure also has an executable-loader
+  consumer of 0x8c008300 that needs its own proof.
+- Silver's program extent, which depends on the allocator proof.
 
 ### RAM maps (compatibility test 3)
 

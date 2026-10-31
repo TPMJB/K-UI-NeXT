@@ -79,6 +79,12 @@ static void variable(struct fixture *f) {
     }
     for(unsigned i=0;i<48u;i++) put(f,0x0c300fe8u+i*4u,4u,f->config.rx_slots[i]);
 }
+/* A pd 1.46 boundary from an unmasked API wrapper: P1 lock cell, held lock. */
+static void early(struct fixture *f) {
+    fixture(f,0u,0u,0u);f->driver.family=KUI_VMU_NATIVE_FAMILY_EARLY_V1;
+    f->driver.lock_cell=0x8c011000u;put(f,f->driver.lock_cell,4u,0x8c011004u);
+    f->boundary.inherited_sr=0u;
+}
 static int run(struct fixture *f,struct kui_vmu_native_runtime_snapshot *out) {
     f->reads=0u;return kui_vmu_native_runtime_check(&f->driver,&f->config,&f->boundary,
         read_value,f,out);
@@ -194,6 +200,36 @@ int main(void) {
     fixture(&f,0u,0u,0u);variable(&f);memset(f.config.rx_slots,0,sizeof(f.config.rx_slots));
     for(unsigned i=0;i<48u;i++) put(&f,0x0c300fe8u+i*4u,4u,0u);
     reject(&f,KUI_VMU_NATIVE_RUNTIME_STATE);
+    /* A pd 1.46 server runs at its caller's level holding its TAS lock, and
+     * its lock cell keeps the image's cached pointer in either area. */
+    const uint32_t early_lock[2]={0x0c011004u,0x8c011004u};
+    for(unsigned a=0;a<2u;a++) for(unsigned phase=0;phase<2u;phase++) for(unsigned level=0;level<16u;level++) {
+        fixture(&f,0u,0u,phase);f.driver.family=KUI_VMU_NATIVE_FAMILY_EARLY_V1;
+        f.driver.lock_cell=early_lock[a]-4u;put(&f,f.driver.lock_cell,4u,early_lock[a]);
+        f.boundary.inherited_sr=level<<4;
+        CHECK(run(&f,&out)==KUI_VMU_NATIVE_RUNTIME_VALID && out.lock==early_lock[a]);
+    }
+    early(&f);CHECK(run(&f,&out)==KUI_VMU_NATIVE_RUNTIME_VALID);
+    total=f.reads;
+    for(unsigned at=1u;at<=total;at++) {
+        early(&f);f.fail_at=at;reject(&f,KUI_VMU_NATIVE_RUNTIME_READ);CHECK(f.reads==at);
+        early(&f);f.change_at=at;reject(&f,0);
+    }
+    /* Its P2 alias or another area is not the pointer it leaves; a free lock
+     * means this server does not hold it. */
+    const uint32_t early_wrong[3]={0xac011004u,0x0c011008u,0x8c011000u};
+    for(unsigned i=0;i<3u;i++) {
+        fixture(&f,0u,0u,0u);f.driver.family=KUI_VMU_NATIVE_FAMILY_EARLY_V1;f.driver.lock_cell=0x8c011000u;
+        put(&f,f.driver.lock_cell,4u,early_wrong[i]);reject(&f,KUI_VMU_NATIVE_RUNTIME_POINTER);
+    }
+    early(&f);put(&f,0x8c011004u,1u,0u);reject(&f,KUI_VMU_NATIVE_RUNTIME_STATE);
+    /* The pd 1.50 family keeps its inherited IMASK6/15 contract. */
+    for(unsigned level=0;level<16u;level++) {
+        if(level==6u || level==15u) continue;
+        fixture(&f,0u,0u,0u);f.boundary.inherited_sr=level<<4;
+        reject(&f,KUI_VMU_NATIVE_RUNTIME_CONTEXT);CHECK(!f.reads);
+    }
+    fixture(&f,0u,0u,0u);f.driver.family=3u;reject(&f,KUI_VMU_NATIVE_RUNTIME_INVALID);CHECK(!f.reads);
     fixture(&f,0u,0u,0u);f.driver.requirements=0u;reject(&f,KUI_VMU_NATIVE_RUNTIME_INVALID);CHECK(!f.reads);
     fixture(&f,0u,0u,0u);f.config.version++;reject(&f,KUI_VMU_NATIVE_RUNTIME_INVALID);CHECK(!f.reads);
     CHECK(kui_vmu_native_runtime_check(NULL,&f.config,&f.boundary,read_value,&f,&out)==KUI_VMU_NATIVE_RUNTIME_INVALID);

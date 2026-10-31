@@ -33,7 +33,7 @@ enum kui_vmu_native_runtime_result kui_vmu_native_runtime_check(
     struct span executable,lease,guard,manager_cell,lock_cell,initial,gun,timer1,timer2,callsite;
     if(!d || !c || !b || !read || !snapshot ||
        d->version!=KUI_VMU_NATIVE_DISCOVERY_VERSION || d->bytes!=sizeof(*d) ||
-       d->family!=KUI_VMU_NATIVE_FAMILY_UNIFORM_V1 ||
+       !kui_vmu_native_family_valid(d->family) ||
        d->requirements!=KUI_VMU_NATIVE_REQUIREMENTS ||
        c->version!=KUI_VMU_NATIVE_RUNTIME_VERSION || c->bytes!=sizeof(*c) ||
        b->phase>KUI_VMU_NATIVE_BEFORE_CONSUMER || c->rx_layout>KUI_VMU_NATIVE_RX_EXPLICIT48 ||
@@ -56,9 +56,12 @@ enum kui_vmu_native_runtime_result kui_vmu_native_runtime_check(
        overlap(guard,manager_cell) || overlap(guard,lock_cell) ||
        overlap(guard,gun) || overlap(guard,timer1) || overlap(guard,timer2))
         return KUI_VMU_NATIVE_RUNTIME_CONFLICT;
+    /* An early server does not mask interrupts; its API wrappers may run it
+     * at their own level. It holds the TAS lock instead, checked below. */
     unsigned mask=(b->inherited_sr>>4)&15u;
+    bool masked=mask==6u || mask==15u || d->family==KUI_VMU_NATIVE_FAMILY_EARLY_V1;
     struct span returnsite;
-    if(((b->worker_sr>>4)&15u)!=15u || (mask!=6u && mask!=15u) ||
+    if(((b->worker_sr>>4)&15u)!=15u || !masked ||
        (b->phase==KUI_VMU_NATIVE_BEFORE_CONSUMER &&
         (!ram(b->inherited_pr,2u,2u,&returnsite) ||
          !in(executable,returnsite.begin,returnsite.bytes) ||
@@ -85,7 +88,7 @@ enum kui_vmu_native_runtime_result kui_vmu_native_runtime_check(
     READ(d->manager_cell,4u,manager);READ(d->lock_cell,4u,lock);
     struct span actual_manager,actual_lock;
     if(!ram(manager,0x1100u,4u,&actual_manager) || actual_manager.begin!=initial.begin ||
-       !p2(lock) || !ram(lock,1u,1u,&actual_lock) || actual_lock.begin!=lock_cell.begin+4u)
+       lock!=kui_vmu_native_lock_pointer(d) || !ram(lock,1u,1u,&actual_lock))
         return KUI_VMU_NATIVE_RUNTIME_POINTER;
     READ(manager+0xfc4u,4u,tx);READ(manager+0xfc8u,4u,rx);
     struct span tx_span,rx_span;

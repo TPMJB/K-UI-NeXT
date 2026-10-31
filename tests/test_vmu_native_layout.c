@@ -170,9 +170,11 @@ static void transport_model(const uint8_t *image,size_t bytes,const struct kui_v
     uint32_t constructor=0u;
     if(uniform) {uint32_t pc=l->initializer+108u;constructor=sh_long(((pc+4u)&~3u)+4u*(sh_word(pc)&255u));}
     bool tail=uniform && (sh_word(l->initializer_call)&0xf0ffu)==0x402bu;
+    /* The early constructor's slot loop ends four bytes later. */
+    uint32_t filled=d->family==KUI_VMU_NATIVE_FAMILY_EARLY_V1?90u:86u;
     struct sh_model m={0};m.pc=l->initializer_call-(uniform?(tail?6u:8u):12u);m.sr=0x600000e0u;m.r[15]=0x0c900000u;m.r[10]=0x12345678u;
     for(unsigned step=0;step<10000u;step++) {
-        if(physical(m.pc)==(uniform?physical(constructor)+86u:physical(l->initializer)+238u)) {
+        if(physical(m.pc)==(uniform?physical(constructor)+filled:physical(l->initializer)+238u)) {
             CHECK(m.calls==(uniform?4u:3u));
             CHECK(sh_long(d->manager_initial+0xfc4u)==l->tx_base);
             CHECK(sh_long(d->manager_initial+0xfc8u)==l->rx_base);
@@ -302,9 +304,13 @@ static void uniform_image_tests(const char *path) {
      * outer hash, must reject changed initializer/constructor/root transport. */
     uint32_t pc=d.initializer+108u;uint16_t code=sh_word(pc);
     uint32_t constructor=sh_long(((pc+4u)&~3u)+4u*(code&255u));
+    /* The early wrapper is eight bytes shorter: its argument transport and
+     * initializer call, and its helper call, sit eight bytes earlier. */
+    const bool early=d.family==KUI_VMU_NATIVE_FAMILY_EARLY_V1;
+    const uint32_t wrapper_tail=early?8u:0u;
     const uint32_t locations[]={d.initializer+22u,d.initializer+38u,d.initializer+104u,
         constructor+34u,constructor+48u,constructor+80u,constructor+82u,
-        l.initializer_wrapper+8u,l.initializer_wrapper+44u,l.initializer_wrapper+50u,
+        l.initializer_wrapper+8u,l.initializer_wrapper+44u-wrapper_tail,l.initializer_wrapper+50u-wrapper_tail,
         l.initializer_call,l.input_array,l.index_array};
     for(unsigned i=0;i<sizeof(locations)/sizeof(locations[0]);i++) {
         size_t offset=physical(locations[i])-physical(d.load_address);CHECK(offset<n);
@@ -333,7 +339,7 @@ static void uniform_image_tests(const char *path) {
     }
     const unsigned gaps[]={18u,22u,26u,28u,38u,42u,44u,66u};
     for(unsigned i=0;i<sizeof(gaps)/sizeof(gaps[0])+1u;i++) {
-        uint32_t address=i<sizeof(gaps)/sizeof(gaps[0])?upper_pc+gaps[i]:l.initializer_wrapper+36u;
+        uint32_t address=i<sizeof(gaps)/sizeof(gaps[0])?upper_pc+gaps[i]:l.initializer_wrapper+36u-wrapper_tail;
         size_t offset=physical(address)-physical(d.load_address);CHECK(offset+2u<=n);
         memcpy(p,original,n);p[offset]=0x00u;p[offset+1u]=0xefu;
         struct kui_vmu_native_discovery bad_driver;struct kui_vmu_native_layout bad_layout;

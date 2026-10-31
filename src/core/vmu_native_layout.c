@@ -149,6 +149,9 @@ static bool gun(const uint8_t *p,size_t n,uint32_t base,const struct kui_vmu_nat
         {16,0xcbf0},{18,0x400e},{26,0x8b19},
         {30,0x6232},{32,0x7201},{34,0x2322},{38,0x0009},{42,0x0009},
         {80,0xe300},{82,0x2432},{86,0x6242},{88,0x7201},{90,0x2422}};
+    /* The wrapper calls the Maple server entry, whose distance from the
+     * completion call is the driver family's. */
+    const uint32_t span=kui_vmu_native_server_span(d->family);
     unsigned count=0;uint32_t chosen=0;
     for(size_t s=0;s<n && n-s>=92u;s+=2u) {
         if(u16(p+s)!=0x2fe6u || u16(p+s+2u)!=0x2fd6u || u16(p+s+4u)!=0x0002u) continue;
@@ -161,7 +164,7 @@ static bool gun(const uint8_t *p,size_t n,uint32_t base,const struct kui_vmu_nat
         bool alternate=u16(p+s+14u)==0x2029u && u16(p+s+22u)==0x6342u &&
             u16(p+s+24u)==0x2338u && u16(p+s+40u)==0xb03au;
         if((!old && !alternate) || !word_literal(p,n,base,s+8u,old?3u:2u,0xff0fu) ||
-           d->completion_call<0x4au || !bsr_target(p,n,base,s+36u,d->completion_call-0x4au)) continue;
+           d->completion_call<span || !bsr_target(p,n,base,s+36u,d->completion_call-span)) continue;
         uint32_t flag,cleared;
         if(!literal(p,n,base,s+20u,4u,&flag) || !literal(p,n,base,s+84u,4u,&cleared) || !ram(flag,4u,4u) || flag==cleared) continue;
         chosen=flag;++count;
@@ -293,6 +296,34 @@ static bool variable_from_bound(const void *image,size_t n,
 /* Original SDK initializer: caller R4/R6 become aligned P2 TX/RX bases;
  * its constructor assigns every one of the 48 contiguous 1 KiB RX slots.
  * The optional pointer-array initializer may coexist without being called. */
+/* pd 1.46 receive-slot constructor. Its loop is four bytes longer: it reloads
+ * the manager each half and reaches the upper 24 slots through a second
+ * literal, manager+0x1048 (0xfe8+96), instead of adding 96. Slot k is still
+ * the RX base plus k KiB for all 48 slots. The rest is the pd 1.50 code four
+ * bytes later, with the same registers live afterwards. */
+static bool early_constructor(const uint8_t *p,size_t n,uint32_t base,uint32_t constructor,
+    const struct kui_vmu_native_discovery *d) {
+    static const struct witness construct[]={
+        {0,0x2fe6},{2,0x2fd6},{4,0x2fc6},{6,0x2fb6},{8,0x2fa6},{10,0x2f96},{12,0x2f86},{14,0x4f22},{16,0x7ff8},
+        {20,0xed00},{24,0x64d3},{26,0x63e2},{28,0xec60},{32,0x67d3},{34,0x03d6},{36,0x7004},
+        {38,0x63e2},{42,0x03d6},
+        {46,0x60e2},{48,0x6203},{50,0x330c},{54,0x334c},{56,0x012e},{58,0x317c},{60,0x2312},
+        {64,0x60e2},{66,0x6203},{68,0x330c},{72,0x334c},{74,0x7404},{76,0x012e},{78,0x34c2},{80,0x316c},{82,0x2312},
+        {84,0x365c},{86,0x8fe9},{88,0x375c},{90,0x62e2},{92,0xe608},{96,0xe500},{98,0x6323},
+        {100,0x013e},{104,0x0216},{106,0x63e2},{110,0x6233},{114,0x022e},{118,0x321c},{120,0x0326},
+        {122,0x70fc},{124,0x63e2},{126,0x6233},{128,0x022e},{132,0x0326}
+    };
+    size_t c;
+    return at(constructor,base,n,134u,&c) && WORDS(p,n,c,construct) &&
+        target(p,n,base,c+18u,14u,d->manager_cell) &&
+        word_literal(p,n,base,c+22u,0u,0x10b4u) && word_literal(p,n,base,c+30u,6u,0x6000u) &&
+        word_literal(p,n,base,c+40u,5u,0x400u) && word_literal(p,n,base,c+44u,3u,0xfe8u) &&
+        word_literal(p,n,base,c+52u,0u,0xfc8u) && word_literal(p,n,base,c+62u,3u,0x1048u) &&
+        word_literal(p,n,base,c+70u,0u,0xfc8u) && word_literal(p,n,base,c+94u,0u,0xfc4u) &&
+        word_literal(p,n,base,c+102u,0u,0x10a8u) && word_literal(p,n,base,c+108u,0u,0xfc4u) &&
+        word_literal(p,n,base,c+112u,1u,0x3000u) && word_literal(p,n,base,c+116u,0u,0x10acu) &&
+        word_literal(p,n,base,c+130u,0u,0xfccu);
+}
 static bool uniform_initializer(const uint8_t *p,size_t n,uint32_t base,
     const struct kui_vmu_native_discovery *d) {
     static const struct witness init[]={
@@ -320,7 +351,9 @@ static bool uniform_initializer(const uint8_t *p,size_t n,uint32_t base,
        !word_literal(p,n,base,s+6u,0u,0xfc4u) || !word_literal(p,n,base,s+44u,0u,0xfc4u) ||
        !word_literal(p,n,base,s+62u,0u,0xfc8u) || !word_literal(p,n,base,s+86u,0u,0xfc4u) ||
        !literal(p,n,base,s+90u,4u,&alias) || alias!=0xa0000000u ||
-       !literal(p,n,base,s+108u,3u,&constructor) || !at(constructor,base,n,130u,&c) || !WORDS(p,n,c,construct)) return false;
+       !literal(p,n,base,s+108u,3u,&constructor)) return false;
+    if(d->family==KUI_VMU_NATIVE_FAMILY_EARLY_V1) return early_constructor(p,n,base,constructor,d);
+    if(!at(constructor,base,n,130u,&c) || !WORDS(p,n,c,construct)) return false;
     return target(p,n,base,c+18u,14u,d->manager_cell) &&
         word_literal(p,n,base,c+22u,0u,0x10b4u) && word_literal(p,n,base,c+30u,6u,0x6000u) &&
         word_literal(p,n,base,c+40u,5u,0x400u) && word_literal(p,n,base,c+44u,0u,0xfc8u) &&
@@ -422,8 +455,25 @@ static bool uniform_from_bound(const void *image,size_t n,
         {16,0xc90f},{18,0x1f02},{20,0x0002},{22,0x2039},{24,0xcbf0},{26,0x400e},
         {32,0x6242},{34,0x223b},{38,0x2422},{44,0x66f2},{46,0x6573},{48,0x430b},{50,0x54f1}
     };
+    /* pd 1.46 omits the four instructions that store the lock pointer's P2
+     * alias, so its helper call takes a no-op delay slot and the lock cell
+     * keeps its cached pointer. */
+    static const struct witness early_wrap[]={
+        {0,0x4f22},{2,0x7ff4},{4,0x0002},{8,0x2f42},{10,0x4009},{12,0x1f51},{14,0x4009},
+        {16,0xc90f},{18,0x1f02},{20,0x0002},{22,0x2039},{24,0xcbf0},{26,0x400e},{30,0x0009},
+        {36,0x66f2},{38,0x6573},{40,0x430b},{42,0x54f1}
+    };
+    const bool early=d->family==KUI_VMU_NATIVE_FAMILY_EARLY_V1;
     unsigned found=0;size_t wrapper=0;
-    for(size_t s=0;s<n && n-s>=52u;s+=2u) {
+    for(size_t s=0;early && s<n && n-s>=44u;s+=2u) {
+        uint32_t capacity;
+        if(u16(p+s)!=0x4f22u || u16(p+s+2u)!=0x7ff4u || !WORDS(p,n,s,early_wrap) ||
+           !word_literal(p,n,base,s+6u,3u,0xff0fu) || !bsr_code(p,n,base,s+28u) ||
+           !literal(p,n,base,s+32u,7u,&capacity) || capacity!=0xc000u ||
+           !target(p,n,base,s+34u,3u,d->initializer)) continue;
+        wrapper=s;if(++found>1u) return false;
+    }
+    for(size_t s=0;!early && s<n && n-s>=52u;s+=2u) {
         uint32_t alias,capacity;
         if(u16(p+s)!=0x4f22u || u16(p+s+2u)!=0x7ff4u || !WORDS(p,n,s,wrap) ||
            !word_literal(p,n,base,s+6u,3u,0xff0fu) || !target(p,n,base,s+28u,4u,d->lock_cell) ||
@@ -619,7 +669,9 @@ bool kui_vmu_native_layout_bind_checked(const struct kui_vmu_native_layout *l,co
     if(l->version!=KUI_VMU_NATIVE_LAYOUT_VERSION && !infile)
         return bind_failure(diag,KUI_VMU_LAYOUT_BIND_SCHEMA,(uint32_t)(uintptr_t)&l->version,l->version,KUI_VMU_NATIVE_LAYOUT_VERSION);
     SCHEMA(l->bytes,sizeof(*l));SCHEMA(d->version,1u);SCHEMA(d->bytes,sizeof(*d));
-    SCHEMA(d->family,KUI_VMU_NATIVE_FAMILY_UNIFORM_V1);SCHEMA(d->requirements,KUI_VMU_NATIVE_REQUIREMENTS);
+    if(!kui_vmu_native_family_valid(d->family)) return bind_failure(diag,KUI_VMU_LAYOUT_BIND_SCHEMA,
+        (uint32_t)(uintptr_t)&d->family,d->family,KUI_VMU_NATIVE_FAMILY_UNIFORM_V1);
+    SCHEMA(d->requirements,KUI_VMU_NATIVE_REQUIREMENTS);
     SCHEMA(out->version,1u);SCHEMA(out->bytes,sizeof(*out));SCHEMA(out->lease_header_bytes,32u);
     bool uniform=l->rx_layout==KUI_VMU_NATIVE_RX_UNIFORM48;
     if(l->rx_layout>KUI_VMU_NATIVE_RX_EXPLICIT48)

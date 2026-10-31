@@ -794,6 +794,8 @@ static bool prepare_hook_entry(uint32_t address,uint32_t target) {
 #ifndef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
 static bool prepare_sdk_coherence_hook(void) {
     extern const uint32_t kui_vmu_native_trace_exports[10];
+    /* No coherence gate is installed for a pd 1.46 driver. */
+    if(config.driver.family==KUI_VMU_NATIVE_FAMILY_EARLY_V1) return true;
     const uint32_t *table=kui_vmu_native_trace_exports;
     unsigned kind=config.layout.rx_layout==KUI_VMU_NATIVE_RX_UNIFORM48?0u:1u;
     uint32_t pc=config.layout.initializer_wrapper+(kind?46u:42u),op,word;
@@ -1011,7 +1013,7 @@ int kui_vmu_native_passive_arm(const struct kui_vmu_native_passive_config *c,voi
      * subsequent complete heap ownership proof. */
     if(!c || c->version!=1u || c->bytes!=sizeof(*c) || state.armed || state.pending ||
        c->driver.version!=1u || c->driver.bytes!=sizeof(c->driver) ||
-       c->driver.family!=KUI_VMU_NATIVE_FAMILY_UNIFORM_V1 || c->driver.requirements!=KUI_VMU_NATIVE_REQUIREMENTS ||
+       !kui_vmu_native_family_valid(c->driver.family) || c->driver.requirements!=KUI_VMU_NATIVE_REQUIREMENTS ||
        (c->layout.version!=KUI_VMU_NATIVE_LAYOUT_VERSION &&
         c->layout.version!=KUI_VMU_NATIVE_LAYOUT_INFILE_VERSION) || c->layout.bytes!=sizeof(c->layout) ||
        c->layout.tx_base!=c->tx_base || c->layout.rx_layout>KUI_VMU_NATIVE_RX_EXPLICIT48 ||
@@ -1377,7 +1379,10 @@ static bool transfer_context_valid(const struct kui_vmu_native_passive_frame *f,
     }
     if(bank>1u) return context_reject(6u,0u,bank,1u);
     if(phase>1u) return context_reject(7u,0u,phase,1u);
-    if(mask!=6u && mask!=15u) return context_reject(8u,0u,f->sr,0xf0u);
+    /* An early server runs at its caller's level, holding the TAS lock
+     * witnessed below instead. */
+    if(mask!=6u && mask!=15u && NATIVE_HOT_CONFIG.driver.family!=KUI_VMU_NATIVE_FAMILY_EARLY_V1)
+        return context_reject(8u,0u,f->sr,0xf0u);
     uint32_t source=physical(NATIVE_HOT_CONFIG.tx_base)+bank*KUI_VMU_NATIVE_TX_BANK_BYTES;
     if(state.source!=source) return context_reject(9u,0u,state.source,source);
     if(!phase) {
@@ -1407,7 +1412,7 @@ static bool transfer_context_valid(const struct kui_vmu_native_passive_frame *f,
         return context_reject(0xb0u,NATIVE_HOT_CONFIG.driver.manager_cell,UINT32_MAX,NATIVE_HOT_CONFIG.driver.manager_initial);
     if(physical(manager)!=physical(NATIVE_HOT_CONFIG.driver.manager_initial))
         return context_reject(0x30u,NATIVE_HOT_CONFIG.driver.manager_cell,manager,NATIVE_HOT_CONFIG.driver.manager_initial);
-    uint32_t expected_lock=(physical(NATIVE_HOT_CONFIG.driver.lock_cell)+4u)|UINT32_C(0xa0000000);
+    uint32_t expected_lock=kui_vmu_native_lock_pointer(&NATIVE_HOT_CONFIG.driver);
     if(!read_value(NULL,NATIVE_HOT_CONFIG.driver.lock_cell,4u,&lock))
         return context_reject(0xb1u,NATIVE_HOT_CONFIG.driver.lock_cell,UINT32_MAX,expected_lock);
     if(lock!=expected_lock) return context_reject(0x31u,NATIVE_HOT_CONFIG.driver.lock_cell,lock,expected_lock);
