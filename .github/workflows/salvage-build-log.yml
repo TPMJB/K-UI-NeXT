@@ -1,0 +1,30 @@
+name: Salvage compiler failure details
+on:
+  push:
+    branches: ['codex/salvage-build-diagnostics-20261030']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  details:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Read failed compiler log
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run view 41149231443 --repo TPMJB/K-UI-NeXT --job 124381500841 --log > "$RUNNER_TEMP/sdk.log"
+          python3 - <<'PY'
+          import os,re
+          from pathlib import Path
+          lines=Path(os.environ['RUNNER_TEMP'],'sdk.log').read_text(errors='replace').splitlines()
+          errors=[x for x in lines if re.search(r'error:|Error [0-9]|FAILED|No such file|not found|Process completed',x)]
+          text='ERROR SUMMARY\n'+'\n'.join(errors[-25:])+'\nLOG TAIL\n'+'\n'.join(lines[-80:])
+          Path(os.environ['RUNNER_TEMP'],'sdk-failure.txt').write_text(text)
+          print(text)
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: salvage-sdk-failure
+          path: ${{ runner.temp }}/sdk-failure.txt
