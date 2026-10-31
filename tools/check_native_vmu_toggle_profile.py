@@ -171,7 +171,7 @@ WORKER_PINS = {'dual': {'_reader_capture_region': (100, 'c72e3817d131eaa98589d30
              '_kui_vmu_native_terminal_dispatch_tagged.constprop.0': (108,
                                                                       '29948b6b73618390ba0d533004efde09cd3390f77526d9dd31889bd1975e27e7'),
              '_kui_vmu_native_timer_callback_owned': (92,
-                                                      '258845de87754d9836d928060bd4211c8619420ba5239dbe7810ca61cedf0963'),
+                                                      '06da399a6b677cdddfe117fe9e91eec648066ea8ce8eb4fd8dae05cb248aaafb'),
              '_memcpy': (72, 'cf04fa8199a588139e7f567443f39a51dce313766b1ca5a9e0085b6de93b4634'),
              '_normalize_heap_dispatch': (276,
                                           'fd9caa746c386e62c9b3ffba925aaf3d1c8778f441b3df52009808588a9b8741'),
