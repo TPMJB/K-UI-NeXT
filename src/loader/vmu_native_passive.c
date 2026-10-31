@@ -896,7 +896,7 @@ static void report(void) {
 #if KUI_NATIVE_MAPLE_DELAY_ISOLATION
     if(state.error==0x4du) retail_display_line("MAPLE DELAY CLOCK REFUSED");
 #endif
-    retail_display_line("VMU / A2");
+    retail_display_line("VMU / " KUI_VMU_NATIVE_VIRTUAL_NAME);
     retail_display_line("SCI JOURNAL");
     retail_display_hex("PHASE",state.proof?15u:16u);
     retail_display_hex("DETAIL",state.error);
@@ -914,7 +914,7 @@ static void report(void) {
     retail_display_line("PHOTO / POWER OFF");
 #elif KUI_VMU_NATIVE_READONLY_PROBE
     retail_display_line("AUTOMATIC NATIVE READ-ONLY VMU TEST");
-    retail_display_line("VIRTUAL A2 / NO SAVE OR STORAGE WRITES");
+    retail_display_line("VIRTUAL " KUI_VMU_NATIVE_VIRTUAL_NAME " / NO SAVE OR STORAGE WRITES");
     retail_display_hex("PHASE",state.proof?13u:14u);
     retail_display_hex("DETAIL",state.error);
     retail_display_values("SUBMITTED COMPLETED RX SLOTS ADVERTISE REPLIES",(uint32_t[5]){
@@ -1076,8 +1076,8 @@ int kui_vmu_native_passive_arm(const struct kui_vmu_native_passive_config *c,voi
        config.exits.load!=config.driver.load_address || config.exits.image_bytes!=config.driver.image_bytes ||
        config.exits.image_bytes<12u || !ram(config.exits.load,config.exits.image_bytes,4u) ||
        !protect_sdk() ||
-       (!reader_only() && kui_vmu_durable_init_address(&durable_card,2u,&config.durable,persistent_lease,kui_vmu_native_persistent_sd_transaction)) ||
-       kui_vmu_readonly_overlay_init_backend_address(&overlay,2u,persistent_handler,persistent_admit,&durable_card)) {
+       (!reader_only() && kui_vmu_durable_init_address(&durable_card,KUI_VMU_NATIVE_VIRTUAL_ADDRESS,&config.durable,persistent_lease,kui_vmu_native_persistent_sd_transaction)) ||
+       kui_vmu_readonly_overlay_init_backend_address(&overlay,KUI_VMU_NATIVE_VIRTUAL_ADDRESS,persistent_handler,persistent_admit,&durable_card)) {
         memset(&config,0,sizeof(config));return -3;
     }
     if(reader_only()) {
@@ -1103,7 +1103,8 @@ int kui_vmu_native_passive_arm(const struct kui_vmu_native_passive_config *c,voi
     if(!split_controller_geometry()) {memset(&config,0,sizeof(config));return -3;}
 #endif
 #else
-    if(kui_vmu_readonly_init_address(&card,2u) || kui_vmu_readonly_overlay_init_address(&overlay,2u,readonly_handler,&card)) {
+    if(kui_vmu_readonly_init_address(&card,KUI_VMU_NATIVE_VIRTUAL_ADDRESS) ||
+       kui_vmu_readonly_overlay_init_address(&overlay,KUI_VMU_NATIVE_VIRTUAL_ADDRESS,readonly_handler,&card)) {
         memset(&config,0,sizeof(config));return -3;
     }
 #endif
@@ -1232,7 +1233,7 @@ static bool chain(unsigned bank,bool compare) {
             chain_frames[count]=(struct kui_vmu_volatile_chain_frame){.control=control,.rx=rx,.header=header,
                 .payload0=words>3u?captured[at+3u]:0u,
                 .payload=(const uint8_t *)(const void *)(captured+at+3u)};
-            if(destination==2u && (header&255u)==12u && words==37u) {
+            if(destination==KUI_VMU_NATIVE_VIRTUAL_ADDRESS && (header&255u)==12u && words==37u) {
                 /* prepare() copies this immutable pre-DMA capture into its
                  * private WRITE staging and retains no payload pointer. The
                  * complete captured chain remains owned and unchanged through
@@ -1288,7 +1289,7 @@ static bool filtered_boundary(const struct kui_vmu_native_passive_frame *f,
 static bool physical_response_valid(unsigned i,uint32_t response) {
     uint32_t header=chain_frames[i].header;
     unsigned destination=(header>>8)&255u,port=destination&192u,cmd=header&255u;
-    if(destination==2u) return true; /* No virtual A2 packet reached hardware. */
+    if(destination==KUI_VMU_NATIVE_VIRTUAL_ADDRESS) return true; /* No virtual-card packet reached hardware. */
     if(response==UINT32_MAX) return destination!=32u;
     if((destination&63u)!=32u) {
         unsigned code=response&255u,words=response>>24;
@@ -1301,12 +1302,14 @@ static bool physical_response_valid(unsigned i,uint32_t response) {
             if(code!=(cmd==1u?5u:6u) || words!=(cmd==1u?28u:48u)) return false;
             return read_value(NULL,(receivers[i]+4u)|UINT32_C(0xa0000000),4u,&function) && function;
         }
-        if(destination==1u && cmd==3u) return code==7u && !words;
-        if(destination==1u && (cmd==10u || cmd==11u || cmd==12u || cmd==13u || cmd==14u)) {
-            /* A1 remains a real VMU. Its exact wire reply stays owned by
-             * hardware, including memory-card errors and LCD acknowledgments.
-             * Only a typed response from that same endpoint can precede A2
-             * publication; a malformed physical packet aborts the batch. */
+        if(destination==KUI_VMU_NATIVE_PHYSICAL_ADDRESS && cmd==3u) return code==7u && !words;
+        if(destination==KUI_VMU_NATIVE_PHYSICAL_ADDRESS &&
+           (cmd==10u || cmd==11u || cmd==12u || cmd==13u || cmd==14u)) {
+            /* The other slot remains a real VMU. Its exact wire reply stays
+             * owned by hardware, including memory-card errors and LCD
+             * acknowledgments. Only a typed response from that same endpoint
+             * can precede the virtual card's publication; a malformed
+             * physical packet aborts the batch. */
             if(code==0xfbu) {
                 return words==1u &&
                     read_value(NULL,(receivers[i]+4u)|UINT32_C(0xa0000000),4u,&function) &&
@@ -1523,7 +1526,8 @@ static bool controller_prepare(const struct kui_vmu_native_passive_frame *f) {
             controller_pair.snapshot[at+3u]==UINT32_C(0x01000000);
         /* Empty ports are repeatedly queried by the original SDK. Retain
          * their exact INFO/ALLINFO DMA and natural attachment responses;
-         * only the A controller GETCOND can authorize virtual A2 presence. */
+         * only the A controller GETCOND can authorize the virtual card's
+         * presence. */
         bool query=port && !words && (command==1u || command==2u) && header==(endpoint|command);
         if((!condition && !query) || (ports&(1u<<port))) return false;
         unsigned slot=controller_pair.bank*24u+port*6u;
@@ -1611,8 +1615,10 @@ static void controller_complete(const struct kui_vmu_native_passive_frame *f) {
             }
         } else if(!port) CONTROLLER_FAIL(9u,i,address,response,0u);
         if(i==controller_pair.parent) {
-            if(!reader_only() && (response&UINT32_C(0x00020000)))
-                CONTROLLER_FAIL(10u,i,address,response,response&~UINT32_C(0x00020000));
+            /* A physical device in the virtual card's slot blocks the card. */
+            const uint32_t occupied=(uint32_t)KUI_VMU_NATIVE_VIRTUAL_ADDRESS<<16;
+            if(!reader_only() && (response&occupied))
+                CONTROLLER_FAIL(10u,i,address,response,response&~occupied);
             parent_response=response;
         }
         if(!i) state.first_response=response;
@@ -1624,7 +1630,7 @@ static void controller_complete(const struct kui_vmu_native_passive_frame *f) {
         controller_pair.frames[controller_pair.parent].rx,0u,1024u);
 #if !KUI_NATIVE_READER_ONLY_ISOLATION
     if(!reader_only()) {
-        ((volatile uint8_t *)parent)[2]=(uint8_t)((parent_response>>16)|2u);
+        ((volatile uint8_t *)parent)[2]=(uint8_t)((parent_response>>16)|KUI_VMU_NATIVE_VIRTUAL_ADDRESS);
         ++overlay.stats.advertisements;
     }
 #else
@@ -1725,7 +1731,7 @@ void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *f)
         state.fault_expect=NATIVE_HOT_CONFIG.lease.payload;fail(0x40u);
     }
     int built=kui_vmu_volatile_chain_build_address(&issued_plan,chain_frames,state.descriptors,
-        state.source,state.bytes,issued_chain,sizeof(issued_chain),target,2u);
+        state.source,state.bytes,issued_chain,sizeof(issued_chain),target,KUI_VMU_NATIVE_VIRTUAL_ADDRESS);
     if(built) {
         state.runtime_result=UINT32_C(0x30002);state.fault_at=state.source;
         state.fault_value=(uint32_t)built;state.fault_expect=0u;fail(0x40u);
@@ -1848,7 +1854,7 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
     for(unsigned i=0;i<state.descriptors;i++) {
         uint32_t response;
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
-        if(((chain_frames[i].header>>8)&255u)==2u) continue;
+        if(((chain_frames[i].header>>8)&255u)==KUI_VMU_NATIVE_VIRTUAL_ADDRESS) continue;
 #endif
         if(!read_value(NULL,receivers[i]|UINT32_C(0xa0000000),4u,&response)) fail(12u);
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE

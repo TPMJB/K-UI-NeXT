@@ -491,7 +491,7 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
 #endif
 #elif KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION
 #if KUI_NATIVE_VMU_ONLY
-    retail_display_line("STANDARD READER / VIRTUAL A2 ON");
+    retail_display_line("STANDARD READER / VIRTUAL " KUI_VMU_NATIVE_VIRTUAL_NAME " ON");
 #if KUI_NATIVE_VMU_LITE
     retail_display_line("72 KIB VMU LITE / BACKGROUND OFF");
 #else
@@ -514,7 +514,8 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     retail_display_line("72 KIB VMU / 284 KIB BACKGROUND");
 #endif
     retail_display_line(native_runtime_mode()==KUI_VMU_NATIVE_MODE_READER_ONLY?
-        "NEW READER / VIRTUAL A2 OFF":"NEW READER / VIRTUAL A2 ON");
+        "NEW READER / VIRTUAL " KUI_VMU_NATIVE_VIRTUAL_NAME " OFF":
+        "NEW READER / VIRTUAL " KUI_VMU_NATIVE_VIRTUAL_NAME " ON");
 #if KUI_NATIVE_SPLIT_CONTROLLER_STREAM_GUARD
     retail_display_line("PREFETCH AUTO / SPLIT CONTROLLER ALL");
 #elif KUI_NATIVE_SPLIT_CONTROLLER_PREFETCH
@@ -527,21 +528,21 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
 #endif
     retail_display_line("REAL MAPLE CALLBACKS ON");
 #elif KUI_NATIVE_METADATA_CACHE_ISOLATION
-    retail_display_line("NEW READER / VIRTUAL A2 ON");
+    retail_display_line("NEW READER / VIRTUAL " KUI_VMU_NATIVE_VIRTUAL_NAME " ON");
     retail_display_line("PREFETCH OFF / METADATA CACHE");
     retail_display_line("REAL MAPLE CALLBACKS ON");
 #elif KUI_NATIVE_STANDARD_VMU_ISOLATION
-    retail_display_line("STANDARD READER / VIRTUAL A2 ON");
+    retail_display_line("STANDARD READER / VIRTUAL " KUI_VMU_NATIVE_VIRTUAL_NAME " ON");
     retail_display_line("384 KIB / BACKGROUND OFF");
 #else
     if(cfg.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN)
         retail_display_line("ACTIVE HOOKS / ORIGINAL MAPLE DMA LIST");
     else if(cfg.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_HOOKS_ONLY)
         retail_display_line("ALL HOOKS ACTIVE / VIRTUAL VMU OFF");
-    else retail_display_line("PERSISTENT VIRTUAL A2 ARMED - STARTING GAME");
+    else retail_display_line("PERSISTENT VIRTUAL " KUI_VMU_NATIVE_VIRTUAL_NAME " ARMED - STARTING GAME");
 #endif
 #elif KUI_VMU_NATIVE_READONLY_PROBE
-    retail_display_line("READ ONLY VIRTUAL A2 ARMED - STARTING GAME");
+    retail_display_line("READ ONLY VIRTUAL " KUI_VMU_NATIVE_VIRTUAL_NAME " ARMED - STARTING GAME");
 #else
     retail_display_line("PASSIVE WORKER ARMED - STARTING GAME");
 #endif

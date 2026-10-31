@@ -6,6 +6,15 @@
 #define CONTROL_MASK UINT32_C(0x800300ff)
 #define CONTROLLER UINT32_C(0x01000000)
 #define MEMCARD UINT32_C(0x02000000)
+/* The virtual card keeps a real VMU in the other controller A slot: A1 in the
+ * default A2 build, A2 in a KUI_VMU_VIRTUAL_A1 build. The other address keeps
+ * the historical A1 experiment, which retains no physical card. */
+#if defined(KUI_VMU_VIRTUAL_A1) && KUI_VMU_VIRTUAL_A1
+#define PASSTHROUGH_VIRTUAL 1u
+#else
+#define PASSTHROUGH_VIRTUAL 2u
+#endif
+#define PASSTHROUGH_PHYSICAL (3u-PASSTHROUGH_VIRTUAL)
 #define LCD UINT32_C(0x04000000)
 #define CLOCK UINT32_C(0x08000000)
 
@@ -82,7 +91,7 @@ static int volatile_chain_geometry(const struct kui_vmu_volatile_chain_plan *pla
         return KUI_VMU_VOLATILE_CHAIN_ARGUMENT;
     if(plan->virtual_address!=1u && plan->virtual_address!=2u)
         return KUI_VMU_VOLATILE_CHAIN_ARGUMENT;
-    size_t maximum=plan->virtual_address==2u?KUI_VMU_VOLATILE_CHAIN_PASSTHROUGH_BYTES:
+    size_t maximum=plan->virtual_address==PASSTHROUGH_VIRTUAL?KUI_VMU_VOLATILE_CHAIN_PASSTHROUGH_BYTES:
         KUI_VMU_VOLATILE_CHAIN_BYTES;
     if(capacity<12u || capacity>maximum || (capacity&3u) ||
        capacity!=plan->output_capacity)
@@ -101,8 +110,9 @@ static int volatile_chain_geometry(const struct kui_vmu_volatile_chain_plan *pla
     return KUI_VMU_VOLATILE_CHAIN_OK;
 }
 
-/* 0 is the filtered virtual endpoint. The explicit A2 path retains A1 VMU
- * memory and LCD requests with their complete immutable payloads. */
+/* 0 is the filtered virtual endpoint. The pass-through path retains the
+ * physical card's VMU memory and LCD requests with their complete immutable
+ * payloads. */
 static int volatile_chain_classify(const struct kui_vmu_volatile_chain_frame *frame,
     unsigned virtual_address) {
     uint32_t control=frame->control, header=frame->header;
@@ -121,8 +131,9 @@ static int volatile_chain_classify(const struct kui_vmu_volatile_chain_frame *fr
          frame->payload0==CONTROLLER || frame->payload0==UINT32_C(0x02000000) ||
          frame->payload0==UINT32_C(0x04000000) || frame->payload0==UINT32_C(0x08000000) ||
          frame->payload0==UINT32_C(0x00010000)))) return 1;
-    if(virtual_address==2u && destination==1u && command==3u && !words) return 1;
-    if(virtual_address==2u && destination==1u && words>1u) {
+    if(virtual_address==PASSTHROUGH_VIRTUAL && destination==PASSTHROUGH_PHYSICAL &&
+       command==3u && !words) return 1;
+    if(virtual_address==PASSTHROUGH_VIRTUAL && destination==PASSTHROUGH_PHYSICAL && words>1u) {
         if(!volatile_chain_pointer_span(frame->payload,4u*words) ||
            volatile_chain_le32(frame->payload)!=frame->payload0)
             return KUI_VMU_VOLATILE_CHAIN_ARGUMENT;
@@ -246,7 +257,7 @@ int kui_vmu_volatile_chain_build(struct kui_vmu_volatile_chain_plan *result,
     uint32_t source, uint32_t source_bytes,
     uint8_t *output, size_t capacity, uint32_t output_physical) {
     return kui_vmu_volatile_chain_build_address(result,frames,count,source,source_bytes,
-        output,capacity,output_physical,1u);
+        output,capacity,output_physical,PASSTHROUGH_PHYSICAL);
 }
 
 int kui_vmu_volatile_chain_verify(const struct kui_vmu_volatile_chain_plan *plan,
@@ -259,7 +270,7 @@ int kui_vmu_volatile_chain_verify(const struct kui_vmu_volatile_chain_plan *plan
        plan->padding_count>KUI_VMU_VOLATILE_CHAIN_ENTRIES-plan->frame_count ||
        plan->output_bytes>capacity || (plan->output_bytes&3u) ||
        plan->output_bytes<12u*plan->physical_count ||
-       plan->output_bytes>(plan->virtual_address==2u?1032u:16u)*plan->physical_count ||
+       plan->output_bytes>(plan->virtual_address==PASSTHROUGH_VIRTUAL?1032u:16u)*plan->physical_count ||
        plan->source_bytes<plan->output_bytes+12u*plan->virtual_count+4u*plan->padding_count)
         return KUI_VMU_VOLATILE_CHAIN_DESCRIPTOR;
     if(volatile_chain_crc32(output,plan->output_bytes)!=plan->crc32)

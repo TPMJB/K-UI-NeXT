@@ -58,7 +58,9 @@ static void split_done(unsigned conditions,unsigned allinfo,uint32_t parent_func
         unsigned command=(conditions&(1u<<port))?9u:(allinfo&(1u<<port))?2u:1u;
         unsigned words=command==9u?3u:command==2u?48u:28u;
         unsigned code=command==9u?8u:command==2u?6u:5u;
-        put(rx_at(port*6u),4u,(words<<24)|(port<<22)|(port<<14)|0x003d0000u|code);
+        /* Every main unit reports sub-units in slots 3-5 and the physical
+         * card's controller A slot, never the virtual card's. */
+        put(rx_at(port*6u),4u,(words<<24)|(port<<22)|(port<<14)|((0x3cu|PHYSICAL)<<16)|code);
         put(rx_at(port*6u)+4u,4u,port?0x40000000u:parent_function);
         if(port && command==9u) put(rx_at(port*6u)+4u,4u,0x01000000u);
     }
@@ -85,7 +87,7 @@ static void split_success(void) {
         split_done(conditions,allinfo,0x01000000u);
         uint8_t before[4][1024];
         for(unsigned port=0u;port<4u;port++) memcpy(before[port],rx_bytes(port*6u),1024u);
-        complete_return();before[0][2]|=2u;
+        complete_return();before[0][2]|=VIRTUAL;
         for(unsigned port=0u;port<4u;port++) CHECK(!memcmp(before[port],rx_bytes(port*6u),1024u));
         CHECK(live_plan.ready && controller_pair.pending==NATIVE_CONTROLLER_IDLE);
         CHECK(!measured_work.storage && !lease_calls && !block_callbacks && !sd.bytes && !sd.writes);
@@ -203,7 +205,7 @@ static void split_long_sessions(void) {
     uint8_t next[512];for(unsigned i=0u;i<sizeof(next);i++) next[i]=(uint8_t)(i^0x9bu);
     split_setup();state.submitted=state.completed=UINT32_MAX-2u;
     stage_block(42u,next);transfer_batch(13u,42u,4u,NULL);
-    CHECK(durable_card.commits==1u && value_at(rx_at(2))==0x00020007u);
+    CHECK(durable_card.commits==1u && value_at(rx_at(VIRTUAL))==((VIRTUAL<<16)|7u));
     read_compare(42u,next);CHECK(state.submitted==3u && state.completed==3u);
     CHECK(release_saw_unpublished);protect_media();
     model_reopen();
