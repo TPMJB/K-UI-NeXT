@@ -9,6 +9,10 @@
 /* Native SCI Background X/Y with generic virtual A2. Standard and the
  * separate CE/CDDA/compressed routes retain their existing packages. */
 #define KUI_GAMES_RETAIL_NATIVE_DUAL_PACKAGE "0:/KUI/apps/games/retail-native-dual.kui"
+/* The same module built with its virtual card in A1, for games whose save code
+ * only uses A1. A launch asking for KUI_GAMES_RETAIL_VIRTUAL_A1 with Virtual VMU
+ * On uses it; A2 stays physical there. */
+#define KUI_GAMES_RETAIL_NATIVE_DUAL_A1_PACKAGE "0:/KUI/apps/games/retail-native-dual-a1.kui"
 /* Optional New reader without virtual VMU or game-RAM reservation. A New (X)
  * launch uses it only when the combined module's complete executable proof
  * refuses and the executable has the reviewed SDK SCI family. */
@@ -46,6 +50,9 @@
 #define KUI_GAMES_RETAIL_CE_EXCERPT 0x1000u
 /* Explicit historical LZO1X selection for .zso only; not a reader/wire bit. */
 #define KUI_GAMES_RETAIL_LZO 0x2000u
+/* This game's virtual card belongs in A1: the native Background route loads
+ * KUI_GAMES_RETAIL_NATIVE_DUAL_A1_PACKAGE. Ignored by other routes. */
+#define KUI_GAMES_RETAIL_VIRTUAL_A1 0x4000u
 /* Single storage worker only. Prepare one native GD-ROM launch;
  * complete IP/boot CRCs and bounded physical extent map are read-only. Success
  * owns a patched stage package with all files closed and SD disconnected.

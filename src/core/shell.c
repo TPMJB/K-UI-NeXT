@@ -573,6 +573,7 @@ static void clear_game_detail(struct kui_shell *s) {
     s->games_retail_scrambled=false;s->games_probe_from_options=false;
     s->games_launch_encoding=KUI_GAME_ENCODING_AUTO;
     s->games_launch_codec=KUI_ZSO_LZ4;s->games_codec_override=false;s->games_baseline=false;
+    s->games_launch_vmu_slot=KUI_GAME_VMU_SLOT_A2;
     s->game_tools_selected=s->game_tests_selected=0;s->games_tests_from_options=false;
     s->games_launch_notice[0]=0;
     memset(&s->games_launch_patches,0,sizeof(s->games_launch_patches));
@@ -756,7 +757,7 @@ void kui_shell_set_games_detail(struct kui_shell *s,const struct kui_games_detai
     s->games_launch_reader=game_default_reader(detail);
     s->games_launch_selected=0;s->games_launch_cdda=false;s->games_probe_from_options=false;
     s->games_retail_scrambled=detail->cd_image && !detail->windows_ce && detail->scrambled;
-    s->games_launch_encoding=KUI_GAME_ENCODING_AUTO;
+    s->games_launch_encoding=KUI_GAME_ENCODING_AUTO;s->games_launch_vmu_slot=KUI_GAME_VMU_SLOT_A2;
     memset(&s->games_launch_patches,0,sizeof(s->games_launch_patches));
     s->games_patch_selected=s->games_patch_digit=0;s->games_patch_editing=false;
     s->game_tools_selected=s->game_tests_selected=0;s->games_tests_from_options=true;
@@ -805,6 +806,10 @@ bool kui_shell_games_encoding_ready(const struct kui_shell *s) {
 bool kui_shell_games_background_ready(const struct kui_shell *s) {
     return kui_shell_games_retail_ready(s) && s->games_detail.format!=KUI_GAME_IMAGE_ZSO;
 }
+bool kui_shell_games_vmu_slot_ready(const struct kui_shell *s) {
+    return kui_shell_games_background_ready(s) && !s->games_detail.windows_ce &&
+        !s->games_launch_cdda && s->games_launch_reader!=KUI_RETAIL_READER_STANDARD;
+}
 bool kui_shell_games_cdda_ready(const struct kui_shell *s) {
     if(kui_shell_games_ce_probe_ready(s)) {
         /* Offer an opt-in to every WinCE GDI with gameplay audio
@@ -851,7 +856,8 @@ bool kui_shell_game_launch_settings(const struct kui_shell *s,
                                     struct kui_game_launch_settings *out) {
     if(!out || !kui_shell_games_image_ready(s)) return false;
     struct kui_game_launch_settings value={.reader=s->games_launch_reader,.cdda=s->games_launch_cdda,
-        .encoding=s->games_launch_encoding,.codec=s->games_launch_codec,.patches=s->games_launch_patches};
+        .encoding=s->games_launch_encoding,.codec=s->games_launch_codec,.patches=s->games_launch_patches,
+        .vmu_slot=s->games_launch_vmu_slot};
     if(!kui_game_launch_settings_valid(&value)) return false;
     *out=value;return true;
 }
@@ -866,7 +872,7 @@ void kui_shell_set_game_launch_settings(struct kui_shell *s,const char *path,
             kui_shell_games_ce_probe_ready(s)?KUI_RETAIL_READER_ASYNC:value->reader;
         s->games_launch_cdda=value->cdda && kui_shell_games_cdda_ready(s);
         s->games_launch_encoding=kui_shell_games_encoding_ready(s)?value->encoding:KUI_GAME_ENCODING_AUTO;
-        s->games_launch_patches=value->patches;
+        s->games_launch_patches=value->patches;s->games_launch_vmu_slot=value->vmu_slot;
         bool patches_unavailable=!kui_shell_games_patches_ready(s) && kui_game_ram_patches_enabled(&value->patches);
         if(patches_unavailable)
             for(unsigned i=0;i<KUI_GAME_RAM_PATCHES_COUNT;i++) s->games_launch_patches.entries[i].enabled=false;
@@ -897,6 +903,7 @@ static enum kui_shell_action save_game_launch(struct kui_shell *s) {
 static enum kui_shell_action game_launch_defaults(struct kui_shell *s) {
     s->games_launch_reader=game_default_reader(&s->games_detail);
     s->games_launch_cdda=false;s->games_launch_encoding=KUI_GAME_ENCODING_AUTO;
+    s->games_launch_vmu_slot=KUI_GAME_VMU_SLOT_A2;
     s->games_retail_scrambled=kui_shell_games_encoding_ready(s) && s->games_detail.scrambled;
     memset(&s->games_launch_patches,0,sizeof(s->games_launch_patches));
     s->games_patch_editing=false;
@@ -970,6 +977,8 @@ static enum kui_shell_action games_launch_choice(struct kui_shell *s) {
         s->games_retail_reader|=KUI_GAMES_RETAIL_LZO;
     if(kui_shell_games_encoding_ready(s))
         s->games_retail_reader|=s->games_retail_scrambled?KUI_GAMES_RETAIL_DESCRAMBLE:KUI_GAMES_RETAIL_BOOT_PLAIN;
+    if(kui_shell_games_vmu_slot_ready(s) && s->games_launch_vmu_slot==KUI_GAME_VMU_SLOT_A1)
+        s->games_retail_reader|=KUI_GAMES_RETAIL_VIRTUAL_A1;
     return KUI_SHELL_GAMES_RETAIL;
 }
 static enum kui_shell_action games_check_choice(struct kui_shell *s) {
@@ -2559,6 +2568,13 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             break;
         case KUI_SHELL_GAME_TOOL_CHECK:
             if(buttons==KUI_SHELL_A) return games_check_choice(s);
+            break;
+        case KUI_SHELL_GAME_TOOL_VMU_SLOT:
+            if(kui_shell_games_vmu_slot_ready(s)) {
+                s->games_launch_vmu_slot=s->games_launch_vmu_slot==KUI_GAME_VMU_SLOT_A1?
+                    KUI_GAME_VMU_SLOT_A2:KUI_GAME_VMU_SLOT_A1;
+                return save_game_launch(s);
+            }
             break;
         }
         break;

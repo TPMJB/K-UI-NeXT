@@ -99,7 +99,8 @@ enum kui_shell_vmu_card_action {
 enum kui_shell_game_tool {
     KUI_SHELL_GAME_TOOL_ENCODING, KUI_SHELL_GAME_TOOL_SPEED,
     KUI_SHELL_GAME_TOOL_INFO, KUI_SHELL_GAME_TOOL_TESTS,
-    KUI_SHELL_GAME_TOOL_PATCHES, KUI_SHELL_GAME_TOOL_DEFAULTS, KUI_SHELL_GAME_TOOL_CHECK, KUI_SHELL_GAME_TOOL_BASELINE, KUI_SHELL_GAME_TOOL_COUNT
+    KUI_SHELL_GAME_TOOL_PATCHES, KUI_SHELL_GAME_TOOL_DEFAULTS, KUI_SHELL_GAME_TOOL_CHECK, KUI_SHELL_GAME_TOOL_BASELINE,
+    KUI_SHELL_GAME_TOOL_VMU_SLOT, KUI_SHELL_GAME_TOOL_COUNT
 };
 enum kui_shell_ripper_tool {
     KUI_SHELL_RIPPER_TOOL_VERIFY, KUI_SHELL_RIPPER_TOOL_RESUME,
@@ -259,6 +260,7 @@ struct kui_shell {
     unsigned games_launch_encoding, game_tools_selected, game_tests_selected;
     bool games_tests_from_options;
     unsigned games_launch_codec,games_codec_selected;
+    unsigned games_launch_vmu_slot; /* enum kui_game_vmu_slot */
     bool games_codec_override;
     bool games_baseline;
     struct kui_game_launch_settings games_baseline_previous;
@@ -443,6 +445,9 @@ bool kui_shell_games_cdda_ready(const struct kui_shell *shell);
 const char *kui_shell_games_cdda_status(const struct kui_shell *shell);
 bool kui_shell_games_launch_ready(const struct kui_shell *shell);
 bool kui_shell_games_patches_ready(const struct kui_shell *shell);
+/* The virtual card slot belongs to the native Background module, the only
+ * route here with a per-game virtual card. */
+bool kui_shell_games_vmu_slot_ready(const struct kui_shell *shell);
 bool kui_shell_game_launch_settings(const struct kui_shell *shell,
                                     struct kui_game_launch_settings *out);
 /* loaded=true with settings=NULL means no exact-image preset exists. Keep

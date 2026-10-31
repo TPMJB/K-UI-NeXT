@@ -151,3 +151,26 @@ build, the upper wrapper, root and timers resolve in all five titles. The
 remaining gates are a heap allocator family (syMalloc 1.35 does not match the
 reviewed allocator), a terminal exit family, and Silver's program extent, which
 depends on the allocator proof.
+
+### RAM maps (compatibility test 3)
+
+The RAM-map standalone reader filled every free 128 KiB page from 0x8c000000
+with a pattern before the game started. On A+B+X+Y+Start it listed the pages
+that still held it: bit i of word w is the page at 0x8c000000+(32w+i)*0x20000.
+Pages 112-113 (the stage, 0x8ce00000-0x8ce40000) and 127 are never marked.
+
+| Title | Words | Untouched |
+|---|---|---|
+| Sonic Adventure (two sessions, the same) | 00000000 00000000 80000000 02000010 | single pages only: 0x8cbe0000, 0x8cc80000, 0x8cf20000 |
+| The House of the Dead 2, session 1 | 00000000 00000000 00000000 681CFFE0 | 0x8cca0000-0x8ce00000 (1.375 MiB), 0x8ce40000-0x8cea0000, 0x8cf60000-0x8cf80000, 0x8cfa0000-0x8cfe0000 |
+| The House of the Dead 2, session 2 | 00000000 00000000 FFFF0000 681CFFFF | 0x8ca00000-0x8ce00000 (4 MiB) and the same three upper pieces |
+| Time Stalkers (two sessions) | all zero | none |
+
+- The House of the Dead 2 left 0x8cca0000-0x8ce00000 untouched in both
+  sessions, room for the 284 KiB module as a fixed arena. Session 1 used 2.625
+  MiB more than session 2, so a long session should confirm the range first.
+- Sonic Adventure has no two adjacent untouched pages, so the 284 KiB module
+  cannot sit in a fixed arena there.
+- Time Stalkers wrote every page, probably clearing RAM at boot. Marking RAM
+  before the game starts cannot tell cleared pages from used ones; marking
+  after the game's own startup could.

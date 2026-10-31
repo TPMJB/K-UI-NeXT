@@ -2350,19 +2350,24 @@ static void games_extra_options(struct paint *p,const struct kui_shell *s) {
     games_variant_line(p,s,158);
     bool native_reader=kui_shell_games_retail_ready(s) && !s->games_launch_cdda &&
         s->games_detail.format!=KUI_GAME_IMAGE_ZSO;
-    const char *names[]={"Boot encoding",native_reader?"Background reader":"Background speed","Image information","Developer tests","RAM patches","Restore defaults","Check executable","Temporary baseline"};
+    const char *names[]={"Boot encoding",native_reader?"Background reader":"Background speed","Image information","Developer tests","RAM patches","Restore defaults","Check executable","Temporary baseline","Virtual card slot"};
     const char *encodings[]={"Automatic","Plain","Scrambled"};
     bool encoding=kui_shell_games_encoding_ready(s);
     bool speed=kui_shell_games_background_ready(s) && !s->games_launch_cdda;
     const char *values[]={encoding?encodings[s->games_launch_encoding<KUI_GAME_ENCODING_COUNT?s->games_launch_encoding:0]:"Automatic",
         speed?(native_reader?(s->games_launch_reader==KUI_GAME_READER_STANDARD?"Off":kui_shell_games_reader_label(s)):
             s->games_launch_reader==KUI_GAME_READER_EAGER?"Aggressive":"Normal"):"Unavailable","Open","Open",
-        kui_shell_games_patches_ready(s)?(kui_game_ram_patches_enabled(&s->games_launch_patches)?"On":"Off"):"Unavailable","Apply",kui_shell_games_launch_ready(s)?"Run":"Unavailable",s->games_baseline?"On (unsaved)":"Off"};
+        kui_shell_games_patches_ready(s)?(kui_game_ram_patches_enabled(&s->games_launch_patches)?"On":"Off"):"Unavailable","Apply",kui_shell_games_launch_ready(s)?"Run":"Unavailable",s->games_baseline?"On (unsaved)":"Off",
+        kui_shell_games_vmu_slot_ready(s)?(s->games_launch_vmu_slot==KUI_GAME_VMU_SLOT_A1?"A1":"A2"):"Unavailable"};
+    _Static_assert(sizeof(names)/sizeof(names[0])==KUI_SHELL_GAME_TOOL_COUNT &&
+                   sizeof(values)/sizeof(values[0])==KUI_SHELL_GAME_TOOL_COUNT,"one name and value per Advanced row");
     for(unsigned i=0;i<KUI_SHELL_GAME_TOOL_COUNT;i++) {
-        unsigned y=174+i*24;bool ready=i==KUI_SHELL_GAME_TOOL_ENCODING?encoding:i==KUI_SHELL_GAME_TOOL_SPEED?speed:
+        /* Nine rows end above the hint line at 374. */
+        unsigned y=174+i*22;bool ready=i==KUI_SHELL_GAME_TOOL_ENCODING?encoding:i==KUI_SHELL_GAME_TOOL_SPEED?speed:
             i==KUI_SHELL_GAME_TOOL_PATCHES?kui_shell_games_patches_ready(s):
-            (i==KUI_SHELL_GAME_TOOL_CHECK || i==KUI_SHELL_GAME_TOOL_BASELINE)?kui_shell_games_launch_ready(s):true;
-        panel(p,32,y,576,22,s->game_tools_selected==i?SELECTED:PANEL);
+            (i==KUI_SHELL_GAME_TOOL_CHECK || i==KUI_SHELL_GAME_TOOL_BASELINE)?kui_shell_games_launch_ready(s):
+            i==KUI_SHELL_GAME_TOOL_VMU_SLOT?kui_shell_games_vmu_slot_ready(s):true;
+        panel(p,32,y,576,20,s->game_tools_selected==i?SELECTED:PANEL);
         label(p,48,y+4,ready?WHITE:MUTED,names[i]);
         words(p,350,y+4,592,ready?CYAN:MUTED,values[i],false);
     }
@@ -2373,7 +2378,9 @@ static void games_extra_options(struct paint *p,const struct kui_shell *s) {
         "Two one-time boot patches. Native games with CD music Off only.",
         "Save detected defaults for this image, including turning RAM patches Off.",
         "Check the executable and launch package without starting the game.",
-        "Use defaults without saving. Select again to restore choices."};
+        "Use defaults without saving. Select again to restore choices.",
+        "Background loading's virtual card: A1 for games that only save there. Keep it empty."};
+    _Static_assert(sizeof(hints)/sizeof(hints[0])==KUI_SHELL_GAME_TOOL_COUNT,"one hint per Advanced row");
     const char *hint=hints[s->game_tools_selected<KUI_SHELL_GAME_TOOL_COUNT?s->game_tools_selected:0];
     if(s->games_detail.format==KUI_GAME_IMAGE_ZSO) {
         if(s->game_tools_selected==KUI_SHELL_GAME_TOOL_SPEED)

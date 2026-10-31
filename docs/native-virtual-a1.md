@@ -50,4 +50,7 @@ slots exchanged.
   default build either. With a jump pack plugged in, the game's first
   vibration is refused and stops the game on the resident's failure screen.
   Polling a jump pack is fine.
-- The slot is chosen at build time. A per-game setting comes next.
+- The slot is chosen at build time, so the A1 build ships beside the default
+  one as `retail-native-dual-a1.kui`. Each game's Advanced page has a
+  "Virtual card slot" row (A2 by default); a game set to A1 launches the A1
+  module when Virtual VMU is On. The A2 module stays byte-identical.

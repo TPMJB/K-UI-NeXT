@@ -2488,6 +2488,32 @@ static void games_patch_controls(void) {
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_GAME_LAUNCH && s.games_launch_reader==KUI_RETAIL_READER_ASYNC_EAGER);
     press(KUI_SHELL_B,false);
     assert(press(KUI_SHELL_START,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==KUI_RETAIL_READER_ASYNC_EAGER);
+    /* The virtual card slot follows Background loading: A or left/right
+     * toggles A1, saved settings carry it, the launch asks for the A1 module,
+     * and the Standard reader neither offers nor sends it. */
+    open_extra_options();s.game_tools_selected=KUI_SHELL_GAME_TOOL_VMU_SLOT;
+    assert(kui_shell_games_vmu_slot_ready(&s) && s.games_launch_vmu_slot==KUI_GAME_VMU_SLOT_A2);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_GAME_LAUNCH && s.games_launch_vmu_slot==KUI_GAME_VMU_SLOT_A1);
+    struct kui_game_launch_settings slot_value;
+    assert(kui_shell_game_launch_settings(&s,&slot_value) && slot_value.vmu_slot==KUI_GAME_VMU_SLOT_A1);
+    press(KUI_SHELL_B,false);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_GAMES_RETAIL &&
+           s.games_retail_reader==(KUI_RETAIL_READER_ASYNC_EAGER|KUI_GAMES_RETAIL_VIRTUAL_A1));
+    open_extra_options();s.game_tools_selected=KUI_SHELL_GAME_TOOL_SPEED;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_SAVE_GAME_LAUNCH && s.games_launch_reader==KUI_RETAIL_READER_STANDARD);
+    s.game_tools_selected=KUI_SHELL_GAME_TOOL_VMU_SLOT;
+    assert(!kui_shell_games_vmu_slot_ready(&s) && press(KUI_SHELL_A,false)==KUI_SHELL_NONE &&
+           s.games_launch_vmu_slot==KUI_GAME_VMU_SLOT_A1);
+    press(KUI_SHELL_B,false);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==KUI_RETAIL_READER_STANDARD);
+    /* Loading saved settings restores the slot; Restore defaults returns A2. */
+    slot_value.reader=KUI_RETAIL_READER_ASYNC_EAGER;
+    kui_shell_set_game_launch_settings(&s,s.games_selected_path,&slot_value,true);
+    assert(s.games_launch_vmu_slot==KUI_GAME_VMU_SLOT_A1 && s.games_launch_reader==KUI_RETAIL_READER_ASYNC_EAGER);
+    open_extra_options();s.game_tools_selected=KUI_SHELL_GAME_TOOL_VMU_SLOT;
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_SAVE_GAME_LAUNCH && s.games_launch_vmu_slot==KUI_GAME_VMU_SLOT_A2);
+    press(KUI_SHELL_B,false);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_GAMES_RETAIL && s.games_retail_reader==KUI_RETAIL_READER_ASYNC_EAGER);
     open_extra_options();s.game_tools_selected=KUI_SHELL_GAME_TOOL_PATCHES;press(KUI_SHELL_A,false);
     /* A stale/out-of-range peer must never prevent switching a patch Off. */
     s.games_launch_patches.entries[1].address=UINT32_C(0x8c010080);s.games_patch_selected=0;

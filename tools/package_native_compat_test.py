@@ -31,6 +31,7 @@ SCHEMA = 'kui.native.compat-test.manifest.v2'
 TARGETS = {
     'gui': 'KUI/runtime.kui',
     'background': 'KUI/apps/games/retail-native-dual.kui',
+    'background_a1': 'KUI/apps/games/retail-native-dual-a1.kui',
     'standalone': 'KUI/apps/games/retail-native-standalone.kui',
 }
 ARTIFACTS = {
@@ -40,6 +41,7 @@ ARTIFACTS = {
     'standalone': ('stage.elf', 'stage.map', 'resident-sci.elf', 'resident-sci.map',
                    'entry.elf', 'entry.map', 'entry.compile.json'),
 }
+ARTIFACTS['background_a1'] = ARTIFACTS['background']
 
 
 def require(value, message):
@@ -65,13 +67,16 @@ def runtime(path, build):
     return data
 
 
-def background_module(build, revision):
+def background_module(build, revision, slot):
     module = runtime(build/'retail-native-background-compact.kui', revision)
     require((build/'retail-native-dual.kui').read_bytes() == module,
             'Compact Background dual-reader alias differs')
     stage, worker = read_elf(build/'stage.elf'), read_elf(build/'native-worker.elf')
     require(layout_for(worker[4]) is BACKGROUND_COMPACT and layout_for(stage[4]) is BACKGROUND_COMPACT,
             'Background build is not the exact compact 284 KiB profile')
+    other = 'A1' if slot == 'A2' else 'A2'
+    require(('VIRTUAL %s ON' % slot).encode() in module and ('VIRTUAL %s ON' % other).encode() not in module,
+            'Background build does not put its virtual card in '+slot)
     return module
 
 
@@ -88,30 +93,34 @@ def test_sheet():
     writer = csv.writer(stream)
     writer.writerow(('game', 'reader', 'virtual_vmu', 'boots', 'gameplay', 'loading_stutter',
                      'memory_card_seen', 'save', 'power_cycle_load', 'failure_screen', 'notes'))
-    for row in (('Sword of the Berserk', 'Background New (X)', 'On (A1)'),
-                ('Regression: a game that already saved', 'Background New (X)', 'On (A1)'),
-                ('Sonic Adventure (RAM map: note the four numbers)', 'Background New (X)', 'standalone, none'),
-                ('The House of the Dead 2 (RAM map)', 'Background New (X)', 'standalone, none'),
-                ('Time Stalkers (RAM map)', 'Background New (X)', 'standalone, none'),
-                ('Elemental Gimmick Gear (RAM map, after recopying)', 'Background New (X)', 'standalone, none')):
+    for row in (('Sword of the Berserk (Virtual card slot A1)', 'Background New (X)', 'On (A1)'),
+                ('A game that already saved (slot A2)', 'Background New (X)', 'On (A2)'),
+                ('Elemental Gimmick Gear (note the executable sector lines if it stops)', 'Background New (X)',
+                 'standalone, none'),
+                ('Sonic Adventure, optional: seconds to ENTERING OWNER BOOTSTRAP 2, then to the SEGA logo',
+                 'Background New (X)', 'standalone, none'),
+                ('Sonic Adventure, optional: the same two times', 'Standard (background loading Off)', 'Off')):
         writer.writerow((*row, '', '', '', '', '', '', '', ''))
     return stream.getvalue().encode()
 
 
-def package(background_build, standalone_build, gui, output=None, evidence=(), verification=None):
+def package(background_build, background_a1_build, standalone_build, gui, output=None, evidence=(), verification=None):
     commit, tree = git('rev-parse', 'HEAD'), git('rev-parse', 'HEAD^{tree}')
     require(not git('status', '--porcelain'), 'Commit source changes before packaging')
     revision = commit[:12]
     background_build = Path(background_build).resolve(strict=True)
+    background_a1_build = Path(background_a1_build).resolve(strict=True)
     standalone_build = Path(standalone_build).resolve(strict=True)
-    modules = {'gui': runtime(gui, revision), 'background': background_module(background_build, revision),
+    modules = {'gui': runtime(gui, revision), 'background': background_module(background_build, revision, 'A2'),
+               'background_a1': background_module(background_a1_build, revision, 'A1'),
                'standalone': standalone_module(standalone_build, revision)}
     require(set(modules) == set(TARGETS), 'Package components differ from the card targets')
     files = {TARGETS[name]: data for name, data in modules.items()}
     metadata = dict(schema=SCHEMA, source_commit=commit, build=revision,
                     files={name: dict(path=TARGETS[name], sha256=sha(data)) for name, data in modules.items()})
     files['details/compat-test.json'] = wire(metadata)
-    for name, build in (('background', background_build), ('standalone', standalone_build)):
+    for name, build in (('background', background_build), ('background_a1', background_a1_build),
+                        ('standalone', standalone_build)):
         for artifact in ARTIFACTS[name]:
             files['details/artifacts/'+name+'/'+artifact] = (build/artifact).read_bytes()
     for source in evidence:
@@ -172,6 +181,8 @@ def package(background_build, standalone_build, gui, output=None, evidence=(), v
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--background-build', type=Path, required=True)
+    parser.add_argument('--background-a1-build', type=Path, required=True,
+                        help='The same compact module built with its virtual card in A1')
     parser.add_argument('--standalone-build', type=Path, required=True)
     parser.add_argument('--gui', type=Path, required=True, help='runtime.kui built from this checkpoint')
     parser.add_argument('--output', type=Path)
@@ -180,7 +191,8 @@ def main():
     args = parser.parse_args()
     try:
         verification = json.loads(args.verification.read_text()) if args.verification else None
-        package(args.background_build, args.standalone_build, args.gui, args.output, args.evidence, verification)
+        package(args.background_build, args.background_a1_build, args.standalone_build, args.gui, args.output,
+                args.evidence, verification)
     except (OSError, ValueError, KeyError, TypeError, subprocess.CalledProcessError) as error:
         parser.exit(2, 'Compatibility test package refused: '+str(error)+'\n')
 

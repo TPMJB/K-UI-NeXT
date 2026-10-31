@@ -17,10 +17,16 @@ enum kui_game_encoding {
     KUI_GAME_ENCODING_AUTO, KUI_GAME_ENCODING_PLAIN, KUI_GAME_ENCODING_SCRAMBLED,
     KUI_GAME_ENCODING_COUNT
 };
+/* Controller A slot of the native Background module's virtual card. A1 is for
+ * games whose save code only uses A1; the other slot stays physical. */
+enum kui_game_vmu_slot {
+    KUI_GAME_VMU_SLOT_A2, KUI_GAME_VMU_SLOT_A1, KUI_GAME_VMU_SLOT_COUNT
+};
 struct kui_game_launch_settings {
     unsigned reader;bool cdda;unsigned encoding;
     unsigned codec; /* Explicit ZSO dialect; default standard LZ4, never inferred. */
     struct kui_game_ram_patches patches;
+    unsigned vmu_slot; /* enum kui_game_vmu_slot; A2 unless chosen */
 };
 #define KUI_GAME_LAUNCH_SETTINGS_ENTRIES 128u
 #define KUI_GAME_LAUNCH_SETTINGS_PATH_CAP 512u
@@ -60,7 +66,9 @@ bool kui_game_launch_table_upsert(struct kui_game_launch_table *table,const char
  * u8 encoding,u8 patch-enable mask,u16 reserved zero,u32 address0,u32 value0,
  * u32 address1,u32 value1}; mask bits0/1 select the two patches, other bits fail.
  * Write v3 using the same 24-byte entry with u8 codec at byte6 (0 LZ4,
- * 1 LZO1X) and byte7 reserved zero. Old v1/v2 default to LZ4.
+ * 1 LZO1X) and byte7 reserved zero. Old v1/v2 default to LZ4. When any entry
+ * puts its virtual card in A1, write v4 instead: the same entry with u8
+ * virtual card slot at byte7 (0 A2, 1 A1). Older records read as A2.
  * All entries end in canonical non-NUL path bytes. Disabled patch tuples are
  * retained, so an edited patch can be disabled and reenabled without reentry.
  * Header has version at8, sequence at16, count at24 and reserved zero at28.
