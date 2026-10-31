@@ -193,10 +193,13 @@ then jumps through the same cell with R4=2. They share one literal pool.
   nop; nop`, which loads its target from the second entry's ordinary 12-byte
   veneer; both go to the same low terminal. The veneer's literal is 4-byte
   aligned at either entry alignment, so the head is constant
-  (`KUI_VMU_NATIVE_PATCH_HEAD`). The worker witnesses all 20 bytes of the
-  joint before every transfer, with the head's window 8 bytes and the
-  veneer's 12. The terminal does not read R4, so how each exit was entered
-  does not matter.
+  (`KUI_VMU_NATIVE_PATCH_HEAD`). The installer's exit loop is unchanged: it
+  compares each exit's 12 original bytes, then patches it. For the early pair
+  the first entry's turn writes nothing; the second entry's writes its veneer
+  and then the first entry's head, so each exit keeps working at every step.
+  The worker witnesses all 20 bytes of the joint before every transfer, with
+  the head's window 8 bytes and the veneer's 12. The terminal does not read
+  R4, so how each exit was entered does not matter.
 - Results on the library: The House of the Dead 2 resolves (entries
   0x8c0afeb0/0x8c0afeb8, cleanup 0x0c0bea30), and so does Time Stalkers
   (0x8c026ce8/0x8c026cf0). Every other title's exit result is unchanged.
