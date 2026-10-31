@@ -1,23 +1,21 @@
-# Compatibility test 4b: a virtual card slot for each game
+# Compatibility test 5: early-driver groundwork (regression check)
 
-Sword of the Berserk saved in A1 with test 3. This test makes the slot a
-per-game choice instead of a module swap.
+The Background module now understands the Maple (controller and VMU) driver of
+the early SDK that Sonic Adventure, The House of the Dead 2, Time Stalkers,
+Elemental Gimmick Gear and Silver use. Those games do not get a virtual card
+yet: they still need the early exit patch and, for The House of the Dead 2, a
+fixed block of RAM. Until then they keep running on the standalone New reader,
+as before.
 
-**4b fixes test 4's A1 launch.** Test 4's GUI skipped the executable check for
-a game set to A1, so its card was never prepared and the loader stopped with
-`NATIVE VMU PREPARED PROFILE / GAME MAP REFUSED`. Only the GUI changed; the
-three modules are test 4's code, rebuilt with this build number. A game you
-already set to A1 stays set.
+The module's code changed for every game, though, so this test checks that the
+games that already save still do.
 
 | File | What it is |
 |---|---|
-| GUI | Each game's **Advanced** page has a new **Virtual card slot** row, A2 by default. If a game's boot executable cannot be read, the log now names the sector and shows its raw header. |
-| `retail-native-dual.kui` | The Background module with the card in **A2**: the same code as test 2. |
-| `retail-native-dual-a1.kui` | The same module with the card in **A1**: the same code as test 3. Games set to A1 use it. |
-| Standalone New reader | The ordinary build again. The RAM maps are done, so it no longer marks RAM. |
-
-Test 3 put every game's card in A1. With this test, every game is back in A2
-unless you set it to A1.
+| GUI | Test 4b's GUI, rebuilt with this build number. |
+| `retail-native-dual.kui` | The Background module, card in **A2**, with the early-driver support. |
+| `retail-native-dual-a1.kui` | The same module with the card in **A1**, for games set to A1. |
+| Standalone New reader | Test 4b's, rebuilt with this build number. |
 
 ## Install
 
@@ -29,53 +27,43 @@ exactly four files, whatever an earlier test put there:
 - `KUI/runtime.kui`, the GUI;
 - `KUI/apps/games/retail-native-dual.kui`, the Background module, card in A2;
 - `KUI/apps/games/retail-native-dual-a1.kui`, the Background module, card in A1;
-- `KUI/apps/games/retail-native-standalone.kui`, the standalone New reader,
-  without the RAM map.
+- `KUI/apps/games/retail-native-standalone.kui`, the standalone New reader.
 
-Cards, saves, game assignments, settings and the other loaders are not
-touched. After booting, the top right of the GUI should read this package's
-build number. Everything in `details/` is evidence and source, not needed on
-the card.
+Cards, saves, game assignments, settings (including each game's Virtual card
+slot) and the other loaders are not touched. After booting, the top right of
+the GUI should read this package's build number. Everything in `details/` is
+evidence and source, not needed on the card.
 
-## Setup
-
-1. **Sword of the Berserk:** Games, select it, Options, Advanced, **Virtual card
-   slot**: press A to switch it to **A1**. It saves automatically.
-2. Keep the virtual card's slot empty: A1 for Berserk, A2 for every other game.
-   A real device in that slot stops the game on a failure screen before
-   anything is saved.
-3. **No jump pack.** Vibration is not passed through yet.
+Keep the virtual card's slot empty (A1 for Berserk, A2 for every other game)
+and leave the jump pack out: vibration is not passed through yet.
 
 ## What to check
 
-1. **Berserk:** the loader shows `NEW READER / VIRTUAL A1 ON`. Load the save
-   from test 3, save again, power off, boot and load.
-2. **A game that already saved** (Sonic Adventure 2, Jet Grind Radio or Skies),
-   slot left at A2: the loader shows `NEW READER / VIRTUAL A2 ON` and it loads
-   and saves as before.
-3. **Elemental Gimmick Gear:** if it still stops with "Invalid or unsupported
-   data sector", press UP a few times on the Diagnostics page. Just above
-   that error are a line starting `Retail boot: executable sector LBA` and one
-   starting `Retail boot: its first 24 raw bytes`. Photograph both, or press Y
-   to save the log and send the file. Also send the text of EGG's `.gdi` file
-   (open it in any text editor; it is a few short lines).
-4. **Optional, Sonic Adventure's boot time.** Do this last. From pressing A on
-   the game, time two moments with a phone stopwatch: when the loader's screen
-   says `ENTERING OWNER BOOTSTRAP 2`, and when the SEGA logo appears. Then do the
-   same with the Standard reader: VMU tools, **Use virtual VMU**: Off; Sonic,
-   Options, **Background loading**: Off. Set both back afterwards. The second
-   pair of times shows whether the wait after bootstrap 2 is the card's speed or
-   the way the New reader paces its reads.
+1. **A game that already saves** (Sonic Adventure 2, Jet Grind Radio or
+   Skies): the loader shows `NEW READER / VIRTUAL A2 ON`. Load the save, save
+   again, power off, boot and load.
+2. **Sword of the Berserk**, slot A1: the loader shows `NEW READER / VIRTUAL A1
+   ON`. The same check.
+3. **Optional, Crazy Taxi 2**: it uses the fixed-RAM path. The same check.
+4. **The House of the Dead 2 or Sonic Adventure**: still boots and plays as
+   before, on the standalone New reader, without a card.
+5. **Optional, Elemental Gimmick Gear** after the re-rip and recopy: if it
+   still stops with "Invalid or unsupported data sector", press UP a few times
+   on the Diagnostics page and photograph the two lines above the error.
 
-Record results in `test-results.csv` or tell me in chat.
+A failure screen anywhere: photograph it. Record results in
+`test-results.csv` or tell me in chat.
 
 ## What was and was not verified before delivery
 
-- `retail-native-dual.kui` is byte-identical to the audited test 2 module apart
-  from the build number; `retail-native-dual-a1.kui` is the test 3 module
-  rebuilt from the same source.
-- Host tests: launch settings (v4 slot record, v3 kept when every game is A2),
-  the Games options shell (slot row, launch request, saved choice), the
-  launcher, the A1 resident tests with the slots exchanged and the standalone
-  reader's structural tests.
+- Host tests: the native compatibility suite (persistent bridge, controller
+  fast lane, placement, lifetime, fixed-arena plan, exit family, coherence
+  preparation, and the layout tests on real executables), the A1 suite, and the
+  GUI's native-cache and launcher tests. Two checks did not pass here, as on
+  the previous commit: the bottom-heap placement check needs a corpus proof
+  built from original executables this machine lacks, and the personalization
+  tool's own test already fails before this change.
+- The structural probe gives byte-identical results before and after this
+  change for the 16 other recognized executables in your library; only the
+  five early titles changed, and they now resolve their driver layout.
 - Nothing in this package has run on a console yet.

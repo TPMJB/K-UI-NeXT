@@ -93,13 +93,11 @@ def test_sheet():
     writer = csv.writer(stream)
     writer.writerow(('game', 'reader', 'virtual_vmu', 'boots', 'gameplay', 'loading_stutter',
                      'memory_card_seen', 'save', 'power_cycle_load', 'failure_screen', 'notes'))
-    for row in (('Sword of the Berserk (Virtual card slot A1)', 'Background New (X)', 'On (A1)'),
-                ('A game that already saved (slot A2)', 'Background New (X)', 'On (A2)'),
-                ('Elemental Gimmick Gear (note the executable sector lines if it stops)', 'Background New (X)',
-                 'standalone, none'),
-                ('Sonic Adventure, optional: seconds to ENTERING OWNER BOOTSTRAP 2, then to the SEGA logo',
-                 'Background New (X)', 'standalone, none'),
-                ('Sonic Adventure, optional: the same two times', 'Standard (background loading Off)', 'Off')):
+    for row in (('A game that already saved (Sonic Adventure 2, Jet Grind Radio or Skies)', 'Background New (X)', 'On (A2)'),
+                ('Sword of the Berserk (Virtual card slot A1)', 'Background New (X)', 'On (A1)'),
+                ('Crazy Taxi 2 (optional)', 'Background New (X)', 'On (A2)'),
+                ('The House of the Dead 2 or Sonic Adventure (no card yet)', 'Background New (X)', 'standalone, none'),
+                ('Elemental Gimmick Gear after the re-rip (optional)', 'Background New (X)', 'standalone, none')):
         writer.writerow((*row, '', '', '', '', '', '', '', ''))
     return stream.getvalue().encode()
 
