@@ -252,8 +252,34 @@ the exact executable (bytes and SHA-256), like Crazy Taxi 2's plan:
   the full proof and the live check.
 - Controller-only frames of the early driver always take the full submit:
   the split capture requires the P2 lock pointer, which only pd 1.50 stores.
-- Still to do: the stage (discovery, installer without allocator calls), the
-  native cache record and the GUI's routing.
+- Stage (dual builds): when heap discovery finds no allocator, the relay
+  binds the arena plan for this exact image and shows `NO SDK ALLOCATOR -
+  REVIEWED RAM ARENA`. The arena takes the fixed arena's route: the borrowed
+  literal gets the trampoline, which gives it the low heap hook, makes the
+  borrowed call, then calls the hook with the arena. The hook's initializer is
+  the stage's no-op (`RTS; NOP` after the trampoline). The installer then
+  takes the arena itself as the lease: the hook's arguments must be exactly
+  the planned arena, entered from the trampoline on an owner stack, and no
+  allocator is called. Placement has its own check
+  (`kui_vmu_native_stage_arena_safe`): 32-byte aligned main RAM outside the
+  live stage and the executable. The digest kept from discovery to
+  installation covers the borrowed call site instead of allocator code. Exit
+  discovery is guarded by the submit window alone; the installer compares,
+  replays and patches no initializer or release entry. In lease-only mode a
+  borrowed literal gets back the call target it held, for Crazy Taxi 2's
+  fixed arena too (it previously got the allocator initializer).
+- Only the compact Background profile's lease is exactly the arena (284
+  KiB); the General profiles' larger leases refuse it, so only the compact
+  modules (A2 and A1) may be routed to it.
+- Checks: a host test runs the stage's whole route on the owner's executable
+  (program extent, driver and digest, plan, placement, lease, exit pair with
+  the submit window alone, and all 60 spans the worker protects, 48 of them
+  receive slots, outside the arena). The fixed-arena audit executes the
+  compiled arm for both kinds, now also checking which line it shows; its
+  mutation test covers the arena tests. The game's crt0 keeps the boot stack
+  (0x8c00f400, guard-filled down to 0x8c00c000), inside the owner range the
+  hook and the installer check.
+- Still to do: the native cache record and the GUI's routing.
 
 ### Remaining
 

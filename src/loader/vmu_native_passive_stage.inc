@@ -153,9 +153,13 @@ static void readonly_patch_entry(uint32_t address,uint32_t target) {
 #include "vmu_native_sdk_coherence_stage.inc"
 #endif
 #if KUI_VMU_NATIVE_READONLY_PROBE
+/* An arena lease has no allocator: no initializer or release entry exists to
+ * compare, replay or patch. */
 static void native_passive_capture_windows(void) {
-    memcpy(readonly_init_window,(const void *)(uintptr_t)native_heap.initializer,sizeof(readonly_init_window));
-    memcpy(readonly_release_window,(const void *)(uintptr_t)native_heap.release,sizeof(readonly_release_window));
+    if(!native_arena) {
+        memcpy(readonly_init_window,(const void *)(uintptr_t)native_heap.initializer,sizeof(readonly_init_window));
+        memcpy(readonly_release_window,(const void *)(uintptr_t)native_heap.release,sizeof(readonly_release_window));
+    }
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     for(unsigned i=0;i<native_exits.count;i++)
         memcpy(persistent_exit_windows[i],(const void *)(uintptr_t)native_exits.entries[i],12u);
@@ -169,14 +173,16 @@ static void native_passive_prepare(void) {
 #if KUI_VMU_NATIVE_READONLY_PROBE
     const struct kui_vmu_native_patch_window windows[3]={{native_driver.submit,12u},
         {native_heap.initializer,12u},{native_heap.release,20u}};
-    if(((native_heap.initializer|native_heap.release)&3u) || !readonly_release_replay_valid()) native_report(2u,12u);
+    const size_t count=native_arena?1u:sizeof(windows)/sizeof(windows[0]);
+    if(!native_arena && (((native_heap.initializer|native_heap.release)&3u) || !readonly_release_replay_valid()))
+        native_report(2u,12u);
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(!kui_vmu_native_exit_discover_guarded((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
-       exec_bytes,KUI_RETAIL_EXEC_ADDRESS,windows,sizeof(windows)/sizeof(windows[0]),
+       exec_bytes,KUI_RETAIL_EXEC_ADDRESS,windows,count,
        &native_exits) || !native_sdk_coherence_cached_admit()) native_report(2u,13u);
 #else
     if(!kui_vmu_native_patch_no_interiors((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
-       exec_bytes,KUI_RETAIL_EXEC_ADDRESS,windows,sizeof(windows)/sizeof(windows[0]))) native_report(2u,12u);
+       exec_bytes,KUI_RETAIL_EXEC_ADDRESS,windows,count)) native_report(2u,12u);
 #endif
     native_passive_capture_windows();
 #else
@@ -235,10 +241,17 @@ static void __attribute__((noipa)) native_passive_lease_only(
     for(unsigned i=0;i<native_exits.count;i++)
         if(memcmp((const void *)(uintptr_t)native_exits.entries[i],persistent_exit_windows[i],12u))
             native_report(9u,7u);
+    /* A borrowed literal (a fixed or arena plan) gets back the call target
+     * it held, not the initializer the low heap hook called. */
+#if KUI_NATIVE_DUAL_READERS
+    const uint32_t original=native_fixed?native_fixed_hook.target:native_heap.initializer_target;
+#else
+    const uint32_t original=native_heap.initializer_target;
+#endif
     uint32_t slot=(native_heap.initializer_slot&UINT32_C(0x1fffffff))|UINT32_C(0x80000000);
-    *(volatile uint32_t *)(uintptr_t)slot=native_heap.initializer_target;
+    *(volatile uint32_t *)(uintptr_t)slot=original;
     native_publish(slot);
-    if(native_word(slot|UINT32_C(0x20000000))!=native_heap.initializer_target ||
+    if(native_word(slot|UINT32_C(0x20000000))!=original ||
        !kui_vmu_native_heap_lease_valid(lease,native_read,NULL,1u) ||
        native_word(native_driver.completion_slot)!=native_driver.consumer)
         native_report(9u,9u);
@@ -420,9 +433,10 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     static const uint16_t original[6]={0x9028u,0x63e2u,0x023eu,0x12c6u,0x9029u,0x63e2u};
     if(memcmp((const void *)(uintptr_t)native_driver.submit,original,sizeof(original))) native_report(9u,3u);
 #if KUI_VMU_NATIVE_READONLY_PROBE
-    if(memcmp((const void *)(uintptr_t)native_heap.initializer,readonly_init_window,sizeof(readonly_init_window)) ||
-       memcmp((const void *)(uintptr_t)native_heap.release,readonly_release_window,sizeof(readonly_release_window)) ||
-       !readonly_release_replay_valid()) native_report(9u,5u);
+    if(!native_arena &&
+       (memcmp((const void *)(uintptr_t)native_heap.initializer,readonly_init_window,sizeof(readonly_init_window)) ||
+        memcmp((const void *)(uintptr_t)native_heap.release,readonly_release_window,sizeof(readonly_release_window)) ||
+        !readonly_release_replay_valid())) native_report(9u,5u);
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(native_runtime_mode()==KUI_VMU_NATIVE_MODE_LEASE_ONLY) {
         native_passive_lease_only(lease,e);return;
@@ -434,8 +448,10 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
 #endif
     /* The first real initializer has returned and our lease is allocated.
      * Every later direct/indirect entry now stops before reclaiming it. */
-    readonly_patch_entry(native_heap.initializer,NATIVE_LOW_RETURN_HOOK);
-    readonly_patch_entry(native_heap.release,e->release_hook);
+    if(!native_arena) {
+        readonly_patch_entry(native_heap.initializer,NATIVE_LOW_RETURN_HOOK);
+        readonly_patch_entry(native_heap.release,e->release_hook);
+    }
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     for(unsigned i=0;i<native_exits.count;i++) {
         if(memcmp((const void *)(uintptr_t)native_exits.entries[i],persistent_exit_windows[i],12u))

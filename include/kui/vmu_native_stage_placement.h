@@ -22,4 +22,9 @@ bool kui_vmu_native_stage_allocation_safe(const struct kui_vmu_native_heap *heap
 bool kui_vmu_native_stage_bottom_allocation_safe(const struct kui_vmu_native_heap *heap,
     uint32_t exec_bytes,uint32_t stage_begin,uint32_t stage_end,
     uint32_t arena_begin,uint32_t arena_bytes);
+/* An arena lease (KUI_VMU_NATIVE_HEAP_ARENA): no allocator call or metadata
+ * write occurs. The complete 32-byte aligned arena must lie in main RAM above
+ * the system area, outside the live stage and the loaded executable. */
+bool kui_vmu_native_stage_arena_safe(uint32_t exec_bytes,uint32_t stage_begin,uint32_t stage_end,
+    uint32_t arena_begin,uint32_t arena_bytes);
 #endif

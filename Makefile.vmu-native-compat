@@ -131,12 +131,20 @@ native-heap-fixed-host-tests:
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-heap-fixed
 
 # No-allocator arena plans and leases. HOTD2_STARTUP, if given, checks the
-# reviewed plan on that executable; CACHE_STARTUPS must all be refused.
+# reviewed plan on that executable; CACHE_STARTUPS must all be refused. The
+# route test runs the compact stage's whole discovery route on it.
 native-heap-arena-host-tests:
 	@mkdir -p $(BUILD)
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_heap_arena.c src/core/hash.c src/core/data.c \
 	 -o $(BUILD)/test-heap-arena
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-heap-arena $(if $(HOTD2_STARTUP),'$(HOTD2_STARTUP)' $(CACHE_STARTUPS),)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_NATIVE_READAHEAD=1 -DKUI_NATIVE_GENERAL_LEAN_LAYOUT=1 \
+	 -DKUI_NATIVE_DUAL_READERS=1 -DKUI_NATIVE_BACKGROUND_COMPACT=1 tests/test_vmu_native_arena_route.c \
+	 src/core/vmu_native_program.c src/core/vmu_native_layout.c src/core/vmu_native_discovery.c \
+	 src/core/vmu_native_heap.c src/core/vmu_native_lifetime.c src/core/vmu_native_exit.c \
+	 src/core/vmu_native_patch.c src/core/vmu_native_stage_placement.c src/core/hash.c src/core/data.c \
+	 -o $(BUILD)/test-arena-route
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-arena-route $(if $(HOTD2_STARTUP),'$(HOTD2_STARTUP)',)
 
 native-lifetime-prepared-host-tests:
 	@mkdir -p $(BUILD)

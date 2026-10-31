@@ -12,6 +12,10 @@ results to its caller. This audit runs the actual compiled code of the
 relay's dispatch, the arm and the trampoline. It proves writes and register
 flow only; console compatibility and the RAM-map evidence that selected the
 arena are separate.
+
+An arena lease (KUI_VMU_NATIVE_HEAP_ARENA, an executable without an SDK
+allocator) takes the same route with one difference: the initializer the low
+heap hook calls is the stage's no-op, as no allocator exists to initialize.
 """
 import argparse
 import hashlib
@@ -33,6 +37,8 @@ ARM = '_native_arm_fixed_call'
 HOOK = '_kui_native_fixed_call_hook'
 RETURN_LABEL = '_kui_native_fixed_call_return'
 FLAG, PLAN_HOOK, CALL_DATA = '_native_fixed', '_native_fixed_hook', '_native_fixed_call'
+ARENA_FLAG, NOOP = '_native_arena', '_kui_native_fixed_call_noop'
+LINES = {False: 'FIXED RAM ARENA FROM REVIEWED RAM MAP', True: 'RAM ARENA LEASE FROM REVIEWED RAM MAP'}
 MASK = 0xffffffff
 # Synthetic owner values: a borrowed literal mid-line, its target (a U0
 # alias, as the game holds it), the allocator initializer and an arena. No
@@ -63,8 +69,15 @@ def trampoline_words(stage):
     literal = struct.unpack_from('<I', code, 0x2c)[0]
     require(literal == ((data[0]&0x1fffffff)|0xa0000000),
             'Fixed-arena trampoline does not read its record through P2')
-    return dict(address=hex(address), return_address=hex(back), bytes=0x30,
-                sha256=hashlib.sha256(code).hexdigest())
+    result = dict(address=hex(address), return_address=hex(back), bytes=0x30,
+                  sha256=hashlib.sha256(code).hexdigest())
+    if NOOP in stage[4]:
+        noop, body, section = symbol_bytes(stage, NOOP, 2)
+        require(section[2]&7 == 6 and noop == address+0x30 and
+                struct.unpack('<2H', body) == (0x000b, 0x0009),
+                'Arena no-op initializer is not RTS/NOP after the trampoline')
+        result['noop'] = hex(noop)
+    return result
 
 
 class FixedCPU(CallbackCPU):
@@ -76,6 +89,7 @@ class FixedCPU(CallbackCPU):
             address, body, _ = symbol_bytes(stage, name, 2)
             self.code_bounds.append((address, address+len(body)))
         self.display_calls = 0
+        self.display_text = []
         self.display = stage[4]['_retail_display_line'][0]
         self.targets |= {self.display}
         self.line_flushes = []
@@ -92,6 +106,10 @@ class FixedCPU(CallbackCPU):
     def callee(self):
         if self.pc == self.display:
             self.display_calls += 1
+            text = bytearray()
+            while len(text) < 64 and (byte := self.read(self.r[4]+len(text), 1)):
+                text.append(byte)
+            self.display_text.append(text.decode('ascii', 'replace'))
             continuation = self.pr
             for i in range(8):
                 self.r[i] = (0x2468ace1+i*0x1111111+self.display_calls)&MASK
@@ -102,7 +120,7 @@ class FixedCPU(CallbackCPU):
         super().callee()
 
 
-def setup_arm(cpu, stage, low, *, flag=1, slot_value=TARGET):
+def setup_arm(cpu, stage, low, *, flag=1, slot_value=TARGET, arena=False):
     control, original = low[2]|0x20000000, low[3]|0x20000000
     for i in range(14):
         cpu.write(control+4*i, 0)
@@ -111,9 +129,14 @@ def setup_arm(cpu, stage, low, *, flag=1, slot_value=TARGET):
     heap, call = stage[4]['_native_heap'][0], stage[4]['_native_call'][0]
     for i in range(18):
         cpu.write(heap+4*i, 0)
-    cpu.write(heap+24, INITIALIZER)
+    # An arena owner names only the borrowed literal: no initializer.
+    cpu.write(heap+24, 0 if arena else INITIALIZER)
     cpu.write(heap+28, SLOT)
-    cpu.write(heap+32, INITIALIZER)
+    cpu.write(heap+32, 0 if arena else INITIALIZER)
+    if ARENA_FLAG in stage[4]:
+        cpu.write(stage[4][ARENA_FLAG][0], int(arena))
+    else:
+        require(not arena, 'Arena arm requested from a stage without arena leases')
     cpu.write(call, CALL_RETURN-6)
     cpu.write(call+4, CALL_RETURN-4)
     cpu.write(call+8, CALL_RETURN)
@@ -128,20 +151,20 @@ def setup_arm(cpu, stage, low, *, flag=1, slot_value=TARGET):
     return control, original
 
 
-def arm_case(resident, stage, expected, reader, *, seed=0, bank=1, variant='ok', body=None):
+def arm_case(resident, stage, expected, reader, *, seed=0, bank=1, variant='ok', body=None, arena=False):
     if body is not None:
         stage = (body, *stage[1:])
     cpu = FixedCPU(resident, stage, reader, (SELECTOR, ARM), seed=seed, bank=bank)
     low = expected[reader-1]
     failure = None
     if variant == 'flag':
-        control, original = setup_arm(cpu, stage, low, flag=0)
+        control, original = setup_arm(cpu, stage, low, flag=0, arena=arena)
         failure = SLOT
     elif variant == 'slot':
-        control, original = setup_arm(cpu, stage, low, slot_value=INITIALIZER)
+        control, original = setup_arm(cpu, stage, low, slot_value=INITIALIZER, arena=arena)
         failure = SLOT
     else:
-        control, original = setup_arm(cpu, stage, low)
+        control, original = setup_arm(cpu, stage, low, arena=arena)
     if isinstance(variant, tuple) and variant[0] == 'control':
         cpu.write(control+4*variant[1], 0x12345678)
         failure = low[2]+4*variant[1]
@@ -178,8 +201,9 @@ def arm_case(resident, stage, expected, reader, *, seed=0, bank=1, variant='ok',
     stack = stage[4]['_native_installer_stack'][0]+0x10000-32
     require(tuple(cpu.read(control+4*i) for i in range(3)) == (installer, stack, 1),
             'Fixed arm did not publish the selected control object and installer')
+    initializer = stage[4][NOOP][0] if arena else INITIALIZER
     require(tuple(cpu.read(original+4*i) for i in range(8)) ==
-            (INITIALIZER, BEGIN, BYTES, back&0x1fffffff, 0, 0, 0, 0),
+            (initializer, BEGIN, BYTES, back&0x1fffffff, 0, 0, 0, 0),
             'Fixed arm did not name the initializer, arena and trampoline return')
     require(tuple(cpu.read(record+4*i) for i in range(5)) == (low[0], BEGIN, BYTES, TARGET, SLOT),
             'Fixed arm did not give the trampoline its reader hook, arena, target and literal')
@@ -189,6 +213,7 @@ def arm_case(resident, stage, expected, reader, *, seed=0, bank=1, variant='ok',
             'Fixed arm did not install the trampoline and this reader\'s owner return')
     require(cpu.flushes == [SLOT&~31] and cpu.display_calls == 1,
             'Fixed arm did not publish the literal once')
+    require(cpu.display_text == [LINES[arena]], 'Fixed arm displayed the wrong arena kind')
     allowed = {control, control+4, control+8, original, original+4, original+8, original+12,
                SLOT, frame+20, *(record+4*i for i in range(5))}
     require(all((at in allowed and count == 4) or cpu.stack_top-256 <= at < cpu.stack_top
@@ -325,15 +350,16 @@ def mutants(resident, stage, expected):
     require(len(tests) >= 5, 'Fixed arm lacks its ownership comparisons')
     variants = ('ok', 'flag', 'slot', 'readback', ('control', 0), ('control', 13),
                 ('original', 0), ('original', 7))
+    kinds = (False, True) if ARENA_FLAG in stage[4] else (False,)
     equivalent = []
     for at in tests:
         detected = 0
         for forced in (0x3000, 0x3006):
             data = bytearray(stage[0])
             struct.pack_into('<H', data, start+at, forced)
-            for variant in variants:
+            for variant, arena in ((v, a) for a in kinds for v in variants):
                 try:
-                    arm_case(resident, stage, expected, 1, variant=variant, body=bytes(data))
+                    arm_case(resident, stage, expected, 1, variant=variant, body=bytes(data), arena=arena)
                 except (ValueError, AssertionError) as error:
                     require(not str(error).startswith('Unsupported'), 'Mutant left the model: '+str(error))
                     detected += 1
@@ -361,18 +387,22 @@ def check(directory, *, self_test=False):
     cases = dict(armed=0, refused=0, entered=0)
     variants = ['ok', 'flag', 'slot', 'readback', *(('control', i) for i in range(14)),
                 *(('original', i) for i in range(8))]
+    kinds = (False, True) if ARENA_FLAG in stage[4] else (False,)
     # As in the callback audit, the SCI image backs memory and the reader
     # selects which linked low reader's roles must appear.
     for reader in (1, 2):
         for seed in range(3):
-            for variant in variants:
-                cases[arm_case(resident, stage, expected, reader, seed=seed, variant=variant)] += 1
+            for arena in kinds:
+                for variant in variants:
+                    cases[arm_case(resident, stage, expected, reader, seed=seed, variant=variant,
+                                   arena=arena)] += 1
             cases[trampoline_case(resident, stage, expected, reader, seed=seed)] += 1
     routes = [dispatch_case(stage, resident, stack, fixed=fixed) for fixed in (False, True)]
     proof = dict(schema=SCHEMA, enabled=True,
                  artifact_sha256={name: hashlib.sha256(image[0]).hexdigest()
                                   for name, image in (('stage', stage), ('resident', resident), ('legacy', legacy))},
                  trampoline=pin, cases=cases, relay_dispatch=routes,
+                 arena_leases=ARENA_FLAG in stage[4],
                  arm_bytes=len(symbol_bytes(stage, ARM, 2)[1]),
                  limits=['Synthetic owner addresses; the reviewed plan and its RAM-map evidence are checked elsewhere.',
                          'The borrowed call, the low heap hook and the installer are modeled as calls.'])

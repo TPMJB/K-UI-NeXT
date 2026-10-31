@@ -175,8 +175,50 @@ static void actual_record(const char *path) {
         CHECK(header==UINT32_C(0x0cfcffe0) && payload==UINT32_C(0x0cfd0000));
     }
 }
+/* An arena lease: the whole arena outside the stage and the executable.
+ * The House of the Dead 2's reviewed arena ends where the stage begins. */
+static bool arena_oracle(uint32_t image,uint32_t stage_begin,uint32_t stage_end,
+    uint32_t arena,uint32_t bytes) {
+    if(!image || image>0xc00000u || !good_alias(stage_begin) || !good_alias(stage_end) ||
+       ((stage_begin^stage_end)&UINT32_C(0xe0000000)) || !good_alias(arena) ||
+       ((arena|bytes)&31u) || !bytes) return false;
+    uint64_t stage=phys(stage_begin),limit=phys(stage_end),begin=phys(arena),finish=begin+bytes;
+    if(stage<first || stage>=end_ram || limit<=stage || limit>end_ram ||
+       (stage<(uint64_t)first+image && first<limit) ||
+       begin<first || begin>=end_ram || finish>end_ram) return false;
+    return !(begin<limit && stage<finish) && !(begin<(uint64_t)first+image && first<finish);
+}
+static void arena_cases(void) {
+    const uint32_t image=812268u,stage=UINT32_C(0x8ce00000),limit=UINT32_C(0x8ce40000);
+    const uint32_t arena=UINT32_C(0x8cdb9000),bytes=0x47000u;
+    for(unsigned i=0;i<3u;i++) for(unsigned j=0;j<3u;j++)
+        CHECK(kui_vmu_native_stage_arena_safe(image,phys(stage)|areas[i],phys(limit)|areas[i],
+            phys(arena)|areas[j],bytes));
+    CHECK(!kui_vmu_native_stage_arena_safe(image,stage,limit,arena+32u,bytes));
+    CHECK(!kui_vmu_native_stage_arena_safe(image,stage,limit,arena,bytes+32u));
+    CHECK(!kui_vmu_native_stage_arena_safe(image,stage,limit,arena+4u,bytes));
+    CHECK(!kui_vmu_native_stage_arena_safe(image,stage,limit,arena,bytes-4u));
+    CHECK(!kui_vmu_native_stage_arena_safe(image,stage,limit,UINT32_C(0x6cdb9000),bytes));
+    CHECK(!kui_vmu_native_stage_arena_safe(image,stage,limit,UINT32_C(0x8c0c6000),bytes));
+    CHECK(!kui_vmu_native_stage_arena_safe(image,stage,limit,UINT32_C(0x8c000000),bytes));
+    CHECK(!kui_vmu_native_stage_arena_safe(0u,stage,limit,arena,bytes));
+    CHECK(!kui_vmu_native_stage_arena_safe(0xc00004u,stage,limit,arena,bytes));
+    CHECK(!kui_vmu_native_stage_arena_safe(image,stage,UINT32_C(0xace40000),arena,bytes));
+    CHECK(!kui_vmu_native_stage_arena_safe(image,stage,stage,arena,bytes));
+    /* Against the oracle: every 32 KiB-step arena of three sizes, with the
+     * stage high or low and executables reaching the arena or not. */
+    const uint32_t sizes[]={0x47000u,0x20u,0x400000u},images[]={812268u,0xc00000u,0x20u};
+    const uint32_t stages[][2]={{UINT32_C(0x8ce00000),UINT32_C(0x8ce40000)},
+        {UINT32_C(0x8c400000),UINT32_C(0x8c410000)},{UINT32_C(0x0cfe0000),UINT32_C(0x0d000000)}};
+    for(unsigned s=0;s<3u;s++) for(unsigned n=0;n<3u;n++) for(unsigned g=0;g<3u;g++)
+        for(uint32_t at=UINT32_C(0x0c000000);at<UINT32_C(0x0d000000);at+=0x8000u) {
+            uint32_t address=at|areas[(at>>15)%3u];
+            CHECK(kui_vmu_native_stage_arena_safe(images[n],stages[g][0],stages[g][1],address,sizes[s])==
+                  arena_oracle(images[n],stages[g][0],stages[g][1],address,sizes[s]));
+        }
+}
 int main(int argc,char **argv) {
-    direct_cases();boundaries();malformed();
+    direct_cases();boundaries();malformed();arena_cases();
     for(int i=1;i<argc;i++) actual_record(argv[i]);
     printf("Native temporary-stage placement: %u checks passed%s\n",checks,argc>1?" including actual cached heap geometry":"");
     return 0;
