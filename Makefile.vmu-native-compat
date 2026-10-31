@@ -225,7 +225,8 @@ compat-host-tests: native-infile-buffers-host-tests native-program-host-tests na
 	KUI_NATIVE_STARTUP=$(if $(STARTUP),'$(STARTUP)',) python3 tests/test_vmu_native_resolution_cache_tool.py
 	python3 tests/test_vmu_native_cache_seed_artifact.py
 	python3 tests/test_package_vmu_native_catalog.py
-	$(MAKE) -s -f Makefile test-games-native-cache STARTUP=$(if $(STARTUP),'$(STARTUP)',)
+	$(MAKE) -s -f Makefile test-games-native-cache STARTUP=$(if $(STARTUP),'$(STARTUP)',) \
+	 HOTD2_STARTUP=$(if $(HOTD2_STARTUP),'$(HOTD2_STARTUP)',)
 
 .PHONY: native-phase-host-tests
 native-phase-host-tests:

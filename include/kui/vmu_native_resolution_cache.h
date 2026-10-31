@@ -18,6 +18,9 @@ struct kui_vmu_native_resolution {
     struct kui_vmu_native_exit exits;
 };
 /* Complete fresh immutable-image discovery, uniqueness and six-window proof.
+ * For an executable without an SDK allocator, a reviewed arena plan for that
+ * exact image replaces the allocator proof, and the submit window alone
+ * guards its exits (kind 3).
  * Emits canonical little-endian metadata only: no live allocation, SD state,
  * manager snapshot, lease or authority to install anything is serialized.
  * Both output buffers must be disjoint from each other and the image. All

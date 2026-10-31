@@ -45,6 +45,14 @@ static void mock(const uint8_t *image,size_t n,struct kui_vmu_native_resolution 
     r->exits.family=KUI_VMU_NATIVE_EXIT_FAMILY;r->exits.load=load;
     r->exits.image_bytes=(uint32_t)n;r->exits.count=3u;r->exits.entries[3]=0u;
 }
+/* An arena lease's owner names only the image and the borrowed literal; its
+ * call returns after the borrowed JSR/delay slot and names a nonempty arena. */
+static void arena_record(struct kui_vmu_native_resolution *r) {
+    r->heap=(struct kui_vmu_native_heap){.version=KUI_VMU_NATIVE_HEAP_VERSION,.bytes=sizeof(r->heap),
+        .family=KUI_VMU_NATIVE_HEAP_ARENA,.image_bytes=r->driver.image_bytes,.load=r->driver.load_address,
+        .initializer_slot=r->driver.load_address+0x100u};
+    r->call.return_pr=r->call.call+4u;
+}
 static void codec_and_trust_tests(void) {
     uint8_t image[1024],wire[1024],original[1024],pin[32],changed[32];
     for(unsigned i=0;i<sizeof(image);i++) image[i]=(uint8_t)(i*17u+1u);
@@ -215,6 +223,44 @@ static void codec_and_trust_tests(void) {
     CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
     source.call.return_pr=source.call.call+4u;source.call.entry_bytes=0u;
     CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
+    /* An arena lease (no SDK allocator) is kind 3, with no allocator role,
+     * the borrowed literal, its own return and a nonempty arena. A kind-1 or
+     * kind-2 reader refuses it; no other kind value names it. */
+    mock(image,sizeof(image),&source);arena_record(&source);CHECK(source.call.entry_bytes);
+    CHECK(kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));CHECK(get32(wire+20u)==3u);
+    memcpy(original,wire,sizeof(wire));
+    CHECK(kui_vmu_native_resolution_cache_record_digest(wire,sizeof(wire),pin));
+    CHECK(replay(image,sizeof(image),load,wire,sizeof(wire),pin,&out));CHECK(!memcmp(&source,&out,sizeof(out)));
+    CHECK(!strict(image,sizeof(image),load,wire,sizeof(wire),&out));
+    for(uint32_t kind=0u;kind<5u;kind++) {
+        if(kind==3u) continue;
+        memcpy(wire,original,sizeof(wire));wire[20]=(uint8_t)kind;seal(wire);
+        CHECK(!kui_vmu_native_resolution_cache_record_digest(wire,sizeof(wire),changed));
+        CHECK(!replay(image,sizeof(image),load,wire,sizeof(wire),pin,&out));
+    }
+    /* Neither allocator record can be relabelled kind 3. */
+    for(unsigned fixed=0u;fixed<2u;fixed++) {
+        mock(image,sizeof(image),&source);
+        if(fixed) {source.heap.initializer_slot=0u;source.heap.initializer_target=0u;source.call.return_pr=source.call.call+4u;}
+        CHECK(kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
+        wire[20]=3u;seal(wire);CHECK(!kui_vmu_native_resolution_cache_record_digest(wire,sizeof(wire),changed));
+    }
+    for(unsigned role=0u;role<12u;role++) {
+        mock(image,sizeof(image),&source);arena_record(&source);
+        struct kui_vmu_native_heap *h=&source.heap;
+        uint32_t *const roles[12]={&h->layout,&h->initializer,&h->initializer_target,&h->allocate,
+            &h->release,&h->dispatch_cell,&h->dispatch_table,&h->sentinel,&h->cursor_cell,
+            &h->begin_cell,&h->bytes_cell,&h->begin_copy_cell};
+        *roles[role]=load+0x200u;CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
+    }
+    mock(image,sizeof(image),&source);arena_record(&source);source.heap.initializer_slot=0u;
+    CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
+    arena_record(&source);source.call.return_pr+=2u;CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
+    arena_record(&source);source.call.entry_bytes=0u;CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
+    mock(image,sizeof(image),&source);arena_record(&source);source.heap.load+=4u;
+    CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
+    arena_record(&source);source.heap.image_bytes+=4u;CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
+    arena_record(&source);source.heap.family=3u;CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
 }
 static void actual_tests(const char *path) {
     FILE *f=fopen(path,"rb");CHECK(f);CHECK(!fseek(f,0,SEEK_END));long length=ftell(f);CHECK(length>0 && length<=0xc00000);rewind(f);
@@ -307,14 +353,24 @@ static void generic_actual_tests(const char *path) {
     }
     CHECK((fresh.layout.rx_layout==KUI_VMU_NATIVE_RX_UNIFORM48 && fresh.layout.inputs==1u) ||
         (fresh.layout.rx_layout==KUI_VMU_NATIVE_RX_EXPLICIT48 && fresh.layout.inputs==12u));
-    CHECK(fresh.exits.family>=KUI_VMU_NATIVE_EXIT_FAMILY && fresh.exits.family<=KUI_VMU_NATIVE_EXIT_CRT_BOOTSTRAP);
-    CHECK(fresh.exits.count==(fresh.exits.family==KUI_VMU_NATIVE_EXIT_PAIR_ONLY?2u:
+    CHECK(fresh.exits.family>=KUI_VMU_NATIVE_EXIT_FAMILY && fresh.exits.family<=KUI_VMU_NATIVE_EXIT_EARLY_PAIR);
+    CHECK(fresh.exits.count==(fresh.exits.family==KUI_VMU_NATIVE_EXIT_PAIR_ONLY ||
+        fresh.exits.family==KUI_VMU_NATIVE_EXIT_EARLY_PAIR?2u:
         fresh.exits.family==KUI_VMU_NATIVE_EXIT_CRT_BOOTSTRAP?4u:3u));
+    /* An arena lease's record: kind 3, the reviewed plan, and exits guarded
+     * by the submit window alone. */
+    CHECK((get32(wire+20u)==3u)==(fresh.heap.family==KUI_VMU_NATIVE_HEAP_ARENA));
+    if(fresh.heap.family==KUI_VMU_NATIVE_HEAP_ARENA) {
+        struct kui_vmu_native_heap owner;struct kui_vmu_native_heap_call call;
+        struct kui_vmu_native_heap_fixed_hook hook;
+        CHECK(kui_vmu_native_heap_arena_plan(image,program_bytes,program_hash,load,&owner,&call,&hook));
+        CHECK(!memcmp(&owner,&fresh.heap,sizeof(owner)) && !memcmp(&call,&fresh.call,sizeof(call)));
+    }
     digest(image,n,after_hash);CHECK(!memcmp(source_hash,after_hash,32u));
     image[program_bytes-1u]^=1u;CHECK(!replay(image,program_bytes,load,wire,sizeof(wire),pin,&out));
     char source_hex[65],program_hex[65];kui_hex(source_hash,32u,source_hex);kui_hex(program_hash,32u,program_hex);
-    printf("  Complete cache corpus: %s layout=%u inputs=%u exit-family=%u source-bytes=%zu program-bytes=%zu "
-        "discarded-suffix-bytes=%zu source-sha256=%s image-sha256=%s\n",path,
+    printf("  Complete cache corpus: %s kind=%u layout=%u inputs=%u exit-family=%u source-bytes=%zu program-bytes=%zu "
+        "discarded-suffix-bytes=%zu source-sha256=%s image-sha256=%s\n",path,get32(wire+20u),
         fresh.layout.rx_layout,fresh.layout.inputs,fresh.exits.family,n,program_bytes,n-program_bytes,source_hex,program_hex);
     free(image);
 }

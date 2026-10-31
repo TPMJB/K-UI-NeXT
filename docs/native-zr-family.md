@@ -279,7 +279,21 @@ the exact executable (bytes and SHA-256), like Crazy Taxi 2's plan:
   mutation test covers the arena tests. The game's crt0 keeps the boot stack
   (0x8c00f400, guard-filled down to 0x8c00c000), inside the owner range the
   hook and the installer check.
-- Still to do: the native cache record and the GUI's routing.
+- Cache record (kind 3): when heap discovery finds no allocator, the
+  resolution record holds the arena plan's owner and call, with the exits
+  guarded by the submit window alone. Its owner may hold no allocator role;
+  the stage replays it only through the plan bound again for the exact
+  image, and kind-1 and kind-2 readers refuse it as a cache miss. On the 21
+  executables of the library only The House of the Dead 2's result changes
+  (refused before, kind 3 now); every other record is byte-identical.
+- GUI: the launcher seeds a kind-3 record only into a combined module whose
+  own lease (its dual descriptor's lease size) is exactly the arena, that is
+  the compact Background modules in A2 and A1. Any other module is not
+  seeded; with New it then takes the standalone reader, as for an executable
+  without any proof. So with this change The House of the Dead 2 runs on the
+  Background module, with Virtual VMU On or Off, instead of the standalone
+  New reader. Host tests cover the routing for all three readers and four
+  lease sizes, and on the owner's executable.
 
 ### Remaining
 
