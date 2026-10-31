@@ -26,8 +26,10 @@ class FixedArenaArtifact(unittest.TestCase):
     def test_arm_trampoline_and_dispatch(self):
         proof = self.proof
         self.assertTrue(proof["enabled"])
-        # Both readers, three seeds: one accepted arm and 25 refusals each.
-        self.assertEqual(proof["cases"], {"armed": 6, "refused": 150, "entered": 6})
+        # Both readers, three seeds: one accepted arm and 25 refusals each,
+        # for the fixed arena and, in a stage with arena leases, the arena.
+        kinds = 2 if proof.get("arena_leases") else 1
+        self.assertEqual(proof["cases"], {"armed": 6*kinds, "refused": 150*kinds, "entered": 6})
         self.assertEqual(proof["relay_dispatch"], ["initializer", "fixed"])
         self.assertEqual(proof["trampoline"]["bytes"], 0x30)
 
