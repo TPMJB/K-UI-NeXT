@@ -125,6 +125,18 @@ static void readonly_patch_entry(uint32_t address,uint32_t target) {
     kui_native_passive_publish(address,address+sizeof(patch));
     if(memcmp((const void *)(uintptr_t)(address|0x20000000u),patch,sizeof(patch))) native_report(9u,6u);
 }
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+/* The early pair's first exit: an eight-byte head through the next entry's
+ * veneer, which the same loop writes with the same target. */
+static void readonly_patch_head(uint32_t address) {
+    address=(address&0x1fffffffu)|0x80000000u;
+    uint16_t patch[4];
+    if(!kui_vmu_native_patch_encode_head(address,patch)) native_report(9u,8u);
+    memcpy((void *)(uintptr_t)address,patch,sizeof(patch));
+    kui_native_passive_publish(address,address+sizeof(patch));
+    if(memcmp((const void *)(uintptr_t)(address|0x20000000u),patch,sizeof(patch))) native_report(9u,6u);
+}
+#endif
 #endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
 #include "vmu_native_sdk_coherence_stage.inc"
@@ -135,7 +147,8 @@ static void native_passive_capture_windows(void) {
     memcpy(readonly_release_window,(const void *)(uintptr_t)native_heap.release,sizeof(readonly_release_window));
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     for(unsigned i=0;i<native_exits.count;i++)
-        memcpy(persistent_exit_windows[i],(const void *)(uintptr_t)native_exits.entries[i],12u);
+        memcpy(persistent_exit_windows[i],(const void *)(uintptr_t)native_exits.entries[i],
+            kui_vmu_native_exit_window(&native_exits,i));
 #endif
 }
 #endif
@@ -210,7 +223,8 @@ static uint32_t __attribute__((noipa)) native_runtime_diagnostics(void) {
 static void __attribute__((noipa)) native_passive_lease_only(
     struct kui_vmu_native_heap_lease *lease,const struct kui_vmu_native_passive_exports *e) {
     for(unsigned i=0;i<native_exits.count;i++)
-        if(memcmp((const void *)(uintptr_t)native_exits.entries[i],persistent_exit_windows[i],12u))
+        if(memcmp((const void *)(uintptr_t)native_exits.entries[i],persistent_exit_windows[i],
+                  kui_vmu_native_exit_window(&native_exits,i)))
             native_report(9u,7u);
     uint32_t slot=(native_heap.initializer_slot&UINT32_C(0x1fffffff))|UINT32_C(0x80000000);
     *(volatile uint32_t *)(uintptr_t)slot=native_heap.initializer_target;
@@ -412,10 +426,14 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     readonly_patch_entry(native_heap.initializer,NATIVE_LOW_RETURN_HOOK);
     readonly_patch_entry(native_heap.release,e->release_hook);
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
-    for(unsigned i=0;i<native_exits.count;i++) {
-        if(memcmp((const void *)(uintptr_t)native_exits.entries[i],persistent_exit_windows[i],12u))
+    /* Last entry first: the early pair's head jumps through the next entry's
+     * veneer, which is then already in place, so each exit stays usable. */
+    for(unsigned i=native_exits.count;i--;) {
+        uint32_t window=kui_vmu_native_exit_window(&native_exits,i);
+        if(memcmp((const void *)(uintptr_t)native_exits.entries[i],persistent_exit_windows[i],window))
             native_report(9u,7u);
-        readonly_patch_entry(native_exits.entries[i],NATIVE_LOW_RETURN_HOOK);
+        if(window==8u) readonly_patch_head(native_exits.entries[i]);
+        else readonly_patch_entry(native_exits.entries[i],NATIVE_LOW_RETURN_HOOK);
     }
 #endif
 #endif

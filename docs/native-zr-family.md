@@ -176,17 +176,46 @@ unchanged.
 - The SDK coherence gate (it retires stale P1 lines of pd 1.50's P2 lock
   alias) is neither prepared nor installed for the early family.
 
+### Exits (done for The House of the Dead 2 and Time Stalkers)
+
+The early SDK (syBt 1.04) has two adjacent BIOS exits, byte-identical in all
+five titles: an 8-byte one that jumps through the vector cell 0x8c0000e0 with
+R4=1, and right after it a cleanup exit that calls the SDK cleanup routine and
+then jumps through the same cell with R4=2. They share one literal pool.
+
+- Discovery: `KUI_VMU_NATIVE_EXIT_EARLY_PAIR` (family 7, two entries, the
+  second exactly 8 bytes after the first). Every opcode, the vector literal
+  and the linker fill are exact; the cleanup literal must be an even address
+  inside the image. The pair must be the image's only firmware consumer: its
+  own two loads of the vector cell in any alias, and no load of the boot
+  entry 0x8c008300. No branch or literal may enter either window's interior.
+- Patch: the first entry gets an 8-byte head, `mov.l @(3,pc),r0; jmp @r0;
+  nop; nop`, which loads its target from the second entry's ordinary 12-byte
+  veneer; both go to the same low terminal. The veneer's literal is 4-byte
+  aligned at either entry alignment, so the head is constant
+  (`KUI_VMU_NATIVE_PATCH_HEAD`). The worker witnesses all 20 bytes of the
+  joint before every transfer, with the head's window 8 bytes and the
+  veneer's 12. The terminal does not read R4, so how each exit was entered
+  does not matter.
+- Results on the library: The House of the Dead 2 resolves (entries
+  0x8c0afeb0/0x8c0afeb8, cleanup 0x0c0bea30), and so does Time Stalkers
+  (0x8c026ce8/0x8c026cf0). Every other title's exit result is unchanged.
+  Elemental Gimmick Gear is refused because two literal-pool words read as
+  branches into the windows; Sonic Adventure because it also loads 0x8c008300
+  in its executable loader; Silver because it has more consumers of the vector
+  cell, including a 0xac0000e0 alias.
+- Size: the compact worker now fills its 72 KiB exactly. Its state ends at
+  the owned 4 KiB stack, so the next worker change has to free room first.
+
 ### Remaining
 
 - Lease. The House of the Dead 2 does not link syMalloc at all: it manages
   its own memory, so its lease needs a fixed arena outside any allocator, a new
-  lease mode. Sonic Adventure, Time Stalkers, Elemental Gimmick Gear and Silver
-  link syMalloc 1.35, which the heap model does not know yet.
-- Exits. The early SDK has two adjacent BIOS exits: an 8-byte one (r4=1) and a
-  cleanup one (r4=2) right after it, both through the literal 0x8c0000e0. An
-  8-byte joint head at the first, loading its target from the second's
-  standard veneer, covers both. Sonic Adventure also has an executable-loader
-  consumer of 0x8c008300 that needs its own proof.
+  lease mode, with no release or initializer hook. Sonic Adventure, Time
+  Stalkers, Elemental Gimmick Gear and Silver link syMalloc 1.35, which the
+  heap model does not know yet.
+- Exits for Sonic Adventure (its executable-loader consumer of 0x8c008300
+  needs its own proof), Silver and Elemental Gimmick Gear.
 - Silver's program extent, which depends on the allocator proof.
 
 ### RAM maps (compatibility test 3)

@@ -327,6 +327,67 @@ static void pvr_tests(void) {
         word(image,load+0x682u);CHECK(!guarded(image,sizeof(image),load,extra,1u,&out));
     }
 }
+/* pd 1.46 adjacent exits, encoded independently: an eight-byte BIOS exit
+ * (R4=1), then a cleanup exit (R4=2) sharing its vector literal. */
+static const unsigned early=0x300u;
+static void early_fixture(uint16_t fill) {
+    memset(image,0,sizeof(image));
+    long_load(early,2u,early+0x1cu,UINT32_C(0x8c0000e0));
+    halfword(image+early+2u,0x6322);halfword(image+early+4u,0x432b);halfword(image+early+6u,0xe401);
+    halfword(image+early+8u,0x4f22);long_load(early+10u,3u,early+0x20u,load+0x760u);
+    halfword(image+early+12u,0x430b);halfword(image+early+14u,0x0009);
+    long_load(early+16u,3u,early+0x1cu,UINT32_C(0x8c0000e0));halfword(image+early+18u,0xe402);
+    halfword(image+early+20u,0x6032);halfword(image+early+22u,0x402b);halfword(image+early+24u,0x4f26);
+    halfword(image+early+26u,fill);
+}
+static void early_pair_tests(void) {
+    struct kui_vmu_native_exit out;
+    const uint32_t aliases[]={0u,UINT32_C(0x80000000),UINT32_C(0xa0000000)};
+    for(unsigned a=0;a<3u;a++) for(unsigned f=0;f<2u;f++) {
+        early_fixture(f?UINT16_C(0xffff):0u);uint32_t base=(load&0x1fffffffu)|aliases[a];
+        CHECK(discover(image,sizeof(image),base,&out));
+        CHECK(out.family==KUI_VMU_NATIVE_EXIT_EARLY_PAIR && out.count==2u && kui_vmu_native_exit_shape_valid(&out));
+        CHECK(out.entries[0]==base+early && out.entries[1]==base+early+8u && !out.entries[2] && !out.entries[3]);
+        CHECK(out.bios_vector_literal==base+early+0x1cu && out.cleanup==load+0x760u && !out.exec_thunk);
+        CHECK(kui_vmu_native_exit_window(&out,0u)==8u && kui_vmu_native_exit_window(&out,1u)==12u);
+    }
+    /* Every authored opcode, the vector literal and the fill are exact. The
+     * cleanup literal is a code pointer: any even in-image alias is valid, so
+     * it is checked separately below. */
+    for(unsigned at=0;at<0x20u;at+=2u) for(unsigned bit=0;bit<16u;bit+=5u) {
+        early_fixture(0u);image[early+at+bit/8u]^=(unsigned char)(1u<<(bit&7u));
+        CHECK(!discover(image,sizeof(image),load,&out));
+    }
+    early_fixture(0x0009u);CHECK(!discover(image,sizeof(image),load,&out));
+    early_fixture(0u);word(image+early+0x20u,UINT32_C(0x8c100000));CHECK(!discover(image,sizeof(image),load,&out));
+    early_fixture(0u);word(image+early+0x20u,load+0x761u);CHECK(!discover(image,sizeof(image),load,&out));
+    /* The pair must be the only firmware consumer, in any alias. */
+    for(unsigned a=0;a<3u;a++) for(unsigned target=0;target<2u;target++) {
+        early_fixture(0u);
+        long_load(0x80u,3u,0x100u,aliases[a]|(target?UINT32_C(0x0c008300):UINT32_C(0x0c0000e0)));
+        CHECK(!discover(image,sizeof(image),load,&out));
+    }
+    /* No branch or literal may enter either window's interior; the second
+     * entry itself stays a legitimate target. */
+    for(unsigned offset=2u;offset<20u;offset+=2u) {
+        early_fixture(0u);word(image,load+early+offset);
+        if(offset==8u) CHECK(discover(image,sizeof(image),load,&out));
+        else CHECK(!discover(image,sizeof(image),load,&out));
+    }
+    early_fixture(0u);memcpy(image+0x600u,image+early,0x24u);CHECK(!discover(image,sizeof(image),load,&out));
+    const struct kui_vmu_native_patch_window extra[]={{load+0x688u,12u}};
+    early_fixture(0u);CHECK(guarded(image,sizeof(image),load,extra,1u,&out));
+    CHECK(out.family==KUI_VMU_NATIVE_EXIT_EARLY_PAIR);
+    word(image,load+0x68au);CHECK(!guarded(image,sizeof(image),load,extra,1u,&out));
+    const struct kui_vmu_native_patch_window overlapping[]={{load+early+18u,4u}};
+    early_fixture(0u);CHECK(!guarded(image,sizeof(image),load,overlapping,1u,&out));
+    /* The shape contract binds the adjacent second entry. */
+    early_fixture(0u);CHECK(discover(image,sizeof(image),load,&out));
+    struct kui_vmu_native_exit bad=out;bad.entries[1]+=2u;CHECK(!kui_vmu_native_exit_shape_valid(&bad));
+    bad=out;bad.count=3u;CHECK(!kui_vmu_native_exit_shape_valid(&bad));
+    bad=out;bad.exec_thunk=load;CHECK(!kui_vmu_native_exit_shape_valid(&bad));
+    bad=out;bad.family=KUI_VMU_NATIVE_EXIT_PAIR_ONLY;CHECK(kui_vmu_native_exit_window(&bad,0u)==12u);
+}
 static void pair_only_tests(void) {
     struct kui_vmu_native_exit out;
     const uint32_t aliases[]={0u,UINT32_C(0x80000000),UINT32_C(0xa0000000)};
@@ -384,7 +445,7 @@ static void pair_fill_tests(void) {
 }
 int main(int argc,char **argv) {
     struct kui_vmu_native_exit out;
-    pvr_tests();pair_only_tests();pair_fill_tests();crt_tests();
+    pvr_tests();pair_only_tests();early_pair_tests();pair_fill_tests();crt_tests();
     fixture();CHECK(discover(image,sizeof(image),load,&out));
     CHECK(out.version==KUI_VMU_NATIVE_EXIT_VERSION && out.family==1u && out.bytes==sizeof(out) && out.count==3u);
     CHECK(out.load==load && out.image_bytes==sizeof(image));
@@ -520,9 +581,9 @@ int main(int argc,char **argv) {
         CHECK(discover(actual,(size_t)n,load,&out));
         CHECK(out.family==KUI_VMU_NATIVE_EXIT_FAMILY || out.family==KUI_VMU_NATIVE_EXIT_PVR_CLEAR || out.family==KUI_VMU_NATIVE_EXIT_PVR_COMPACT ||
             out.family==KUI_VMU_NATIVE_EXIT_PAIR_ONLY || out.family==KUI_VMU_NATIVE_EXIT_TERMINAL_DISPATCH ||
-            out.family==KUI_VMU_NATIVE_EXIT_CRT_BOOTSTRAP);
+            out.family==KUI_VMU_NATIVE_EXIT_CRT_BOOTSTRAP || out.family==KUI_VMU_NATIVE_EXIT_EARLY_PAIR);
         struct kui_vmu_native_exit original=out;
-        CHECK(out.count==(out.family==KUI_VMU_NATIVE_EXIT_PAIR_ONLY?2u:
+        CHECK(out.count==(out.family==KUI_VMU_NATIVE_EXIT_PAIR_ONLY || out.family==KUI_VMU_NATIVE_EXIT_EARLY_PAIR?2u:
             out.family==KUI_VMU_NATIVE_EXIT_CRT_BOOTSTRAP?4u:3u));
         CHECK(out.count==4u || !out.entries[3]);
         if(original.family==KUI_VMU_NATIVE_EXIT_CRT_BOOTSTRAP) {

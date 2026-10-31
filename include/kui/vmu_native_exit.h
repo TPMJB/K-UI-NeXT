@@ -12,6 +12,10 @@
 #define KUI_VMU_NATIVE_EXIT_PAIR_ONLY 4u
 #define KUI_VMU_NATIVE_EXIT_TERMINAL_DISPATCH 5u
 #define KUI_VMU_NATIVE_EXIT_CRT_BOOTSTRAP 6u
+/* pd 1.46 (syBt 1.04): two adjacent exits sharing one BIOS-vector literal.
+ * The first is only eight bytes long, so it takes an eight-byte head that
+ * jumps through the second exit's standard veneer literal. */
+#define KUI_VMU_NATIVE_EXIT_EARLY_PAIR 7u
 #define KUI_VMU_NATIVE_EXIT_ENTRIES 4u
 struct kui_vmu_native_exit {
     uint32_t version,bytes,family,load,image_bytes,count;
@@ -37,6 +41,9 @@ static inline bool kui_vmu_native_exit_shape_valid(const struct kui_vmu_native_e
     if(!e || e->version!=KUI_VMU_NATIVE_EXIT_VERSION || e->bytes!=sizeof(*e)) return false;
     if(e->family==KUI_VMU_NATIVE_EXIT_PAIR_ONLY)
         return e->count==2u && !e->entries[2] && !e->entries[3] && !e->exec_thunk;
+    if(e->family==KUI_VMU_NATIVE_EXIT_EARLY_PAIR)
+        return e->count==2u && e->entries[0] && e->entries[1]==e->entries[0]+8u &&
+            !e->entries[2] && !e->entries[3] && !e->exec_thunk;
     if(e->family==KUI_VMU_NATIVE_EXIT_TERMINAL_DISPATCH)
         return e->count==3u && e->entries[2] && !e->entries[3] && e->terminal_dispatch.table;
     if(e->family==KUI_VMU_NATIVE_EXIT_CRT_BOOTSTRAP)
@@ -44,6 +51,11 @@ static inline bool kui_vmu_native_exit_shape_valid(const struct kui_vmu_native_e
     return (e->family==KUI_VMU_NATIVE_EXIT_FAMILY ||
         e->family==KUI_VMU_NATIVE_EXIT_PVR_CLEAR || e->family==KUI_VMU_NATIVE_EXIT_PVR_COMPACT) &&
         e->count==3u && !e->entries[3];
+}
+/* Bytes a hook replaces at entry i: twelve, except the early pair's first
+ * entry, whose eight-byte head ends where the second entry's veneer begins. */
+static inline uint32_t kui_vmu_native_exit_window(const struct kui_vmu_native_exit *e,unsigned i) {
+    return e->family==KUI_VMU_NATIVE_EXIT_EARLY_PAIR && !i?8u:12u;
 }
 /* Fresh immutable-image discovery for three strict SDK exit/exec shapes or
  * an exact legacy pair with no additional encoded firmware consumers and no

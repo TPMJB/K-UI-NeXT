@@ -141,11 +141,12 @@ static void codec_and_trust_tests(void) {
     CHECK(!kui_vmu_native_resolution_cache_encode(&source,&source,1024u));
     source.layout.inputs=24u;CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
     CHECK(!memcmp(wire,original,sizeof(wire)));
-    for(unsigned family=KUI_VMU_NATIVE_EXIT_FAMILY;family<=KUI_VMU_NATIVE_EXIT_CRT_BOOTSTRAP;family++) {
+    for(unsigned family=KUI_VMU_NATIVE_EXIT_FAMILY;family<=KUI_VMU_NATIVE_EXIT_EARLY_PAIR;family++) {
         mock(image,sizeof(image),&source);source.exits.family=family;
-        if(family==KUI_VMU_NATIVE_EXIT_PAIR_ONLY) {
+        if(family==KUI_VMU_NATIVE_EXIT_PAIR_ONLY || family==KUI_VMU_NATIVE_EXIT_EARLY_PAIR) {
             source.exits.count=2u;source.exits.entries[2]=0u;source.exits.exec_thunk=0u;
         }
+        if(family==KUI_VMU_NATIVE_EXIT_EARLY_PAIR) source.exits.entries[1]=source.exits.entries[0]+8u;
         if(family==KUI_VMU_NATIVE_EXIT_CRT_BOOTSTRAP) {source.exits.count=4u;source.exits.entries[3]=load+0x300u;}
         source.layout.rx_layout=KUI_VMU_NATIVE_RX_UNIFORM48;source.layout.inputs=1u;
         CHECK(kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
@@ -159,6 +160,14 @@ static void codec_and_trust_tests(void) {
     CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
     source.exits.entries[2]=0u;source.exits.exec_thunk=load;
     CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
+    /* The early pair's second entry is bound to the end of the first's head. */
+    mock(image,sizeof(image),&source);source.exits.family=KUI_VMU_NATIVE_EXIT_EARLY_PAIR;
+    source.exits.count=2u;source.exits.entries[2]=source.exits.exec_thunk=0u;
+    source.exits.entries[1]=source.exits.entries[0]+12u;
+    CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
+    source.exits.entries[1]=source.exits.entries[0]+8u;
+    CHECK(kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
+    source.exits.count=3u;CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
     mock(image,sizeof(image),&source);source.exits.family=KUI_VMU_NATIVE_EXIT_TERMINAL_DISPATCH;
     source.exits.count=2u;CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
     source.exits.count=3u;source.exits.entries[2]=0u;

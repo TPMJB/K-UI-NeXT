@@ -722,6 +722,55 @@ static void prepared_hook_witnesses(void) {
     printf("Prepared hook witnesses: %u byte/bit mutations, %u ignored neighbor bits, %u read-fault positions\n",
         mutations,neighbors,reader_faults);
 }
+/* pd 1.46 adjacent exits: an eight-byte head at the first entry jumps
+ * through the veneer literal of the second, eight bytes on. Every bit of the
+ * twenty-byte joint is witnessed, and the head's load reaches the terminal. */
+static void early_pair_setup(unsigned half) {
+    model_reset();fixture();prepare_handoff();model_card.bus.transfer_block=block_transfer;
+    lease_calls=block_callbacks=0u;corrupt_before_loan=corrupt_after_loan=0u;
+    input.exits.family=KUI_VMU_NATIVE_EXIT_EARLY_PAIR;input.exits.count=2u;
+    input.exits.entries[0]=0x8c013000u+half*2u;input.exits.entries[1]=input.exits.entries[0]+8u;
+    input.exits.entries[2]=input.exits.exec_thunk=0u;
+}
+static void early_pair_hook_witnesses(void) {
+    unsigned mutations=0u;
+    for(unsigned half=0u;half<2u;half++) {
+        early_pair_setup(half);arm();install_hooks();
+        /* Two ordinary veneers are not the joint patch. */
+        CHECK(!installed_hooks_valid());
+        const uint32_t head=input.exits.entries[0];uint16_t patch[4];
+        CHECK(kui_vmu_native_patch_encode_head(head,patch));
+        for(unsigned byte=0;byte<8u;byte++) put(head+byte,1u,(patch[byte/2u]>>(8u*(byte&1u)))&255u);
+        CHECK(installed_hooks_valid());
+        CHECK(hook_witness_count==11u+(half?7u:5u));
+        uint32_t op,literal,target;
+        CHECK(read_value(NULL,physical(head)|UINT32_C(0xa0000000),2u,&op) && op==UINT32_C(0xd003));
+        literal=((physical(head)+4u)&~3u)+4u*(op&255u);
+        CHECK(literal>=physical(head)+14u && literal+4u<=physical(head)+20u);
+        CHECK(read_value(NULL,literal|UINT32_C(0xa0000000),4u,&target) && target==input.low_terminal);
+        for(unsigned byte=0;byte<20u;byte++) for(unsigned bit=0;bit<8u;bit++) {
+            uint32_t address=head+byte;uint8_t old=memory[physical(address)-UINT32_C(0x0c000000)];
+            put(address,1u,old^(1u<<bit));CHECK(!installed_hooks_valid());
+            put(address,1u,old);CHECK(installed_hooks_valid());++mutations;
+        }
+        const uint32_t adjacent[]={head-2u,head-1u,head+20u,head+21u};
+        for(unsigned i=0;i<4u;i++) for(unsigned bit=0;bit<8u;bit++) {
+            uint8_t old=memory[physical(adjacent[i])-UINT32_C(0x0c000000)];
+            put(adjacent[i],1u,old^(1u<<bit));CHECK(installed_hooks_valid());put(adjacent[i],1u,old);
+        }
+        idle();
+    }
+    /* The shape binds the second entry to the head's end. */
+    for(unsigned invalid=0u;invalid<4u;invalid++) {
+        early_pair_setup(0u);
+        if(invalid==0u) input.exits.entries[1]+=4u;
+        else if(invalid==1u) input.exits.count=3u;
+        else if(invalid==2u) input.exits.entries[2]=0x8c013200u;
+        else input.exits.exec_thunk=0x8c013200u;
+        CHECK(kui_vmu_native_passive_arm(&input,NULL)<0 && !state.armed);
+    }
+    printf("Early exit pair: %u joint byte/bit mutations\n",mutations);
+}
 static void external_boundary_mutations(void) {
     uint8_t next[512],before[1024];memset(next,0x73,sizeof(next));
     for(unsigned write=0;write<2u;write++) for(unsigned after=0;after<2u;after++)
@@ -990,7 +1039,7 @@ int main(void) {
     memcpy(target,rx_bytes(VIRTUAL),sizeof(target));reject_complete();
     CHECK(!durable_card.commits && durable_card.faulted && !memcmp(target,rx_bytes(VIRTUAL),sizeof(target)));
     CHECK(!memcmp(sd.media[image_lba(42u)],next,512u));
-    bounded_controller_work();external_boundary_mutations();halfword_exit_hooks();prepared_hook_witnesses();
+    bounded_controller_work();external_boundary_mutations();halfword_exit_hooks();prepared_hook_witnesses();early_pair_hook_witnesses();
     polling_ownership_scope();gameplay_diagnostics();hooks_only_has_no_virtual_card_or_io();raw_chain_preserves_original_dma();completion_context_failures();
 #if !KUI_NATIVE_SPLIT_CONTROLLER_GENERAL
     diagnostic_pair_budget();

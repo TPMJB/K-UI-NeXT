@@ -775,19 +775,25 @@ static bool hook_word(uint32_t address,uint32_t value,uint32_t mask) {
     hook_witness[i].address=physical(address)|UINT32_C(0xa0000000);
     hook_witness[i].value=value&mask;hook_witness[i].mask=mask;return true;
 }
-static bool prepare_hook_entry(uint32_t address,uint32_t target) {
+/* Witness a hook's exact bytes with aligned-word masks: twelve for a veneer
+ * to target, or eight for the early exit pair's first entry, whose constant
+ * head jumps through the next entry's veneer literal. */
+static bool prepare_hook_entry(uint32_t address,uint32_t target,unsigned bytes) {
     uint16_t patch[6];
-    if(!ram(address,12u,2u) || !kui_vmu_native_patch_encode(address,target,patch)) return false;
+    if(!ram(address,bytes,2u) || !kui_vmu_native_patch_encode(address,target,patch)) return false;
+    /* KUI_VMU_NATIVE_PATCH_HEAD: the veneer's first four halfwords with the
+     * load displacement three and, at a halfword-aligned entry, a NOP where
+     * the veneer's literal begins. */
+    if(bytes==8u) {patch[0]=UINT16_C(0xd003);patch[3]=9u;}
     uint32_t word=physical(address)&~3u,value=0u,mask=0u;
-    for(unsigned i=0;i<12u;i++) {
-        uint32_t at=physical(address)+i;
+    for(unsigned i=0;i<bytes/2u;i++) {
+        uint32_t at=physical(address)+2u*i;
         if((at&~3u)!=word) {
             if(!hook_word(word,value,mask)) return false;
             word=at&~3u;value=mask=0u;
         }
-        unsigned shift=(at&3u)*8u;
-        value|=(uint32_t)((patch[i/2u]>>((i&1u)*8u))&255u)<<shift;
-        mask|=UINT32_C(255)<<shift;
+        unsigned shift=(at&2u)*8u;
+        value|=(uint32_t)patch[i]<<shift;mask|=UINT32_C(0xffff)<<shift;
     }
     return hook_word(word,value,mask);
 }
@@ -819,13 +825,14 @@ static bool prepare_sdk_coherence_hook(void) {
 static bool prepare_installed_hooks(void) {
     hook_witness_ready=0u;hook_witness_count=0u;
     if((config.driver.submit|config.lease.owner.release|config.lease.owner.initializer)&3u ||
-       !prepare_hook_entry(config.driver.submit,kui_vmu_native_worker_exports.submit_hook) ||
-       !prepare_hook_entry(config.lease.owner.release,kui_vmu_native_worker_exports.release_hook) ||
-       !prepare_hook_entry(config.lease.owner.initializer,config.low_terminal) ||
+       !prepare_hook_entry(config.driver.submit,kui_vmu_native_worker_exports.submit_hook,12u) ||
+       !prepare_hook_entry(config.lease.owner.release,kui_vmu_native_worker_exports.release_hook,12u) ||
+       !prepare_hook_entry(config.lease.owner.initializer,config.low_terminal,12u) ||
        !hook_word(config.lease.owner.initializer_slot,config.low_heap_hook,UINT32_MAX) ||
        !hook_word(config.driver.completion_slot,kui_vmu_native_worker_exports.complete_hook,UINT32_MAX)) return false;
     for(unsigned i=0;i<config.exits.count;i++)
-        if(!prepare_hook_entry(config.exits.entries[i],config.low_terminal)) return false;
+        if(!prepare_hook_entry(config.exits.entries[i],config.low_terminal,
+                               kui_vmu_native_exit_window(&config.exits,i))) return false;
 #ifndef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
     /* Witness the original initializer call-target word, independently
      * decoded from its exact wrapper, alongside the ordinary DMA hooks. */

@@ -36,7 +36,8 @@ int main(int argc,char **argv) {
     for(unsigned i=0;i<repeat;i++) REQUIRE(kui_vmu_native_exit_discover(image,bytes,load,&exits));
     double exit_only=now()-start;
     struct kui_vmu_native_patch_window all[3u+KUI_VMU_NATIVE_EXIT_ENTRIES]={additional[0],additional[1],additional[2]};
-    for(unsigned i=0;i<exits.count;i++) all[3u+i]=(struct kui_vmu_native_patch_window){exits.entries[i],12u};
+    for(unsigned i=0;i<exits.count;i++)
+        all[3u+i]=(struct kui_vmu_native_patch_window){exits.entries[i],kui_vmu_native_exit_window(&exits,i)};
     start=now();
     for(unsigned i=0;i<repeat;i++) REQUIRE(kui_vmu_native_patch_no_interiors(image,bytes,load,all,3u+exits.count));
     double extra_scan=now()-start;start=now();
