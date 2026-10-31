@@ -215,13 +215,36 @@ then jumps through the same cell with R4=2. They share one literal pool.
   284 KiB lease and the 192 KiB cache are unchanged; 1 KiB is now free for
   code and state. Other profiles keep 4 KiB stacks.
 
+### No-allocator arena (in progress, for The House of the Dead 2)
+
+The House of the Dead 2 links no SDK allocator, so its lease is a reviewed
+fixed arena that is the whole lease (`KUI_VMU_NATIVE_HEAP_ARENA`), pinned to
+the exact executable (bytes and SHA-256), like Crazy Taxi 2's plan:
+
+- Borrowed call: the game's init calls the SDK hardware init once
+  (MOV.L/JSR/NOP at 0x8c01b112, literal 0x8c01b184, target 0x0c0ae9c4). That
+  routine copies the interrupt vector the SDK SCI route needs (0x8c0bf044 loads
+  it at 0x8c0bf0a2). The borrowed literal has one consumer and no immutable
+  word holds its address.
+- Arena: 0x8cdb9000, 284 KiB, ending where the stage begins. The owner names
+  only the image and the borrowed literal; every allocator role is zero. The
+  lease is begin == payload, the complete arena, phase 2, one initialization.
+  Its validity is that exact geometry, and every allocator-only proof
+  (identity, release, bottom transaction) refuses it.
+- Lifetime plan: no release is ever admitted. Its identity is the worker's own
+  first eight header words at the arena's start, so the per-transfer poll stops
+  the worker if anything overwrites the arena's beginning; no protected SDK span
+  may lie inside the arena.
+- Still to do: the worker's arena mode (no release or initializer hooks), the
+  stage (discovery, installer without allocator calls), the native cache record
+  and the GUI's routing.
+
 ### Remaining
 
-- Lease. The House of the Dead 2 does not link syMalloc at all: it manages
-  its own memory, so its lease needs a fixed arena outside any allocator, a new
-  lease mode, with no release or initializer hook. Sonic Adventure, Time
-  Stalkers, Elemental Gimmick Gear and Silver link syMalloc 1.35, which the
-  heap model does not know yet.
+- Lease for the syMalloc 1.35 titles: Sonic Adventure, Time Stalkers,
+  Elemental Gimmick Gear and Silver link syMalloc 1.35, which the heap model
+  does not know yet. Silver's own exact-image module (built in October) took
+  its lease from that allocator and is a reference for its control block.
 - Exits for Sonic Adventure (its executable-loader consumer of 0x8c008300
   needs its own proof), Silver and Elemental Gimmick Gear.
 - Silver's program extent, which depends on the allocator proof.
@@ -238,11 +261,14 @@ Pages 112-113 (the stage, 0x8ce00000-0x8ce40000) and 127 are never marked.
 | Sonic Adventure (two sessions, the same) | 00000000 00000000 80000000 02000010 | single pages only: 0x8cbe0000, 0x8cc80000, 0x8cf20000 |
 | The House of the Dead 2, session 1 | 00000000 00000000 00000000 681CFFE0 | 0x8cca0000-0x8ce00000 (1.375 MiB), 0x8ce40000-0x8cea0000, 0x8cf60000-0x8cf80000, 0x8cfa0000-0x8cfe0000 |
 | The House of the Dead 2, session 2 | 00000000 00000000 FFFF0000 681CFFFF | 0x8ca00000-0x8ce00000 (4 MiB) and the same three upper pieces |
+| The House of the Dead 2, session 3 (test 6, to midway through the second chapter) | 00000000 00000000 00000000 681CFFFC | 0x8cc40000-0x8ce00000 (1.75 MiB) and the same three upper pieces |
 | Time Stalkers (two sessions) | all zero | none |
 
-- The House of the Dead 2 left 0x8cca0000-0x8ce00000 untouched in both
-  sessions, room for the 284 KiB module as a fixed arena. Session 1 used 2.625
-  MiB more than session 2, so a long session should confirm the range first.
+- The House of the Dead 2 left 0x8cca0000-0x8ce00000 untouched in all three
+  sessions, room for the 284 KiB module as a fixed arena. Its top 284 KiB,
+  0x8cdb9000-0x8ce00000, is the reviewed arena: about 1.1 MiB above the highest
+  page any session wrote (session 1's 0x8cca0000). Later chapters and the other
+  modes should still be mapped before relying on it.
 - Sonic Adventure has no two adjacent untouched pages, so the 284 KiB module
   cannot sit in a fixed arena there.
 - Time Stalkers wrote every page, probably clearing RAM at boot. Marking RAM

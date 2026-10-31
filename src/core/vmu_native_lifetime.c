@@ -64,15 +64,29 @@ bool kui_vmu_native_lifetime_prepare(struct kui_vmu_native_lifetime_plan *out,
        !kui_vmu_native_heap_lease_valid(lease,read,context,initializations)) return false;
     struct kui_vmu_native_lifetime_plan p={0};
     p.self=(uintptr_t)out;p.alias=lease->begin&UINT32_C(0xe0000000);
-    p.begin=physical(lease->begin);p.end=p.begin+lease->heap_bytes;
-    p.lease_begin=physical(lease->header);p.lease_end=physical(lease->payload)+lease->lease_bytes;
-    p.sentinel=lease->owner.sentinel;p.cursor=lease->owner.cursor_cell;
-    const uint32_t addresses[8]={lease->owner.begin_cell,lease->owner.begin_copy_cell,
-        lease->owner.bytes_cell,lease->owner.dispatch_cell,lease->owner.dispatch_table,
-        lease->owner.dispatch_table+4u,lease->owner.sentinel+4u,lease->header+4u};
-    const uint32_t values[8]={lease->begin,lease->begin,lease->heap_bytes,lease->owner.dispatch_table,
-        lease->owner.allocate,lease->owner.release,0u,lease->units};
-    for(unsigned i=0;i<8u;i++) p.identity[i]=(struct kui_vmu_native_lifetime_witness){addresses[i],values[i]};
+    bool arena=lease->owner.family==KUI_VMU_NATIVE_HEAP_ARENA;
+    if(arena) {
+        /* No allocator: no release is ever admitted, so sentinel and cursor
+         * stay zero. Identity is the worker's own first eight header words at
+         * the arena's start, which nothing else writes; no protected SDK span
+         * may lie inside the arena. */
+        p.begin=p.lease_begin=physical(lease->payload);p.end=p.lease_end=p.begin+lease->lease_bytes;
+        for(unsigned i=0;i<8u;i++) {
+            uint32_t address=lease->payload+4u*i,value;
+            if(!read || !read(context,address,&value)) return false;
+            p.identity[i]=(struct kui_vmu_native_lifetime_witness){address,value};
+        }
+    } else {
+        p.begin=physical(lease->begin);p.end=p.begin+lease->heap_bytes;
+        p.lease_begin=physical(lease->header);p.lease_end=physical(lease->payload)+lease->lease_bytes;
+        p.sentinel=lease->owner.sentinel;p.cursor=lease->owner.cursor_cell;
+        const uint32_t addresses[8]={lease->owner.begin_cell,lease->owner.begin_copy_cell,
+            lease->owner.bytes_cell,lease->owner.dispatch_cell,lease->owner.dispatch_table,
+            lease->owner.dispatch_table+4u,lease->owner.sentinel+4u,lease->header+4u};
+        const uint32_t values[8]={lease->begin,lease->begin,lease->heap_bytes,lease->owner.dispatch_table,
+            lease->owner.allocate,lease->owner.release,0u,lease->units};
+        for(unsigned i=0;i<8u;i++) p.identity[i]=(struct kui_vmu_native_lifetime_witness){addresses[i],values[i]};
+    }
     for(size_t i=0;i<count;i++) {
         uint32_t area=ranges[i].begin&UINT32_C(0xe0000000),at=physical(ranges[i].begin);
         if((area!=0u && area!=UINT32_C(0x80000000) && area!=UINT32_C(0xa0000000)) ||
@@ -82,6 +96,7 @@ bool kui_vmu_native_lifetime_prepare(struct kui_vmu_native_lifetime_plan *out,
         if(at<p.begin) at=p.begin;
         if(end>p.end) end=p.end;
         if(at>=end) continue;
+        if(arena) return false;
         unsigned j=p.count++;
         while(j && p.ranges[j-1u].begin>at) {p.ranges[j]=p.ranges[j-1u];--j;}
         p.ranges[j]=(struct kui_vmu_native_lifetime_interval){at,end};

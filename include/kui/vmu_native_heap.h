@@ -7,6 +7,10 @@
 
 #define KUI_VMU_NATIVE_HEAP_VERSION 1u
 #define KUI_VMU_NATIVE_HEAP_TAIL32 1u
+/* No SDK allocator at all: a reviewed fixed arena is the whole lease. The
+ * owner names only its image and the borrowed call's literal; every other
+ * allocator role is zero, and no release or initializer entry exists. */
+#define KUI_VMU_NATIVE_HEAP_ARENA 2u
 #define KUI_VMU_NATIVE_HEAP_DISPATCH2 1u
 #define KUI_VMU_NATIVE_HEAP_FREE_LIMIT 1024u
 enum kui_vmu_native_heap_result {
@@ -53,6 +57,16 @@ struct kui_vmu_native_heap_fixed_hook {uint32_t slot,target;};
 bool kui_vmu_native_heap_fixed_plan(const void *image,size_t n,const uint8_t sha256[32],
     const struct kui_vmu_native_heap *,struct kui_vmu_native_heap_call *,
     struct kui_vmu_native_heap_fixed_hook *hook);
+/* An exact executable that links no SDK allocator (bytes and SHA-256 at load):
+ * a reviewed plan names the game init's single call into the SDK hardware
+ * init, borrowed and checked exactly as for fixed_plan, and an arena outside
+ * the image that console RAM maps showed the game never writes. The arena
+ * becomes the whole lease (heap_arena_lease); owner is the ARENA descriptor,
+ * call names the borrowed site and the arena, hook the literal and target.
+ * RAM-map evidence is not a whole-program proof. */
+bool kui_vmu_native_heap_arena_plan(const void *image,size_t n,const uint8_t sha256[32],uint32_t load,
+    struct kui_vmu_native_heap *owner,struct kui_vmu_native_heap_call *call,
+    struct kui_vmu_native_heap_fixed_hook *hook);
 
 /* The caller must exclude allocator mutation across the entire check; the
  * reader must return cached owner state coherently, without changing it.
@@ -64,6 +78,11 @@ struct kui_vmu_native_heap_lease {
     struct kui_vmu_native_heap owner;
     uint32_t begin,heap_bytes,lease_bytes,header,payload,units,remaining;
 };
+/* The arena lease: phase 2, one initialization, begin == payload, the
+ * complete arena as both heap and lease bytes, no allocator header. Its
+ * validity (heap_lease_valid) is this exact geometry; nothing is read. */
+bool kui_vmu_native_heap_arena_lease(const struct kui_vmu_native_heap *owner,uint32_t begin,
+    uint32_t bytes,uint32_t lease_bytes,struct kui_vmu_native_heap_lease *);
 /* initializations is an independently maintained, live initializer-entry
  * count. Exactly the first initialization is supported. A caller must keep
  * observing reinitialization; metadata cannot detect an unobserved reset.

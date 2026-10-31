@@ -21,7 +21,7 @@ COMPAT_CACHE_HOST_SRC = src/core/vmu_native_program.c src/core/vmu_native_resolu
  src/core/vmu_native_layout.c src/core/vmu_native_heap.c src/core/vmu_native_exit.c \
  src/core/vmu_native_patch.c src/core/hash.c src/core/data.c
 
-.PHONY: compat-host-tests native-placement-host-tests native-lease-alias-host-tests native-lifetime-prepared-host-tests native-layout-root-host-tests native-layout-leaf-host-tests native-layout-tail-host-tests native-heap-fixed-host-tests native-evolution-context-host-tests native-evolution-fault-host-tests
+.PHONY: compat-host-tests native-placement-host-tests native-lease-alias-host-tests native-lifetime-prepared-host-tests native-layout-root-host-tests native-layout-leaf-host-tests native-layout-tail-host-tests native-heap-fixed-host-tests native-heap-arena-host-tests native-evolution-context-host-tests native-evolution-fault-host-tests
 .PHONY: native-evolution-trace-host-tests native-evolution-trace-persistent-host-tests
 .PHONY: native-exception-capture-host-tests
 .PHONY: native-sdk-coherence-install-host-tests
@@ -130,6 +130,14 @@ native-heap-fixed-host-tests:
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_heap_fixed.c -o $(BUILD)/test-heap-fixed
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-heap-fixed
 
+# No-allocator arena plans and leases. HOTD2_STARTUP, if given, checks the
+# reviewed plan on that executable; CACHE_STARTUPS must all be refused.
+native-heap-arena-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_heap_arena.c src/core/hash.c src/core/data.c \
+	 -o $(BUILD)/test-heap-arena
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-heap-arena $(if $(HOTD2_STARTUP),'$(HOTD2_STARTUP)' $(CACHE_STARTUPS),)
+
 native-lifetime-prepared-host-tests:
 	@mkdir -p $(BUILD)
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_lifetime_prepared.c \
@@ -174,7 +182,7 @@ native-placement-host-tests: $(BUILD)/stage.elf $(BUILD)/native-worker.bin
 	 $(if $(EVOLUTION1_STARTUP),--evolution1 '$(EVOLUTION1_STARTUP)',) $(if $(EVOLUTION2_STARTUP),--evolution2 '$(EVOLUTION2_STARTUP)',) $(if $(JGR_STARTUP),--jgr '$(JGR_STARTUP)',)
 	python3 tests/test_vmu_native_stage_stack_artifact.py
 
-compat-host-tests: native-infile-buffers-host-tests native-program-host-tests native-crt-prearm-host-tests native-timer-registration-host-tests $(BUILD)/retail-maple-observe.kui persistent-host-tests passive-host-tests readonly-host-tests native-placement-host-tests native-lease-alias-host-tests native-lifetime-prepared-host-tests native-layout-root-host-tests native-layout-leaf-host-tests native-layout-tail-host-tests native-heap-fixed-host-tests native-controller-fast-host-tests native-phase-host-tests native-cached-stack-host-tests
+compat-host-tests: native-infile-buffers-host-tests native-program-host-tests native-crt-prearm-host-tests native-timer-registration-host-tests $(BUILD)/retail-maple-observe.kui persistent-host-tests passive-host-tests readonly-host-tests native-placement-host-tests native-lease-alias-host-tests native-lifetime-prepared-host-tests native-layout-root-host-tests native-layout-leaf-host-tests native-layout-tail-host-tests native-heap-fixed-host-tests native-heap-arena-host-tests native-controller-fast-host-tests native-phase-host-tests native-cached-stack-host-tests
 	KUI_NATIVE_ARTIFACT_DIR=$(BUILD) python3 tests/test_vmu_native_prepared_artifact.py
 	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_mode.c src/core/vmu_native_mode.c -o $(BUILD)/test-mode
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-mode
