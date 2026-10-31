@@ -12,7 +12,7 @@ games that already save still do.
 
 | File | What it is |
 |---|---|
-| GUI | Test 4b's GUI, rebuilt with this build number. |
+| GUI | Test 4b's GUI. Its launch check now recognizes the early driver too, with no visible change. |
 | `retail-native-dual.kui` | The Background module, card in **A2**, with the early-driver support. |
 | `retail-native-dual-a1.kui` | The same module with the card in **A1**, for games set to A1. |
 | Standalone New reader | Test 4b's, rebuilt with this build number. |
