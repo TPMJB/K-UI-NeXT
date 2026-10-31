@@ -1789,16 +1789,18 @@ static void edit_clock(struct kui_shell *s,unsigned buttons) {
 }
 static void recovery_requests_clear(struct kui_shell *s) {
     s->salvage_trial_requested=s->salvage_speed_probe_requested=s->salvage_trial_result=false;
+    s->salvage_read_trial_requested=false;
     s->salvage_details=false;
     s->salvage_diagnostic_requested=KUI_SALVAGE_DIAGNOSTIC_NONE;
 }
 static enum kui_shell_action recovery_diagnostic(struct kui_shell *s,
-        enum kui_salvage_diagnostic mode,bool trial,bool speed) {
+        enum kui_salvage_diagnostic mode,bool trial,bool speed,bool reads) {
     enum kui_shell_page origin=s->page;
     recovery_requests_clear(s);
     s->salvage_result_return=origin==KUI_SHELL_SALVAGE_DRIVE?origin:KUI_SHELL_SALVAGE;
     s->salvage_diagnostic_requested=mode;s->salvage_trial_requested=trial;
     s->salvage_speed_probe_requested=speed;s->salvage_trial_result=true;
+    s->salvage_read_trial_requested=reads;
     s->page=KUI_SHELL_SALVAGE;return KUI_SHELL_SALVAGE_RECOVER;
 }
 static void recovery_pass_limit(struct kui_shell *s,bool previous) {
@@ -2149,7 +2151,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     if(s->confirm_salvage_check) {
         if(buttons==KUI_SHELL_A) {
             s->confirm_salvage_check=false;
-            return recovery_diagnostic(s,KUI_SALVAGE_DIAGNOSTIC_REVALIDATE,false,false);
+            return recovery_diagnostic(s,KUI_SALVAGE_DIAGNOSTIC_REVALIDATE,false,false,false);
         }
         return KUI_SHELL_NONE;
     }
@@ -3188,16 +3190,18 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     case KUI_SHELL_SALVAGE_DRIVE:
         s->salvage_drive_selected=move_count(s->salvage_drive_selected,buttons,KUI_SHELL_RECOVERY_DIAGNOSTICS_COUNT);
         if(buttons!=KUI_SHELL_A)break;
-        if(s->salvage_drive_selected==KUI_SHELL_RECOVERY_REVALIDATE) {
+        if(s->salvage_drive_selected==KUI_SHELL_RECOVERY_READ_TRIAL)
+            return recovery_diagnostic(s,KUI_SALVAGE_DIAGNOSTIC_NONE,false,false,true);
+        else if(s->salvage_drive_selected==KUI_SHELL_RECOVERY_REVALIDATE) {
             recovery_requests_clear(s);s->confirm_salvage_check=true;
         } else if(s->salvage_drive_selected==KUI_SHELL_RECOVERY_SAVED_READS)
-            return recovery_diagnostic(s,KUI_SALVAGE_DIAGNOSTIC_SAVED_READS,false,false);
+            return recovery_diagnostic(s,KUI_SALVAGE_DIAGNOSTIC_SAVED_READS,false,false,false);
         else if(s->salvage_drive_selected==KUI_SHELL_RECOVERY_TRIAL)
-            return recovery_diagnostic(s,KUI_SALVAGE_DIAGNOSTIC_NONE,true,false);
+            return recovery_diagnostic(s,KUI_SALVAGE_DIAGNOSTIC_NONE,true,false,false);
         else if(s->salvage_drive_selected==KUI_SHELL_RECOVERY_SPEED_PROBE)
-            return recovery_diagnostic(s,KUI_SALVAGE_DIAGNOSTIC_NONE,false,true);
+            return recovery_diagnostic(s,KUI_SALVAGE_DIAGNOSTIC_NONE,false,true,false);
         else if(s->salvage_drive_selected==KUI_SHELL_RECOVERY_G1_MODE)
-            return recovery_diagnostic(s,KUI_SALVAGE_DIAGNOSTIC_G1_MODE,false,false);
+            return recovery_diagnostic(s,KUI_SALVAGE_DIAGNOSTIC_G1_MODE,false,false,false);
         else {recovery_requests_clear(s);s->page=KUI_SHELL_SALVAGE;}
         break;
     case KUI_SHELL_SYSTEM_TOOLS:

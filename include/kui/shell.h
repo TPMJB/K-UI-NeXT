@@ -69,7 +69,8 @@ enum kui_shell_recovery_option {
     KUI_SHELL_RECOVERY_OPTIONS_COUNT
 };
 enum kui_shell_recovery_diagnostic {
-    KUI_SHELL_RECOVERY_REVALIDATE, KUI_SHELL_RECOVERY_SAVED_READS, KUI_SHELL_RECOVERY_TRIAL,
+    KUI_SHELL_RECOVERY_READ_TRIAL, KUI_SHELL_RECOVERY_REVALIDATE,
+    KUI_SHELL_RECOVERY_SAVED_READS, KUI_SHELL_RECOVERY_TRIAL,
     KUI_SHELL_RECOVERY_SPEED_PROBE, KUI_SHELL_RECOVERY_G1_MODE,
     KUI_SHELL_RECOVERY_DIAGNOSTICS_RETURN, KUI_SHELL_RECOVERY_DIAGNOSTICS_COUNT
 };
@@ -187,6 +188,7 @@ struct kui_shell {
     unsigned salvage_drive_selected;
     /* One queued RECOVER action only; main copies and clears this request. */
     bool salvage_trial_requested;
+    bool salvage_read_trial_requested;
     bool salvage_speed_probe_requested;
     enum kui_salvage_diagnostic salvage_diagnostic_requested;
     bool salvage_trial_result; /* Keep trial results visible until dismissed. */
@@ -503,6 +505,7 @@ struct kui_shell_view {
     const struct kui_app_status *app_status;
     bool busy, saving, cancel_requested, saved_verified, memory_valid;
     bool salvage_control_trial; /* Busy salvage uses fixed trial profiles. */
+    bool salvage_read_trial; /* Bounded comparison of approaches to missing sectors. */
     bool salvage_speed_probe; /* Read-only speed support test; no saved job admission. */
     enum kui_salvage_diagnostic salvage_diagnostic;
     bool log_truncated, reference_checked, video_trial, drive_reset_required;

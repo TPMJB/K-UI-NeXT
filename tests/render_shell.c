@@ -35,7 +35,8 @@
  * recovery-dashboard-blocked, recovery-dashboard-long, recovery-options,
  * recovery-diagnostics, recovery-check-confirm, disc-tools-recovery,
  * disc-tools-verify, verify-direct, salvage-working-details, recovery-dashboard-error,
- * recovery-dashboard-stopped, recovery-dashboard-reset, recovery-dashboard-complete. */
+ * recovery-dashboard-stopped, recovery-dashboard-reset, recovery-dashboard-complete,
+ * salvage-drive-read-trial, salvage-read-trial-working, salvage-read-trial-result. */
 #include "kui/shell.h"
 #include "kui/salvage_display.h"
 #include <stdio.h>
@@ -730,7 +731,7 @@ int main(int argc,char **argv) {
             shell.salvage_drive_options.retries=2;
         }
         if(!strcmp(argv[1],"recovery-diagnostics"))shell.page=KUI_SHELL_SALVAGE_DRIVE;
-    } else if(!strcmp(argv[1],"salvage-drive") || !strcmp(argv[1],"salvage-drive-retries") || !strcmp(argv[1],"salvage-drive-trial") || !strcmp(argv[1],"salvage-drive-speed-probe") || !strcmp(argv[1],"salvage-drive-saved-reads") || !strcmp(argv[1],"salvage-drive-g1") || !strcmp(argv[1],"salvage-drive-revalidate") || !strcmp(argv[1],"salvage-drive-return")) {
+    } else if(!strcmp(argv[1],"salvage-drive") || !strcmp(argv[1],"salvage-drive-retries") || !strcmp(argv[1],"salvage-drive-trial") || !strcmp(argv[1],"salvage-drive-read-trial") || !strcmp(argv[1],"salvage-drive-speed-probe") || !strcmp(argv[1],"salvage-drive-saved-reads") || !strcmp(argv[1],"salvage-drive-g1") || !strcmp(argv[1],"salvage-drive-revalidate") || !strcmp(argv[1],"salvage-drive-return")) {
         shell.page=KUI_SHELL_SALVAGE_DRIVE;
         if(!strcmp(argv[1],"salvage-drive")) {
             shell.page=KUI_SHELL_SALVAGE_OPTIONS;shell.salvage_options_selected=KUI_SHELL_RECOVERY_SPEED;
@@ -740,6 +741,7 @@ int main(int argc,char **argv) {
             shell.salvage_drive_options=(struct kui_drive_options){8,1};
         }
         if(!strcmp(argv[1],"salvage-drive-trial"))shell.salvage_drive_selected=KUI_SHELL_RECOVERY_TRIAL;
+        if(!strcmp(argv[1],"salvage-drive-read-trial"))shell.salvage_drive_selected=KUI_SHELL_RECOVERY_READ_TRIAL;
         if(!strcmp(argv[1],"salvage-drive-speed-probe"))shell.salvage_drive_selected=KUI_SHELL_RECOVERY_SPEED_PROBE;
         if(!strcmp(argv[1],"salvage-drive-saved-reads"))shell.salvage_drive_selected=KUI_SHELL_RECOVERY_SAVED_READS;
         if(!strcmp(argv[1],"salvage-drive-g1"))shell.salvage_drive_selected=KUI_SHELL_RECOVERY_G1_MODE;
@@ -803,6 +805,22 @@ int main(int argc,char **argv) {
         }
         view.app_status=&status;view.busy=!finished;
         view.salvage_diagnostic=saved?KUI_SALVAGE_DIAGNOSTIC_SAVED_READS:KUI_SALVAGE_DIAGNOSTIC_G1_MODE;
+    } else if(!strcmp(argv[1],"salvage-read-trial-working") || !strcmp(argv[1],"salvage-read-trial-result")) {
+        bool finished=!strcmp(argv[1],"salvage-read-trial-result");
+        shell.page=KUI_SHELL_SALVAGE;shell.salvage_trial_result=true;
+        shell.salvage_result_return=KUI_SHELL_SALVAGE_DRIVE;
+        status.complete=finished;status.passed=finished;status.done=finished?64u:21u;status.total=64;status.line_count=9;
+        strcpy(status.message,finished?"Example: read comparison finished":"Example: comparing approaches to damaged sectors");
+        strcpy(status.lines[0],finished?"Comparison steps 64/64; 16 sampled sectors":"Comparison steps 21/64; 16 sampled sectors");
+        strcpy(status.lines[1],"Saved repairs 6344; remaining 673");
+        strcpy(status.lines[2],"Single: valid 0/16; new 0; 45.0s");
+        strcpy(status.lines[3],"Lead-in 4: valid 1/16; new 1; 51.0s");
+        strcpy(status.lines[4],"Centered 16: valid 2/16; new 1; 63.0s");
+        strcpy(status.lines[5],"Reseek + 16: valid 2/16; new 0; 76.0s");
+        strcpy(status.lines[6],"/KUI/salvage/job-0003");
+        strcpy(status.lines[7],"One retry setting across all four approaches.");
+        strcpy(status.lines[8],"Send the automatically saved diagnostic report.");
+        view.app_status=&status;view.busy=!finished;view.salvage_read_trial=true;
     } else if(!strcmp(argv[1],"salvage-trial-working") || !strcmp(argv[1],"salvage-trial-result")) {
         bool finished=!strcmp(argv[1],"salvage-trial-result");
         shell.page=KUI_SHELL_SALVAGE;shell.salvage_selected=5;shell.salvage_trial_result=true;

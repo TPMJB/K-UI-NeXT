@@ -207,7 +207,7 @@ static void salvage_session_observe_errors(void) {
 static char salvage_path_pending[KUI_DEST_JOB_CAP];
 static unsigned salvage_passes_pending;
 static struct kui_drive_options salvage_drive_pending;
-static bool salvage_trial_pending,salvage_speed_probe_pending;
+static bool salvage_trial_pending,salvage_read_trial_pending,salvage_speed_probe_pending;
 static enum kui_salvage_diagnostic salvage_diagnostic_pending;
 static bool salvage_verify_pending,salvage_defer_pending;
 static char scan_path_pending[KUI_DEST_JOB_CAP];
@@ -2001,7 +2001,8 @@ static void salvage_operation(unsigned action) {
     uint8_t session_card[32];
     struct kui_salvage_options options={.passes=salvage_passes_pending,
         .job=salvage_path_pending,.progress=salvage_progress,.defer_next_range=defer_next_range,
-        .control_trial=salvage_trial_pending,.trial_select=kui_disc_controls_trial_select};
+        .control_trial=salvage_trial_pending,.trial_select=kui_disc_controls_trial_select,
+        .read_trial=salvage_read_trial_pending};
     const struct kui_capture_ops ops={.read=salvage_read,.cancelled=scan_cancel,
         .now_ms=scan_now,.log=kui_log,.build=KUI_BUILD_ID,.recover=kui_disc_recover};
     kui_sd_set_params(KUI_STORAGE_AUTO,true);
@@ -2016,7 +2017,7 @@ static void salvage_operation(unsigned action) {
         kui_disc_timing_phase(NULL,true);
         if(action==46 || kui_salvage_latest(&plan,&ops,salvage_path_pending)) {
             if(action!=46)recovery_dashboard_admitted(salvage_path_pending);
-            bool ordinary=action==47 && !defer_next_range && !salvage_trial_pending;
+            bool ordinary=action==47 && !defer_next_range && !salvage_trial_pending && !salvage_read_trial_pending;
             bool card_ok=true;
             if(ordinary && kui_storage_active()==KUI_STORAGE_SCI) {
                 card_ok=salvage_session_card(session_card);
@@ -2081,12 +2082,16 @@ static void salvage_operation(unsigned action) {
             (checked.saved_verified?"resolved; saved bytes verified; full catalogue match":"resolved; recovery CRC full catalogue match"):
         result.result==KUI_SALVAGE_RESOLVED?
             (checked.saved_verified?"resolved; saved bytes verified; no full catalogue match":"resolved; no full catalogue match"):
+        result.result==KUI_SALVAGE_UNRESOLVED && salvage_read_trial_pending?
+            (result.trial_budget_expired?"bounded read comparison budget reached; saved repairs retained":
+                "bounded read comparison finished; unresolved sectors remain"):
         result.result==KUI_SALVAGE_UNRESOLVED && salvage_trial_pending?
             (result.trial_budget_expired?"bounded control trial budget reached; saved repairs retained":
                 "bounded control trial finished; unresolved sectors remain"):
         result.result==KUI_SALVAGE_UNRESOLVED?"unresolved holes remain":
         result.result==KUI_SALVAGE_STOPPED?"stopped":"failed";
-    save_report(salvage_trial_pending?"auto salvage control trial":"auto salvage",outcome,true);
+    save_report(salvage_read_trial_pending?"auto salvage read comparison":
+        salvage_trial_pending?"auto salvage control trial":"auto salvage",outcome,true);
     salvage_session_observe_errors();
 }
 /* Video is changed only by main, while no foreground I/O runs. The canvas
@@ -2499,7 +2504,7 @@ static void *worker(void *unused) {
         mutex_unlock(&lock);
 #ifdef KUI_SD_RUNTIME
         salvage_session_observe_errors();
-        bool ordinary_continue=action==47 && !salvage_defer_pending && !salvage_trial_pending &&
+        bool ordinary_continue=action==47 && !salvage_defer_pending && !salvage_trial_pending && !salvage_read_trial_pending &&
             !salvage_speed_probe_pending && salvage_diagnostic_pending==KUI_SALVAGE_DIAGNOSTIC_NONE;
         if(!kui_salvage_session_policy_action(action,ordinary_continue))salvage_session_forget();
         if(action && !games_session_action(action)) (void)kui_games_storage_release();
@@ -3520,6 +3525,7 @@ static void draw_shell(void) {
     view.storage_test_target=kui_storage_name(kui_storage_selected());
     view.busy = busy; view.saving = saving_report; view.cancel_requested = cancel_requested;
     view.salvage_control_trial=salvage_trial_pending;
+    view.salvage_read_trial=salvage_read_trial_pending;
     view.salvage_speed_probe=salvage_speed_probe_pending;
     view.salvage_diagnostic=salvage_diagnostic_pending;
     view.sci_video_quiet=sci_video_quiet.requested;
@@ -4140,11 +4146,13 @@ int main(void) {
             if(action>=46 && action<=48) {
                 salvage_defer_pending=false;
                 salvage_trial_pending=false;
+                salvage_read_trial_pending=false;
                 salvage_speed_probe_pending=false;
                 salvage_diagnostic_pending=KUI_SALVAGE_DIAGNOSTIC_NONE;
                 shell.salvage_diagnostic_requested=KUI_SALVAGE_DIAGNOSTIC_NONE;
                 shell.salvage_speed_probe_requested=false;
                 shell.salvage_trial_requested=shell.salvage_trial_result=false;
+                shell.salvage_read_trial_requested=false;
                 salvage_status=(struct kui_app_status){.complete=true,.errors=1};
                 snprintf(salvage_status.message,sizeof(salvage_status.message),"Drive reset required. Use System Tools > Restart.");
             }
@@ -4244,14 +4252,16 @@ int main(void) {
                 recovery_cd_pending=shell.capture_cd_toc;
                 salvage_passes_pending=shell.salvage_passes;
                 salvage_drive_pending=shell.salvage_drive_options;
-                salvage_trial_pending=shell.salvage_trial_requested;
+                salvage_trial_pending=action==48 && shell.salvage_trial_requested;
+                salvage_read_trial_pending=action==48 && shell.salvage_read_trial_requested;
                 salvage_speed_probe_pending=shell.salvage_speed_probe_requested;
                 salvage_diagnostic_pending=action==48?shell.salvage_diagnostic_requested:KUI_SALVAGE_DIAGNOSTIC_NONE;
                 if(salvage_diagnostic_pending!=KUI_SALVAGE_DIAGNOSTIC_NONE)
-                    salvage_trial_pending=salvage_speed_probe_pending=false;
+                    salvage_trial_pending=salvage_read_trial_pending=salvage_speed_probe_pending=false;
                 shell.salvage_diagnostic_requested=KUI_SALVAGE_DIAGNOSTIC_NONE;
                 shell.salvage_speed_probe_requested=false;
                 shell.salvage_trial_requested=false;
+                shell.salvage_read_trial_requested=false;
                 salvage_verify_pending=shell.salvage_verify_files;
                 salvage_defer_pending=requested==KUI_SHELL_SALVAGE_RESUME_DEFER;
                 salvage_path_pending[0]=0;

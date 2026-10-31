@@ -883,17 +883,25 @@ build/maintenance-image: tests/maintenance_image.c $(CORE) $(FATFS) src/core/sto
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) src/core/storage_probe.c src/core/destination.c src/core/files_path.c src/core/hash.c src/apps/maintenance.c tests/maintenance_image.c -o $@
 
-build/salvage-image: tests/salvage_image.c tests/salvage_trial_fixture.inc src/core/salvage_control_trial.inc tests/salvage_legacy_narrow.inc tests/salvage_defer_fixture.inc tests/salvage_partial_fixture.inc tests/salvage_burst_fixture.inc tests/salvage_legacy_index_fixture.inc $(CORE) $(FATFS) src/core/salvage.c src/core/salvage_files.inc src/core/recovery_guard.c src/core/destination.c src/core/recovery_crc.c src/core/recovery_sector.c src/core/hash.c src/core/storage_probe.c include/kui/salvage.h include/kui/capture.h
+build/salvage-image: tests/salvage_image.c tests/salvage_trial_fixture.inc src/core/salvage_control_trial.inc src/core/salvage_read_trial.inc tests/salvage_legacy_narrow.inc tests/salvage_defer_fixture.inc tests/salvage_partial_fixture.inc tests/salvage_burst_fixture.inc tests/salvage_legacy_index_fixture.inc $(CORE) $(FATFS) src/core/salvage.c src/core/salvage_files.inc src/core/recovery_guard.c src/core/destination.c src/core/recovery_crc.c src/core/recovery_sector.c src/core/hash.c src/core/storage_probe.c include/kui/salvage.h include/kui/capture.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) src/core/salvage.c src/core/recovery_guard.c src/core/destination.c src/core/recovery_crc.c src/core/recovery_sector.c src/core/hash.c src/core/storage_probe.c tests/salvage_image.c -Wl,--wrap=f_write,--wrap=f_sync,--wrap=f_read,--wrap=f_open,--wrap=f_rename,--wrap=f_stat,--wrap=f_opendir,--wrap=f_readdir,--wrap=f_closedir -o $@
 
 .PHONY: test-salvage-session
-build/salvage-session-image: tests/salvage_session_image.c $(CORE) $(FATFS) src/core/salvage.c src/core/salvage_files.inc src/core/recovery_guard.c src/core/destination.c src/core/recovery_crc.c src/core/recovery_sector.c src/core/hash.c src/core/storage_probe.c include/kui/salvage.h
+build/salvage-session-image: tests/salvage_session_image.c src/core/salvage_read_trial.inc $(CORE) $(FATFS) src/core/salvage.c src/core/salvage_files.inc src/core/recovery_guard.c src/core/destination.c src/core/recovery_crc.c src/core/recovery_sector.c src/core/hash.c src/core/storage_probe.c include/kui/salvage.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) src/core/salvage.c src/core/recovery_guard.c src/core/destination.c src/core/recovery_crc.c src/core/recovery_sector.c src/core/hash.c src/core/storage_probe.c tests/salvage_session_image.c -Wl,--wrap=f_open,--wrap=f_close,--wrap=f_read,--wrap=f_write,--wrap=f_mount -o $@
 
 test-salvage-session: build/salvage-session-image test-salvage-session-policy
 	ASAN_OPTIONS=detect_leaks=0 python3 tests/test_salvage_session_images.py
+
+.PHONY: test-salvage-read-trial
+build/salvage-read-trial-image: tests/salvage_read_trial_image.c src/core/salvage_control_trial.inc src/core/salvage_read_trial.inc $(CORE) $(FATFS) src/core/salvage.c src/core/salvage_files.inc src/core/recovery_guard.c src/core/destination.c src/core/recovery_crc.c src/core/recovery_sector.c src/core/hash.c src/core/storage_probe.c include/kui/salvage.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) src/core/salvage.c src/core/recovery_guard.c src/core/destination.c src/core/recovery_crc.c src/core/recovery_sector.c src/core/hash.c src/core/storage_probe.c tests/salvage_read_trial_image.c -Wl,--wrap=f_open,--wrap=f_close,--wrap=f_write,--wrap=f_sync -o $@
+
+test-salvage-read-trial: build/salvage-read-trial-image
+	ASAN_OPTIONS=detect_leaks=0 python3 tests/test_salvage_read_trial_images.py
 
 .PHONY: test-salvage-session-policy
 test: test-salvage-session-policy
@@ -909,7 +917,7 @@ test-salvage-session-policy: build/test-salvage-session-policy build/test-storag
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-salvage-session-policy
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-storage-card-identity
 
-build/salvage-completion-image: tests/salvage_completion_image.c src/core/salvage_control_trial.inc $(CORE) $(FATFS) src/core/salvage.c src/core/salvage_files.inc src/core/recovery_guard.c src/core/destination.c src/core/salvage_completion.c src/core/known_dumps.c src/core/recovery_crc.c src/core/recovery_sector.c src/core/hash.c src/core/storage_probe.c include/kui/salvage.h include/kui/salvage_completion.h
+build/salvage-completion-image: tests/salvage_completion_image.c src/core/salvage_control_trial.inc src/core/salvage_read_trial.inc $(CORE) $(FATFS) src/core/salvage.c src/core/salvage_files.inc src/core/recovery_guard.c src/core/destination.c src/core/salvage_completion.c src/core/known_dumps.c src/core/recovery_crc.c src/core/recovery_sector.c src/core/hash.c src/core/storage_probe.c include/kui/salvage.h include/kui/salvage_completion.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(CORE) $(FATFS) src/core/salvage.c src/core/recovery_guard.c src/core/destination.c src/core/salvage_completion.c src/core/known_dumps.c src/core/recovery_crc.c src/core/recovery_sector.c src/core/hash.c src/core/storage_probe.c tests/salvage_completion_image.c -Wl,--wrap=f_write,--wrap=f_sync,--wrap=f_rename,--wrap=f_read -o $@
 

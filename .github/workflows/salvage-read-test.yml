@@ -1,0 +1,72 @@
+name: Salvage read comparison test build
+
+on:
+  push:
+    branches: ['milestone/salvage-read-main-20261030']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  combined-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install build prerequisites
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y build-essential git curl wget patch python3 bison flex texinfo gettext libgmp-dev libmpfr-dev libmpc-dev libisl-dev dosfstools exfatprogs
+      - name: Restore pinned FatFs downloads
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: .deps/downloads
+          key: fatfs-downloads-v1-${{ hashFiles('dependencies.json') }}
+      - name: Restore pinned compiler
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            .deps/sh-elf
+            .deps/kos/utils/kos-chain/*.tar.*
+          key: sh-elf-ubuntu24-v1-${{ hashFiles('dependencies.json', 'tools/setup_kos.sh') }}
+          restore-keys: sh-elf-ubuntu24-v1-
+      - name: Prepare pinned SDK
+        env:
+          KUI_JOBS: '4'
+        run: bash tools/setup_kos.sh
+      - name: Check combined recovery and menus
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+        run: |
+          mkdir -p "$RUNNER_TEMP/salvage-read-artifacts"
+          make -j2 build/test-shell build/test-salvage-display build/test-games-group build/salvage-read-trial-image
+          ./build/test-shell > "$RUNNER_TEMP/salvage-read-artifacts/shell-tests.log"
+          ./build/test-salvage-display > "$RUNNER_TEMP/salvage-read-artifacts/display-tests.log"
+          ./build/test-games-group > "$RUNNER_TEMP/salvage-read-artifacts/games-group-tests.log"
+          python3 tests/test_salvage_read_trial_images.py > "$RUNNER_TEMP/salvage-read-artifacts/read-trial-tests.log"
+      - name: Build combined Dreamcast runtime
+        shell: bash
+        run: |
+          source .deps/kos/environ.sh
+          make -f Makefile.dc -j4 build/kui-runtime.elf
+          sh-elf-nm -u build/kui-runtime.elf > "$RUNNER_TEMP/salvage-read-artifacts/undefined-symbols.txt"
+          test ! -s "$RUNNER_TEMP/salvage-read-artifacts/undefined-symbols.txt"
+          python3 tools/runtime_package.py build build/kui-runtime.elf "$RUNNER_TEMP/salvage-read-artifacts/runtime.kui" --build-id "$(git rev-parse --short=12 HEAD)" > "$RUNNER_TEMP/salvage-read-artifacts/runtime-envelope.json"
+          cp build/kui-runtime.compile.json build/kui-runtime.elf build/kui-runtime.map "$RUNNER_TEMP/salvage-read-artifacts/"
+          python3 - <<'PY'
+          import hashlib,json,subprocess
+          from pathlib import Path
+          r=json.loads(Path('build/kui-runtime.compile.json').read_text())
+          assert r['commit']==subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          assert not r['source_dirty']
+          assert r['elf_sha256']==hashlib.sha256(Path('build/kui-runtime.elf').read_bytes()).hexdigest()
+          PY
+      - name: Retain runtime and validation
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: salvage-read-current-main
+          path: ${{ runner.temp }}/salvage-read-artifacts/
+          if-no-files-found: warn
+          retention-days: 14

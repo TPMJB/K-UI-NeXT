@@ -1126,14 +1126,15 @@ static void salvage(struct paint *p,const struct kui_shell *s,const struct kui_s
     bool diagnostic=v->salvage_diagnostic==KUI_SALVAGE_DIAGNOSTIC_SAVED_READS ||
         v->salvage_diagnostic==KUI_SALVAGE_DIAGNOSTIC_G1_MODE ||
         v->salvage_diagnostic==KUI_SALVAGE_DIAGNOSTIC_REVALIDATE;
-    bool trial_result=(v->salvage_control_trial || v->salvage_speed_probe || diagnostic) &&
+    bool trial_result=(v->salvage_control_trial || v->salvage_read_trial || v->salvage_speed_probe || diagnostic) &&
         s->salvage_trial_result && status && status->complete;
     bool showing=v->busy || trial_result;
     title(p,40,108,showing && v->salvage_diagnostic==KUI_SALVAGE_DIAGNOSTIC_SAVED_READS?
         "Saved repair read comparison":showing && v->salvage_diagnostic==KUI_SALVAGE_DIAGNOSTIC_G1_MODE?
         "Direct G1 drive settings":showing && v->salvage_diagnostic==KUI_SALVAGE_DIAGNOSTIC_REVALIDATE?
         "Saved salvage revalidation":showing && v->salvage_speed_probe?
-        "Drive speed support probe":showing?"Disc recovery":"Recover a damaged disc");
+        "Drive speed support probe":showing && v->salvage_read_trial?
+        "Recovery read comparison":showing?"Disc recovery":"Recover a damaged disc");
     if(showing && v->salvage_diagnostic==KUI_SALVAGE_DIAGNOSTIC_SAVED_READS) {
         label(p,40,138,MUTED,"Read-only SD test; saved repairs remain blocked");
     } else if(showing && v->salvage_diagnostic==KUI_SALVAGE_DIAGNOSTIC_G1_MODE) {
@@ -1142,6 +1143,8 @@ static void salvage(struct paint *p,const struct kui_shell *s,const struct kui_s
         label(p,40,138,MUTED,"Full saved-data check; recovery starts separately");
     } else if(showing && v->salvage_speed_probe) {
         label(p,40,138,MUTED,"Read-only disc test; saved recovery jobs unchanged");
+    } else if(showing && v->salvage_read_trial) {
+        label(p,40,138,MUTED,"Up to 16 sectors; four approaches; current drive settings");
     } else if((v->busy || trial_result) && v->salvage_control_trial) {
         label(p,40,138,MUTED,"Bounded trial: up to 8 sectors; fixed comparison profiles");
     } else if(v->busy && s->salvage_details && (s->salvage_drive_options.speed || s->salvage_drive_options.retries)) {
@@ -1154,10 +1157,10 @@ static void salvage(struct paint *p,const struct kui_shell *s,const struct kui_s
         v->inserted_title && v->inserted_title[0]?v->inserted_title:"Recovery keeps checked data and retries missing sectors.");
     if((v->busy || trial_result) && status) {
         panel(p,32,160,576,240,PANEL);
-        if(diagnostic || v->salvage_speed_probe || v->salvage_control_trial || s->salvage_details) {
+        if(diagnostic || v->salvage_read_trial || v->salvage_speed_probe || v->salvage_control_trial || s->salvage_details) {
             app_status(p,status,v->busy,170);
             unsigned count=status->line_count<KUI_APP_LINES?status->line_count:KUI_APP_LINES;
-            bool compact=v->salvage_speed_probe || diagnostic;
+            bool compact=v->salvage_read_trial || v->salvage_speed_probe || diagnostic;
             unsigned limit=compact?9u:7u,spacing=compact?19u:23u;
             for(unsigned i=0;i<count && i<limit;i++) label(p,40,224+i*spacing,MUTED,status->lines[i]);
         } else {
@@ -1257,13 +1260,14 @@ static void salvage_options(struct paint *p,const struct kui_shell *s) {
 static void salvage_drive(struct paint *p,const struct kui_shell *s) {
     title(p,40,108,"Recovery diagnostics");
     label(p,40,138,MUTED,"Saved-data checks and optional drive tests.");
-    const char *names[]={"Full saved progress check","Saved read comparison","Bounded recovery trial",
+    const char *names[]={"Recovery read comparison","Full saved progress check","Saved read comparison","Drive settings trial",
         "Speed support test","Direct G1 probe","Return to recovery"};
     for(unsigned i=0;i<KUI_SHELL_RECOVERY_DIAGNOSTICS_COUNT;++i) {
-        unsigned y=164+i*27;panel(p,32,y,576,24,i==s->salvage_drive_selected?SELECTED:PANEL);
+        unsigned y=164+i*24;panel(p,32,y,576,22,i==s->salvage_drive_selected?SELECTED:PANEL);
         label(p,48,y+4,i==s->salvage_drive_selected?WHITE:MUTED,names[i]);
     }
     static const char *const help[][3]={
+        {"Try four read approaches on up to 16 unresolved sectors.","Checked repairs are saved; B stops safely.","Current drive settings; ten-minute soft limit after checks."},
         {"Check the journal, repair records and every saved track byte.","A full pass can unblock consistent saved progress.","May take 40-50 minutes for a GD-ROM; confirmation follows."},
         {"Compare saved repair reads using four SD transfer profiles.","Saved job files are read-only; this cannot unblock recovery.","Send the saved diagnostic report when it finishes."},
         {"Compare recovery settings on up to 8 unresolved sectors.","Checked repairs are saved; active reads finish before Stop.","Fixed profiles and a five-minute soft limit."},
