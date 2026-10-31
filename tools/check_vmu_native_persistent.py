@@ -1432,7 +1432,9 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
         selected_callbacks=callbacks is not None
         require(not lean_stage or selected_callbacks,
                 'Lean General publication requires its selected low callbacks')
-        i=(0x49a if compact_stage else 0x480 if lean_stage else 0x464 if callbacks is not None else 0x46c)//2
+        # The compact stage's arena-lease branches (The House of the Dead 2)
+        # moved this unchanged block from +0x49a to +0x498.
+        i=(0x498 if compact_stage else 0x480 if lean_stage else 0x464 if callbacks is not None else 0x46c)//2
         prior=words[i-4:i]
         # The selected low-reader accessors move this complete block by8B.
         # Keep its actual refusal branch tied to the original phase/detail
@@ -3219,7 +3221,10 @@ def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_
             "vmu_emulation.c": {"kui_vmu_emulation_handle"},
             "vmu_native_heap.c": {"read_is", "kui_vmu_native_heap_lease_valid", "kui_vmu_native_heap_lease_valid_with_release"},
             "vmu_native_layout.c": {"kui_vmu_native_layout_bind_checked"},
-            "vmu_native_lifetime.c": {"kui_vmu_native_lifetime_release_safe_ranges"},
+            # An arena lease's identity words are read through the same
+            # reader at prepare (the worker's protect_sdk passes read_heap).
+            "vmu_native_lifetime.c": {"kui_vmu_native_lifetime_release_safe_ranges",
+                                      "kui_vmu_native_lifetime_prepare"},
             "vmu_native_live.c": {"kui_vmu_native_live_check"},
             "vmu_native_runtime.c": {"kui_vmu_native_runtime_check"},
             "vmu_store.c": {"write_sync", "kui_vmu_store_open", "kui_vmu_store_read", "kui_vmu_store_sync"},

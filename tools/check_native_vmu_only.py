@@ -401,7 +401,9 @@ def callgraph_stacks(directory, worker, resident, transport, coherence):
         'vmu_emulation.c': {'kui_vmu_emulation_handle'},
         'vmu_native_heap.c': {'read_is', 'kui_vmu_native_heap_lease_valid', 'kui_vmu_native_heap_lease_valid_with_release'},
         'vmu_native_layout.c': {'kui_vmu_native_layout_bind_checked'},
-        'vmu_native_lifetime.c': {'kui_vmu_native_lifetime_release_safe_ranges'},
+        # An arena lease's identity words are read through the same reader at prepare.
+        'vmu_native_lifetime.c': {'kui_vmu_native_lifetime_release_safe_ranges',
+                                  'kui_vmu_native_lifetime_prepare'},
         'vmu_native_live.c': {'kui_vmu_native_live_check'},
         'vmu_native_runtime.c': {'kui_vmu_native_runtime_check'},
         'vmu_store.c': {'write_sync', 'kui_vmu_store_open', 'kui_vmu_store_read', 'kui_vmu_store_sync'},

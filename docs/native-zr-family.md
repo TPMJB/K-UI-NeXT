@@ -128,7 +128,7 @@ Its earlier "Invalid or unsupported data sector" came from a damaged copy of
 track03.bin on the card, where the executable occupies the track's last 486
 sectors.
 
-## Virtual VMU route for the early titles (not yet admitted)
+## Virtual VMU route for the early titles (The House of the Dead 2 admitted for test 7)
 
 All five early titles share one Maple driver build (pd 1.46). Its submit,
 resume, consumer, gate and ready code already passes the reviewed driver
@@ -215,7 +215,7 @@ then jumps through the same cell with R4=2. They share one literal pool.
   284 KiB lease and the 192 KiB cache are unchanged; 1 KiB is now free for
   code and state. Other profiles keep 4 KiB stacks.
 
-### No-allocator arena (in progress, for The House of the Dead 2)
+### No-allocator arena (done for The House of the Dead 2; console test 7)
 
 The House of the Dead 2 links no SDK allocator, so its lease is a reviewed
 fixed arena that is the whole lease (`KUI_VMU_NATIVE_HEAP_ARENA`), pinned to

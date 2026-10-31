@@ -93,13 +93,14 @@ def test_sheet():
     writer = csv.writer(stream)
     writer.writerow(('game', 'reader', 'virtual_vmu', 'boots', 'gameplay', 'loading_stutter',
                      'memory_card_seen', 'save', 'power_cycle_load', 'failure_screen', 'notes'))
-    for row in (('A game that already saved (Sonic Adventure 2, Jet Grind Radio or Skies)', 'Background New (X)', 'On (A2)'),
+    for row in (('The House of the Dead 2: new save, power off, load', 'Background New (X)', 'On (A2)'),
+                ('The House of the Dead 2: story, Boss Mode, Training (note where any problem happened)',
+                 'Background New (X)', 'On (A2)'),
+                ('The House of the Dead 2 with a physical card in A2', 'Background New (X)', 'Off'),
+                ('A game that already saved (Sonic Adventure 2, Jet Grind Radio or Skies)', 'Background New (X)', 'On (A2)'),
                 ('Sword of the Berserk (Virtual card slot A1)', 'Background New (X)', 'On (A1)'),
                 ('Crazy Taxi 2 (optional)', 'Background New (X)', 'On (A2)'),
-                ('The House of the Dead 2, RAM map session 1: the story (note the four numbers)',
-                 'Background New (X)', 'standalone RAM map, none'),
-                ('The House of the Dead 2, RAM map session 2: the other modes (note the four numbers)',
-                 'Background New (X)', 'standalone RAM map, none')):
+                ('Sonic Adventure or Time Stalkers (optional)', 'Background New (X)', 'standalone, none')):
         writer.writerow((*row, '', '', '', '', '', '', '', ''))
     return stream.getvalue().encode()
 

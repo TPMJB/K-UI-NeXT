@@ -20,6 +20,7 @@ from sh4_delay_slots import validate_delay_slot
 STAGE, LIMIT, OLD_STACK = 0x8CE00000, 0x8CFE0000, 0x8CFF0000
 STACK_SYMBOL, STACK_BYTES = "_native_installer_stack", 65536
 HELPER = "_kui_vmu_native_stage_allocation_safe"
+ARENA_HELPER = "_kui_vmu_native_stage_arena_safe"
 BOTTOM_HELPER = "_kui_vmu_native_stage_bottom_allocation_safe"
 
 
@@ -193,22 +194,36 @@ class Machine(CPU):
 
 
 class AllocationWrapper(Machine):
-    def __init__(self, stage, seed, mask, outcome, *, body=None):
+    """arena: the dual stage's arena route flag is set, so the wrapper must
+    take the arena placement helper, which receives no allocator metadata."""
+    def __init__(self, stage, seed, mask, outcome, *, body=None, arena=False):
         super().__init__(stage, "_allocation_safe", seed, mask, OLD_STACK, body=body)
         self.r[4:6] = [0x8CC00000, 0x00400000]
-        self.symbols, self.outcome = stage[4], outcome
-        self.helper = allocation_helper(stage)
+        self.symbols, self.outcome, self.arena = stage[4], outcome, arena
+        self.helper = ARENA_HELPER if arena else allocation_helper(stage)
         self.mem[self.symbols["_exec_bytes"][0]] = 0x200000
+        if "_native_arena" in self.symbols:
+            self.mem[self.symbols["_native_arena"][0]] = int(arena)
+        else:
+            require(not arena, "arena placement requested from a stage without arena leases")
         self.before = self.r.copy(), self.pr, self.mach, self.macl, self.gbr, self.sr, self.fpscr, self.fr.copy()
 
     def call(self, target):
         if target == self.stop_pc:
             return False
+        # The two-helper wrapper branches within its own body to one epilogue.
+        if self.base <= target < self.base + len(self.blob):
+            return False
         assert target == self.symbols[self.helper][0], "allocation wrapper changed its exact helper"
+        assert not self.calls, "allocation wrapper called a placement helper twice"
         self.calls.append("allocation")
-        assert self.r[4:8] == [self.symbols["_native_heap"][0], 0x200000, STAGE,
-                               self.symbols["__retail_stage_bss_end"][0]]
-        assert [self.read(self.r[15] + 4 * i) for i in range(2)] == [0x8CC00000, 0x00400000]
+        bss_end = self.symbols["__retail_stage_bss_end"][0]
+        if self.arena:
+            assert self.r[4:8] == [0x200000, STAGE, bss_end, 0x8CC00000]
+            assert self.read(self.r[15]) == 0x00400000
+        else:
+            assert self.r[4:8] == [self.symbols["_native_heap"][0], 0x200000, STAGE, bss_end]
+            assert [self.read(self.r[15] + 4 * i) for i in range(2)] == [0x8CC00000, 0x00400000]
         self.abi_return(int(self.outcome)); return True
 
     def check(self):
@@ -286,6 +301,10 @@ class ArmRoute(Machine):
         # route is executed by check_native_fixed_arena.py.
         if "_native_fixed" in self.symbols:
             self.mem[self.symbols["_native_fixed"][0]] = 0
+        # Likewise the arena-lease flag: a found allocator never sets it. The
+        # arena route's dispatch is executed by check_native_fixed_arena.py.
+        if "_native_arena" in self.symbols:
+            self.mem[self.symbols["_native_arena"][0]] = 0
         heap, call = self.symbols["_native_heap"][0], self.symbols["_native_call"][0]
         self.mem.update({heap + 24: self.original, heap + 28: self.slot, heap + 32: self.original,
                          call + 8: 0x8C0100C6, call + 12: 0x8CC00000, call + 16: 0x00400000})
@@ -576,6 +595,8 @@ def check(stage, resident, *, worker=None, self_test=False):
         for mask in range(16):
             for outcome in (False, True):
                 AllocationWrapper(stage, seed, mask, outcome).run().check(); wrappers += 1
+                if "_native_arena" in stage[4]:
+                    AllocationWrapper(stage, seed, mask, outcome, arena=True).run().check(); wrappers += 1
             for mode in modes:
                 for hit in ((False, True) if "_native_resolution_replay" in stage[4] else (False,)):
                     for normalized in (False,True):

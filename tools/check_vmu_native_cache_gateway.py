@@ -23,7 +23,10 @@ def require(value, message):
 
 
 class CacheGateway(CPU):
-    def __init__(self, stage, seed, mask, outcomes, blob=None, *, fixed_fallback=False):
+    """fixed_fallback: a replayed fixed-arena record (no initializer slot);
+    arena: a replayed arena lease (heap family 2), which binds its plan again
+    and then has no allocator release entry to admit."""
+    def __init__(self, stage, seed, mask, outcomes, blob=None, *, fixed_fallback=False, arena=False):
         symbols = stage[4]
         begin, body, _ = symbol_bytes(stage, "_native_resolution_replay", 2)
         super().__init__(seed, begin, 1)
@@ -34,12 +37,14 @@ class CacheGateway(CPU):
         self.sr = (self.sr & ~0xf0) | mask << 4
         self.pr = begin + len(self.blob) + 0x100
         self.before = self.r.copy(), self.pr, self.sr, self.fpscr, self.fr.copy()
-        self.fixed_fallback=fixed_fallback
-        require(not fixed_fallback or stage_profile(stage),
-                'fixed-plan cache replay requires the exact lean General stage')
-        require(len(outcomes)==(6 if fixed_fallback else 5),
+        self.fixed_fallback,self.arena=fixed_fallback,arena
+        require(not (fixed_fallback and arena), 'one cache replay fallback at a time')
+        require(not (fixed_fallback or arena) or stage_profile(stage),
+                'fixed-plan or arena cache replay requires the exact lean General stage')
+        require(len(outcomes)==(6 if fixed_fallback or arena else 5),
                 "cache wrapper needs every independently admitted callback result")
-        self.outcomes = dict(zip(("seed", "replay", "allocation", "release", "sdk-slot", "fixed-plan"), outcomes))
+        self.outcomes = dict(zip(("seed", "replay", "allocation", "release", "sdk-slot",
+                                  "arena-plan" if arena else "fixed-plan"), outcomes))
         self.symbols, self.calls, self.copies = symbols, [], []
         self.seed_address = symbols["__native_resolution_cache_seed_start"][0]
         self.state = symbols["_native_cached_resolution"][0]
@@ -49,6 +54,8 @@ class CacheGateway(CPU):
         values[544 // 4 + 10] = 0x8c0131b0
         values[616 // 4 + 3] = 0x0c300000
         values[616 // 4 + 4] = 0x00800000
+        # The heap family: the allocator (1) or an arena lease (2).
+        values[544//4+2]=2 if arena else 1
         if fixed_fallback:
             values[544//4+7]=values[544//4+8]=0
         self.proof = [int(v) for v in values]
@@ -62,6 +69,18 @@ class CacheGateway(CPU):
             ("_native_passive_capture_windows", "capture"))}
         if fixed_fallback:
             self.targets[symbols['_native_fixed_plan_bind'][0]]='fixed-plan'
+        # The dual stage's arena route flag is clear when the replay begins;
+        # only a successful arena plan bind sets it (with the fixed route's).
+        self.arena_flag=symbols['_native_arena'][0] if '_native_arena' in symbols else None
+        if self.arena_flag is not None:
+            self.mem[self.arena_flag]=0
+        if arena:
+            self.targets[symbols['_native_arena_plan_bind'][0]]='arena-plan'
+
+    def required(self):
+        """The callback results a successful replay depends on."""
+        names=["seed","replay"]+(["arena-plan"] if self.arena else ["fixed-plan"] if self.fixed_fallback else [])
+        return names+([] if self.arena else ["release"])+["allocation","sdk-slot"]
 
     def code(self, address, size):
         assert self.base <= address < address + size <= self.base + len(self.blob)
@@ -132,11 +151,24 @@ class CacheGateway(CPU):
         elif name == "allocation":
             assert len(self.copies) == 5
             assert self.r[4:6] == [0x0c300000, 0x00800000]
+            assert not self.arena or self.calls[-2]=='arena-plan' and self.outcomes['arena-plan']
             result = int(self.outcomes[name])
         elif name == "release":
-            assert len(self.copies) == 5
+            assert len(self.copies) == 5 and not self.arena, "an arena lease has no release entry to admit"
             assert not self.fixed_fallback or self.outcomes['fixed-plan'] and self.calls[-2]=='fixed-plan'
             result = int(self.outcomes[name])
+        elif name == 'arena-plan':
+            assert self.arena and self.calls==['seed','replay']+['memcpy']*5+['arena-plan']
+            assert len(self.copies)==5 and self.r[4]==1
+            heap=self.symbols['_native_heap'][0]
+            assert self.read(heap+8)==2
+            if self.outcomes[name]:
+                # The separately proved arena plan API admits exactly the
+                # replayed owner and call, unchanged, and selects the arena
+                # route; the wrapper must still admit placement and the SDK.
+                self.fixed_writes=[(self.arena_flag,1)]
+                self.mem.update(self.fixed_writes)
+                result=1
         elif name == 'fixed-plan':
             assert self.fixed_fallback and self.calls==['seed','replay']+['memcpy']*5+['fixed-plan']
             assert len(self.copies)==5 and self.r[4]==1
@@ -151,12 +183,12 @@ class CacheGateway(CPU):
                 self.mem.update(self.fixed_writes)
                 result=1
         elif name == "sdk-slot":
-            assert len(self.copies)==5 and all(self.outcomes[name] for name in ("seed","replay","release","allocation"))
-            assert self.calls[-3:]==["release","allocation","sdk-slot"]
+            assert len(self.copies)==5 and all(self.outcomes[n] for n in self.required() if n!="sdk-slot")
+            assert self.calls[-3:]==["arena-plan" if self.arena else "release","allocation","sdk-slot"]
             result=int(self.outcomes[name])
         else:
-            assert name == "capture" and all(self.outcomes.values())
-            assert len(self.copies) == 5 and "allocation" in self.calls and "release" in self.calls
+            assert name == "capture" and all(self.outcomes[n] for n in self.required())
+            assert len(self.copies) == 5 and "allocation" in self.calls and ("release" in self.calls)!=self.arena
         # Every volatile GPR/PR and T may be clobbered by an ABI-compliant
         # callee. Unbanked R8..R15 retain the wrapper's saved targets/frame.
         for i in range(8):
@@ -203,7 +235,7 @@ class CacheGateway(CPU):
         registers, pr, sr, fpscr, fr = self.before
         assert self.r[8:] == registers[8:] and self.pr == pr
         assert (self.fpscr, self.fr) == (fpscr, fr) and self.sr & ~1 == sr & ~1
-        expected = all(self.outcomes.values())
+        expected = all(self.outcomes[n] for n in self.required())
         assert self.r[0] == int(expected)
         assert self.calls.count("capture") == int(expected)
         calls=["seed"]
@@ -211,10 +243,15 @@ class CacheGateway(CPU):
             calls.append("replay")
             if self.outcomes["replay"]:
                 calls += ["memcpy"]*5
-                if self.fixed_fallback:calls.append('fixed-plan')
-                if not self.fixed_fallback or self.outcomes['fixed-plan']:
-                    calls.append('release')
-                if 'release' in calls and self.outcomes["release"]:
+                if self.arena:
+                    calls.append('arena-plan')
+                    admitted=bool(self.outcomes['arena-plan'])
+                else:
+                    if self.fixed_fallback:calls.append('fixed-plan')
+                    if not self.fixed_fallback or self.outcomes['fixed-plan']:
+                        calls.append('release')
+                    admitted='release' in calls and bool(self.outcomes["release"])
+                if admitted:
                     calls.append("allocation")
                     if self.outcomes["allocation"]:
                         calls.append("sdk-slot")
@@ -222,7 +259,8 @@ class CacheGateway(CPU):
         assert self.calls==calls,"cache wrapper bypassed/reordered a live metadata/ownership/SDK-slot admission"
         if self.outcomes["seed"] and self.outcomes["replay"]:
             assert len(self.copies) == 5
-            assert ('release' in self.calls)==(not self.fixed_fallback or bool(self.outcomes['fixed-plan']))
+            assert ('release' in self.calls)==(not self.arena and
+                                               (not self.fixed_fallback or bool(self.outcomes['fixed-plan'])))
             if 'release' in self.calls and self.outcomes["release"]:
                 assert "allocation" in self.calls
         else:
@@ -231,6 +269,9 @@ class CacheGateway(CPU):
             heap=self.symbols['_native_heap'][0]
             expected_fixed=[(heap+28,0x8c014000),(heap+32,self.proof[544//4+6])]
             assert self.fixed_writes==(expected_fixed if 'fixed-plan' in self.calls and self.outcomes['fixed-plan'] else [])
+        if self.arena:
+            assert self.fixed_writes==([(self.arena_flag,1)] if self.outcomes['seed'] and self.outcomes['replay'] and
+                                       self.outcomes['arena-plan'] else [])
         # Check every copied word, including the two documented fixed-plan
         # output fields. Failure never permits an extra metadata publication.
         copies=(("_native_driver",0,104),("_passive_layout",104,440),
@@ -516,6 +557,19 @@ def check(stage, *, self_test=False):
                 for flags in range(64):
                     CacheGateway(stage,seed,mask,[(flags>>i)&1 for i in range(6)],
                                  fixed_fallback=True).run().check();fixed_cases+=1
+    # An arena lease record (The House of the Dead 2): only the dual stage's
+    # arena route binds its plan again; no release entry is admitted.
+    arena_route='_native_arena_plan_bind' in symbols
+    require(not arena_route or lean_stage,'arena lease replay requires the exact lean General stage')
+    arena_cases=0
+    if arena_route:
+        for seed in range(24):
+            for mask in range(16):
+                for flags in range(64):
+                    CacheGateway(stage,seed,mask,[(flags>>i)&1 for i in range(6)],
+                                 arena=True).run().check();arena_cases+=1
+    replay_modes=((False,False),(True,False),(False,True)) if arena_route else \
+        ((False,False),(True,False)) if lean_stage else ((False,False),)
     routes = 0
     background='_native_background_boot_region' in symbols
     modes = ((0,2,4,5,6) if background else (0,1,2,3,4,5,6)) if "_native_runtime_mode" in symbols else (0,)
@@ -536,6 +590,7 @@ def check(stage, *, self_test=False):
             "_native_sdk_coherence_cached_admit",
             "_native_passive_capture_windows")]
         if lean_stage:targets.append(symbols['_native_fixed_plan_bind'][0])
+        if arena_route:targets.append(symbols['_native_arena_plan_bind'][0])
         changed_bodies = []
         for target in targets:
             at = body.find(struct.pack("<I", target))
@@ -548,9 +603,9 @@ def check(stage, *, self_test=False):
         changed_bodies.append(bytes(changed))
         for changed in changed_bodies:
             rejected=False
-            for fixed in ((False,True) if lean_stage else (False,)):
-                try:CacheGateway(stage,7,15,[1]*(6 if fixed else 5),changed,
-                                 fixed_fallback=fixed).run().check()
+            for fixed,arena in replay_modes:
+                try:CacheGateway(stage,7,15,[1]*(6 if fixed or arena else 5),changed,
+                                 fixed_fallback=fixed,arena=arena).run().check()
                 except (AssertionError,struct.error,KeyError):rejected=True;break
             if rejected:mutations+=1
             else:
@@ -558,7 +613,12 @@ def check(stage, *, self_test=False):
         words = struct.unpack("<" + "H" * (len(body) // 2), body)
         gates = [i + 1 for i in range(len(words) - 1) if words[i] == 0x2008 and
                  words[i + 1] >> 8 in (0x89, 0x8b, 0x8d, 0x8f)]
-        if lean_stage:
+        if arena_route:
+            # Seed, replay, the shared fixed/arena plan call, allocation,
+            # SDK slot and release results.
+            require(tuple(2*i for i in gates)==(0x1a,0x46,0x86,0x9c,0xa6,0xd2),
+                    'Dual stage must retain all six exact callback result gates')
+        elif lean_stage:
             require(tuple(2*i for i in gates)==(0x1a,0x46,0x90,0x9e,0xa8,0xbe),
                     'Lean General must retain all six exact callback result gates')
         else:
@@ -566,17 +626,41 @@ def check(stage, *, self_test=False):
         for gate in gates:
             changed = bytearray(body); struct.pack_into("<H", changed, gate * 2, 9)
             rejected=False
-            for fixed in ((False,True) if lean_stage else (False,)):
-                bits=6 if fixed else 5
+            for fixed,arena in replay_modes:
+                bits=6 if fixed or arena else 5
                 for flags in range(1<<bits):
                     try:CacheGateway(stage,7,15,[(flags>>i)&1 for i in range(bits)],bytes(changed),
-                                     fixed_fallback=fixed).run().check()
+                                     fixed_fallback=fixed,arena=arena).run().check()
                     except (AssertionError,struct.error,KeyError):rejected=True;break
                 if rejected:break
             if rejected:mutations+=1
             else:
                 raise ValueError("cache wrapper accepted a missing result guard")
-        if lean_stage:
+        def literal(index):
+            op=words[index];at=((begin+index*2+4)&~3)+4*(op&255)
+            return struct.unpack_from('<I',body,at-begin)[0]
+        if arena_route:
+            # Family 2 binds the arena plan (R4=1), then refuses on its result;
+            # the arena route flag alone skips the allocator release entry.
+            # Otherwise a zero initializer slot binds the fixed plan through
+            # the same call and result gate.
+            require(words[0x76//2:0x90//2]==(0x5082,0x8802,0x8f1b,0xe401,0xd027,0x400b,9,0x2008,0x89ca,
+                                              0xd125,0x6112,0x2118,0x8917) and
+                    literal(0x7e//2)==symbols['_native_arena_plan_bind'][0] and
+                    literal(0x88//2)==symbols['_native_arena'][0] and
+                    words[0xb4//2:0xc0//2]==(0x5187,0x2118,0x8be6,0xd01d,0xafe0,9) and
+                    literal(0xba//2)==symbols['_native_fixed_plan_bind'][0],
+                    'Dual stage arena/fixed-plan selection/callback/refusal block changed')
+            for at,replacement,mode,label in ((0xb8,0x89e6,(True,False),'required fixed-plan fallback'),
+                                              (0x7a,0x8d1b,(False,True),'required arena plan'),
+                                              (0x7a,0x8d1b,(False,False),'allocator release admission'),
+                                              (0x8e,0x8b17,(False,True),'arena route without release')):
+                changed=bytearray(body);struct.pack_into('<H',changed,at,replacement)
+                try:CacheGateway(stage,7,15,[1]*(5 if mode==(False,False) else 6),bytes(changed),
+                                 fixed_fallback=mode[0],arena=mode[1]).run().check()
+                except (AssertionError,struct.error,KeyError):mutations+=1
+                else:raise ValueError('cache wrapper bypassed its '+label)
+        elif lean_stage:
             require(words[0x76//2:0x7c//2]==(0x5197,0x2118,0x891c) and
                     words[0xb6//2:0xc6//2]==(0xd018,0x400b,0xe401,0x2008,0x8fdd,0xe800,0xafae,0x6083),
                     'Lean General fixed-plan selection/callback/refusal block changed')
@@ -610,7 +694,14 @@ def check(stage, *, self_test=False):
                 callback_result_combinations=64 if lean_stage else 0,
                 initializer_slot_offset=544+28,initializer_target_offset=544+32,
                 fixed_callback_argument_one=True if lean_stage else None,
-                exact_six_result_gate_offsets=[0x1a,0x46,0x90,0x9e,0xa8,0xbe] if lean_stage else [],
+                exact_six_result_gate_offsets=([0x1a,0x46,0x86,0x9c,0xa6,0xd2] if arena_route else
+                                               [0x1a,0x46,0x90,0x9e,0xa8,0xbe] if lean_stage else []),
                 capture_requires_fixed_release_allocation_sdk_admissions=lean_stage,
                 complete_wrapper_byte_mutation_rejections=pin_mutations,
-                model_scope='Actual wrapper instructions; fixed-plan is a typed success/failure API boundary, with its two consumed private heap-output fields modeled; fixed-plan decoder itself is separately proved')}
+                model_scope='Actual wrapper instructions; fixed-plan is a typed success/failure API boundary, with its two consumed private heap-output fields modeled; fixed-plan decoder itself is separately proved'),
+            "arena_lease_replay":dict(enabled=arena_route,actual_wrapper_instruction_cases=arena_cases,
+                callback_result_combinations=64 if arena_route else 0,heap_family_offset=544+8,
+                arena_callback_argument_one=True if arena_route else None,
+                release_entry_admitted=False if arena_route else None,
+                capture_requires_arena_plan_allocation_sdk_admissions=arena_route,
+                model_scope='Actual wrapper instructions; the arena plan bind is a typed success/failure API boundary that sets the arena route flag; the plan itself is separately proved')}
