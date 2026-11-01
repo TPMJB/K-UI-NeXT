@@ -414,7 +414,7 @@ static bool native_handoff_ready(void) {
     return controls_safe(NULL) && !controls.active && !controls_format_pending &&
         !controls_format_refused && !kui_cancelled();
 }
-static bool native_handoff_media(const char *phase) {
+static bool native_handoff_media(const char *phase,bool cooked_verified) {
     cd_check_drive_status_t drive={0};
     if(!native_handoff_ready()) {
         kui_log("Disc handoff %s: optical ownership refused (poison=%u media=%u command=%u DMA=%u controls=%u)",
@@ -425,7 +425,8 @@ static bool native_handoff_media(const char *phase) {
     kui_log("Disc handoff %s: BIOS=%d status=%d type=%d",phase,result,drive.status,drive.disc_type);
     return result==0 &&
         drive.disc_type==CD_GDROM &&
-        (drive.status==CD_STATUS_PAUSED || drive.status==CD_STATUS_STANDBY);
+        (drive.status==CD_STATUS_PAUSED || drive.status==CD_STATUS_STANDBY ||
+         (cooked_verified && drive.status==CD_STATUS_PLAYING));
 }
 bool kui_disc_native_handoff(uint32_t ip_fad,const uint8_t expected_ip_sector[2048]) {
     /* The new direct-disc launcher has read raw 2352-byte sectors. Leave the
@@ -433,7 +434,7 @@ bool kui_disc_native_handoff(uint32_t ip_fad,const uint8_t expected_ip_sector[20
      * game's own GD code. This gate neither resets the drive nor installs an
      * emulated GD vector. The source has already admitted a native GD image. */
     if(!expected_ip_sector || ip_fad<45150u || ip_fad>0xffffffu) return false;
-    if(!native_handoff_media("before format")) return false;
+    if(!native_handoff_media("before format",false)) return false;
     if(!set_mode(2048,1024) || !native_handoff_ready()) {
         kui_log("Disc handoff: restoring Mode1 2048-byte reads refused");return false;
     }
@@ -454,7 +455,15 @@ bool kui_disc_native_handoff(uint32_t ip_fad,const uint8_t expected_ip_sector[20
                 i+1u,read_ok,(unsigned long)detail.size,KUI_DATA_BYTES);return false;
         }
     }
-    if(memcmp(cooked[0].data,cooked[1].data,KUI_DATA_BYTES) || !native_handoff_media("after cooked reads")) return false;
+    /* The mechanical drive status may still be PLAYING after a completed
+     * data read (observed on Power Stone). It is not command ownership: both
+     * PIO commands above must have returned terminal success, released their
+     * buffers and supplied exactly the expected bytes. KOS's own sector-read
+     * path likewise uses terminal command completion without waiting for a
+     * mechanical pause. Admit this state only after those two checked reads;
+     * BUSY/SEEKING/SCANNING and any unsafe owner/media state still refuse. */
+    if(memcmp(cooked[0].data,cooked[1].data,KUI_DATA_BYTES) ||
+       !native_handoff_media("after cooked reads",true)) return false;
     kui_log("Disc handoff: Mode1 2048-byte boot sector verified; real GD firmware retained");
     return true;
 }

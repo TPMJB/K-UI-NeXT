@@ -63,8 +63,12 @@ Failures now stay on **GD Play** with the specific error, preparation stage and
 last read location. Press **R Save log** there and retain the saved text log.
 If the final RAM handoff is refused, the screen and log identify the precise
 guard and source/stack addresses. The bounds themselves have not been relaxed.
-The previous Power Stone photo showed only the tail of Diagnostics, so its
-original refusal still needs the saved log or a result from this revision.
+The Power Stone log from build e91ea0a0d354 confirmed successful staging and
+two exact cooked-sector reads, followed by refusal of mechanical drive status
+3 (PLAYING). This revision admits that status at the final checkpoint after
+both reads pass. Initial admission and all command ownership, media, size,
+buffer guard and content checks remain in effect. Console boot still needs
+testing beyond that checkpoint.
 
 For each result, send **the exact build number, game/product, X Check result,
 Y Direct boot result, last visible screen, and approximate time**. Photograph
