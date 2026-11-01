@@ -293,7 +293,7 @@ def check(stage,resident,self_test=False):
             0x8cdffa00,STAGE,(stage_end-1)&~255)
         for vbr in addresses:
             expect_refusal(StructuralColdCPU(stage,resident,cache=cache,vbr=vbr,exact=0),
-                           7,helpers=[],label='VBR '+hex(vbr));negative_address+=1
+                           0x0b,helpers=[],label='VBR '+hex(vbr));negative_address+=1
         # The caller checks every shared field it subsequently trusts for
         # publication; common/default identity is the pure helper's contract.
         for exact in (0,1):
@@ -301,7 +301,7 @@ def check(stage,resident,self_test=False):
                     (4,SDK_VBR+0x260),(5,SDK_VBR+0x264),(6,0),(6,0xac007458)):
                 c=StructuralColdCPU(stage,resident,cache=cache,exact=exact)
                 c.plan_mutation=(word,value)
-                expect_refusal(c,7,helpers=[EXACT,DISCOVER] if exact==0 else [EXACT],
+                expect_refusal(c,0x0c,helpers=[EXACT,DISCOVER] if exact==0 else [EXACT],
                                label='shared plan word '+str(word));negative_plan+=1
     if self_test:
         address,body,section=symbol_bytes(stage,'_native_sdk_sci_route_bind',2)

@@ -125,7 +125,6 @@ static const uint8_t early_nesting[32]={
     0x90,0x23,0xb7,0xd3,0x8d,0x99,0x6d,0x07,0x3e,0x26,0x3d,0xbf,0x42,0x35,0x13,0xed};
 #define EARLY_STUB_BYTES 0x34u
 #define EARLY_SCRATCH_WORD 11u
-#define EARLY_COMMON_WORD 12u
 #define EARLY_COMMON_BYTES 0x14cu
 #define EARLY_NESTING_BYTES 0x180u
 #define EARLY_NESTING_EVENT 0x17cu
@@ -136,8 +135,11 @@ static const uint8_t early_nesting[32]={
 _Static_assert(EARLY_COMMON_BYTES+EARLY_NESTING_BYTES+8u==EARLY_EVENT_OFFSET,
     "The nesting handler ends at the saved-SP word, eight bytes before the event word");
 /* nesting is 0 unless the install routine and the nesting handler are both
- * exactly the reviewed ones. */
-struct early_family {size_t stub_at,default_at;uint32_t stub,common,nesting,original,event;};
+ * exactly the reviewed ones. selected is the handler both stub templates name:
+ * the install routine writes its choice into the templates in the executable
+ * itself, then copies them, so a running game's image holds the nesting
+ * handler there when it chose that mode. */
+struct early_family {size_t stub_at,default_at;uint32_t stub,common,nesting,selected,original,event;};
 /* The value of the install routine's MOV.L @(disp,PC),Rn at instruction. */
 static bool install_literal(const uint8_t *p,size_t n,uint32_t load,size_t install,
     size_t instruction,unsigned reg,uint32_t *value) {
@@ -191,11 +193,12 @@ static int early_family(const uint8_t *p,size_t n,uint32_t load,struct early_fam
     uint32_t event=u32(s+0x28u),area=event&UINT32_C(0xe0000000);
     uint32_t common=((load+(uint32_t)common_at)&UINT32_C(0x1fffffff))|area;
     uint32_t raw_event=((load+(uint32_t)common_at+EARLY_EVENT_OFFSET)&UINT32_C(0x1fffffff))|area;
+    /* Both templates name one handler; which one is decided below. */
+    const uint32_t selected=u32(s+0x30u);
     if((area!=0u && area!=UINT32_C(0x80000000)) || event!=raw_event ||
        n-common_at<EARLY_EVENT_OFFSET+4u ||
        !normalized(x,EARLY_STUB_BYTES,early_stub_holes,3u,early_expevt) ||
-       u32(x+0x28u)!=event || u32(x+0x2cu) || u32(s+0x2cu) ||
-       u32(x+0x30u)!=common || u32(s+0x30u)!=common ||
+       u32(x+0x28u)!=event || u32(x+0x2cu) || u32(s+0x2cu) || u32(x+0x30u)!=selected ||
        !normalized(c,EARLY_COMMON_BYTES,early_common_hole,1u,early_common) || u32(c+0x148u)!=event)return -1;
     unsigned initializers=0u;bool bound=false;uint32_t original=0u;size_t init_at=0u;
     for(size_t at=0u;at<n && n-at>=0x2eu;at+=2u) {
@@ -212,6 +215,9 @@ static int early_family(const uint8_t *p,size_t n,uint32_t load,struct early_fam
     if(!normalized(d,EARLY_DEFAULT_BYTES,early_default_holes,3u,early_default) ||
        u32(d+0xb8u)!=event+4u || u32(d+0xbcu)!=event-8u || u32(d+0xc0u)!=event-4u)return -1;
     uint32_t nesting=early_nesting_common(p,n,load,init_at,expevt_at,stub_at,common_at,area,event);
-    *out=(struct early_family){stub_at,default_at,load+(uint32_t)stub_at,common,nesting,original,event};
+    /* The plain handler, or the nesting one only when it and its install
+     * routine are exactly the reviewed ones. */
+    if(selected!=common && (!nesting || selected!=nesting))return -1;
+    *out=(struct early_family){stub_at,default_at,load+(uint32_t)stub_at,common,nesting,selected,original,event};
     return 1;
 }

@@ -163,21 +163,20 @@ int kui_native_sdk_sci_route_discover(const void *image,size_t image_bytes,uint3
     if(!vectors) {
         struct early_family early;int found=early_family(p,image_bytes,load,&early);
         if(found!=1)return found;
-        /* The live INTEVT copy must still name a reviewed common handler:
-         * the plain one, or the nesting one the install routine selects with
-         * its 0x80000000 argument (only when that routine and handler are
-         * exactly the reviewed ones). Only its R0 scratch word may differ. */
-        uint32_t selected=0u;
+        /* The live INTEVT copy must equal its template; only its R0 scratch
+         * word may differ. Its common word is therefore the handler the
+         * install routine wrote into both templates: the plain one, or with
+         * its 0x80000000 argument the nesting one, which early_family()
+         * admits only when that routine and handler are exactly the
+         * reviewed ones. */
         for(unsigned i=0u;i<EARLY_STUB_BYTES/4u;i++) {
             uint32_t word;
             if(i==EARLY_SCRATCH_WORD)continue;
-            if(!read(context,current_vbr+0x600u+4u*i,&word))return -1;
-            if(i==EARLY_COMMON_WORD) {
-                if(word!=early.common && (!early.nesting || word!=early.nesting))return -1;
-                selected=word;
-            } else if(word!=u32(p+early.stub_at+4u*i))return -1;
+            if(!read(context,current_vbr+0x600u+4u*i,&word) ||
+               word!=u32(p+early.stub_at+4u*i))return -1;
         }
-        bool nesting=early.nesting && selected==early.nesting;
+        const uint32_t selected=early.selected;
+        bool nesting=selected!=early.common;
         uint32_t common_code=(selected&UINT32_C(0x1fffffff))|UINT32_C(0x80000000),eri,rxi;
         if(!live_words(read,context,common_code,p+(common_code-load),
                        nesting?EARLY_NESTING_BYTES:EARLY_COMMON_BYTES) ||

@@ -116,13 +116,18 @@ and both still-default SCI slots. The standalone New resident's late bind
 compares the 13-word early stub (scratch 11, common 12) instead of the 24-word
 full vector.
 
-The install routine, 0x15a bytes before the table initializer (its first 0x84
-bytes are identical in all five), copies both stubs and chooses their common
-handler from its first argument. With 0x80000000 it stores the nesting handler
-that directly follows the plain one, clears the nesting count (event+4) and
-stores its second argument, the game's interrupt stack, at event-4. The
-nesting handler (0x180 bytes) counts levels. On the first level it saves SP at
-event-8 and switches to that stack. It then saves the same frame, masks to
+The install routine runs from 0x15a bytes before the table initializer to its
+end, and the initializer is its last part. Its first 0x84 bytes are identical in
+all five titles. It chooses the stubs' common handler from its first argument
+and writes that choice into both stub templates in the executable itself, at
++0x30. With 0x80000000 it writes the nesting handler that directly follows the
+plain one, clears the nesting count (event+4) and stores its second argument,
+the game's interrupt stack, at event-4. Otherwise it writes the plain handler
+and clears both words. Only then does it copy the templates to VBR+0x100, +0x400
+and +0x600 and fill the handler table with the default.
+
+The nesting handler (0x180 bytes) counts levels. On the first level it saves SP
+at event-8 and switches to that stack. It then saves the same frame, masks to
 IMASK 15 and dispatches through the same table, so an SCI callback runs in the
 same state under either handler. Its only literal is the event word, and it
 never branches outside itself.
@@ -131,21 +136,36 @@ never branches outside itself.
   calls the install routine, its init calls a setter (0x8c03b570) that stores
   the mode 0x80000000 and its interrupt stack, 0x0c573700, far below the
   virtual card's arena.
-- Sonic Adventure, Elemental Gimmick Gear and Silver store the same mode from
-  another function. Time Stalkers never does.
-- The live route accepts either handler in the INTEVT copy's common word. The
-  nesting one is accepted only when four things match exactly: the install
-  routine, its four role literals (both stubs' common words, the nesting
-  handler and the plain one), the nesting handler, and its event word. Its
-  0x180 live bytes are then checked instead of the plain handler's 0x14c. The
-  image-only finder still reports the plain handler.
-- Compatibility test 7 stopped The House of the Dead 2 at the Background
-  stage's SCI route bind (phase 10, detail 7), after the virtual card's worker
-  had installed, because only the plain handler was known.
+- Sonic Adventure, Elemental Gimmick Gear and Silver have the SDK's
+  interrupt-stack setter. A small wrapper calls it with a fixed buffer. Time
+  Stalkers has none.
+- The Background stage binds the route on the running game's memory: the
+  executable it proves is the one the install routine has just changed.
+  `early_family()` therefore accepts stub templates that both name one handler:
+  the plain one, or the nesting one when four things match exactly: the
+  install routine, its four role literals (both stubs' common words, the
+  nesting handler and the plain one), the nesting handler, and its event word.
+  The live INTEVT copy must then equal its template word for word, apart from
+  its R0 scratch. The selected handler's live code is checked: 0x180 bytes for
+  the nesting one, 0x14c for the plain one. The image-only finder still reports
+  the plain handler.
+- Compatibility tests 7 and 7b stopped The House of the Dead 2 at this bind
+  (phase 10, detail 7), after the virtual card's worker had installed. Test 7
+  knew only the plain handler. Test 7b accepted the nesting handler in the live
+  copy, but still required the plain one in the templates. Its host test had
+  checked the untouched file as the image, which is never what the stage sees.
+- The early-family test now executes each title's own install routine, in
+  both modes, in a small SH-4 interpreter over one main-RAM model. The route
+  then reads that memory as the image and as live state. It accepts all five
+  titles in both modes; test 7b's code refuses all five in nesting mode, as
+  on console.
+- The bind's refusals are now distinct: detail 0x0B for a live table that
+  overlaps loader memory, 6 or 7 for the admission (7: the route check
+  refused), and 0x0C for a plan with unexpected fields.
 - The standalone New resident's late bind still accepts only the plain
-  handler. For a title in nesting mode it therefore never installs the SCI
-  callbacks, and reading stays in the game's own GD calls. That is a
-  follow-up.
+  handler, in the templates and in the copy. For a title in nesting mode it
+  therefore never installs the SCI callbacks, and reading stays in the game's
+  own GD calls. That is a follow-up.
 
 Blue Stinger (Shinobi 1.28) has the same stubs and handler but another table
 initializer, so it is still refused. Silver also fails its executable-extent

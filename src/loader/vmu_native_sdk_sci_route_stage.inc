@@ -92,7 +92,9 @@ static void __attribute__((noipa)) native_sdk_sci_route_bind(uint32_t payload) {
     __asm__ volatile("stc sr,%0":"=r"(sr)::"memory");
     __asm__ volatile("stc vbr,%0":"=r"(vbr)::"memory");
 #if KUI_NATIVE_SDK_SCI_STRUCTURAL
-    if(!native_sdk_sci_route_disjoint(vbr,payload))native_report(10u,7u);
+    /* Each refusal of this bind has its own detail: 0x0B the live table's
+     * place, 6 or 7 the owner admission, 0x0C its plan. */
+    if(!native_sdk_sci_route_disjoint(vbr,payload))native_report(10u,0x0bu);
 #endif
     struct kui_native_sdk_sci_route_plan plan;
     int admitted=kui_native_sdk_sci_route_admit((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
@@ -121,7 +123,7 @@ static void __attribute__((noipa)) native_sdk_sci_route_bind(uint32_t payload) {
        plan.eri_slot!=KUI_NATIVE_SDK_SCI_OWNER_VBR+KUI_NATIVE_SDK_SCI_ERI_SLOT_OFFSET ||
        plan.rxi_slot!=KUI_NATIVE_SDK_SCI_OWNER_VBR+KUI_NATIVE_SDK_SCI_RXI_SLOT_OFFSET ||
 #endif
-       plan.callback!=exports.callback)native_report(10u,7u);
+       plan.callback!=exports.callback)native_report(10u,0x0cu);
     /* Preserve exact old SCI callback and original VBR first. The cookie is
      * still zero, so neither an IRQ nor a later GD entry can treat a partial
      * table publication as a live route. Other callback slots are untouched. */
