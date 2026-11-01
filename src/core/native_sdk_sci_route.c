@@ -163,21 +163,29 @@ int kui_native_sdk_sci_route_discover(const void *image,size_t image_bytes,uint3
     if(!vectors) {
         struct early_family early;int found=early_family(p,image_bytes,load,&early);
         if(found!=1)return found;
-        /* The live INTEVT copy must still name the one reviewed common
-         * handler; only its R0 scratch word may differ. */
+        /* The live INTEVT copy must still name a reviewed common handler:
+         * the plain one, or the nesting one the install routine selects with
+         * its 0x80000000 argument (only when that routine and handler are
+         * exactly the reviewed ones). Only its R0 scratch word may differ. */
+        uint32_t selected=0u;
         for(unsigned i=0u;i<EARLY_STUB_BYTES/4u;i++) {
             uint32_t word;
             if(i==EARLY_SCRATCH_WORD)continue;
-            if(!read(context,current_vbr+0x600u+4u*i,&word) ||
-               word!=u32(p+early.stub_at+4u*i))return -1;
+            if(!read(context,current_vbr+0x600u+4u*i,&word))return -1;
+            if(i==EARLY_COMMON_WORD) {
+                if(word!=early.common && (!early.nesting || word!=early.nesting))return -1;
+                selected=word;
+            } else if(word!=u32(p+early.stub_at+4u*i))return -1;
         }
-        uint32_t common_code=(early.common&UINT32_C(0x1fffffff))|UINT32_C(0x80000000),eri,rxi;
-        if(!live_words(read,context,common_code,p+(common_code-load),EARLY_COMMON_BYTES) ||
+        bool nesting=early.nesting && selected==early.nesting;
+        uint32_t common_code=(selected&UINT32_C(0x1fffffff))|UINT32_C(0x80000000),eri,rxi;
+        if(!live_words(read,context,common_code,p+(common_code-load),
+                       nesting?EARLY_NESTING_BYTES:EARLY_COMMON_BYTES) ||
            !live_words(read,context,load+(uint32_t)early.default_at,p+early.default_at,EARLY_DEFAULT_BYTES) ||
            !read(context,current_vbr+0x25cu,&eri) || !read(context,current_vbr+0x260u,&rxi) ||
            eri!=early.original || rxi!=early.original)return -1;
         *out=(struct kui_native_sdk_sci_route_plan){KUI_NATIVE_SDK_SCI_ROUTE_VERSION,sizeof(*out),
-            current_vbr,early.common,current_vbr+0x25cu,current_vbr+0x260u,callback,eri};
+            current_vbr,selected,current_vbr+0x25cu,current_vbr+0x260u,callback,eri};
         return 1;
     }
     if(image_bytes-vector_at<96u)return -1;

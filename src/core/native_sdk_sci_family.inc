@@ -110,12 +110,68 @@ static const uint8_t early_common[32]={
 static const uint8_t early_default[32]={
     0x1f,0xdf,0x9e,0xd9,0x98,0x1b,0xc3,0xcb,0xcd,0x9e,0x6f,0x7e,0xba,0x89,0x36,0x00,
     0x4e,0x85,0x4d,0xb0,0xb0,0xe6,0x86,0xf5,0xaa,0x01,0x98,0x21,0x65,0x78,0xca,0xec};
+/* The install routine (it copies both stubs, then calls the table initializer
+ * 0x15a bytes on) chooses the stubs' common handler from its argument: when
+ * it is 0x80000000, the nesting handler that directly follows the plain one.
+ * That handler counts nesting levels and, on the first, saves SP and enters
+ * the game's own interrupt stack; it then saves and dispatches exactly as
+ * the plain one. Its code up to the variables before the event word is
+ * fingerprinted with the event literal as the only hole. */
+static const uint8_t early_install[32]={
+    0x84,0xc3,0x0a,0x9f,0x20,0x0e,0x26,0xa3,0xc0,0x7e,0xb3,0x8b,0x3f,0xc8,0xd5,0xe9,
+    0x1d,0xb6,0xa9,0xa4,0x97,0xe6,0x1e,0xba,0x26,0xf5,0x33,0x44,0x53,0x89,0xe7,0xa1};
+static const uint8_t early_nesting[32]={
+    0xae,0x51,0xf5,0x33,0x48,0x62,0xb3,0x74,0x6b,0x2d,0x10,0x43,0x31,0xb4,0x62,0xcb,
+    0x90,0x23,0xb7,0xd3,0x8d,0x99,0x6d,0x07,0x3e,0x26,0x3d,0xbf,0x42,0x35,0x13,0xed};
 #define EARLY_STUB_BYTES 0x34u
 #define EARLY_SCRATCH_WORD 11u
+#define EARLY_COMMON_WORD 12u
 #define EARLY_COMMON_BYTES 0x14cu
+#define EARLY_NESTING_BYTES 0x180u
+#define EARLY_NESTING_EVENT 0x17cu
+#define EARLY_INSTALL_BEFORE_INIT 0x15au
+#define EARLY_INSTALL_BYTES 0x84u
 #define EARLY_EVENT_OFFSET 0x2d4u
 #define EARLY_DEFAULT_BYTES 0xc4u
-struct early_family {size_t stub_at,default_at;uint32_t stub,common,original,event;};
+_Static_assert(EARLY_COMMON_BYTES+EARLY_NESTING_BYTES+8u==EARLY_EVENT_OFFSET,
+    "The nesting handler ends at the saved-SP word, eight bytes before the event word");
+/* nesting is 0 unless the install routine and the nesting handler are both
+ * exactly the reviewed ones. */
+struct early_family {size_t stub_at,default_at;uint32_t stub,common,nesting,original,event;};
+/* The value of the install routine's MOV.L @(disp,PC),Rn at instruction. */
+static bool install_literal(const uint8_t *p,size_t n,uint32_t load,size_t install,
+    size_t instruction,unsigned reg,uint32_t *value) {
+    uint16_t op=u16(p+install+instruction);
+    if((op&0xff00u)!=(uint16_t)(0xd000u|(reg<<8)))return false;
+    size_t at=(((load+(uint32_t)(install+instruction)+4u)&~3u)+4u*(op&255u))-load;
+    if(at>n || n-at<4u)return false;
+    *value=u32(p+at);return true;
+}
+static uint32_t early_nesting_common(const uint8_t *p,size_t n,uint32_t load,size_t init_at,
+    size_t expevt_at,size_t stub_at,size_t common_at,uint32_t area,uint32_t event) {
+    static const uint16_t nesting_hole[]={EARLY_NESTING_EVENT};
+    size_t nesting_at=common_at+EARLY_COMMON_BYTES;
+    if(init_at<EARLY_INSTALL_BEFORE_INIT || n-nesting_at<EARLY_NESTING_BYTES)return 0u;
+    size_t install=init_at-EARLY_INSTALL_BEFORE_INIT;
+    if(n-install<EARLY_INSTALL_BYTES ||
+       !normalized(p+install,EARLY_INSTALL_BYTES,NULL,0u,early_install) ||
+       !normalized(p+nesting_at,EARLY_NESTING_BYTES,nesting_hole,1u,early_nesting) ||
+       u32(p+nesting_at+EARLY_NESTING_EVENT)!=event)return 0u;
+    const uint32_t nesting=((load+(uint32_t)nesting_at)&UINT32_C(0x1fffffff))|area;
+    const uint32_t common=((load+(uint32_t)common_at)&UINT32_C(0x1fffffff))|area;
+    /* Its four role literals: the INTEVT and EXPEVT stubs' common words, and
+     * the nesting and plain handlers it stores there. */
+    const struct {size_t instruction;unsigned reg;uint32_t value;} roles[]={
+        {0x1eu,7u,((load+(uint32_t)stub_at+0x30u)&UINT32_C(0x1fffffff))|area},
+        {0x2eu,0u,((load+(uint32_t)expevt_at+0x30u)&UINT32_C(0x1fffffff))|area},
+        {0x30u,4u,nesting},{0x42u,4u,common}};
+    for(size_t i=0u;i<sizeof(roles)/sizeof(roles[0]);i++) {
+        uint32_t value;
+        if(!install_literal(p,n,load,install,roles[i].instruction,roles[i].reg,&value) ||
+           value!=roles[i].value)return 0u;
+    }
+    return nesting;
+}
 /* Image-only roles of the early family: 1 found, 0 none, -1 malformed or
  * ambiguous. Callers try it only when no full/compact vector prefix exists. */
 static int early_family(const uint8_t *p,size_t n,uint32_t load,struct early_family *out) {
@@ -141,13 +197,13 @@ static int early_family(const uint8_t *p,size_t n,uint32_t load,struct early_fam
        u32(x+0x28u)!=event || u32(x+0x2cu) || u32(s+0x2cu) ||
        u32(x+0x30u)!=common || u32(s+0x30u)!=common ||
        !normalized(c,EARLY_COMMON_BYTES,early_common_hole,1u,early_common) || u32(c+0x148u)!=event)return -1;
-    unsigned initializers=0u;bool bound=false;uint32_t original=0u;
+    unsigned initializers=0u;bool bound=false;uint32_t original=0u;size_t init_at=0u;
     for(size_t at=0u;at<n && n-at>=0x2eu;at+=2u) {
         if(u16(p+at)!=0x9511u || u16(p+at+2u)!=0x9411u ||
            !normalized(p+at,0x2eu,early_init_holes,1u,family_init))continue;
         if(++initializers>1u)return -1;
         bound=literal_at(p+at,load+(uint32_t)at,4u,7u,0x2au);
-        original=u32(p+at+0x2au);
+        original=u32(p+at+0x2au);init_at=at;
     }
     size_t default_at;
     if(initializers!=1u || !bound || (original&3u) ||
@@ -155,6 +211,7 @@ static int early_family(const uint8_t *p,size_t n,uint32_t load,struct early_fam
     const uint8_t *d=p+default_at;
     if(!normalized(d,EARLY_DEFAULT_BYTES,early_default_holes,3u,early_default) ||
        u32(d+0xb8u)!=event+4u || u32(d+0xbcu)!=event-8u || u32(d+0xc0u)!=event-4u)return -1;
-    *out=(struct early_family){stub_at,default_at,load+(uint32_t)stub_at,common,original,event};
+    uint32_t nesting=early_nesting_common(p,n,load,init_at,expevt_at,stub_at,common_at,area,event);
+    *out=(struct early_family){stub_at,default_at,load+(uint32_t)stub_at,common,nesting,original,event};
     return 1;
 }
