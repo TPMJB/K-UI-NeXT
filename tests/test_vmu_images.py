@@ -86,10 +86,15 @@ COLLECTION_READ_ONLY = tuple(case for case in COLLECTION[3:19] if case!="collect
 DESCRIPTIONS = ("description-physical", "description-fragmented", "description-malformed",
                 "description-read-fail", "description-image", "description-image-fragmented")
 DESCRIPTION_READ_ONLY = DESCRIPTIONS[:3]
+READ_RECOVERY = ("read-recovery-healthy", "read-recovery-once", "read-recovery-last",
+                 "read-recovery-alternating", "read-recovery-two-only", "read-recovery-short",
+                 "read-recovery-timeout", "read-recovery-malformed", "read-recovery-oversize", "read-recovery-prior-oversize",
+                 "read-recovery-identity", "read-recovery-cancel", "read-recovery-between-passes",
+                 "read-recovery-recovered-then-changed")
 CAPTURE = ("capture-ok", "capture-opaque", "capture-empty", "capture-orphan",
            "capture-duplicate", "capture-dirty", "capture-missing", "capture-short",
            "capture-oversize", "capture-read-fail", "capture-device-change",
-           "capture-metadata-change", "capture-payload-change", "capture-cancel", "capture-invalid-slot")
+           "capture-metadata-change", "capture-payload-change", "capture-cancel", "capture-invalid-slot") + READ_RECOVERY
 
 
 def digest(path):

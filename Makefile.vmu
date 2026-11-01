@@ -241,4 +241,4 @@ $(BUILD)/test-bounded-vmu-read: tests/test_vmu_read_bounded.c src/dreamcast/vmu_
 	@mkdir -p $(@D)
 	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -pedantic $(HOST_SANITIZERS) \
         -Itests/vmu_read_bounded_stubs -Iinclude \
-        tests/test_vmu_read_bounded.c src/dreamcast/vmu_read_bounded.c src/core/data.c -o $@
+        tests/test_vmu_read_bounded.c src/dreamcast/vmu_read_bounded.c src/core/data.c -Wl,--wrap=kui_crc32 -o $@

@@ -17,6 +17,10 @@ static struct {
     uint8_t *header_only;
     _Alignas(32) union {uint32_t words[256];uint8_t bytes[1024];} shared;
     unsigned locks,inits,queues,waits,unlocks,removes,wakes,polls;
+    unsigned lock_calls,flushes,again_replies,again_seen,corrupt_flushes;
+    uint32_t last_sent[2];
+    maple_frame_t *polled_frame;
+    int allow_bad_request;
     unsigned busy_attempts;
     unsigned invalidations,dirty_evictions;
     int cached_alias_dirty,allow_dirty_queue;
@@ -24,7 +28,22 @@ static struct {
     unsigned block;
     int lock_failure,lock_bad_state,queue_failure,wait_result,next_state;
     int short_storage;
+    unsigned crc_calls,crc_fault;
 } model;
+uint32_t __real_kui_crc32(uint32_t initial,const void *bytes,size_t count);
+uint32_t __wrap_kui_crc32(uint32_t initial,const void *bytes,size_t count) {
+    ++model.crc_calls;
+    /* Inject an observed reply change before/after its private copy, or a
+     * corrupted private copy. These faults leave every response header valid. */
+    if(model.crc_fault && model.crc_calls==model.crc_fault) {
+        assert(count==512u);((uint8_t *)(uintptr_t)bytes)[137u]^=0x40u;
+    }
+    uint32_t result=__real_kui_crc32(initial,bytes,count);
+    if(model.crc_fault==4u && model.crc_calls==1u) {
+        assert(count==512u);((uint8_t *)(uintptr_t)bytes)[137u]^=0x40u;
+    }
+    return result;
+}
 static void put32(uint8_t *p,uint32_t value) {
     for(unsigned i=0;i<4u;i++) p[i]=(uint8_t)(value>>(i*8u));
 }
@@ -38,7 +57,8 @@ static void setup(unsigned block) {
     for(unsigned i=0;i<512u;i++) model.reply[12u+i]=model.expected[i]=(uint8_t)(i*17u+block+31u);
 }
 int maple_frame_trylock(maple_frame_t *frame) {
-    assert(frame==&device.frame);++model.locks;
+    assert(frame==&device.frame);++model.locks;++model.lock_calls;
+    model.polled_frame=frame;
     if(model.lock_failure || model.busy_attempts) {
         if(model.busy_attempts) --model.busy_attempts;
         frame->state=MAPLE_FRAME_SENT;return -1;
@@ -47,11 +67,17 @@ int maple_frame_trylock(maple_frame_t *frame) {
     frame->state=model.lock_bad_state?MAPLE_FRAME_SENT:MAPLE_FRAME_UNSENT;return 0;
 }
 int thd_poll(thd_cb_t callback,void *context,unsigned long timeout) {
-    assert(context==&device.frame && callback && timeout==100u);++model.polls;
+    assert(context && callback && timeout==100u);++model.polls;
     for(unsigned attempt=0;attempt<8u;attempt++) {
+        model.polled_frame=NULL;
+        /* The production owner guard can refuse before trying to acquire a
+         * replacement frame. Count polling attempts independently of the
+         * SDK lock calls, and never complete an abandoned frame artificially. */
+        unsigned lock_calls=model.lock_calls;
         int result=callback(context);if(result) return result;
         /* Another public driver owns the frame until it completes. */
-        if(!model.lock_failure) device.frame.state=MAPLE_FRAME_VACANT;
+        if(!model.lock_failure && model.lock_calls!=lock_calls)
+            model.polled_frame->state=MAPLE_FRAME_VACANT;
     }
     return 0;
 }
@@ -72,6 +98,22 @@ void dcache_inval_range(uintptr_t start,size_t count) {
      * those stale bytes back into the separate uncached physical memory. */
     model.cached_alias_dirty=0;++model.invalidations;
 }
+static void model_flush(maple_frame_t *frame) {
+    assert(frame==&device.frame && frame->queued && frame->state==MAPLE_FRAME_UNSENT);
+    /* KOS's actual queue builder copies the request anew on EVERY retry. */
+    memcpy(model.last_sent,frame->send_buf,sizeof(model.last_sent));++model.flushes;
+    int intact=model.last_sent[0]==MAPLE_FUNC_MEMCARD && model.last_sent[1]==model.block<<24;
+    if(!intact) ++model.corrupt_flushes;
+    assert(model.allow_bad_request || intact);frame->state=MAPLE_FRAME_SENT;
+}
+static void model_again(maple_frame_t *frame) {
+    assert(frame==&device.frame && frame->queued && frame->state==MAPLE_FRAME_SENT);
+    /* A zero-payload AGAIN still replaces the shared buffer's first word.
+     * KOS leaves it queued, marks UNSENT and invokes no completion callback. */
+    const uint8_t again[4]={(uint8_t)MAPLE_RESPONSE_AGAIN,0x20u,0x01u,0u};
+    memcpy(frame->recv_buf,again,sizeof(again));frame->state=MAPLE_FRAME_UNSENT;
+    ++model.again_seen;
+}
 int maple_queue_frame(maple_frame_t *frame) {
     assert(frame==&device.frame && frame->state==MAPLE_FRAME_UNSENT && !frame->queued);
     assert(frame->cmd==MAPLE_COMMAND_BREAD && frame->length==2);
@@ -80,7 +122,7 @@ int maple_queue_frame(maple_frame_t *frame) {
     assert(frame->callback);++model.queues;
     assert(model.allow_dirty_queue || (model.invalidations==1u && !model.cached_alias_dirty));
     if(model.queue_failure) return -1;
-    frame->queued=1;frame->state=MAPLE_FRAME_SENT;return 0;
+    frame->queued=1;model_flush(frame);return 0;
 }
 int maple_queue_remove(maple_frame_t *frame) {
     assert(frame==&device.frame && frame->queued && model.irq_depth);
@@ -96,6 +138,10 @@ int genwait_wait(void *object,const char *label,unsigned int timeout) {
     maple_frame_t *frame=object;
     assert(frame==&device.frame && frame->queued && frame->state==MAPLE_FRAME_SENT);
     assert(label && timeout==100u);++model.waits;
+    for(unsigned i=0;i<model.again_replies;i++) {
+        model_again(frame);model_flush(frame);
+        assert(!model.wakes && !model.unlocks);
+    }
     memcpy(frame->recv_buf,model.reply,sizeof(model.reply));
     if(model.cached_alias_dirty) {
         /* A dirty cached line left by calloc evicts after uncached DMA. The
@@ -142,9 +188,9 @@ static void check(int expected) {
     }
     else {
         assert(model.inits==1u && model.invalidations==1u && model.queues==1u && !model.dirty_evictions);
-        if(model.queue_failure) assert(!model.waits && !model.unlocks && !model.removes);
+        if(model.queue_failure) assert(!model.waits && !model.unlocks && !model.removes && !model.flushes);
         else {
-            assert(model.waits==1u);
+            assert(model.waits==1u && model.flushes==1u+model.again_replies && !model.corrupt_flushes);
             if(model.next_state==MAPLE_FRAME_RESPONDED)
                 assert(model.unlocks==1u && !model.removes && model.wakes==1u);
             else if(model.next_state==MAPLE_FRAME_SENT) {
@@ -273,8 +319,95 @@ static void dirty_cached_receive_alias(void) {
     setup(0u);check(MAPLE_EOK);
     assert(model.invalidations==1u && !model.dirty_evictions);
 }
+static void again_retransmissions(void) {
+    /* Reproduce the old transport defect using the actual KOS buffer alias
+     * and its retry transition. It corrupts the next transmitted function
+     * word even though BREAD's command and block fields remain intact. */
+    setup(128u);model.allow_dirty_queue=1;model.allow_bad_request=1;
+    maple_frame_t *f=&device.frame;
+    assert(maple_frame_trylock(f)==0);maple_frame_init(f);
+    f->send_buf[0]=MAPLE_FUNC_MEMCARD;f->send_buf[1]=model.block<<24;
+    f->cmd=MAPLE_COMMAND_BREAD;f->length=2;f->dst_port=device.port;f->dst_unit=device.unit;
+    f->callback=model_reply_wake;
+    assert(maple_queue_frame(f)==0 && model.corrupt_flushes==0u);
+    model_again(f);model_flush(f);
+    assert(model.corrupt_flushes==1u && model.last_sent[0]!=MAPLE_FUNC_MEMCARD);
+    assert(model.last_sent[1]==model.block<<24 && !model.wakes && !model.unlocks);
+    f->queued=0;f->state=MAPLE_FRAME_RESPONDED;maple_frame_unlock(f);
+    /* Production BREAD retains its request through real AGAIN/requeue cycles
+     * for every block, including the owner's troublesome allocated block128. */
+    for(unsigned b=0;b<256u;b++) {
+        setup(b);model.again_replies=1u;check(MAPLE_EOK);
+        assert(model.again_seen==1u && !model.corrupt_flushes);
+        assert(device.frame.send_buf!=(uint32_t *)(void *)device.frame.recv_buf);
+    }
+    for(unsigned retries=2u;retries<=8u;retries++) {
+        setup(128u);model.again_replies=retries;check(MAPLE_EOK);
+        assert(model.again_seen==retries);
+    }
+    for(unsigned p=0u;p<MAPLE_PORT_COUNT;p++)
+        for(unsigned u=1u;u<MAPLE_UNIT_COUNT;u++) {
+            setup(128u);device.port=(int)p;device.unit=(int)u;
+            model.again_replies=2u;check(MAPLE_EOK);
+        }
+}
+static void late_again_and_replacement(void) {
+    setup(128u);model.next_state=MAPLE_FRAME_SENT;model.wait_result=-1;
+    uint8_t out[512],replacement_out[512];memset(out,0x6bu,sizeof(out));
+    memset(replacement_out,0x7cu,sizeof(replacement_out));
+    assert(kui_vmu_read_bounded(&device,128u,out)==MAPLE_ETIMEOUT);
+    maple_frame_t *f=&device.frame;uint32_t *request=f->send_buf;
+    assert(f->state==MAPLE_FRAME_SENT && f->queued && !model.unlocks && !model.wakes);
+    assert(request!=(uint32_t *)(void *)f->recv_buf);
+    assert(request[0]==MAPLE_FUNC_MEMCARD && request[1]==128u<<24);
+    maple_device_t replacement={0};replacement.valid=1u;replacement.port=device.port;
+    replacement.unit=device.unit;replacement.info.functions=MAPLE_FUNC_MEMCARD;
+    /* The old request may still receive AGAIN after its caller has returned.
+     * A new frame at the same slot must not overwrite those persistent words,
+     * either while it is SENT or between AGAIN and the subsequent flush. */
+    for(unsigned retries=0u;retries<4u;retries++) {
+        unsigned locks=model.lock_calls,inits=model.inits,queues=model.queues,waits=model.waits;
+        assert(kui_vmu_read_bounded(&replacement,129u,replacement_out)==MAPLE_ETIMEOUT);
+        assert(model.lock_calls==locks && model.inits==inits && model.queues==queues && model.waits==waits);
+        assert(replacement.frame.state==MAPLE_FRAME_VACANT && !replacement.frame.queued);
+        assert(request[0]==MAPLE_FUNC_MEMCARD && request[1]==128u<<24);
+        model_again(f);
+        assert(kui_vmu_read_bounded(&replacement,130u,replacement_out)==MAPLE_ETIMEOUT);
+        assert(f->state==MAPLE_FRAME_UNSENT && f->queued);
+        model_flush(f);
+    }
+    struct kui_vmu_read_bounded_diagnostic saved=*kui_vmu_read_bounded_last();
+    f->state=MAPLE_FRAME_RESPONDED;f->queued=0;f->callback(NULL,f);
+    assert(!memcmp(kui_vmu_read_bounded_last(),&saved,sizeof(saved)));
+    assert(model.unlocks==1u && !model.wakes && !model.corrupt_flushes);
+    for(unsigned i=0;i<512u;i++) assert(out[i]==0x6bu && replacement_out[i]==0x7cu);
+    /* Completion releases the owner guard; a new request at this slot works. */
+    setup(129u);model.again_replies=1u;check(MAPLE_EOK);
+}
+static void internally_changed_payload(void) {
+    for(unsigned fault=1u;fault<=4u;fault++) {
+        setup(128u);uint8_t out[512];memset(out,0x6bu,sizeof(out));
+        /* Fault1 occurs before the first observation, so the captured bytes
+         * consistently describe that response. Fault2 changes raw bytes after
+         * copying; fault3 changes only the private copy; fault4 changes raw
+         * bytes after the first observation and before copying. */
+        model.crc_fault=fault;
+        int result=kui_vmu_read_bounded(&device,128u,out);
+        const struct kui_vmu_read_bounded_diagnostic *d=kui_vmu_read_bounded_last();
+        assert(model.crc_calls==3u && model.unlocks==1u && !device.frame.queued);
+        if(fault==1u) {
+            assert(result==MAPLE_EOK && d->stage==KUI_VMU_READ_COMPLETE);
+            model.expected[137u]^=0x40u;assert(!memcmp(out,model.expected,sizeof(out)));
+        } else {
+            assert(result==MAPLE_EFAIL && d->stage==KUI_VMU_READ_STABILITY);
+            assert(d->raw_crc_before!=d->raw_crc_after || d->raw_crc_before!=d->copy_crc);
+            for(unsigned i=0;i<sizeof(out);i++) assert(out[i]==0x6bu);
+        }
+    }
+}
 int main(void) {
     dirty_cached_receive_alias();exact_lengths_and_locations();malformed_responses();frame_lifetimes();invalid_arguments();
-    puts("Bounded VMU BREAD: dirty cached receive aliases, shared request/reply buffer, bounded busy acquisition, every response length/type, exact block/function, diagnostics, unchanged failure output and public frame cleanup passed");
+    again_retransmissions();late_again_and_replacement();internally_changed_payload();
+    puts("Bounded VMU BREAD: persistent independent requests, AGAIN retransmission for every block, late AGAIN/replacement-slot ownership, private-copy stability, cache ownership, exact framing and unchanged refusal output passed");
     return 0;
 }

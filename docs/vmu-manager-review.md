@@ -24,6 +24,33 @@ bounded BREAD helper, retaining duplicate reads, device checks and canaries.
 The helper validates framing before copying, keeps frame ownership through
 the copy, and quarantines sent operations that time out.
 
+## Bounded read retries and logical import follow-up
+
+The November 1 review found a separate BREAD retry defect in the adapter's
+request storage. KOS `maple_frame_init` aliases the send and receive buffers;
+an AGAIN reply overwrites the request before KOS marks it UNSENT and resends
+from `send_buf`. The reader now retains two independent request words per
+physical slot. An owner-frame guard remains held across a SENT timeout and
+late AGAIN retries, so another device cannot reuse a pending request. It is
+released only when that request is no longer queued or in flight. A private
+512-byte copy must have the same CRC32 as the receive payload before and
+after copying, before any caller bytes are published.
+
+The application retains two identical reads for healthy blocks. If complete
+replies differ, at most eight reads are allowed and three consecutive whole
+512-byte samples must agree. No byte voting, padding repair or synthesized
+allocated data is used. Identity, cancellation, canary and transport failures
+stop immediately; later independent payload and metadata comparisons remain.
+Refusals log block/save context, first differing offset and observed CRCs.
+
+The current import wizard captures all admitted saves into a separate
+canonical card without reading unused physical flash. An exact raw VMD
+backup still reads all 256 blocks twice and refuses disagreement, including
+unstable free blocks. These are intentionally different operations. The
+retry defect can explain refused reads or timeouts; it is not proof of the
+cause of the black VMU's earlier changing allocated block 128. Console
+recovery remains unconfirmed until the owner retries this build.
+
 ## Delete and copy write paths
 
 Delete clears the selected directory entry, verifies the directory, frees only

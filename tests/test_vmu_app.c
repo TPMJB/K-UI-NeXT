@@ -30,6 +30,12 @@ static bool missing,payload_seen,injected;
 static unsigned vmu_writes,free_user_reads,rejection_read_count;
 static bool collection_read_guard;
 static unsigned collection_unowned_reads;
+static unsigned recovery_reads,recovery_changes,recovery_completions;
+static bool recovery_diagnostic,recovery_save_context;
+static unsigned recovery_transport_lines;
+static bool recovery_transport_ready;
+static struct kui_vmu_read_bounded_diagnostic recovery_transport;
+static uint8_t *recovery_previous_output;
 static uint8_t original_card[256][512];
 static FILE *image;
 static uint64_t image_blocks;
@@ -38,7 +44,18 @@ static const char *sentinel_path="0:/KUI/backups/vmu/A1-0001/keep.bin";
 static const char sentinel[]="Existing VMU backup and capture files must remain intact";
 static bool is(const char *name) {return fault && !strcmp(fault,name);}
 static void log_line(const char *format,...) {
-    va_list args;va_start(args,format);vprintf(format,args);va_end(args);puts("");
+    char line[512];va_list args;va_start(args,format);
+    vsnprintf(line,sizeof(line),format,args);va_end(args);puts(line);
+    if(strstr(line,"VMU block 128 read") && strstr(line,"changed:")) {
+        ++recovery_changes;
+        if(strstr(line,"CRC32 ") && strstr(line,"first byte 12:")) recovery_diagnostic=true;
+    }
+    if(strstr(line,"VMU block 128 recovered at read")) ++recovery_completions;
+    if(strstr(line,"VMU allocated save 1 (SAVE00)") && strstr(line,"refused at block 128"))
+        recovery_save_context=true;
+    if(strstr(line,"VMU bounded reader: block 128 stage ")) recovery_transport_lines|=1u;
+    if(strstr(line,"VMU bounded fields: function 01020304/05060708 location 11223344/55667788")) recovery_transport_lines|=2u;
+    if(strstr(line,"VMU bounded CRC32: raw-before 12345678 raw-after 90abcdef private-copy a1b2c3d4")) recovery_transport_lines|=4u;
 }
 static void put16(uint8_t *p,unsigned value) {p[0]=(uint8_t)value;p[1]=(uint8_t)(value>>8);}
 static void setup(unsigned count) {
@@ -76,6 +93,9 @@ maple_device_t *maple_enum_dev(int port,int unit) {
 }
 int vmufs_mutex_lock(void) {assert(!locks);++locks;return 0;}
 int vmufs_mutex_unlock(void) {assert(locks==1);--locks;return 0;}
+const struct kui_vmu_read_bounded_diagnostic *kui_vmu_read_bounded_last(void) {
+    return recovery_transport_ready?&recovery_transport:NULL;
+}
 int kui_vmu_read_bounded(maple_device_t *device,uint16_t block,uint8_t out[512]) {
     assert(locks==1 && block<256);++reads;uint8_t (*storage)[512]=device_card(device);
     if(collection_read_guard) {
@@ -88,6 +108,40 @@ int kui_vmu_read_bounded(maple_device_t *device,uint16_t block,uint8_t out[512])
         if(!metadata && !allocated) ++collection_unowned_reads;
     }
     if(block<200 && storage[254][block*2]==0xfc && storage[254][block*2+1]==0xff) ++free_user_reads;
+    if(block==128u && fault && !strncmp(fault,"read-recovery-",14u)) {
+        ++recovery_reads;
+        if(recovery_reads==3u && (is("read-recovery-timeout") || is("read-recovery-malformed"))) {
+            recovery_transport=(struct kui_vmu_read_bounded_diagnostic){.block=128u,
+                .stage=is("read-recovery-timeout")?KUI_VMU_READ_WAIT:KUI_VMU_READ_LENGTH,
+                .result=is("read-recovery-timeout")?-2:-1,.wait_result=-1,.response=-127,.data_len=129u,
+                .actual_function=0x01020304u,.expected_function=0x05060708u,
+                .actual_location=0x11223344u,.expected_location=0x55667788u,
+                .raw_crc_before=0x12345678u,.raw_crc_after=0x90abcdefu,.copy_crc=0xa1b2c3d4u};
+            recovery_transport_ready=true;
+            injected=true;return is("read-recovery-timeout")?-2:-1;
+        }
+        if(is("read-recovery-short")) {memcpy(out,storage[block],508u);injected=true;return 0;}
+        if(is("read-recovery-between-passes") && recovery_reads==3u) {storage[block][11]^=1u;injected=true;}
+        if(is("read-recovery-recovered-then-changed") && recovery_reads==5u) {storage[block][11]^=1u;injected=true;}
+        memcpy(out,storage[block],512u);
+        unsigned alter=0u;
+        if(is("read-recovery-alternating")) alter=recovery_reads&1u;
+        else if(is("read-recovery-two-only")) {
+            static const uint8_t choices[8]={1,2,2,1,1,2,2,1};
+            assert(recovery_reads<=8u);alter=choices[recovery_reads-1u];
+        } else if(is("read-recovery-last"))
+            alter=recovery_reads<=5u && (recovery_reads&1u)?recovery_reads:0u;
+        else if(!is("read-recovery-healthy") && !is("read-recovery-between-passes"))
+            alter=recovery_reads==1u?1u:0u;
+        if(alter) {out[12]^=(uint8_t)alter;injected=true;}
+        if(recovery_reads==3u && is("read-recovery-oversize")) {out[512]=0u;injected=true;}
+        if(recovery_reads==3u && is("read-recovery-prior-oversize")) {
+            assert(recovery_previous_output);recovery_previous_output[512]=0u;injected=true;
+        }
+        if(recovery_reads==3u && is("read-recovery-identity")) {active=1u;injected=true;}
+        recovery_previous_output=out;
+        return 0;
+    }
     if(is("description-read-fail") && block<200) {injected=true;return -1;}
     if(is("bulk-vmu-read-fail") || (is("bulk-final-read-fail") && bulk_dir_commits && block==199 && device==&devices[destination_active]) || is("vmu-read-fail") ||
        (is("collection-capture-read-fail") && block==254 && reads>30u)) {injected=true;rejection_read_count=reads;return -1;}
@@ -143,6 +197,7 @@ int vmufs_dir_write(maple_device_t *device,vmu_root_t *root,vmu_dir_t *dir) {
     return 0;
 }
 static bool cancelled(void) {
+    if(is("read-recovery-cancel") && recovery_reads>=3u) {injected=true;return true;}
     if(is("bulk-cancel-start") || (is("bulk-cancel-data") && vmu_writes) || (is("bulk-cancel-after-one") && reported_done>=1024)) {injected=true;return true;}
     if(is("image-cancel-read") && media_reads>=8) {injected=true;return true;}
     if(((is("restore-cancel") && vmu_writes) || (is("restore-stop-commit") && vmu_writes>=3)) || (is("delete-stop-commit") && vmu_writes) || (is("delete-cancel-backup") && payload_seen) ||
@@ -866,7 +921,7 @@ static void test_collection_adapter(const char *mode) {
             assert(strstr(out.status.message,"need 201 blocks"));
         if(!strcmp(mode,"collection-capture-read-fail")) {
             assert(injected && reads==rejection_read_count && out.status.errors==1u);
-            assert(!strcmp(out.status.message,"VMU block read failed"));
+            assert(!strcmp(out.status.message,"VMU block 254: read failed (read 1)"));
         }
         assert(!memcmp(card,original_card,sizeof(card)));return;
     }
@@ -944,6 +999,41 @@ static void test_collection_adapter(const char *mode) {
     assert(reads==before_reads && enumerations==before_enumerations && writes==before_writes && !vmu_writes && !locks);
 }
 
+static void test_read_recovery(const char *mode) {
+    struct kui_vmu_view out;struct kui_vmu_image_summary summary;
+    uint8_t *captured=malloc(KUI_VMU_IMAGE_BYTES);assert(captured);
+    collection_setup(10);move_first_save(128u);collection_read_guard=true;
+    memcpy(original_card,card,sizeof(card));memset(captured,0x6d,KUI_VMU_IMAGE_BYTES);
+    fault=mode;
+    bool expected=is("read-recovery-healthy") || is("read-recovery-once") || is("read-recovery-last");
+    bool ok=kui_vmu_capture_run(0u,captured,KUI_VMU_IMAGE_BYTES,&summary,&out,log_line,cancelled,progress);
+    assert(ok==expected && out.status.passed==expected && out.status.complete==expected);
+    assert(!connects && !disconnects && !writes && !vmu_writes && !source_vmu_writes && !locks);
+    assert(!free_user_reads && !collection_unowned_reads);
+    if(!is("read-recovery-between-passes") && !is("read-recovery-recovered-then-changed"))
+        assert(!memcmp(original_card,card,sizeof(card)));
+    if(expected) {
+        assert(summary.files==10u && summary.used_blocks==20u && summary.free_blocks==180u);
+        unsigned at=captured[253u*512u+2u]|(unsigned)captured[253u*512u+3u]<<8;
+        assert(!memcmp(captured+at*512u,original_card[128],512u));
+        assert(recovery_reads==(is("read-recovery-healthy")?4u:is("read-recovery-once")?6u:10u));
+        assert(recovery_completions==(is("read-recovery-healthy")?0u:1u));
+        assert(!out.status.errors && !out.status.stopped);
+        if(!is("read-recovery-healthy")) assert(recovery_changes && recovery_diagnostic);
+    } else {
+        assert(!summary.files && !summary.used_blocks && (out.status.errors || out.status.stopped));
+        for(unsigned i=0;i<KUI_VMU_IMAGE_BYTES;i++) assert(captured[i]==0x6d);
+        if(is("read-recovery-alternating") || is("read-recovery-two-only") || is("read-recovery-short")) {
+            assert(recovery_reads==8u && !recovery_completions);
+            assert(strstr(out.status.message,"VMU block 128: unstable"));
+        } else if(is("read-recovery-between-passes")) assert(recovery_reads==4u);
+        else if(is("read-recovery-recovered-then-changed")) assert(recovery_reads==6u && recovery_completions==1u);
+        else assert(recovery_reads==3u && !recovery_completions);
+        if(!is("read-recovery-between-passes") && !is("read-recovery-recovered-then-changed")) assert(recovery_save_context);
+        if(is("read-recovery-timeout") || is("read-recovery-malformed")) assert(recovery_transport_lines==7u);
+    }
+    free(captured);
+}
 static void test_wizard_capture(const char *mode) {
     struct kui_vmu_view out;struct kui_vmu_image_summary summary;
     uint8_t *captured=malloc(KUI_VMU_IMAGE_BYTES);assert(captured);
@@ -994,6 +1084,9 @@ int main(int argc,char **argv) {
         assert(kui_destination_mkdirs("/KUI/dumps",log_line));
         write_file(sentinel_path,sentinel,sizeof(sentinel));write_file("0:/KUI/dumps/keep.bin",sentinel,sizeof(sentinel));
         assert(f_mount(NULL,"0:",0)==FR_OK);fclose(image);puts("PASS VMU seed");return 0;
+    }
+    if(!strncmp(mode,"read-recovery-",14u)) {
+        test_read_recovery(mode);assert(!locks);fclose(image);printf("PASS VMU %s\n",mode);return 0;
     }
     if(!strncmp(mode,"description-",12)) {
         test_description_rows(mode);assert(!locks);fclose(image);printf("PASS VMU %s\n",mode);return 0;

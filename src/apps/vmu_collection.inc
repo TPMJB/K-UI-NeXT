@@ -77,7 +77,12 @@ static bool collection_payloads(struct collection_source *source,const struct sn
         unsigned at=le16(files[i].entry+2),blocks=le16(files[i].entry+24);
         for(unsigned n=0;ok && n<blocks;n++) {
             uint8_t *data=(uint8_t *)files[i].payload+n*BLOCK_BYTES;
-            if(collection_source_read(source,(uint16_t)at,compare?scratch:data)) {ok=false;break;}
+            if(collection_source_read(source,(uint16_t)at,compare?scratch:data)) {
+                char name[16];display_name(name,files[i].entry);
+                s->log("VMU allocated save %u (%s), pass %u refused at block %u (%u/%u)",
+                    i+1u,name,compare?2u:1u,at,n+1u,blocks);
+                ok=false;break;
+            }
             if(compare && memcmp(scratch,data,BLOCK_BYTES)) {
                 char message[128];snprintf(message,sizeof(message),
                     "Source rejected: save %u changed at block %u",i+1u,at);
