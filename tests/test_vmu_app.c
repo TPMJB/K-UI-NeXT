@@ -6,9 +6,11 @@
 #include "kui/storage.h"
 #include "kui/vmu_read_bounded.h"
 #include "kui/vmu_collection.h"
+#include "kui/hash.h"
 #include <dc/maple.h>
 #include <dc/vmufs.h>
 #include <assert.h>
+#include <inttypes.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,6 +38,10 @@ static unsigned recovery_transport_lines;
 static bool recovery_transport_ready;
 static struct kui_vmu_read_bounded_diagnostic recovery_transport;
 static uint8_t *recovery_previous_output;
+static char comparison_log[2048];
+static size_t comparison_log_bytes;
+static unsigned comparison_pairs;
+static uint8_t *retained_capture_sample;
 static uint8_t original_card[256][512];
 static FILE *image;
 static uint64_t image_blocks;
@@ -43,6 +49,17 @@ static const char *fault;
 static const char *sentinel_path="0:/KUI/backups/vmu/A1-0001/keep.bin";
 static const char sentinel[]="Existing VMU backup and capture files must remain intact";
 static bool is(const char *name) {return fault && !strcmp(fault,name);}
+#ifdef KUI_VMU_CAPTURE_TEST_WRAP_CRC
+uint32_t __real_kui_crc32(uint32_t,const void *,size_t);
+/* Observe the first-pass hash boundary to inject a later retained-RAM fault.
+ * Production code has no test hook and performs no synthetic mutation. */
+uint32_t __wrap_kui_crc32(uint32_t seed,const void *data,size_t bytes) {
+    uint32_t crc=__real_kui_crc32(seed,data,bytes);
+    if(is("read-recovery-retained-change") && !retained_capture_sample && bytes==512u &&
+       !memcmp(data,original_card[128],512u)) retained_capture_sample=(uint8_t *)(uintptr_t)data;
+    return crc;
+}
+#endif
 static void log_line(const char *format,...) {
     char line[512];va_list args;va_start(args,format);
     vsnprintf(line,sizeof(line),format,args);va_end(args);puts(line);
@@ -56,6 +73,12 @@ static void log_line(const char *format,...) {
     if(strstr(line,"VMU bounded reader: block 128 stage ")) recovery_transport_lines|=1u;
     if(strstr(line,"VMU bounded fields: function 01020304/05060708 location 11223344/55667788")) recovery_transport_lines|=2u;
     if(strstr(line,"VMU bounded CRC32: raw-before 12345678 raw-after 90abcdef private-copy a1b2c3d4")) recovery_transport_lines|=4u;
+    if(strstr(line,"VMU save comparison") || strstr(line,"VMU save byte ") || strstr(line,"VMU raw retained VMS header")) {
+        int written=snprintf(comparison_log+comparison_log_bytes,sizeof(comparison_log)-comparison_log_bytes,"%s\n",line);
+        assert(written>=0 && (size_t)written<sizeof(comparison_log)-comparison_log_bytes);
+        comparison_log_bytes+=(size_t)written;
+        if(strstr(line,"VMU save byte ")) ++comparison_pairs;
+    }
 }
 static void put16(uint8_t *p,unsigned value) {p[0]=(uint8_t)value;p[1]=(uint8_t)(value>>8);}
 static void setup(unsigned count) {
@@ -123,6 +146,15 @@ int kui_vmu_read_bounded(maple_device_t *device,uint16_t block,uint8_t out[512])
         if(is("read-recovery-short")) {memcpy(out,storage[block],508u);injected=true;return 0;}
         if(is("read-recovery-between-passes") && recovery_reads==3u) {storage[block][11]^=1u;injected=true;}
         if(is("read-recovery-recovered-then-changed") && recovery_reads==5u) {storage[block][11]^=1u;injected=true;}
+        if(is("read-recovery-mapped-change") && recovery_reads==3u) {
+            static const unsigned offsets[]={0u,12u,31u,127u,200u,255u,300u,400u,500u,511u};
+            static const uint8_t masks[]={1u,3u,7u,15u,31u,63u,127u,255u,1u,3u};
+            for(unsigned i=0u;i<sizeof(offsets)/sizeof(offsets[0]);i++) storage[block][offsets[i]]^=masks[i];
+            injected=true;
+        }
+        if(is("read-recovery-retained-change") && recovery_reads==3u) {
+            assert(retained_capture_sample);retained_capture_sample[11]^=1u;injected=true;
+        }
         memcpy(out,storage[block],512u);
         unsigned alter=0u;
         if(is("read-recovery-alternating")) alter=recovery_reads&1u;
@@ -131,7 +163,7 @@ int kui_vmu_read_bounded(maple_device_t *device,uint16_t block,uint8_t out[512])
             assert(recovery_reads<=8u);alter=choices[recovery_reads-1u];
         } else if(is("read-recovery-last"))
             alter=recovery_reads<=5u && (recovery_reads&1u)?recovery_reads:0u;
-        else if(!is("read-recovery-healthy") && !is("read-recovery-between-passes"))
+        else if(!is("read-recovery-healthy") && !is("read-recovery-between-passes") && !is("read-recovery-mapped-change") && !is("read-recovery-retained-change"))
             alter=recovery_reads==1u?1u:0u;
         if(alter) {out[12]^=(uint8_t)alter;injected=true;}
         if(recovery_reads==3u && is("read-recovery-oversize")) {out[512]=0u;injected=true;}
@@ -1003,6 +1035,15 @@ static void test_read_recovery(const char *mode) {
     struct kui_vmu_view out;struct kui_vmu_image_summary summary;
     uint8_t *captured=malloc(KUI_VMU_IMAGE_BYTES);assert(captured);
     collection_setup(10);move_first_save(128u);collection_read_guard=true;
+    if(!strcmp(mode,"read-recovery-mapped-change")) {
+        collection_setup(4);
+        memcpy(card[126],card[4],512u);memcpy(card[129],card[5],512u);memset(card[128],0xab,512u);
+        put16(card[254]+4u*2u,0xfffcu);put16(card[254]+5u*2u,0xfffcu);
+        put16(card[254]+126u*2u,129u);put16(card[254]+129u*2u,128u);put16(card[254]+128u*2u,0xfffau);
+        put16(card[253]+2u*32u+2u,126u);put16(card[253]+2u*32u+24u,3u);put16(card[253]+2u*32u+26u,1u);
+        put16(card[129]+64u,1u);put16(card[129]+68u,0u);put16(card[129]+70u,0x1234u);
+        memset(card[129]+72u,0,4u);put16(card[129]+72u,384u);
+    }
     memcpy(original_card,card,sizeof(card));memset(captured,0x6d,KUI_VMU_IMAGE_BYTES);
     fault=mode;
     bool expected=is("read-recovery-healthy") || is("read-recovery-once") || is("read-recovery-last");
@@ -1010,7 +1051,7 @@ static void test_read_recovery(const char *mode) {
     assert(ok==expected && out.status.passed==expected && out.status.complete==expected);
     assert(!connects && !disconnects && !writes && !vmu_writes && !source_vmu_writes && !locks);
     assert(!free_user_reads && !collection_unowned_reads);
-    if(!is("read-recovery-between-passes") && !is("read-recovery-recovered-then-changed"))
+    if(!is("read-recovery-between-passes") && !is("read-recovery-recovered-then-changed") && !is("read-recovery-mapped-change"))
         assert(!memcmp(original_card,card,sizeof(card)));
     if(expected) {
         assert(summary.files==10u && summary.used_blocks==20u && summary.free_blocks==180u);
@@ -1026,11 +1067,46 @@ static void test_read_recovery(const char *mode) {
         if(is("read-recovery-alternating") || is("read-recovery-two-only") || is("read-recovery-short")) {
             assert(recovery_reads==8u && !recovery_completions);
             assert(strstr(out.status.message,"VMU block 128: unstable"));
-        } else if(is("read-recovery-between-passes")) assert(recovery_reads==4u);
+        } else if(is("read-recovery-between-passes") || is("read-recovery-mapped-change") || is("read-recovery-retained-change")) assert(recovery_reads==4u);
         else if(is("read-recovery-recovered-then-changed")) assert(recovery_reads==6u && recovery_completions==1u);
         else assert(recovery_reads==3u && !recovery_completions);
-        if(!is("read-recovery-between-passes") && !is("read-recovery-recovered-then-changed")) assert(recovery_save_context);
+        if(!is("read-recovery-between-passes") && !is("read-recovery-recovered-then-changed") && !is("read-recovery-mapped-change") && !is("read-recovery-retained-change")) assert(recovery_save_context);
         if(is("read-recovery-timeout") || is("read-recovery-malformed")) assert(recovery_transport_lines==7u);
+        if(is("read-recovery-between-passes") || is("read-recovery-recovered-then-changed") || is("read-recovery-mapped-change") || is("read-recovery-retained-change")) {
+            bool mapped=is("read-recovery-mapped-change"),retained=is("read-recovery-retained-change");
+            assert(strstr(comparison_log,mapped?
+                "save 3 (SAVE02), directory-index 2, first-block 126, header-block-offset 1":
+                "save 1 (SAVE00), directory-index 0, first-block 128, header-block-offset 0"));
+            assert(strstr(comparison_log,mapped?
+                "file-block-index 2 of 3, physical-block 128, file-byte-offset 1024":
+                "file-block-index 0 of 2, physical-block 128, file-byte-offset 0"));
+            char expected_crc[160];
+            uint8_t retained_bytes[512];memcpy(retained_bytes,original_card[128],sizeof(retained_bytes));
+            if(retained) retained_bytes[11]^=1u;
+            snprintf(expected_crc,sizeof(expected_crc),"VMU save comparison CRC32: captured %08" PRIx32 ", retained %08" PRIx32 ", reread %08" PRIx32,
+                kui_crc32(0u,original_card[128],512u),kui_crc32(0u,retained_bytes,512u),kui_crc32(0u,card[128],512u));
+            assert(strstr(comparison_log,expected_crc));
+            assert(strstr(comparison_log,retained?"CRC matches: retained/captured no, reread/captured yes":
+                "CRC matches: retained/captured yes, reread/captured no"));
+            assert(strstr(comparison_log,mapped?"10 differing bytes, 39 differing bits":"1 differing bytes, 1 differing bits"));
+            assert(comparison_pairs==(mapped?8u:1u));
+            if(mapped) {
+                assert(strstr(out.status.message,"save 3 (SAVE02) changed at block 128"));
+                assert(strstr(comparison_log,"VMU raw retained VMS header (unvalidated): file-offset 512, CRC16 1234, icons 1, eye-type 0, data-bytes 384"));
+                const unsigned offsets[]={0u,12u,31u,127u,200u,255u,300u,400u};
+                for(unsigned i=0u;i<sizeof(offsets)/sizeof(offsets[0]);i++) {
+                    char pair[160];snprintf(pair,sizeof(pair),"VMU save byte %u: block-offset %u, file-offset %u, %02x -> %02x",
+                        i+1u,offsets[i],1024u+offsets[i],(unsigned)original_card[128][offsets[i]],(unsigned)card[128][offsets[i]]);
+                    assert(strstr(comparison_log,pair));
+                }
+                assert(!strstr(comparison_log,"block-offset 500") && !strstr(comparison_log,"block-offset 511"));
+            } else {
+                assert(strstr(out.status.message,"save 1 (SAVE00) changed at block 128"));
+                char pair[160];snprintf(pair,sizeof(pair),"VMU save byte 1: block-offset 11, file-offset 11, %02x -> %02x",
+                    (unsigned)retained_bytes[11],(unsigned)card[128][11]);
+                assert(strstr(comparison_log,pair));
+            }
+        }
     }
     free(captured);
 }

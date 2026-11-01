@@ -779,7 +779,7 @@ build/test-network-app: tests/test_network_app.c src/apps/network_test.c src/app
 
 build/test-vmu-app: tests/test_vmu_app.c $(CORE) $(DESTINATION) src/core/storage_probe.c $(FATFS) $(VMU_MANAGEMENT) src/core/hash.c src/apps/vmu.c src/apps/vmu_collection.inc include/kui/apps.h include/kui/vmu_read_bounded.h $(wildcard tests/vmu_stubs/dc/*.h tests/vmu_stubs/dc/maple/*.h)
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) -Itests/vmu_stubs -Isrc/dreamcast $(CORE) $(DESTINATION) src/core/storage_probe.c $(FATFS) $(VMU_MANAGEMENT) src/core/hash.c src/apps/vmu.c tests/test_vmu_app.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie -DKUI_VMU_CAPTURE_TEST_WRAP_CRC=1 $(INCLUDES) -Itests/vmu_stubs -Isrc/dreamcast $(CORE) $(DESTINATION) src/core/storage_probe.c $(FATFS) $(VMU_MANAGEMENT) src/core/hash.c src/apps/vmu.c tests/test_vmu_app.c -Wl,--wrap=kui_crc32 -o $@
 
 .PHONY: test-vmu-read-recovery
 test-vmu-read-recovery: build/test-vmu-app

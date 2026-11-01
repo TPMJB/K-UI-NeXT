@@ -1,8 +1,11 @@
 # Black physical VMU import test — @BUILD@
 
-This GUI update corrects a Maple BREAD retry defect and adds bounded recovery
-for differing block samples. It needs a new test on the black Sega VMU; host
-tests do not establish that its previously observed changing bytes are fixed.
+This GUI update retains the Maple BREAD retry correction and bounded block
+recovery, and adds diagnostics for a later capture-pass disagreement. The
+black Sega VMU still refused build `bc455d0ca6df`: save 3 changed at block
+128. Its complete log showed no transport refusal or local recovery before
+that comparison. This build improves diagnosis; the original changing-data
+problem remains unresolved.
 
 The reader previously placed the request in the same memory used for replies.
 When a VMU answered AGAIN, KOS could retry with the reply header overwriting
@@ -14,6 +17,14 @@ reader permits at most eight total samples and requires three consecutive
 identical 512-byte samples. It never votes on individual bytes or invents
 allocated save data. The later independent save/metadata comparisons remain.
 Timeouts, malformed or oversized responses, and device changes refuse.
+
+Each accepted first-pass block now gets a diagnostic CRC recorded immediately
+after capture. A later mismatch logs that original CRC, the retained block's
+current CRC and the reread CRC. These observations help distinguish retained
+RAM changing from later accepted samples differing. They do not replace the
+exact comparison or permit an inconsistent import. The report also includes
+bounded raw VMS-header fields labelled unvalidated, for interpreting the
+changing byte's position within the file.
 
 ## Copy the GUI
 
@@ -34,8 +45,9 @@ journals, assignments or settings. Restore the backed-up runtime to revert.
    from every expected game are present, including Time Stalkers if it is
    still on this card. Do not delete or restore anything on the physical card.
 4. If capture refuses, open Diagnostics, save the log with **Y**, and send it.
-   It records the exact block, repeated-read CRCs, first differing byte and
-   allocated save context when available. No camera photograph is required.
+   It records the save name, physical block, position within that save,
+   CRCs, differing byte/bit counts and the first differing offsets and values.
+   No camera photograph is required.
 
 The wizard builds a separate standard virtual card from verified logical
 saves. It skips unused physical flash, which previously returned changing

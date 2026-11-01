@@ -90,7 +90,7 @@ READ_RECOVERY = ("read-recovery-healthy", "read-recovery-once", "read-recovery-l
                  "read-recovery-alternating", "read-recovery-two-only", "read-recovery-short",
                  "read-recovery-timeout", "read-recovery-malformed", "read-recovery-oversize", "read-recovery-prior-oversize",
                  "read-recovery-identity", "read-recovery-cancel", "read-recovery-between-passes",
-                 "read-recovery-recovered-then-changed")
+                 "read-recovery-recovered-then-changed", "read-recovery-mapped-change", "read-recovery-retained-change")
 CAPTURE = ("capture-ok", "capture-opaque", "capture-empty", "capture-orphan",
            "capture-duplicate", "capture-dirty", "capture-missing", "capture-short",
            "capture-oversize", "capture-read-fail", "capture-device-change",

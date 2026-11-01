@@ -69,10 +69,10 @@ static bool collection_check_snapshot(struct collection_source *source,
     return true;
 }
 static bool collection_payloads(struct collection_source *source,const struct snapshot *snap,
-    const struct kui_vmu_image_file *files,unsigned count,bool compare) {
+    const struct kui_vmu_image_file *files,unsigned count,bool compare,uint32_t *capture_crc) {
     struct session *s=source->session;
     if(vmufs_mutex_lock()!=0) return fail(s,"Cannot lock source VMU saves");
-    bool ok=true;_Alignas(32) uint8_t scratch[BLOCK_BYTES];
+    bool ok=true;unsigned capture_block=0u;_Alignas(32) uint8_t scratch[BLOCK_BYTES];
     for(unsigned i=0;ok && i<count;i++) {
         unsigned at=le16(files[i].entry+2),blocks=le16(files[i].entry+24);
         for(unsigned n=0;ok && n<blocks;n++) {
@@ -83,12 +83,48 @@ static bool collection_payloads(struct collection_source *source,const struct sn
                     i+1u,name,compare?2u:1u,at,n+1u,blocks);
                 ok=false;break;
             }
+            if(!compare) capture_crc[capture_block]=kui_crc32(0u,data,BLOCK_BYTES);
             if(compare && memcmp(scratch,data,BLOCK_BYTES)) {
+                char name[16];display_name(name,files[i].entry);
+                unsigned directory=UINT32_MAX,differences=0u,bits=0u;
+                for(unsigned row=0u;row<snap->count;row++)
+                    if(!memcmp(snap->directory+snap->entries[row]*32u,files[i].entry,32u)) {
+                        directory=snap->entries[row];break;
+                    }
+                for(unsigned byte=0u;byte<BLOCK_BYTES;byte++) {
+                    unsigned changed=data[byte]^scratch[byte];
+                    if(changed) ++differences;
+                    while(changed) {bits+=changed&1u;changed>>=1u;}
+                }
+                s->log("VMU save comparison: save %u (%s), directory-index %u, first-block %u, header-block-offset %u",
+                    i+1u,name,directory,(unsigned)le16(files[i].entry+2u),(unsigned)le16(files[i].entry+26u));
+                s->log("VMU save comparison: file-block-index %u of %u, physical-block %u, file-byte-offset %u",
+                    n,blocks,at,n*BLOCK_BYTES);
+                uint32_t retained_crc=kui_crc32(0u,data,BLOCK_BYTES),reread_crc=kui_crc32(0u,scratch,BLOCK_BYTES);
+                s->log("VMU save comparison CRC32: captured %08" PRIx32 ", retained %08" PRIx32 ", reread %08" PRIx32,
+                    capture_crc[capture_block],retained_crc,reread_crc);
+                s->log("VMU save comparison CRC matches: retained/captured %s, reread/captured %s",
+                    retained_crc==capture_crc[capture_block]?"yes":"no",reread_crc==capture_crc[capture_block]?"yes":"no");
+                s->log("VMU save comparison: %u differing bytes, %u differing bits; first 8 byte pairs follow",
+                    differences,bits);
+                size_t header_at=(size_t)le16(files[i].entry+26u)*BLOCK_BYTES;
+                if(header_at<=files[i].bytes && files[i].bytes-header_at>=128u) {
+                    const uint8_t *header=(const uint8_t *)files[i].payload+header_at;
+                    s->log("VMU raw retained VMS header (unvalidated): file-offset %u, CRC16 %04x, icons %u, eye-type %u, data-bytes %" PRIu32,
+                        (unsigned)header_at,(unsigned)le16(header+70u),(unsigned)le16(header+64u),
+                        (unsigned)le16(header+68u),le32(header+72u));
+                }
+                unsigned shown=0u;
+                for(unsigned byte=0u;byte<BLOCK_BYTES && shown<8u;byte++) if(data[byte]!=scratch[byte]) {
+                    s->log("VMU save byte %u: block-offset %u, file-offset %u, %02x -> %02x",++shown,
+                        byte,n*BLOCK_BYTES+byte,(unsigned)data[byte],(unsigned)scratch[byte]);
+                }
                 char message[128];snprintf(message,sizeof(message),
-                    "Source rejected: save %u changed at block %u",i+1u,at);
+                    "Source rejected: save %u (%s) changed at block %u",i+1u,name,at);
                 ok=fail(s,message);break;
             }
             at=le16(snap->fat+at*2u);
+            ++capture_block;
         }
     }
     return collection_unlock(s,ok);
@@ -109,8 +145,12 @@ static bool collection_capture(struct collection_source *source,
         return fail(s,message);
     }
     struct kui_vmu_image_file *files=calloc(count,sizeof(*files));
-    uint8_t *payload=malloc((size_t)blocks*BLOCK_BYTES);bool ok=false;
+    /* Diagnostic CRCs pin each first-pass block immediately after its checked
+     * copy. On later refusal they distinguish retained-RAM changes from a new
+     * sample. They grant no import authority and add no physical reads. */
+    uint8_t *payload=malloc((size_t)blocks*(BLOCK_BYTES+sizeof(uint32_t)));bool ok=false;
     if(!files || !payload) {fail(s,"Not enough RAM for checked source saves");goto done;}
+    uint32_t *capture_crc=(uint32_t *)(void *)(payload+(size_t)blocks*BLOCK_BYTES);
     size_t offset=0;
     for(unsigned i=0;i<count;i++) {
         const uint8_t *entry=snap->directory+snap->entries[all?i:row]*32u;
@@ -138,9 +178,9 @@ static bool collection_capture(struct collection_source *source,
         files[i].payload=payload+offset;offset+=files[i].bytes;
     }
     if(!collection_check_snapshot(source,snap,check) ||
-       !collection_payloads(source,snap,files,count,false) ||
+       !collection_payloads(source,snap,files,count,false,capture_crc) ||
        !collection_check_snapshot(source,snap,check) ||
-       !collection_payloads(source,snap,files,count,true) ||
+       !collection_payloads(source,snap,files,count,true,capture_crc) ||
        !collection_check_snapshot(source,snap,check)) goto done;
     int result=kui_vmu_image_pack(files,count,image,IMAGE_BYTES,workspace,summary);
     if(result) {
