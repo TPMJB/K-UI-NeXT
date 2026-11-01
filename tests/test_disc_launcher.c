@@ -178,6 +178,21 @@ static void successful_paths(void) {
     CHECK(image.info.payload_bytes==image.info.memory_bytes && fixture.last.complete);
     kui_runtime_free(&image);CHECK(fixture.runtime_frees==1u && !image.data);
 }
+static void region_paths(void) {
+    for(unsigned gate=0;gate<2u;gate++) for(unsigned console=0;console<4u;console++) {
+        setup();memset(fixture.data[0]+48u,' ',8u);fixture.data[0][48u]='E';
+        struct kui_runtime_image image={0};struct kui_app_status status;
+        struct kui_disc_launcher_region region={.region_free=gate!=0u,.console="JUE?"[console]};
+        bool expected=region.region_free || region.console=='E';
+        bool result=kui_disc_launcher_prepare_module(KUI_DISC_LAUNCH_PACKAGE,NULL,NULL,&region,
+            &image,&status,log_line,cancelled,progress);
+        CHECK(result==expected);released();
+        CHECK(status.complete && status.passed==expected && !status.stopped);
+        if(expected) {CHECK(image.data && fixture.reallocations==1u);kui_runtime_free(&image);}
+        else {CHECK(!image.data && !fixture.reallocations && fixture.raw_reads==21u);
+            CHECK(strstr(status.message,"Region-free") && status.errors==1u);}
+    }
+}
 static void preparation_failures(void) {
     setup();fixture.is_cd=true;refusal(false);released();CHECK(!fixture.raw_reads);
     setup();fixture.toc[1].count=100u;refusal(false);released();CHECK(!fixture.raw_reads);
@@ -232,7 +247,7 @@ static void every_optical_cut(void) {
     }
 }
 int main(void) {
-    successful_paths();preparation_failures();check_only_failures();every_optical_cut();
+    successful_paths();region_paths();preparation_failures();check_only_failures();every_optical_cut();
     printf("Physical GD launcher app: %u checks; actual optical planner/packet hashes, read cuts, changed bytes, bounded SD lifecycle and no VMU file access\n",checks);
     return 0;
 }

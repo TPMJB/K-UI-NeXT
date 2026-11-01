@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Independent physical-disc serial save support, relocatable with the worker.
+BUILD ?= build/disc-vmu-support-sci
+BUILD_ID ?= $(shell git rev-parse --short=12 HEAD)
+VMU_TRANSPORT ?= 1
+ifeq ($(filter $(VMU_TRANSPORT),0 1),)
+$(error VMU_TRANSPORT must be0 (SCIF) or1 (SCI))
+endif
+CC = sh-elf-gcc
+OBJCOPY = sh-elf-objcopy
+CPU := -m4-single -ml -mdiv=call-div1 -mfixed-range=fr0-fr15,fpul-fpul
+FLAGS := -std=c11 -Os -g -Wall -Wextra -Werror $(CPU) -ffreestanding -fno-builtin \
+ -fno-stack-protector -fno-pic -ffunction-sections -fdata-sections -fno-jump-tables \
+ -fstack-usage -fcallgraph-info=su -Iinclude -Isrc/loader -DKUI_ON_CONSOLE=1 \
+ -DKUI_RETAIL_FAST_IO=1 -DKUI_NATIVE_VMU_ONLY=1 -DKUI_NATIVE_VMU_LITE=1 \
+ -DKUI_VMU_NATIVE_PERSISTENT_PROBE=1 -DKUI_RETAIL_TRANSPORT=$(VMU_TRANSPORT) \
+ -DKUI_BUILD_ID='"$(BUILD_ID)"'
+# Saves already use bounded programmed writes. Keep support reads programmed
+# too: no borrowed DMA channel, game reader or prefetch cache is linked here.
+FLAGS += -DKUI_SCI_SD_PIO_ONLY=1
+LINK := $(CPU) -nostdlib -Wl,--gc-sections -Wl,--build-id=none -Wl,--emit-relocs
+SOURCES := src/loader/disc_vmu_support.c src/loader/disc_vmu_transport.c \
+ src/loader/disc_vmu_storage.c src/loader/minic.c
+ifeq ($(VMU_TRANSPORT),1)
+SOURCES += src/loader/sci_sd_bus.c
+else
+SOURCES += src/loader/retail_sd.c
+endif
+OBJECTS := $(patsubst %.c,$(BUILD)/%.o,$(SOURCES)) $(BUILD)/support_asm.o
+.PHONY: all test audit force-config
+all: $(BUILD)/support.bin $(BUILD)/support.reloc audit
+force-config:
+$(BUILD)/config: force-config
+	@mkdir -p $(BUILD)
+	@printf '%s\n' 'TRANSPORT=$(VMU_TRANSPORT)' 'FLAGS=$(FLAGS)' > $@.tmp
+	@cmp -s $@.tmp $@ || cp $@.tmp $@
+	@rm -f $@.tmp
+$(OBJECTS): $(BUILD)/config
+$(BUILD)/%.o: %.c
+	@mkdir -p $(@D)
+	$(CC) $(FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/support_asm.o: src/loader/disc_vmu_support.S
+	@mkdir -p $(@D)
+	$(CC) $(FLAGS) -c $< -o $@
+$(BUILD)/support.elf: $(OBJECTS) src/loader/disc_vmu_support.ld
+	$(CC) $(LINK) -Tsrc/loader/disc_vmu_support.ld -Wl,-Map,$(BUILD)/support.map -o $@ $(OBJECTS) -lgcc
+	@test -z "$$(sh-elf-nm -u $@)"
+	python3 tools/record_build.py $@
+$(BUILD)/support.bin: $(BUILD)/support.elf
+	$(OBJCOPY) -O binary $< $@
+$(BUILD)/support.reloc: $(BUILD)/support.elf $(BUILD)/support.bin tools/vmu_native_relocations.py
+	python3 tools/vmu_native_relocations.py $< $(BUILD)/support.bin $@ --link-base 0x8c112000 --span-bytes 0x2000
+test: audit
+	python3 tests/test_disc_vmu_transport.py
+	python3 tests/test_disc_vmu_support.py
+audit: $(BUILD)/support.bin $(BUILD)/support.reloc
+	python3 tools/check_disc_vmu_support.py $(BUILD)/support.elf $(BUILD)/support.bin
+	python3 tests/test_disc_vmu_support_linked.py $(BUILD)/support.elf $(BUILD)/support.bin
+	python3 -c 'import sys,subprocess;sys.path.insert(0,"tools");from check_retail_instructions import audit;print("Physical-disc support linked instructions:",audit("support",subprocess.check_output(["sh-elf-objdump","-d","$(BUILD)/support.elf"],text=True)))'
+-include $(OBJECTS:.o=.d)

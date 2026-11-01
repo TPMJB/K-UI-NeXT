@@ -154,6 +154,13 @@ static void fixture(void) {
     put(0x0c400008u,4u,0x01002009u);put(0x0c40000cu,4u,0x01000000u);put(0x0c500000u,4u,0x03002008u);
     input.sd_lease=0x8c004100u;
     input.low_heap_hook=0x8c004200u;input.low_terminal=0x8c004300u;
+#if KUI_NATIVE_PHYSICAL_DISC
+    /* The physical variant retains all BIOS low RAM. Its exact callback
+     * pinning lives in the independent support tail of this same lease. */
+    uint32_t support=(input.lease.payload|UINT32_C(0x80000000))+KUI_DISC_VMU_SUPPORT_OFFSET;
+    input.sd_lease=support+0x100u;input.low_heap_hook=support+0x200u;
+    input.low_terminal=support+0x300u;
+#endif
     input.exits=(struct kui_vmu_native_exit){.version=KUI_VMU_NATIVE_EXIT_VERSION,
         .bytes=sizeof(input.exits),.family=KUI_VMU_NATIVE_EXIT_FAMILY,
         .load=input.driver.load_address,.image_bytes=input.driver.image_bytes,

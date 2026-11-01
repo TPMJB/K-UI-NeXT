@@ -380,6 +380,12 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     kui_native_passive_publish(load,load+bytes);
 #endif
     uint32_t unused=0;
+#if KUI_NATIVE_PHYSICAL_DISC
+    /* Unlike image readers, physical disc leaves all firmware RAM intact.
+     * Publish its independent serial callback inside this same owned lease,
+     * and retire the temporary allocator callback before arming the worker. */
+    native_disc_support_bind(e,dest,bytes,lease,&cfg);
+#endif
 #if KUI_NATIVE_COLD_PROGRESS_STAGE
     retail_display_line("COLD 34 WORKER ARM BEGIN");
 #endif

@@ -1,0 +1,17 @@
+{
+  "schema": "kui.owner.console.observation.v1",
+  "date": "2026-11-01",
+  "build": "c01e8c96f5ab",
+  "game": "Power Stone",
+  "route": "physical native GD direct boot; physical VMUs",
+  "owner_report": "No repeat of Sega logo, seemed to boot right into the game like it should",
+  "confirmed": [
+    "The repeated logo sequence from the previous build was not observed.",
+    "The owner reported direct entry into the game."
+  ],
+  "not_established": [
+    "Virtual VMU attachment or persistence; this build installs no VMU worker.",
+    "Physical VMU save and power-cycle load.",
+    "Complete gameplay, disc audio or foreign-region compatibility."
+  ]
+}

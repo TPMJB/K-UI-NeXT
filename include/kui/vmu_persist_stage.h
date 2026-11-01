@@ -41,6 +41,17 @@ int kui_vmu_persist_stage_admit(const struct kui_vmu_persist_profile *,
 int kui_vmu_persist_stage_prepare(const struct kui_vmu_persist_profile *,
     const struct kui_retail_manifest *,const struct kui_vmu_persist_session_ops *,
     struct kui_vmu_persist_stage_workspace *,struct kui_vmu_durable_handoff *);
+/* Physical-disc variant. All game content is on the GD-ROM, so admission has
+ * no SD image map or protected game extents. The complete live filesystem,
+ * card identity, selected pair, journal recovery and sealed handoff checks are
+ * shared with the image path. Only SCI and SCIF are admitted. The caller owns
+ * the already initialized/acquired selected port throughout preparation and
+ * must discard the result if its final release does not restore that port. */
+int kui_vmu_persist_disc_stage_admit(const struct kui_vmu_persist_profile *,
+    uint32_t transport);
+int kui_vmu_persist_disc_stage_prepare(const struct kui_vmu_persist_profile *,
+    uint32_t transport,const struct kui_vmu_persist_session_ops *,
+    struct kui_vmu_persist_stage_workspace *,struct kui_vmu_durable_handoff *);
 /* Installer rechecks a mutable prepared result against the immutable embedded
  * P2 identity/maps, preserving its newly computed hashes after bootstrap. */
 int kui_vmu_persist_stage_handoff_matches(const struct kui_vmu_persist_profile *,

@@ -913,6 +913,29 @@ int main(int argc,char **argv) {
         strcpy(shell.browse_path,"/Games/MDK2");
     } else if(!strcmp(argv[1],"home-music")) shell.home_selected=home_row(KUI_SHELL_MUSIC);
     else if(!strcmp(argv[1],"home-gd")) shell.home_selected=home_row(KUI_SHELL_DISC_TOOLS);
+    else if(!strcmp(argv[1],"gd-options")) {
+        shell.page=KUI_SHELL_GD_OPTIONS;shell.gd_region_enabled=shell.gd_region_known=true;
+        shell.vmu_emulation_enabled=shell.vmu_emulation_known=true;
+        strcpy(shell.vmu_emulation_notice,"Virtual VMU On. Applies to the next K-UI boot.");
+    }
+    else if(!strncmp(argv[1],"gd-vmu-",7)) {
+        shell.page=KUI_SHELL_GD_PLAY;
+        (void)kui_shell_input(&shell,KUI_SHELL_A,false);
+        if(strcmp(argv[1],"gd-vmu-loading")) {
+            struct kui_vmu_game_info info={.known=true,.enabled=strcmp(argv[1],"gd-vmu-off")!=0};
+            if(info.enabled) {
+                strcpy(info.product,"MK-51007");info.count=2;info.candidates_sequence=3;
+                info.storage.card_sectors=1000000;info.storage.partition_first=2048;info.storage.partition_end=999000;
+                info.storage.cid[0]=0x42;info.storage.high_capacity=1;
+                for(unsigned i=0;i<info.count;i++) {
+                    info.cards[i].pair=11+i;info.cards[i].identity[0]=11+i;
+                    snprintf(info.cards[i].label,sizeof(info.cards[i].label),"Save version %u / %s VMU",i+1,i?"Black":"White");
+                }
+                strcpy(info.notice,"Select the save version to use for this disc launch.");
+            } else strcpy(info.notice,"Virtual VMU is Off; no virtual cards were read.");
+            kui_shell_set_disc_vmu_cards(&shell,shell.games_vmu_generation,&info);
+        }
+    }
     else if(!strcmp(argv[1],"gd-play") || !strcmp(argv[1],"gd-confirm") ||
             !strcmp(argv[1],"gd-direct-confirm") || !strcmp(argv[1],"gd-checked") ||
             !strcmp(argv[1],"gd-error") || !strcmp(argv[1],"gd-stopped")) {

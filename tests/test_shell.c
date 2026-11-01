@@ -875,28 +875,42 @@ static void music_and_boot_controls(void) {
     reset(KUI_SHELL_DIAGNOSTICS);assert(press(KUI_SHELL_Y,false)==KUI_SHELL_SAVE_LOG);
     reset(KUI_SHELL_SETTINGS);assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE);
     reset(KUI_SHELL_GD_PLAY);
-    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.confirm_gd_boot);
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_NONE && s.confirm_gd_boot);
     assert(press(KUI_SHELL_X|KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.confirm_gd_boot);
     assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && !s.confirm_gd_boot);
-    press(KUI_SHELL_A,false);
+    press(KUI_SHELL_X,false);
     assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.confirm_gd_boot);
     assert(press(KUI_SHELL_B|KUI_SHELL_A,true)==KUI_SHELL_STOP && !s.confirm_gd_boot);
-    press(KUI_SHELL_A,false);
+    press(KUI_SHELL_X,false);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_GD_BOOT && !s.confirm_gd_boot);
     reset(KUI_SHELL_GD_PLAY);
     assert(press(KUI_SHELL_R,false)==KUI_SHELL_SAVE_LOG && s.page==KUI_SHELL_GD_PLAY);
     assert(press(KUI_SHELL_R,true)==KUI_SHELL_NONE);
     assert(press(KUI_SHELL_R|KUI_SHELL_B,false)==KUI_SHELL_NONE);
     reset(KUI_SHELL_GD_PLAY);
-    assert(press(KUI_SHELL_X,false)==KUI_SHELL_GD_CHECK);
-    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.confirm_gd_direct);
-    assert(press(KUI_SHELL_X|KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.confirm_gd_direct);
-    assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && !s.confirm_gd_direct);
-    press(KUI_SHELL_Y,false);
-    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.confirm_gd_direct);
-    assert(press(KUI_SHELL_B|KUI_SHELL_A,true)==KUI_SHELL_STOP && !s.confirm_gd_direct);
-    press(KUI_SHELL_Y,false);
-    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GD_DIRECT_BOOT && !s.confirm_gd_direct);
+    assert(press(KUI_SHELL_A|KUI_SHELL_X,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GD_VMU_INFO && s.page==KUI_SHELL_GAMES_VMU_CARD);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GD_PLAY);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_GD_OPTIONS_LOAD && s.page==KUI_SHELL_GD_OPTIONS);
+    assert(s.vmu_emulation_loading && s.gd_region_loading && s.gd_region_enabled);
+    unsigned region_generation=s.gd_region_generation;
+    kui_shell_set_disc_region(&s,region_generation+1,false,true,"Stale");assert(s.gd_region_loading);
+    kui_shell_set_disc_region(&s,region_generation,true,true,"Region-free On");
+    kui_shell_set_vmu_emulation(&s,s.vmu_emulation_generation,true,true,false,"Virtual VMU On");
+    assert(!s.gd_region_loading && s.gd_region_known && s.gd_region_enabled);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_EMULATION_SAVE && !s.vmu_emulation_requested);
+    kui_shell_set_vmu_emulation(&s,s.vmu_emulation_generation,false,true,false,"Virtual VMU Off");
+    press(KUI_SHELL_DOWN,false);assert(s.gd_options_selected==1);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GD_REGION_SAVE && !s.gd_region_requested);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    kui_shell_set_disc_region(&s,s.gd_region_generation,false,true,"Region-free Off");
+    assert(!s.gd_region_enabled && s.gd_region_known);
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_GD_OPTIONS_LOAD);
+    kui_shell_set_disc_region(&s,s.gd_region_generation,true,false,"Read failed");
+    assert(!s.gd_region_known && !s.gd_region_enabled);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GD_OPTIONS_LOAD); /* Uncertain state reloads. */
+    assert(press(KUI_SHELL_B,true)==KUI_SHELL_STOP);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GD_PLAY);
     reset(KUI_SHELL_ADVANCED);s.advanced_selected=3;
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.confirm_quick_resume);
     assert(press(KUI_SHELL_X|KUI_SHELL_Y|KUI_SHELL_DOWN,false)==KUI_SHELL_NONE);
@@ -1503,16 +1517,19 @@ static void music_and_boot_rendering(void) {
     assert(strstr(drawn,"Direct 2048 and repaired jobs verify saved bytes."));
     assert(strstr(drawn,"Use Verify to detect same-size raw-job damage."));
     reset(KUI_SHELL_GD_PLAY);render(&v);
-    assert(strstr(drawn,"Inserted: MDK2") && strstr(drawn,"A Boot via console BIOS"));
-    assert(strstr(drawn,"X Check native disc") && strstr(drawn,"Y Direct boot test"));
-    assert(strstr(drawn,"R Save log"));
-    assert(strstr(drawn,"physical VMUs only"));
+    assert(strstr(drawn,"Inserted: MDK2") && strstr(drawn,"A K-UI boot"));
+    assert(strstr(drawn,"X Stock retail boot") && strstr(drawn,"Y Options"));
+    assert(!strstr(drawn,"Check native disc") && !strstr(drawn,"Direct boot test"));
+    s.page=KUI_SHELL_GD_OPTIONS;s.gd_region_known=s.vmu_emulation_known=true;
+    render(&v);assert(strstr(drawn,"Virtual VMU") && strstr(drawn,"Region-free"));
+    assert(strstr(drawn,"Stock retail boot uses the console BIOS settings"));
+    s.page=KUI_SHELL_GD_PLAY;
     s.confirm_gd_direct=true;render(&v);
     assert(strstr(drawn,"TEST DIRECT PHYSICAL-DISC BOOT?"));
     assert(strstr(drawn,"Virtual VMU is disabled") && strstr(drawn,"No BIOS flashing"));
     s.confirm_gd_direct=false;
     s.confirm_gd_boot=true;render(&v);
-    assert(strstr(drawn,"EXIT K-UI AND BOOT VIA CONSOLE BIOS?"));
+    assert(strstr(drawn,"BOOT THROUGH THE CONSOLE BIOS?"));
     assert(strstr(drawn,"region and autostart"));
     s.confirm_gd_boot=false;
     struct kui_app_status disc_failure={.complete=true,.errors=1,.line_count=3};
@@ -5089,6 +5106,68 @@ static struct kui_vmu_game_info chooser_snapshot(void) {
     info.cards[1].pair=12;info.cards[1].identity[0]=12;strcpy(info.cards[1].label,"PSO black VMU");
     return info;
 }
+static void disc_vmu_picker_controls(void) {
+    struct kui_shell_view view={0};struct kui_vmu_game_info info=chooser_snapshot();
+    reset(KUI_SHELL_GD_PLAY);strcpy(s.games_detail.product,"UNRELATED");
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GD_VMU_INFO);
+    assert(s.page==KUI_SHELL_GAMES_VMU_CARD && s.games_vmu_disc && s.games_vmu_loading);
+    unsigned generation=s.games_vmu_generation;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    kui_shell_set_disc_vmu_cards(&s,generation+1,&info);assert(s.games_vmu_loading);
+    kui_shell_set_disc_vmu_cards(&s,generation,&info);
+    assert(!s.games_vmu_loading && !s.games_vmu_selection.selected);
+    assert(!strcmp(s.games_detail.product,"UNRELATED"));
+    render(&view);assert(strstr(drawn,"Disc / virtual VMU boot") && strstr(drawn,"T-12345"));
+    assert(!strstr(drawn,"UNRELATED") && strstr(drawn,"A Boot"));
+    assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_VMU_GAME_CARD_DEFAULT);
+    assert(s.games_vmu_selection.pair==12 && s.games_vmu_default_saving);
+    info.default_pair=12;info.candidates_sequence++;
+    kui_shell_set_game_vmu_cards(&s,s.games_vmu_generation,&info);
+    assert(!s.games_vmu_loading && s.games_vmu_selection.pair==12);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GD_DIRECT_BOOT && s.page==KUI_SHELL_GD_PLAY);
+    assert(s.gd_vmu_launch && s.games_vmu_selection.selected && s.games_vmu_selection.identity[0]==12);
+    /* Stock retail remains a separate confirmed BIOS boot. */
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_NONE && s.confirm_gd_boot);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GD_BOOT);
+    /* Off has no product, card identity or picker choice to resolve. */
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GD_VMU_INFO);
+    struct kui_vmu_game_info off={.known=true};strcpy(off.notice,"Virtual VMU is Off");
+    kui_shell_set_disc_vmu_cards(&s,s.games_vmu_generation,&off);
+    assert(!s.games_vmu_loading && !s.games_vmu_selection.selected && !s.games_vmu_product[0]);
+    render(&view);assert(strstr(drawn,"A Boot with physical VMUs"));
+    assert(press(0,false)==KUI_SHELL_GD_DIRECT_BOOT && s.gd_vmu_launch);
+    /* An unassigned On product can create its own card in launcher preparation. */
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GD_VMU_INFO);
+    info=chooser_snapshot();info.count=0;
+    kui_shell_set_disc_vmu_cards(&s,s.games_vmu_generation,&info);
+    assert(press(0,false)==KUI_SHELL_GD_DIRECT_BOOT && !s.games_vmu_selection.selected);
+    assert(!strcmp(s.games_vmu_selection.product,info.product));
+    /* A sole version or a saved default launches without another question. */
+    for(unsigned mode=0;mode<2u;mode++) {
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_GD_VMU_INFO);
+        info=chooser_snapshot();if(mode) info.default_pair=12;else info.count=1;
+        kui_shell_set_disc_vmu_cards(&s,s.games_vmu_generation,&info);
+        assert(s.gd_auto_launch && s.games_vmu_selection.selected);
+        assert(s.games_vmu_selection.pair==(mode?12u:11u));
+        assert(press(0,false)==KUI_SHELL_GD_DIRECT_BOOT && s.page==KUI_SHELL_GD_PLAY);
+    }
+    /* Stop beats an automatic launch, even if the finished query arrives late. */
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GD_VMU_INFO);generation=s.games_vmu_generation;
+    assert(press(KUI_SHELL_B,true)==KUI_SHELL_STOP && s.page==KUI_SHELL_GD_PLAY);
+    kui_shell_set_disc_vmu_cards(&s,generation,&off);
+    assert(!s.gd_auto_launch && press(0,false)==KUI_SHELL_NONE);
+    /* Failure and cancellation block launch, and stale results cannot reopen the page. */
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GD_VMU_INFO);generation=s.games_vmu_generation;
+    struct kui_vmu_game_info failed={0};strcpy(failed.notice,"Disc query failed");
+    kui_shell_set_disc_vmu_cards(&s,generation,&failed);
+    assert(!s.games_vmu_loading && press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GD_PLAY);
+    kui_shell_set_disc_vmu_cards(&s,generation,&info);assert(s.page==KUI_SHELL_GD_PLAY);
+    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_GD_PLAY);
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_DISC_TOOLS);
+    puts("PASS disc VMU picker: optical product source, exact versions/default, physical-only comparison, Off without product, blank-card launch, cancellation and stale results");
+}
 static void game_vmu_version_picker_controls(void) {
     struct kui_games_detail detail=launch_detail(false,false);strcpy(detail.product,"T-12345");
     struct kui_vmu_game_info info=chooser_snapshot();
@@ -5266,7 +5345,7 @@ int main(int argc,char **argv) {
         puts("PASS salvage drive settings: default, navigation, wrap, busy guard, boot reset and rendering");return 0;
     }
     vmu_menu_cleanup_controls();game_vmu_card_info_controls();
-    game_vmu_version_picker_controls();vmu_wizard_save_picker_controls();vmu_automatic_import_controls();
+    game_vmu_version_picker_controls();disc_vmu_picker_controls();vmu_wizard_save_picker_controls();vmu_automatic_import_controls();
     vmu_emulation_controls();
     vmu_wizard_controls();vmu_wizard_library_scrolling();vmu_wizard_publication_lock();vmu_wizard_rendering();
     if(argc==2 && !strcmp(argv[1],"--vmu-wizard")) return 0;

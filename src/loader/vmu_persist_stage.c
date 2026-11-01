@@ -45,6 +45,12 @@ int kui_vmu_persist_stage_admit(const struct kui_vmu_persist_profile *p,
     }
     return 0;
 }
+int kui_vmu_persist_disc_stage_admit(const struct kui_vmu_persist_profile *p,
+    uint32_t transport) {
+    return kui_vmu_persist_profile_validate(p) ||
+        (transport!=KUI_STORAGE_SCI && transport!=KUI_STORAGE_SCIF)?
+        KUI_VMU_PERSIST_STAGE_MAPPING:0;
+}
 int kui_vmu_persist_stage_handoff_matches(const struct kui_vmu_persist_profile *p,
     const struct kui_vmu_durable_handoff *h) {
     if(kui_vmu_persist_profile_validate(p) || kui_vmu_durable_handoff_validate(h) ||
@@ -71,8 +77,9 @@ static int vmu_persist_stage_fail(struct kui_vmu_persist_stage_workspace *w,
     memset(out,0,sizeof(*out));w->result=result;kui_vmu_persist_session_poison(&w->session);
     return result;
 }
-int kui_vmu_persist_stage_prepare(const struct kui_vmu_persist_profile *p,
-    const struct kui_retail_manifest *m,const struct kui_vmu_persist_session_ops *ops,
+static int vmu_persist_stage_prepare(const struct kui_vmu_persist_profile *p,
+    const struct kui_retail_manifest *m,uint32_t transport,bool physical_disc,
+    const struct kui_vmu_persist_session_ops *ops,
     struct kui_vmu_persist_stage_workspace *w,struct kui_vmu_durable_handoff *out) {
     /* A disjoint output is cleared even for invalid ordinary arguments. An
      * aliased output cannot be cleared without damaging a live input/state. */
@@ -81,21 +88,23 @@ int kui_vmu_persist_stage_prepare(const struct kui_vmu_persist_profile *p,
        (m && vmu_persist_stage_overlap(out,sizeof(*out),m,sizeof(*m))) ||
        (ops && vmu_persist_stage_overlap(out,sizeof(*out),ops,sizeof(*ops)))) return KUI_VMU_PERSIST_STAGE_ARGUMENT;
     memset(out,0,sizeof(*out));
-    if(!w || !out || !p || !m || !ops || !ops->identity || !ops->healthy ||
+    if(!w || !out || !p || (!m && !physical_disc) || !ops || !ops->identity || !ops->healthy ||
        !ops->read_sector || !ops->write_sector || !ops->sync ||
        vmu_persist_stage_overlap(w,sizeof(*w),p,sizeof(*p)) ||
-       vmu_persist_stage_overlap(w,sizeof(*w),m,sizeof(*m)) ||
+       (m && vmu_persist_stage_overlap(w,sizeof(*w),m,sizeof(*m))) ||
        vmu_persist_stage_overlap(w,sizeof(*w),ops,sizeof(*ops))) return KUI_VMU_PERSIST_STAGE_ARGUMENT;
     if(w->started) return KUI_VMU_PERSIST_STAGE_ARGUMENT;
     memset(w,0,sizeof(*w));w->started=1u;w->phase=KUI_VMU_PERSIST_STAGE_PREFLIGHT;
-    if(kui_vmu_persist_stage_admit(p,m)) return vmu_persist_stage_fail(w,out,KUI_VMU_PERSIST_STAGE_MAPPING);
-    for(uint32_t i=0;i<m->extent_count;i++) {
+    if(physical_disc?kui_vmu_persist_disc_stage_admit(p,transport):kui_vmu_persist_stage_admit(p,m))
+        return vmu_persist_stage_fail(w,out,KUI_VMU_PERSIST_STAGE_MAPPING);
+    uint32_t protected_count=m?m->extent_count:0u;
+    for(uint32_t i=0;i<protected_count;i++) {
         const struct kui_retail_extent *e=&m->slots[m->track_count+i].extent;
         w->protected[i]=(struct kui_vmu_fs_range){e->card_lba,e->blocks};
     }
     struct kui_vmu_fs_input input={.card_sectors=p->card_sectors,.partition_first=p->partition_first,
         .partition_end=p->partition_end,.high_capacity=p->high_capacity,.pair_path=p->pair_path,
-        .forbidden=w->protected,.forbidden_count=m->extent_count};
+        .forbidden=protected_count?w->protected:NULL,.forbidden_count=protected_count};
     memcpy(input.cid,p->cid,16u);memcpy(input.image_id,p->image_id,16u);
     w->phase=KUI_VMU_PERSIST_STAGE_RECOVER;
     int result=kui_vmu_persist_session_init(&w->session,p,&input,ops,&w->filesystem,&w->image);
@@ -126,4 +135,14 @@ int kui_vmu_persist_stage_prepare(const struct kui_vmu_persist_profile *p,
     if(!w->session.snapshot_valid || kui_vmu_durable_handoff_seal(out) ||
        kui_vmu_persist_stage_handoff_matches(p,out)) return vmu_persist_stage_fail(w,out,KUI_VMU_PERSIST_STAGE_HANDOFF);
     w->result=0;return 0;
+}
+int kui_vmu_persist_stage_prepare(const struct kui_vmu_persist_profile *p,
+    const struct kui_retail_manifest *m,const struct kui_vmu_persist_session_ops *ops,
+    struct kui_vmu_persist_stage_workspace *w,struct kui_vmu_durable_handoff *out) {
+    return vmu_persist_stage_prepare(p,m,0u,false,ops,w,out);
+}
+int kui_vmu_persist_disc_stage_prepare(const struct kui_vmu_persist_profile *p,
+    uint32_t transport,const struct kui_vmu_persist_session_ops *ops,
+    struct kui_vmu_persist_stage_workspace *w,struct kui_vmu_durable_handoff *out) {
+    return vmu_persist_stage_prepare(p,NULL,transport,true,ops,w,out);
 }

@@ -88,6 +88,7 @@ build/dc/src/apps/games_retail.o: src/apps/games_vmu_card.inc include/kui/vmu_ga
 build/dc/src/apps/games_retail.o build/dc/sd-runtime.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
 build/dc/src/apps/vmu_wizard.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
 build/dc/src/apps/vmu_game_info.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
+build/dc/src/apps/disc_vmu_card.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
 # These separately linked, opt-in music modules retain their tested CE layout
 # even when the ordinary native loader uses its lower firmware reservation.
 # Explicit arguments also isolate them from a requested native diagnostic.

@@ -43,7 +43,15 @@ __asm__(".global __kui_native_standard_vmu_isolation_worker\n"
         ".set __kui_native_standard_vmu_isolation_worker,1\n");
 #endif
 #if KUI_NATIVE_STANDARD_VMU_ISOLATION || KUI_NATIVE_READER_ONLY_ISOLATION || KUI_NATIVE_METADATA_CACHE_ISOLATION || KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION
-#if KUI_NATIVE_VMU_LITE
+#if KUI_NATIVE_PHYSICAL_DISC
+_Static_assert(KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES==KUI_DISC_VMU_LEASE_BYTES &&
+    KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES==KUI_DISC_VMU_WORKER_BYTES,
+    "Physical disc owns its 72 KiB worker and independent serial support");
+__asm__(".global __kui_native_physical_disc_worker\n"
+        ".set __kui_native_physical_disc_worker,1\n"
+        ".global __kui_native_isolation_lease_bytes\n"
+        ".set __kui_native_isolation_lease_bytes,0x14000\n");
+#elif KUI_NATIVE_VMU_LITE
 _Static_assert(KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES==UINT32_C(0x12000),
     "VMU-lite allocation contains exactly its worker and stack");
 __asm__(".global __kui_native_vmu_only_worker\n"
@@ -1064,12 +1072,18 @@ int kui_vmu_native_passive_arm(const struct kui_vmu_native_passive_config *c,voi
     /* Initialize callbacks only after relocation, at their final P2 addresses. */
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(((config.driver.submit|config.lease.owner.release|config.lease.owner.initializer)&3u) ||
+#if KUI_NATIVE_PHYSICAL_DISC
+       !kui_disc_vmu_support_entry_owned(config.lease.payload,config.sd_lease) ||
+       !kui_disc_vmu_support_entry_owned(config.lease.payload,config.low_terminal) ||
+       !kui_disc_vmu_support_entry_owned(config.lease.payload,config.low_heap_hook) ||
+#else
        (config.sd_lease&1u) || config.sd_lease<UINT32_C(0x8c004000) ||
        config.sd_lease>=UINT32_C(0x8c007800) ||
        (config.low_terminal&1u) || config.low_terminal<UINT32_C(0x8c004000) ||
        config.low_terminal>=UINT32_C(0x8c007800) ||
        (config.low_heap_hook&1u) || config.low_heap_hook<UINT32_C(0x8c004000) ||
        config.low_heap_hook>=UINT32_C(0x8c007800) ||
+#endif
        !kui_vmu_native_exit_shape_valid(&config.exits) ||
        (config.exits.family==KUI_VMU_NATIVE_EXIT_TERMINAL_DISPATCH &&
         !kui_vmu_native_terminal_dispatch_tagged(&config.exits)) ||

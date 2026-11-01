@@ -38,6 +38,7 @@
 #include "kui/splash.h"
 #include "kui/gd_play.h"
 #include "kui/disc_launcher.h"
+#include "kui/disc_region.h"
 #include "kui/disc_launch.h"
 #include "kui/recovery_scan.h"
 #include "kui/repair_copy.h"
@@ -154,7 +155,12 @@ static unsigned vmu_collection_generation,vmu_collection_page_pending;
 static unsigned vmu_collection_request_pending,vmu_collection_request_result;
 static char vmu_name_path_pending[KUI_VMU_BACKUP_PATH_CAP],vmu_name_label_pending[49];
 static uint8_t vmu_name_identity_pending[16];
-static struct kui_vmu_game_info vmu_game_info_snapshot;
+static struct kui_vmu_game_info vmu_game_info_snapshot,disc_vmu_info_snapshot;
+static unsigned disc_vmu_info_generation,disc_vmu_info_request_pending,disc_vmu_info_request_result;
+static bool disc_vmu_launch_pending;
+static unsigned disc_region_request,disc_region_result,disc_region_generation;
+static bool disc_region_requested,disc_region_enabled=true,disc_region_ok;
+static char disc_region_note[128];
 struct vmu_game_info_request {
     char product[12];
     unsigned generation;
@@ -308,6 +314,14 @@ static mutex_t lock = MUTEX_INITIALIZER;
 #ifdef KUI_SD_RUNTIME
 static void disc_launch_progress(const struct kui_app_status *status) {
     mutex_lock(&lock);probe_status=*status;mutex_unlock(&lock);
+}
+/* Caller holds lock. Also completes a queued query that failed before its
+ * worker body, so the card page cannot stay indefinitely in Loading. */
+static void disc_vmu_info_failure(unsigned generation,const char *message) {
+    memset(&disc_vmu_info_snapshot,0,sizeof(disc_vmu_info_snapshot));
+    snprintf(disc_vmu_info_snapshot.notice,sizeof(disc_vmu_info_snapshot.notice),"%s",message);
+    snprintf(disc_vmu_info_snapshot.label,sizeof(disc_vmu_info_snapshot.label),"Unavailable");
+    disc_vmu_info_request_result=generation;++disc_vmu_info_generation;
 }
 /* Keep the actual refusal available to the disc page. This only classifies
  * the existing staging guards; it never enlarges the admitted RAM ranges. */
@@ -747,6 +761,29 @@ static void vmu_emulation_operation(bool save) {
     memcpy(vmu_emulation_note,note,sizeof(vmu_emulation_note));
     vmu_emulation_result=vmu_emulation_request;++vmu_emulation_generation;
     mutex_unlock(&lock);
+}
+static void disc_region_operation(bool save) {
+    bool enabled=true,ok=false,stopped=kui_cancelled();char note[128]={0};
+    if(stopped) snprintf(note,sizeof(note),"Preference operation stopped; reload to confirm.");
+    else if(save) {
+        ok=kui_disc_region_save(disc_region_requested,kui_log,kui_cancelled);
+        if(ok) {
+            enabled=disc_region_requested;
+            snprintf(note,sizeof(note),"Region-free %s. Applies to the next K-UI boot.",enabled?"On":"Off");
+        } else {
+            stopped=kui_cancelled();
+            ok=!stopped && kui_disc_region_load(&enabled,kui_log,kui_cancelled);
+            snprintf(note,sizeof(note),ok?"Write not confirmed; the current saved choice was reloaded.":
+                stopped?"Preference operation stopped; reload to confirm.":"Could not confirm region-free setting; X Reload to retry.");
+        }
+    } else {
+        ok=kui_disc_region_load(&enabled,kui_log,kui_cancelled);
+        if(ok) snprintf(note,sizeof(note),"Region-free %s. Applies to the next K-UI boot.",enabled?"On":"Off");
+        else snprintf(note,sizeof(note),"Could not read region-free setting; X Reload to retry.");
+    }
+    mutex_lock(&lock);disc_region_enabled=enabled;disc_region_ok=ok;
+    memcpy(disc_region_note,note,sizeof(disc_region_note));
+    disc_region_result=disc_region_request;++disc_region_generation;mutex_unlock(&lock);
 }
 static bool startup_sound_cancelled(void) {
     mutex_lock(&lock);
@@ -2222,7 +2259,7 @@ static void files_song_result(const struct kui_app_status *result) {
 }
 static bool needs_cd_handoff(unsigned action) {
     return action==1 || (action>=4 && action<=7) || action==12 || action==22 ||
-        action==24 || action==25 || action==56 || action==57 || action==58 || action==65 || action==79 || action==81 || action==96 || action==97 || action==103 || action==104 || (action>=68 && action<=71) || (action>=46 && action<=48);
+        action==24 || action==25 || action==56 || action==57 || action==58 || action==65 || action==79 || action==81 || action==96 || action==97 || action==103 || action==104 || action==105 || (action>=68 && action<=71) || (action>=46 && action<=48);
 }
 static bool games_page(enum kui_shell_page page) {
     return page==KUI_SHELL_GAMES || page==KUI_SHELL_GAMES_ADVANCED ||
@@ -2266,7 +2303,7 @@ static bool games_action_invalidates(unsigned action) {
         action==25 || action==30 || action==33 || action==38 || action==40 ||
         (action>=42 && action<=48) || (action>=56 && action<=58) || action==62 ||
         action==64 || action==65 || action==67 || action==79 || action==81 || action==96 || action==97 || action==82 ||
-        action==83 || action==85 || action==86 || action==90 || action==92 || action==95 || action==98 || action==100 || action==104 || (action>=68 && action<=71);
+        action==83 || action==85 || action==86 || action==90 || action==92 || action==95 || action==98 || action==100 || action==104 || action==105 || action==106 || action==107 || (action>=68 && action<=71);
 }
 static bool games_action_changes_content(unsigned action) {
     /* Directory-changing writers can add/remove launch selectors. Saved
@@ -2344,8 +2381,8 @@ static bool games_art_idle_work(void) {
 static void vmu_game_info_request_start(void) {
     if(!shell.games_vmu_loading) return;
     memcpy(vmu_game_info_requested.product,shell.games_vmu_product,sizeof(vmu_game_info_requested.product));
-    vmu_game_info_requested.native_route=(shell.games_detail.native_gd || shell.games_detail.native_cd) &&
-        !shell.games_detail.windows_ce;
+    vmu_game_info_requested.native_route=shell.games_vmu_disc ||
+        ((shell.games_detail.native_gd || shell.games_detail.native_cd) && !shell.games_detail.windows_ce);
     vmu_game_info_requested.generation=shell.games_vmu_generation;
     vmu_game_info_request_valid=true;
 }
@@ -2640,9 +2677,10 @@ static void *worker(void *unused) {
             if(action==81 || action==96 || action==97) {scan_status=(struct kui_app_status){.complete=true,.errors=1};
                 snprintf(scan_status.message,sizeof(scan_status.message),"Audio CD stop failed; repair did not start.");}
             if(action==56 || action==57 || action==58 || action==104) probe_launch_failed=true;
-            if(action==103 || action==104) {
+            if(action==103 || action==104 || action==105) {
                 probe_status=(struct kui_app_status){.complete=true,.errors=1};
                 snprintf(probe_status.message,sizeof(probe_status.message),"Audio CD stop failed; disc test did not start.");
+                if(action==105) disc_vmu_info_failure(disc_vmu_info_request_pending,probe_status.message);
             }
             if(action==79) {
                 probe_status=(struct kui_app_status){.complete=true,.errors=1};
@@ -2786,9 +2824,10 @@ static void *worker(void *unused) {
                 probe_status=(struct kui_app_status){.complete=true,.stopped=true};
                 snprintf(probe_status.message,sizeof(probe_status.message),"Executable check stopped before starting.");
             }
-            if(action==103) {
+            if(action==103 || action==105) {
                 probe_status=(struct kui_app_status){.complete=true,.stopped=true};
                 snprintf(probe_status.message,sizeof(probe_status.message),"Physical-disc check stopped before starting.");
+                if(action==105) disc_vmu_info_failure(disc_vmu_info_request_pending,probe_status.message);
             }
             if(action==76) {
                 memcpy(games_launch_result_path,games_launch_path_pending,sizeof(games_launch_result_path));
@@ -2873,7 +2912,12 @@ static void *worker(void *unused) {
                     "Import wizard stopped before starting.");
                 ++vmu_wizard_generation;
             }
-            if(action==99 || action==100) {
+            if(action==106 || action==107) {
+                disc_region_result=disc_region_request;disc_region_ok=false;
+                snprintf(disc_region_note,sizeof(disc_region_note),"Preference operation stopped; X Reload to retry.");
+                ++disc_region_generation;
+            }
+            if(action==99 || action==100 || action==106) {
                 vmu_emulation_result=vmu_emulation_request;
                 vmu_emulation_ok=false;vmu_emulation_stopped=true;
                 snprintf(vmu_emulation_note,sizeof(vmu_emulation_note),"VMU setting operation stopped before starting.");
@@ -3158,6 +3202,15 @@ static void *worker(void *unused) {
                     "Executable check failed. See Diagnostics for the exact reason.");
                 mutex_lock(&lock);probe_status=checked;mutex_unlock(&lock);
             }
+            if(action==105) {
+                struct kui_app_status result;struct kui_vmu_game_info info;
+                kui_sd_set_params(KUI_STORAGE_AUTO,true);
+                kui_disc_launcher_vmu_info(&info,&result,kui_log,kui_cancelled,disc_launch_progress);
+                disc_launch_progress(&result);
+                mutex_lock(&lock);disc_vmu_info_snapshot=info;
+                disc_vmu_info_request_result=disc_vmu_info_request_pending;++disc_vmu_info_generation;
+                mutex_unlock(&lock);
+            }
             if(action==103) {
                 struct kui_app_status result;
                 kui_disc_launcher_check(&result,kui_log,kui_cancelled,disc_launch_progress);
@@ -3169,7 +3222,9 @@ static void *worker(void *unused) {
                 kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 struct kui_app_status disc_result;
                 bool prepared=action==104?
-                    kui_disc_launcher_prepare(&probe_image,&disc_result,kui_log,kui_cancelled,disc_launch_progress):action==58?
+                    (disc_vmu_launch_pending?
+                     kui_disc_launcher_prepare_vmu(&games_vmu_selection_pending,&probe_image,&disc_result,kui_log,kui_cancelled,disc_launch_progress):
+                     kui_disc_launcher_prepare(&probe_image,&disc_result,kui_log,kui_cancelled,disc_launch_progress)):action==58?
                     kui_games_retail_prepare_launch_card(games_path_pending,games_reader_pending,&games_patches_pending,
                         &games_vmu_selection_pending,&probe_image,
                         kui_log,kui_cancelled):action==57?
@@ -3407,6 +3462,11 @@ static void *worker(void *unused) {
                 vmu_collection_request_result=vmu_collection_request_pending;++vmu_collection_generation;
                 mutex_unlock(&lock);
             }
+            if(action==106 || action==107) {
+                kui_sd_set_params(KUI_STORAGE_AUTO,true);
+                if(action==106) vmu_emulation_operation(false);
+                disc_region_operation(action==107);
+            }
             if(action==102) vmu_game_default_work();
             if(action==99 || action==100) {
                 active_app=action;kui_sd_set_params(KUI_STORAGE_AUTO,true);
@@ -3481,7 +3541,7 @@ static void *worker(void *unused) {
 #ifdef KUI_SD_RUNTIME
         if(action!=12 && action!=27 && action!=60) kui_log("Operation ended. Diagnostics page: Y saves the log to SD.");
         if(action==12 || action==1 || (action>=4 && action<=7) || action==22 ||
-           action==49 || action==81 || action==96 || action==97 || action==103 || action==104 || (action>=46 && action<=48)) {
+           action==49 || action==81 || action==96 || action==97 || action==103 || action==104 || action==105 || (action>=46 && action<=48)) {
             if(!kui_cd_audio_owns_drive() && !kui_disc_stop())salvage_session_forget();
             if(action!=12) kui_disc_identity_invalidate(&disc_identity);
             mutex_lock(&lock);
@@ -3800,6 +3860,9 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_VMU_GAME_CARD_DEFAULT:return 102;
         case KUI_SHELL_GD_CHECK:return 103;
         case KUI_SHELL_GD_DIRECT_BOOT:return 104;
+        case KUI_SHELL_GD_VMU_INFO:return 105;
+        case KUI_SHELL_GD_OPTIONS_LOAD:return 106;
+        case KUI_SHELL_GD_REGION_SAVE:return 107;
         default: return 0;
     }
 }
@@ -3976,7 +4039,7 @@ int main(void) {
     unsigned seen_files_listing=0,seen_files_preview=0,seen_files_result=0,seen_files_picture=0;
     unsigned seen_wifi_generation=0,seen_vmu_bulk=0,seen_vmu_import=0;
     unsigned seen_vmu_collection=0,seen_vmu_collection_copy=0,seen_vmu_wizard=0,seen_vmu_emulation=0;
-    unsigned seen_vmu_game_info=0;
+    unsigned seen_vmu_game_info=0,seen_disc_vmu_info=0,seen_disc_region=0;
     bool startup_routed=false;
     unsigned held_navigation = 0;
     uint64_t repeat_at = 0;
@@ -4110,6 +4173,14 @@ int main(void) {
             kui_shell_set_vmu_collection(&shell,vmu_collection_request_result,&vmu_collection_snapshot);
             seen_vmu_collection=vmu_collection_generation;
         }
+        if(seen_disc_region!=disc_region_generation) {
+            kui_shell_set_disc_region(&shell,disc_region_result,disc_region_enabled,disc_region_ok,disc_region_note);
+            seen_disc_region=disc_region_generation;
+        }
+        if(seen_disc_vmu_info!=disc_vmu_info_generation) {
+            kui_shell_set_disc_vmu_cards(&shell,disc_vmu_info_request_result,&disc_vmu_info_snapshot);
+            seen_disc_vmu_info=disc_vmu_info_generation;
+        }
         if(seen_vmu_game_info!=vmu_game_info_generation) {
             kui_shell_set_game_vmu_cards(&shell,vmu_game_info_request_result,&vmu_game_info_snapshot);
             seen_vmu_game_info=vmu_game_info_generation;
@@ -4215,7 +4286,7 @@ int main(void) {
         if(cd_drive_owned && requested==KUI_SHELL_MUSIC_STOP) requested=KUI_SHELL_CD_STOP;
         if(requested==KUI_SHELL_VMU_GAME_INFO && !busy) vmu_game_info_request_start();
         unsigned action = worker_action(requested);
-        if(drive_reset_required && (action==1 || (action>=4 && action<=7) || action==22 || action==81 || action==96 || action==97 || action==103 || action==104 || (action>=46 && action<=53))) {
+        if(drive_reset_required && (action==1 || (action>=4 && action<=7) || action==22 || action==81 || action==96 || action==97 || action==103 || action==104 || action==105 || (action>=46 && action<=53))) {
             snprintf(capture_message,sizeof(capture_message),
                 "Drive reset required. Reboot, then Resume the partial dump.");
             if(action>=46 && action<=48) {
@@ -4231,9 +4302,10 @@ int main(void) {
             }
             if(action==81 || action==96 || action==97) {scan_status=(struct kui_app_status){.complete=true,.errors=1};
                 snprintf(scan_status.message,sizeof(scan_status.message),"Drive reset required. Use System Tools > Restart.");}
-            if(action==103 || action==104) {
+            if(action==103 || action==104 || action==105) {
                 probe_status=(struct kui_app_status){.complete=true,.errors=1};
                 snprintf(probe_status.message,sizeof(probe_status.message),"Drive reset required. Use System Tools > Restart.");
+                if(action==105) disc_vmu_info_failure(shell.games_vmu_generation,probe_status.message);
             }
             if(action>=49 && action<=53) {
                 cd_audio_snapshot.poisoned=true;
@@ -4379,7 +4451,7 @@ int main(void) {
                 vmu_wizard_snapshot=shell.vmu_wizard;
                 vmu_wizard_snapshot.status=(struct kui_app_status){0};
             }
-            if(action==99 || action==100) {
+            if(action==99 || action==100 || action==106) {
                 vmu_emulation_request=shell.vmu_emulation_generation;
                 vmu_emulation_requested=shell.vmu_emulation_requested;
             }
@@ -4413,6 +4485,14 @@ int main(void) {
                 games_reader_pending=shell.games_retail_reader;
                 games_patches_pending=shell.games_launch_patches;
                 games_vmu_selection_pending=shell.games_vmu_selection;
+            }
+            if(action==106 || action==107) {
+                disc_region_request=shell.gd_region_generation;disc_region_requested=shell.gd_region_requested;
+            }
+            if(action==105) disc_vmu_info_request_pending=shell.games_vmu_generation;
+            if(action==104) {
+                disc_vmu_launch_pending=shell.gd_vmu_launch;
+                games_vmu_selection_pending=disc_vmu_launch_pending?shell.games_vmu_selection:(struct kui_vmu_game_selection){0};
             }
             if(action==55) {games_codec_pending=shell.games_launch_codec;games_codec_override_pending=shell.games_codec_override;}
             if(action==54 || action==59) {games_view_pending=shell.games_view;games_epoch_pending=shell.games_generation;}
@@ -4462,7 +4542,7 @@ int main(void) {
                 probe_status=(struct kui_app_status){0};
                 snprintf(probe_status.message,sizeof(probe_status.message),"Reading executable, checking its package and preparing the launch map...");
             }
-            if(action==103 || action==104) {
+            if(action==103 || action==104 || action==105) {
                 probe_status=(struct kui_app_status){0};
                 snprintf(probe_status.message,sizeof(probe_status.message),"Checking native GD boot bytes...");
                 probe_launch_disc=action==104;probe_launch_failed=false;
