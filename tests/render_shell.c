@@ -914,7 +914,8 @@ int main(int argc,char **argv) {
     } else if(!strcmp(argv[1],"home-music")) shell.home_selected=home_row(KUI_SHELL_MUSIC);
     else if(!strcmp(argv[1],"home-gd")) shell.home_selected=home_row(KUI_SHELL_DISC_TOOLS);
     else if(!strcmp(argv[1],"gd-play") || !strcmp(argv[1],"gd-confirm") ||
-            !strcmp(argv[1],"gd-direct-confirm") || !strcmp(argv[1],"gd-checked")) {
+            !strcmp(argv[1],"gd-direct-confirm") || !strcmp(argv[1],"gd-checked") ||
+            !strcmp(argv[1],"gd-error") || !strcmp(argv[1],"gd-stopped")) {
         shell.page=KUI_SHELL_GD_PLAY;shell.confirm_gd_boot=!strcmp(argv[1],"gd-confirm");
         shell.confirm_gd_direct=!strcmp(argv[1],"gd-direct-confirm");
         if(!strcmp(argv[1],"gd-checked")) {
@@ -924,6 +925,16 @@ int main(int argc,char **argv) {
             strcpy(status.lines[0],"TOY COMMANDER");
             strcpy(status.lines[1],"Product MK-51007 / region JUE");
             strcpy(status.lines[2],"1ST_READ.BIN: 748444 bytes");
+        }
+        if(!strcmp(argv[1],"gd-error") || !strcmp(argv[1],"gd-stopped")) {
+            view.app_status=&status;status.complete=true;status.passed=false;
+            status.stopped=!strcmp(argv[1],"gd-stopped");status.errors=status.stopped?0u:1u;
+            status.line_count=3;
+            strcpy(status.message,status.stopped?"Direct disc boot stopped before game handoff.":
+                "Direct boot refused: Source buffer overlaps the reserved main-stack margin. No game code has executed.");
+            strcpy(status.lines[0],"Payload 4259840 bytes");
+            strcpy(status.lines[1],"Source 8CB00000");
+            strcpy(status.lines[2],"Main stack 8CF00000");
         }
     } else if(!strcmp(argv[1],"quick-resume")) {
         shell.page=KUI_SHELL_ADVANCED;shell.advanced_selected=3;shell.confirm_quick_resume=true;

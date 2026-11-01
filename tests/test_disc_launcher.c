@@ -21,7 +21,7 @@ static struct fixture {
     uint8_t data[SECTORS][2048];
     struct kui_toc toc[2];
     unsigned connections,disconnects,mounts,unmounts,runtime_reads,runtime_frees;
-    unsigned preparations,raw_reads,progress,logs,reallocations;
+    unsigned preparations,raw_reads,raw_calls,max_run,progress,logs,reallocations;
     unsigned read_fail,edc_fail,address_fail,cancel_at,change_at;
     bool connected,mounted,stop,connect_fail,mount_fail,unmount_fail,prepare_fail,is_cd,handoff_fail;
     bool runtime_fail,template_invalid,realloc_fail,ce;
@@ -126,17 +126,21 @@ bool kui_disc_native_handoff(uint32_t fad,const uint8_t expected[2048]) {
 }
 static uint8_t bcd(unsigned n) {return (uint8_t)((n/10u)*16u+n%10u);}
 enum kui_read_result kui_disc_read_raw(void *context,uint32_t fad,unsigned count,uint8_t *out) {
-    (void)context;CHECK(count==1u && !fixture.connected && !fixture.mounted);
-    CHECK(fad>=FIRST && fad-FIRST<SECTORS);++fixture.raw_reads;
-    if(fixture.cancel_at==fixture.raw_reads)fixture.stop=true;
-    if(fixture.read_fail==fixture.raw_reads)return KUI_READ_RETRY;
-    memset(out,0,2352u);memset(out+1u,255,10u);
-    out[12]=bcd(fad/4500u);out[13]=bcd((fad/75u)%60u);out[14]=bcd(fad%75u);out[15]=1u;
-    memcpy(out+16u,fixture.data[fad-FIRST],2048u);
-    if(fixture.change_at==fixture.raw_reads)out[16u+100u]^=1u;
-    if(fixture.address_fail==fixture.raw_reads)out[14]=bcd((fad+1u)%75u);
-    put(out+2064u,kui_cd_edc(out,2064u));
-    if(fixture.edc_fail==fixture.raw_reads)out[16u+101u]^=1u;
+    (void)context;CHECK(count && count<=8u && !fixture.connected && !fixture.mounted);
+    CHECK(fad>=FIRST && fad-FIRST<SECTORS && count<=SECTORS-(fad-FIRST));
+    ++fixture.raw_calls;if(count>fixture.max_run)fixture.max_run=count;
+    for(unsigned i=0;i<count;i++,fad++,out+=2352u) {
+        ++fixture.raw_reads;
+        if(fixture.cancel_at==fixture.raw_reads)fixture.stop=true;
+        if(fixture.read_fail==fixture.raw_reads)return KUI_READ_RETRY;
+        memset(out,0,2352u);memset(out+1u,255,10u);
+        out[12]=bcd(fad/4500u);out[13]=bcd((fad/75u)%60u);out[14]=bcd(fad%75u);out[15]=1u;
+        memcpy(out+16u,fixture.data[fad-FIRST],2048u);
+        if(fixture.change_at==fixture.raw_reads)out[16u+100u]^=1u;
+        if(fixture.address_fail==fixture.raw_reads)out[14]=bcd((fad+1u)%75u);
+        put(out+2064u,kui_cd_edc(out,2064u));
+        if(fixture.edc_fail==fixture.raw_reads)out[16u+101u]^=1u;
+    }
     return KUI_READ_OK;
 }
 static void released(void) {
@@ -158,12 +162,14 @@ static void successful_paths(void) {
     CHECK(status.complete && status.passed && !status.errors && !status.stopped);
     CHECK(status.line_count==4u && status.done==21u*2048u);
     CHECK(fixture.raw_reads==21u && fixture.preparations==1u);
+    CHECK(fixture.raw_calls==6u && fixture.max_run==8u);
     CHECK(!fixture.connections && !fixture.runtime_reads && !fixture.runtime_frees);
     setup();struct kui_runtime_image image={0};
     CHECK(kui_disc_launcher_prepare(&image,&status,log_line,cancelled,progress));
     CHECK(status.complete && status.passed && !status.stopped && !status.errors);
     CHECK(fixture.runtime_reads==1u && fixture.reallocations==1u && !fixture.runtime_frees);
     CHECK(fixture.raw_reads==39u && status.done==39u*2048u);released();
+    CHECK(fixture.raw_calls==9u && fixture.max_run==8u);
     struct kui_disc_launch_plan plan;CHECK(kui_disc_launch_validate(image.data,image.info.payload_bytes,&plan));
     CHECK(plan.exec_bytes==BOOT_BYTES);
     CHECK(!memcmp((uint8_t *)image.data+plan.ip_offset,fixture.data,32768u));
@@ -204,15 +210,20 @@ static void check_only_failures(void) {
     CHECK(status.complete && status.passed && !fixture.progress && !fixture.connections);
 }
 static void every_optical_cut(void) {
+    static const unsigned ends[]={1u,2u,3u,11u,19u,21u,29u,37u,39u};
     for(unsigned at=1u;at<=39u;at++) {
+        unsigned end=0u;
+        for(unsigned i=0;i<sizeof(ends)/sizeof(ends[0]);i++)if(at<=ends[i]){end=ends[i];break;}
+        CHECK(end);
         setup();fixture.read_fail=at;refusal(false);released();
         CHECK(fixture.raw_reads==at && fixture.runtime_frees==1u);
         setup();fixture.edc_fail=at;refusal(false);released();
-        CHECK(fixture.raw_reads==at && fixture.runtime_frees==1u);
+        CHECK(fixture.raw_reads==end && fixture.runtime_frees==1u);
+        CHECK(strstr(fixture.last.lines[0],"Stage:") && strstr(fixture.last.lines[1],"Last read: FAD"));
         setup();fixture.address_fail=at;refusal(false);released();
-        CHECK(fixture.raw_reads==at && fixture.runtime_frees==1u);
+        CHECK(fixture.raw_reads==end && fixture.runtime_frees==1u);
         setup();fixture.cancel_at=at;refusal(true);released();
-        CHECK(fixture.raw_reads==at && fixture.runtime_frees==1u);
+        CHECK(fixture.raw_reads==end && fixture.runtime_frees==1u);
     }
     /* Valid EDC cannot authorize changed bytes between preflight and load. */
     for(unsigned at=22u;at<=39u;at++) {

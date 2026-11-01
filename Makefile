@@ -1401,6 +1401,7 @@ test-disc-native: build/test-disc-boot build/test-disc-launch build/test-disc-la
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-disc-vmu-storage
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-disc-launcher
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-shell
+	python3 tests/test_disc_handoff_gui.py
 build/test-disc-boot: tests/test_disc_boot.c $(DISC_BOOT_CORE) include/kui/disc_boot.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) tests/test_disc_boot.c $(DISC_BOOT_CORE) -o $@

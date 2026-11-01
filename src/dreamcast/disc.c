@@ -414,9 +414,16 @@ static bool native_handoff_ready(void) {
     return controls_safe(NULL) && !controls.active && !controls_format_pending &&
         !controls_format_refused && !kui_cancelled();
 }
-static bool native_handoff_media(void) {
+static bool native_handoff_media(const char *phase) {
     cd_check_drive_status_t drive={0};
-    return native_handoff_ready() && syscall_gdrom_check_drive(&drive)==0 &&
+    if(!native_handoff_ready()) {
+        kui_log("Disc handoff %s: optical ownership refused (poison=%u media=%u command=%u DMA=%u controls=%u)",
+            phase,poisoned,media_changed,command_running,dma_in_flight,controls.active);
+        return false;
+    }
+    int result=syscall_gdrom_check_drive(&drive);
+    kui_log("Disc handoff %s: BIOS=%d status=%d type=%d",phase,result,drive.status,drive.disc_type);
+    return result==0 &&
         drive.disc_type==CD_GDROM &&
         (drive.status==CD_STATUS_PAUSED || drive.status==CD_STATUS_STANDBY);
 }
@@ -425,25 +432,29 @@ bool kui_disc_native_handoff(uint32_t ip_fad,const uint8_t expected_ip_sector[20
      * real firmware in ordinary Mode1 data-area format before entering the
      * game's own GD code. This gate neither resets the drive nor installs an
      * emulated GD vector. The source has already admitted a native GD image. */
-    if(!expected_ip_sector || ip_fad<45150u || ip_fad>0xffffffu ||
-       !native_handoff_media() || !set_mode(2048,1024) || !native_handoff_ready()) return false;
+    if(!expected_ip_sector || ip_fad<45150u || ip_fad>0xffffffu) return false;
+    if(!native_handoff_media("before format")) return false;
+    if(!set_mode(2048,1024) || !native_handoff_ready()) {
+        kui_log("Disc handoff: restoring Mode1 2048-byte reads refused");return false;
+    }
     for(unsigned i=0;i<2u;i++) {
         uint8_t fill=i?0x5a:0xa5;
         memset(&cooked[i],fill,sizeof(cooked[i]));
         /* Firmware receives only the adapter's static parameter/buffer. A
          * failed abort may retain them; never inspect or refill after poison. */
         bool read_ok=read_sector(cooked[i].data,ip_fad);
-        if(poisoned) return false;
+        if(poisoned) {kui_log("Disc handoff: boot-sector read %u left drive poisoned",i+1u);return false;}
         if(!kui_guard_is(cooked[i].before,32u,fill) ||
            !kui_guard_is(cooked[i].after,32u,fill)) {
             poisoned=true;kui_log("DISC HANDOFF GUARD CORRUPTION: RESET REQUIRED");return false;
         }
         if(!read_ok || detail.size!=KUI_DATA_BYTES || !native_handoff_ready() ||
            memcmp(cooked[i].data,expected_ip_sector,KUI_DATA_BYTES)) {
-            kui_log("Disc handoff: cooked boot-sector read not confirmed");return false;
+            kui_log("Disc handoff: cooked boot-sector read not confirmed (read=%u ok=%u size=%lu expected=%u)",
+                i+1u,read_ok,(unsigned long)detail.size,KUI_DATA_BYTES);return false;
         }
     }
-    if(memcmp(cooked[0].data,cooked[1].data,KUI_DATA_BYTES) || !native_handoff_media()) return false;
+    if(memcmp(cooked[0].data,cooked[1].data,KUI_DATA_BYTES) || !native_handoff_media("after cooked reads")) return false;
     kui_log("Disc handoff: Mode1 2048-byte boot sector verified; real GD firmware retained");
     return true;
 }

@@ -3088,6 +3088,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(buttons & KUI_SHELL_A) s->confirm_gd_boot=true;
         else if(buttons & KUI_SHELL_X) return KUI_SHELL_GD_CHECK;
         else if(buttons & KUI_SHELL_Y) s->confirm_gd_direct=true;
+        else if(buttons & KUI_SHELL_R) return KUI_SHELL_SAVE_LOG;
         break;
     case KUI_SHELL_CD_AUDIO:
         if(buttons&KUI_SHELL_START) {s->page=KUI_SHELL_HOME;break;}
