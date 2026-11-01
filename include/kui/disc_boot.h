@@ -9,6 +9,7 @@
 #define KUI_DISC_BOOT_GD_TYPE UINT32_C(0x80)
 #define KUI_DISC_BOOT_IP_BYTES UINT32_C(32768)
 #define KUI_DISC_BOOT_MAX_EXEC_BYTES (12u * 1024u * 1024u)
+#define KUI_DISC_BOOT_RUN_SECTORS 8u
 
 enum kui_disc_boot_io_result {
     KUI_DISC_BOOT_IO_OK, KUI_DISC_BOOT_IO_ERROR, KUI_DISC_BOOT_IO_CANCELLED
@@ -25,6 +26,14 @@ struct kui_disc_boot_source {
      * exclusive and must stop before audio, a gap or the leadout. The caller
      * owns the optical device and must keep this media/geometry unchanged. */
     uint32_t disc_type, first_fad, end_fad;
+    /* Optional bounded cooked-sector reader for hashing known extents. count
+     * is 1..KUI_DISC_BOOT_RUN_SECTORS; data has count * 2048 bytes. Metadata
+     * always uses read_sector, with no lookahead beyond its requested sector. */
+    enum kui_disc_boot_io_result (*read_run)(void *context, uint32_t fad,
+                                            uint32_t count, uint8_t *data);
+    /* Zero selects the 12 MiB format limit. A smaller nonzero limit refuses
+     * after checked metadata, before any IP/executable hashing. */
+    uint32_t max_exec_bytes;
 };
 enum kui_disc_boot_status {
     KUI_DISC_BOOT_OK, KUI_DISC_BOOT_ARGUMENT, KUI_DISC_BOOT_MEDIA,

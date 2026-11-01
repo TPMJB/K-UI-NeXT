@@ -1900,6 +1900,27 @@ static void confirmation(struct paint *p,const struct kui_shell *s,bool quick) {
     if(quick) path_words(p,72,282,568,MUTED,s->capture_job[0]?s->capture_job:"Automatic latest matching job");
     label(p,72,304,CYAN,quick?"A Quick resume":"A Start capture"); label(p,368,304,WHITE,"B Cancel");
 }
+static void gd_message(struct paint *p,const char *text,uint16_t color) {
+    /* A retained failure must fit in full, not lose its cause to ellipsis.
+     * The model caps messages at127 bytes; four measured rows cover that
+     * even when an unbroken word must be split. */
+    size_t remaining=127u;
+    for(unsigned row=0;row<4u && remaining && *text;row++) {
+        while(remaining && *text==' ') {++text;--remaining;}
+        char line[128];size_t n=0,space=0;
+        while(n<remaining && text[n] && n+1u<sizeof(line)) {
+            unsigned char c=(unsigned char)text[n];
+            line[n++]=c>=32u && c<=126u?(char)c:'?';line[n]=0;
+            if(word_width(p,line,false)>544u) {--n;break;}
+            if(c==' ') space=n-1u;
+        }
+        /* Keep enough progress for all127 bytes even if a very long word
+         * follows a short one. Four rows each admit at least32 glyphs. */
+        if(n<remaining && text[n] && space>=32u) n=space;
+        if(!n) break;
+        line[n]=0;words(p,48,260u+18u*row,592,color,line,false);text+=n;remaining-=n;
+    }
+}
 static void gd_play(struct paint *p,const struct kui_shell_view *v) {
     title(p,40,108,"GD Play");
     char line[160];snprintf(line,sizeof(line),"Inserted: %s",
@@ -1907,17 +1928,18 @@ static void gd_play(struct paint *p,const struct kui_shell_view *v) {
     label(p,40,138,CYAN,line);
     panel(p,32,174,576,224,PANEL);
     label(p,48,190,WHITE,"A Boot via console BIOS");
-    label(p,48,214,CYAN,"X Check native disc   Y Direct boot test");
+    label(p,48,214,CYAN,"X Check native disc  Y Direct boot test  R Save log");
     label(p,48,240,AMBER,"Direct test: physical VMUs only");
     const struct kui_app_status *status=v->app_status;
-    words(p,48,268,592,MUTED,status && status->message[0]?status->message:
-        "Check reads the disc. Direct boot tests our new native launcher.",false);
+    gd_message(p,status && status->message[0]?status->message:
+        "Check reads the disc. Direct boot tests our new native launcher.",
+        status && status->errors?AMBER:MUTED);
     if(v->busy && status && status->done) {
         snprintf(line,sizeof(line),"Read %llu KiB from disc",(unsigned long long)(status->done/1024u));
-        label(p,48,294,CYAN,line);
+        label(p,48,328,CYAN,line);
     }
     if(status) for(unsigned i=0;i<status->line_count && i<3u;i++)
-        label(p,48,320+(int)i*22,MUTED,status->lines[i]);
+        label(p,48,346+(int)i*18,MUTED,status->lines[i]);
 }
 static void gd_direct_confirmation(struct paint *p) {
     box(p,32,154,576,262,NAVY);

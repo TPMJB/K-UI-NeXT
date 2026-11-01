@@ -30,7 +30,7 @@ and settings remain on the SD card. Use your backed-up GUI to restore its exact
 previous version after the disc test; also restore the previous disc module if
 one existed. The remaining ZIP folders contain evidence/source and stay on PC.
 
-## Run the first test
+## Run the test
 
 Insert an original native Dreamcast GD-ROM and open **Disc tools → GD Play**.
 
@@ -51,15 +51,25 @@ Insert an original native Dreamcast GD-ROM and open **Disc tools → GD Play**.
 not test the new controlled handoff. Virtual VMU settings in Games do not enable
 an emulated card in this prototype.
 
-The first implementation deliberately reads sectors repeatedly for validation:
-each cooked-sector callback uses the existing verified raw-pair read, and direct
-boot reads the boot content once for its plan and again while staging it. The
-result can load slowly. Advancing byte counts/loading text mean work is still
-in progress; report elapsed time and the last visible message if it stops.
+This revision batches boot-content reads into runs of up to eight sectors. Each
+run still uses the existing verified raw-pair read, checks every sector's address
+and EDC, and preserves the complete boot-content fingerprints. Metadata reads
+remain individual. Direct boot reads content once for its plan and again while
+staging it. Preparation can still take time; report elapsed time and the last
+visible message if it stops. The menu music cache is released before staging to
+leave more RAM available. Oversized boot files are refused before hashing them.
+
+Failures now stay on **GD Play** with the specific error, preparation stage and
+last read location. Press **R Save log** there and retain the saved text log.
+If the final RAM handoff is refused, the screen and log identify the precise
+guard and source/stack addresses. The bounds themselves have not been relaxed.
+The previous Power Stone photo showed only the tail of Diagnostics, so its
+original refusal still needs the saved log or a result from this revision.
 
 For each result, send **the exact build number, game/product, X Check result,
 Y Direct boot result, last visible screen, and approximate time**. Photograph
-the complete failure screen. Also note physical-VMU save/reload and CD audio.
+the complete failure screen and retain the text log using **R Save log**. Also
+note physical-VMU save/reload and CD audio.
 
 ## Current boundaries
 

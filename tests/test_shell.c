@@ -884,6 +884,10 @@ static void music_and_boot_controls(void) {
     press(KUI_SHELL_A,false);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_GD_BOOT && !s.confirm_gd_boot);
     reset(KUI_SHELL_GD_PLAY);
+    assert(press(KUI_SHELL_R,false)==KUI_SHELL_SAVE_LOG && s.page==KUI_SHELL_GD_PLAY);
+    assert(press(KUI_SHELL_R,true)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_R|KUI_SHELL_B,false)==KUI_SHELL_NONE);
+    reset(KUI_SHELL_GD_PLAY);
     assert(press(KUI_SHELL_X,false)==KUI_SHELL_GD_CHECK);
     assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.confirm_gd_direct);
     assert(press(KUI_SHELL_X|KUI_SHELL_Y,false)==KUI_SHELL_NONE && s.confirm_gd_direct);
@@ -1501,6 +1505,7 @@ static void music_and_boot_rendering(void) {
     reset(KUI_SHELL_GD_PLAY);render(&v);
     assert(strstr(drawn,"Inserted: MDK2") && strstr(drawn,"A Boot via console BIOS"));
     assert(strstr(drawn,"X Check native disc") && strstr(drawn,"Y Direct boot test"));
+    assert(strstr(drawn,"R Save log"));
     assert(strstr(drawn,"physical VMUs only"));
     s.confirm_gd_direct=true;render(&v);
     assert(strstr(drawn,"TEST DIRECT PHYSICAL-DISC BOOT?"));
@@ -1509,6 +1514,19 @@ static void music_and_boot_rendering(void) {
     s.confirm_gd_boot=true;render(&v);
     assert(strstr(drawn,"EXIT K-UI AND BOOT VIA CONSOLE BIOS?"));
     assert(strstr(drawn,"region and autostart"));
+    s.confirm_gd_boot=false;
+    struct kui_app_status disc_failure={.complete=true,.errors=1,.line_count=3};
+    strcpy(disc_failure.message,"Direct boot refused: Source buffer overlaps the reserved main-stack margin. No game code has executed.");
+    strcpy(disc_failure.lines[0],"Payload 4259840 bytes");
+    strcpy(disc_failure.lines[1],"Source 8CB00000");
+    strcpy(disc_failure.lines[2],"Main stack 8CF00000");
+    v.app_status=&disc_failure;render(&v);
+    assert(strstr(drawn,"Direct boot refused:") && strstr(drawn,"No game code has executed."));
+    assert(strstr(drawn,"Payload 4259840 bytes") && strstr(drawn,"Source 8CB00000") && strstr(drawn,"Main stack 8CF00000"));
+    memset(disc_failure.message,'W',127u);disc_failure.message[127]=0;render(&v);
+    unsigned count_w=0;for(const char *p=drawn;*p;p++) if(*p=='W')++count_w;
+    assert(count_w==127u);
+    v.app_status=NULL;
     reset(KUI_SHELL_MUSIC);
     strcpy(s.music_listing.entries[0].name,"test.wav");s.music_listing.count=1;
     strcpy(s.music_listing.entries[1].name,"Albums");s.music_listing.entries[1].directory=true;

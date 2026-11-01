@@ -305,9 +305,43 @@ static bool is_capture_action(unsigned action) {
 #define LINE_BYTES 77
 #define VISIBLE_LINES 19
 static mutex_t lock = MUTEX_INITIALIZER;
+#ifdef KUI_SD_RUNTIME
 static void disc_launch_progress(const struct kui_app_status *status) {
     mutex_lock(&lock);probe_status=*status;mutex_unlock(&lock);
 }
+/* Keep the actual refusal available to the disc page. This only classifies
+ * the existing staging guards; it never enlarges the admitted RAM ranges. */
+static const char *probe_handoff_refusal(uintptr_t source,size_t length,
+        uintptr_t stack,bool disc,const void *payload) {
+    if(source<KUI_RUNTIME_ADDRESS || source>=0x8d000000u || (source&3u))
+        return "Source buffer is outside aligned main RAM";
+    if(!length || (length&3u)) return "Payload length is empty or unaligned";
+    if(length>0x8d000000u-source) return "Payload extends beyond main RAM";
+    if(stack<=0x8c200000u) return "Main stack is outside its safe launch range";
+    if(source+length>stack-65536u) return "Source buffer overlaps the reserved main-stack margin";
+    if(disc) {
+        struct kui_disc_launch_plan plan;
+        if(!kui_disc_launch_validate(payload,length,&plan))
+            return "Disc handoff packet or boot fingerprint was refused";
+    } else if(length>KUI_IMAGE_RESIDENT_BLOB_OFFSET+KUI_IMAGE_RESIDENT_MAX_BYTES)
+        return "Image-loader payload exceeds its staging limit";
+    return NULL;
+}
+static struct kui_app_status disc_handoff_refusal_status(const char *reason,bool cancelled,
+        uintptr_t source,size_t length,uintptr_t stack) {
+    struct kui_app_status status={.complete=true,.stopped=cancelled,
+        .errors=cancelled?0u:1u,.line_count=3u};
+    snprintf(status.message,sizeof(status.message),"%s%s",cancelled?
+        "Direct boot stopped before game handoff.":"Direct boot refused: ",cancelled?"":reason);
+    snprintf(status.lines[0],KUI_APP_LINE_CAP,"Payload %lu bytes",(unsigned long)length);
+    snprintf(status.lines[1],KUI_APP_LINE_CAP,"Source %08" PRIXPTR,source);
+    snprintf(status.lines[2],KUI_APP_LINE_CAP,"Main stack %08" PRIXPTR,stack);
+    return status;
+}
+static enum kui_shell_page probe_handoff_failure_page(bool disc) {
+    return disc?KUI_SHELL_GD_PLAY:KUI_SHELL_DIAGNOSTICS;
+}
+#endif
 static char lines[LOG_LINES][LINE_BYTES];
 static unsigned line_count;
 static bool log_truncated, busy, cancel_requested, saving_report;
@@ -533,6 +567,21 @@ static void publish_music_if_ready(void) {
     struct kui_music_status status;
     if(!kui_music_status_try_copy(&status)) return;
     mutex_lock(&lock);music_snapshot=status;mutex_unlock(&lock);
+}
+static void disc_launch_release_menu_memory(void) {
+    struct kui_music_status status;
+    kui_music_status_copy(&status);
+    kui_memory_log("physical disc preload before menu cache release");
+    /* The single worker has cancelled any idle preload. Clear drains the
+     * audio callback before freeing cached songs/decoder allocations. */
+    kui_music_clear_cache();publish_music();
+    mutex_lock(&lock);
+    music_cache_attempted=0;
+    music_requested=status.enabled && status.loaded && status.current_index<KUI_MUSIC_TRACKS?
+        (int)status.current_index:-1;
+    ++music_request_generation;
+    mutex_unlock(&lock);
+    kui_memory_log("physical disc preload after menu cache release");
 }
 static void configure_music(void) {
     struct kui_system_settings value;
@@ -2753,8 +2802,9 @@ static void *worker(void *unused) {
                 vmu_game_info_request_result=vmu_game_default_generation;++vmu_game_info_generation;
             }
             if(action==56 || action==57 || action==58 || action==104) {
-                probe_status=(struct kui_app_status){.stopped=true};
-                snprintf(probe_status.message,sizeof(probe_status.message),"Games handoff stopped before starting.");
+                probe_status=(struct kui_app_status){.complete=true,.stopped=true};
+                snprintf(probe_status.message,sizeof(probe_status.message),"%s",action==104?
+                    "Direct disc boot stopped before starting.":"Games handoff stopped before starting.");
                 probe_launch_failed=true;
             }
             if((action>=41 && action<=43) || action==87 || action==88) {
@@ -3115,6 +3165,7 @@ static void *worker(void *unused) {
             }
             if(action==56 || action==57 || action==58 || action==104) {
                 if(action!=104) (void)games_selection_store(true);
+                else disc_launch_release_menu_memory();
                 kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 struct kui_app_status disc_result;
                 bool prepared=action==104?
@@ -3124,7 +3175,15 @@ static void *worker(void *unused) {
                         kui_log,kui_cancelled):action==57?
                     kui_games_image_probe_prepare(games_path_pending,&probe_image,kui_log,kui_cancelled):
                     kui_games_probe_prepare(&probe_image,kui_log,kui_cancelled);
-                if(prepared && kui_cancelled()) {kui_runtime_free(&probe_image);prepared=false;}
+                if(prepared && kui_cancelled()) {
+                    kui_runtime_free(&probe_image);prepared=false;
+                    if(action==104) {
+                        disc_result.complete=disc_result.stopped=true;
+                        disc_result.passed=false;disc_result.errors=0;
+                        snprintf(disc_result.message,sizeof(disc_result.message),"Direct disc boot stopped before game handoff.");
+                        disc_launch_progress(&disc_result);
+                    }
+                }
                 if(prepared) {
                     /* No more filesystem work may run once main owns this
                      * image. arch_exec performs the final KOS teardown. */
@@ -4406,7 +4465,7 @@ int main(void) {
             if(action==103 || action==104) {
                 probe_status=(struct kui_app_status){0};
                 snprintf(probe_status.message,sizeof(probe_status.message),"Checking native GD boot bytes...");
-                probe_launch_failed=false;
+                probe_launch_disc=action==104;probe_launch_failed=false;
             }
             if(action==56 || action==57 || action==58) {
                 probe_status=(struct kui_app_status){0};
@@ -4414,7 +4473,7 @@ int main(void) {
                     "Preparing selected game launch...":action==57?
                     "Mapping selected image and reading reference samples...":
                     "Preparing resident probe and SD map...");
-                probe_launch_failed=false;
+                probe_launch_disc=false;probe_launch_failed=false;
             }
             if(action==19) memory_test_status=(struct kui_app_status){0};
             if(action==20 || action==45) network_test_status=(struct kui_app_status){0};
@@ -4458,27 +4517,28 @@ int main(void) {
         bool launch_probe=probe_launch_ready,probe_failed=probe_launch_failed,launch_disc=probe_launch_disc;
         probe_launch_failed=false;
         mutex_unlock(&lock);
-        if(probe_failed) {shell.page=KUI_SHELL_DIAGNOSTICS;shell.scroll=0;}
+        if(probe_failed) {shell.page=probe_handoff_failure_page(launch_disc);shell.scroll=0;}
         if(launch_probe) {
             uintptr_t stack;
             __asm__ __volatile__("mov r15,%0" : "=r"(stack));
             uintptr_t source=(uintptr_t)probe_image.data;
             size_t length=probe_image.info.payload_bytes;
-            struct kui_disc_launch_plan disc_plan;
             /* arch_exec copies forward to low RAM and executes its trampoline
              * on main's stack. High resident relocation occurs only afterwards. */
-            bool safe=source>=KUI_RUNTIME_ADDRESS && source<0x8d000000u && !(source&3u) &&
-                length && !(length&3u) &&
-                length<=0x8d000000u-source && stack>0x8c200000u &&
-                source+length<=stack-65536u;
-            if(safe) safe=launch_disc?
-                kui_disc_launch_validate(probe_image.data,length,&disc_plan):
-                length<=KUI_IMAGE_RESIDENT_BLOB_OFFSET+KUI_IMAGE_RESIDENT_MAX_BYTES;
-            if(safe && !kui_cancelled()) arch_exec(probe_image.data,(uint32_t)length);
+            const char *refusal=probe_handoff_refusal(source,length,stack,launch_disc,probe_image.data);
+            bool cancelled=kui_cancelled();
+            if(!refusal && !cancelled) arch_exec(probe_image.data,(uint32_t)length);
+            if(!refusal && !cancelled) refusal="Game handoff unexpectedly returned";
+            if(launch_disc) {
+                struct kui_app_status result=disc_handoff_refusal_status(refusal,cancelled,source,length,stack);
+                disc_launch_progress(&result);
+                kui_log("Physical disc handoff refused: %s; source=%08" PRIXPTR " bytes=%lu stack=%08" PRIXPTR,
+                    cancelled?"cancelled":refusal,source,(unsigned long)length,stack);
+            }
             kui_runtime_free(&probe_image);
-            kui_log("Games handoff refused: %s",safe?"cancelled":"unsafe staging range");
+            if(!launch_disc) kui_log("Games handoff refused: %s",cancelled?"cancelled":refusal);
             mutex_lock(&lock);probe_launch_ready=false;mutex_unlock(&lock);
-            shell.page=KUI_SHELL_DIAGNOSTICS;shell.scroll=0;
+            shell.page=probe_handoff_failure_page(launch_disc);shell.scroll=0;
         }
         if(requested == KUI_SHELL_MSTATS) {
             kui_memory_log("L trigger");kui_music_log_stats("L trigger");shell.scroll=0;

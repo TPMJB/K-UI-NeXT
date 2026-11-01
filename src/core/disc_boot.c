@@ -33,6 +33,20 @@ static enum kui_disc_boot_status read_fad(struct preparation *p,uint32_t fad,
     ++p->reads;
     return KUI_DISC_BOOT_OK;
 }
+static enum kui_disc_boot_status read_hash_run(struct preparation *p,uint32_t fad,
+                                              uint32_t count,uint8_t *data) {
+    if(!p->source->read_run)return read_fad(p,fad,data);
+    if(count>KUI_DISC_BOOT_RUN_SECTORS || !fad_range(p,fad,count))return KUI_DISC_BOOT_ISO;
+    if(stopped(p))return KUI_DISC_BOOT_CANCELLED;
+    enum kui_disc_boot_io_result r=p->source->read_run(p->source->context,fad,count,data);
+    if(r==KUI_DISC_BOOT_IO_CANCELLED)return KUI_DISC_BOOT_CANCELLED;
+    /* Preserve a primary device error even when the callback also observes a
+     * cancellation. The device result is needed to diagnose failed media. */
+    if(r!=KUI_DISC_BOOT_IO_OK)return KUI_DISC_BOOT_IO;
+    if(stopped(p))return KUI_DISC_BOOT_CANCELLED;
+    p->reads+=count;
+    return KUI_DISC_BOOT_OK;
+}
 static void sha256(const uint8_t *data,size_t bytes,uint8_t digest[32]) {
     struct kui_sha256 sha;kui_sha256_init(&sha);kui_sha256_update(&sha,data,bytes);
     kui_sha256_digest(&sha,digest);
@@ -76,17 +90,21 @@ static bool overlap(uint32_t a,uint32_t an,uint32_t b,uint32_t bn) {
 static enum kui_disc_boot_status hash_extent(struct preparation *p,uint32_t fad,
     uint32_t bytes,bool ip,uint32_t *crc,uint8_t digest[32]) {
     struct kui_sha256 sha;kui_sha256_init(&sha);uint32_t checked=0u;
-    uint8_t sector[2048];
+    uint8_t sectors[KUI_DISC_BOOT_RUN_SECTORS*2048u];
     for(uint32_t done=0u;done<bytes;) {
-        enum kui_disc_boot_status r=read_fad(p,fad+done/2048u,sector);
+        uint32_t count=(bytes-done+2047u)/2048u;
+        if(count>KUI_DISC_BOOT_RUN_SECTORS)count=KUI_DISC_BOOT_RUN_SECTORS;
+        if(!p->source->read_run)count=1u;
+        enum kui_disc_boot_status r=read_hash_run(p,fad+done/2048u,count,sectors);
         if(r!=KUI_DISC_BOOT_OK)return r;
         if(ip && !done) {
-            uint8_t current[32];sha256(sector,sizeof(sector),current);
+            uint8_t current[32];sha256(sectors,2048u,current);
             if(!p->have_ip || memcmp(current,p->first_ip_sha256,sizeof(current)))
                 return KUI_DISC_BOOT_CHANGED;
         }
-        uint32_t amount=bytes-done;if(amount>2048u)amount=2048u;
-        checked=kui_crc32(checked,sector,amount);kui_sha256_update(&sha,sector,amount);
+        uint32_t amount=bytes-done;
+        if(amount>count*2048u)amount=count*2048u;
+        checked=kui_crc32(checked,sectors,amount);kui_sha256_update(&sha,sectors,amount);
         done+=amount;
     }
     *crc=checked;kui_sha256_digest(&sha,digest);return KUI_DISC_BOOT_OK;
@@ -98,7 +116,8 @@ enum kui_disc_boot_status kui_disc_boot_prepare(const struct kui_disc_boot_sourc
     memset(out,0,sizeof(*out));
     /* Firmware TOC FADs are 24-bit. Require the observed high-density session
      * and enough room for its IP and first ISO descriptor before any read. */
-    if(!source->read_sector || !source->cancelled)return KUI_DISC_BOOT_ARGUMENT;
+    if(!source->read_sector || !source->cancelled ||
+       source->max_exec_bytes>KUI_DISC_BOOT_MAX_EXEC_BYTES)return KUI_DISC_BOOT_ARGUMENT;
     if(source->disc_type!=KUI_DISC_BOOT_GD_TYPE)return KUI_DISC_BOOT_MEDIA;
     if(source->first_fad<45150u ||
        source->end_fad>UINT32_C(0x01000000) || source->first_fad>=source->end_fad ||
@@ -111,7 +130,6 @@ enum kui_disc_boot_status kui_disc_boot_prepare(const struct kui_disc_boot_sourc
     if(r!=KUI_DISC_BOOT_OK)return r;
     if(plan.metadata.windows_ce)return KUI_DISC_BOOT_WINDOWS_CE;
     if(!plan.metadata.native_gd)return KUI_DISC_BOOT_MEDIA;
-    if(plan.metadata.boot_bytes>KUI_DISC_BOOT_MAX_EXEC_BYTES)return KUI_DISC_BOOT_LIMIT;
     uint32_t root_sectors=(plan.metadata.root_bytes+2047u)/2048u;
     uint32_t boot_sectors=(plan.metadata.boot_bytes+2047u)/2048u;
     uint32_t root_fad=plan.metadata.root_lba+150u,boot_fad=plan.metadata.boot_lba+150u;
@@ -119,6 +137,9 @@ enum kui_disc_boot_status kui_disc_boot_prepare(const struct kui_disc_boot_sourc
      * the complete directory and executable physically disjoint as well. */
     if(!p.primary_fad || root_fad<=p.primary_fad || boot_fad<=p.primary_fad ||
        overlap(root_fad,root_sectors,boot_fad,boot_sectors))return KUI_DISC_BOOT_ISO;
+    uint32_t max_exec_bytes=source->max_exec_bytes?source->max_exec_bytes:
+        KUI_DISC_BOOT_MAX_EXEC_BYTES;
+    if(plan.metadata.boot_bytes>max_exec_bytes)return KUI_DISC_BOOT_LIMIT;
     r=hash_extent(&p,source->first_fad,KUI_DISC_BOOT_IP_BYTES,true,
         &plan.ip_crc32,plan.ip_sha256);
     if(r!=KUI_DISC_BOOT_OK)return r;
