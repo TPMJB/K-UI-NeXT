@@ -1390,3 +1390,29 @@ test-vmu-per-game: build/test-shell build/test-vmu-game-candidates
 build/test-vmu-game-candidates: tests/test_vmu_game_candidates.c src/core/vmu_game_candidates.c src/core/vmu_game_assign.c include/kui/vmu_game_candidates.h src/core/vmu_game_card.c src/core/retail_image.c
 	@mkdir -p build
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -ffunction-sections -fdata-sections $(INCLUDES) tests/test_vmu_game_candidates.c src/core/vmu_game_card.c src/core/retail_image.c -Wl,--gc-sections -o $@
+
+DISC_BOOT_CORE = src/core/disc_boot.c src/core/game_metadata.c src/core/hash.c src/core/data.c
+DISC_LAUNCH_CORE = src/core/disc_launch.c src/core/hash.c src/core/data.c
+.PHONY: test-disc-native
+test-disc-native: build/test-disc-boot build/test-disc-launch build/test-disc-launch-adversarial build/test-disc-vmu-storage build/test-disc-launcher build/test-shell
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-disc-boot
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-disc-launch
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-disc-launch-adversarial
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-disc-vmu-storage
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-disc-launcher
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-shell
+build/test-disc-boot: tests/test_disc_boot.c $(DISC_BOOT_CORE) include/kui/disc_boot.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) tests/test_disc_boot.c $(DISC_BOOT_CORE) -o $@
+build/test-disc-launch: tests/test_disc_launch.c $(DISC_LAUNCH_CORE) include/kui/disc_launch.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) tests/test_disc_launch.c $(DISC_LAUNCH_CORE) -o $@
+build/test-disc-launch-adversarial: tests/test_disc_launch_adversarial.c $(DISC_LAUNCH_CORE) src/loader/minic.c include/kui/disc_launch.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie -fno-builtin $(INCLUDES) tests/test_disc_launch_adversarial.c $(DISC_LAUNCH_CORE) -o $@
+build/test-disc-vmu-storage: tests/test_disc_vmu_storage.c src/loader/disc_vmu_storage.c include/kui/disc_vmu_storage.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) -Isrc/loader tests/test_disc_vmu_storage.c src/loader/disc_vmu_storage.c -o $@
+build/test-disc-launcher: tests/test_disc_launcher.c src/apps/disc_launcher.c $(DISC_BOOT_CORE) src/core/disc_launch.c include/kui/disc_launcher.h include/kui/disc_launch.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) -Isrc/dreamcast tests/test_disc_launcher.c src/apps/disc_launcher.c $(DISC_BOOT_CORE) src/core/disc_launch.c -Wl,--wrap=realloc -o $@

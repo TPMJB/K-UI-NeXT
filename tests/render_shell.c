@@ -913,8 +913,18 @@ int main(int argc,char **argv) {
         strcpy(shell.browse_path,"/Games/MDK2");
     } else if(!strcmp(argv[1],"home-music")) shell.home_selected=home_row(KUI_SHELL_MUSIC);
     else if(!strcmp(argv[1],"home-gd")) shell.home_selected=home_row(KUI_SHELL_DISC_TOOLS);
-    else if(!strcmp(argv[1],"gd-play") || !strcmp(argv[1],"gd-confirm")) {
+    else if(!strcmp(argv[1],"gd-play") || !strcmp(argv[1],"gd-confirm") ||
+            !strcmp(argv[1],"gd-direct-confirm") || !strcmp(argv[1],"gd-checked")) {
         shell.page=KUI_SHELL_GD_PLAY;shell.confirm_gd_boot=!strcmp(argv[1],"gd-confirm");
+        shell.confirm_gd_direct=!strcmp(argv[1],"gd-direct-confirm");
+        if(!strcmp(argv[1],"gd-checked")) {
+            view.app_status=&status;
+            status.complete=status.passed=true;status.line_count=3;
+            strcpy(status.message,"Native GD boot bytes checked. X checks again; Y tests direct boot.");
+            strcpy(status.lines[0],"TOY COMMANDER");
+            strcpy(status.lines[1],"Product MK-51007 / region JUE");
+            strcpy(status.lines[2],"1ST_READ.BIN: 748444 bytes");
+        }
     } else if(!strcmp(argv[1],"quick-resume")) {
         shell.page=KUI_SHELL_ADVANCED;shell.advanced_selected=3;shell.confirm_quick_resume=true;
     } else if(!strcmp(argv[1],"music")) {

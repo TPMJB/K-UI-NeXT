@@ -18,12 +18,15 @@ static struct {
     unsigned sends,reads,polls,total_polls,sleeps,passes,aborts,modes,bus_inits;
     unsigned target_polls,poll_us,guard;
     unsigned failure_prefix;
+    unsigned sector_bytes,sector_type,cooked_bad_read,drive_change_after_reads;
     int reported_delta,command;
     int failure_sense,failure_detail;
     size_t failure_size;
     bool stop,abort_started,submit_busy,submit_always_busy,underfill,fail;
     bool timeout,cancel,abort_fail,mode_fail,changed,cancel_on_pass,cancel_on_sleep;
     bool submit_fail,terminal_not_found,abort_medium,streaming_failure;
+    bool handoff_during_command,mode_cancel;
+    const uint8_t *cooked_ip;
     cd_read_params_t params;
     cd_cmd_toc_params_t toc_params;
     cd_check_drive_status_t drive;
@@ -61,7 +64,12 @@ void kui_log(const char *format,...) {
     fake.used+=(size_t)n;fake.log[fake.used++]='\n';fake.log[fake.used]=0;
 }
 int syscall_gdrom_sector_mode(cd_sec_mode_params_t *p) {
-    assert(p->size==2352 && p->track_type==0);fake.us+=7;++fake.modes;
+    assert(p->operation==0 &&
+        ((p->size==2352 && p->track_type==0 && p->part==CDROM_READ_WHOLE_SECTOR) ||
+         (p->size==2048 && p->track_type==1024 && p->part==CDROM_READ_DATA_AREA)));
+    fake.sector_bytes=(unsigned)p->size;fake.sector_type=(unsigned)p->track_type;
+    fake.us+=7;++fake.modes;
+    if(fake.mode_cancel)fake.stop=true;
     if(fake.mode_format_change==1)fake.hardware_mode.speed=(fake.hardware_mode.speed+1u)%8u;
     if(fake.mode_format_change==2)fake.hardware_mode.standby^=1u;
     if(fake.mode_format_change==3)fake.hardware_mode.read_flags^=8u;
@@ -73,6 +81,7 @@ int syscall_gdrom_check_drive(cd_check_drive_status_t *out) {
     /* A failed syscall may leave its zero-filled destination untouched. A
      * positive failure must not turn that into apparent CDDA admission. */
     if(!fake.drive_result)*out=fake.drive;
+    if(fake.drive_change_after_reads && fake.reads>=fake.drive_change_after_reads)out->disc_type=CD_CDROM;
     return fake.drive_result;
 }
 int syscall_gdrom_send_command(cd_cmd_code_t code,void *params) {
@@ -94,6 +103,12 @@ int syscall_gdrom_send_command(cd_cmd_code_t code,void *params) {
         unsigned sends=fake.sends,queries=fake.mode_queries;
         assert(!kui_disc_g1_probe_begin() && fake.sends==sends && fake.mode_queries==queries);
         fake.g1_during_command=false;
+    }
+    if(fake.handoff_during_command) {
+        uint8_t expected[KUI_DATA_BYTES]={0};unsigned sends=fake.sends,modes=fake.modes,queries=fake.drive_queries;
+        assert(!kui_disc_native_handoff(45150u,expected));
+        assert(fake.sends==sends && fake.modes==modes && fake.drive_queries==queries);
+        fake.handoff_during_command=false;
     }
     if(fake.submit_busy || fake.submit_always_busy) {fake.submit_busy=false;return 0;}
     fake.polls=0;fake.abort_started=false;fake.command_started=fake.us;
@@ -120,7 +135,7 @@ int syscall_gdrom_send_command(cd_cmd_code_t code,void *params) {
 void syscall_gdrom_exec_server(void) {fake.us+=3;}
 static void damage_guard(void) {
     uint8_t *data=fake.params.buffer;
-    size_t bytes=(size_t)fake.params.num_sec*KUI_RAW_BYTES;
+    size_t bytes=(size_t)fake.params.num_sec*fake.sector_bytes;
     if(fake.guard==1) data[bytes]=0; /* tail or trailing guard */
     if(fake.guard==2) data[-1]=0;
 }
@@ -163,7 +178,7 @@ int syscall_gdrom_check_command(int handle,cd_cmd_chk_status_t *detail) {
     if(fake.streaming_failure)return 3;
     if(fake.fail || fake.changed || fake.terminal_not_found) {
         if(fake.command==CD_CMD_PIOREAD || fake.command==CD_CMD_DMAREAD) {
-            size_t bytes=(size_t)fake.params.num_sec*KUI_RAW_BYTES;
+            size_t bytes=(size_t)fake.params.num_sec*fake.sector_bytes;
             assert(fake.failure_prefix<=bytes);
             kui_pattern(fake.params.buffer,(uint64_t)fake.params.start_sec*KUI_RAW_BYTES,fake.failure_prefix);
             damage_guard();
@@ -199,9 +214,13 @@ int syscall_gdrom_check_command(int handle,cd_cmd_chk_status_t *detail) {
     if(fake.command==CD_CMD_GETTOC2) {return_toc();detail->size=sizeof(cd_toc_t);return 2;}
     assert(fake.command==CD_CMD_PIOREAD || fake.command==CD_CMD_DMAREAD);
     if(fake.command==CD_CMD_DMAREAD) test_cache_note('C',0,0);   /* the transfer is done */
-    size_t bytes=(size_t)fake.params.num_sec*KUI_RAW_BYTES;
+    size_t bytes=(size_t)fake.params.num_sec*fake.sector_bytes;
     uint8_t *data=fake.params.buffer;
-    kui_pattern(data,(uint64_t)fake.params.start_sec*KUI_RAW_BYTES,bytes-(fake.underfill?1:0));
+    if(fake.sector_bytes==KUI_DATA_BYTES && fake.cooked_ip) {
+        assert(fake.params.num_sec==1u && data!=fake.cooked_ip);
+        memcpy(data,fake.cooked_ip,bytes-(fake.underfill?1u:0u));
+        if(fake.cooked_bad_read==fake.reads)data[17]^=1u;
+    } else kui_pattern(data,(uint64_t)fake.params.start_sec*KUI_RAW_BYTES,bytes-(fake.underfill?1:0));
     damage_guard();detail->size=(uint32_t)((int)bytes+fake.reported_delta);return 2;
 }
 void syscall_gdrom_abort_command(int handle) {
@@ -1140,9 +1159,105 @@ static void controls_subprocesses(void) {
         int status;assert(waitpid(child,&status,0)==child && WIFEXITED(status) && WEXITSTATUS(status)==0);
     }
 }
+static int run_native_handoff(const char *mode) {
+    static _Alignas(32) uint8_t out[32u*KUI_RAW_BYTES];
+    uint8_t expected[KUI_DATA_BYTES],saved[KUI_DATA_BYTES];
+    kui_pattern(expected,0u,sizeof(expected));memcpy(expected,"SEGA SEGAKATANA ",16u);
+    memcpy(saved,expected,sizeof(saved));reset();
+    if(!strcmp(mode,"handoff-uninitialized")) {
+        assert(!kui_disc_native_handoff(45150u,expected));
+        assert(!fake.sends && !fake.modes && !fake.drive_queries && !fake.bus_inits);
+        printf("PASS native disc handoff: %s\n",mode);return 0;
+    }
+    struct kui_toc sessions[2];assert(kui_disc_prepare(sessions));
+    fake.cooked_ip=expected;
+    unsigned sends=fake.sends,modes=fake.modes,reads=fake.reads,queries=fake.drive_queries;
+    bool accepted=false,poison=false,zero_io=false;
+    if(!strcmp(mode,"handoff-good"))accepted=true;
+    else if(!strcmp(mode,"handoff-invalid")) {
+        assert(!kui_disc_native_handoff(45150u,NULL));
+        assert(!kui_disc_native_handoff(149u,expected));
+        assert(!kui_disc_native_handoff(45149u,expected));
+        assert(!kui_disc_native_handoff(0x1000000u,expected));zero_io=true;
+    } else if(!strcmp(mode,"handoff-mode-failure"))fake.mode_fail=true;
+    else if(!strcmp(mode,"handoff-mode-cancel"))fake.mode_cancel=true;
+    else if(!strcmp(mode,"handoff-underfill"))fake.underfill=true;
+    else if(!strcmp(mode,"handoff-size-short"))fake.reported_delta=-1;
+    else if(!strcmp(mode,"handoff-size-long"))fake.reported_delta=1;
+    else if(!strcmp(mode,"handoff-content-first"))fake.cooked_bad_read=reads+1u;
+    else if(!strcmp(mode,"handoff-content-second"))fake.cooked_bad_read=reads+2u;
+    else if(!strcmp(mode,"handoff-guard-before")) {fake.guard=2u;poison=true;}
+    else if(!strcmp(mode,"handoff-guard-after")) {fake.guard=1u;poison=true;}
+    else if(!strcmp(mode,"handoff-read-failure"))fake.fail=true;
+    else if(!strcmp(mode,"handoff-failure-guard")) {fake.fail=true;fake.guard=1u;poison=true;}
+    else if(!strcmp(mode,"handoff-read-timeout"))fake.timeout=true;
+    else if(!strcmp(mode,"handoff-read-cancel"))fake.cancel=true;
+    else if(!strcmp(mode,"handoff-abort-failure")) {fake.timeout=fake.abort_fail=true;poison=true;}
+    else if(!strcmp(mode,"handoff-media-during-read"))fake.changed=true;
+    else if(!strcmp(mode,"handoff-media-after-read"))fake.drive_change_after_reads=reads+2u;
+    else if(!strcmp(mode,"handoff-cancel-entry")) {fake.stop=true;zero_io=true;}
+    else if(!strcmp(mode,"handoff-controls-active")) {
+        const struct kui_drive_options unchanged_options={0};
+        assert(kui_disc_controls_begin(&unchanged_options));zero_io=true;
+    } else if(!strcmp(mode,"handoff-g1-active")) {
+        assert(kui_disc_g1_probe_begin());sends=fake.sends;queries=fake.drive_queries;zero_io=true;
+    } else if(!strcmp(mode,"handoff-dma-active")) {
+        assert(kui_disc_read_begin(NULL,45150u,32u,out));
+        sends=fake.sends;modes=fake.modes;reads=fake.reads;zero_io=true;
+    } else if(!strcmp(mode,"handoff-command-active")) {
+        fake.handoff_during_command=true;
+        assert(kui_disc_read_raw(NULL,45150u,1u,out)==KUI_READ_OK);
+        assert(!fake.handoff_during_command && fake.sector_bytes==KUI_RAW_BYTES);
+        assert(!memcmp(expected,saved,sizeof(saved)));
+        printf("PASS native disc handoff: %s\n",mode);return 0;
+    } else if(!strcmp(mode,"handoff-known-media-change")) {
+        fake.changed=true;assert(kui_disc_read_raw(NULL,45150u,1u,out)==KUI_READ_FATAL);
+        fake.changed=false;sends=fake.sends;modes=fake.modes;reads=fake.reads;zero_io=true;
+    } else if(!strcmp(mode,"handoff-drive-query-failure"))fake.drive_result=1;
+    else if(!strcmp(mode,"handoff-drive-not-gd"))fake.drive.disc_type=CD_CDROM;
+    else if(!strcmp(mode,"handoff-drive-not-ready"))fake.drive.status=CD_STATUS_OPEN;
+    else {assert(!strcmp(mode,"handoff-standby"));fake.drive.status=CD_STATUS_STANDBY;accepted=true;}
+    uint64_t start=fake.us;
+    if(strcmp(mode,"handoff-invalid"))assert(kui_disc_native_handoff(45150u,expected)==accepted);
+    assert(!memcmp(expected,saved,sizeof(saved))); /* BIOS never owns caller memory. */
+    if(accepted) {
+        assert(fake.modes==modes+1u && fake.reads==reads+2u && fake.sends==sends+2u);
+        assert(fake.drive_queries==queries+2u && fake.sector_bytes==2048u && fake.sector_type==1024u);
+        assert(fake.command==CD_CMD_PIOREAD && fake.params.start_sec==45150u && fake.params.num_sec==1u);
+        assert(!fake.aborts && fake.bus_inits==1u && !fake.mode_sets);
+        expect("Mode1 2048-byte boot sector verified; real GD firmware retained");
+    }
+    if(zero_io)assert(fake.sends==sends && fake.modes==modes && fake.reads==reads && fake.drive_queries==queries);
+    if(!strcmp(mode,"handoff-mode-failure") || !strcmp(mode,"handoff-mode-cancel"))assert(fake.reads==reads);
+    if(!strcmp(mode,"handoff-read-timeout"))assert(fake.us-start>=5000000u && fake.us-start<5020000u && fake.aborts==1u);
+    if(!strcmp(mode,"handoff-abort-failure"))assert(fake.us-start>=6000000u && fake.us-start<6030000u && fake.aborts==1u);
+    if(poison) {
+        sends=fake.sends;modes=fake.modes;reads=fake.reads;queries=fake.drive_queries;
+        fake.fail=fake.timeout=fake.abort_fail=fake.stop=false;fake.guard=0u;
+        assert(!kui_disc_native_handoff(45150u,expected));
+        assert(!kui_disc_prepare(sessions));
+        assert(fake.sends==sends && fake.modes==modes && fake.reads==reads && fake.drive_queries==queries);
+    }
+    printf("PASS native disc handoff: %s\n",mode);return 0;
+}
+static void native_handoff_subprocesses(void) {
+    const char *cases[]={"handoff-uninitialized","handoff-good","handoff-standby","handoff-invalid",
+        "handoff-mode-failure","handoff-mode-cancel","handoff-underfill","handoff-size-short","handoff-size-long",
+        "handoff-content-first","handoff-content-second","handoff-guard-before","handoff-guard-after",
+        "handoff-read-failure","handoff-failure-guard","handoff-read-timeout","handoff-read-cancel",
+        "handoff-abort-failure","handoff-media-during-read","handoff-media-after-read","handoff-cancel-entry",
+        "handoff-controls-active","handoff-g1-active","handoff-dma-active","handoff-command-active",
+        "handoff-known-media-change","handoff-drive-query-failure","handoff-drive-not-gd","handoff-drive-not-ready"};
+    for(unsigned i=0;i<sizeof(cases)/sizeof(*cases);i++) {
+        pid_t child=fork();assert(child>=0);
+        if(!child) {int result=run_native_handoff(cases[i]);assert(fflush(stdout)==0);_exit(result);}
+        int status;assert(waitpid(child,&status,0)==child && WIFEXITED(status) && WEXITSTATUS(status)==0);
+    }
+}
 int main(int argc,char **argv) {
     uint8_t out[KUI_CAPTURE_CHUNK*KUI_RAW_BYTES],expected[sizeof(out)];
     if(argc==2 && !strcmp(argv[1],"prepare"))return run_prepare();
+    if(argc==2 && !strncmp(argv[1],"handoff-",8))return run_native_handoff(argv[1]);
     if(argc==2 && !strncmp(argv[1],"recover-",8))return run_recovery(argv[1]);
     if(argc==2 && !strncmp(argv[1],"salvage-",8))return run_salvage_policy(argv[1]);
     if(argc==2 && !strncmp(argv[1],"dma",3)) return run_dma(argv[1]);
@@ -1150,7 +1265,7 @@ int main(int argc,char **argv) {
     if(argc==2 && !strncmp(argv[1],"trial-native-",13))return run_control_trial(argv[1]);
     if(argc==2 && !strncmp(argv[1],"speed-native-",13))return run_speed_control_probe(argv[1]);
     if(argc==2 && !strncmp(argv[1],"g1-gate-",8))return run_g1_gate(argv[1]);
-    if(argc==1) {prepare_subprocess();recovery_subprocesses();salvage_policy_subprocesses();controls_subprocesses();trial_control_subprocesses();speed_control_subprocesses();g1_gate_subprocesses();}
+    if(argc==1) {native_handoff_subprocesses();prepare_subprocess();recovery_subprocesses();salvage_policy_subprocesses();controls_subprocesses();trial_control_subprocesses();speed_control_subprocesses();g1_gate_subprocesses();}
     memset(out,0xd3,sizeof(out));reset();
     if(argc==2) {
         capture_phase();
