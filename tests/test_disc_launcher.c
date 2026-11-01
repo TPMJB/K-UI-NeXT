@@ -21,10 +21,11 @@ static struct fixture {
     uint8_t data[SECTORS][2048];
     struct kui_toc toc[2];
     unsigned connections,disconnects,mounts,unmounts,runtime_reads,runtime_frees;
-    unsigned preparations,raw_reads,raw_calls,max_run,progress,logs,reallocations;
+    unsigned preparations,raw_reads,raw_calls,max_run,progress,logs,reallocations,callbacks,handoffs;
     unsigned read_fail,edc_fail,address_fail,cancel_at,change_at;
     bool connected,mounted,stop,connect_fail,mount_fail,unmount_fail,prepare_fail,is_cd,handoff_fail;
-    bool runtime_fail,template_invalid,realloc_fail,ce;
+    bool runtime_fail,template_invalid,realloc_fail,ce,vmu,callback_fail,callback_cancel,callback_mutate;
+    bool callback_fill_refusal;
     struct kui_app_status last;
 } fixture;
 static void dual16(uint8_t *p,uint16_t n) {
@@ -85,9 +86,9 @@ enum kui_runtime_result kui_runtime_read(const char *path,struct kui_runtime_ima
     kui_log_fn log,kui_cancel_fn cancel) {
     (void)log;(void)cancel;
     CHECK(fixture.connected && fixture.mounted);
-    /* This is the ONLY permitted filesystem pathname in this app. Any VMU
-     * image, assignment, candidate, journal or preference lookup fails here. */
-    CHECK(!strcmp(path,KUI_DISC_LAUNCH_PACKAGE));++fixture.runtime_reads;
+    /* Only the selected trusted bootstrap pathname is read by this layer.
+     * Card image, assignment, candidate and journal lookups fail here. */
+    CHECK(!strcmp(path,fixture.vmu?KUI_DISC_LAUNCH_VMU_PACKAGE:KUI_DISC_LAUNCH_PACKAGE));++fixture.runtime_reads;
     memset(out,0,sizeof(*out));if(fixture.runtime_fail)return KUI_RUNTIME_IO;
     uint32_t bytes=KUI_DISC_LAUNCH_STAGE_OFFSET+4u;
     out->data=calloc(1u,bytes);CHECK(out->data);uint8_t *h=(uint8_t *)out->data+KUI_DISC_LAUNCH_HEADER_OFFSET;
@@ -96,7 +97,8 @@ enum kui_runtime_result kui_runtime_read(const char *path,struct kui_runtime_ima
     put(h+24u,KUI_DISC_LAUNCH_STAGE_ADDRESS);put(h+28u,4u);
     put(h+32u,KUI_DISC_LAUNCH_STAGE_ADDRESS);put(h+36u,KUI_DISC_LAUNCH_EXEC_ADDRESS);
     put(h+40u,KUI_DISC_LAUNCH_EXEC_MAX_BYTES);put(h+44u,KUI_DISC_LAUNCH_STACK);
-    put(h+48u,KUI_DISC_LAUNCH_STAGE_OFFSET);put(h+52u,KUI_DISC_LAUNCH_FLAGS);
+    put(h+48u,KUI_DISC_LAUNCH_STAGE_OFFSET);
+    put(h+52u,fixture.vmu?KUI_DISC_LAUNCH_VMU_FLAGS:KUI_DISC_LAUNCH_FLAGS);
     if(fixture.template_invalid)h[16u]^=1u;
     out->info.payload_bytes=out->info.memory_bytes=bytes;
     memcpy(out->info.build,"abcdef012345",13u);return KUI_RUNTIME_OK;
@@ -120,9 +122,26 @@ bool kui_disc_prepare_capture(struct kui_toc sessions[2],bool *is_cd) {
     bool result=kui_disc_prepare(sessions);*is_cd=fixture.is_cd;return result;
 }
 bool kui_disc_native_handoff(uint32_t fad,const uint8_t expected[2048]) {
+    ++fixture.handoffs;
     CHECK(fad==FIRST && expected && !fixture.connected && !fixture.mounted);
     CHECK(!memcmp(expected,fixture.data[0],2048u));
     return !fixture.handoff_fail;
+}
+static bool staged_card(const char *product,const void *executable,uint32_t bytes,
+    uint8_t profile[4096],char refusal[KUI_DISC_LAUNCHER_REFUSAL_BYTES],void *context,
+    kui_log_fn log,kui_cancel_fn cancel) {
+    CHECK(!fixture.connected && !fixture.mounted && fixture.raw_reads==39u && fixture.reallocations==1u);
+    CHECK(!strcmp(product,"T-12345") && bytes==BOOT_BYTES && context==&fixture &&
+        log==log_line && cancel==cancelled && !fixture.handoffs);
+    CHECK(executable && !memcmp(executable,fixture.data[BOOT],BOOT_BYTES));
+    for(unsigned i=0;i<4096u;i++)CHECK(!profile[i]);
+    for(unsigned i=0;i<KUI_DISC_LAUNCHER_REFUSAL_BYTES;i++)CHECK(!refusal[i]);
+    ++fixture.callbacks;
+    if(fixture.callback_fill_refusal)memset(refusal,'R',KUI_DISC_LAUNCHER_REFUSAL_BYTES);
+    else if(fixture.callback_fail)strcpy(refusal,"Virtual VMU unsupported: Maple driver. R: Save Log.");
+    if(fixture.callback_cancel)fixture.stop=true;
+    if(fixture.callback_mutate)((uint8_t *)(uintptr_t)executable)[100u]^=1u;
+    memset(profile,0x5a,4096u);return !fixture.callback_fail;
 }
 static uint8_t bcd(unsigned n) {return (uint8_t)((n/10u)*16u+n%10u);}
 enum kui_read_result kui_disc_read_raw(void *context,uint32_t fad,unsigned count,uint8_t *out) {
@@ -193,6 +212,32 @@ static void region_paths(void) {
             CHECK(strstr(status.message,"Region-free") && status.errors==1u);}
     }
 }
+static void staged_callback_paths(void) {
+    setup();fixture.vmu=true;struct kui_runtime_image image={0};struct kui_app_status status;
+    CHECK(kui_disc_launcher_prepare_module(KUI_DISC_LAUNCH_VMU_PACKAGE,staged_card,&fixture,NULL,
+        &image,&status,log_line,cancelled,progress));released();
+    CHECK(fixture.callbacks==1u && fixture.handoffs==1u && status.passed);
+    struct kui_disc_launch_plan plan;CHECK(kui_disc_launch_validate(image.data,image.info.payload_bytes,&plan));
+    CHECK(plan.flags==KUI_DISC_LAUNCH_VMU_FLAGS && plan.vmu_profile_bytes==4096u);
+    for(unsigned i=0;i<4096u;i++)CHECK(((uint8_t *)image.data)[plan.vmu_profile_offset+i]==0x5au);
+    kui_runtime_free(&image);
+    for(unsigned mode=0;mode<4u;mode++) {
+        setup();fixture.vmu=true;fixture.callback_fail=mode<2u;
+        fixture.callback_fill_refusal=mode==1u;fixture.callback_cancel=mode==2u;fixture.callback_mutate=mode==3u;
+        CHECK(!kui_disc_launcher_prepare_module(KUI_DISC_LAUNCH_VMU_PACKAGE,staged_card,&fixture,NULL,
+            &image,&status,log_line,cancelled,progress));released();
+        CHECK(fixture.callbacks==1u && !fixture.handoffs && !image.data && fixture.runtime_frees==1u);
+        CHECK(status.complete && !status.passed && status.stopped==(mode==2u) && status.errors==(mode==2u?0u:1u));
+        if(mode==0u)CHECK(!strcmp(status.message,"Virtual VMU unsupported: Maple driver. R: Save Log."));
+        if(mode==1u)CHECK(strlen(status.message)==KUI_DISC_LAUNCHER_REFUSAL_BYTES-1u && status.message[0]=='R');
+        if(mode>=2u)CHECK(strstr(status.message,"boot bytes changed or handoff was stopped"));
+    }
+    /* No compatibility/card operation runs when staging itself fails. */
+    setup();fixture.vmu=true;fixture.read_fail=39u;
+    CHECK(!kui_disc_launcher_prepare_module(KUI_DISC_LAUNCH_VMU_PACKAGE,staged_card,&fixture,NULL,
+        &image,&status,log_line,cancelled,progress));released();
+    CHECK(!fixture.callbacks && !fixture.handoffs && !image.data);
+}
 static void preparation_failures(void) {
     setup();fixture.is_cd=true;refusal(false);released();CHECK(!fixture.raw_reads);
     setup();fixture.toc[1].count=100u;refusal(false);released();CHECK(!fixture.raw_reads);
@@ -247,7 +292,7 @@ static void every_optical_cut(void) {
     }
 }
 int main(void) {
-    successful_paths();region_paths();preparation_failures();check_only_failures();every_optical_cut();
+    successful_paths();region_paths();staged_callback_paths();preparation_failures();check_only_failures();every_optical_cut();
     printf("Physical GD launcher app: %u checks; actual optical planner/packet hashes, read cuts, changed bytes, bounded SD lifecycle and no VMU file access\n",checks);
     return 0;
 }

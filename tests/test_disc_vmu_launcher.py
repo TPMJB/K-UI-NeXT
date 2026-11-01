@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Physical-disc VMU frontdoor dispatch and mounted-session failure paths."""
+"""Physical-disc VMU frontdoor, immutable preflight and storage failure paths."""
 import os
 from pathlib import Path
 import shlex

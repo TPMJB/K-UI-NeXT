@@ -17,11 +17,16 @@ bool kui_disc_launcher_prepare(struct kui_runtime_image *image,
     kui_app_progress_fn progress);
 /* Shared optical preparation for the optional disc VMU frontend. The callback
  * runs with no optical read in flight and no filesystem mounted by this layer.
- * It receives the actual checked physical product and fills one canonical P2
- * profile. The module capability must explicitly admit that profile; the
+ * It receives the actual checked physical product and complete staged immutable
+ * executable, and fills one canonical P2 profile. A refusal may explain the
+ * unsupported component in the bounded, initially empty refusal buffer. The
+ * module capability must explicitly admit that profile; the
  * physical-only path never calls a callback or examines a profile. */
-typedef bool (*kui_disc_launcher_card_fn)(const char *product,uint8_t profile[4096],
-    void *context,kui_log_fn log,kui_cancel_fn cancel);
+#define KUI_DISC_LAUNCHER_REFUSAL_BYTES 128u
+typedef bool (*kui_disc_launcher_card_fn)(const char *product,const void *executable,
+    uint32_t executable_bytes,uint8_t profile[4096],
+    char refusal[KUI_DISC_LAUNCHER_REFUSAL_BYTES],void *context,
+    kui_log_fn log,kui_cancel_fn cancel);
 struct kui_disc_launcher_region {bool region_free;char console;};
 bool kui_disc_launcher_prepare_module(const char *package,kui_disc_launcher_card_fn card,
     void *card_context,const struct kui_disc_launcher_region *region,

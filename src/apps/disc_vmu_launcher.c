@@ -2,9 +2,11 @@
 #include "kui/disc_launcher.h"
 #include "kui/disc_launch.h"
 #include "kui/disc_vmu_card.h"
+#include "kui/disc_vmu_probe.h"
 #include "kui/disc_region.h"
 #include "kui/vmu_emulation_settings.h"
 #include "platform.h"
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -55,7 +57,24 @@ void kui_disc_launcher_vmu_info(struct kui_vmu_game_info *info,struct kui_app_st
     snprintf(out->message,sizeof(out->message),"%s",info->notice[0]?info->notice:info->label);
     if(progress) progress(out);
 }
-static bool selected_card(const char *product,uint8_t profile[4096],void *context,
+static const char *probe_refusal(uint32_t stage) {
+    switch(stage) {
+    case KUI_DISC_VMU_PROBE_MAPLE_DRIVER:
+        return "Virtual VMU unsupported: Maple driver. R: Save Log; disable VMU in Options.";
+    case KUI_DISC_VMU_PROBE_MAPLE_LAYOUT:
+        return "Virtual VMU unsupported: Maple buffer layout. R: Save Log; disable VMU in Options.";
+    case KUI_DISC_VMU_PROBE_HEAP_DISCOVERY:
+        return "Virtual VMU unsupported: allocator. R: Save Log; disable VMU in Options.";
+    case KUI_DISC_VMU_PROBE_HEAP_SLOT:
+        return "Virtual VMU unsupported: allocator initializer. R: Save Log; disable VMU in Options.";
+    case KUI_DISC_VMU_PROBE_HEAP_CALL:
+        return "Virtual VMU unsupported: allocator startup call. R: Save Log; disable VMU in Options.";
+    default:
+        return "Virtual VMU unsupported: executable format. R: Save Log; disable VMU in Options.";
+    }
+}
+static bool selected_card(const char *product,const void *executable,uint32_t executable_bytes,
+    uint8_t profile[4096],char refusal[KUI_DISC_LAUNCHER_REFUSAL_BYTES],void *context,
     kui_log_fn log,kui_cancel_fn cancel) {
     const struct kui_vmu_game_selection *selection=context;
     memset(profile,0,4096u);
@@ -66,6 +85,30 @@ static bool selected_card(const char *product,uint8_t profile[4096],void *contex
             log("Physical disc virtual VMU: disc product changed after card review");
             return false;
         }
+    }
+    if(cancel()) return false;
+    /* Immutable diagnostics only. Bootstrap installation repeats its own
+     * admission and live checks; these addresses grant no patch authority. */
+    struct kui_disc_vmu_probe probe={0};
+    bool compatible=kui_disc_vmu_probe_run(executable,executable_bytes,
+        KUI_DISC_LAUNCH_EXEC_ADDRESS,&probe);
+    log("Physical disc VMU preflight: product %s; exact file CRC32 %08" PRIx32
+        "; full bytes %" PRIu32 "; program bytes %" PRIu32,
+        product,probe.file_crc32,probe.file_bytes,probe.program_bytes);
+    log("Physical disc VMU preflight: %s; driver result %" PRId32 "; heap result %" PRId32,
+        kui_disc_vmu_probe_stage_text(probe.stage),probe.driver_result,probe.heap_result);
+    log("Physical disc VMU preflight: proven Maple submit %08" PRIx32 "; initializer %08" PRIx32
+        "; layout initializer %08" PRIx32 "; TX %08" PRIx32 "; RX %08" PRIx32,
+        probe.driver.submit,probe.driver.initializer,probe.layout.initializer,
+        probe.layout.tx_base,probe.layout.rx_base);
+    log("Physical disc VMU preflight: proven heap initializer %08" PRIx32 "; slot %08" PRIx32
+        "; allocate %08" PRIx32 "; release %08" PRIx32,
+        probe.heap.initializer,probe.heap.initializer_slot,probe.heap.allocate,probe.heap.release);
+    log("Physical disc VMU preflight: proven heap load %08" PRIx32 "; call %08" PRIx32
+        "; return %08" PRIx32,probe.call.load,probe.call.call,probe.call.return_pr);
+    if(!compatible) {
+        snprintf(refusal,KUI_DISC_LAUNCHER_REFUSAL_BYTES,"%s",probe_refusal(probe.stage));
+        return false;
     }
     if(cancel() || !kui_sd_connect()) return false;
     FATFS fs;bool mounted=kui_mount(&fs,log);

@@ -18,6 +18,7 @@
 #include "kui/settings.h"
 #include "kui/system_settings.h"
 #include "kui/disc_identity.h"
+#include "kui/disc_idle.h"
 #include "kui/music.h"
 #include "kui/apps.h"
 #include "kui/vmu_import.h"
@@ -130,6 +131,7 @@ static unsigned video_prior_mode;
 static uint64_t video_deadline;
 static unsigned applied_video = KUI_VIDEO_AUTO;
 static struct kui_disc_identity disc_identity, disc_snapshot;
+static struct kui_disc_idle disc_idle;
 static struct kui_music_status music_snapshot;
 static struct kui_cd_audio_status cd_audio_snapshot;
 static unsigned cd_audio_generation,cd_track_pending;
@@ -2586,6 +2588,7 @@ static void *worker(void *unused) {
 #ifdef KUI_SD_RUNTIME
         bool clear_games_cache=games_cache_clear_pending;
         games_cache_clear_pending=false;
+        bool inspection_passed=false,inspection_read=false;
 #endif
         mutex_unlock(&lock);
 #ifdef KUI_SD_RUNTIME
@@ -2611,6 +2614,7 @@ static void *worker(void *unused) {
             bool reset=drive_reset_required;
             mutex_unlock(&lock);
             if(idle && kui_cd_audio_owns_drive()) {
+                kui_disc_idle_cancel(&disc_idle);
                 static uint64_t next_cd_poll;
                 uint64_t now=timer_ms_gettime64();
                 if(now>=next_cd_poll) {
@@ -2644,6 +2648,19 @@ static void *worker(void *unused) {
                 mutex_unlock(&lock);
             }
             if(!action) {
+                mutex_lock(&lock);
+                bool can_stop=!busy && !pending && !video_preview;
+                bool no_media=disc_identity.state==KUI_DISC_IDENTITY_OPEN ||
+                    disc_identity.state==KUI_DISC_IDENTITY_EMPTY;
+                bool must_reset=drive_reset_required;
+                mutex_unlock(&lock);
+                if(kui_disc_idle_take_stop(&disc_idle,timer_ms_gettime64(),can_stop,
+                   kui_cd_audio_owns_drive(),must_reset,no_media)) {
+                    kui_log("Disc idle for 45 seconds; stopping spindle.");
+                    if(!kui_disc_stop()) salvage_session_forget();
+                }
+            }
+            if(!action) {
                 /* Keep the just-validated job exclusive while paused. Audio
                  * keeps playing from RAM; unrelated preloads/cache writers
                  * resume after another foreground action revokes the receipt. */
@@ -2663,6 +2680,7 @@ static void *worker(void *unused) {
         /* Other operations may alter card content, reconnect storage or hand
          * all memory to a game. Only browsing and inspection retain the cache. */
         if(games_action_invalidates(action)) games_cache_invalidate();
+        if(action>=49u && action<=53u) kui_disc_idle_cancel(&disc_idle);
         if(action==1 || is_capture_action(action) || action==7 || action==49 ||
            action==81 || action==96 || action==97) {
             mutex_lock(&lock);kui_recovery_dashboard_clear(&recovery_dashboard);mutex_unlock(&lock);
@@ -2984,6 +3002,7 @@ static void *worker(void *unused) {
                 mutex_unlock(&lock);
                 if(disc_identity.state==KUI_DISC_IDENTITY_READY)
                     kui_log("Inserted disc: %s",disc_identity.title);
+                inspection_passed=inspection_read=disc_identity.state==KUI_DISC_IDENTITY_READY;
             }
             if(action==13 || action==14) system_operation(action==14);
             if(action==21) {
@@ -3206,6 +3225,8 @@ static void *worker(void *unused) {
                 struct kui_app_status result;struct kui_vmu_game_info info;
                 kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 kui_disc_launcher_vmu_info(&info,&result,kui_log,kui_cancelled,disc_launch_progress);
+                inspection_passed=result.complete && result.passed && !result.stopped;
+                inspection_read=inspection_passed && info.enabled;
                 disc_launch_progress(&result);
                 mutex_lock(&lock);disc_vmu_info_snapshot=info;
                 disc_vmu_info_request_result=disc_vmu_info_request_pending;++disc_vmu_info_generation;
@@ -3214,6 +3235,7 @@ static void *worker(void *unused) {
             if(action==103) {
                 struct kui_app_status result;
                 kui_disc_launcher_check(&result,kui_log,kui_cancelled,disc_launch_progress);
+                inspection_passed=inspection_read=result.complete && result.passed && !result.stopped;
                 disc_launch_progress(&result);
             }
             if(action==56 || action==57 || action==58 || action==104) {
@@ -3540,9 +3562,11 @@ static void *worker(void *unused) {
         }
 #ifdef KUI_SD_RUNTIME
         if(action!=12 && action!=27 && action!=60) kui_log("Operation ended. Diagnostics page: Y saves the log to SD.");
-        if(action==12 || action==1 || (action>=4 && action<=7) || action==22 ||
-           action==49 || action==81 || action==96 || action==97 || action==103 || action==104 || action==105 || (action>=46 && action<=48)) {
-            if(!kui_cd_audio_owns_drive() && !kui_disc_stop())salvage_session_forget();
+        if(kui_disc_idle_cleanup(action)) {
+            enum kui_disc_idle_result cleanup=kui_disc_idle_complete(&disc_idle,action,
+                inspection_passed && !kui_cancelled(),inspection_read,timer_ms_gettime64(),
+                kui_cd_audio_owns_drive());
+            if(cleanup==KUI_DISC_IDLE_STOP && !kui_disc_stop())salvage_session_forget();
             if(action!=12) kui_disc_identity_invalidate(&disc_identity);
             mutex_lock(&lock);
             if(!drive_reset_required) disc_snapshot=disc_identity;
@@ -3975,7 +3999,7 @@ int main(void) {
     kui_log("B returns home while idle; during work it stops and checkpoints.");
     kui_log("New dumps use game-named folders in /Games; duplicates get a number.");
     kui_log("Home/Ripper L/R: previous/next song. Ripper Start: Advanced, destination and settings.");
-    kui_log("Newly inserted GD-ROM titles appear while idle, then the disc stops.");
+    kui_log("Newly inserted GD-ROM titles appear while idle; the drive stays ready for 45 seconds.");
     kui_log("The boot disc stays stopped; disc apps start the drive when requested.");
     kui_log("System Settings: video, memory display and menu music. Hold Y on runtime start for safe video.");
     kui_log("Reports say if a dump matches Redump/TOSEC (copy data/known-dumps/*.db to KUI/).");
