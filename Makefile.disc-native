@@ -43,5 +43,7 @@ test:
 	 src/core/disc_launch.c src/core/hash.c src/core/data.c -Wl,--gc-sections -o $(BUILD)/test-disc-launch
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-disc-launch
 audit: $(BUILD)/native-disc.kui
+	python3 tools/check_disc_handoff.py $(BUILD)/stage.elf
+	python3 tests/test_disc_handoff.py $(BUILD)/stage.elf
 	python3 -c 'import sys,subprocess;sys.path.insert(0,"tools");from check_retail_instructions import audit;print("Physical-disc linked instructions:",sum(audit(n,subprocess.check_output(["sh-elf-objdump","-d","$(BUILD)/"+n+".elf"],text=True)) for n in ("entry","stage")))'
 -include $(OBJECTS:.o=.d)

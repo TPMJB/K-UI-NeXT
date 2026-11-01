@@ -130,7 +130,9 @@ __retail_boot_fpscr_init:
 .Lgbr: .long 0x8c000000
 .Lowner_stack: .long 0x8c00f400
 .Lfpscr: .long 0x00040001
-.Lbootstrap: .long 0xac008300
+/* Bootstrap 2 is IP+0x6000. IP+0x300 is the lower bootstrap and may run
+ * firmware disc boot again instead of entering our already staged game. */
+.Lbootstrap: .long 0xac00e000
 .Lreturn: .long .Lreturned
 .Lhigh_stack: .long 0x8cff0000
 .Lreturn_handler: .long C(kui_disc_stage_returned)
