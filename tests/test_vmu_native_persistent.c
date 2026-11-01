@@ -5,6 +5,10 @@
 #define KUI_VMU_NATIVE_READONLY_PROBE 1
 #define KUI_VMU_NATIVE_PERSISTENT_PROBE 1
 #include "../src/loader/vmu_native_passive.c"
+/* The virtual card's unit (A2, or A1 in a KUI_VMU_VIRTUAL_A1 build) and the
+ * controller A slot that stays physical. */
+#define VIRTUAL KUI_VMU_NATIVE_VIRTUAL_ADDRESS
+#define PHYSICAL KUI_VMU_NATIVE_PHYSICAL_ADDRESS
 #include <assert.h>
 #include <setjmp.h>
 #include <stdio.h>
@@ -17,6 +21,7 @@
 static uint8_t memory[0x1000000u];
 static uint32_t mmio[4];
 static unsigned used,bus_reads,fail_read,checks;
+static void (*read_observer)(uint32_t,unsigned);
 static bool refuse_rx_map;
 static unsigned measured_submit_reads,measured_complete_reads;
 static struct kui_vmu_native_profile_sample test_clock;
@@ -51,6 +56,7 @@ bool kui_vmu_native_passive_test_read(uint32_t a,unsigned width,uint32_t *v) {
             which==2u?config.layout.input_array:which==3u?state.source+12u:config.driver.submit;
         put(target,4u,0u);
     }
+    if(read_observer) read_observer(a,width);
     ++bus_reads;if(fail_read && bus_reads==fail_read) return false;
     if(ram(a,width,width)) {*v=0u;memcpy(v,memory+physical(a)-0x0c000000u,width);return true;}
     int i=mmio_index(a);if(i<0 || width!=4u) return false;*v=mmio[i];return true;
@@ -75,11 +81,15 @@ void kui_vmu_native_persistent_test_clock(struct kui_vmu_native_profile_sample *
 void kui_vmu_native_passive_test_terminal(uint32_t phase,uint32_t error) {terminal_phase=phase;terminal_error=error;longjmp(terminal,1);}
 static struct kui_vmu_native_passive_config input;
 static struct kui_vmu_native_passive_frame frame;
+/* Inherited SR of the server's submit and completion: IMASK 6 and 15 by
+ * default, or a caller's level for the pd 1.46 server. */
+static uint32_t submit_sr,complete_sr;
 static void runtime_phase(unsigned phase) {
     put(0x0c3010b4u,4u,phase);put(0x0c3010b8u,4u,phase);put(0x0c300fc0u,4u,phase?0u:1u);
     frame.sr=phase?0xf0u:0x60u;frame.pr=0x0c012226u;
 }
 static void fixture(void) {
+    read_observer=NULL;
     memset(&durable_card,0,sizeof(durable_card));memset(&overlay,0,sizeof(overlay));
     memset(&state,0,sizeof(state));memset(&config,0,sizeof(config));memset(captured,0,sizeof(captured));
     memset(receivers,0,sizeof(receivers));memset(&input,0,sizeof(input));memset(&frame,0,sizeof(frame));
@@ -87,7 +97,7 @@ static void fixture(void) {
     used=bus_reads=fail_read=0u;refuse_rx_map=false;live_sr=0xf0u;live_sp=SELF_ADDRESS+WORKER_SPAN-0x100u;bad_guard=0u;terminal_phase=terminal_error=0u;
     test_clock=(struct kui_vmu_native_profile_sample){0xe0au,UINT32_MAX,2u,1u,UINT32_MAX};
     test_ccr=0x105u;clock_reads=0u;
-    corrupt_on_restore=0u;
+    corrupt_on_restore=0u;submit_sr=0x60000161u;complete_sr=0x600001f1u;
     input.version=1u;input.bytes=sizeof(input);input.tx_base=0xac400000u;
     input.driver=(struct kui_vmu_native_discovery){.version=1u,.bytes=sizeof(input.driver),.family=1u,
         .image_bytes=0x200000u,.load_address=0x8c010000u,.requirements=7u,
@@ -154,6 +164,13 @@ static void fixture(void) {
     put(0x0c400008u,4u,0x01002009u);put(0x0c40000cu,4u,0x01000000u);put(0x0c500000u,4u,0x03002008u);
     input.sd_lease=0x8c004100u;
     input.low_heap_hook=0x8c004200u;input.low_terminal=0x8c004300u;
+#if KUI_NATIVE_PHYSICAL_DISC
+    /* The physical variant retains all BIOS low RAM. Its exact callback
+     * pinning lives in the independent support tail of this same lease. */
+    uint32_t support=(input.lease.payload|UINT32_C(0x80000000))+KUI_DISC_VMU_SUPPORT_OFFSET;
+    input.sd_lease=support+0x100u;input.low_heap_hook=support+0x200u;
+    input.low_terminal=support+0x300u;
+#endif
     input.exits=(struct kui_vmu_native_exit){.version=KUI_VMU_NATIVE_EXIT_VERSION,
         .bytes=sizeof(input.exits),.family=KUI_VMU_NATIVE_EXIT_FAMILY,
         .load=input.driver.load_address,.image_bytes=input.driver.image_bytes,
@@ -175,16 +192,16 @@ static void stage_batch(unsigned command,unsigned block) {
     uint32_t source=physical(input.tx_base)+packet_bank*0x3000u;
     put(0xa05f6c04u,4u,source);put(0x0c3010b0u,4u,source|0xa0000000u);
     put(0x0c3010b4u,4u,packet_bank);put(0x0c3010b8u,4u,packet_bank);
-    put(0x0c300fc0u,4u,1u);frame.sr=0x60000161u;frame.pr=0x0c012226u;
+    put(0x0c300fc0u,4u,1u);frame.sr=submit_sr;frame.pr=0x0c012226u;
     memset(memory+source-0x0c000000u,0,0x3000u);
-    memset(rx_bytes(0),0xa5,1024u);memset(rx_bytes(2),0xa5,1024u);memset(rx_bytes(6),0xa5,1024u);
+    memset(rx_bytes(0),0xa5,1024u);memset(rx_bytes(VIRTUAL),0xa5,1024u);memset(rx_bytes(6),0xa5,1024u);
     /* Main A controller polling is kept physical. */
     put(source,4u,1u);put(source+4u,4u,rx_at(0));put(source+8u,4u,0x01002009u);put(source+12u,4u,0x01000000u);
     source+=16u;
     if(command) {
         unsigned words=command==1u || command==2u || command==3u?0u:command==12u?34u:2u;
-        put(source,4u,words);put(source+4u,4u,rx_at(2));
-        put(source+8u,4u,(words<<24)|0x00000200u|command);
+        put(source,4u,words);put(source+4u,4u,rx_at(VIRTUAL));
+        put(source+8u,4u,(words<<24)|(VIRTUAL<<8)|command);
         if(words) put(source+12u,4u,0x02000000u);
         if(words>1u) put(source+16u,4u,block<<24);
         source+=12u+4u*words;
@@ -194,7 +211,7 @@ static void stage_batch(unsigned command,unsigned block) {
 }
 static void physical_complete(void) {
     put(0x0c3010b4u,4u,packet_bank^1u);put(0x0c3010b8u,4u,packet_bank^1u);put(0x0c300fc0u,4u,0u);
-    frame.sr=0x600001f1u;
+    frame.sr=complete_sr;
     put(rx_at(0),4u,0x03200008u);put(rx_at(0)+4u,4u,0x01000000u);
     put(rx_at(6),4u,0x1c604005u);put(rx_at(6)+4u,4u,0x01000000u);
     put(0xa05f6c18u,4u,0u);
@@ -283,13 +300,13 @@ int kui_vmu_native_persistent_test_lease(kui_vmu_sd_transaction callback,void *c
     uint32_t crc=durable_card.handoff.block_crc[durable_card.block];
     uint32_t commits=durable_card.commits,bound=durable_card.bound;
     unsigned committed=durable_card.protocol.committed_valid;
-    uint8_t before[1024];memcpy(before,rx_bytes(2),sizeof(before));
+    uint8_t before[1024];memcpy(before,rx_bytes(VIRTUAL),sizeof(before));
     struct kui_loader_sd loan=model_card;
     int result=callback(context,&loan);
     CHECK(durable_card.handoff.block_crc[durable_card.block]==crc && durable_card.commits==commits);
     CHECK(durable_card.bound==bound && !durable_card.store.io.context);
     CHECK(durable_card.protocol.committed_valid==committed);
-    CHECK(!memcmp(before,rx_bytes(2),sizeof(before)));
+    CHECK(!memcmp(before,rx_bytes(VIRTUAL),sizeof(before)));
     release_saw_unpublished=true;release(&sd);leave(&sd);
     if(result || !loan.ready || !sd.health) {model_card.ready=false;return KUI_VMU_SD_LEASE_FAULT;}
     if(corrupt_after_loan) {
@@ -319,8 +336,11 @@ static void prepare_handoff(void) {
 static void install_hooks(void) {
     const uint32_t entries[]={input.driver.submit,input.lease.owner.release,
         input.lease.owner.initializer,input.exits.entries[0],input.exits.entries[1],input.exits.entries[2],input.exits.entries[3]};
+    /* An arena lease has no release or initializer entry. */
+    const bool arena=input.lease.owner.family==KUI_VMU_NATIVE_HEAP_ARENA;
     for(unsigned i=0;i<sizeof(entries)/sizeof(entries[0]);i++) {
         if(i>=3u+input.exits.count) break;
+        if(arena && (i==1u || i==2u)) continue;
         uint32_t target=i==0u?kui_vmu_native_worker_exports.submit_hook:
             i==1u?kui_vmu_native_worker_exports.release_hook:input.low_terminal;
         uint16_t patch[6];CHECK(kui_vmu_native_patch_encode(entries[i],target,patch));
@@ -367,7 +387,7 @@ static void inspect_physical_chain(bool original_fast) {
         CHECK(at+12u<=capacity);uint32_t descriptor[3];
         memcpy(descriptor,hardware+at,sizeof(descriptor));
         unsigned destination=(descriptor[2]>>8)&255u,cmd=descriptor[2]&255u;
-        CHECK(destination!=2u && cmd!=12u && cmd!=13u);
+        CHECK(destination!=VIRTUAL && cmd!=12u && cmd!=13u);
         CHECK(destination==32u || destination==96u);
         at+=12u+4u*(descriptor[0]&255u);++count;
         if(descriptor[0]&0x80000000u) break;
@@ -397,7 +417,7 @@ static void finish_batch(void) {
     uint8_t parent_reply[1024],unrelated_reply[1024];
     physical_complete();memcpy(parent_reply,rx_bytes(0),sizeof(parent_reply));
     memcpy(unrelated_reply,rx_bytes(6),sizeof(unrelated_reply));
-    complete_return();idle();parent_reply[2]|=2u;
+    complete_return();idle();parent_reply[2]|=VIRTUAL;
     CHECK(!memcmp(parent_reply,rx_bytes(0),sizeof(parent_reply)));
     CHECK(!memcmp(unrelated_reply,rx_bytes(6),sizeof(unrelated_reply)));
     CHECK(value_at(0xa05f6c04u)==physical(input.tx_base)+packet_bank*0x3000u);
@@ -409,7 +429,7 @@ static void stage_block(unsigned block,const uint8_t data[512]) {
     unsigned bytes=sd.bytes,calls=lease_calls;
     for(unsigned phase=0;phase<4u;phase++) {
         transfer_batch(12u,block,phase,data+phase*128u);
-        CHECK(value_at(rx_at(2))==0x00020007u);
+        CHECK(value_at(rx_at(VIRTUAL))==((VIRTUAL<<16)|7u));
     }
     CHECK(sd.bytes==bytes && lease_calls==calls && durable_card.write_phases==4u);
 }
@@ -418,15 +438,15 @@ static void protect_media(void);
 static void retry_batch(unsigned command,unsigned block,unsigned phase,const uint8_t *payload) {
     uint8_t parent[1024],unrelated[1024],target[1024];
     begin_batch(command,block,phase,payload);physical_complete();
-    /* Retain the physical A1 attachment while advertising virtual A2. */
-    rx_bytes(0)[2]|=1u;
+    /* Retain the physical card's attachment while advertising the virtual one. */
+    rx_bytes(0)[2]|=PHYSICAL;
     memcpy(parent,rx_bytes(0),sizeof(parent));memcpy(unrelated,rx_bytes(6),sizeof(unrelated));
-    memcpy(target,rx_bytes(2),sizeof(target));
-    complete_return();idle();parent[2]|=2u;
+    memcpy(target,rx_bytes(VIRTUAL),sizeof(target));
+    complete_return();idle();parent[2]|=VIRTUAL;
     CHECK(!memcmp(parent,rx_bytes(0),sizeof(parent)));
     CHECK(!memcmp(unrelated,rx_bytes(6),sizeof(unrelated)));
-    CHECK(value_at(rx_at(2))==UINT32_C(0x000200fc));
-    CHECK(!memcmp(target+4u,rx_bytes(2)+4u,sizeof(target)-4u));
+    CHECK(value_at(rx_at(VIRTUAL))==((VIRTUAL<<16)|0xfcu));
+    CHECK(!memcmp(target+4u,rx_bytes(VIRTUAL)+4u,sizeof(target)-4u));
     CHECK(!state.pending && !state.error && state.completed==state.submitted &&
         overlay.admitted && !overlay.pending && !overlay.stats.flags && !durable_card.faulted);
 }
@@ -460,22 +480,22 @@ static void storage_contention_retries(void) {
             durable_card.protocol.staged_block==43u && !memcmp(durable_card.protocol.staged,next,512u));
         sd.deny_enter=sd.deny_acquire=false;
         transfer_batch(13u,43u,4u,NULL);idle();
-        CHECK(value_at(rx_at(2))==UINT32_C(0x00020007) && durable_card.commits==1u &&
+        CHECK(value_at(rx_at(VIRTUAL))==((VIRTUAL<<16)|7u) && durable_card.commits==1u &&
             durable_card.protocol.committed_valid && !durable_card.protocol.active);
         CHECK(!memcmp(sd.media[image_lba(43u)],next,512u));
         unsigned bytes=sd.bytes,calls=lease_calls;
         transfer_batch(13u,43u,4u,NULL);
-        CHECK(value_at(rx_at(2))==UINT32_C(0x00020007) && durable_card.commits==1u &&
+        CHECK(value_at(rx_at(VIRTUAL))==((VIRTUAL<<16)|7u) && durable_card.commits==1u &&
             sd.bytes==bytes && lease_calls==calls);
         read_compare(43u,next);protect_media();
     }
 }
 static void read_compare(unsigned block,const uint8_t data[512]) {
     transfer_batch(11u,block,0u,NULL);
-    if(value_at(rx_at(2))!=0x82020008u || memcmp(rx_bytes(2)+12u,data,512u))
+    if(value_at(rx_at(VIRTUAL))!=(0x82000008u|(VIRTUAL<<16)) || memcmp(rx_bytes(VIRTUAL)+12u,data,512u))
         fprintf(stderr,"Read block%u response%08x actual%02x expected%02x reads%u commits%u\n",
-            block,value_at(rx_at(2)),rx_bytes(2)[12],data[0],durable_card.reads,durable_card.commits);
-    CHECK(value_at(rx_at(2))==0x82020008u && !memcmp(rx_bytes(2)+12u,data,512u));
+            block,value_at(rx_at(VIRTUAL)),rx_bytes(VIRTUAL)[12],data[0],durable_card.reads,durable_card.commits);
+    CHECK(value_at(rx_at(VIRTUAL))==(0x82000008u|(VIRTUAL<<16)) && !memcmp(rx_bytes(VIRTUAL)+12u,data,512u));
 }
 static void protect_media(void) {
     for(unsigned lba=0;lba<1024u;lba++) if(!allowed(lba))
@@ -499,6 +519,43 @@ static unsigned measure_batch(unsigned cmd,unsigned phase,const uint8_t *payload
     memset(&measured_work,0,sizeof(measured_work));
     transfer_batch(cmd,cmd==10u?0u:42u,phase,payload);
     return measured_submit_reads+measured_complete_reads;
+}
+/* The held report: both triggers fully pressed with A, B, X and Y in port A's
+ * condition reply. The page (detail 0x4F) follows the 180th consecutive held
+ * full transfer; a controller-only fast transfer, a release, a 199 trigger or
+ * a missing face button restarts the count. The model below predicts each
+ * transfer independently of whichever path production chooses. */
+static unsigned held_model,held_reports;
+static void held_round(unsigned cmd,uint32_t controls,bool gesture) {
+    begin_batch(cmd,0u,0u,NULL);bool fast=controller_pair.pending!=0u;
+    physical_complete();put(rx_at(0)+8u,4u,controls);
+    held_model=fast || !gesture?0u:held_model+1u;
+    if(held_model<180u) {complete_return();idle();return;}
+    if(setjmp(terminal)==0) {kui_vmu_native_passive_complete(&frame);CHECK(false);}
+    CHECK(terminal_error==0x4fu && !state.proof && !lease_calls && !durable_card.commits);
+    held_model=0u;++held_reports;
+}
+static void held_report_gesture_session(void) {
+    const uint32_t held=UINT32_C(0xfffff9f9),released=UINT32_C(0xffffffff);
+    const uint32_t near[]={UINT32_C(0xc7fff9f9),UINT32_C(0xffc7f9f9),UINT32_C(0xfffff9fd),
+        UINT32_C(0xfffff9fb),UINT32_C(0xfffffbf9),UINT32_C(0xfffffdf9)};
+    for(unsigned cmd=0u;cmd<2u;cmd++) {
+        /* The worker's counter is a static: one process runs every session. */
+        setup();held_report=0u;held_model=held_reports=0u;
+        for(unsigned i=0u;i<sizeof(near)/sizeof(near[0]);i++)
+            for(unsigned round=0u;round<200u;round++)held_round(cmd,near[i],false);
+        for(unsigned round=0u;round<179u;round++)held_round(cmd,held,true);
+        held_round(cmd,released,false);
+        for(unsigned round=0u;round<180u && !held_reports;round++)held_round(cmd,held,true);
+        /* Transfers with a virtual request always take the full path. */
+        if(cmd)CHECK(held_reports==1u);
+    }
+    /* Mixed: one controller-only transfer inside a held run restarts it. */
+    setup();held_report=0u;held_model=held_reports=0u;
+    for(unsigned round=0u;round<179u;round++)held_round(1u,held,true);
+    held_round(0u,held,true);
+    for(unsigned round=0u;round<180u && !held_reports;round++)held_round(1u,held,true);
+    CHECK(held_reports==1u);
 }
 static void bounded_controller_work(void) {
     setup();unsigned first=measure_batch(0u,0u,NULL);
@@ -530,7 +587,7 @@ static void polling_ownership_scope(void) {
         put(input.lease.begin,4u,input.lease.begin); /* Invalid circular list. */
         CHECK(poll_lease_valid() && !lease_valid());
         transfer_batch(0u,0u,0u,NULL);CHECK(!sd.bytes && !lease_calls);
-        uint8_t before[1024];memcpy(before,rx_bytes(2),sizeof(before));
+        uint8_t before[1024];memcpy(before,rx_bytes(VIRTUAL),sizeof(before));
         if(release) {
             frame.r4=0u;
             if(setjmp(terminal)==0) {kui_vmu_native_readonly_release_check(&frame);CHECK(false);}
@@ -540,7 +597,7 @@ static void polling_ownership_scope(void) {
             CHECK(durable_card.faulted && !durable_card.commits);
         }
         CHECK(!sd.bytes && !lease_calls && !sd.writes);
-        CHECK(!memcmp(before,rx_bytes(2),sizeof(before)));
+        CHECK(!memcmp(before,rx_bytes(VIRTUAL),sizeof(before)));
     }
 }
 static void halfword_exit_hooks(void) {
@@ -718,16 +775,191 @@ static void prepared_hook_witnesses(void) {
     printf("Prepared hook witnesses: %u byte/bit mutations, %u ignored neighbor bits, %u read-fault positions\n",
         mutations,neighbors,reader_faults);
 }
+/* pd 1.46 adjacent exits: an eight-byte head at the first entry jumps
+ * through the veneer literal of the second, eight bytes on. Every bit of the
+ * twenty-byte joint is witnessed, and the head's load reaches the terminal. */
+static void early_pair_setup(unsigned half) {
+    model_reset();fixture();prepare_handoff();model_card.bus.transfer_block=block_transfer;
+    lease_calls=block_callbacks=0u;corrupt_before_loan=corrupt_after_loan=0u;
+    input.exits.family=KUI_VMU_NATIVE_EXIT_EARLY_PAIR;input.exits.count=2u;
+    input.exits.entries[0]=0x8c013000u+half*2u;input.exits.entries[1]=input.exits.entries[0]+8u;
+    input.exits.entries[2]=input.exits.exec_thunk=0u;
+}
+static void early_pair_hook_witnesses(void) {
+    unsigned mutations=0u;
+    for(unsigned half=0u;half<2u;half++) {
+        early_pair_setup(half);arm();install_hooks();
+        /* Two ordinary veneers are not the joint patch. */
+        CHECK(!installed_hooks_valid());
+        const uint32_t head=input.exits.entries[0];uint16_t patch[4];
+        CHECK(kui_vmu_native_patch_encode_head(head,patch));
+        for(unsigned byte=0;byte<8u;byte++) put(head+byte,1u,(patch[byte/2u]>>(8u*(byte&1u)))&255u);
+        CHECK(installed_hooks_valid());
+        CHECK(hook_witness_count==11u+(half?7u:5u));
+        uint32_t op,literal,target;
+        CHECK(read_value(NULL,physical(head)|UINT32_C(0xa0000000),2u,&op) && op==UINT32_C(0xd003));
+        literal=((physical(head)+4u)&~3u)+4u*(op&255u);
+        CHECK(literal>=physical(head)+14u && literal+4u<=physical(head)+20u);
+        CHECK(read_value(NULL,literal|UINT32_C(0xa0000000),4u,&target) && target==input.low_terminal);
+        for(unsigned byte=0;byte<20u;byte++) for(unsigned bit=0;bit<8u;bit++) {
+            uint32_t address=head+byte;uint8_t old=memory[physical(address)-UINT32_C(0x0c000000)];
+            put(address,1u,old^(1u<<bit));CHECK(!installed_hooks_valid());
+            put(address,1u,old);CHECK(installed_hooks_valid());++mutations;
+        }
+        const uint32_t adjacent[]={head-2u,head-1u,head+20u,head+21u};
+        for(unsigned i=0;i<4u;i++) for(unsigned bit=0;bit<8u;bit++) {
+            uint8_t old=memory[physical(adjacent[i])-UINT32_C(0x0c000000)];
+            put(adjacent[i],1u,old^(1u<<bit));CHECK(installed_hooks_valid());put(adjacent[i],1u,old);
+        }
+        idle();
+    }
+    /* The shape binds the second entry to the head's end. */
+    for(unsigned invalid=0u;invalid<4u;invalid++) {
+        early_pair_setup(0u);
+        if(invalid==0u) input.exits.entries[1]+=4u;
+        else if(invalid==1u) input.exits.count=3u;
+        else if(invalid==2u) input.exits.entries[2]=0x8c013200u;
+        else input.exits.exec_thunk=0x8c013200u;
+        CHECK(kui_vmu_native_passive_arm(&input,NULL)<0 && !state.armed);
+    }
+    printf("Early exit pair: %u joint byte/bit mutations\n",mutations);
+}
+/* A no-allocator arena lease (The House of the Dead 2): the reviewed fixed
+ * arena is the whole lease. The worker hooks the submit entry, the borrowed
+ * literal, the completion slot and the exits, never a release or initializer
+ * entry; it admits no free, and its poll witnesses the arena's first words. */
+static void arena_setup(void) {
+    model_reset();fixture();prepare_handoff();model_card.bus.transfer_block=block_transfer;
+    lease_calls=block_callbacks=0u;corrupt_before_loan=corrupt_after_loan=0u;release_saw_unpublished=false;
+    const struct kui_vmu_native_heap owner={.version=KUI_VMU_NATIVE_HEAP_VERSION,.bytes=sizeof(owner),
+        .family=KUI_VMU_NATIVE_HEAP_ARENA,.image_bytes=input.driver.image_bytes,
+        .load=input.driver.load_address,.initializer_slot=0x8c0133f0u};
+    CHECK(kui_vmu_native_heap_arena_lease(&owner,input.lease.payload,input.lease.lease_bytes,
+        input.lease.lease_bytes,&input.lease));
+    /* The stage writes release+20 as for every lease; nothing jumps there. */
+    kui_vmu_native_readonly_release_resume=input.lease.owner.release+20u;
+    for(unsigned i=0;i<8u;i++) put(input.lease.payload+4u*i,4u,0x4b554900u+i);
+}
+static void arena_lease_mode(void) {
+    uint8_t next[512];memset(next,0x5a,sizeof(next));
+    unsigned mutations=0u,refusals=0u;
+    arena_setup();arm();install_hooks();
+    CHECK(installed_hooks_valid() && hook_witness_count==5u+3u*input.exits.count);
+    for(unsigned i=0;i<hook_witness_count;i++)
+        CHECK(physical(hook_witness[i].address)>=physical(input.driver.load_address) &&
+              physical(hook_witness[i].address)<physical(input.driver.load_address)+input.driver.image_bytes);
+    /* Every bit of the borrowed literal is witnessed. */
+    for(unsigned byte=0;byte<4u;byte++) for(unsigned bit=0;bit<8u;bit++) {
+        uint32_t address=input.lease.owner.initializer_slot+byte;
+        uint8_t old=memory[physical(address)-UINT32_C(0x0c000000)];
+        put(address,1u,old^(1u<<bit));CHECK(!installed_hooks_valid());
+        put(address,1u,old);CHECK(installed_hooks_valid());++mutations;
+    }
+    /* The virtual card reads and saves as on an allocator lease. */
+    transfer_batch(1u,0u,0u,NULL);transfer_batch(10u,0u,0u,NULL);
+    CHECK(overlay.stats.devinfo==1u && overlay.stats.media==1u);
+    stage_block(42u,next);transfer_batch(13u,42u,4u,NULL);
+    CHECK(durable_card.commits==1u && !memcmp(sd.media[image_lba(42u)],next,512u));
+    read_compare(42u,next);
+    /* The poll stops on any change to the arena's first eight words. */
+    CHECK(lease_valid() && poll_lease_valid());
+    for(unsigned word=0;word<8u;word++) for(unsigned bit=0;bit<32u;bit++) {
+        uint32_t address=input.lease.payload+4u*word,old=value_at(address);
+        put(address,4u,old^(UINT32_C(1)<<bit));CHECK(!poll_lease_valid() && lease_valid());
+        put(address,4u,old);CHECK(poll_lease_valid());++mutations;
+    }
+    /* No free is admitted, whatever its payload. */
+    const uint32_t payloads[]={0u,input.lease.payload,input.lease.payload+input.lease.lease_bytes,0x0c200020u};
+    for(unsigned i=0;i<4u;i++) {
+        frame.r4=payloads[i];
+        if(setjmp(terminal)==0) {kui_vmu_native_readonly_release_check(&frame);CHECK(false);}
+        CHECK(terminal_error==0x30u);terminal_error=0u;
+    }
+    /* Arm refuses an allocator role, another resume cell, or a protected SDK
+     * word inside the arena. */
+    for(unsigned invalid=0u;invalid<15u;invalid++) {
+        arena_setup();
+        struct kui_vmu_native_heap *h=&input.lease.owner;
+        uint32_t *roles[]={&h->layout,&h->initializer,&h->initializer_target,&h->allocate,&h->release,
+            &h->dispatch_cell,&h->dispatch_table,&h->sentinel,&h->cursor_cell,&h->begin_cell,
+            &h->bytes_cell,&h->begin_copy_cell};
+        int expected=-2;
+        if(invalid<12u) {*roles[invalid]=0x8c013400u;if(roles[invalid]==&h->release)
+            kui_vmu_native_readonly_release_resume=h->release+20u;}
+        else if(invalid==12u) {kui_vmu_native_readonly_release_resume=0u;expected=-3;}
+        else if(invalid==13u) {input.layout.gun_flag=input.lease.payload+0x100u;expected=-3;}
+        else {input.lease.owner.family=1u;}
+        CHECK(kui_vmu_native_passive_arm(&input,NULL)==expected && !state.armed);++refusals;
+    }
+    printf("Arena lease: %u witness bit mutations, %u arm refusals\n",mutations,refusals);
+}
+/* The House of the Dead 2's combination through the worker: the pd 1.46
+ * driver, whose lock cell keeps the image's cached pointer and whose server
+ * may run at its caller's level, the early exit pair, and the arena lease.
+ * The card reads and saves at every level while the server holds its lock;
+ * the pd 1.50 driver still refuses the levels other than 6 and 15. */
+static void early_arena_setup(uint32_t family) {
+    arena_setup();input.driver.family=family;
+    put(input.driver.lock_cell,4u,kui_vmu_native_lock_pointer(&input.driver));
+    input.exits.family=KUI_VMU_NATIVE_EXIT_EARLY_PAIR;input.exits.count=2u;
+    input.exits.entries[0]=0x8c013000u;input.exits.entries[1]=0x8c013008u;
+    input.exits.entries[2]=input.exits.exec_thunk=0u;
+    arm();install_hooks();
+    uint16_t patch[4];CHECK(kui_vmu_native_patch_encode_head(input.exits.entries[0],patch));
+    for(unsigned byte=0;byte<8u;byte++)
+        put(input.exits.entries[0]+byte,1u,(patch[byte/2u]>>(8u*(byte&1u)))&255u);
+    CHECK(installed_hooks_valid() && hook_witness_count==10u);
+}
+static void early_arena_session(void) {
+    volatile unsigned sessions=0u;
+    for(unsigned level=0u;level<16u;level++) {
+        uint8_t next[512];memset(next,(int)(0x31u+level),sizeof(next));
+        early_arena_setup(KUI_VMU_NATIVE_FAMILY_EARLY_V1);
+        submit_sr=0x60000101u|(level<<4);complete_sr=0x60000101u|(((level*7u)&15u)<<4);
+        transfer_batch(1u,0u,0u,NULL);transfer_batch(10u,0u,0u,NULL);
+        CHECK(overlay.stats.devinfo==1u && overlay.stats.media==1u && !lease_calls);
+        stage_block(42u,next);transfer_batch(13u,42u,4u,NULL);
+        CHECK(durable_card.commits==1u && !memcmp(sd.media[image_lba(42u)],next,512u));
+        read_compare(42u,next);transfer_batch(0u,0u,0u,NULL);++sessions;
+        protect_media();
+    }
+    /* Without the held lock, or with the P2 lock pointer only the pd 1.50
+     * initializer stores, the early server is refused at level 0; and the
+     * pd 1.50 server runs only at 6 or 15. Each holds for the full proof of
+     * a first transfer and for the live check once one has bound it. */
+    for(volatile unsigned bound=0u;bound<2u;bound++)
+        for(volatile unsigned level=0u;level<18u;level++) {
+            if(level==6u || level==15u) continue;
+            uint32_t family=level<16u?KUI_VMU_NATIVE_FAMILY_UNIFORM_V1:KUI_VMU_NATIVE_FAMILY_EARLY_V1;
+            early_arena_setup(family);
+            if(bound) {transfer_batch(1u,0u,0u,NULL);CHECK(live_plan.ready && state.submitted==1u);}
+            volatile int32_t expected=KUI_VMU_NATIVE_RUNTIME_CONTEXT;
+            submit_sr=0x60000101u|((level&15u)<<4);
+            if(level==16u) {
+                put(kui_vmu_native_lock_pointer(&input.driver),1u,0u);
+                expected=KUI_VMU_NATIVE_RUNTIME_STATE;
+            } else if(level==17u) {
+                put(input.driver.lock_cell,4u,
+                    ((input.driver.lock_cell+4u)&UINT32_C(0x1fffffff))|UINT32_C(0xa0000000));
+                expected=bound?KUI_VMU_NATIVE_RUNTIME_STATE:KUI_VMU_NATIVE_RUNTIME_POINTER;
+            }
+            stage_batch(1u,0u);
+            if(setjmp(terminal)==0) {kui_vmu_native_passive_submit(&frame);CHECK(false);}
+            CHECK(terminal_error && !state.pending && state.submitted==bound && !state.proof);
+            CHECK(state.runtime_result==(uint32_t)expected);
+        }
+    printf("Early driver on the arena lease: %u sessions at every inherited level\n",(unsigned)sessions);
+}
 static void external_boundary_mutations(void) {
     uint8_t next[512],before[1024];memset(next,0x73,sizeof(next));
     for(unsigned write=0;write<2u;write++) for(unsigned after=0;after<2u;after++)
         for(unsigned which=1u;which<=4u;which++) {
             setup();if(write) stage_block(42u,next);
             begin_batch(write?13u:11u,42u,write?4u:0u,NULL);physical_complete();
-            memcpy(before,rx_bytes(2),sizeof(before));
+            memcpy(before,rx_bytes(VIRTUAL),sizeof(before));
             if(after) corrupt_after_loan=which;else corrupt_before_loan=which;
             reject_complete();
-            CHECK(!memcmp(before,rx_bytes(2),sizeof(before)) && !durable_card.commits);
+            CHECK(!memcmp(before,rx_bytes(VIRTUAL),sizeof(before)) && !durable_card.commits);
             if(after) CHECK(lease_calls==1u && sd.bytes && durable_card.faulted);
             else CHECK(!lease_calls && !sd.bytes && !sd.writes && durable_card.faulted);
         }
@@ -836,16 +1068,16 @@ static void hooks_only_has_no_virtual_card_or_io(void) {
         begin_batch(cmd,cmd==10u?0u:42u,cmd==13u?4u:0u,cmd==12u?payload:NULL);
         physical_complete();
         uint8_t parent[1024],target[1024],other[1024];
-        memcpy(parent,rx_bytes(0),sizeof(parent));memcpy(target,rx_bytes(2),sizeof(target));
+        memcpy(parent,rx_bytes(0),sizeof(parent));memcpy(target,rx_bytes(VIRTUAL),sizeof(target));
         memcpy(other,rx_bytes(6),sizeof(other));
         struct kui_vmu_durable saved_card=durable_card;
         complete_return();idle();
-        CHECK(!memcmp(parent,rx_bytes(0),sizeof(parent)) && !(rx_bytes(0)[2]&2u));
+        CHECK(!memcmp(parent,rx_bytes(0),sizeof(parent)) && !(rx_bytes(0)[2]&VIRTUAL));
         CHECK(!memcmp(other,rx_bytes(6),sizeof(other)));
         if(cmd) {
-            CHECK(value_at(rx_at(2))==UINT32_MAX);
-            CHECK(!memcmp(target+4u,rx_bytes(2)+4u,sizeof(target)-4u));
-        } else CHECK(!memcmp(target,rx_bytes(2),sizeof(target)));
+            CHECK(value_at(rx_at(VIRTUAL))==UINT32_MAX);
+            CHECK(!memcmp(target+4u,rx_bytes(VIRTUAL)+4u,sizeof(target)-4u));
+        } else CHECK(!memcmp(target,rx_bytes(VIRTUAL),sizeof(target)));
         CHECK(!memcmp(&saved_card,&durable_card,sizeof(durable_card)));
         CHECK(!overlay.stats.backend_calls && !overlay.stats.advertisements && !overlay.stats.replies);
         CHECK(!lease_calls && !block_callbacks && !sd.bytes && !sd.writes && !durable_card.commits);
@@ -857,16 +1089,16 @@ static void hooks_only_has_no_virtual_card_or_io(void) {
     CHECK(!clock_reads && !diagnostic.timing.metric[KUI_VMU_NATIVE_PROFILE_FREE].calls);
 
     /* All ordinary physical/context/ownership guards remain mandatory before
-     * any absent publication. Both failure cases preserve stale A2 headers. */
+     * any absent publication. Both failure cases preserve stale virtual headers. */
     for(unsigned failure=0;failure<3u;failure++) {
         hooks_only_setup();begin_batch(11u,42u,0u,NULL);physical_complete();
-        if(!failure) rx_bytes(0)[2]|=2u;
+        if(!failure) rx_bytes(0)[2]|=VIRTUAL;
         else if(failure==1u) put(input.driver.completion_slot,4u,kui_vmu_native_worker_exports.complete_hook+2u);
         else put(0x0c3010b4u,4u,packet_bank);
         uint8_t before[3][1024];
-        memcpy(before[0],rx_bytes(0),1024u);memcpy(before[1],rx_bytes(2),1024u);
+        memcpy(before[0],rx_bytes(0),1024u);memcpy(before[1],rx_bytes(VIRTUAL),1024u);
         memcpy(before[2],rx_bytes(6),1024u);reject_complete();
-        CHECK(!memcmp(before[0],rx_bytes(0),1024u) && !memcmp(before[1],rx_bytes(2),1024u));
+        CHECK(!memcmp(before[0],rx_bytes(0),1024u) && !memcmp(before[1],rx_bytes(VIRTUAL),1024u));
         CHECK(!memcmp(before[2],rx_bytes(6),1024u));
         CHECK(!lease_calls && !block_callbacks && !sd.bytes && !sd.writes && !overlay.stats.backend_calls);
         CHECK(!clock_reads && !durable_card.commits);
@@ -900,7 +1132,7 @@ static void completion_context_failures(void) {
     for(unsigned which=1u;which<=sizeof(code)/sizeof(code[0]);which++) {
         uint8_t before[3][1024];
         setup();begin_batch(1u,0u,0u,NULL);physical_complete();
-        memcpy(before[0],rx_bytes(0),1024u);memcpy(before[1],rx_bytes(2),1024u);
+        memcpy(before[0],rx_bytes(0),1024u);memcpy(before[1],rx_bytes(VIRTUAL),1024u);
         memcpy(before[2],rx_bytes(6),1024u);
         uint32_t entry_pr=frame.pr,entry_sr=frame.sr;corrupt_on_restore=which;
         reject_context_complete();
@@ -908,7 +1140,7 @@ static void completion_context_failures(void) {
         CHECK(state.runtime_result==(0x20000u|code[which-1u]));
         CHECK(state.frame_pr==entry_pr && state.frame_sr==entry_sr);
         CHECK(!lease_calls && !sd.bytes && !sd.writes && !durable_card.commits);
-        CHECK(!memcmp(before[0],rx_bytes(0),1024u) && !memcmp(before[1],rx_bytes(2),1024u));
+        CHECK(!memcmp(before[0],rx_bytes(0),1024u) && !memcmp(before[1],rx_bytes(VIRTUAL),1024u));
         CHECK(!memcmp(before[2],rx_bytes(6),1024u));
         if(which==1u) CHECK(state.fault_at==0xa05f6c04u &&
             state.fault_value==issued_plan.output_physical && state.fault_expect==state.source);
@@ -933,13 +1165,13 @@ int main(void) {
     setup();transfer_batch(1u,0u,0u,NULL);transfer_batch(10u,0u,0u,NULL);
     CHECK(overlay.stats.devinfo==1u && overlay.stats.media==1u && !lease_calls);
     stage_block(42u,next);transfer_batch(13u,42u,4u,NULL);
-    CHECK(value_at(rx_at(2))==0x00020007u && durable_card.commits==1u && release_saw_unpublished);
+    CHECK(value_at(rx_at(VIRTUAL))==((VIRTUAL<<16)|7u) && durable_card.commits==1u && release_saw_unpublished);
     CHECK(!block_callbacks && !memcmp(sd.media[image_lba(42u)],next,512u));
     read_compare(42u,next);read_compare(43u,old);
     CHECK(block_callbacks==2u && durable_card.reads==2u && durable_card.commits==1u);
     protect_media();recover_checkpoint();read_compare(42u,next);protect_media();
 
-    /* A2 payloads and full SDK state remain immutable through completion.
+    /* Virtual payloads and full SDK state remain immutable through completion.
      * None of these corruptions may invoke the SD gateway or publish RX. */
     for(unsigned corruption=0;corruption<20u;corruption++) {
         setup();stage_block(42u,next);begin_batch(13u,42u,4u,NULL);physical_complete();
@@ -956,37 +1188,39 @@ int main(void) {
         } else if(corruption==17u) put(input.lease.owner.initializer_slot,4u,input.low_heap_hook+2u);
         else if(corruption==18u) put(input.driver.completion_slot,4u,kui_vmu_native_worker_exports.complete_hook+2u);
         else put(rx_at(6),4u,0xa5a5a5a5u);
-        memcpy(parent,rx_bytes(0),sizeof(parent));memcpy(target,rx_bytes(2),sizeof(target));
+        memcpy(parent,rx_bytes(0),sizeof(parent));memcpy(target,rx_bytes(VIRTUAL),sizeof(target));
         memcpy(other,rx_bytes(6),sizeof(other));reject_complete();
         CHECK(!lease_calls && !sd.bytes && !sd.writes && !durable_card.commits);
-        CHECK(!memcmp(parent,rx_bytes(0),sizeof(parent)) && !memcmp(target,rx_bytes(2),sizeof(target)));
+        CHECK(!memcmp(parent,rx_bytes(0),sizeof(parent)) && !memcmp(target,rx_bytes(VIRTUAL),sizeof(target)));
         CHECK(!memcmp(other,rx_bytes(6),sizeof(other)));
     }
-    /* A physical A2 attachment blocks the backend even though virtual A2
-     * requests are absent from the entire physical schedule. */
-    setup();begin_batch(1u,0u,0u,NULL);physical_complete();rx_bytes(0)[2]|=2u;
-    memcpy(parent,rx_bytes(0),sizeof(parent));memcpy(target,rx_bytes(2),sizeof(target));reject_complete();
+    /* A physical device in the virtual slot blocks the backend even though
+     * virtual requests are absent from the entire physical schedule. */
+    setup();begin_batch(1u,0u,0u,NULL);physical_complete();rx_bytes(0)[2]|=VIRTUAL;
+    memcpy(parent,rx_bytes(0),sizeof(parent));memcpy(target,rx_bytes(VIRTUAL),sizeof(target));reject_complete();
     CHECK(!lease_calls && !sd.bytes && !memcmp(parent,rx_bytes(0),sizeof(parent)));
-    CHECK(!memcmp(target,rx_bytes(2),sizeof(target)));
+    CHECK(!memcmp(target,rx_bytes(VIRTUAL),sizeof(target)));
     const unsigned unsupported[]={4u,9u};
     for(unsigned i=0;i<sizeof(unsupported)/sizeof(unsupported[0]);i++) {
         setup();stage_batch(unsupported[i],0u);reject_submit();CHECK(!sd.bytes && !lease_calls);
     }
     setup();begin_batch(12u,42u,0u,next);physical_complete();
-    put(state.source+40u,4u,0x01020304u);memcpy(target,rx_bytes(2),sizeof(target));reject_complete();
-    CHECK(!durable_card.write_phases && !lease_calls && !sd.bytes && !memcmp(target,rx_bytes(2),sizeof(target)));
+    put(state.source+40u,4u,0x01020304u);memcpy(target,rx_bytes(VIRTUAL),sizeof(target));reject_complete();
+    CHECK(!durable_card.write_phases && !lease_calls && !sd.bytes && !memcmp(target,rx_bytes(VIRTUAL),sizeof(target)));
     /* A torn base write is never acknowledged. Fresh controlled management
      * recovery replays its committed journal before resealing the next boot. */
     setup();stage_block(42u,next);sd.fail_write=4u;begin_batch(13u,42u,4u,NULL);physical_complete();
-    memcpy(target,rx_bytes(2),sizeof(target));reject_complete();
-    CHECK(durable_card.faulted && !durable_card.commits && !memcmp(target,rx_bytes(2),sizeof(target)));
+    memcpy(target,rx_bytes(VIRTUAL),sizeof(target));reject_complete();
+    CHECK(durable_card.faulted && !durable_card.commits && !memcmp(target,rx_bytes(VIRTUAL),sizeof(target)));
     recover_checkpoint();read_compare(42u,next);protect_media();
     /* Successful wire programming still cannot publish before restoration. */
     setup();stage_block(42u,next);sd.fail_release=true;begin_batch(13u,42u,4u,NULL);physical_complete();
-    memcpy(target,rx_bytes(2),sizeof(target));reject_complete();
-    CHECK(!durable_card.commits && durable_card.faulted && !memcmp(target,rx_bytes(2),sizeof(target)));
+    memcpy(target,rx_bytes(VIRTUAL),sizeof(target));reject_complete();
+    CHECK(!durable_card.commits && durable_card.faulted && !memcmp(target,rx_bytes(VIRTUAL),sizeof(target)));
     CHECK(!memcmp(sd.media[image_lba(42u)],next,512u));
-    bounded_controller_work();external_boundary_mutations();halfword_exit_hooks();prepared_hook_witnesses();
+    held_report_gesture_session();
+    bounded_controller_work();external_boundary_mutations();halfword_exit_hooks();prepared_hook_witnesses();early_pair_hook_witnesses();
+    arena_lease_mode();early_arena_session();
     polling_ownership_scope();gameplay_diagnostics();hooks_only_has_no_virtual_card_or_io();raw_chain_preserves_original_dma();completion_context_failures();
 #if !KUI_NATIVE_SPLIT_CONTROLLER_GENERAL
     diagnostic_pair_budget();

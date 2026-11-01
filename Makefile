@@ -139,7 +139,7 @@ build/test-games-native-cache: tests/test_games_native_cache.c tests/test_vmu_na
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie -Iinclude tests/test_games_native_cache.c $(NATIVE_CACHE_SOURCES) src/core/hash.c src/core/data.c -o $@
 .PHONY: test-games-native-cache
 test-games-native-cache: build/test-games-native-cache
-	ASAN_OPTIONS=detect_leaks=0 ./build/test-games-native-cache $(if $(STARTUP),'$(STARTUP)',) $(if $(EVOLUTION2_STARTUP),'$(EVOLUTION2_STARTUP)',)
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-games-native-cache $(if $(STARTUP),'$(STARTUP)',) $(if $(EVOLUTION2_STARTUP),'$(EVOLUTION2_STARTUP)',) $(if $(HOTD2_STARTUP),'$(HOTD2_STARTUP)',)
 build/test-vmu-launch-package: tests/test_vmu_launch_package.c src/core/vmu_launch_package.c src/core/retail_image.c src/core/hash.c include/kui/vmu_launch_package.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -ffunction-sections -fdata-sections tests/test_vmu_launch_package.c src/core/vmu_launch_package.c src/core/retail_image.c src/core/hash.c -Wl,--gc-sections -o $@
@@ -779,7 +779,12 @@ build/test-network-app: tests/test_network_app.c src/apps/network_test.c src/app
 
 build/test-vmu-app: tests/test_vmu_app.c $(CORE) $(DESTINATION) src/core/storage_probe.c $(FATFS) $(VMU_MANAGEMENT) src/core/hash.c src/apps/vmu.c src/apps/vmu_collection.inc include/kui/apps.h include/kui/vmu_read_bounded.h $(wildcard tests/vmu_stubs/dc/*.h tests/vmu_stubs/dc/maple/*.h)
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests/vmu_stubs -Isrc/dreamcast $(CORE) $(DESTINATION) src/core/storage_probe.c $(FATFS) $(VMU_MANAGEMENT) src/core/hash.c src/apps/vmu.c tests/test_vmu_app.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie -DKUI_VMU_CAPTURE_TEST_WRAP_CRC=1 $(INCLUDES) -Itests/vmu_stubs -Isrc/dreamcast $(CORE) $(DESTINATION) src/core/storage_probe.c $(FATFS) $(VMU_MANAGEMENT) src/core/hash.c src/apps/vmu.c tests/test_vmu_app.c -Wl,--wrap=kui_crc32,--wrap=kui_vmu_image_pack -o $@
+
+.PHONY: test-vmu-read-recovery
+test-vmu-read-recovery: build/test-vmu-app
+	python3 tests/test_vmu_read_recovery.py
+	python3 tests/test_vmu_capture_recover.py
 
 build/test-vmu-save-format: tests/test_vmu_save_format.c src/core/vmu_save_format.c src/core/crc16.c include/kui/vmu_import.h include/kui/crc16.h
 	@mkdir -p $(@D)
@@ -1390,3 +1395,55 @@ test-vmu-per-game: build/test-shell build/test-vmu-game-candidates
 build/test-vmu-game-candidates: tests/test_vmu_game_candidates.c src/core/vmu_game_candidates.c src/core/vmu_game_assign.c include/kui/vmu_game_candidates.h src/core/vmu_game_card.c src/core/retail_image.c
 	@mkdir -p build
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -ffunction-sections -fdata-sections $(INCLUDES) tests/test_vmu_game_candidates.c src/core/vmu_game_card.c src/core/retail_image.c -Wl,--gc-sections -o $@
+
+DISC_BOOT_CORE = src/core/disc_boot.c src/core/game_metadata.c src/core/hash.c src/core/data.c
+DISC_LAUNCH_CORE = src/core/disc_launch.c src/core/hash.c src/core/data.c
+.PHONY: test-disc-native
+test-disc-native: build/test-disc-boot build/test-disc-launch build/test-disc-launch-adversarial build/test-disc-vmu-storage build/test-disc-launcher build/test-shell
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-disc-boot
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-disc-launch
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-disc-launch-adversarial
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-disc-vmu-storage
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-disc-launcher
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-shell
+	python3 tests/test_disc_handoff_gui.py
+build/test-disc-boot: tests/test_disc_boot.c $(DISC_BOOT_CORE) include/kui/disc_boot.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) tests/test_disc_boot.c $(DISC_BOOT_CORE) -o $@
+build/test-disc-launch: tests/test_disc_launch.c $(DISC_LAUNCH_CORE) include/kui/disc_launch.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) tests/test_disc_launch.c $(DISC_LAUNCH_CORE) -o $@
+build/test-disc-launch-adversarial: tests/test_disc_launch_adversarial.c $(DISC_LAUNCH_CORE) src/loader/minic.c include/kui/disc_launch.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie -fno-builtin $(INCLUDES) tests/test_disc_launch_adversarial.c $(DISC_LAUNCH_CORE) -o $@
+build/test-disc-vmu-storage: tests/test_disc_vmu_storage.c src/loader/disc_vmu_storage.c include/kui/disc_vmu_storage.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) -Isrc/loader tests/test_disc_vmu_storage.c src/loader/disc_vmu_storage.c -o $@
+build/test-disc-launcher: tests/test_disc_launcher.c src/apps/disc_launcher.c $(DISC_BOOT_CORE) src/core/disc_launch.c include/kui/disc_launcher.h include/kui/disc_launch.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) -Isrc/dreamcast tests/test_disc_launcher.c src/apps/disc_launcher.c $(DISC_BOOT_CORE) src/core/disc_launch.c -Wl,--wrap=realloc -o $@
+
+.PHONY: test-disc-vmu
+test-disc-vmu: test-disc-native test-disc-vmu-probe build/test-disc-launch-vmu
+	python3 tests/test_disc_idle.py
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-disc-launch-vmu
+	python3 tests/test_disc_vmu_card.py
+	python3 tests/test_disc_vmu_launcher.py
+	python3 tests/test_disc_vmu_transport.py
+	python3 tests/test_disc_vmu_persist_stage.py
+	python3 tests/test_disc_vmu_support.py
+	python3 tests/test_disc_vmu_return_stage.py
+	python3 tests/test_disc_region.py
+	$(MAKE) -f Makefile.disc-vmu disc-vmu-entry-host-tests
+build/test-disc-launch-vmu: tests/test_disc_launch_vmu.c $(DISC_LAUNCH_CORE) include/kui/disc_launch.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) tests/test_disc_launch_vmu.c $(DISC_LAUNCH_CORE) -o $@
+
+DISC_VMU_PROBE_CORE = src/core/disc_vmu_probe.c src/core/vmu_native_program.c src/core/vmu_native_discovery.c src/core/vmu_native_layout.c src/core/vmu_native_heap.c src/core/vmu_native_exit.c src/core/vmu_native_patch.c src/core/hash.c src/core/data.c
+DISC_VMU_PROBE_WRAPS = -Wl,--wrap=kui_vmu_native_program_extent,--wrap=kui_vmu_native_discover_layout,--wrap=kui_vmu_native_discover,--wrap=kui_vmu_native_heap_discover,--wrap=kui_vmu_native_heap_call_discover
+.PHONY: test-disc-vmu-probe
+test-disc-vmu-probe: build/test-disc-vmu-probe
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-disc-vmu-probe $(if $(STARTUP),'$(STARTUP)',)
+build/test-disc-vmu-probe: tests/test_disc_vmu_probe.c $(DISC_VMU_PROBE_CORE) include/kui/disc_vmu_probe.h include/kui/vmu_native_program.h include/kui/vmu_native_discovery.h include/kui/vmu_native_layout.h include/kui/vmu_native_heap.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) tests/test_disc_vmu_probe.c $(DISC_VMU_PROBE_CORE) $(DISC_VMU_PROBE_WRAPS) -o $@

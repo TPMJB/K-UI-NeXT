@@ -1,0 +1,97 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Separate physical-disc module. The original no-VMU module is unchanged.
+.DEFAULT_GOAL := disc-vmu
+BUILD ?= build/disc-vmu
+VMU_TRANSPORT := 1
+DISC_VMU_VIRTUAL_A1 ?= 0
+ifneq ($(filter $(DISC_VMU_VIRTUAL_A1),0 1),$(DISC_VMU_VIRTUAL_A1))
+$(error DISC_VMU_VIRTUAL_A1 must be 0 or 1)
+endif
+include Makefile.vmu-native-vmu-lite-paced
+NATIVE_FLAGS += -DKUI_NATIVE_PHYSICAL_DISC=1
+DISC_VMU_SLOT_FLAGS = -DKUI_VMU_VIRTUAL_A1=$(DISC_VMU_VIRTUAL_A1)
+FLAGS += $(DISC_VMU_SLOT_FLAGS)
+NATIVE_FLAGS += $(DISC_VMU_SLOT_FLAGS)
+
+DISC_FLAGS = $(NATIVE_FLAGS) -DKUI_ON_CONSOLE=1 -DKUI_RETAIL_LOW_RESIDENT=1 \
+ -DKUI_VMU_MAPLE_OBSERVE=1 -DKUI_VMU_NATIVE_HEAP_PROBE=1 \
+ -DKUI_NATIVE_WORKER_BIN='"$(BUILD)/native-worker.bin"' \
+ -DKUI_NATIVE_WORKER_RELOC='"$(BUILD)/native-worker.reloc"' \
+ -DKUI_DISC_SUPPORT_BIN='"$(BUILD)/support/support.bin"' \
+ -DKUI_DISC_SUPPORT_RELOC='"$(BUILD)/support/support.reloc"' \
+ -DKUI_NATIVE_VMU_SCI_RX_PACED=1 -DKUI_RETAIL_TRANSPORT=1 -I$(BUILD)
+DISC_SOURCES = src/loader/disc_vmu_stage.c src/core/disc_launch.c src/core/disc_vmu_probe.c src/core/hash.c src/core/data.c \
+ src/loader/retail_display.c src/loader/minic.c src/loader/sd_reader.c src/loader/sci_sd_bus.c \
+ src/dreamcast/sci_sd_storage.c src/loader/vmu_backing.c src/loader/vmu_persist_stage.c \
+ src/core/vmu_fs_admission.c src/core/vmu_persist_profile.c src/core/vmu_persist_session.c \
+ src/core/vmu_store.c src/core/vmu_image.c src/core/vmu_durable.c src/core/vmu_native_discovery.c \
+ src/core/vmu_native_heap.c src/core/vmu_native_program.c src/core/vmu_native_stage_placement.c \
+ src/core/vmu_native_layout.c src/core/vmu_native_patch.c src/core/vmu_native_exit.c \
+ src/core/vmu_native_relocate.c src/loader/vmu_native_trace.c src/core/retail_image.c
+DISC_OBJECTS = $(patsubst %.c,$(BUILD)/disc/%.o,$(DISC_SOURCES)) \
+ $(BUILD)/disc/stage_asm.o $(BUILD)/disc/heap_boot.o $(BUILD)/disc/worker_call.o
+$(DISC_OBJECTS): $(BUILD)/readonly-config
+# A slot change in a reused BUILD directory must rebuild the worker, its
+# separately compiled chain backend and the installer together. Serial support
+# owns no Maple endpoint and is deliberately shared between the two slots.
+$(BUILD)/disc-vmu-slot-config: force-mode-config
+	@mkdir -p $(BUILD)
+	@printf '%s\n' 'DISC_VMU_VIRTUAL_A1=$(DISC_VMU_VIRTUAL_A1)' > $@.tmp
+	@cmp -s $@.tmp $@ || cp $@.tmp $@
+	@rm -f $@.tmp
+$(NATIVE_OBJ) $(WORKER_OBJ) $(DISC_OBJECTS): $(BUILD)/disc-vmu-slot-config
+.PHONY: disc-vmu disc-vmu-support disc-vmu-audit
+disc-vmu: $(BUILD)/native-disc-vmu.kui $(BUILD)/native-worker.compile.json disc-vmu-audit
+$(BUILD)/native-worker.compile.json: $(BUILD)/native-worker.elf
+	python3 tools/record_build.py $<
+disc-vmu-support:
+	$(MAKE) -f Makefile.disc-vmu-support BUILD=$(BUILD)/support BUILD_ID=$(BUILD_ID)
+$(BUILD)/support/support.bin $(BUILD)/support/support.reloc: disc-vmu-support
+$(BUILD)/disc_vmu_worker_symbols.h: $(BUILD)/native-worker.elf tools/disc_vmu_worker_symbols.py
+	python3 tools/disc_vmu_worker_symbols.py $< $@
+$(BUILD)/disc/src/loader/disc_vmu_stage.o: $(BUILD)/native-worker.bin $(BUILD)/native-worker.reloc \
+ $(BUILD)/support/support.bin $(BUILD)/support/support.reloc $(BUILD)/disc_vmu_worker_symbols.h
+$(BUILD)/disc/%.o: %.c
+	@mkdir -p $(@D)
+	$(CC) $(DISC_FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/disc/stage_asm.o: src/loader/disc_vmu_stage_asm.S
+	@mkdir -p $(@D)
+	$(CC) $(DISC_FLAGS) -c $< -o $@
+$(BUILD)/disc/heap_boot.o: src/loader/vmu_maple_observe_boot.S
+	@mkdir -p $(@D)
+	$(CC) $(DISC_FLAGS) -c $< -o $@
+$(BUILD)/disc/worker_call.o: src/loader/vmu_native_worker_call.S
+	@mkdir -p $(@D)
+	$(CC) $(DISC_FLAGS) -c $< -o $@
+$(BUILD)/disc-stage.elf: $(DISC_OBJECTS) src/loader/disc_vmu_stage.ld
+	$(CC) $(LINK) -Tsrc/loader/disc_vmu_stage.ld -Wl,-Map,$(BUILD)/disc-stage.map -o $@ $(DISC_OBJECTS) -lgcc
+	@test -z "$$(sh-elf-nm -u $@)"
+	python3 tools/record_build.py $@
+$(BUILD)/disc-stage.bin: $(BUILD)/disc-stage.elf
+	$(OBJCOPY) -O binary $< $@
+$(BUILD)/disc/entry.o: src/loader/disc_entry.S $(BUILD)/disc-stage.bin
+	$(CC) $(DISC_FLAGS) -DKUI_DISC_VMU=1 -DKUI_DISC_STAGE_BIN='"$(BUILD)/disc-stage.bin"' -c $< -o $@
+$(BUILD)/disc-entry.elf: $(BUILD)/disc/entry.o src/loader/disc_vmu_entry.ld
+	$(CC) $(LINK) -Tsrc/loader/disc_vmu_entry.ld -Wl,-Map,$(BUILD)/disc-entry.map -o $@ $<
+	@test -z "$$(sh-elf-nm -u $@)"
+	python3 tools/record_build.py $@
+$(BUILD)/native-disc-vmu.kui: $(BUILD)/disc-entry.elf
+	python3 tools/runtime_package.py build $< $@ --build-id $(BUILD_ID)
+disc-vmu-audit: $(BUILD)/native-disc-vmu.kui
+	python3 tools/check_disc_vmu_handoff.py $(BUILD)/disc-stage.elf --support $(BUILD)/support/support.elf
+	python3 tests/test_disc_vmu_handoff.py $(BUILD)/disc-stage.elf $(BUILD)/support/support.elf
+	python3 tools/check_disc_vmu_stack.py $(BUILD) --json $(BUILD)/physical-disc-stack-audit.json
+	python3 tests/test_disc_vmu_stack.py $(BUILD)
+	python3 -c 'import sys,subprocess;sys.path.insert(0,"tools");from check_retail_instructions import audit;print("Physical VMU stage linked instructions:",sum(audit(n,subprocess.check_output(["sh-elf-objdump","-d","$(BUILD)/disc-"+n+".elf"],text=True)) for n in ("entry","stage")))'
+.PHONY: disc-vmu-worker-host-tests
+disc-vmu-worker-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) $(VMU_LITE_HOST_FLAGS) $(DISC_VMU_SLOT_FLAGS) -DKUI_NATIVE_PHYSICAL_DISC=1 \
+	 tests/test_disc_vmu_worker.c $(COMPAT_WORKER_HOST_SRC) -Wl,--gc-sections -o $(BUILD)/test-disc-vmu-worker
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-disc-vmu-worker
+.PHONY: disc-vmu-entry-host-tests
+disc-vmu-entry-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_disc_vmu_entry.c src/core/disc_vmu_entry.c -o $(BUILD)/test-disc-vmu-entry
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-disc-vmu-entry
+-include $(DISC_OBJECTS:.o=.d)

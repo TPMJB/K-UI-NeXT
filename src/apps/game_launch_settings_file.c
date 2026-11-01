@@ -142,7 +142,8 @@ static bool verify_saved(unsigned target,const uint8_t *record,size_t bytes,kui_
     return true;
 }
 static bool settings_equal(const struct kui_game_launch_settings *a,const struct kui_game_launch_settings *b) {
-    if(a->reader!=b->reader || a->cdda!=b->cdda || a->encoding!=b->encoding || a->codec!=b->codec) return false;
+    if(a->reader!=b->reader || a->cdda!=b->cdda || a->encoding!=b->encoding || a->codec!=b->codec ||
+       a->vmu_slot!=b->vmu_slot) return false;
     for(unsigned i=0;i<2;i++) {
         const struct kui_game_ram_patch *left=&a->patches.entries[i],*right=&b->patches.entries[i];
         if(left->address!=right->address || left->value!=right->value || left->enabled!=right->enabled) return false;

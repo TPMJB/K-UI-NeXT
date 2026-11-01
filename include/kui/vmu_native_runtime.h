@@ -71,7 +71,10 @@ bool kui_vmu_native_timer_callback_owned(const struct kui_vmu_native_discovery *
  * lifetime independently on this launch, and execute this under IMASK15.
  * Existing discovery requirement bits remain unchanged. Snapshot is written
  * only on success and must occupy caller-owned storage. No state is cached;
- * repeat at both boundaries and retain the existing descriptor/payload guards. */
+ * repeat at both boundaries and retain the existing descriptor/payload guards.
+ * The inherited IMASK must be 6 or 15, except for an EARLY_V1 driver, whose
+ * server runs unmasked holding its TAS lock; that lock byte is always checked.
+ * The lock pointer must be the one each family's initializer leaves. */
 enum kui_vmu_native_runtime_result kui_vmu_native_runtime_check(
     const struct kui_vmu_native_discovery *driver,
     const struct kui_vmu_native_runtime_config *config,

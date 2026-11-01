@@ -142,6 +142,8 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->confirm_storage_test ? "A Start test   B Cancel" :
         s->confirm_wifi_forget ? "A Forget the network   B Cancel" :
         s->confirm_wifi_update ? "A Update firmware   B Cancel" :
+        s->page==KUI_SHELL_GD_PLAY ? "A K-UI   X Stock retail   Y Options   B Back" :
+        s->page==KUI_SHELL_GD_OPTIONS ? "D-pad Select   A Change   X Reload   B GD Play" :
         s->page==KUI_SHELL_HOME ? "D-pad Select   A Open   Y Volume   L/R Songs" :
         s->page==KUI_SHELL_DISC_TOOLS ? "D-pad Select   A Open   B Home" :
         s->page==KUI_SHELL_SETTINGS ? "A Save / Open   B Back / discard" :
@@ -152,8 +154,10 @@ static void footer(struct paint *p, const struct kui_shell *s,
             "A Repair / Resume   B Advanced":s->recovery_operation==2u?
             "A Reread again   B Advanced":"A Scan again   B Advanced") :
         s->page==KUI_SHELL_VMU_TOOLS ? "D-pad Select   A Open / Toggle   X Reload   B Home" :
-        s->page==KUI_SHELL_GAMES_VMU_CARD ? (s->games_vmu_info.candidates_sequence?
-            "A Use card   X Set default   Y Always ask   B Back":"A Use card   B Back") :
+        s->page==KUI_SHELL_GAMES_VMU_CARD ? (s->games_vmu_disc?
+            (s->games_vmu_loading?"B Stop":!s->games_vmu_info.known?"B Back":
+             s->games_vmu_info.candidates_sequence?"A Boot   X Set default   Y Always ask   B Back":"A Boot   B Back"):
+            s->games_vmu_info.candidates_sequence?"A Use card   X Set default   Y Always ask   B Back":"A Use card   B Back") :
         s->page==KUI_SHELL_VMU_WIZARD ? (s->vmu_wizard.view_only?
             "UP/DOWN Scroll   LEFT/RIGHT Page   B Card":s->vmu_wizard.missing_card_confirmation?
             "A Use imported saves   B Cancel":s->vmu_wizard.stage==KUI_VMU_WIZARD_GROUPS?
@@ -782,22 +786,25 @@ static void vmu_page(struct paint *p,const struct kui_shell *s,const struct kui_
 static void vmu_tools(struct paint *p,const struct kui_shell *s) {
     title(p,40,108,"VMU tools");
     label(p,40,140,MUTED,"Virtual VMU is independent of reader and prefetch settings.");
-    char preference[64];
+    char preference[64],slot[64];
     snprintf(preference,sizeof(preference),"Use virtual VMU: %s",s->vmu_emulation_known?
         (s->vmu_emulation_enabled?"On":"Off"):s->vmu_emulation_loading?"Reading...":"Unavailable");
-    const char *names[]={"Virtual VMUs","Physical VMUs","Import saves","Backups & restore",preference};
+    snprintf(slot,sizeof(slot),"Disc virtual slot: %s",s->vmu_emulation_known?
+        (s->vmu_emulation_slot==KUI_GAME_VMU_SLOT_A1?"A1":"A2"):s->vmu_emulation_loading?"Reading...":"Unavailable");
+    const char *names[]={"Virtual VMUs","Physical VMUs","Import saves","Backups & restore",preference,slot};
     const char *details[]={"Cards, saves, free blocks and assigned games.",
         "Connected cards in controller ports A to D.",
         "Combine physical saves and choose their game cards.",
         "Browse saved backups and restore individual saves.",
-        "For supported native games. Applies on next launch."};
-    for(unsigned i=0;i<5;i++) {
-        unsigned y=168+i*42;
-        panel(p,32,y,576,38,i==s->vmu_tools_selected?SELECTED:PANEL);
+        "For supported native games. Applies on next launch.",
+        "Physical discs; image games keep their saved slot."};
+    for(unsigned i=0;i<6;i++) {
+        unsigned y=168+i*38;
+        panel(p,32,y,576,34,i==s->vmu_tools_selected?SELECTED:PANEL);
         label(p,48,y+3,i==s->vmu_tools_selected?WHITE:CYAN,names[i]);
         label(p,48,y+20,MUTED,details[i]);
     }
-    words(p,40,389,608,s->vmu_emulation_known?CYAN:AMBER,
+    words(p,40,396,608,s->vmu_emulation_known?CYAN:AMBER,
         s->vmu_emulation_notice[0]?s->vmu_emulation_notice:
         "Reader and prefetch settings stay unchanged; cards are kept.",false);
 }
@@ -1900,24 +1907,82 @@ static void confirmation(struct paint *p,const struct kui_shell *s,bool quick) {
     if(quick) path_words(p,72,282,568,MUTED,s->capture_job[0]?s->capture_job:"Automatic latest matching job");
     label(p,72,304,CYAN,quick?"A Quick resume":"A Start capture"); label(p,368,304,WHITE,"B Cancel");
 }
+static void gd_message(struct paint *p,const char *text,uint16_t color) {
+    /* A retained failure must fit in full, not lose its cause to ellipsis.
+     * The model caps messages at127 bytes; four measured rows cover that
+     * even when an unbroken word must be split. */
+    size_t remaining=127u;
+    for(unsigned row=0;row<4u && remaining && *text;row++) {
+        while(remaining && *text==' ') {++text;--remaining;}
+        char line[128];size_t n=0,space=0;
+        while(n<remaining && text[n] && n+1u<sizeof(line)) {
+            unsigned char c=(unsigned char)text[n];
+            line[n++]=c>=32u && c<=126u?(char)c:'?';line[n]=0;
+            if(word_width(p,line,false)>544u) {--n;break;}
+            if(c==' ') space=n-1u;
+        }
+        /* Keep enough progress for all127 bytes even if a very long word
+         * follows a short one. Four rows each admit at least32 glyphs. */
+        if(n<remaining && text[n] && space>=32u) n=space;
+        if(!n) break;
+        line[n]=0;words(p,48,260u+18u*row,592,color,line,false);text+=n;remaining-=n;
+    }
+}
 static void gd_play(struct paint *p,const struct kui_shell_view *v) {
     title(p,40,108,"GD Play");
     char line[160];snprintf(line,sizeof(line),"Inserted: %s",
         v->inserted_title&&v->inserted_title[0]?v->inserted_title:"No disc detected");
     label(p,40,138,CYAN,line);
     panel(p,32,174,576,224,PANEL);
-    art(p,60,214,128,128,kui_art_icons[0]);
-    label(p,216,198,WHITE,"A Boot via console BIOS");
-    words(p,216,232,592,MUTED,"Exits K-UI and starts the console BIOS.",false);
-    words(p,216,258,592,MUTED,"Region and autostart settings still apply.",false);
-    words(p,216,284,592,MUTED,"Use the BIOS Play option if needed.",false);
-    words(p,216,326,592,MUTED,"The current boot disc can start K-UI again.",false);
+    label(p,48,190,WHITE,"A K-UI boot");
+    label(p,48,214,CYAN,"X Stock retail boot");
+    label(p,48,238,CYAN,"Y Options");
+    const struct kui_app_status *status=v->app_status;
+    gd_message(p,status && status->message[0]?status->message:
+        "Boot the inserted disc with your K-UI save and region options.",
+        status && status->errors?AMBER:MUTED);
+    if(v->busy && status && status->done) {
+        snprintf(line,sizeof(line),"Read %llu KiB from disc",(unsigned long long)(status->done/1024u));
+        label(p,48,328,CYAN,line);
+    }
+    if(status) for(unsigned i=0;i<status->line_count && i<3u;i++)
+        label(p,48,346+(int)i*18,MUTED,status->lines[i]);
+}
+static void gd_options(struct paint *p,const struct kui_shell *s) {
+    title(p,40,108,"GD Play / Options");
+    label(p,40,140,MUTED,"Changes apply to K-UI boot.");
+    const char *names[3]={"Virtual VMU","Region-free","Virtual VMU slot"};
+    bool loading[3]={s->vmu_emulation_loading,s->gd_region_loading,s->vmu_emulation_loading};
+    bool known[3]={s->vmu_emulation_known,s->gd_region_known,s->vmu_emulation_known};
+    bool enabled[3]={s->vmu_emulation_enabled,s->gd_region_enabled,s->vmu_emulation_enabled};
+    for(unsigned i=0;i<3u;i++) {
+        unsigned y=174u+i*58u;panel(p,32,y,576,52,s->gd_options_selected==i?SELECTED:PANEL);
+        label(p,48,y+10,WHITE,names[i]);
+        label(p,480,y+10,loading[i]?MUTED:known[i]?(enabled[i]?CYAN:WHITE):AMBER,
+            loading[i]?"Reading...":!known[i]?"Unknown":i==2u?
+                (s->vmu_emulation_slot==KUI_GAME_VMU_SLOT_A1?"A1":"A2"):enabled[i]?"On":"Off");
+        label(p,48,y+30,MUTED,i==2u?"A2 by default. Choose A1 when the game requires it.":
+            i?"Allow discs from other regions.":"Use this game's save card on the SD card.");
+    }
+    label(p,40,350,MUTED,"Stock retail boot uses the console BIOS settings.");
+    const char *notice=s->gd_options_selected==1u?s->gd_region_notice:s->vmu_emulation_notice;
+    words(p,40,378,608,MUTED,notice,false);
+}
+static void gd_direct_confirmation(struct paint *p) {
+    box(p,32,154,576,262,NAVY);
+    panel(p,48,160,544,220,PANEL);box(p,52,164,536,4,PINK);
+    label(p,72,188,WHITE,"TEST DIRECT PHYSICAL-DISC BOOT?");
+    label(p,72,222,MUTED,"Native GD-ROM only. This closes K-UI.");
+    label(p,72,246,MUTED,"Starts the disc using our new boot path.");
+    label(p,72,276,AMBER,"Virtual VMU is disabled in this first boot test.");
+    label(p,72,302,MUTED,"Use a physical VMU for saves. No BIOS flashing.");
+    label(p,72,344,CYAN,"A Direct boot");label(p,368,344,WHITE,"B Cancel");
 }
 static void gd_boot_confirmation(struct paint *p) {
     box(p,32,154,576,262,NAVY);
     panel(p,48,160,544,202,PANEL);box(p,52,164,536,4,PINK);
-    label(p,72,188,WHITE,"EXIT K-UI AND BOOT VIA CONSOLE BIOS?");
-    label(p,72,224,MUTED,"Console region and autostart settings still apply.");
+    label(p,72,188,WHITE,"BOOT THROUGH THE CONSOLE BIOS?");
+    label(p,72,224,MUTED,"Console region and autostart settings apply.");
     label(p,72,248,MUTED,"Select Play in the BIOS if the disc does not start.");
     label(p,72,282,MUTED,"This closes the current K-UI session.");
     label(p,72,322,CYAN,"A Exit to BIOS");label(p,368,322,WHITE,"B Cancel");
@@ -2296,10 +2361,17 @@ static void games_launch_options(struct paint *p,const struct kui_shell *s) {
 }
 static void games_vmu_card_picker(struct paint *p,const struct kui_shell *s) {
     const struct kui_vmu_game_info *info=&s->games_vmu_info;
-    title(p,40,108,"Choose virtual VMU card");
-    words(p,40,140,608,CYAN,s->games_detail.title,false);
+    title(p,40,108,s->games_vmu_disc?"Disc / virtual VMU boot":"Choose virtual VMU card");
+    words(p,40,140,608,CYAN,s->games_vmu_disc?
+        (info->product[0]?info->product:"Inserted physical disc"):s->games_detail.title,false);
     char line[160];
-    snprintf(line,sizeof(line),"%u card%s  |  %s",(unsigned)info->count,info->count==1?"":"s",
+    if(s->games_vmu_disc && s->games_vmu_loading)
+        snprintf(line,sizeof(line),"Preparing the inserted disc's save options");
+    else if(s->games_vmu_disc && !info->known)
+        snprintf(line,sizeof(line),"Disc or card information unavailable");
+    else if(s->games_vmu_disc && !info->enabled)
+        snprintf(line,sizeof(line),"Physical VMUs / Virtual VMU Off");
+    else snprintf(line,sizeof(line),"%u card%s  |  %s",(unsigned)info->count,info->count==1?"":"s",
         info->default_pair?"Default saved":"Ask when multiple cards are available");
     label(p,40,164,MUTED,line);panel(p,32,188,576,177,PANEL);
     unsigned selected=s->games_vmu_card_selected;
@@ -2311,11 +2383,17 @@ static void games_vmu_card_picker(struct paint *p,const struct kui_shell *s) {
         snprintf(line,sizeof(line),"p%04u%s",(unsigned)card->pair,card->pair==info->default_pair?" Default":"");
         words(p,468,y+1,592,card->pair==info->default_pair?GREEN:MUTED,line,false);
     }
-    if(!info->count) words(p,48,208,592,MUTED,s->games_vmu_loading?"Checking game cards...":
+    if(!info->count) words(p,48,208,592,MUTED,s->games_vmu_loading?
+        (s->games_vmu_disc?"Reading launch settings...":"Checking game cards..."):
+        s->games_vmu_disc && !info->known?"Return to GD Play and retry after checking the disc and SD card.":
         info->enabled?"No imported versions; a game card is selected at launch.":"Virtual VMU is Off; physical cards are used.",false);
     vmu_scrollbar(p,start/KUI_VMU_WIZARD_ROWS,selected%KUI_VMU_WIZARD_ROWS,info->count);
-    label(p,40,374,MUTED,info->candidates_sequence?
-        "A uses this card for this launch; X saves your default.":"A single existing card is selected automatically.");
+    label(p,40,374,MUTED,s->games_vmu_disc?
+        (s->games_vmu_loading?"Checking disc and virtual VMU preference...":!info->known?"B Back to GD Play":
+         !info->enabled?"A Boot with physical VMUs   B Back":info->count?
+         "A Boot with this card   X Default   Y Always ask":"A Create game card and boot   B Back"):
+        info->candidates_sequence?"A uses this card for this launch; X saves your default.":
+        "A single existing card is selected automatically.");
     words(p,40,398,608,info->known?CYAN:AMBER,s->games_vmu_notice[0]?s->games_vmu_notice:info->notice,false);
 }
 static void games_check(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
@@ -2350,19 +2428,24 @@ static void games_extra_options(struct paint *p,const struct kui_shell *s) {
     games_variant_line(p,s,158);
     bool native_reader=kui_shell_games_retail_ready(s) && !s->games_launch_cdda &&
         s->games_detail.format!=KUI_GAME_IMAGE_ZSO;
-    const char *names[]={"Boot encoding",native_reader?"Background reader":"Background speed","Image information","Developer tests","RAM patches","Restore defaults","Check executable","Temporary baseline"};
+    const char *names[]={"Boot encoding",native_reader?"Background reader":"Background speed","Image information","Developer tests","RAM patches","Restore defaults","Check executable","Temporary baseline","Virtual card slot"};
     const char *encodings[]={"Automatic","Plain","Scrambled"};
     bool encoding=kui_shell_games_encoding_ready(s);
     bool speed=kui_shell_games_background_ready(s) && !s->games_launch_cdda;
     const char *values[]={encoding?encodings[s->games_launch_encoding<KUI_GAME_ENCODING_COUNT?s->games_launch_encoding:0]:"Automatic",
         speed?(native_reader?(s->games_launch_reader==KUI_GAME_READER_STANDARD?"Off":kui_shell_games_reader_label(s)):
             s->games_launch_reader==KUI_GAME_READER_EAGER?"Aggressive":"Normal"):"Unavailable","Open","Open",
-        kui_shell_games_patches_ready(s)?(kui_game_ram_patches_enabled(&s->games_launch_patches)?"On":"Off"):"Unavailable","Apply",kui_shell_games_launch_ready(s)?"Run":"Unavailable",s->games_baseline?"On (unsaved)":"Off"};
+        kui_shell_games_patches_ready(s)?(kui_game_ram_patches_enabled(&s->games_launch_patches)?"On":"Off"):"Unavailable","Apply",kui_shell_games_launch_ready(s)?"Run":"Unavailable",s->games_baseline?"On (unsaved)":"Off",
+        kui_shell_games_vmu_slot_ready(s)?(s->games_launch_vmu_slot==KUI_GAME_VMU_SLOT_A1?"A1":"A2"):"Unavailable"};
+    _Static_assert(sizeof(names)/sizeof(names[0])==KUI_SHELL_GAME_TOOL_COUNT &&
+                   sizeof(values)/sizeof(values[0])==KUI_SHELL_GAME_TOOL_COUNT,"one name and value per Advanced row");
     for(unsigned i=0;i<KUI_SHELL_GAME_TOOL_COUNT;i++) {
-        unsigned y=174+i*24;bool ready=i==KUI_SHELL_GAME_TOOL_ENCODING?encoding:i==KUI_SHELL_GAME_TOOL_SPEED?speed:
+        /* Nine rows end above the hint line at 374. */
+        unsigned y=174+i*22;bool ready=i==KUI_SHELL_GAME_TOOL_ENCODING?encoding:i==KUI_SHELL_GAME_TOOL_SPEED?speed:
             i==KUI_SHELL_GAME_TOOL_PATCHES?kui_shell_games_patches_ready(s):
-            (i==KUI_SHELL_GAME_TOOL_CHECK || i==KUI_SHELL_GAME_TOOL_BASELINE)?kui_shell_games_launch_ready(s):true;
-        panel(p,32,y,576,22,s->game_tools_selected==i?SELECTED:PANEL);
+            (i==KUI_SHELL_GAME_TOOL_CHECK || i==KUI_SHELL_GAME_TOOL_BASELINE)?kui_shell_games_launch_ready(s):
+            i==KUI_SHELL_GAME_TOOL_VMU_SLOT?kui_shell_games_vmu_slot_ready(s):true;
+        panel(p,32,y,576,20,s->game_tools_selected==i?SELECTED:PANEL);
         label(p,48,y+4,ready?WHITE:MUTED,names[i]);
         words(p,350,y+4,592,ready?CYAN:MUTED,values[i],false);
     }
@@ -2373,7 +2456,9 @@ static void games_extra_options(struct paint *p,const struct kui_shell *s) {
         "Two one-time boot patches. Native games with CD music Off only.",
         "Save detected defaults for this image, including turning RAM patches Off.",
         "Check the executable and launch package without starting the game.",
-        "Use defaults without saving. Select again to restore choices."};
+        "Use defaults without saving. Select again to restore choices.",
+        "Background loading's virtual card: A1 for games that only save there. Keep it empty."};
+    _Static_assert(sizeof(hints)/sizeof(hints[0])==KUI_SHELL_GAME_TOOL_COUNT,"one hint per Advanced row");
     const char *hint=hints[s->game_tools_selected<KUI_SHELL_GAME_TOOL_COUNT?s->game_tools_selected:0];
     if(s->games_detail.format==KUI_GAME_IMAGE_ZSO) {
         if(s->game_tools_selected==KUI_SHELL_GAME_TOOL_SPEED)
@@ -2914,6 +2999,7 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     case KUI_SHELL_CLOCK: clock_page(&p,s); break;
     case KUI_SHELL_CRC_SCAN: crc_scan(&p,s,v); break;
     case KUI_SHELL_GD_PLAY: gd_play(&p,v); break;
+    case KUI_SHELL_GD_OPTIONS: gd_options(&p,s); break;
     case KUI_SHELL_CD_AUDIO: cd_audio(&p,s,v); break;
     case KUI_SHELL_MUSIC: music_player(&p,s,v); break;
     case KUI_SHELL_GAMES: games(&p,s,v); break;
@@ -2943,6 +3029,7 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     footer(&p,s,v);
     if(s->confirm_new || s->confirm_quick_resume) confirmation(&p,s,s->confirm_quick_resume);
     if(s->confirm_gd_boot) gd_boot_confirmation(&p);
+    if(s->confirm_gd_direct) gd_direct_confirmation(&p);
     if(s->confirm_storage_test) storage_test_confirmation(&p,s,v);
     if(s->confirm_clock || s->confirm_defaults || s->confirm_vmu_restore || s->confirm_vmu_delete ||
        s->confirm_vmu_copy || s->confirm_vmu_copy_all || s->confirm_music_clear || s->confirm_restart || s->confirm_salvage || s->confirm_salvage_check || s->confirm_repair_in_place ||

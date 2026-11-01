@@ -58,7 +58,7 @@ enum kui_shell_page { KUI_SHELL_HOME, KUI_SHELL_RIPPER,
     KUI_SHELL_GAMES_TESTS, KUI_SHELL_GAMES_INFO, KUI_SHELL_GAMES_PATCHES, KUI_SHELL_GAMES_CODEC, KUI_SHELL_GAMES_CHECK, KUI_SHELL_VMU_IMAGE, KUI_SHELL_VMU_IMPORT,
     KUI_SHELL_VMU_COLLECTION, KUI_SHELL_VMU_TOOLS, KUI_SHELL_VMU_WIZARD,
     KUI_SHELL_DISC_TOOLS, KUI_SHELL_VMU_CARD, KUI_SHELL_SALVAGE_DRIVE,
-    KUI_SHELL_SALVAGE_OPTIONS, KUI_SHELL_GAMES_VMU_CARD };
+    KUI_SHELL_SALVAGE_OPTIONS, KUI_SHELL_GAMES_VMU_CARD, KUI_SHELL_GD_OPTIONS };
 enum kui_shell_recovery_row {
     KUI_SHELL_RECOVERY_CONTINUE, KUI_SHELL_RECOVERY_NEW, KUI_SHELL_RECOVERY_OPTIONS,
     KUI_SHELL_RECOVERY_DIAGNOSTICS, KUI_SHELL_RECOVERY_COUNT
@@ -99,7 +99,8 @@ enum kui_shell_vmu_card_action {
 enum kui_shell_game_tool {
     KUI_SHELL_GAME_TOOL_ENCODING, KUI_SHELL_GAME_TOOL_SPEED,
     KUI_SHELL_GAME_TOOL_INFO, KUI_SHELL_GAME_TOOL_TESTS,
-    KUI_SHELL_GAME_TOOL_PATCHES, KUI_SHELL_GAME_TOOL_DEFAULTS, KUI_SHELL_GAME_TOOL_CHECK, KUI_SHELL_GAME_TOOL_BASELINE, KUI_SHELL_GAME_TOOL_COUNT
+    KUI_SHELL_GAME_TOOL_PATCHES, KUI_SHELL_GAME_TOOL_DEFAULTS, KUI_SHELL_GAME_TOOL_CHECK, KUI_SHELL_GAME_TOOL_BASELINE,
+    KUI_SHELL_GAME_TOOL_VMU_SLOT, KUI_SHELL_GAME_TOOL_COUNT
 };
 enum kui_shell_ripper_tool {
     KUI_SHELL_RIPPER_TOOL_VERIFY, KUI_SHELL_RIPPER_TOOL_RESUME,
@@ -151,14 +152,16 @@ enum kui_shell_action {
     KUI_SHELL_VMU_COLLECTION_COPY_COMMIT, KUI_SHELL_REPAIR_IN_PLACE, KUI_SHELL_REPAIR_NEW_COPY,
     KUI_SHELL_SALVAGE_RESUME_DEFER, KUI_SHELL_VMU_WIZARD_RUN,
     KUI_SHELL_VMU_EMULATION_LOAD, KUI_SHELL_VMU_EMULATION_SAVE,
-    KUI_SHELL_VMU_RENAME, KUI_SHELL_VMU_GAME_INFO, KUI_SHELL_VMU_GAME_CARD_DEFAULT
+    KUI_SHELL_VMU_RENAME, KUI_SHELL_VMU_GAME_INFO, KUI_SHELL_VMU_GAME_CARD_DEFAULT,
+    KUI_SHELL_GD_CHECK, KUI_SHELL_GD_DIRECT_BOOT, KUI_SHELL_GD_VMU_INFO,
+    KUI_SHELL_GD_OPTIONS_LOAD, KUI_SHELL_GD_REGION_SAVE
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
 struct kui_shell {
     enum kui_shell_page page;
     unsigned home_selected, setting_selected, scroll;
-    bool confirm_new, confirm_quick_resume, confirm_gd_boot;
+    bool confirm_new, confirm_quick_resume, confirm_gd_boot, confirm_gd_direct;
     struct kui_settings saved, draft;
     struct kui_system_settings system_saved, system_draft;
     unsigned system_selected;
@@ -175,6 +178,8 @@ struct kui_shell {
     struct kui_vmu_wizard_view vmu_wizard;
     /* Confirmed SD preference, independent of reader selection and cards. */
     bool vmu_emulation_enabled,vmu_emulation_known,vmu_emulation_loading,vmu_emulation_requested;
+    unsigned vmu_emulation_slot,vmu_emulation_slot_requested; /* Disc default; per-game image slots are separate. */
+    bool vmu_emulation_slot_change;
     unsigned vmu_emulation_generation;
     char vmu_emulation_notice[128];
     bool confirm_salvage, confirm_salvage_defer, confirm_salvage_check, confirm_repair_in_place;
@@ -259,6 +264,7 @@ struct kui_shell {
     unsigned games_launch_encoding, game_tools_selected, game_tests_selected;
     bool games_tests_from_options;
     unsigned games_launch_codec,games_codec_selected;
+    unsigned games_launch_vmu_slot; /* enum kui_game_vmu_slot */
     bool games_codec_override;
     bool games_baseline;
     struct kui_game_launch_settings games_baseline_previous;
@@ -266,6 +272,11 @@ struct kui_shell {
     char games_vmu_label[64],games_vmu_notice[128],games_vmu_product[12];
     unsigned games_vmu_generation;
     bool games_vmu_loading;
+    /* Disc card selection has its own product source; it never borrows Games metadata. */
+    bool games_vmu_disc,gd_vmu_launch,gd_auto_launch;
+    unsigned gd_options_selected,gd_region_generation;
+    bool gd_region_loading,gd_region_known,gd_region_enabled,gd_region_requested;
+    char gd_region_notice[128];
     struct kui_vmu_game_info games_vmu_info;
     struct kui_vmu_game_selection games_vmu_selection;
     unsigned games_vmu_card_selected;
@@ -369,9 +380,13 @@ void kui_shell_set_vmu(struct kui_shell *shell, const struct kui_vmu_view *view)
 /* Wizard publications belong to the current page and exact request generation. */
 void kui_shell_set_vmu_wizard(struct kui_shell *,const struct kui_vmu_wizard_view *);
 void kui_shell_set_game_vmu_cards(struct kui_shell *,unsigned generation,const struct kui_vmu_game_info *);
+void kui_shell_set_disc_vmu_cards(struct kui_shell *,unsigned generation,const struct kui_vmu_game_info *);
+void kui_shell_set_disc_region(struct kui_shell *,unsigned generation,bool enabled,bool ok,const char *notice);
 /* Global preference results echo the exact outstanding request generation.
  * Failed/uncertain saves preserve the last confirmed value and require reload. */
 void kui_shell_set_vmu_emulation(struct kui_shell *,unsigned generation,bool enabled,
+    bool ok,bool stopped,const char *message);
+void kui_shell_set_vmu_emulation_full(struct kui_shell *,unsigned generation,bool enabled,unsigned slot,
     bool ok,bool stopped,const char *message);
 /* Read-only card-info results name the exact current request/product. */
 void kui_shell_set_game_vmu(struct kui_shell *,unsigned generation,const char *product,
@@ -443,6 +458,9 @@ bool kui_shell_games_cdda_ready(const struct kui_shell *shell);
 const char *kui_shell_games_cdda_status(const struct kui_shell *shell);
 bool kui_shell_games_launch_ready(const struct kui_shell *shell);
 bool kui_shell_games_patches_ready(const struct kui_shell *shell);
+/* The virtual card slot belongs to the native Background module, the only
+ * route here with a per-game virtual card. */
+bool kui_shell_games_vmu_slot_ready(const struct kui_shell *shell);
 bool kui_shell_game_launch_settings(const struct kui_shell *shell,
                                     struct kui_game_launch_settings *out);
 /* loaded=true with settings=NULL means no exact-image preset exists. Keep

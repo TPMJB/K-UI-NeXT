@@ -10,6 +10,17 @@
 #include <string.h>
 
 static struct kui_vmu_read_bounded_diagnostic diagnostic;
+/* KOS retransmits AGAIN frames from send_buf, after DMA has overwritten
+ * recv_buf. Its default shared request/reply buffer cannot retain BREAD's
+ * function word through that retry. Keep the two request words separately,
+ * including after the synchronous caller times out. A replacement device at
+ * the same physical slot must not reuse them while the old frame is pending. */
+struct bounded_vmu_read_request {maple_frame_t *owner;uint32_t words[2];};
+static struct bounded_vmu_read_request requests[MAPLE_PORT_COUNT][MAPLE_UNIT_COUNT];
+struct bounded_vmu_read_lock_context {
+    maple_frame_t *frame;
+    struct bounded_vmu_read_request *request;
+};
 const struct kui_vmu_read_bounded_diagnostic *kui_vmu_read_bounded_last(void) {
     return &diagnostic;
 }
@@ -20,13 +31,28 @@ static void bounded_vmu_read_frame_status(const maple_frame_t *frame) {
     diagnostic.frame_state=(uint32_t)frame->state;diagnostic.queued=(uint32_t)frame->queued;
 }
 static int bounded_vmu_read_lock(void *context) {
-    ++diagnostic.lock_attempts;return maple_frame_trylock(context)==0;
+    struct bounded_vmu_read_lock_context *lock=context;
+    ++diagnostic.lock_attempts;
+    irq_mask_t saved_irq=irq_disable();
+    int locked=!lock->request->owner && maple_frame_trylock(lock->frame)==0;
+    if(locked) lock->request->owner=lock->frame;
+    irq_restore(saved_irq);return locked;
+}
+static void bounded_vmu_read_release(maple_frame_t *frame) {
+    /* Called only once our request is no longer queued or in flight. Scan
+     * the small fixed owner table rather than trusting mutable target fields
+     * in a late callback. Never clear a replacement frame's ownership. */
+    irq_mask_t saved_irq=irq_disable();
+    for(unsigned p=0;p<MAPLE_PORT_COUNT;p++)
+        for(unsigned u=1;u<MAPLE_UNIT_COUNT;u++)
+            if(requests[p][u].owner==frame) requests[p][u].owner=NULL;
+    irq_restore(saved_irq);
 }
 static void bounded_vmu_read_reply(maple_state_t *state,maple_frame_t *frame) {
     (void)state;genwait_wake_all(frame);
 }
 static void bounded_vmu_read_abandoned(maple_state_t *state,maple_frame_t *frame) {
-    (void)state;maple_frame_unlock(frame);
+    (void)state;bounded_vmu_read_release(frame);maple_frame_unlock(frame);
 }
 static uint32_t bounded_vmu_read_word(const uint8_t *p) {
     return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24;
@@ -41,18 +67,21 @@ int kui_vmu_read_bounded(maple_device_t *device,uint16_t block,uint8_t out[512])
        device->port<0 || device->port>=MAPLE_PORT_COUNT ||
        device->unit<=0 || device->unit>=MAPLE_UNIT_COUNT) return bounded_vmu_read_finish(MAPLE_EINVALID);
     maple_frame_t *frame=&device->frame;
+    struct bounded_vmu_read_request *request=&requests[device->port][device->unit];
+    struct bounded_vmu_read_lock_context lock={frame,request};
     diagnostic.stage=KUI_VMU_READ_LOCK;
     /* The public SDK's synchronous BREAD waits for frame ownership. Preserve
      * that behavior with a deadline instead of treating an unrelated current
      * owner as a permanent source error. thd_poll retries the atomic lock and
      * yields to the scheduler; it never steals or resets another frame. */
-    if(thd_poll(bounded_vmu_read_lock,frame,100u)==0) {
+    if(thd_poll(bounded_vmu_read_lock,&lock,100u)==0) {
         bounded_vmu_read_frame_status(frame);return bounded_vmu_read_finish(MAPLE_ETIMEOUT);
     }
     diagnostic.stage=KUI_VMU_READ_FRAME;
     /* Public KOS frame locks acquire VACANT -> UNSENT before initialization. */
     if(frame->state!=MAPLE_FRAME_UNSENT) {
-        bounded_vmu_read_frame_status(frame);return bounded_vmu_read_finish(MAPLE_EFAIL);
+        bounded_vmu_read_frame_status(frame);bounded_vmu_read_release(frame);
+        return bounded_vmu_read_finish(MAPLE_EFAIL);
     }
     maple_frame_init(frame);
     /* KOS calloc initializes recv_buf_arr through cached P1, whereas frame
@@ -64,12 +93,14 @@ int kui_vmu_read_bounded(maple_device_t *device,uint16_t block,uint8_t out[512])
     uintptr_t cached_receive=((uintptr_t)frame->recv_buf&MEM_AREA_CACHE_MASK)|MEM_AREA_P1_BASE;
     dcache_inval_range(cached_receive,1024u);
     uint32_t location=(uint32_t)block<<24;
-    frame->send_buf[0]=MAPLE_FUNC_MEMCARD;frame->send_buf[1]=location;
+    request->words[0]=MAPLE_FUNC_MEMCARD;request->words[1]=location;
+    frame->send_buf=request->words;
     frame->cmd=MAPLE_COMMAND_BREAD;frame->dst_port=device->port;frame->dst_unit=device->unit;
     frame->length=2;frame->callback=bounded_vmu_read_reply;
     diagnostic.stage=KUI_VMU_READ_QUEUE;
     if(maple_queue_frame(frame)<0) {
         bounded_vmu_read_frame_status(frame);frame->state=MAPLE_FRAME_VACANT;
+        bounded_vmu_read_release(frame);
         return bounded_vmu_read_finish(MAPLE_EFAIL);
     }
     diagnostic.stage=KUI_VMU_READ_WAIT;
@@ -86,6 +117,7 @@ int kui_vmu_read_bounded(maple_device_t *device,uint16_t block,uint8_t out[512])
         else {
             if(frame->queued) (void)maple_queue_remove(frame);
             frame->state=MAPLE_FRAME_VACANT;
+            bounded_vmu_read_release(frame);
         }
         irq_restore(saved_irq);
         return bounded_vmu_read_finish(waited<0?MAPLE_ETIMEOUT:MAPLE_EFAIL);
@@ -106,14 +138,21 @@ int kui_vmu_read_bounded(maple_device_t *device,uint16_t block,uint8_t out[512])
             if(diagnostic.actual_function==MAPLE_FUNC_MEMCARD) {
                 diagnostic.stage=KUI_VMU_READ_LOCATION;
                 if(diagnostic.actual_location==location) {
+                    _Alignas(32) uint8_t payload[512];
+                    diagnostic.stage=KUI_VMU_READ_STABILITY;
                     diagnostic.raw_crc_before=kui_crc32(0,response->data+8u,512u);
-                    memcpy(out,response->data+8u,512u);
+                    memcpy(payload,response->data+8u,sizeof(payload));
                     diagnostic.raw_crc_after=kui_crc32(0,response->data+8u,512u);
-                    diagnostic.copy_crc=kui_crc32(0,out,512u);result=MAPLE_EOK;
-                    diagnostic.stage=KUI_VMU_READ_COMPLETE;
+                    diagnostic.copy_crc=kui_crc32(0,payload,sizeof(payload));
+                    if(diagnostic.raw_crc_before==diagnostic.raw_crc_after &&
+                       diagnostic.raw_crc_before==diagnostic.copy_crc) {
+                        memcpy(out,payload,sizeof(payload));result=MAPLE_EOK;
+                        diagnostic.stage=KUI_VMU_READ_COMPLETE;
+                    }
                 }
             }
         }
     }
-    maple_frame_unlock(frame);return bounded_vmu_read_finish(result);
+    bounded_vmu_read_release(frame);maple_frame_unlock(frame);
+    return bounded_vmu_read_finish(result);
 }

@@ -17,6 +17,12 @@ bool kui_vmu_native_patch_encode(uint32_t address,uint32_t target,uint16_t out[6
     for(unsigned i=0;i<6u;i++) out[i]=patch[i];
     return true;
 }
+bool kui_vmu_native_patch_encode_head(uint32_t address,uint16_t out[4]) {
+    if(!out || (address&1u) || !ram(address,20u)) return false;
+    const uint16_t head[4]=KUI_VMU_NATIVE_PATCH_HEAD;
+    for(unsigned i=0;i<4u;i++) out[i]=head[i];
+    return true;
+}
 bool kui_vmu_native_patch_no_interiors(const void *image,size_t bytes,uint32_t load,
     const struct kui_vmu_native_patch_window *windows,size_t count) {
     if(!image || bytes>0xc00000u || bytes<2u ||

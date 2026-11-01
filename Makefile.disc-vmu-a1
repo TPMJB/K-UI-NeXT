@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Physical-disc service whose virtual card answers as A1, leaving A2 physical.
+# Retain the base artifact for existing build auditors and provide a distinct
+# delivery name so choosing A1 never overwrites the default A2 module.
+BUILD ?= build/disc-vmu-a1
+override DISC_VMU_VIRTUAL_A1 := 1
+include Makefile.disc-vmu
+
+disc-vmu: $(BUILD)/native-disc-vmu-a1.kui
+$(BUILD)/native-disc-vmu-a1.kui: $(BUILD)/native-disc-vmu.kui
+	cp $< $@

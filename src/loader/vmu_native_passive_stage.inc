@@ -117,22 +117,49 @@ static bool readonly_release_replay_valid(void) {
     return literal>=KUI_RETAIL_EXEC_ADDRESS && literal-KUI_RETAIL_EXEC_ADDRESS<=exec_bytes-2u &&
         *(const uint16_t *)(uintptr_t)literal==0xff0fu;
 }
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+/* The early pair's first exit: an eight-byte head through the next entry's
+ * veneer, written only once that veneer is in place. */
+static void readonly_patch_head(uint32_t address) {
+    uint16_t patch[4];
+    if(!kui_vmu_native_patch_encode_head(address,patch)) native_report(9u,8u);
+    memcpy((void *)(uintptr_t)address,patch,sizeof(patch));
+    kui_native_passive_publish(address,address+sizeof(patch));
+    if(memcmp((const void *)(uintptr_t)(address|0x20000000u),patch,sizeof(patch))) native_report(9u,6u);
+}
+#endif
 static void readonly_patch_entry(uint32_t address,uint32_t target) {
     address=(address&0x1fffffffu)|0x80000000u;
     uint16_t patch[6];
     if(!kui_vmu_native_patch_encode(address,target,patch)) native_report(9u,8u);
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    /* The installer patches exits in order, after comparing each one's 12
+     * original bytes. The early pair's first entry is left for the second:
+     * that one gets its veneer, then the first its head, so each exit keeps
+     * working throughout and the second still compares unchanged. */
+    uint32_t early=native_exits.family==KUI_VMU_NATIVE_EXIT_EARLY_PAIR?
+        (native_exits.entries[0]&0x1fffffffu)|0x80000000u:0u;
+    if(address==early) return;
+#endif
     memcpy((void *)(uintptr_t)address,patch,sizeof(patch));
     kui_native_passive_publish(address,address+sizeof(patch));
     if(memcmp((const void *)(uintptr_t)(address|0x20000000u),patch,sizeof(patch))) native_report(9u,6u);
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    if(early && address==early+8u) readonly_patch_head(early);
+#endif
 }
 #endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
 #include "vmu_native_sdk_coherence_stage.inc"
 #endif
 #if KUI_VMU_NATIVE_READONLY_PROBE
+/* An arena lease has no allocator: no initializer or release entry exists to
+ * compare, replay or patch. */
 static void native_passive_capture_windows(void) {
-    memcpy(readonly_init_window,(const void *)(uintptr_t)native_heap.initializer,sizeof(readonly_init_window));
-    memcpy(readonly_release_window,(const void *)(uintptr_t)native_heap.release,sizeof(readonly_release_window));
+    if(!native_arena) {
+        memcpy(readonly_init_window,(const void *)(uintptr_t)native_heap.initializer,sizeof(readonly_init_window));
+        memcpy(readonly_release_window,(const void *)(uintptr_t)native_heap.release,sizeof(readonly_release_window));
+    }
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     for(unsigned i=0;i<native_exits.count;i++)
         memcpy(persistent_exit_windows[i],(const void *)(uintptr_t)native_exits.entries[i],12u);
@@ -146,14 +173,16 @@ static void native_passive_prepare(void) {
 #if KUI_VMU_NATIVE_READONLY_PROBE
     const struct kui_vmu_native_patch_window windows[3]={{native_driver.submit,12u},
         {native_heap.initializer,12u},{native_heap.release,20u}};
-    if(((native_heap.initializer|native_heap.release)&3u) || !readonly_release_replay_valid()) native_report(2u,12u);
+    const size_t count=native_arena?1u:sizeof(windows)/sizeof(windows[0]);
+    if(!native_arena && (((native_heap.initializer|native_heap.release)&3u) || !readonly_release_replay_valid()))
+        native_report(2u,12u);
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(!kui_vmu_native_exit_discover_guarded((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
-       exec_bytes,KUI_RETAIL_EXEC_ADDRESS,windows,sizeof(windows)/sizeof(windows[0]),
+       exec_bytes,KUI_RETAIL_EXEC_ADDRESS,windows,count,
        &native_exits) || !native_sdk_coherence_cached_admit()) native_report(2u,13u);
 #else
     if(!kui_vmu_native_patch_no_interiors((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
-       exec_bytes,KUI_RETAIL_EXEC_ADDRESS,windows,sizeof(windows)/sizeof(windows[0]))) native_report(2u,12u);
+       exec_bytes,KUI_RETAIL_EXEC_ADDRESS,windows,count)) native_report(2u,12u);
 #endif
     native_passive_capture_windows();
 #else
@@ -181,11 +210,15 @@ static bool __attribute__((noipa)) native_resolution_replay(void) {
     native_driver=native_cached_resolution.driver;passive_layout=native_cached_resolution.layout;
     native_heap=native_cached_resolution.heap;native_call=native_cached_resolution.call;
     native_exits=native_cached_resolution.exits;
+    /* A replayed arena or fixed-arena record must name exactly the plan
+     * reviewed for this image; an arena lease has no allocator entries. */
     if(
 #if KUI_NATIVE_DUAL_READERS
-       (!native_heap.initializer_slot && !native_fixed_plan_bind(true)) ||
+       (native_heap.family==KUI_VMU_NATIVE_HEAP_ARENA?!native_arena_plan_bind(true):
+        (!native_heap.initializer_slot && !native_fixed_plan_bind(true))) ||
 #endif
-       ((native_heap.initializer|native_heap.release)&3u) || !readonly_release_replay_valid() ||
+       (!native_arena && (((native_heap.initializer|native_heap.release)&3u) ||
+                          !readonly_release_replay_valid())) ||
        !allocation_safe(native_call.entry_begin,native_call.entry_bytes) ||
        !native_sdk_coherence_cached_admit()) return false;
     native_passive_capture_windows();return true;
@@ -212,10 +245,17 @@ static void __attribute__((noipa)) native_passive_lease_only(
     for(unsigned i=0;i<native_exits.count;i++)
         if(memcmp((const void *)(uintptr_t)native_exits.entries[i],persistent_exit_windows[i],12u))
             native_report(9u,7u);
+    /* A borrowed literal (a fixed or arena plan) gets back the call target
+     * it held, not the initializer the low heap hook called. */
+#if KUI_NATIVE_DUAL_READERS
+    const uint32_t original=native_fixed?native_fixed_hook.target:native_heap.initializer_target;
+#else
+    const uint32_t original=native_heap.initializer_target;
+#endif
     uint32_t slot=(native_heap.initializer_slot&UINT32_C(0x1fffffff))|UINT32_C(0x80000000);
-    *(volatile uint32_t *)(uintptr_t)slot=native_heap.initializer_target;
+    *(volatile uint32_t *)(uintptr_t)slot=original;
     native_publish(slot);
-    if(native_word(slot|UINT32_C(0x20000000))!=native_heap.initializer_target ||
+    if(native_word(slot|UINT32_C(0x20000000))!=original ||
        !kui_vmu_native_heap_lease_valid(lease,native_read,NULL,1u) ||
        native_word(native_driver.completion_slot)!=native_driver.consumer)
         native_report(9u,9u);
@@ -263,7 +303,8 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     uint32_t load=(lease->payload&UINT32_C(0x1fffffff))|UINT32_C(0x80000000),dest=load+UINT32_C(0x20000000);
     uint32_t bytes=(uint32_t)(__native_worker_blob_end-__native_worker_blob_begin);
     uint32_t reloc_bytes=(uint32_t)(__native_worker_reloc_end-__native_worker_reloc_begin);
-    if(bytes<sizeof(struct kui_vmu_native_passive_exports) || bytes>=span-0x1000u || (native_driver.submit&3u) ||
+    if(bytes<sizeof(struct kui_vmu_native_passive_exports) || bytes>=span-KUI_VMU_NATIVE_PASSIVE_STACK_BYTES ||
+       (native_driver.submit&3u) ||
        !kui_vmu_native_heap_lease_valid(lease,native_read,NULL,1u)) native_report(8u,1u);
     struct kui_vmu_native_passive_config cfg;memset(&cfg,0,sizeof(cfg));
     cfg.version=1u;cfg.bytes=sizeof(cfg);cfg.driver=native_driver;cfg.lease=*lease;
@@ -342,13 +383,20 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
 #if KUI_NATIVE_COLD_PROGRESS_STAGE
     retail_display_line("COLD 33 WORKER RELOCATED");
 #endif
+#if KUI_NATIVE_PHYSICAL_DISC
+    /* On disc launches the former relocation caption also covered the
+     * complete bind/arm/publication sequence. Show its actual boundary once;
+     * no timer ownership or progress polling is needed. */
+    retail_display_line("INITIALIZING PASSIVE MAPLE STATE");
+#endif
     memset((void *)(uintptr_t)(dest+bytes),0,span-bytes);
     const struct kui_vmu_native_passive_exports *e=(const void *)(uintptr_t)dest;
     if(e->magic!=KUI_VMU_NATIVE_PASSIVE_MAGIC || e->version!=KUI_VMU_NATIVE_PASSIVE_VERSION || e->bytes!=sizeof(*e) ||
        !passive_entry(e->arm,dest,bytes) || !passive_entry(e->submit_hook,dest,bytes) ||
        !passive_entry(e->complete_hook,dest,bytes) || !passive_entry(e->terminal,dest,bytes) ||
        e->bss_begin!=dest+bytes || e->bss_end<e->bss_begin || e->bss_end>e->stack_bottom ||
-       e->stack_bottom!=dest+span-0x1000u || e->stack_top!=dest+span || e->memory_end!=e->stack_top ||
+       e->stack_bottom!=dest+span-KUI_VMU_NATIVE_PASSIVE_STACK_BYTES || e->stack_top!=dest+span ||
+       e->memory_end!=e->stack_top ||
        (e->resume_cell&3u) || (e->consumer_cell&3u) || e->resume_cell==e->consumer_cell ||
        e->resume_cell<dest+64u || e->resume_cell>dest+bytes-4u ||
        e->consumer_cell<dest+64u || e->consumer_cell>dest+bytes-4u)
@@ -380,6 +428,13 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     kui_native_passive_publish(load,load+bytes);
 #endif
     uint32_t unused=0;
+#if KUI_NATIVE_PHYSICAL_DISC
+    /* Unlike image readers, physical disc leaves all firmware RAM intact.
+     * Publish its independent serial callback inside this same owned lease,
+     * and retire the temporary allocator callback before arming the worker. */
+    native_disc_support_bind(e,dest,bytes,lease,&cfg);
+    retail_display_line("ARMING PASSIVE MAPLE WORKER");
+#endif
 #if KUI_NATIVE_COLD_PROGRESS_STAGE
     retail_display_line("COLD 34 WORKER ARM BEGIN");
 #endif
@@ -395,9 +450,10 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     static const uint16_t original[6]={0x9028u,0x63e2u,0x023eu,0x12c6u,0x9029u,0x63e2u};
     if(memcmp((const void *)(uintptr_t)native_driver.submit,original,sizeof(original))) native_report(9u,3u);
 #if KUI_VMU_NATIVE_READONLY_PROBE
-    if(memcmp((const void *)(uintptr_t)native_heap.initializer,readonly_init_window,sizeof(readonly_init_window)) ||
-       memcmp((const void *)(uintptr_t)native_heap.release,readonly_release_window,sizeof(readonly_release_window)) ||
-       !readonly_release_replay_valid()) native_report(9u,5u);
+    if(!native_arena &&
+       (memcmp((const void *)(uintptr_t)native_heap.initializer,readonly_init_window,sizeof(readonly_init_window)) ||
+        memcmp((const void *)(uintptr_t)native_heap.release,readonly_release_window,sizeof(readonly_release_window)) ||
+        !readonly_release_replay_valid())) native_report(9u,5u);
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(native_runtime_mode()==KUI_VMU_NATIVE_MODE_LEASE_ONLY) {
         native_passive_lease_only(lease,e);return;
@@ -405,12 +461,17 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
 #if KUI_NATIVE_COLD_PROGRESS_STAGE
     retail_display_line("COLD 36 SDK HOOK PUBLICATION BEGIN");
 #endif
+#if KUI_NATIVE_PHYSICAL_DISC
+    retail_display_line("PUBLISHING PASSIVE MAPLE HOOKS");
+#endif
     if(native_sdk_coherence_install(e,dest,bytes)!=1) native_report(9u,0x47u);
 #endif
     /* The first real initializer has returned and our lease is allocated.
      * Every later direct/indirect entry now stops before reclaiming it. */
-    readonly_patch_entry(native_heap.initializer,NATIVE_LOW_RETURN_HOOK);
-    readonly_patch_entry(native_heap.release,e->release_hook);
+    if(!native_arena) {
+        readonly_patch_entry(native_heap.initializer,NATIVE_LOW_RETURN_HOOK);
+        readonly_patch_entry(native_heap.release,e->release_hook);
+    }
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     for(unsigned i=0;i<native_exits.count;i++) {
         if(memcmp((const void *)(uintptr_t)native_exits.entries[i],persistent_exit_windows[i],12u))
@@ -491,7 +552,7 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
 #endif
 #elif KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION
 #if KUI_NATIVE_VMU_ONLY
-    retail_display_line("STANDARD READER / VIRTUAL A2 ON");
+    retail_display_line("STANDARD READER / VIRTUAL " KUI_VMU_NATIVE_VIRTUAL_NAME " ON");
 #if KUI_NATIVE_VMU_LITE
     retail_display_line("72 KIB VMU LITE / BACKGROUND OFF");
 #else
@@ -514,7 +575,8 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     retail_display_line("72 KIB VMU / 284 KIB BACKGROUND");
 #endif
     retail_display_line(native_runtime_mode()==KUI_VMU_NATIVE_MODE_READER_ONLY?
-        "NEW READER / VIRTUAL A2 OFF":"NEW READER / VIRTUAL A2 ON");
+        "NEW READER / VIRTUAL " KUI_VMU_NATIVE_VIRTUAL_NAME " OFF":
+        "NEW READER / VIRTUAL " KUI_VMU_NATIVE_VIRTUAL_NAME " ON");
 #if KUI_NATIVE_SPLIT_CONTROLLER_STREAM_GUARD
     retail_display_line("PREFETCH AUTO / SPLIT CONTROLLER ALL");
 #elif KUI_NATIVE_SPLIT_CONTROLLER_PREFETCH
@@ -527,21 +589,21 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
 #endif
     retail_display_line("REAL MAPLE CALLBACKS ON");
 #elif KUI_NATIVE_METADATA_CACHE_ISOLATION
-    retail_display_line("NEW READER / VIRTUAL A2 ON");
+    retail_display_line("NEW READER / VIRTUAL " KUI_VMU_NATIVE_VIRTUAL_NAME " ON");
     retail_display_line("PREFETCH OFF / METADATA CACHE");
     retail_display_line("REAL MAPLE CALLBACKS ON");
 #elif KUI_NATIVE_STANDARD_VMU_ISOLATION
-    retail_display_line("STANDARD READER / VIRTUAL A2 ON");
+    retail_display_line("STANDARD READER / VIRTUAL " KUI_VMU_NATIVE_VIRTUAL_NAME " ON");
     retail_display_line("384 KIB / BACKGROUND OFF");
 #else
     if(cfg.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN)
         retail_display_line("ACTIVE HOOKS / ORIGINAL MAPLE DMA LIST");
     else if(cfg.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_HOOKS_ONLY)
         retail_display_line("ALL HOOKS ACTIVE / VIRTUAL VMU OFF");
-    else retail_display_line("PERSISTENT VIRTUAL A2 ARMED - STARTING GAME");
+    else retail_display_line("PERSISTENT VIRTUAL " KUI_VMU_NATIVE_VIRTUAL_NAME " ARMED - STARTING GAME");
 #endif
 #elif KUI_VMU_NATIVE_READONLY_PROBE
-    retail_display_line("READ ONLY VIRTUAL A2 ARMED - STARTING GAME");
+    retail_display_line("READ ONLY VIRTUAL " KUI_VMU_NATIVE_VIRTUAL_NAME " ARMED - STARTING GAME");
 #else
     retail_display_line("PASSIVE WORKER ARMED - STARTING GAME");
 #endif

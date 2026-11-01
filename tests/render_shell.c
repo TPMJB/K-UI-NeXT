@@ -913,8 +913,55 @@ int main(int argc,char **argv) {
         strcpy(shell.browse_path,"/Games/MDK2");
     } else if(!strcmp(argv[1],"home-music")) shell.home_selected=home_row(KUI_SHELL_MUSIC);
     else if(!strcmp(argv[1],"home-gd")) shell.home_selected=home_row(KUI_SHELL_DISC_TOOLS);
-    else if(!strcmp(argv[1],"gd-play") || !strcmp(argv[1],"gd-confirm")) {
+    else if(!strcmp(argv[1],"gd-options") || !strcmp(argv[1],"gd-options-a1")) {
+        shell.page=KUI_SHELL_GD_OPTIONS;shell.gd_region_enabled=shell.gd_region_known=true;
+        shell.vmu_emulation_enabled=shell.vmu_emulation_known=true;
+        shell.vmu_emulation_slot=!strcmp(argv[1],"gd-options-a1")?KUI_GAME_VMU_SLOT_A1:KUI_GAME_VMU_SLOT_A2;
+        shell.gd_options_selected=2u;
+        snprintf(shell.vmu_emulation_notice,sizeof(shell.vmu_emulation_notice),
+            "Virtual VMU On; disc slot %s. Applies on next launch.",shell.vmu_emulation_slot==KUI_GAME_VMU_SLOT_A1?"A1":"A2");
+    }
+    else if(!strncmp(argv[1],"gd-vmu-",7)) {
+        shell.page=KUI_SHELL_GD_PLAY;
+        (void)kui_shell_input(&shell,KUI_SHELL_A,false);
+        if(strcmp(argv[1],"gd-vmu-loading")) {
+            struct kui_vmu_game_info info={.known=true,.enabled=strcmp(argv[1],"gd-vmu-off")!=0};
+            if(info.enabled) {
+                strcpy(info.product,"MK-51007");info.count=2;info.candidates_sequence=3;
+                info.storage.card_sectors=1000000;info.storage.partition_first=2048;info.storage.partition_end=999000;
+                info.storage.cid[0]=0x42;info.storage.high_capacity=1;
+                for(unsigned i=0;i<info.count;i++) {
+                    info.cards[i].pair=11+i;info.cards[i].identity[0]=11+i;
+                    snprintf(info.cards[i].label,sizeof(info.cards[i].label),"Save version %u / %s VMU",i+1,i?"Black":"White");
+                }
+                strcpy(info.notice,"Select the save version to use for this disc launch.");
+            } else strcpy(info.notice,"Virtual VMU is Off; no virtual cards were read.");
+            kui_shell_set_disc_vmu_cards(&shell,shell.games_vmu_generation,&info);
+        }
+    }
+    else if(!strcmp(argv[1],"gd-play") || !strcmp(argv[1],"gd-confirm") ||
+            !strcmp(argv[1],"gd-direct-confirm") || !strcmp(argv[1],"gd-checked") ||
+            !strcmp(argv[1],"gd-error") || !strcmp(argv[1],"gd-stopped")) {
         shell.page=KUI_SHELL_GD_PLAY;shell.confirm_gd_boot=!strcmp(argv[1],"gd-confirm");
+        shell.confirm_gd_direct=!strcmp(argv[1],"gd-direct-confirm");
+        if(!strcmp(argv[1],"gd-checked")) {
+            view.app_status=&status;
+            status.complete=status.passed=true;status.line_count=3;
+            strcpy(status.message,"Native GD boot bytes checked. X checks again; Y tests direct boot.");
+            strcpy(status.lines[0],"TOY COMMANDER");
+            strcpy(status.lines[1],"Product MK-51007 / region JUE");
+            strcpy(status.lines[2],"1ST_READ.BIN: 748444 bytes");
+        }
+        if(!strcmp(argv[1],"gd-error") || !strcmp(argv[1],"gd-stopped")) {
+            view.app_status=&status;status.complete=true;status.passed=false;
+            status.stopped=!strcmp(argv[1],"gd-stopped");status.errors=status.stopped?0u:1u;
+            status.line_count=3;
+            strcpy(status.message,status.stopped?"Direct disc boot stopped before game handoff.":
+                "Direct boot refused: Source buffer overlaps the reserved main-stack margin. No game code has executed.");
+            strcpy(status.lines[0],"Payload 4259840 bytes");
+            strcpy(status.lines[1],"Source 8CB00000");
+            strcpy(status.lines[2],"Main stack 8CF00000");
+        }
     } else if(!strcmp(argv[1],"quick-resume")) {
         shell.page=KUI_SHELL_ADVANCED;shell.advanced_selected=3;shell.confirm_quick_resume=true;
     } else if(!strcmp(argv[1],"music")) {
@@ -989,10 +1036,13 @@ int main(int argc,char **argv) {
         shell.vmu_wizard.total=shell.vmu_wizard.count=4;shell.vmu_wizard.cards=1;
         const char *names[]={"Grandia II","Resident Evil Code Veronica","Sonic Adventure 2","Toy Commander"};
         for(unsigned i=0;i<4;i++) snprintf(shell.vmu_wizard.games[i].title,sizeof(shell.vmu_wizard.games[i].title),"%s",names[i]);
-    } else if(!strcmp(argv[1],"vmu-tools") || !strcmp(argv[1],"vmu-tools-off") ||
+    } else if(!strcmp(argv[1],"vmu-tools") || !strcmp(argv[1],"vmu-tools-a1") || !strcmp(argv[1],"vmu-tools-off") ||
               !strcmp(argv[1],"vmu-tools-saving") || !strcmp(argv[1],"vmu-tools-unavailable")) {
         shell.page=KUI_SHELL_VMU_TOOLS;shell.vmu_tools_selected=4;shell.vmu_emulation_known=true;
         shell.vmu_emulation_enabled=strcmp(argv[1],"vmu-tools-off")!=0;
+        if(!strcmp(argv[1],"vmu-tools-a1")) {
+            shell.vmu_emulation_slot=KUI_GAME_VMU_SLOT_A1;shell.vmu_tools_selected=5u;
+        }
         if(!strcmp(argv[1],"vmu-tools-saving")) {
             shell.vmu_emulation_loading=true;shell.vmu_emulation_requested=false;
             strcpy(shell.vmu_emulation_notice,"Saving virtual VMU preference...");

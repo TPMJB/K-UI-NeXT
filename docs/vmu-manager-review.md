@@ -24,6 +24,56 @@ bounded BREAD helper, retaining duplicate reads, device checks and canaries.
 The helper validates framing before copying, keeps frame ownership through
 the copy, and quarantines sent operations that time out.
 
+## Bounded read retries and logical import follow-up
+
+The November 1 review found a separate BREAD retry defect in the adapter's
+request storage. KOS `maple_frame_init` aliases the send and receive buffers;
+an AGAIN reply overwrites the request before KOS marks it UNSENT and resends
+from `send_buf`. The reader now retains two independent request words per
+physical slot. An owner-frame guard remains held across a SENT timeout and
+late AGAIN retries, so another device cannot reuse a pending request. It is
+released only when that request is no longer queued or in flight. A private
+512-byte copy must have the same CRC32 as the receive payload before and
+after copying, before any caller bytes are published.
+
+The application retains two identical reads for healthy blocks. If complete
+replies differ, at most eight reads are allowed and three consecutive whole
+512-byte samples must agree. No byte voting, padding repair or synthesized
+allocated data is used. Identity, cancellation, canary and transport failures
+stop immediately; later independent payload and metadata comparisons remain.
+Refusals log block/save context, first differing offset and observed CRCs.
+
+The current import wizard captures all admitted saves into a separate
+canonical card without reading unused physical flash. An exact raw VMD
+backup still reads all 256 blocks twice and refuses disagreement, including
+unstable free blocks. These are intentionally different operations. The
+retry defect can explain refused reads or timeouts; it is not proof of the
+cause of the black VMU's earlier changing allocated block 128.
+
+The owner's `4ca1b2142a6a` report isolates `TIME_STK.001`, directory entry 2,
+first physical block 128, 16 blocks. At file offset 123 one accepted value
+changed from `08` to `09`: exactly one differing byte and bit. The pinned and
+retained CRCs both stayed `333b8453`, while the reread was `6332eebc`. The
+reported CRC XOR exactly matches that single-bit change in a 512-byte block.
+This supports different accepted read samples with an unchanged retained
+copy; it does not identify a hardware cause. The unvalidated raw header does
+not supply a trustworthy checksum for choosing one value.
+
+The import wizard now opts into bounded whole-save reacquisition after this
+kind of mismatch. It requires three consecutive identical complete save copies
+within six fresh acquisitions, with exact original metadata and identity
+checked around each one. No earlier partial reread counts as a candidate.
+RAM-pin or transport/identity/metadata failures remain terminal. Only a whole
+accepted file can replace the private capture; no block voting or byte repair
+occurs. The strict public capture API and copy-preview binding remain intact.
+This recovery policy can accept later consistent data after earlier variation;
+it must not be described as proving the source stayed unchanged throughout.
+The owner retested build `08045e88736e` and reported that the black VMU's
+whole-source import took a while but worked. This validates that import
+workflow on the reported card; it does not establish exact raw-VMD backup,
+which historical bit was correct, or a subsequent in-game reload of every
+imported save. The underlying source of changing read samples remains open.
+
 ## Delete and copy write paths
 
 Delete clears the selected directory entry, verifies the directory, frees only
@@ -64,4 +114,5 @@ placement and refusal without writes, metadata preservation, staged backups,
 and injected application I/O failures. The separate bounded-reader tests run
 the actual reader against a Maple frame/cache model, including malformed
 responses, busy acquisition, timeout cleanup and late completion. Hardware
-retesting is still needed for the physical-card behavior.
+write-completion testing remains separate from the successful read-only
+logical import reported above.

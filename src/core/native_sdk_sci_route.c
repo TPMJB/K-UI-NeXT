@@ -160,16 +160,46 @@ int kui_native_sdk_sci_route_discover(const void *image,size_t image_bytes,uint3
            !fingerprint(p+at,64u,family_vector_prefix))continue;
         vector_at=at;if(++vectors>1u)return -1;
     }
-    if(!vectors)return 0;
+    if(!vectors) {
+        struct early_family early;int found=early_family(p,image_bytes,load,&early);
+        if(found!=1)return found;
+        /* The live INTEVT copy must equal its template; only its R0 scratch
+         * word may differ. Its common word is therefore the handler the
+         * install routine wrote into both templates: the plain one, or with
+         * its 0x80000000 argument the nesting one, which early_family()
+         * admits only when that routine and handler are exactly the
+         * reviewed ones. */
+        for(unsigned i=0u;i<EARLY_STUB_BYTES/4u;i++) {
+            uint32_t word;
+            if(i==EARLY_SCRATCH_WORD)continue;
+            if(!read(context,current_vbr+0x600u+4u*i,&word) ||
+               word!=u32(p+early.stub_at+4u*i))return -1;
+        }
+        const uint32_t selected=early.selected;
+        bool nesting=selected!=early.common;
+        uint32_t common_code=(selected&UINT32_C(0x1fffffff))|UINT32_C(0x80000000),eri,rxi;
+        if(!live_words(read,context,common_code,p+(common_code-load),
+                       nesting?EARLY_NESTING_BYTES:EARLY_COMMON_BYTES) ||
+           !live_words(read,context,load+(uint32_t)early.default_at,p+early.default_at,EARLY_DEFAULT_BYTES) ||
+           !read(context,current_vbr+0x25cu,&eri) || !read(context,current_vbr+0x260u,&rxi) ||
+           eri!=early.original || rxi!=early.original)return -1;
+        *out=(struct kui_native_sdk_sci_route_plan){KUI_NATIVE_SDK_SCI_ROUTE_VERSION,sizeof(*out),
+            current_vbr,selected,current_vbr+0x25cu,current_vbr+0x260u,callback,eri};
+        return 1;
+    }
     if(image_bytes-vector_at<96u)return -1;
     uint32_t vector=load+(uint32_t)vector_at;
-    uint32_t event_physical=u32(p+vector_at+0x4cu)&UINT32_C(0x1fffffff);
-    bool compact=event_physical==(vector&UINT32_C(0x1fffffff))+0x338u;
-    if(!compact && event_physical!=(vector&UINT32_C(0x1fffffff))+0x398u)return -1;
-    if(image_bytes-vector_at<(compact?0x340u:0x3a0u))return -1;
-    uint32_t normal_bytes=compact?0x138u:0x168u,fpu_bytes=compact?0x16cu:0x19cu;
+    /* The event word selects the full, compact-FPU or round-toward-zero
+     * layout; every role below is still decoded and fingerprinted. */
+    uint32_t event_offset=(u32(p+vector_at+0x4cu)&UINT32_C(0x1fffffff))-
+        (vector&UINT32_C(0x1fffffff));
+    bool compact=event_offset==0x338u,zero=event_offset==0x3a0u;
+    if(!compact && !zero && event_offset!=0x398u)return -1;
+    if(image_bytes-vector_at<event_offset+8u)return -1;
+    uint32_t normal_bytes=compact?0x138u:zero?0x16cu:0x168u;
+    uint32_t fpu_bytes=compact?0x16cu:zero?0x1a0u:0x19cu;
     uint32_t normal=vector+0x8cu,fpu=normal+normal_bytes;
-    uint32_t event=vector+(compact?0x338u:0x398u),original=0u;size_t default_at=0u;
+    uint32_t event=vector+event_offset,original=0u;size_t default_at=0u;
     const uint8_t *v=p+vector_at,*integer=v+0x8cu,*floating=v+0x8cu+normal_bytes;
     static const uint16_t vector_holes[]={0x4cu,0x58u};
     uint16_t normal_hole=(uint16_t)(normal_bytes-4u),fpu_hole=(uint16_t)(fpu_bytes-4u);
@@ -200,14 +230,15 @@ int kui_native_sdk_sci_route_discover(const void *image,size_t image_bytes,uint3
        (compact && u32(def+0xf8u)!=raw_event) ||
        (helper&3u) || !owner_span(helper,0x238u,area,load,image_bytes,&helper_at) ||
        !literal_at(v,vector,0x38u,0u,0x4cu) || !literal_at(v,vector,0x3cu,1u,0x58u) ||
-       !literal_at(integer,normal,compact?0x80u:0x92u,4u,normal_hole) ||
-       !literal_at(integer,normal,compact?0x10cu:0x13cu,1u,normal_hole) ||
-       !literal_at(floating,fpu,compact?0x13eu:0x16eu,1u,fpu_hole) ||
+       !literal_at(integer,normal,compact?0x80u:zero?0x94u:0x92u,4u,normal_hole) ||
+       !literal_at(integer,normal,compact?0x10cu:zero?0x140u:0x13cu,1u,normal_hole) ||
+       !literal_at(floating,fpu,compact?0x13eu:zero?0x172u:0x16eu,1u,fpu_hole) ||
        !literal_at(def,load+(uint32_t)default_at,0x40u,0u,0xf4u) ||
        (compact && !literal_at(def,load+(uint32_t)default_at,0xbeu,1u,0xf8u)) ||
        !normalized(v,96u,vector_holes,2u,family_vector) ||
-       !normalized(integer,normal_bytes,&normal_hole,1u,compact?compact_normal:family_normal) ||
-       !normalized(floating,fpu_bytes,&fpu_hole,1u,compact?compact_fpu:family_fpu) ||
+       !normalized(integer,normal_bytes,&normal_hole,1u,
+           compact?compact_normal:zero?zero_normal:family_normal) ||
+       !normalized(floating,fpu_bytes,&fpu_hole,1u,compact?compact_fpu:zero?zero_fpu:family_fpu) ||
        !normalized(def,compact?0xfcu:0xf8u,default_holes,compact?5u:4u,
            compact?compact_default:family_default))return -1;
     for(size_t i=0u;i<sizeof(helper_windows)/sizeof(helper_windows[0]);i++)

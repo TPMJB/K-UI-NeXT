@@ -105,6 +105,31 @@ int main(void) {
             default:bad.dma_bytes=0x3004u;break;}
         CHECK(reference(&bad,&expected)!=0);no_snapshot_on_failure(&bad);
     }
+    /* The pd 1.46 server may run at its caller's level: the live check and
+     * the full proof agree at all sixteen inherited levels, in both phases,
+     * while the pd 1.50 server is still refused by both outside 6 and 15. */
+    for(unsigned family=KUI_VMU_NATIVE_FAMILY_UNIFORM_V1;family<=KUI_VMU_NATIVE_FAMILY_EARLY_V1;family++)
+        for(unsigned phase=0;phase<2u;phase++) {
+            fixture();input.driver.family=family;
+            put(input.driver.lock_cell,4u,kui_vmu_native_lock_pointer(&input.driver));
+            struct kui_vmu_native_runtime_boundary at=live_boundary_input(0u,phase,false);prepare_plan(&at);
+            for(unsigned level=0;level<16u;level++) {
+                at.inherited_sr=level<<4;
+                if(family==KUI_VMU_NATIVE_FAMILY_EARLY_V1 || level==6u || level==15u) {
+                    CHECK(reference(&at,&expected)==0);
+                    CHECK(kui_vmu_native_live_check(&plan,&input.driver,&at,read_value,NULL,&out)==0);
+                    CHECK(!memcmp(&out,&expected,sizeof(out)));
+                } else {
+                    CHECK(reference(&at,&expected)==KUI_VMU_NATIVE_RUNTIME_CONTEXT);
+                    CHECK(kui_vmu_native_live_check(&plan,&input.driver,&at,read_value,NULL,&out)==
+                          KUI_VMU_NATIVE_RUNTIME_CONTEXT);
+                    no_snapshot_on_failure(&at);
+                }
+                /* The worker itself always runs at IMASK15. */
+                struct kui_vmu_native_runtime_boundary low=at;low.worker_sr=0x60u;
+                CHECK(reference(&low,&expected)==KUI_VMU_NATIVE_RUNTIME_CONTEXT);no_snapshot_on_failure(&low);
+            }
+        }
     b=live_boundary_input(0u,1u,true);
     const uint32_t invalid_dma[]={0x0c6fffe0u,0x0c72ffe0u,0xac700020u,0x0c700021u};
     for(unsigned i=0;i<4u;i++) {

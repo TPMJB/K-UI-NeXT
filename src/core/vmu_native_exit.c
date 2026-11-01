@@ -56,6 +56,36 @@ static bool short_at(const uint8_t *p,size_t bytes,uint32_t load,size_t at,unsig
         load+(uint32_t)at+4u+2u*(op&255u)==load+(uint32_t)slot && u16(p+slot)==expected;
 }
 struct exit_shape {uint32_t second,vector,boot,vector_loads[3];};
+/* pd 1.46 (syBt 1.04) exits: two adjacent routines and one shared literal
+ * pool. The first jumps through the BIOS vector cell with R4=1; the second
+ * calls the SDK cleanup routine, then jumps through the same cell with R4=2.
+ * The halfword after the second is linker fill; both pool words are decoded. */
+static bool exit_early_pair(const uint8_t *p,size_t bytes,uint32_t load,size_t at,uint32_t *cleanup) {
+    static const struct witness w[]={
+        {0,0xd206},{2,0x6322},{4,0x432b},{6,0xe401},
+        {8,0x4f22},{10,0xd305},{12,0x430b},{14,0x0009},{16,0xd302},{18,0xe402},
+        {20,0x6032},{22,0x402b},{24,0x4f26}
+    };
+    return bytes-at>=0x24u && (u16(p+at+26u)==0u || u16(p+at+26u)==UINT16_C(0xffff)) && WORDS(p,at,w) &&
+        value_at(p,bytes,load,at,2u,at+0x1cu,UINT32_C(0x8c0000e0)) &&
+        value_at(p,bytes,load,at+16u,3u,at+0x1cu,UINT32_C(0x8c0000e0)) &&
+        code_at(p,bytes,load,at+10u,3u,at+0x20u,cleanup);
+}
+/* The early pair must be the only firmware consumer: exactly its own two
+ * loads of the BIOS vector cell, and no boot-entry consumer at all. */
+static bool early_consumers(const uint8_t *p,size_t bytes,uint32_t load,size_t pair) {
+    unsigned vectors=0u;
+    for(size_t at=0;at+2u<=bytes;at+=2u) {
+        uint16_t op=u16(p+at);uint32_t address,value;
+        if((op&UINT16_C(0xf000))!=UINT16_C(0xd000) ||
+           !literal(p,bytes,load,at,(op>>8)&15u,&address,&value) || !direct(value)) continue;
+        if(physical(value)==UINT32_C(0x0c0000e0)) {
+            if(at!=pair && at!=pair+16u) return false;
+            ++vectors;
+        } else if(physical(value)==UINT32_C(0x0c008300)) return false;
+    }
+    return vectors==2u;
+}
 struct exec_shape {uint32_t family,thunk,boot;};
 /* The alternate table is useful only after its common fatal entry has itself
  * become a terminal hook. Prove all four pure argument wrappers, the complete
@@ -380,7 +410,7 @@ bool kui_vmu_native_exit_discover_guarded(const void *image,size_t bytes,uint32_
        bytes>UINT32_C(0x0d000000)-physical(load) || extra_count>5u ||
        (extra_count && !additional)) return false;
     const uint8_t *p=image;unsigned count=0u;size_t pair=0u,exec=0u;uint32_t cleanup=0u;
-    bool pvr=false;struct exit_shape pair_shape={0};struct exec_shape exec_shape={0};
+    bool pvr=false,early=false;struct exit_shape pair_shape={0};struct exec_shape exec_shape={0};
     for(size_t at=0;at+0x60u<=bytes;at+=4u) {
         uint16_t op=u16(p+at),next=u16(p+at+2u);uint32_t target;
         if((op&UINT16_C(0xff00))==UINT16_C(0xd300) && next==UINT16_C(0x6030) &&
@@ -393,9 +423,26 @@ bool kui_vmu_native_exit_discover_guarded(const void *image,size_t bytes,uint32_
             pair=at;cleanup=target;pvr=true;
             pair_shape=(struct exit_shape){54u,0x64u,26u,{38u,46u,62u}};
             if(++count>1u) return false;
+        } else if(op==UINT16_C(0xd206) && next==UINT16_C(0x6322) &&
+           exit_early_pair(p,bytes,load,at,&target)) {
+            pair=at;cleanup=target;early=true;
+            if(++count>1u) return false;
         }
     }
     if(count!=1u) return false;
+    if(early) {
+        /* No loader or boot-entry consumer exists in this family. */
+        if(!early_consumers(p,bytes,load,pair)) return false;
+        struct kui_vmu_native_patch_window windows[7]={
+            {load+(uint32_t)pair,8u},{load+(uint32_t)pair+8u,12u}};
+        for(size_t i=0;i<extra_count;i++) windows[2u+i]=additional[i];
+        if(!kui_vmu_native_patch_no_interiors(image,bytes,load,windows,2u+extra_count)) return false;
+        *out=(struct kui_vmu_native_exit){.version=KUI_VMU_NATIVE_EXIT_VERSION,.bytes=sizeof(*out),
+            .family=KUI_VMU_NATIVE_EXIT_EARLY_PAIR,.load=load,.image_bytes=(uint32_t)bytes,.count=2u,
+            .entries={load+(uint32_t)pair,load+(uint32_t)pair+8u,0u,0u},
+            .bios_vector_literal=load+(uint32_t)pair+0x1cu,.cleanup=cleanup};
+        return true;
+    }
     count=0u;bool loader_prologue=false;
     for(size_t at=0;at+24u<=bytes;at+=4u) {
         if(u16(p+at)!=UINT16_C(0x2fe6)) continue;

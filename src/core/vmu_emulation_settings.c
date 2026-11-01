@@ -4,25 +4,27 @@
 
 static const char *const paths[2]={KUI_VMU_EMULATION_SETTINGS_PATH_A,KUI_VMU_EMULATION_SETTINGS_PATH_B};
 static const uint8_t magic[8]={'K','U','I','V','M','U','E','1'};
-struct setting_slot {bool present,valid,enabled;uint64_t sequence;};
+struct setting_slot {bool present,valid,enabled;unsigned slot;uint64_t sequence;};
 static uint32_t get32(const uint8_t *p) {
     return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24;
 }
 static void put32(uint8_t *p,uint32_t n) {for(unsigned i=0;i<4u;i++) p[i]=(uint8_t)(n>>(8u*i));}
 static bool decode(const uint8_t record[KUI_VMU_EMULATION_SETTINGS_BYTES],struct setting_slot *slot) {
     uint64_t sequence=(uint64_t)get32(record+16u)|(uint64_t)get32(record+20u)<<32;
-    if(memcmp(record,magic,sizeof(magic)) || get32(record+8u)!=1u ||
+    uint32_t version=get32(record+8u),card_slot=version==2u?get32(record+28u):KUI_GAME_VMU_SLOT_A2;
+    if(memcmp(record,magic,sizeof(magic)) || (version!=1u && version!=2u) ||
        get32(record+12u)!=KUI_VMU_EMULATION_SETTINGS_BYTES || !sequence ||
-       get32(record+24u)>1u || get32(record+60u)!=kui_crc32(0,record,60u)) return false;
-    for(unsigned i=28u;i<60u;i++) if(record[i]) return false;
-    slot->valid=true;slot->enabled=get32(record+24u)!=0;slot->sequence=sequence;
+       get32(record+24u)>1u || card_slot>=KUI_GAME_VMU_SLOT_COUNT ||
+       get32(record+60u)!=kui_crc32(0,record,60u)) return false;
+    for(unsigned i=version==1u?28u:32u;i<60u;i++) if(record[i]) return false;
+    slot->valid=true;slot->enabled=get32(record+24u)!=0;slot->slot=card_slot;slot->sequence=sequence;
     return true;
 }
-static void encode(uint8_t record[KUI_VMU_EMULATION_SETTINGS_BYTES],bool enabled,uint64_t sequence) {
+static void encode(uint8_t record[KUI_VMU_EMULATION_SETTINGS_BYTES],bool enabled,unsigned slot,uint64_t sequence) {
     memset(record,0,KUI_VMU_EMULATION_SETTINGS_BYTES);memcpy(record,magic,sizeof(magic));
-    put32(record+8u,1u);put32(record+12u,KUI_VMU_EMULATION_SETTINGS_BYTES);
+    put32(record+8u,slot==KUI_GAME_VMU_SLOT_A2?1u:2u);put32(record+12u,KUI_VMU_EMULATION_SETTINGS_BYTES);
     put32(record+16u,(uint32_t)sequence);put32(record+20u,(uint32_t)(sequence>>32));
-    put32(record+24u,enabled?1u:0u);put32(record+60u,kui_crc32(0,record,60u));
+    put32(record+24u,enabled?1u:0u);put32(record+28u,slot);put32(record+60u,kui_crc32(0,record,60u));
 }
 static bool read_slot(unsigned index,struct setting_slot *slot) {
     memset(slot,0,sizeof(*slot));FILINFO info;
@@ -44,19 +46,23 @@ static bool read_slot(unsigned index,struct setting_slot *slot) {
 static bool read_slots(struct setting_slot slots[2],int *current) {
     if(!read_slot(0,slots) || !read_slot(1,slots+1)) return false;
     if(slots[0].valid && slots[1].valid && slots[0].sequence==slots[1].sequence &&
-       slots[0].enabled!=slots[1].enabled) return false;
+       (slots[0].enabled!=slots[1].enabled || slots[0].slot!=slots[1].slot)) return false;
     *current=!slots[0].valid?(slots[1].valid?1:-1):
         slots[1].valid && slots[1].sequence>slots[0].sequence?1:0;
     return *current>=0 || (!slots[0].present && !slots[1].present);
 }
 bool kui_vmu_emulation_settings_load(bool *enabled,kui_log_fn log) {
-    if(!enabled) return false;
+    unsigned slot;return kui_vmu_emulation_settings_load_full(enabled,&slot,log);
+}
+bool kui_vmu_emulation_settings_load_full(bool *enabled,unsigned *slot,kui_log_fn log) {
+    if(!enabled || !slot) return false;
     struct setting_slot slots[2];int current;
     if(!read_slots(slots,&current)) {
         if(log) log("VMU emulation preference unavailable or damaged");
         return false;
     }
     *enabled=current<0?true:slots[current].enabled;
+    *slot=current<0?KUI_GAME_VMU_SLOT_A2:slots[current].slot;
     return true;
 }
 static bool parents(void) {
@@ -68,14 +74,13 @@ static bool parents(void) {
     }
     return true;
 }
-bool kui_vmu_emulation_settings_save(bool enabled,kui_log_fn log) {
-    struct setting_slot slots[2];int current;
-    if(!read_slots(slots,&current)) return false;
-    if(current>=0 && slots[current].enabled==enabled) return true;
+static bool save_setting(bool enabled,unsigned slot,const struct setting_slot slots[2],int current,kui_log_fn log) {
+    if(slot>=KUI_GAME_VMU_SLOT_COUNT) return false;
+    if(current>=0 && slots[current].enabled==enabled && slots[current].slot==slot) return true;
     if(current>=0 && slots[current].sequence==UINT64_MAX) return false;
     if(!parents()) return false;
     uint8_t record[KUI_VMU_EMULATION_SETTINGS_BYTES],saved[KUI_VMU_EMULATION_SETTINGS_BYTES];
-    encode(record,enabled,current<0?1u:slots[current].sequence+1u);
+    encode(record,enabled,slot,current<0?1u:slots[current].sequence+1u);
     unsigned target=current<0?0u:1u-(unsigned)current;FIL file;UINT done=0;
     if(f_open(&file,paths[target],FA_WRITE|FA_CREATE_ALWAYS)!=FR_OK) return false;
     bool ok=f_write(&file,record,sizeof(record),&done)==FR_OK && done==sizeof(record);
@@ -92,4 +97,20 @@ bool kui_vmu_emulation_settings_save(bool enabled,kui_log_fn log) {
     }
     if(!ok && log) log("VMU emulation preference save not confirmed; previous slot retained");
     return ok;
+}
+bool kui_vmu_emulation_settings_save_full(bool enabled,unsigned slot,kui_log_fn log) {
+    if(slot>=KUI_GAME_VMU_SLOT_COUNT) return false;
+    struct setting_slot slots[2];int current;
+    return read_slots(slots,&current) && save_setting(enabled,slot,slots,current,log);
+}
+bool kui_vmu_emulation_settings_save(bool enabled,kui_log_fn log) {
+    struct setting_slot slots[2];int current;
+    return read_slots(slots,&current) && save_setting(enabled,
+        current<0?KUI_GAME_VMU_SLOT_A2:slots[current].slot,slots,current,log);
+}
+bool kui_vmu_emulation_settings_save_slot(unsigned slot,kui_log_fn log) {
+    if(slot>=KUI_GAME_VMU_SLOT_COUNT) return false;
+    struct setting_slot slots[2];int current;
+    return read_slots(slots,&current) && save_setting(current<0?true:slots[current].enabled,
+        slot,slots,current,log);
 }

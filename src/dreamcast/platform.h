@@ -78,6 +78,13 @@ enum kui_runtime_result kui_bootstrap_measure(unsigned transport_filter,
     kui_cancel_fn cancelled);
 bool kui_disc_prepare(struct kui_toc sessions[2]);
 bool kui_disc_prepare_capture(struct kui_toc sessions[2],bool *is_cd);
+/* New direct native-GD launch only, after exclusive raw startup reads and
+ * before arch_exec. Restore ordinary Mode1 2048-byte firmware reads, then
+ * recheck the admitted first IP sector twice in guarded static buffers.
+ * Requires an initialized, idle, unchanged GD with no active drive controls.
+ * No reset/INIT, SD access or GD vector patch. False forbids game handoff;
+ * failed abort/guard damage retains the adapter's permanent poison latch. */
+bool kui_disc_native_handoff(uint32_t ip_fad,const uint8_t expected_ip_sector[2048]);
 /* Exclusive salvage owner, after successful preparation and before reads.
  * Zero selections issue no mode commands. An active session is reapplied after
  * INIT and restored on end, including a clean user Stop. Never call begin/end

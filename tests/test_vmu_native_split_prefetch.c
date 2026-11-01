@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* The general split controller with prefetch restored: every proved split
- * completion dispatches exactly one genuine bound auxiliary TICK after its
- * publication; refused completions and full-path fallbacks dispatch none. */
+/* Split prefetch keeps each driver's established opportunities: early main
+ * INFO/ALLINFO does not gain a masked PIO window just because it now uses the
+ * split path. Refused completions and full-path fallbacks dispatch none. */
 #define _GNU_SOURCE 1
 #define KUI_NATIVE_READAHEAD 1
 #define KUI_NATIVE_IRQ_REARM 1
@@ -70,8 +70,29 @@ static void prefetch_suite(void) {
     tick_case(split_full_fallback,0u);
     tick_case(split_warm_tag_refusals,2u);    /* Only each first, proved completion. */
 #if KUI_NATIVE_SPLIT_CONTROLLER_GENERAL
+    tick_case(split_early_sessions,192u);    /* Early main queries do not add TICK; GETCOND retains one. */
+    tick_case(split_early_refusals,0u);      /* An early lock/hook refusal grants no reader visit. */
     tick_case(split_long_sessions,30u);      /* Old cap and uint32 wrap keep TICK usable. */
 #endif
+}
+static void early_query_prefetch_suite(void) {
+    for(unsigned early=0u;early<2u;early++)
+        for(unsigned cached=0u;cached<2u;cached++) for(unsigned arena=0u;arena<2u;arena++)
+            for(unsigned command=1u;command<=9u;command++) {
+                if(command!=1u && command!=2u && command!=9u) continue;
+                reader_bind();
+                if(early) {split_early_setup(cached,arena);submit_sr=complete_sr=0x60000101u;}
+                else split_setup();
+                /* Other ports poll GETCOND in each case: only the main A
+                 * command decides whether the early driver gets a TICK. */
+                unsigned conditions=command==9u?15u:14u,allinfo=command==2u?1u:0u;
+                split_batch(conditions,allinfo,0u);split_submit_ok();
+                split_done(conditions,allinfo,0x01000000u);
+                unsigned before=tick_visits;complete_return();
+                CHECK(tick_visits==before+(!early || command==9u));
+                CHECK(!state.pending && !controller_pair.pending && !durable_card.inflight &&
+                      !durable_card.handling && !lease_calls && !sd.bytes && !sd.writes);
+            }
 }
 #if KUI_NATIVE_SPLIT_CONTROLLER_STREAM_GUARD
 /* One proved split completion after the game received `blocks` more blocks. */
@@ -124,7 +145,9 @@ int KUI_SPLIT_PREFETCH_TEST_MAIN(void) {
         split_prepare();input.diagnostics=mode;
         CHECK(kui_vmu_native_passive_arm(&input,NULL)==-2 && !state.armed);
     }
-    CHECK(tick_visits==80u);
+    CHECK(tick_visits==464u);
+    early_query_prefetch_suite();
+    CHECK(tick_visits==480u);
 #if KUI_NATIVE_SPLIT_CONTROLLER_STREAM_GUARD
     printf("Split controller stream guard host checks: %u; %u TICK visits, none after a refusal; "
         "%u guarded-frame visits, paused while streaming\n",checks,tick_visits,guard_visits);

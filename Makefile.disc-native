@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Independent native physical-disc boot test; no image-reader or VMU resident.
+BUILD ?= build/disc-native
+BUILD_ID ?= $(shell git rev-parse --short=12 HEAD)
+HOST_CC ?= cc
+CPU := -m4-single -ml -mdiv=call-div1 -mfixed-range=fr0-fr15,fpul-fpul
+FLAGS := -std=c11 -Os -g -Wall -Wextra -Werror $(CPU) -ffreestanding -fno-builtin \
+ -ffunction-sections -fdata-sections -fstack-usage -fcallgraph-info=su \
+ -Iinclude -Isrc/loader -DKUI_RETAIL_FAST_IO=1 -DKUI_BUILD_ID='"$(BUILD_ID)"'
+LINK := $(CPU) -nostdlib -Wl,--gc-sections -Wl,--build-id=none
+SOURCES := src/loader/disc_stage.c src/core/disc_launch.c src/core/hash.c src/core/data.c \
+ src/loader/retail_display.c src/loader/minic.c
+OBJECTS := $(patsubst %.c,$(BUILD)/%.o,$(SOURCES)) $(BUILD)/disc_stage_asm.o
+.PHONY: all test audit force-build-id
+all: $(BUILD)/native-disc.kui audit
+force-build-id:
+$(BUILD)/src/loader/retail_display.o: force-build-id
+$(BUILD)/%.o: %.c
+	@mkdir -p $(@D)
+	sh-elf-gcc $(FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/disc_stage_asm.o: src/loader/disc_stage.S
+	@mkdir -p $(@D)
+	sh-elf-gcc $(FLAGS) -c $< -o $@
+$(BUILD)/stage.elf: $(OBJECTS) src/loader/disc_stage.ld
+	sh-elf-gcc $(LINK) -Tsrc/loader/disc_stage.ld -Wl,-Map,$(BUILD)/stage.map -o $@ $(OBJECTS) -lgcc
+	@test -z "$$(sh-elf-nm -u $@)"
+	python3 tools/record_build.py $@
+$(BUILD)/stage.bin: $(BUILD)/stage.elf
+	sh-elf-objcopy -O binary $< $@
+$(BUILD)/disc_entry_asm.o: src/loader/disc_entry.S $(BUILD)/stage.bin
+	sh-elf-gcc $(FLAGS) -DKUI_DISC_STAGE_BIN='"$(BUILD)/stage.bin"' -c $< -o $@
+$(BUILD)/entry.elf: $(BUILD)/disc_entry_asm.o src/loader/disc_entry.ld
+	sh-elf-gcc $(LINK) -Tsrc/loader/disc_entry.ld -Wl,-Map,$(BUILD)/entry.map -o $@ $<
+	@test -z "$$(sh-elf-nm -u $@)"
+	python3 tools/record_build.py $@
+$(BUILD)/native-disc.kui: $(BUILD)/entry.elf
+	python3 tools/runtime_package.py build $< $@ --build-id $(BUILD_ID)
+test:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic \
+	 -fsanitize=address,undefined -fno-omit-frame-pointer -fno-pie -no-pie \
+	 -ffunction-sections -fdata-sections -Iinclude tests/test_disc_launch.c \
+	 src/core/disc_launch.c src/core/hash.c src/core/data.c -Wl,--gc-sections -o $(BUILD)/test-disc-launch
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-disc-launch
+audit: $(BUILD)/native-disc.kui
+	python3 tools/check_disc_handoff.py $(BUILD)/stage.elf
+	python3 tests/test_disc_handoff.py $(BUILD)/stage.elf
+	python3 -c 'import sys,subprocess;sys.path.insert(0,"tools");from check_retail_instructions import audit;print("Physical-disc linked instructions:",sum(audit(n,subprocess.check_output(["sh-elf-objdump","-d","$(BUILD)/"+n+".elf"],text=True)) for n in ("entry","stage")))'
+-include $(OBJECTS:.o=.d)

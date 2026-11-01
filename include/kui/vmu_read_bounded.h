@@ -8,7 +8,7 @@ enum kui_vmu_read_bounded_stage {
     KUI_VMU_READ_ARGUMENT=1,KUI_VMU_READ_LOCK=2,KUI_VMU_READ_FRAME=3,
     KUI_VMU_READ_QUEUE=4,KUI_VMU_READ_WAIT=5,KUI_VMU_READ_TYPE=6,
     KUI_VMU_READ_LENGTH=7,KUI_VMU_READ_FUNCTION=8,KUI_VMU_READ_LOCATION=9,
-    KUI_VMU_READ_COMPLETE=10
+    KUI_VMU_READ_COMPLETE=10,KUI_VMU_READ_STABILITY=11
 };
 struct kui_vmu_read_bounded_diagnostic {
     uint32_t block,stage,frame_state,queued,lock_attempts;
@@ -21,24 +21,30 @@ struct kui_vmu_read_bounded_diagnostic {
  * response == -127 means that no response header was observed. Payload words
  * are inspected only for a DATATRF with the complete 130-word payload.
  * CRC32 observations are made only after all headers match: raw payload before
- * and after copying, then the output before frame release. They do not alter
- * the helper's admission result. The importer independently checks both reads. */
+ * and after copying, then a private copy before frame release. All three must
+ * agree before publishing any caller bytes. The importer additionally checks
+ * independent complete reads. */
 const struct kui_vmu_read_bounded_diagnostic *kui_vmu_read_bounded_last(void);
 
 /* Synchronous read only, outside IRQ context. The caller keeps the physical
  * device alive and serializes VMU filesystem access. The output is a separate
  * caller-owned 512-byte buffer. The helper submits one MEMCARD BREAD request;
- * KOS may requeue AGAIN responses internally. No block write, reset or
- * filesystem mutation is requested.
+ * KOS may requeue AGAIN responses internally. Its two request words live in
+ * separate per-slot storage, so a DMA response cannot overwrite a subsequent
+ * retransmission. The owner-frame guard survives a synchronous timeout and
+ * prevents a replacement device at that slot from reusing pending words.
+ * No block write, reset or filesystem mutation is requested.
  * With the frame exclusively owned and initialized, the cached alias of its
  * aligned receive area is invalidated before request construction, preventing
  * stale calloc cache lines from later writing over uncached DMA replies.
  * Response type, complete 130-word payload, function and block location must
- * all match before any output store. Every refusal preserves all 512 bytes.
+ * all match, and raw-before/raw-after/private-copy CRCs must agree, before any
+ * output store. Every refusal preserves all 512 bytes.
  * Frame acquisition waits at most 100ms for an existing owner; an ordinary
  * transient busy frame is not a read error. Returns MAPLE_EOK, MAPLE_EINVALID,
  * MAPLE_ETIMEOUT or MAPLE_EFAIL. A timeout
  * ends this import. An in-flight frame remains locked until KOS's late
- * completion callback releases it, so its DMA buffers cannot be reused. */
+ * completion callback releases it, so its DMA buffers and request words
+ * cannot be reused, even if KOS receives AGAIN after the caller returns. */
 int kui_vmu_read_bounded(maple_device_t *,uint16_t block,uint8_t out[512]);
 #endif

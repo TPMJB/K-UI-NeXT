@@ -6,9 +6,12 @@
 #include "kui/storage.h"
 #include "kui/vmu_read_bounded.h"
 #include "kui/vmu_collection.h"
+#include "kui/hash.h"
+#include "kui/vmu_image_pack.h"
 #include <dc/maple.h>
 #include <dc/vmufs.h>
 #include <assert.h>
+#include <inttypes.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,6 +33,19 @@ static bool missing,payload_seen,injected;
 static unsigned vmu_writes,free_user_reads,rejection_read_count;
 static bool collection_read_guard;
 static unsigned collection_unowned_reads;
+static unsigned recovery_reads,recovery_changes,recovery_completions;
+static bool recovery_diagnostic,recovery_save_context;
+static unsigned recovery_transport_lines;
+static bool recovery_transport_ready;
+static struct kui_vmu_read_bounded_diagnostic recovery_transport;
+static uint8_t *recovery_previous_output;
+static char comparison_log[2048];
+static size_t comparison_log_bytes;
+static unsigned comparison_pairs;
+static uint8_t *retained_capture_sample;
+static bool whole_mode,whole_cancel,whole_difference,whole_final_metadata,whole_pin_pending;
+static unsigned whole_reads[256],whole_started,whole_attempt,whole_completed,whole_streak,whole_successes;
+static uint8_t *whole_retained_time,*whole_retained_other,*whole_candidate[2];
 static uint8_t original_card[256][512];
 static FILE *image;
 static uint64_t image_blocks;
@@ -37,8 +53,64 @@ static const char *fault;
 static const char *sentinel_path="0:/KUI/backups/vmu/A1-0001/keep.bin";
 static const char sentinel[]="Existing VMU backup and capture files must remain intact";
 static bool is(const char *name) {return fault && !strcmp(fault,name);}
+#ifdef KUI_VMU_CAPTURE_TEST_WRAP_CRC
+uint32_t __real_kui_crc32(uint32_t,const void *,size_t);
+/* Observe the first-pass hash boundary to inject a later retained-RAM fault.
+ * Production code has no test hook and performs no synthetic mutation. */
+uint32_t __wrap_kui_crc32(uint32_t seed,const void *data,size_t bytes) {
+    uint32_t crc=__real_kui_crc32(seed,data,bytes);
+    if(is("read-recovery-retained-change") && !retained_capture_sample && bytes==512u &&
+       !memcmp(data,original_card[128],512u)) retained_capture_sample=(uint8_t *)(uintptr_t)data;
+    if(whole_mode && bytes==512u) {
+        if(!whole_retained_time && !memcmp(data,original_card[128],512u)) whole_retained_time=(uint8_t *)(uintptr_t)data;
+        if(!whole_retained_other && !memcmp(data,original_card[0],512u)) whole_retained_other=(uint8_t *)(uintptr_t)data;
+        if(whole_attempt && whole_pin_pending && data!=whole_retained_time && data!=whole_retained_other &&
+           !memcmp(data,original_card[128],123u) && !memcmp((const uint8_t *)data+124u,original_card[128]+124u,388u)) {
+            unsigned bank=(whole_attempt-1u)&1u;
+            whole_candidate[bank]=(uint8_t *)(uintptr_t)data;whole_pin_pending=false;
+        }
+    }
+    return crc;
+}
+int __real_kui_vmu_image_pack(const struct kui_vmu_image_file *,size_t,void *,size_t,
+    struct kui_vmu_image_workspace *,struct kui_vmu_image_summary *);
+int __wrap_kui_vmu_image_pack(const struct kui_vmu_image_file *files,size_t count,void *destination,size_t bytes,
+    struct kui_vmu_image_workspace *work,struct kui_vmu_image_summary *summary) {
+    int result=__real_kui_vmu_image_pack(files,count,destination,bytes,work,summary);
+    if(!result && whole_mode) {
+        if(is("whole-recovery-late-cancel")) {whole_cancel=true;injected=true;}
+        if(is("whole-recovery-late-identity")) {active=1u;injected=true;}
+    }
+    return result;
+}
+#endif
 static void log_line(const char *format,...) {
-    va_list args;va_start(args,format);vprintf(format,args);va_end(args);puts("");
+    char line[512];va_list args;va_start(args,format);
+    vsnprintf(line,sizeof(line),format,args);va_end(args);puts(line);
+    if(strstr(line,"VMU block 128 read") && strstr(line,"changed:")) {
+        ++recovery_changes;
+        if(strstr(line,"CRC32 ") && strstr(line,"first byte 12:")) recovery_diagnostic=true;
+    }
+    if(strstr(line,"VMU block 128 recovered at read")) ++recovery_completions;
+    if(strstr(line,"VMU allocated save 1 (SAVE00)") && strstr(line,"refused at block 128"))
+        recovery_save_context=true;
+    if(strstr(line,"VMU bounded reader: block 128 stage ")) recovery_transport_lines|=1u;
+    if(strstr(line,"VMU bounded fields: function 01020304/05060708 location 11223344/55667788")) recovery_transport_lines|=2u;
+    if(strstr(line,"VMU bounded CRC32: raw-before 12345678 raw-after 90abcdef private-copy a1b2c3d4")) recovery_transport_lines|=4u;
+    if(strstr(line,"VMU save comparison") || strstr(line,"VMU save byte ") || strstr(line,"VMU raw retained VMS header")) {
+        int written=snprintf(comparison_log+comparison_log_bytes,sizeof(comparison_log)-comparison_log_bytes,"%s\n",line);
+        assert(written>=0 && (size_t)written<sizeof(comparison_log)-comparison_log_bytes);
+        comparison_log_bytes+=(size_t)written;
+        if(strstr(line,"VMU save byte ")) ++comparison_pairs;
+    }
+    if(whole_mode) {
+        if(strstr(line,"VMU save comparison: save 3 (TIME_STK.001)")) whole_difference=true;
+        unsigned attempt,streak;
+        if(sscanf(line,"VMU whole-save recovery: save 3 (TIME_STK.001), acquisition %u/6, streak %u/3",&attempt,&streak)==2) {
+            assert(attempt==whole_completed+1u && attempt<=6u);whole_completed=attempt;whole_streak=streak;
+        }
+        if(strstr(line,"VMU whole-save recovered: save 3 (TIME_STK.001)")) ++whole_successes;
+    }
 }
 static void put16(uint8_t *p,unsigned value) {p[0]=(uint8_t)value;p[1]=(uint8_t)(value>>8);}
 static void setup(unsigned count) {
@@ -76,6 +148,51 @@ maple_device_t *maple_enum_dev(int port,int unit) {
 }
 int vmufs_mutex_lock(void) {assert(!locks);++locks;return 0;}
 int vmufs_mutex_unlock(void) {assert(locks==1);--locks;return 0;}
+static int whole_read(uint8_t storage[256][512],uint16_t block,uint8_t out[512]) {
+    assert(!whole_cancel);++whole_reads[block];
+    if(block==255u && !injected) {
+        if((is("whole-recovery-metadata-pre") && whole_difference) ||
+           (is("whole-recovery-metadata-post") && whole_attempt==1u && whole_reads[143]>=4u) ||
+           (is("whole-recovery-metadata-final") && whole_final_metadata)) {
+            storage[255][48]^=1u;injected=true;
+        }
+        if(is("whole-recovery-candidate-postmeta") && whole_attempt==1u && whole_reads[143]>=4u) {
+            assert(whole_candidate[0]);whole_candidate[0][23]^=1u;injected=true;
+        }
+    }
+    if(block==128u && whole_reads[128]==3u && is("whole-recovery-retained-ram")) {
+        assert(whole_retained_time);whole_retained_time[123]^=1u;injected=true;
+    }
+    if(whole_attempt==1u && block==129u && whole_reads[129]==3u &&
+       (is("whole-recovery-timeout") || is("whole-recovery-malformed"))) {
+        injected=true;return is("whole-recovery-timeout")?-2:-1;
+    }
+    memcpy(out,storage[block],512u);
+    if(block==128u && whole_attempt) whole_pin_pending=true;
+    if(block==128u && !is("whole-recovery-healthy")) {
+        if(!whole_attempt && whole_reads[128]>=3u) out[123]=9u;
+        if(whole_attempt) {
+            unsigned version=9u;
+            if(is("whole-recovery-source-wave") || is("whole-recovery-candidate-overwrite")) version=whole_attempt==1u?8u:9u;
+            if(is("whole-recovery-aabbb")) version=whole_attempt<=2u?8u:9u;
+            if(is("whole-recovery-last")) version=whole_attempt<=3u?7u+whole_attempt:11u;
+            if(is("whole-recovery-alternating") || is("whole-recovery-cancel-exhaustion")) version=(whole_attempt&1u)?8u:9u;
+            if(is("whole-recovery-two-only")) version=8u+(whole_attempt-1u)/2u;
+            if(is("whole-recovery-local-noise") && whole_attempt==1u) version=(whole_reads[128]&1u)?8u:9u;
+            out[123]=(uint8_t)version;
+        }
+    }
+    if(block==129u && whole_attempt && is("whole-recovery-mixed")) out[111]=(whole_attempt&1u)?0x33u:0x44u;
+    if(whole_attempt==1u && block==129u && whole_reads[129]==3u) {
+        if(is("whole-recovery-oversize")) {out[512]=0u;injected=true;}
+        if(is("whole-recovery-identity")) {active=1u;injected=true;}
+    }
+    if(block==7u && whole_reads[7]>=4u && whole_successes) whole_final_metadata=true;
+    return 0;
+}
+const struct kui_vmu_read_bounded_diagnostic *kui_vmu_read_bounded_last(void) {
+    return recovery_transport_ready?&recovery_transport:NULL;
+}
 int kui_vmu_read_bounded(maple_device_t *device,uint16_t block,uint8_t out[512]) {
     assert(locks==1 && block<256);++reads;uint8_t (*storage)[512]=device_card(device);
     if(collection_read_guard) {
@@ -88,6 +205,50 @@ int kui_vmu_read_bounded(maple_device_t *device,uint16_t block,uint8_t out[512])
         if(!metadata && !allocated) ++collection_unowned_reads;
     }
     if(block<200 && storage[254][block*2]==0xfc && storage[254][block*2+1]==0xff) ++free_user_reads;
+    if(whole_mode) return whole_read(storage,block,out);
+    if(block==128u && fault && !strncmp(fault,"read-recovery-",14u)) {
+        ++recovery_reads;
+        if(recovery_reads==3u && (is("read-recovery-timeout") || is("read-recovery-malformed"))) {
+            recovery_transport=(struct kui_vmu_read_bounded_diagnostic){.block=128u,
+                .stage=is("read-recovery-timeout")?KUI_VMU_READ_WAIT:KUI_VMU_READ_LENGTH,
+                .result=is("read-recovery-timeout")?-2:-1,.wait_result=-1,.response=-127,.data_len=129u,
+                .actual_function=0x01020304u,.expected_function=0x05060708u,
+                .actual_location=0x11223344u,.expected_location=0x55667788u,
+                .raw_crc_before=0x12345678u,.raw_crc_after=0x90abcdefu,.copy_crc=0xa1b2c3d4u};
+            recovery_transport_ready=true;
+            injected=true;return is("read-recovery-timeout")?-2:-1;
+        }
+        if(is("read-recovery-short")) {memcpy(out,storage[block],508u);injected=true;return 0;}
+        if(is("read-recovery-between-passes") && recovery_reads==3u) {storage[block][11]^=1u;injected=true;}
+        if(is("read-recovery-recovered-then-changed") && recovery_reads==5u) {storage[block][11]^=1u;injected=true;}
+        if(is("read-recovery-mapped-change") && recovery_reads==3u) {
+            static const unsigned offsets[]={0u,12u,31u,127u,200u,255u,300u,400u,500u,511u};
+            static const uint8_t masks[]={1u,3u,7u,15u,31u,63u,127u,255u,1u,3u};
+            for(unsigned i=0u;i<sizeof(offsets)/sizeof(offsets[0]);i++) storage[block][offsets[i]]^=masks[i];
+            injected=true;
+        }
+        if(is("read-recovery-retained-change") && recovery_reads==3u) {
+            assert(retained_capture_sample);retained_capture_sample[11]^=1u;injected=true;
+        }
+        memcpy(out,storage[block],512u);
+        unsigned alter=0u;
+        if(is("read-recovery-alternating")) alter=recovery_reads&1u;
+        else if(is("read-recovery-two-only")) {
+            static const uint8_t choices[8]={1,2,2,1,1,2,2,1};
+            assert(recovery_reads<=8u);alter=choices[recovery_reads-1u];
+        } else if(is("read-recovery-last"))
+            alter=recovery_reads<=5u && (recovery_reads&1u)?recovery_reads:0u;
+        else if(!is("read-recovery-healthy") && !is("read-recovery-between-passes") && !is("read-recovery-mapped-change") && !is("read-recovery-retained-change"))
+            alter=recovery_reads==1u?1u:0u;
+        if(alter) {out[12]^=(uint8_t)alter;injected=true;}
+        if(recovery_reads==3u && is("read-recovery-oversize")) {out[512]=0u;injected=true;}
+        if(recovery_reads==3u && is("read-recovery-prior-oversize")) {
+            assert(recovery_previous_output);recovery_previous_output[512]=0u;injected=true;
+        }
+        if(recovery_reads==3u && is("read-recovery-identity")) {active=1u;injected=true;}
+        recovery_previous_output=out;
+        return 0;
+    }
     if(is("description-read-fail") && block<200) {injected=true;return -1;}
     if(is("bulk-vmu-read-fail") || (is("bulk-final-read-fail") && bulk_dir_commits && block==199 && device==&devices[destination_active]) || is("vmu-read-fail") ||
        (is("collection-capture-read-fail") && block==254 && reads>30u)) {injected=true;rejection_read_count=reads;return -1;}
@@ -143,6 +304,8 @@ int vmufs_dir_write(maple_device_t *device,vmu_root_t *root,vmu_dir_t *dir) {
     return 0;
 }
 static bool cancelled(void) {
+    if(whole_mode && whole_cancel) return true;
+    if(is("read-recovery-cancel") && recovery_reads>=3u) {injected=true;return true;}
     if(is("bulk-cancel-start") || (is("bulk-cancel-data") && vmu_writes) || (is("bulk-cancel-after-one") && reported_done>=1024)) {injected=true;return true;}
     if(is("image-cancel-read") && media_reads>=8) {injected=true;return true;}
     if(((is("restore-cancel") && vmu_writes) || (is("restore-stop-commit") && vmu_writes>=3)) || (is("delete-stop-commit") && vmu_writes) || (is("delete-cancel-backup") && payload_seen) ||
@@ -196,6 +359,26 @@ bool kui_sd_connect(void) {
 }
 void kui_sd_disconnect(void) {++disconnects;kui_media_set(NULL);}
 static void progress(const struct kui_app_status *value) {
+    if(whole_mode) {
+        unsigned attempt,streak;
+        if(sscanf(value->message,"Checking save TIME_STK.001: acquisition %u/6; matches %u/3",&attempt,&streak)==2) {
+            if(attempt!=whole_attempt) {assert(attempt==whole_attempt+1u);whole_attempt=attempt;++whole_started;}
+            if(!injected) {
+                if(is("whole-recovery-cancel") || (is("whole-recovery-cancel-exhaustion") && whole_completed==6u)) {
+                    whole_cancel=true;injected=true;
+                }
+                if(is("whole-recovery-candidate-ram") && whole_completed==1u && streak==1u) {
+                    assert(whole_candidate[0]);whole_candidate[0][23]^=1u;injected=true;
+                }
+                if(is("whole-recovery-candidate-overwrite") && attempt==3u && whole_completed==2u) {
+                    assert(whole_candidate[0]);whole_candidate[0][23]^=1u;injected=true;
+                }
+                if(is("whole-recovery-unrelated-ram") && whole_completed==3u && streak==3u) {
+                    assert(whole_retained_other);whole_retained_other[12]^=1u;injected=true;
+                }
+            }
+        }
+    }
     assert(value->done<=value->total);reported_done=value->done;
     if(value->done>=1024 && !injected) {
         if(is("bulk-source-removed-after-one")) {missing=true;injected=true;}
@@ -866,7 +1049,7 @@ static void test_collection_adapter(const char *mode) {
             assert(strstr(out.status.message,"need 201 blocks"));
         if(!strcmp(mode,"collection-capture-read-fail")) {
             assert(injected && reads==rejection_read_count && out.status.errors==1u);
-            assert(!strcmp(out.status.message,"VMU block read failed"));
+            assert(!strcmp(out.status.message,"VMU block 254: read failed (read 1)"));
         }
         assert(!memcmp(card,original_card,sizeof(card)));return;
     }
@@ -944,6 +1127,161 @@ static void test_collection_adapter(const char *mode) {
     assert(reads==before_reads && enumerations==before_enumerations && writes==before_writes && !vmu_writes && !locks);
 }
 
+static void test_whole_recovery(const char *mode) {
+    struct kui_vmu_view out;struct kui_vmu_image_summary summary;
+    uint8_t *captured=malloc(KUI_VMU_IMAGE_BYTES);assert(captured);
+    collection_setup(4);collection_read_guard=true;
+    put16(card[254]+4u*2u,0xfffcu);put16(card[254]+5u*2u,0xfffcu);
+    for(unsigned b=128u;b<144u;b++) {
+        for(unsigned j=0u;j<512u;j++) card[b][j]=(uint8_t)(b*7u+j);
+        put16(card[254]+b*2u,b==143u?0xfffau:b+1u);
+    }
+    card[128][123]=8u;
+    uint8_t *entry=card[253]+2u*32u;memcpy(entry+4u,"TIME_STK.001",12u);
+    put16(entry+2u,128u);put16(entry+24u,16u);put16(entry+26u,0u);
+    memcpy(original_card,card,sizeof(card));memset(captured,0x6d,KUI_VMU_IMAGE_BYTES);
+    whole_mode=true;fault=mode;
+    bool healthy=is("whole-recovery-healthy");
+    bool expected=healthy || is("whole-recovery-stable") || is("whole-recovery-source-wave") ||
+        is("whole-recovery-aabbb") || is("whole-recovery-last");
+    bool ok=is("whole-recovery-strict")?
+        kui_vmu_capture_run(0u,captured,KUI_VMU_IMAGE_BYTES,&summary,&out,log_line,cancelled,progress):
+        kui_vmu_capture_recover_run(0u,captured,KUI_VMU_IMAGE_BYTES,&summary,&out,log_line,cancelled,progress);
+    assert(ok==expected && out.status.passed==expected && out.status.complete==expected);
+    assert(!connects && !disconnects && !writes && !vmu_writes && !source_vmu_writes && !locks);
+    assert(!free_user_reads && !collection_unowned_reads && whole_started<=6u && whole_completed<=whole_started);
+    if(!is("whole-recovery-metadata-pre") && !is("whole-recovery-metadata-post") && !is("whole-recovery-metadata-final"))
+        assert(!memcmp(card,original_card,sizeof(card)));
+    if(expected) {
+        assert(summary.files==4u && summary.used_blocks==22u && summary.free_blocks==178u);
+        unsigned acquisitions=healthy?0u:is("whole-recovery-source-wave")?4u:is("whole-recovery-aabbb")?5u:is("whole-recovery-last")?6u:3u;
+        assert(whole_started==acquisitions && whole_completed==acquisitions && whole_successes==!healthy);
+        assert(whole_reads[128]==4u+2u*acquisitions && !out.status.errors && !out.status.stopped);
+        if(!healthy) assert(whole_streak==3u);
+        for(unsigned file=0u;file<4u;file++) {
+            const uint8_t *before=original_card[253]+file*32u,*after=captured+253u*512u+file*32u;
+            assert(!memcmp(before,after,2u) && !memcmp(before+4u,after+4u,28u));
+            unsigned from=before[2]|(unsigned)before[3]<<8,to=after[2]|(unsigned)after[3]<<8;
+            unsigned count=before[24]|(unsigned)before[25]<<8;
+            for(unsigned n=0u;n<count;n++) {
+                for(unsigned byte=0u;byte<512u;byte++) {
+                    uint8_t wanted=original_card[from][byte];
+                    if(file==2u && n==0u && byte==123u && !healthy) wanted=is("whole-recovery-last")?11u:9u;
+                    assert(captured[to*512u+byte]==wanted);
+                }
+                from=original_card[254][from*2u]|(unsigned)original_card[254][from*2u+1u]<<8;
+                to=captured[254u*512u+to*2u]|(unsigned)captured[254u*512u+to*2u+1u]<<8;
+            }
+            assert(from==0xfffau && to==0xfffau);
+        }
+    } else {
+        assert(!summary.files && !summary.used_blocks && (out.status.errors || out.status.stopped));
+        for(unsigned byte=0u;byte<KUI_VMU_IMAGE_BYTES;byte++) assert(captured[byte]==0x6d);
+        if(is("whole-recovery-alternating") || is("whole-recovery-two-only") || is("whole-recovery-mixed") || is("whole-recovery-cancel-exhaustion")) {
+            assert(whole_started==6u && whole_completed==6u && !whole_successes && whole_streak<3u);
+            assert(whole_reads[128]==16u);
+        } else if(is("whole-recovery-strict") || is("whole-recovery-retained-ram") || is("whole-recovery-metadata-pre")) {
+            assert(!whole_started && !whole_completed && !whole_successes && whole_reads[128]==4u);
+        } else if(is("whole-recovery-candidate-ram")) {
+            assert(whole_started==1u && whole_completed==1u && !whole_successes && whole_reads[128]==6u);
+        } else if(is("whole-recovery-candidate-overwrite")) {
+            assert(whole_started==3u && whole_completed==2u && !whole_successes && whole_reads[128]==8u);
+        } else if(is("whole-recovery-unrelated-ram") || is("whole-recovery-metadata-final") ||
+            is("whole-recovery-late-cancel") || is("whole-recovery-late-identity")) {
+            assert(whole_started==3u && whole_completed==3u && whole_successes==1u && whole_reads[128]==10u);
+        } else {
+            assert(whole_started==1u && !whole_completed && !whole_successes);
+            assert(whole_reads[128]==(is("whole-recovery-cancel")?4u:is("whole-recovery-local-noise")?12u:6u));
+        }
+        if(is("whole-recovery-timeout") || is("whole-recovery-malformed") || is("whole-recovery-oversize") || is("whole-recovery-identity"))
+            assert(whole_reads[129]==3u);
+        if(is("whole-recovery-retained-ram") || is("whole-recovery-candidate-ram") ||
+           is("whole-recovery-candidate-overwrite") || is("whole-recovery-candidate-postmeta") || is("whole-recovery-unrelated-ram"))
+            assert(strstr(out.status.message,"RAM"));
+        if(is("whole-recovery-cancel") || is("whole-recovery-cancel-exhaustion") || is("whole-recovery-late-cancel"))
+            assert(out.status.stopped && !out.status.errors);
+    }
+    free(captured);
+}
+static void test_read_recovery(const char *mode) {
+    struct kui_vmu_view out;struct kui_vmu_image_summary summary;
+    uint8_t *captured=malloc(KUI_VMU_IMAGE_BYTES);assert(captured);
+    collection_setup(10);move_first_save(128u);collection_read_guard=true;
+    if(!strcmp(mode,"read-recovery-mapped-change")) {
+        collection_setup(4);
+        memcpy(card[126],card[4],512u);memcpy(card[129],card[5],512u);memset(card[128],0xab,512u);
+        put16(card[254]+4u*2u,0xfffcu);put16(card[254]+5u*2u,0xfffcu);
+        put16(card[254]+126u*2u,129u);put16(card[254]+129u*2u,128u);put16(card[254]+128u*2u,0xfffau);
+        put16(card[253]+2u*32u+2u,126u);put16(card[253]+2u*32u+24u,3u);put16(card[253]+2u*32u+26u,1u);
+        put16(card[129]+64u,1u);put16(card[129]+68u,0u);put16(card[129]+70u,0x1234u);
+        memset(card[129]+72u,0,4u);put16(card[129]+72u,384u);
+    }
+    memcpy(original_card,card,sizeof(card));memset(captured,0x6d,KUI_VMU_IMAGE_BYTES);
+    fault=mode;
+    bool expected=is("read-recovery-healthy") || is("read-recovery-once") || is("read-recovery-last");
+    bool ok=kui_vmu_capture_run(0u,captured,KUI_VMU_IMAGE_BYTES,&summary,&out,log_line,cancelled,progress);
+    assert(ok==expected && out.status.passed==expected && out.status.complete==expected);
+    assert(!connects && !disconnects && !writes && !vmu_writes && !source_vmu_writes && !locks);
+    assert(!free_user_reads && !collection_unowned_reads);
+    if(!is("read-recovery-between-passes") && !is("read-recovery-recovered-then-changed") && !is("read-recovery-mapped-change"))
+        assert(!memcmp(original_card,card,sizeof(card)));
+    if(expected) {
+        assert(summary.files==10u && summary.used_blocks==20u && summary.free_blocks==180u);
+        unsigned at=captured[253u*512u+2u]|(unsigned)captured[253u*512u+3u]<<8;
+        assert(!memcmp(captured+at*512u,original_card[128],512u));
+        assert(recovery_reads==(is("read-recovery-healthy")?4u:is("read-recovery-once")?6u:10u));
+        assert(recovery_completions==(is("read-recovery-healthy")?0u:1u));
+        assert(!out.status.errors && !out.status.stopped);
+        if(!is("read-recovery-healthy")) assert(recovery_changes && recovery_diagnostic);
+    } else {
+        assert(!summary.files && !summary.used_blocks && (out.status.errors || out.status.stopped));
+        for(unsigned i=0;i<KUI_VMU_IMAGE_BYTES;i++) assert(captured[i]==0x6d);
+        if(is("read-recovery-alternating") || is("read-recovery-two-only") || is("read-recovery-short")) {
+            assert(recovery_reads==8u && !recovery_completions);
+            assert(strstr(out.status.message,"VMU block 128: unstable"));
+        } else if(is("read-recovery-between-passes") || is("read-recovery-mapped-change") || is("read-recovery-retained-change")) assert(recovery_reads==4u);
+        else if(is("read-recovery-recovered-then-changed")) assert(recovery_reads==6u && recovery_completions==1u);
+        else assert(recovery_reads==3u && !recovery_completions);
+        if(!is("read-recovery-between-passes") && !is("read-recovery-recovered-then-changed") && !is("read-recovery-mapped-change") && !is("read-recovery-retained-change")) assert(recovery_save_context);
+        if(is("read-recovery-timeout") || is("read-recovery-malformed")) assert(recovery_transport_lines==7u);
+        if(is("read-recovery-between-passes") || is("read-recovery-recovered-then-changed") || is("read-recovery-mapped-change") || is("read-recovery-retained-change")) {
+            bool mapped=is("read-recovery-mapped-change"),retained=is("read-recovery-retained-change");
+            assert(strstr(comparison_log,mapped?
+                "save 3 (SAVE02), directory-index 2, first-block 126, header-block-offset 1":
+                "save 1 (SAVE00), directory-index 0, first-block 128, header-block-offset 0"));
+            assert(strstr(comparison_log,mapped?
+                "file-block-index 2 of 3, physical-block 128, file-byte-offset 1024":
+                "file-block-index 0 of 2, physical-block 128, file-byte-offset 0"));
+            char expected_crc[160];
+            uint8_t retained_bytes[512];memcpy(retained_bytes,original_card[128],sizeof(retained_bytes));
+            if(retained) retained_bytes[11]^=1u;
+            snprintf(expected_crc,sizeof(expected_crc),"VMU save comparison CRC32: captured %08" PRIx32 ", retained %08" PRIx32 ", reread %08" PRIx32,
+                kui_crc32(0u,original_card[128],512u),kui_crc32(0u,retained_bytes,512u),kui_crc32(0u,card[128],512u));
+            assert(strstr(comparison_log,expected_crc));
+            assert(strstr(comparison_log,retained?"CRC matches: retained/captured no, reread/captured yes":
+                "CRC matches: retained/captured yes, reread/captured no"));
+            assert(strstr(comparison_log,mapped?"10 differing bytes, 39 differing bits":"1 differing bytes, 1 differing bits"));
+            assert(comparison_pairs==(mapped?8u:1u));
+            if(mapped) {
+                assert(strstr(out.status.message,"save 3 (SAVE02) changed at block 128"));
+                assert(strstr(comparison_log,"VMU raw retained VMS header (unvalidated): file-offset 512, CRC16 1234, icons 1, eye-type 0, data-bytes 384"));
+                const unsigned offsets[]={0u,12u,31u,127u,200u,255u,300u,400u};
+                for(unsigned i=0u;i<sizeof(offsets)/sizeof(offsets[0]);i++) {
+                    char pair[160];snprintf(pair,sizeof(pair),"VMU save byte %u: block-offset %u, file-offset %u, %02x -> %02x",
+                        i+1u,offsets[i],1024u+offsets[i],(unsigned)original_card[128][offsets[i]],(unsigned)card[128][offsets[i]]);
+                    assert(strstr(comparison_log,pair));
+                }
+                assert(!strstr(comparison_log,"block-offset 500") && !strstr(comparison_log,"block-offset 511"));
+            } else {
+                assert(strstr(out.status.message,"save 1 (SAVE00) changed at block 128"));
+                char pair[160];snprintf(pair,sizeof(pair),"VMU save byte 1: block-offset 11, file-offset 11, %02x -> %02x",
+                    (unsigned)retained_bytes[11],(unsigned)card[128][11]);
+                assert(strstr(comparison_log,pair));
+            }
+        }
+    }
+    free(captured);
+}
 static void test_wizard_capture(const char *mode) {
     struct kui_vmu_view out;struct kui_vmu_image_summary summary;
     uint8_t *captured=malloc(KUI_VMU_IMAGE_BYTES);assert(captured);
@@ -994,6 +1332,12 @@ int main(int argc,char **argv) {
         assert(kui_destination_mkdirs("/KUI/dumps",log_line));
         write_file(sentinel_path,sentinel,sizeof(sentinel));write_file("0:/KUI/dumps/keep.bin",sentinel,sizeof(sentinel));
         assert(f_mount(NULL,"0:",0)==FR_OK);fclose(image);puts("PASS VMU seed");return 0;
+    }
+    if(!strncmp(mode,"read-recovery-",14u)) {
+        test_read_recovery(mode);assert(!locks);fclose(image);printf("PASS VMU %s\n",mode);return 0;
+    }
+    if(!strncmp(mode,"whole-recovery-",15u)) {
+        test_whole_recovery(mode);assert(!locks);fclose(image);printf("PASS VMU %s\n",mode);return 0;
     }
     if(!strncmp(mode,"description-",12)) {
         test_description_rows(mode);assert(!locks);fclose(image);printf("PASS VMU %s\n",mode);return 0;

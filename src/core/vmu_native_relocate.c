@@ -4,10 +4,29 @@
 #include <stdbool.h>
 #include <string.h>
 
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+/* Embedded worker/table words are aligned, but the wire API also accepts
+ * arbitrary host buffers. SH-4 cannot load an unaligned word. Use a single
+ * integer RAM access only when both alignment and byte order allow it; the
+ * alias-qualified type may inspect any object representation. */
+typedef uint32_t reloc_word __attribute__((__may_alias__));
+/* Keep the aligned load as a leaf: GCC otherwise folds the conditional
+ * decoder back into four byte reads at -Os on SH. This tail-called leaf has
+ * no stack frame and no additional retained state. */
+static uint32_t __attribute__((noipa)) aligned32(const uint8_t *p) {
+    return *(const reloc_word *)(const void *)p;
+}
+#endif
 static uint32_t get32(const uint8_t *p) {
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+    if(!((uintptr_t)p&3u)) return aligned32(p);
+#endif
     return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24;
 }
 static void put32(uint8_t *p,uint32_t v) {
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+    if(!((uintptr_t)p&3u)) {*(reloc_word *)(void *)p=v;return;}
+#endif
     p[0]=(uint8_t)v;p[1]=(uint8_t)(v>>8);p[2]=(uint8_t)(v>>16);p[3]=(uint8_t)(v>>24);
 }
 static bool direct(uintptr_t address,uint32_t *physical) {

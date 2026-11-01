@@ -188,7 +188,13 @@ C(kui_vmu_observe_return_hook):
     nop
     .align 2
 .Lreturn_mask: .long 0x100000f0
+#if KUI_NATIVE_PHYSICAL_DISC
+/* Physical disc retains the complete BIOS low workspace. This gateway is
+ * temporary stage code and may use only its still-owned high-stage stack. */
+.Lreturn_stack: .long KUI_RETAIL_STAGE_STACK
+#else
 .Lreturn_stack: .long KUI_RETAIL_HOOK_STACK+0x20000000
+#endif
 .Lfailure: .long C(kui_vmu_observe_low_failure)
     .size C(kui_vmu_observe_return_hook),.-C(kui_vmu_observe_return_hook)
 

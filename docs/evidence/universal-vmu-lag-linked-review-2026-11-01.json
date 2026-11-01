@@ -1,0 +1,144 @@
+{
+  "schema": "kui.native.compact.focused-lag-linked-review.v1",
+  "baseline_commit": "26ed262974a8185a2ca7efdff8bf67cd5de5c647",
+  "comparison_build_label": "26ed262974a8",
+  "candidate_source_dirty_during_initial_build": true,
+  "worker": {
+    "baseline_elf_sha256": "118eb0810ca917c5015715a3cb20a0e66687f9b91d54f8f059f494aed8df8543",
+    "candidate_elf_sha256": "0c9983f9e84b4bba848265c283d32af1c8f707e96cba78a7a82f250bbd54d676",
+    "byte_identical_functions": 60,
+    "relocated_functions": 113,
+    "typed_pointer_relocations": 482,
+    "readonly_pointer_relocations": 7,
+    "verified_compiler_switches": [
+      [
+        "_CSWTCH.357@vmu_native_passive.c",
+        "_CSWTCH.355@vmu_native_passive.c",
+        32
+      ]
+    ],
+    "semantic_changes": {
+      "_kui_vmu_native_passive_complete": {
+        "baseline_bytes": 4110,
+        "candidate_bytes": 4100,
+        "baseline_sha256": "2a16b599e2752aeddab3699d75de3d9b998dcd185d3a74a35a121d8b37695de5",
+        "candidate_sha256": "e2d790865d23eb4255d79930f6a019c9697c3f9f91c31064dea9013f2c763691"
+      }
+    },
+    "removed_functions": [],
+    "added_functions": [],
+    "unresolved": [],
+    "baseline_constant_tail": {
+      "address": "0x8c10bf00",
+      "bytes": 1176,
+      "normalized_build_labels": 1
+    },
+    "candidate_constant_tail": {
+      "address": "0x8c10bee0",
+      "bytes": 1176,
+      "normalized_build_labels": 1
+    }
+  },
+  "stage": {
+    "baseline_elf_sha256": "092533421690fcd9a47d68d2fcc7068c198e6157c506caa1248594c41ed9ad94",
+    "candidate_elf_sha256": "b78e49d1d8b358ad33978797c5f702dd8cd904bb103c0619cd88cc01a4a58157",
+    "byte_identical_functions": 195,
+    "relocated_functions": 202,
+    "typed_pointer_relocations": 1020,
+    "readonly_pointer_relocations": 6,
+    "verified_compiler_switches": [],
+    "semantic_changes": {
+      "_get32@vmu_native_relocate.c": {
+        "baseline_bytes": 30,
+        "candidate_bytes": 48,
+        "baseline_sha256": "6a27271642802c2053d895ffeb2e2a93c5a3bf48ef2c4b7f42a9ced75da48334",
+        "candidate_sha256": "fafc73be139229db8880bcf3571195ffc4c8b8f226bc61ae81de5e0619c69d68"
+      },
+      "_kui_vmu_native_relocate": {
+        "baseline_bytes": 868,
+        "candidate_bytes": 880,
+        "baseline_sha256": "eb283e7bf4ac914e2a236964ec65493ddc0f750011e25a17a59a40564f49a099",
+        "candidate_sha256": "9966757a3da311be15978a978c5340e16eb2105261614be22fcac56bcdc88ee8"
+      }
+    },
+    "removed_functions": [],
+    "added_functions": [
+      "_aligned32@vmu_native_relocate.c"
+    ],
+    "unresolved": [],
+    "baseline_constant_tail": {
+      "address": "0x8ce2b060",
+      "bytes": 12096,
+      "normalized_build_labels": 1
+    },
+    "candidate_constant_tail": {
+      "address": "0x8ce2b040",
+      "bytes": 12096,
+      "normalized_build_labels": 1
+    },
+    "added_helper": {
+      "name": "_aligned32@vmu_native_relocate.c",
+      "bytes": 4,
+      "hex": "0b004260",
+      "assembly": [
+        "rts",
+        "mov.l @r4,r0 (delay slot)"
+      ],
+      "reviewed": true
+    }
+  },
+  "embedded_artifact_checks": {
+    "worker": {
+      "bytes": 50080,
+      "sha256": "adbbeaf095cb6dd3d88bd1eabc763493a1dcdcb160f87bab3295b3fbb468aef4",
+      "exact_input_match": true
+    },
+    "worker_relocations": {
+      "bytes": 5376,
+      "sha256": "45500996baa9295001925815496f0bfb914d4647d14656eb7549eec8f6f286ce",
+      "exact_input_match": true
+    },
+    "readahead": {
+      "bytes": 10240,
+      "sha256": "85126688d208fe691943a12e6a8f5c327e2235c60ec6f5c82a89591bbbaa24d8",
+      "exact_input_match": true
+    },
+    "readahead_relocations": {
+      "bytes": 816,
+      "sha256": "0f4d63d1244536fa4b7cc292807629f21ed237358256f4e4682367458dba7cf2",
+      "exact_input_match": true
+    }
+  },
+  "unchanged_components": {
+    "resident-sci": {
+      "elf_sha256": "779909b02404ba06e91656261bfc47406af43406db6b7f2bace08681c206e82d",
+      "byte_identical_to_baseline": true
+    },
+    "resident-legacy": {
+      "elf_sha256": "1caaf71fea62e7b53ec25a2a7b87830d3602c7b476182a4db2f9b4b93a45eaad",
+      "byte_identical_to_baseline": true
+    },
+    "native-ra-aux": {
+      "elf_sha256": "b6abfab92e547ebf848450f20fe55666d504b0e4a0315e88e11ead4bed2d4fa4",
+      "byte_identical_to_baseline": true
+    }
+  },
+  "fixed_profile_pin_updates": {
+    "role_entries": 64,
+    "distinct_expectations": 55,
+    "baseline_expectations_verified_exactly": true,
+    "runtime_expectation_learning": false
+  },
+  "source_review": [
+    "The completion assembly raises IMASK15 for the entire C completion before restoring inherited interrupt state.",
+    "The removed whole-TX scan had no RX/publication/storage/game callback between it and the retained authoritative whole-TX scan. The retained scan still occurs before first RX read.",
+    "The early-family INFO/ALLINFO scheduling guard follows successful controller completion and reads retained private parent/header fields. GETCOND and all newer-family scheduling are preserved.",
+    "The guarded LE word reader tail-calls a four-byte no-frame aligned load leaf; unaligned decoding retains the four-byte sequence. Relocation validation, CRC, SHA and whole-literal coverage remain before destination copy/patch.",
+    "Stage relocation function register allocation and stack frame changed with the aligned store branch. Host relocation tests and machine-instruction audits remain separately required."
+  ],
+  "limits": [
+    "This is a source-directed static review of the initial candidate built under the baseline12-character label; final committed build must still be recompiled and checked.",
+    "Linked instruction comparison and host checks do not establish console latency or universally safe game admission.",
+    "The complete Background audit remains dependent on the missing mandatory eight-title allocator corpus; no refusal is bypassed."
+  ]
+}

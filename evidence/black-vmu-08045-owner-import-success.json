@@ -1,0 +1,15 @@
+{
+  "source_commit": "08045e88736eae46f11e67bf4e8f535e51dd97db",
+  "source_tree": "255ef1ef908a53e1967107ea9b3423a37943e7f4",
+  "evidence_kind": "owner-reported console result",
+  "workflow": "Import saves from the black physical VMU using bounded whole-save reacquisition",
+  "owner_report": "It took a while but it worked. Is this officially done then?",
+  "result": "logical import succeeded in the reported retest",
+  "limits": [
+    "Does not establish which historical value of a previously changing bit was correct",
+    "Does not establish exact whole-card raw VMD backup",
+    "Does not independently establish subsequent in-game reload of every imported save",
+    "Does not identify the physical cause of different accepted read samples",
+    "Later combined builds still require their own console regression checks"
+  ]
+}

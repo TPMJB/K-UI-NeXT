@@ -45,6 +45,25 @@ int main(void) {
     CHECK(get32(output+8u)==0x0c38a8beu);CHECK(get32(output+12u)==0xac38a8c0u);
     CHECK(get32(output+16u)==0xa05f6c00u);CHECK(!memcmp(output+16u,image+16u,sizeof(image)-16u));
     for(size_t i=sizeof(image);i<sizeof(output);i++) CHECK(output[i]==0xa5u);
+    /* Embedded payloads use aligned words. Exercise every independent host
+     * buffer alignment as well, including the unchanged-output guarantee on
+     * failed validation before the faster word stores may begin. */
+    _Alignas(uint32_t) uint8_t shifted_image[sizeof(image)+3u],shifted_wire[sizeof(wire)+3u];
+    _Alignas(uint32_t) uint8_t shifted_output[sizeof(output)+3u],reference[sizeof(output)];
+    memcpy(reference,output,sizeof(reference));
+    for(unsigned ia=0u;ia<4u;ia++) for(unsigned wa=0u;wa<4u;wa++) for(unsigned oa=0u;oa<4u;oa++) {
+        fixture();memcpy(shifted_image+ia,image,sizeof(image));memcpy(shifted_wire+wa,wire,sizeof(wire));
+        memset(shifted_output,0xa5,sizeof(shifted_output));
+        CHECK(kui_vmu_native_relocate(shifted_image+ia,sizeof(image),shifted_wire+wa,sizeof(wire),
+            shifted_output+oa,sizeof(output),load)==KUI_VMU_NATIVE_RELOCATED);
+        CHECK(!memcmp(shifted_output+oa,reference,sizeof(reference)));
+        for(unsigned i=0u;i<oa;i++) CHECK(shifted_output[i]==0xa5u);
+        for(size_t i=oa+sizeof(output);i<sizeof(shifted_output);i++) CHECK(shifted_output[i]==0xa5u);
+        shifted_image[ia+sizeof(image)-1u]^=1u;memset(shifted_output,0xa5,sizeof(shifted_output));
+        CHECK(kui_vmu_native_relocate(shifted_image+ia,sizeof(image),shifted_wire+wa,sizeof(wire),
+            shifted_output+oa,sizeof(output),load)==KUI_VMU_NATIVE_RELOCATE_IMAGE);
+        for(size_t i=0u;i<sizeof(shifted_output);i++) CHECK(shifted_output[i]==0xa5u);
+    }
     for(size_t i=0;i<sizeof(wire);i++) for(unsigned bit=0;bit<8u;bit++) {
         fixture();wire[i]^=(uint8_t)(1u<<bit);refused();
     }

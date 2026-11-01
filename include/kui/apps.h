@@ -106,6 +106,13 @@ void kui_vmu_collection_copy_run(unsigned source_slot,unsigned page,unsigned sel
 bool kui_vmu_capture_run(unsigned source_slot,void *image,size_t bytes,
     struct kui_vmu_image_summary *summary,struct kui_vmu_view *out,
     kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
+/* Wizard-only recovery of logical saves. Later payload disagreements may
+ * reacquire a complete file, requiring three consecutive complete matches
+ * within six fresh acquisitions. Device, metadata, transport and retained-RAM
+ * failures remain terminal. The strict capture API above is unchanged. */
+bool kui_vmu_capture_recover_run(unsigned source_slot,void *image,size_t bytes,
+    struct kui_vmu_image_summary *summary,struct kui_vmu_view *out,
+    kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
 void kui_vmu_collection_run(unsigned page,struct kui_vmu_backup_view *out,
     kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
 /* Changes display metadata only, then refreshes the unified virtual-card list.

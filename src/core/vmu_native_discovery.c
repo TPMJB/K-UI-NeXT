@@ -95,9 +95,53 @@ static bool wrapper_at(const uint8_t *p,size_t n,uint32_t base,size_t site,size_
     r->consumer=consumer;r->gate=gate;r->ready=ready;r->gate_register=(test>>8)&15u;
     return true;
 }
+/* A PC-relative MOV.L of register reg at offset at, decoded to its literal. */
+static bool pc_literal(const uint8_t *p,size_t n,uint32_t base,size_t at,unsigned reg,uint32_t *value) {
+    if(at>n || n-at<2u || (u16(p+at)&0xff00u)!=(0xd000u|reg<<8)) return false;
+    size_t slot;
+    if(!index_of(((base+(uint32_t)at+4u)&~3u)+4u*(u16(p+at)&255u),base,n,4u,&slot)) return false;
+    *value=u32(p+slot);return true;
+}
+static bool pc_word(const uint8_t *p,size_t n,uint32_t base,size_t at,unsigned reg,uint16_t value) {
+    if(at>n || n-at<2u || (u16(p+at)&0xff00u)!=(0x9000u|reg<<8)) return false;
+    size_t slot=at+4u+2u*(u16(p+at)&255u);(void)base;
+    return slot<=n && n-slot>=2u && u16(p+slot)==value;
+}
+/* The pd 1.46 server entry, completion_call-0x3a: it saves R8-R14 and PR,
+ * calls the lock helper with the busy word set to one in the delay slot, and
+ * records a -2 (lock held) result in manager+0x10e8 for the API wrappers'
+ * retry. The helper returns -3 or -1 unless the driver is idle and Maple DMA
+ * has stopped, then TAS.Bs the byte the lock cell points at: -2 if it was
+ * already held, 0 once this server holds it. The other words are the
+ * unchanged exit branches, identical in every reviewed image. */
+static bool early_server(const uint8_t *p,size_t n,uint32_t base,const struct kui_vmu_native_discovery *r) {
+    static const uint16_t entry[31]={
+        0x2fe6,0x2fd6,0x2fc6,0x2fb6,0x2fa6,0x2f96,0x2f86,0x4f22,0x7ffc,0xd234,0xea01,0xd332,0xed00,
+        0xd82f,0xd92f,0x420b,0x23a2,0x88fe,0x8f04,0x6c03,0x9053,0x6282,0xa0ab,0x02a6,0x4c11,0x8901,
+        0xa09c,0x0009,0xd32b,0x430b,0x0009};
+    static const uint16_t helper[33]={
+        0xd339,0x906b,0x4f22,0x6432,0x024e,0x2228,0x8902,0x4f26,0x000b,0xe0fd,0x9063,0x034e,0x5036,
+        0xc801,0x8902,0x4f26,0x000b,0xe0ff,0xd32f,0x6032,0x401b,0x8906,0xd12f,0xb0b6,0x2f16,0x7f04,
+        0x4f26,0x000b,0xe0fe,0xe000,0x4f26,0x000b,0x0009};
+    size_t s,h;uint32_t value,busy,lock,cell;
+    if(r->completion_call<base+0x3au || !index_of(r->completion_call-0x3au,base,n,sizeof(entry),&s)) return false;
+    for(unsigned i=0;i<31u;i++) if(u16(p+s+2u*i)!=entry[i]) return false;
+    if(!pc_literal(p,n,base,s+18u,2u,&value) || (value&1u) ||
+       !index_of(value&~3u,base,n,sizeof(helper)+2u,&h)) return false;
+    h+=value&2u;
+    for(unsigned i=0;i<33u;i++) if(u16(p+h+2u*i)!=helper[i]) return false;
+    return pc_literal(p,n,base,s+22u,3u,&busy) && ram(busy) && !(busy&3u) &&
+        pc_literal(p,n,base,s+26u,8u,&value) && value==r->manager_cell &&
+        pc_literal(p,n,base,s+28u,9u,&cell) && ram(cell) && !(cell&3u) &&
+        pc_word(p,n,base,s+40u,0u,0x10e8u) &&
+        pc_literal(p,n,base,h,3u,&value) && value==r->manager_cell &&
+        pc_word(p,n,base,h+2u,0u,0xfc0u) && pc_word(p,n,base,h+20u,0u,0x10f4u) &&
+        pc_literal(p,n,base,h+36u,3u,&lock) && lock==r->lock_cell;
+}
 static void finish(struct kui_vmu_native_discovery *r,const void *p,size_t n,uint32_t base) {
     r->version=KUI_VMU_NATIVE_DISCOVERY_VERSION;r->bytes=sizeof(*r);
-    r->family=KUI_VMU_NATIVE_FAMILY_UNIFORM_V1;r->image_bytes=(uint32_t)n;
+    r->family=early_server(p,n,base,r)?KUI_VMU_NATIVE_FAMILY_EARLY_V1:KUI_VMU_NATIVE_FAMILY_UNIFORM_V1;
+    r->image_bytes=(uint32_t)n;
     r->load_address=base;r->requirements=KUI_VMU_NATIVE_REQUIREMENTS;hash(p,n,r->image_sha256);
 }
 enum kui_vmu_native_discovery_result kui_vmu_native_discover(
@@ -130,7 +174,7 @@ enum kui_vmu_native_discovery_result kui_vmu_native_discover(
 bool kui_vmu_native_discovery_cache_valid(const struct kui_vmu_native_discovery *r,
     const void *image,size_t n,uint32_t base) {
     if(!r || !valid(image,n,base) || r->version!=KUI_VMU_NATIVE_DISCOVERY_VERSION ||
-       r->bytes!=sizeof(*r) || r->family!=KUI_VMU_NATIVE_FAMILY_UNIFORM_V1 ||
+       r->bytes!=sizeof(*r) || !kui_vmu_native_family_valid(r->family) ||
        r->requirements!=KUI_VMU_NATIVE_REQUIREMENTS || r->image_bytes!=n ||
        r->load_address!=base || r->submit<base || r->completion_call<base+2u) return false;
     /* A cache is untrusted metadata. Recheck uniqueness as well as hashes:

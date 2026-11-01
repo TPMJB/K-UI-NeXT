@@ -24,6 +24,7 @@ BENCH_OBJECTS := build/dc/src/core/hash.o build/dc/src/core/capture_plan.o build
     build/dc/src/core/settings.o build/dc/src/core/settings_file.o \
     build/dc/src/core/options.o build/dc/src/core/options_file.o build/dc/src/core/bench.o build/dc/src/dreamcast/bench.o
 LOADER_OBJECTS += $(BENCH_OBJECTS)
+LOADER_OBJECTS += build/dc/src/core/recovery_manifest.o build/dc/src/core/recovery_guard.o
 LOADER_OBJECTS += build/dc/src/core/boot_ui.o build/dc/src/dreamcast/boot_draw.o \
     build/dc/src/dreamcast/shell_font.o build/dc/src/apps/boot_splash.o
 RUNTIME_OBJECTS := $(filter-out build/dc/src/dreamcast/main.o build/dc/src/dreamcast/sd.o,$(OBJECTS)) build/dc/main-runtime.o build/dc/sd-runtime.o
@@ -54,6 +55,8 @@ RUNTIME_OBJECTS += build/dc/src/core/vmu_emulation_settings.o
 RUNTIME_OBJECTS += build/dc/src/core/vmu_import_plan.o build/dc/src/core/vmu_game_candidates.o
 RUNTIME_OBJECTS += build/dc/src/core/native_vmu_standard.o
 RUNTIME_OBJECTS += build/dc/src/core/vmu_import_match.o
+RUNTIME_OBJECTS += build/dc/src/core/disc_boot.o build/dc/src/core/disc_launch.o
+RUNTIME_OBJECTS += build/dc/src/core/disc_vmu_probe.o
 RUNTIME_OBJECTS += build/dc/src/core/vmu_library.o
 RUNTIME_OBJECTS += build/dc/src/core/zso.o build/dc/src/core/lzo1x.o build/dc/src/core/retail_zso.o
 RUNTIME_OBJECTS += build/dc/src/core/game_cover.o build/dc/src/core/pvr_texture.o
@@ -86,6 +89,7 @@ build/dc/src/apps/games_retail.o: src/apps/games_vmu_card.inc include/kui/vmu_ga
 build/dc/src/apps/games_retail.o build/dc/sd-runtime.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
 build/dc/src/apps/vmu_wizard.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
 build/dc/src/apps/vmu_game_info.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
+build/dc/src/apps/disc_vmu_card.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
 # These separately linked, opt-in music modules retain their tested CE layout
 # even when the ordinary native loader uses its lower firmware reservation.
 # Explicit arguments also isolate them from a requested native diagnostic.

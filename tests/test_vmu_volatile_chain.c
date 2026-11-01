@@ -1,5 +1,12 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/vmu_volatile_chain.h"
+/* An A1 build exchanges controller A's two expansion slots: every case below
+ * holds with sub-unit addresses 1 and 2 swapped. */
+#if defined(KUI_VMU_VIRTUAL_A1) && KUI_VMU_VIRTUAL_A1
+#define SLOT(unit) ((unit)==1u?2u:(unit)==2u?1u:(unit))
+#else
+#define SLOT(unit) (unit)
+#endif
 
 #include <assert.h>
 #include <stdio.h>
@@ -54,6 +61,7 @@ static void reset(void) {
 static size_t append(unsigned command, unsigned destination, unsigned words,
     uint32_t payload0, int last) {
     assert(fixture.count<32u && words<256u);
+    destination=SLOT(destination);
     size_t start=fixture.raw_bytes;
     size_t bytes=12u+4u*words;
     assert(start+bytes<=sizeof(fixture.raw));
@@ -301,7 +309,7 @@ static void set_selector(size_t frame_index,uint32_t selector) {
 
 static int build_a2(uint8_t *output,size_t capacity) {
     return kui_vmu_volatile_chain_build_address(&fixture.plan,fixture.frames,fixture.count,
-        SOURCE,(uint32_t)fixture.raw_bytes,output,capacity,OUTPUT,2u);
+        SOURCE,(uint32_t)fixture.raw_bytes,output,capacity,OUTPUT,SLOT(2u));
 }
 
 static void a2_preserves_complete_physical_a1(void) {
@@ -331,7 +339,7 @@ static void a2_preserves_complete_physical_a1(void) {
     assert(build_a2(fixture.output,sizeof(fixture.output))==KUI_VMU_VOLATILE_CHAIN_CAPACITY);
     assert(!memcmp(before,fixture.output,sizeof(before)) && !memcmp(&plan,&fixture.plan,sizeof(plan)));
     assert(build_a2(output,sizeof(output))==0);
-    assert(fixture.plan.virtual_address==2u && fixture.plan.virtual_count==2u &&
+    assert(fixture.plan.virtual_address==SLOT(2u) && fixture.plan.virtual_count==2u &&
         fixture.plan.physical_count==8u && fixture.plan.output_bytes==used);
     assert(!memcmp(output,expected,used));
     for(size_t i=used;i<sizeof(output);++i) assert(output[i]==0xa5u);
@@ -348,7 +356,7 @@ static void a2_filters_only_a2(void) {
         append(command,2,command,UINT32_C(0x02000000),1);
         assert(build_a2(fixture.output,sizeof(fixture.output))==0);
         assert(fixture.plan.physical_count==1u && fixture.plan.virtual_count==1u);
-        assert(word(fixture.output+8u)==0x00000101u);
+        assert(word(fixture.output+8u)==((SLOT(1u)<<8)|1u));
         assert(kui_vmu_volatile_chain_verify(&fixture.plan,fixture.output,sizeof(fixture.output))==0);
     }
 }

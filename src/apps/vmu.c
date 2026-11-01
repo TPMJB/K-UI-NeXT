@@ -93,24 +93,59 @@ static bool same_device(struct session *s) {
         return fail(s,"VMU removed or changed; refresh the list");
     return true;
 }
-/* The bounded adapter validates exact Maple framing before copying. Keep
- * independent initialized reads and scratch canaries as an additional check
- * for short, changed or oversized results before accepting any source bytes. */
+static bool read_failure(struct session *s,unsigned block,unsigned attempt,const char *reason) {
+    char message[128];
+    snprintf(message,sizeof(message),"VMU block %u: %s (read %u)",block,reason,attempt);
+    return fail(s,message);
+}
+/* Healthy blocks retain the two-read fast path. Once complete replies differ,
+ * require three consecutive whole-block matches, within eight total reads.
+ * Every sample has fresh, alternating poison and its own canary. This never
+ * combines bytes from different replies or retries a transport refusal. */
 static bool read_block(struct session *s,unsigned block,uint8_t out[BLOCK_BYTES]) {
-    _Alignas(32) uint8_t first[1024],second[1024];
+    _Alignas(32) uint8_t samples[2][1024];
     if(block>=256) return fail(s,"Invalid VMU block address");
-    if(cancelled(s) || !same_device(s)) return false;
-    memset(first,0xa5,sizeof(first));memset(second,0x5a,sizeof(second));
-    int result=kui_vmu_read_bounded(s->device,(uint16_t)block,first);
-    if(result!=0) return fail(s,"VMU block read failed");
-    if(cancelled(s) || !same_device(s)) return false;
-    result=kui_vmu_read_bounded(s->device,(uint16_t)block,second);
-    if(result!=0) return fail(s,"VMU block reread failed");
-    if(!same_device(s)) return false;
-    for(unsigned i=BLOCK_BYTES;i<sizeof(first);i++)
-        if(first[i]!=0xa5 || second[i]!=0x5a) return fail(s,"VMU returned an oversized block");
-    if(memcmp(first,second,BLOCK_BYTES)) return fail(s,"VMU block was short or changed while reading");
-    memcpy(out,first,BLOCK_BYTES);return true;
+    unsigned consecutive=0u;bool recovery=false;
+    for(unsigned attempt=0u;attempt<8u;attempt++) {
+        uint8_t *sample=samples[attempt&1u],*previous=samples[(attempt+1u)&1u];
+        uint8_t poison=(attempt&1u)?0x5au:0xa5u;
+        if(cancelled(s) || !same_device(s)) return false;
+        memset(sample,poison,sizeof(samples[0]));
+        int result=kui_vmu_read_bounded(s->device,(uint16_t)block,sample);
+        if(result!=0) {
+            s->log("VMU block %u read %u/8 rejected by transport: %d",block,attempt+1u,result);
+            const struct kui_vmu_read_bounded_diagnostic *d=kui_vmu_read_bounded_last();
+            if(d) {
+                s->log("VMU bounded reader: block %" PRIu32 " stage %" PRIu32 " result %d wait %d response %d words %" PRIu32,
+                    d->block,d->stage,d->result,d->wait_result,d->response,d->data_len);
+                s->log("VMU bounded fields: function %08" PRIx32 "/%08" PRIx32 " location %08" PRIx32 "/%08" PRIx32,
+                    d->actual_function,d->expected_function,d->actual_location,d->expected_location);
+                s->log("VMU bounded CRC32: raw-before %08" PRIx32 " raw-after %08" PRIx32 " private-copy %08" PRIx32,
+                    d->raw_crc_before,d->raw_crc_after,d->copy_crc);
+            }
+            return read_failure(s,block,attempt+1u,"read failed");
+        }
+        if(cancelled(s) || !same_device(s)) return false;
+        uint8_t previous_poison=(attempt&1u)?0xa5u:0x5au;
+        for(unsigned i=BLOCK_BYTES;i<sizeof(samples[0]);i++)
+            if(sample[i]!=poison || (attempt && previous[i]!=previous_poison))
+                return read_failure(s,block,attempt+1u,"oversized reply");
+        if(attempt && memcmp(previous,sample,BLOCK_BYTES)) {
+            unsigned difference=0u;
+            while(difference<BLOCK_BYTES && previous[difference]==sample[difference]) ++difference;
+            s->log("VMU block %u read %u/8 changed: CRC32 %08" PRIx32 " -> %08" PRIx32
+                "; first byte %u: %02x -> %02x",block,attempt+1u,
+                kui_crc32(0u,previous,BLOCK_BYTES),kui_crc32(0u,sample,BLOCK_BYTES),
+                difference,(unsigned)previous[difference],(unsigned)sample[difference]);
+            recovery=true;consecutive=1u;
+        } else ++consecutive;
+        if(consecutive>=(recovery?3u:2u)) {
+            if(recovery) s->log("VMU block %u recovered at read %u/8: three consecutive replies; CRC32 %08" PRIx32,
+                block,attempt+1u,kui_crc32(0u,sample,BLOCK_BYTES));
+            memcpy(out,sample,BLOCK_BYTES);return true;
+        }
+    }
+    return read_failure(s,block,8u,"unstable; three consecutive replies required");
 }
 static bool snapshot_layout(struct session *s,struct snapshot *snap) {
     for(unsigned i=0;i<16;i++) if(snap->root[i]!=0x55) return fail(s,"VMU is unformatted or its root is damaged");
@@ -254,7 +289,11 @@ static bool read_save(struct session *s,const struct snapshot *snap,const uint8_
     if(vmufs_mutex_lock()!=0) return fail(s,"Cannot lock VMU reader");
     unsigned at=le16(entry+2),blocks=le16(entry+24);bool ok=true;
     for(unsigned n=0;n<blocks;n++) {
-        if(!read_block(s,at,data+n*BLOCK_BYTES)) {ok=false;break;}
+        if(!read_block(s,at,data+n*BLOCK_BYTES)) {
+            char name[16];display_name(name,entry);
+            s->log("VMU allocated save %s refused at block %u (%u/%u)",name,at,n+1u,blocks);
+            ok=false;break;
+        }
         at=le16(snap->fat+at*2);
     }
     if(vmufs_mutex_unlock()!=0) return fail(s,"Cannot unlock VMU reader");
@@ -317,9 +356,13 @@ static bool capture_image(struct session *s,uint8_t *data,bool compare) {
     if(vmufs_mutex_lock()!=0) return fail(s,"Cannot lock VMU image reader");
     bool ok=true;uint8_t block[BLOCK_BYTES];
     for(unsigned i=0;i<256;i++) {
-        if(!read_block(s,i,compare?block:data+i*BLOCK_BYTES)) {ok=false;break;}
+        if(!read_block(s,i,compare?block:data+i*BLOCK_BYTES)) {
+            s->log("VMU full-card raw capture pass %u refused at block %u",compare?2u:1u,i);
+            ok=false;break;
+        }
         if(compare && memcmp(block,data+i*BLOCK_BYTES,BLOCK_BYTES)) {
-            ok=fail(s,"VMU image changed during capture; refresh and retry");break;
+            char message[128];snprintf(message,sizeof(message),"VMU full-card block %u changed between captures; refresh and retry",i);
+            ok=fail(s,message);break;
         }
     }
     if(vmufs_mutex_unlock()!=0) return fail(s,"Cannot unlock VMU image reader");

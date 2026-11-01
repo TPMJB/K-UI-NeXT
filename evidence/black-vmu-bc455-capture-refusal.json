@@ -1,0 +1,13 @@
+{
+  "schema": "kui.physical-vmu.hardware-report.v1",
+  "build": "bc455d0ca6df",
+  "reported_date": "2026-11-01",
+  "source": "Owner report and diagnostics(20261101-182058).txt",
+  "log_truncated": false,
+  "dma_failure_latch": "not observed this boot",
+  "failure": "Source rejected: save 3 changed at block 128",
+  "preceding_transport_refusal_logged": false,
+  "preceding_local_mismatch_recovery_logged": false,
+  "interpretation": "The logical-save capture's independent later payload comparison disagreed at physical block 128. The immediate read policy had accepted each compared sample. The existing message does not record the save name, offsets or differing bytes, and does not distinguish changed source data from changed first-capture RAM.",
+  "limitations": "No whole-card import success or hardware cause established. The failure occurred before packing/publishing the imported card. No physical write was requested by this capture."
+}

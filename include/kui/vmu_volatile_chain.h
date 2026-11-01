@@ -82,13 +82,14 @@ int kui_vmu_volatile_chain_build(struct kui_vmu_volatile_chain_plan *,
     uint32_t source_physical, uint32_t source_bytes,
     uint8_t *output, size_t output_capacity, uint32_t output_physical);
 
-/* Explicit native A2 transport. virtual_address is 1 (the legacy behavior
- * above) or 2. Address 2 filters only A2 and also retains exact physical A1
- * VMU MEDIA/READ/WRITE/SYNC, RESET, LCD BWRITE and LCD/clock SETCOND requests,
- * including their complete captured payloads. A1 source descriptors and reply
- * slots remain owned by
- * the physical SDK device. A2 output capacity may be up to
- * KUI_VMU_VOLATILE_CHAIN_PASSTHROUGH_BYTES. Payload snapshots must be disjoint
+/* Explicit native transport. virtual_address is 1 or 2. The build's virtual
+ * slot (A2, or A1 in a KUI_VMU_VIRTUAL_A1 build) filters only itself and also
+ * retains exact physical VMU MEDIA/READ/WRITE/SYNC, RESET, LCD BWRITE and
+ * LCD/clock SETCOND requests to the other slot, including their complete
+ * captured payloads. Those source descriptors and reply slots remain owned by
+ * the physical SDK device, and output capacity may be up to
+ * KUI_VMU_VOLATILE_CHAIN_PASSTHROUGH_BYTES. The other address keeps the legacy
+ * behavior above, with no physical card. Payload snapshots must be disjoint
  * from plan, frame metadata, output and all RX allocations and remain immutable
  * through build. The caller separately validates every physical response before
  * allowing the SDK to consume it. */

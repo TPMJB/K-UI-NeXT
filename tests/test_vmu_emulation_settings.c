@@ -133,4 +133,75 @@ static void interruptions(void) {
     }
     fail_call=-1;
 }
-int main(void){basic();validation();interruptions();printf("VMU emulation settings: %u checks passed\n",checks);return 0;}
+static void slot_choices(void) {
+    reset();bool enabled=false;unsigned slot=99u;
+    CHECK(kui_vmu_emulation_settings_load_full(&enabled,&slot,NULL) && enabled && slot==KUI_GAME_VMU_SLOT_A2 && !writes);
+    CHECK(!kui_vmu_emulation_settings_load_full(NULL,&slot,NULL));
+    CHECK(!kui_vmu_emulation_settings_load_full(&enabled,NULL,NULL));
+    CHECK(!kui_vmu_emulation_settings_save_full(true,KUI_GAME_VMU_SLOT_COUNT,NULL) && !writes);
+    CHECK(!kui_vmu_emulation_settings_save_slot(KUI_GAME_VMU_SLOT_COUNT,NULL) && !writes);
+    CHECK(kui_vmu_emulation_settings_save_full(false,KUI_GAME_VMU_SLOT_A1,NULL));
+    CHECK(!loaded());
+    CHECK(kui_vmu_emulation_settings_load_full(&enabled,&slot,NULL) && !enabled && slot==KUI_GAME_VMU_SLOT_A1);
+    unsigned before=writes;
+    CHECK(kui_vmu_emulation_settings_save_full(false,KUI_GAME_VMU_SLOT_A1,NULL) && writes==before);
+    CHECK(kui_vmu_emulation_settings_save(true,NULL));
+    CHECK(kui_vmu_emulation_settings_load_full(&enabled,&slot,NULL) && enabled && slot==KUI_GAME_VMU_SLOT_A1);
+    CHECK(kui_vmu_emulation_settings_save_slot(KUI_GAME_VMU_SLOT_A2,NULL));
+    CHECK(kui_vmu_emulation_settings_load_full(&enabled,&slot,NULL) && enabled && slot==KUI_GAME_VMU_SLOT_A2);
+    CHECK(kui_vmu_emulation_settings_save(false,NULL));
+    CHECK(kui_vmu_emulation_settings_save_slot(KUI_GAME_VMU_SLOT_A1,NULL));
+    CHECK(kui_vmu_emulation_settings_load_full(&enabled,&slot,NULL) && !enabled && slot==KUI_GAME_VMU_SLOT_A1);
+    /* A first slot-only update preserves the missing-record On default. */
+    reset();CHECK(kui_vmu_emulation_settings_save_slot(KUI_GAME_VMU_SLOT_A1,NULL));
+    CHECK(kui_vmu_emulation_settings_load_full(&enabled,&slot,NULL) && enabled && slot==KUI_GAME_VMU_SLOT_A1);
+    /* Independently decode a legacy v1 record, rather than relying on a
+     * full-write/read round trip to establish the default. */
+    seed();struct fake_file legacy=slots[0];reset();slots[0]=legacy;
+    CHECK(slots[0].bytes[8]==1u && !slots[0].bytes[28]);
+    CHECK(kui_vmu_emulation_settings_load_full(&enabled,&slot,NULL) && !enabled && slot==KUI_GAME_VMU_SLOT_A2);
+    struct fake_file a1=legacy;put32(a1.bytes+8,2u);put32(a1.bytes+28,KUI_GAME_VMU_SLOT_A1);reseal(&a1);
+    reset();slots[0]=a1;
+    CHECK(kui_vmu_emulation_settings_load_full(&enabled,&slot,NULL) && !enabled && slot==KUI_GAME_VMU_SLOT_A1);
+    /* Same sequence and On/Off but different slot is a conflicting record. */
+    slots[1]=legacy;enabled=true;slot=99u;
+    CHECK(!kui_vmu_emulation_settings_load_full(&enabled,&slot,NULL) && enabled && slot==99u);
+    CHECK(!kui_vmu_emulation_settings_save_slot(KUI_GAME_VMU_SLOT_A2,NULL));
+    /* Equal semantic values may be represented by either accepted version. */
+    slots[0]=legacy;put32(slots[0].bytes+8,2u);reseal(slots);
+    CHECK(kui_vmu_emulation_settings_load_full(&enabled,&slot,NULL) && !enabled && slot==KUI_GAME_VMU_SLOT_A2);
+    const unsigned invalid[]={8u,24u,28u,32u,59u};
+    for(unsigned i=0;i<sizeof(invalid)/sizeof(*invalid);i++) {
+        reset();slots[0]=a1;slots[0].bytes[invalid[i]]^=0x80u;reseal(slots);
+        enabled=true;slot=99u;
+        CHECK(!kui_vmu_emulation_settings_load_full(&enabled,&slot,NULL) && enabled && slot==99u);
+    }
+    reset();slots[0]=a1;put32(slots[0].bytes+28,KUI_GAME_VMU_SLOT_COUNT);reseal(slots);
+    CHECK(!kui_vmu_emulation_settings_load_full(&enabled,&slot,NULL) && enabled && slot==99u);
+    /* v1 retains its original zero-reserved requirement at byte28. */
+    reset();slots[0]=legacy;put32(slots[0].bytes+28,KUI_GAME_VMU_SLOT_A1);reseal(slots);
+    CHECK(!kui_vmu_emulation_settings_load_full(&enabled,&slot,NULL) && enabled && slot==99u);
+    reset();slots[0]=a1;memset(slots[0].bytes+16,0xff,8);reseal(slots);before=writes;
+    CHECK(!kui_vmu_emulation_settings_save_slot(KUI_GAME_VMU_SLOT_A2,NULL) && writes==before);
+}
+static void slot_interruptions(void) {
+    seed();struct fake_file before[2];memcpy(before,slots,sizeof(before));
+    /* A full update cannot expose the new enabled flag with the old slot. */
+    for(int cut=0;cut<=64;cut++) {
+        memcpy(slots,before,sizeof(slots));write_cut=cut;wrote=false;
+        CHECK(!kui_vmu_emulation_settings_save_full(true,KUI_GAME_VMU_SLOT_A1,NULL));
+        CHECK(!memcmp(slots,before,sizeof(slots[0])));write_cut=-1;
+        bool enabled=false;unsigned slot=99u;
+        CHECK(kui_vmu_emulation_settings_load_full(&enabled,&slot,NULL));
+        CHECK(enabled==(cut==64) && slot==(cut==64?KUI_GAME_VMU_SLOT_A1:KUI_GAME_VMU_SLOT_A2));
+    }
+    for(int call=0;call<24;call++) {
+        memcpy(slots,before,sizeof(slots));fail_call=call;calls=0;wrote=false;
+        (void)kui_vmu_emulation_settings_save_full(true,KUI_GAME_VMU_SLOT_A1,NULL);
+        CHECK(!memcmp(slots,before,sizeof(slots[0])));fail_call=-1;
+        bool enabled=false;unsigned slot=99u;
+        CHECK(kui_vmu_emulation_settings_load_full(&enabled,&slot,NULL));
+        CHECK((!enabled && slot==KUI_GAME_VMU_SLOT_A2) || (enabled && slot==KUI_GAME_VMU_SLOT_A1));
+    }
+}
+int main(void){basic();validation();interruptions();slot_choices();slot_interruptions();printf("VMU emulation settings: %u checks passed\n",checks);return 0;}

@@ -13,10 +13,12 @@ _Static_assert(sizeof(struct kui_vmu_native_heap_call)==20u,"Update cache codec/
 _Static_assert(sizeof(struct kui_vmu_native_exit)==52u,"Update cache codec/schema for exit changes");
 static const uint8_t magic[8]={'K','U','I','N','V','R','0','1'};
 /* Header word 20 names the proof's kind. Kind 2, a reviewed fixed arena,
- * is new: older readers accept only kind 1 and treat it as a cache miss. */
-enum {KIND_INITIALIZER_CALL=1u,KIND_FIXED_ARENA=2u};
+ * and kind 3, the arena lease of an executable without an SDK allocator, are
+ * newer: older readers accept fewer kinds and treat the rest as a cache miss. */
+enum {KIND_INITIALIZER_CALL=1u,KIND_FIXED_ARENA=2u,KIND_ARENA_LEASE=3u};
 static uint32_t kind(const struct kui_vmu_native_resolution *r) {
-    return r->heap.initializer_slot?KIND_INITIALIZER_CALL:KIND_FIXED_ARENA;
+    return r->heap.family==KUI_VMU_NATIVE_HEAP_ARENA?KIND_ARENA_LEASE:
+        r->heap.initializer_slot?KIND_INITIALIZER_CALL:KIND_FIXED_ARENA;
 }
 static uint32_t physical(uint32_t a) {return a&UINT32_C(0x1fffffff);}
 static bool ram_span(uintptr_t address,size_t bytes,uint32_t *p) {
@@ -89,22 +91,32 @@ static size_t codec(struct cursor *c,struct kui_vmu_native_resolution *r) {
 #undef WORD
     return c->at;
 }
+/* An SDK allocator with its initializer call or a reviewed fixed arena; or an
+ * arena lease, whose owner names only the image and the borrowed literal. */
+static bool heap_schema(const struct kui_vmu_native_resolution *r) {
+    const struct kui_vmu_native_heap *h=&r->heap;
+    if(h->version!=KUI_VMU_NATIVE_HEAP_VERSION || h->bytes!=sizeof(*h) ||
+       h->load!=r->driver.load_address || h->image_bytes!=r->driver.image_bytes) return false;
+    if(h->family==KUI_VMU_NATIVE_HEAP_ARENA)
+        return !(h->layout|h->initializer|h->initializer_target|h->allocate|h->release|
+                 h->dispatch_cell|h->dispatch_table|h->sentinel|h->cursor_cell|h->begin_cell|
+                 h->bytes_cell|h->begin_copy_cell) && h->initializer_slot &&
+            r->call.return_pr==r->call.call+4u && r->call.entry_bytes;
+    return h->family==KUI_VMU_NATIVE_HEAP_TAIL32 && h->layout==KUI_VMU_NATIVE_HEAP_DISPATCH2 &&
+        (h->initializer_slot || (!h->initializer_target &&
+         r->call.return_pr==r->call.call+4u && r->call.entry_bytes));
+}
 static bool schema(const struct kui_vmu_native_resolution *r) {
     const struct kui_vmu_native_discovery *d=&r->driver;
     return d->version==KUI_VMU_NATIVE_DISCOVERY_VERSION && d->bytes==sizeof(*d) &&
-        d->family==KUI_VMU_NATIVE_FAMILY_UNIFORM_V1 && d->requirements==KUI_VMU_NATIVE_REQUIREMENTS &&
+        kui_vmu_native_family_valid(d->family) && d->requirements==KUI_VMU_NATIVE_REQUIREMENTS &&
         d->image_bytes>=0x300u && d->image_bytes<=UINT32_C(0xc00000) &&
         (d->gate_register==12u || d->gate_register==13u) &&
         (r->layout.version==KUI_VMU_NATIVE_LAYOUT_VERSION ||
          r->layout.version==KUI_VMU_NATIVE_LAYOUT_INFILE_VERSION) && r->layout.bytes==sizeof(r->layout) &&
         ((r->layout.rx_layout==KUI_VMU_NATIVE_RX_EXPLICIT48 && r->layout.inputs==12u) ||
          (r->layout.rx_layout==KUI_VMU_NATIVE_RX_UNIFORM48 && r->layout.inputs==1u)) &&
-        r->heap.version==KUI_VMU_NATIVE_HEAP_VERSION && r->heap.bytes==sizeof(r->heap) &&
-        r->heap.family==KUI_VMU_NATIVE_HEAP_TAIL32 && r->heap.layout==KUI_VMU_NATIVE_HEAP_DISPATCH2 &&
-        r->heap.load==d->load_address && r->heap.image_bytes==d->image_bytes &&
-        (r->heap.initializer_slot || (!r->heap.initializer_target &&
-         r->call.return_pr==r->call.call+4u && r->call.entry_bytes)) &&
-        kui_vmu_native_exit_shape_valid(&r->exits) &&
+        heap_schema(r) && kui_vmu_native_exit_shape_valid(&r->exits) &&
         r->exits.load==d->load_address && r->exits.image_bytes==d->image_bytes &&
         r->exits.count<=KUI_VMU_NATIVE_EXIT_ENTRIES;
 }
@@ -114,7 +126,8 @@ static bool decode(const void *wire,size_t n,struct kui_vmu_native_resolution *r
     if(memcmp(p,magic,sizeof(magic)) || get32(p+8u)!=KUI_VMU_NATIVE_RESOLUTION_CACHE_VERSION ||
        get32(p+12u)!=KUI_VMU_NATIVE_RESOLUTION_CACHE_BYTES ||
        get32(p+16u)!=KUI_VMU_NATIVE_RESOLUTION_DETECTOR_EPOCH ||
-       (get32(p+20u)!=KIND_INITIALIZER_CALL && get32(p+20u)!=KIND_FIXED_ARENA)) return false;
+       (get32(p+20u)!=KIND_INITIALIZER_CALL && get32(p+20u)!=KIND_FIXED_ARENA &&
+        get32(p+20u)!=KIND_ARENA_LEASE)) return false;
     for(size_t i=CACHE_PAYLOAD_END;i<CACHE_DIGEST_OFFSET;i++) if(p[i]) return false;
     hash(p,CACHE_DIGEST_OFFSET,digest);
     if(memcmp(digest,p+CACHE_DIGEST_OFFSET,32u)) return false;
@@ -157,8 +170,17 @@ static bool release_window(const void *image,size_t n,uint32_t load,uint32_t rel
 }
 static bool discover(const void *image,size_t n,uint32_t load,struct kui_vmu_native_resolution *r) {
     memset(r,0,sizeof(*r));
-    if(!kui_vmu_native_discover_layout(image,n,load,&r->driver,&r->layout) ||
-       kui_vmu_native_heap_discover(image,n,load,&r->heap)!=KUI_VMU_NATIVE_HEAP_FOUND ||
+    if(!kui_vmu_native_discover_layout(image,n,load,&r->driver,&r->layout)) return false;
+    enum kui_vmu_native_heap_result heap=kui_vmu_native_heap_discover(image,n,load,&r->heap);
+    if(heap==KUI_VMU_NATIVE_HEAP_NONE) {
+        /* No SDK allocator: only the reviewed arena plan for this exact image,
+         * whose exits are guarded by the submit window alone. */
+        struct kui_vmu_native_heap_fixed_hook hook;
+        const struct kui_vmu_native_patch_window window={r->driver.submit,12u};
+        return kui_vmu_native_heap_arena_plan(image,n,r->driver.image_sha256,load,&r->heap,&r->call,&hook) &&
+            kui_vmu_native_exit_discover_guarded(image,n,load,&window,1u,&r->exits) && schema(r);
+    }
+    if(heap!=KUI_VMU_NATIVE_HEAP_FOUND ||
        (r->heap.initializer_slot?!kui_vmu_native_heap_call_discover(image,n,&r->heap,&r->call):
         !kui_vmu_native_heap_fixed_plan(image,n,r->driver.image_sha256,&r->heap,&r->call,NULL)) ||
        ((r->heap.initializer|r->heap.release)&3u) || !release_window(image,n,load,r->heap.release)) return false;
