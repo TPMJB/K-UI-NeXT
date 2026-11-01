@@ -35,6 +35,7 @@ void kui_shell_init(struct kui_shell *s, const struct kui_settings *p) {
     if(!s) return;
     memset(s, 0, sizeof(*s));
     s->vmu_emulation_enabled=s->vmu_emulation_requested=true;
+    s->gd_region_enabled=s->gd_region_requested=true;
     s->vmu_collection_return=s->vmu_backups_return=s->vmu_wizard_return=KUI_SHELL_VMU_TOOLS;
     s->salvage_passes=0; /* Keep retrying unresolved sectors until complete or stopped. */
     s->salvage_result_return=KUI_SHELL_SALVAGE_DRIVE;s->scan_return=KUI_SHELL_ADVANCED;
@@ -101,6 +102,7 @@ static bool game_vmu_key(const char *product,char out[12]) {
     out[n-first]=0;if(!useful) out[0]=0;return useful;
 }
 static enum kui_shell_action game_vmu_request(struct kui_shell *s) {
+    s->games_vmu_disc=false;
     ++s->games_vmu_generation;if(!s->games_vmu_generation) ++s->games_vmu_generation;
     s->games_vmu_label[0]=s->games_vmu_notice[0]=0;
     s->games_vmu_loading=game_vmu_key(s->games_detail.product,s->games_vmu_product);
@@ -123,7 +125,7 @@ void kui_shell_set_game_vmu_cards(struct kui_shell *s,unsigned generation,const 
     char current[12];
     if(!s || !info || !s->games_vmu_loading || generation!=s->games_vmu_generation ||
        !memchr(info->product,0,sizeof(info->product)) || strcmp(info->product,s->games_vmu_product) ||
-       !game_vmu_key(s->games_detail.product,current) || strcmp(current,info->product)) return;
+       (!s->games_vmu_disc && (!game_vmu_key(s->games_detail.product,current) || strcmp(current,info->product)))) return;
     bool saving=s->games_vmu_default_saving;
     s->games_vmu_info=*info;s->games_vmu_loading=false;s->games_vmu_default_saving=false;
     struct kui_vmu_game_info *value=&s->games_vmu_info;
@@ -153,6 +155,42 @@ void kui_shell_set_game_vmu_cards(struct kui_shell *s,unsigned generation,const 
     snprintf(s->games_vmu_label,sizeof(s->games_vmu_label),"%s",value->label);
     snprintf(s->games_vmu_notice,sizeof(s->games_vmu_notice),"%s",value->notice);
     if(s->games_vmu_card_selected>=value->count) s->games_vmu_card_selected=0;
+}
+/* The optical/storage worker supplies the product, never the idle Games hint.
+ * An Off snapshot may have no product because it intentionally skipped the disc
+ * and all card lookup. Every later launch rechecks the real disc and preference. */
+void kui_shell_set_disc_vmu_cards(struct kui_shell *s,unsigned generation,const struct kui_vmu_game_info *info) {
+    if(!s || !info || !s->games_vmu_disc || s->page!=KUI_SHELL_GAMES_VMU_CARD ||
+       !s->games_vmu_loading || generation!=s->games_vmu_generation ||
+       !memchr(info->product,0,sizeof(info->product))) return;
+    char key[12];
+    if(info->enabled && info->known &&
+       (!game_vmu_key(info->product,key) || strcmp(key,info->product))) return;
+    memcpy(s->games_vmu_product,info->product,sizeof(s->games_vmu_product));
+    kui_shell_set_game_vmu_cards(s,generation,info);
+    s->gd_auto_launch=s->games_vmu_info.known &&
+        (!s->games_vmu_info.enabled || s->games_vmu_info.count<=1u || s->games_vmu_selection.selected);
+}
+void kui_shell_set_disc_region(struct kui_shell *s,unsigned generation,bool enabled,bool ok,const char *notice) {
+    if(!s || !s->gd_region_loading || generation!=s->gd_region_generation) return;
+    s->gd_region_loading=false;s->gd_region_known=ok;
+    if(ok) s->gd_region_enabled=enabled;
+    snprintf(s->gd_region_notice,sizeof(s->gd_region_notice),"%s",notice?notice:"");
+}
+static enum kui_shell_action disc_options_request(struct kui_shell *s) {
+    (void)emulation_request(s,false);
+    ++s->gd_region_generation;if(!s->gd_region_generation) ++s->gd_region_generation;
+    s->gd_region_loading=true;s->gd_region_requested=s->gd_region_enabled;
+    snprintf(s->gd_region_notice,sizeof(s->gd_region_notice),"Reading region-free preference...");
+    return KUI_SHELL_GD_OPTIONS_LOAD;
+}
+static enum kui_shell_action disc_vmu_launch(struct kui_shell *s) {
+    if(!s->games_vmu_info.known) return KUI_SHELL_NONE;
+    if(s->games_vmu_info.enabled && !s->games_vmu_selection.selected)
+        memcpy(s->games_vmu_selection.product,s->games_vmu_info.product,sizeof(s->games_vmu_selection.product));
+    s->page=KUI_SHELL_GD_PLAY;s->gd_vmu_launch=true;s->gd_auto_launch=false;
+    s->games_vmu_pick_pending_launch=false;
+    return KUI_SHELL_GD_DIRECT_BOOT;
 }
 void kui_shell_set_game_vmu(struct kui_shell *s,unsigned generation,const char *product,
         const char *label,const char *notice) {
@@ -585,7 +623,7 @@ static void clear_game_choice(struct kui_shell *s) {
     s->games_variant_selected=0;
     memset(&s->games_vmu_info,0,sizeof(s->games_vmu_info));
     memset(&s->games_vmu_selection,0,sizeof(s->games_vmu_selection));
-    s->games_vmu_pick_pending_launch=false;s->games_vmu_default_saving=false;
+    s->games_vmu_pick_pending_launch=false;s->games_vmu_default_saving=false;s->games_vmu_disc=false;
 }
 static void games_remember(struct kui_shell *s) {
     if(s->page!=KUI_SHELL_GAMES || s->games_loading || s->games_group[0] ||
@@ -750,7 +788,7 @@ void kui_shell_set_games_detail(struct kui_shell *s,const struct kui_games_detai
     s->games_detail=*detail;
     memset(&s->games_vmu_info,0,sizeof(s->games_vmu_info));
     memset(&s->games_vmu_selection,0,sizeof(s->games_vmu_selection));
-    s->games_vmu_pick_pending_launch=false;s->games_vmu_default_saving=false;
+    s->games_vmu_pick_pending_launch=false;s->games_vmu_default_saving=false;s->games_vmu_disc=false;
     s->games_launch_codec=kui_shell_games_zso_selected(s) && detail->zso_codec<=KUI_ZSO_LZO1X?detail->zso_codec:KUI_ZSO_LZ4;
     s->games_codec_override=false;s->games_baseline=false;
     s->games_launch_reader=game_default_reader(detail);
@@ -1817,7 +1855,12 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     }
     /* Stop/back wins even over a simultaneous confirmation or launch. */
     if(buttons & KUI_SHELL_B) {
+        s->gd_auto_launch=false;
         if(busy) {
+            if(s->games_vmu_disc && s->page==KUI_SHELL_GAMES_VMU_CARD && !s->games_vmu_default_saving) {
+                ++s->games_vmu_generation;s->games_vmu_loading=false;
+                s->games_vmu_pick_pending_launch=false;s->page=KUI_SHELL_GD_PLAY;
+            }
             /* The boot slot has been selected: finish the restart and link
              * check before accepting another action. */
             if(s->page==KUI_SHELL_WIFI && s->wifi.firmware_committing) return KUI_SHELL_NONE;
@@ -1947,6 +1990,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(s->confirm_gd_boot) { s->confirm_gd_boot=false; return KUI_SHELL_NONE; }
         if(s->confirm_gd_direct) { s->confirm_gd_direct=false; return KUI_SHELL_NONE; }
         if(s->confirm_new) { s->confirm_new = false; return KUI_SHELL_NONE; }
+        if(s->page==KUI_SHELL_GD_OPTIONS) {s->page=KUI_SHELL_GD_PLAY;return KUI_SHELL_NONE;}
         if(s->page==KUI_SHELL_RIPPER || s->page==KUI_SHELL_GD_PLAY) {
             s->page=KUI_SHELL_DISC_TOOLS;return KUI_SHELL_NONE;
         }
@@ -2128,6 +2172,8 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(s->page == KUI_SHELL_DIAGNOSTICS) scroll(s, buttons);
         return KUI_SHELL_NONE;
     }
+    if(s->gd_auto_launch && s->games_vmu_disc && s->page==KUI_SHELL_GAMES_VMU_CARD)
+        return disc_vmu_launch(s);
     if(s->page==KUI_SHELL_VMU_WIZARD && s->vmu_wizard_loading) return KUI_SHELL_NONE;
     if(s->page==KUI_SHELL_VMU_TOOLS && s->vmu_emulation_loading) return KUI_SHELL_NONE;
     if(s->confirm_vmu_wizard_reset) {
@@ -2460,6 +2506,10 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         break;
     case KUI_SHELL_GAMES_VMU_CARD:
         if(s->games_vmu_loading) break;
+        if(s->games_vmu_disc && buttons==KUI_SHELL_A && s->games_vmu_info.known &&
+           (!s->games_vmu_info.enabled || !s->games_vmu_info.count)) {
+            return disc_vmu_launch(s);
+        }
         if(buttons==KUI_SHELL_UP || buttons==KUI_SHELL_DOWN) {
             s->games_vmu_card_selected=move_count(s->games_vmu_card_selected,buttons,s->games_vmu_info.count);break;
         }
@@ -2478,6 +2528,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             if(s->games_vmu_pick_pending_launch) {
                 s->games_vmu_pick_pending_launch=false;
                 bool check=s->games_vmu_pick_check;s->games_vmu_pick_check=false;
+                if(s->games_vmu_disc) return disc_vmu_launch(s);
                 return check?games_check_choice(s):games_launch_choice(s);
             }
         }
@@ -3084,11 +3135,41 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             return list_vmu_image(s);
         }
         break;
+    case KUI_SHELL_GD_OPTIONS:
+        if(buttons==KUI_SHELL_X) return disc_options_request(s);
+        if(buttons==KUI_SHELL_UP || buttons==KUI_SHELL_DOWN) {
+            s->gd_options_selected=move_count(s->gd_options_selected,buttons,2u);break;
+        }
+        if(buttons==KUI_SHELL_A || buttons==KUI_SHELL_LEFT || buttons==KUI_SHELL_RIGHT) {
+            if(s->gd_options_selected==0u) {
+                if(s->vmu_emulation_loading) break;
+                return emulation_request(s,s->vmu_emulation_known);
+            }
+            if(s->gd_region_loading) break;
+            if(!s->gd_region_known) return disc_options_request(s);
+            ++s->gd_region_generation;if(!s->gd_region_generation) ++s->gd_region_generation;
+            s->gd_region_loading=true;s->gd_region_requested=!s->gd_region_enabled;
+            snprintf(s->gd_region_notice,sizeof(s->gd_region_notice),"Saving region-free preference...");
+            return KUI_SHELL_GD_REGION_SAVE;
+        }
+        break;
     case KUI_SHELL_GD_PLAY:
-        if(buttons & KUI_SHELL_A) s->confirm_gd_boot=true;
-        else if(buttons & KUI_SHELL_X) return KUI_SHELL_GD_CHECK;
-        else if(buttons & KUI_SHELL_Y) s->confirm_gd_direct=true;
-        else if(buttons & KUI_SHELL_R) return KUI_SHELL_SAVE_LOG;
+        if(buttons==KUI_SHELL_A) {
+            s->games_vmu_disc=true;s->gd_vmu_launch=true;
+            memset(&s->games_vmu_info,0,sizeof(s->games_vmu_info));
+            memset(&s->games_vmu_selection,0,sizeof(s->games_vmu_selection));
+            s->games_vmu_product[0]=s->games_vmu_label[0]=s->games_vmu_notice[0]=0;
+            ++s->games_vmu_generation;if(!s->games_vmu_generation) ++s->games_vmu_generation;
+            s->games_vmu_loading=true;s->games_vmu_default_saving=false;s->gd_auto_launch=false;
+            game_vmu_pick_page(s,true);
+            return KUI_SHELL_GD_VMU_INFO;
+        }
+        if(buttons==KUI_SHELL_X) s->confirm_gd_boot=true;
+        else if(buttons==KUI_SHELL_Y) {
+            s->page=KUI_SHELL_GD_OPTIONS;s->gd_options_selected=0;
+            return disc_options_request(s);
+        }
+        else if(buttons==KUI_SHELL_R) return KUI_SHELL_SAVE_LOG;
         break;
     case KUI_SHELL_CD_AUDIO:
         if(buttons&KUI_SHELL_START) {s->page=KUI_SHELL_HOME;break;}

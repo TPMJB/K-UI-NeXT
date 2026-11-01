@@ -127,17 +127,31 @@ void kui_disc_launcher_check(struct kui_app_status *out,kui_log_fn log,
     snprintf(out->message,sizeof(out->message),"Native GD boot bytes checked. X checks again; Y tests direct boot.");
     free(s.raw);s.raw=NULL;publish(&s);
 }
+bool kui_disc_launcher_identity(struct kui_disc_boot_plan *plan,struct kui_app_status *out,
+    kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
+    if(!plan || !out || !log || !cancel) return false;
+    *out=(struct kui_app_status){0};memset(plan,0,sizeof(*plan));
+    struct optical_source s={.log=log,.cancel=cancel,.progress=progress,.status=out,.phase="disc identity"};
+    struct kui_disc_boot_source source;
+    if(!inspect(&s,&source,plan,KUI_DISC_LAUNCH_EXEC_MAX_BYTES)) return false;
+    out->complete=out->passed=true;free(s.raw);s.raw=NULL;publish(&s);return true;
+}
 bool kui_disc_launcher_prepare(struct kui_runtime_image *image,
     struct kui_app_status *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
-    if(!image || !out || !log || !cancel) return false;
+    return kui_disc_launcher_prepare_module(KUI_DISC_LAUNCH_PACKAGE,NULL,NULL,NULL,image,out,log,cancel,progress);
+}
+bool kui_disc_launcher_prepare_module(const char *package,kui_disc_launcher_card_fn card,
+    void *card_context,const struct kui_disc_launcher_region *region,struct kui_runtime_image *image,
+    struct kui_app_status *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
+    if(!package || !image || !out || !log || !cancel) return false;
     *image=(struct kui_runtime_image){0};*out=(struct kui_app_status){0};
     struct optical_source s={.log=log,.cancel=cancel,.progress=progress,.status=out,.phase="bootstrap template"};
     if(stopped(&s)) return fail(&s,"Direct disc boot stopped.");
-    /* A physical-GD baseline must never read any virtual-card catalogue,
-     * assignment, image, journal or preference, even when VMU was On in Games. */
+    /* Only the optional frontend supplies a card callback. The validated
+     * physical-only baseline never reads a virtual preference or card. */
     if(!kui_sd_connect()) return fail(&s,"SD unavailable for the direct-disc bootstrap.");
     FATFS fs;bool mounted=kui_mount(&fs,log),loaded=false;
-    if(mounted) loaded=kui_runtime_read(KUI_DISC_LAUNCH_PACKAGE,image,log,cancel)==KUI_RUNTIME_OK;
+    if(mounted) loaded=kui_runtime_read(package,image,log,cancel)==KUI_RUNTIME_OK;
     bool released=f_mount(NULL,"0:",0)==FR_OK;
     kui_sd_disconnect();
     if(!mounted || !loaded || !released) {
@@ -147,10 +161,26 @@ bool kui_disc_launcher_prepare(struct kui_runtime_image *image,
     if(!kui_disc_launch_layout(image->data,image->info.payload_bytes,4096u,&layout)) {
         kui_runtime_free(image);return fail(&s,"Direct-disc bootstrap template refused.");
     }
+    if((layout.flags==KUI_DISC_LAUNCH_VMU_FLAGS)!=!!card) {
+        kui_runtime_free(image);return fail(&s,"Disc module does not match the requested VMU mode.");
+    }
     struct kui_disc_boot_source source;struct kui_disc_boot_plan plan;
     if(!inspect(&s,&source,&plan,KUI_DISC_LAUNCH_EXEC_MAX_BYTES)) {kui_runtime_free(image);return false;}
+    if(region && !region->region_free &&
+       ((region->console!='J' && region->console!='U' && region->console!='E') ||
+        !memchr(plan.metadata.region,region->console,sizeof(plan.metadata.region)))) {
+        kui_runtime_free(image);return fail(&s,"Disc region differs from console; enable Region-free in GD Play Options.");
+    }
     if(!kui_disc_launch_layout(image->data,image->info.payload_bytes,plan.metadata.boot_bytes,&layout)) {
         kui_runtime_free(image);return fail(&s,"This first direct-boot test supports native executables up to 4 MiB.");
+    }
+    uint8_t profile[KUI_DISC_LAUNCH_VMU_PROFILE_BYTES];
+    if(card) {
+        s.phase="preparing selected virtual VMU";
+        memset(profile,0,sizeof(profile));
+        if(stopped(&s) || !card(plan.metadata.product,profile,card_context,log,cancel)) {
+            kui_runtime_free(image);return fail(&s,"Virtual VMU preparation refused; check the selected card and Diagnostics.");
+        }
     }
     s.phase="staging allocation";
     log("Physical disc: allocating %" PRIu32 " byte payload for %" PRIu32 " byte executable",layout.payload_bytes,layout.exec_bytes);
@@ -177,6 +207,12 @@ bool kui_disc_launcher_prepare(struct kui_runtime_image *image,
     }
     layout.ip_crc32=plan.ip_crc32;layout.exec_crc32=plan.boot_crc32;
     memcpy(layout.ip_sha256,plan.ip_sha256,32u);memcpy(layout.exec_sha256,plan.boot_sha256,32u);
+    if(card) {
+        memcpy((uint8_t *)grown+layout.vmu_profile_offset,profile,sizeof(profile));
+        struct kui_sha256 hash;kui_sha256_init(&hash);
+        kui_sha256_update(&hash,profile,sizeof(profile));kui_sha256_digest(&hash,layout.vmu_profile_sha256);
+        memset(profile,0,sizeof(profile));
+    }
     struct kui_disc_launch_plan checked;
     s.phase="staged byte fingerprints";
     if(stopped(&s) || !kui_disc_launch_encode((uint8_t *)grown+KUI_DISC_LAUNCH_CONFIG_OFFSET,&layout) ||
@@ -190,7 +226,10 @@ bool kui_disc_launcher_prepare(struct kui_runtime_image *image,
     image->info.payload_bytes=image->info.memory_bytes=layout.payload_bytes;
     image->info.crc32=kui_crc32(0,grown,layout.payload_bytes);
     out->complete=out->passed=true;
-    snprintf(out->message,sizeof(out->message),"Direct-disc boot prepared. Virtual VMU is disabled for this test.");
-    log("Physical disc: direct native boot prepared; build %s; no VMU/card lookup",image->info.build);
+    snprintf(out->message,sizeof(out->message),"%s",card?
+        "Direct-disc boot prepared with the selected virtual VMU.":
+        "Direct-disc boot prepared. Virtual VMU is disabled for this test.");
+    log("Physical disc: direct native boot prepared; build %s; %s",image->info.build,
+        card?"selected virtual card prepared":"no VMU/card lookup");
     free(s.raw);s.raw=NULL;publish(&s);return true;
 }

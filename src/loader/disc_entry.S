@@ -32,7 +32,12 @@ _start:
     .ascii "KUIDISC1"
     .long 1,64,0x1000,512,0x8ce00000
     .long __disc_stage_blob_end-__disc_stage_blob_start
-    .long 0x8ce00000,0x8c010000,0x400000,0x8cff0000,0x2000,1,0,0
+    .long 0x8ce00000,0x8c010000,0x400000,0x8cff0000,0x2000
+#if KUI_DISC_VMU
+    .long 3,0,0
+#else
+    .long 1,0,0
+#endif
     .section .disc_config,"a"
     .space 512
     .section .stage_blob,"a"

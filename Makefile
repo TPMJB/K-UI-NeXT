@@ -1417,3 +1417,17 @@ build/test-disc-vmu-storage: tests/test_disc_vmu_storage.c src/loader/disc_vmu_s
 build/test-disc-launcher: tests/test_disc_launcher.c src/apps/disc_launcher.c $(DISC_BOOT_CORE) src/core/disc_launch.c include/kui/disc_launcher.h include/kui/disc_launch.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) -Isrc/dreamcast tests/test_disc_launcher.c src/apps/disc_launcher.c $(DISC_BOOT_CORE) src/core/disc_launch.c -Wl,--wrap=realloc -o $@
+
+.PHONY: test-disc-vmu
+test-disc-vmu: test-disc-native build/test-disc-launch-vmu
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-disc-launch-vmu
+	python3 tests/test_disc_vmu_card.py
+	python3 tests/test_disc_vmu_launcher.py
+	python3 tests/test_disc_vmu_transport.py
+	python3 tests/test_disc_vmu_persist_stage.py
+	python3 tests/test_disc_vmu_support.py
+	python3 tests/test_disc_region.py
+	$(MAKE) -f Makefile.disc-vmu disc-vmu-entry-host-tests
+build/test-disc-launch-vmu: tests/test_disc_launch_vmu.c $(DISC_LAUNCH_CORE) include/kui/disc_launch.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) tests/test_disc_launch_vmu.c $(DISC_LAUNCH_CORE) -o $@

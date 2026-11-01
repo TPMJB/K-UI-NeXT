@@ -28,7 +28,8 @@ void kui_disc_stage_main(void) {
     retail_display_line("ORIGINAL DRIVE / NATIVE GD / NO VMU");
     const uint8_t *payload=(const uint8_t *)(uintptr_t)KUI_DISC_LAUNCH_LOAD_ADDRESS;
     const uint8_t *packet=payload+KUI_DISC_LAUNCH_CONFIG_OFFSET;
-    if(!kui_disc_launch_decode(packet,&plan)) stopped("INVALID DISC BOOT PACKET",1u);
+    if(!kui_disc_launch_decode(packet,&plan) || plan.flags!=KUI_DISC_LAUNCH_FLAGS)
+        stopped("INVALID DISC BOOT PACKET",1u);
     uint32_t actual_stage=(uint32_t)(uintptr_t)__disc_stage_binary_end-KUI_DISC_LAUNCH_STAGE_ADDRESS;
     if(plan.module_bytes!=KUI_DISC_LAUNCH_STAGE_OFFSET+actual_stage ||
        !kui_disc_launch_validate(payload,plan.payload_bytes,&plan))
