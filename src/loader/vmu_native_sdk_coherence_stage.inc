@@ -108,7 +108,10 @@ static bool __attribute__((noipa)) native_sdk_coherence_slot(uint32_t *out) {
         if(passive_layout.rx_slots[i] && native_sdk_coherence_overlap(slot,4u,passive_layout.rx_slots[i],1024u)) return false;
     *out=slot;return true;
 }
+/* A pd 1.46 driver keeps its cached lock pointer: there is no P2 alias to
+ * retire, so no gate is admitted or installed for it. */
 static bool __attribute__((noipa)) native_sdk_coherence_cached_admit(void) {
+    if(native_driver.family==KUI_VMU_NATIVE_FAMILY_EARLY_V1) return true;
     uint32_t slot;return native_sdk_coherence_slot(&slot);
 }
 
@@ -122,6 +125,7 @@ static bool native_sdk_cold_entry(uint32_t entry,uint32_t dest,uint32_t bytes) {
 
 static int __attribute__((noipa)) native_sdk_coherence_install(
     const struct kui_vmu_native_passive_exports *e,uint32_t dest,uint32_t bytes) {
+    if(native_driver.family==KUI_VMU_NATIVE_FAMILY_EARLY_V1) return 1;
     if(!e || bytes<80u+40u || e->bss_begin!=dest+bytes ||
        e->bss_end<e->bss_begin || e->bss_end>e->stack_bottom ||
        !native_sdk_coherence_window_valid()) return -1;

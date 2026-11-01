@@ -30,13 +30,22 @@ int main(int argc,char **argv) {
         CHECK(!memcmp(expected,(const void *)kui_vmu_native_sdk_coherence_state,sizeof(expected)));refused(&c);
 #define BAD(field,value) do {reset();bad=c;bad.field=(value);refused(&bad);} while(0)
         BAD(version,0);BAD(bytes,sizeof(c)-4);BAD(driver.version,0);BAD(driver.bytes,0);
-        BAD(driver.family,0);BAD(driver.requirements,0);BAD(layout.version,0);BAD(layout.version,KUI_VMU_NATIVE_LAYOUT_INFILE_VERSION+1u);BAD(layout.bytes,0);
+        BAD(driver.family,0);BAD(driver.family,3);BAD(driver.requirements,0);BAD(layout.version,0);BAD(layout.version,KUI_VMU_NATIVE_LAYOUT_INFILE_VERSION+1u);BAD(layout.bytes,0);
         BAD(layout.rx_layout,2);BAD(driver.lock_cell,0x8d000000u);BAD(driver.lock_cell,c.driver.lock_cell+1u);
         BAD(driver.manager_cell,0x8d000000u);BAD(driver.manager_initial,0x8cfff000u);
         BAD(driver.initializer,0xfffffffeu);BAD(driver.initializer,c.driver.initializer+2u);
         BAD(layout.initializer,c.layout.initializer+2u);BAD(layout.initializer,c.layout.initializer|0xa0000000u);
         BAD(driver.image_bytes,8u);
 #undef BAD
+        /* A pd 1.46 driver keeps its cached lock pointer: its admission
+         * succeeds without arming any gate state. */
+        {
+            reset();bad=c;bad.driver.family=KUI_VMU_NATIVE_FAMILY_EARLY_V1;
+            uint32_t zero[12]={0};
+            CHECK(kui_vmu_native_sdk_coherence_prepare(&bad)==1);
+            CHECK(!memcmp(zero,(const void *)kui_vmu_native_sdk_coherence_state,sizeof(zero)));
+            bad.driver.lock_cell=0x8d000000u;refused(&bad);
+        }
         /* Both a shared pointer/flag line and a split pair are supported;
          * SA2's actual cell is at offset28 and needs both lines retired. */
         for(unsigned offset=24u;offset<=28u;offset+=4u) {

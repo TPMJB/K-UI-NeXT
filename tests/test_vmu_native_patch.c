@@ -41,8 +41,33 @@ static void veneers(void) {
     }
     CHECK(!kui_vmu_native_patch_encode(UINT32_C(0x8c010000),targets[0],NULL));
 }
+/* An eight-byte head followed by the next entry's veneer: the head's MOV.L
+ * must load that veneer's own literal, at either halfword alignment. */
+static void heads(void) {
+    const uint32_t targets[]={UINT32_C(0x8c004000),UINT32_C(0x8c38a914),UINT32_C(0xacfffffe)};
+    for(unsigned offset=0;offset<512u;offset+=2u) for(unsigned t=0;t<3u;t++) {
+        uint32_t address=UINT32_C(0x8c010000)+offset;uint16_t joint[10];
+        CHECK(kui_vmu_native_patch_encode_head(address,joint));
+        CHECK(kui_vmu_native_patch_encode(address+8u,targets[t],joint+4));
+        CHECK(joint[0]==UINT16_C(0xd003) && joint[1]==UINT16_C(0x402b) && joint[2]==9u && joint[3]==9u);
+        uint32_t literal=((address+4u)&~3u)+4u*(joint[0]&255u);
+        CHECK(!(literal&3u) && literal>=address+14u && literal+4u<=address+20u);
+        unsigned index=(literal-address)/2u;
+        CHECK(((uint32_t)joint[index]|(uint32_t)joint[index+1u]<<16)==targets[t]);
+    }
+    const uint32_t invalid[]={0u,UINT32_C(0x8c010001),UINT32_C(0x8c00fffe),UINT32_C(0x8cffffee),
+        UINT32_C(0x0d000000),UINT32_C(0xcc010000),UINT32_MAX};
+    uint16_t out[4],before[4];memset(out,0xa5,sizeof(out));memcpy(before,out,sizeof(out));
+    for(unsigned i=0;i<sizeof(invalid)/sizeof(invalid[0]);i++) {
+        CHECK(!kui_vmu_native_patch_encode_head(invalid[i],out));CHECK(!memcmp(out,before,sizeof(out)));
+    }
+    CHECK(kui_vmu_native_patch_encode_head(UINT32_C(0x8cffffec),out));
+    CHECK(kui_vmu_native_patch_encode_head(UINT32_C(0x0c010000),out));
+    CHECK(kui_vmu_native_patch_encode_head(UINT32_C(0xac010002),out));
+    CHECK(!kui_vmu_native_patch_encode_head(UINT32_C(0x8c010000),NULL));
+}
 int main(int argc,char **argv) {
-    veneers();
+    veneers();heads();
     unsigned char data[128];const uint32_t load=0x8c010000u,start=load+64u;
     memset(data,0,sizeof(data));CHECK(kui_vmu_native_patch_no_interior(data,sizeof(data),load,start,12u));
     const uint32_t aliases[]={0u,0x80000000u,0xa0000000u};

@@ -9,6 +9,17 @@
 #include "kui/vmu_native_exit.h"
 #endif
 #define KUI_VMU_NATIVE_PASSIVE_MAGIC UINT32_C(0x4b4e5031)
+/* Controller A expansion slot the virtual card answers as; the other slot
+ * stays physical. A2 is the default. KUI_VMU_VIRTUAL_A1 builds answer as A1,
+ * for games whose save code only ever uses A1. */
+#if defined(KUI_VMU_VIRTUAL_A1) && KUI_VMU_VIRTUAL_A1
+#define KUI_VMU_NATIVE_VIRTUAL_ADDRESS 1u
+#define KUI_VMU_NATIVE_VIRTUAL_NAME "A1"
+#else
+#define KUI_VMU_NATIVE_VIRTUAL_ADDRESS 2u
+#define KUI_VMU_NATIVE_VIRTUAL_NAME "A2"
+#endif
+#define KUI_VMU_NATIVE_PHYSICAL_ADDRESS (3u-KUI_VMU_NATIVE_VIRTUAL_ADDRESS)
 /* Canonical selector in the existing config word; no exports/config ABI growth. */
 enum kui_vmu_native_diagnostics {
     KUI_VMU_NATIVE_DIAGNOSTICS_NORMAL = 0,
@@ -30,6 +41,14 @@ enum kui_vmu_native_diagnostics {
 #else
 #define KUI_VMU_NATIVE_PASSIVE_VERSION 1u
 #define KUI_VMU_NATIVE_PASSIVE_SPAN 0x10000u
+#endif
+/* The worker's owned stack: the last bytes of its span. The compact
+ * Background worker's deepest linked call path needs under 2 KiB with every
+ * audited margin, so it owns 3 KiB and leaves the fourth to code and state. */
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE && KUI_NATIVE_BACKGROUND_COMPACT
+#define KUI_VMU_NATIVE_PASSIVE_STACK_BYTES 0xc00u
+#else
+#define KUI_VMU_NATIVE_PASSIVE_STACK_BYTES 0x1000u
 #endif
 struct kui_vmu_native_passive_exports {
     uint32_t magic,version,bytes,arm,submit_hook,complete_hook,terminal;

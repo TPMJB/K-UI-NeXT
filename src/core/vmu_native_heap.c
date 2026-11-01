@@ -165,6 +165,10 @@ enum kui_vmu_native_heap_result kui_vmu_native_heap_discover(
 static bool call_expression(const uint8_t *p,size_t n,const struct kui_vmu_native_heap *h,
     size_t begin,size_t target_load,size_t call,unsigned target,uint32_t *first,uint32_t *bytes) {
     uint32_t value[16]={0},known=0;bool condition=false,condition_known=false,target_loaded=false;
+    /* Words this window itself stored at @(disp,R15). R15 never changes in
+     * the window and no call precedes the target call, so a later load of
+     * the same slot can only return the known value that was stored there. */
+    uint32_t spill[16]={0},spilled=0;
     for(size_t at=begin;at<=call+2u;at+=2u) {
         if(at==call) {
             if(!target_loaded || !(known&(1u<<target)) || value[target]!=h->initializer_target) return false;
@@ -181,7 +185,19 @@ static bool call_expression(const uint8_t *p,size_t n,const struct kui_vmu_nativ
          * the transport itself, not just the original computed target: a
          * later mask/add could otherwise transform the replacement pointer. */
         if(at>target_load && at<call && r==target && (op&0xff00u)!=0x1f00u) return false;
-        if((op&0xf000u)==0xd000u) {
+        if((op&0xf000u)==0x9000u) {
+            /* MOV.W @(disp,PC),Rn: a sign-extended immutable image halfword. */
+            uint32_t pool=h->load+(uint32_t)at+4u+2u*(op&255u);size_t slot;
+            if((target_loaded && r==target) || phys(pool)-phys(h->initializer_slot)<4u ||
+               !index(pool&~3u,h->load,n,4u,&slot)) return false;
+            slot+=pool&2u;
+            value[r]=(uint32_t)(int32_t)(int16_t)h16(p+slot);known|=bit;
+        } else if((op&0xf0f0u)==0x50f0u || (op&0xf0ffu)==0x60f2u) {
+            /* MOV.L @(disp,R15),Rn or MOV.L @R15,Rn of a slot this window spilled. */
+            unsigned disp=(op&0xf000u)==0x5000u?op&15u:0u;
+            if((target_loaded && r==target) || !(spilled&(1u<<disp))) return false;
+            value[r]=spill[disp];known|=bit;
+        } else if((op&0xf000u)==0xd000u) {
             uint32_t pool=((h->load+(uint32_t)at+4u)&~3u)+4u*(op&255u);
             /* The selected word changes to the hook at installation. No
              * earlier/other read may feed arguments or a conditional from
@@ -214,9 +230,11 @@ static bool call_expression(const uint8_t *p,size_t n,const struct kui_vmu_nativ
              * MOV.L Rm,@R15 is exactly the zero-displacement encoding of
              * MOV.L Rm,@(0,R15); neither encoding changes R15. The same
              * known-source and no-replacement-target rules apply to both.
-             * No stack loads are accepted, so this cannot supply knowledge
-             * to the argument expression or follow an unproved pointer. */
+             * A later load accepts only a slot spilled earlier in this same
+             * window, so the stack never supplies unknown or caller state. */
             if((target_loaded && m==target) || !(known&other)) return false;
+            unsigned disp=(op&0xff00u)==0x1f00u?op&15u:0u;
+            spill[disp]=value[m];spilled|=1u<<disp;
         } else if((op&0xf00fu)==0x2008u) {
             if(target_loaded && (r==target || m==target)) return false;
             if((known&(bit|other))!=(bit|other)) return false;
@@ -318,6 +336,36 @@ static bool code(uint32_t a,uint32_t base,size_t n,size_t need,size_t *at) {
     if((a&1u) || !span(a,2u) || p<b || p-b>n || need>n-(p-b)) return false;
     *at=p-b;return true;
 }
+/* The borrowed call: MOV.L @(disp,PC),Rn; JSR @Rn; NOP, reading exactly
+ * the planned literal, which still names the planned target, itself code in
+ * the image. As for an initializer slot: one encoded consumer across the
+ * image and no immutable word holding the slot's address. */
+static bool borrowed_call(const uint8_t *p,size_t n,uint32_t base,const struct fixed_plan *plan) {
+    size_t load,call,inside;
+    if(!code(plan->load,base,n,6u,&load) || !code(plan->call,base,n,4u,&call) ||
+       call!=load+2u || !index(plan->slot,base,n,4u,&inside) ||
+       !code(plan->target,base,n,2u,&inside)) return false;
+    uint16_t op=h16(p+load);unsigned reg=(op>>8)&15u;uint32_t value;
+    if((op&0xf000u)!=0xd000u || phys(((base+(uint32_t)load+4u)&~3u)+4u*(op&255u))!=phys(plan->slot) ||
+       !literal(p,n,base,load,reg,&value) || value!=plan->target ||
+       h16(p+call)!=(0x400bu|(reg<<8)) || h16(p+call+2u)!=0x0009u) return false;
+    unsigned consumers=0u;
+    for(size_t at=0;at<n && n-at>=2u;at+=2u) {
+        if(!(at&3u) && n-at>=4u && span(h32(p+at),4u) && phys(h32(p+at))==phys(plan->slot)) return false;
+        uint16_t word=h16(p+at);
+        if((word&0xf000u)!=0xd000u ||
+           phys(((base+(uint32_t)at+4u)&~3u)+4u*(word&255u))!=phys(plan->slot)) continue;
+        if(at!=load || ++consumers>1u) return false;
+    }
+    return consumers==1u;
+}
+static const struct fixed_plan *plan_for(const struct fixed_plan *plans,size_t count,size_t n,
+    const uint8_t sha256[32]) {
+    const struct fixed_plan *plan=NULL;
+    for(size_t i=0;i<count;i++)
+        if(plans[i].image_bytes==n && !memcmp(plans[i].sha256,sha256,32u)) plan=&plans[i];
+    return plan;
+}
 bool kui_vmu_native_heap_fixed_plan(const void *image,size_t n,const uint8_t sha256[32],
     const struct kui_vmu_native_heap *h,struct kui_vmu_native_heap_call *out,
     struct kui_vmu_native_heap_fixed_hook *hook) {
@@ -325,35 +373,12 @@ bool kui_vmu_native_heap_fixed_plan(const void *image,size_t n,const uint8_t sha
        n!=h->image_bytes || overlaps((uintptr_t)image,n,(uintptr_t)out,sizeof(*out)) ||
        (hook && (overlaps((uintptr_t)image,n,(uintptr_t)hook,sizeof(*hook)) ||
                  overlaps((uintptr_t)out,sizeof(*out),(uintptr_t)hook,sizeof(*hook))))) return false;
-    const struct fixed_plan *plan=NULL;
-    for(unsigned i=0;i<sizeof(fixed_plans)/sizeof(fixed_plans[0]);i++)
-        if(fixed_plans[i].image_bytes==n && !memcmp(fixed_plans[i].sha256,sha256,32u)) plan=&fixed_plans[i];
-    if(!plan) return false;
-    const uint8_t *p=image;size_t load,call,inside;
-    /* The borrowed call: MOV.L @(disp,PC),Rn; JSR @Rn; NOP, reading exactly
-     * the planned literal, which still names the planned target, itself
-     * code in the image. */
-    if(!code(plan->load,h->load,n,6u,&load) || !code(plan->call,h->load,n,4u,&call) ||
-       call!=load+2u || !index(plan->slot,h->load,n,4u,&inside) ||
-       !code(plan->target,h->load,n,2u,&inside)) return false;
-    uint16_t op=h16(p+load);unsigned reg=(op>>8)&15u;uint32_t value;
-    if((op&0xf000u)!=0xd000u || phys(((h->load+(uint32_t)load+4u)&~3u)+4u*(op&255u))!=phys(plan->slot) ||
-       !literal(p,n,h->load,load,reg,&value) || value!=plan->target ||
-       h16(p+call)!=(0x400bu|(reg<<8)) || h16(p+call+2u)!=0x0009u) return false;
-    /* As for an initializer slot: one encoded consumer across the image and
-     * no immutable word holding the slot's address. */
-    unsigned consumers=0u;
-    for(size_t at=0;at<n && n-at>=2u;at+=2u) {
-        if(!(at&3u) && n-at>=4u && span(h32(p+at),4u) && phys(h32(p+at))==phys(plan->slot)) return false;
-        uint16_t word=h16(p+at);
-        if((word&0xf000u)!=0xd000u ||
-           phys(((h->load+(uint32_t)at+4u)&~3u)+4u*(word&255u))!=phys(plan->slot)) continue;
-        if(at!=load || ++consumers>1u) return false;
-    }
+    const struct fixed_plan *plan=plan_for(fixed_plans,sizeof(fixed_plans)/sizeof(fixed_plans[0]),n,sha256);
+    if(!plan || !borrowed_call(image,n,h->load,plan)) return false;
     /* The arena lies in RAM outside the image and the allocator's control
      * cells and dispatch table; stage placement is checked separately. */
     uint32_t begin=phys(plan->begin),image_begin=phys(h->load),control=phys(h->sentinel)-4u;
-    if(consumers!=1u || ((plan->begin|plan->bytes)&31u) || plan->bytes<128u ||
+    if(((plan->begin|plan->bytes)&31u) || plan->bytes<128u ||
        !span(plan->begin,plan->bytes) ||
        (begin<image_begin+(uint32_t)n && image_begin<begin+plan->bytes) ||
        (begin<control+0x34u && control<begin+plan->bytes) ||
@@ -361,6 +386,74 @@ bool kui_vmu_native_heap_fixed_plan(const void *image,size_t n,const uint8_t sha
     *out=(struct kui_vmu_native_heap_call){plan->load,plan->call,plan->call+4u,plan->begin,plan->bytes};
     if(hook) *hook=(struct kui_vmu_native_heap_fixed_hook){plan->slot,plan->target};
     return true;
+}
+/* Exact executables that link no SDK allocator. The arena is the whole
+ * lease; nothing in the game manages it. */
+static const struct fixed_plan arena_plans[]={
+    /* The House of the Dead 2, US MK-51002: the game's init calls the
+     * SDK hardware init once (it copies the interrupt vector the SCI route
+     * needs); the arena is the top 284 KiB of the 1.375 MiB both test-3 console
+     * RAM maps left unwritten, ending where the stage begins
+     * (docs/native-zr-family.md). */
+    {812268u,{0x37,0x81,0x79,0x67,0xc2,0x94,0x9d,0xe6,0xca,0x4c,0x83,0x52,0x2f,0x7e,0xff,0x36,
+              0xfb,0x18,0xea,0x17,0xa5,0xf0,0x6d,0x99,0x5f,0x6e,0x93,0x31,0x95,0x11,0xee,0x6f},
+     UINT32_C(0x8c01b112),UINT32_C(0x8c01b114),UINT32_C(0x8c01b184),UINT32_C(0x0c0ae9c4),
+     UINT32_C(0x8cdb9000),UINT32_C(0x00047000)},
+#ifdef KUI_VMU_NATIVE_HEAP_TEST_ARENA_PLAN
+    KUI_VMU_NATIVE_HEAP_TEST_ARENA_PLAN,
+#endif
+};
+bool kui_vmu_native_heap_arena_plan(const void *image,size_t n,const uint8_t sha256[32],uint32_t load,
+    struct kui_vmu_native_heap *owner,struct kui_vmu_native_heap_call *call,
+    struct kui_vmu_native_heap_fixed_hook *hook) {
+    if(!image || !sha256 || !owner || !call || !hook || n<2u || n>0xc00000u || (load&3u) ||
+       !span(load,(uint32_t)n) ||
+       overlaps((uintptr_t)image,n,(uintptr_t)owner,sizeof(*owner)) ||
+       overlaps((uintptr_t)image,n,(uintptr_t)call,sizeof(*call)) ||
+       overlaps((uintptr_t)image,n,(uintptr_t)hook,sizeof(*hook)) ||
+       overlaps((uintptr_t)owner,sizeof(*owner),(uintptr_t)call,sizeof(*call)) ||
+       overlaps((uintptr_t)owner,sizeof(*owner),(uintptr_t)hook,sizeof(*hook)) ||
+       overlaps((uintptr_t)call,sizeof(*call),(uintptr_t)hook,sizeof(*hook))) return false;
+    const struct fixed_plan *plan=plan_for(arena_plans,sizeof(arena_plans)/sizeof(arena_plans[0]),n,sha256);
+    if(!plan || !borrowed_call(image,n,load,plan)) return false;
+    uint32_t begin=phys(plan->begin),image_begin=phys(load);
+    if(((plan->begin|plan->bytes)&31u) || plan->bytes<128u || !span(plan->begin,plan->bytes) ||
+       (begin<image_begin+(uint32_t)n && image_begin<begin+plan->bytes)) return false;
+    *owner=(struct kui_vmu_native_heap){.version=KUI_VMU_NATIVE_HEAP_VERSION,.bytes=sizeof(*owner),
+        .family=KUI_VMU_NATIVE_HEAP_ARENA,.image_bytes=(uint32_t)n,.load=load,.initializer_slot=plan->slot};
+    *call=(struct kui_vmu_native_heap_call){plan->load,plan->call,plan->call+4u,plan->begin,plan->bytes};
+    *hook=(struct kui_vmu_native_heap_fixed_hook){plan->slot,plan->target};
+    return true;
+}
+/* An arena lease: its owner names only the image and the borrowed literal,
+ * every allocator role is zero; begin == payload, the complete arena as both
+ * heap and lease bytes, no allocator header, phase 2, one initialization, all
+ * of it in RAM outside the image. Nothing is read: this is the whole proof. */
+static bool arena_lease(const struct kui_vmu_native_heap_lease *l,uint32_t initializations) {
+    const struct kui_vmu_native_heap *h=&l->owner;
+    uint32_t roles=h->layout|h->initializer|h->initializer_target|h->allocate|h->release|
+        h->dispatch_cell|h->dispatch_table|h->sentinel|h->cursor_cell|h->begin_cell|h->bytes_cell|
+        h->begin_copy_cell|l->header|l->units|l->remaining;
+    uint32_t image=phys(h->load),begin=phys(l->begin),slot=phys(h->initializer_slot)-image;
+    return !roles && l->version==KUI_VMU_NATIVE_HEAP_VERSION && l->bytes==sizeof(*l) &&
+        h->version==KUI_VMU_NATIVE_HEAP_VERSION && h->bytes==sizeof(*h) &&
+        h->family==KUI_VMU_NATIVE_HEAP_ARENA && l->phase==2u &&
+        initializations==1u && l->initializations==1u && l->payload==l->begin &&
+        l->heap_bytes==l->lease_bytes && l->lease_bytes>=128u && !((l->begin|l->lease_bytes)&31u) &&
+        span(l->begin,l->lease_bytes) && span(h->load,h->image_bytes) &&
+        h->image_bytes>=4u && h->image_bytes<=0xc00000u &&
+        !((h->load|h->initializer_slot)&3u) && !((h->initializer_slot^h->load)&UINT32_C(0xe0000000)) &&
+        slot<=h->image_bytes-4u && (begin>=image+h->image_bytes || image>=begin+l->lease_bytes);
+}
+bool kui_vmu_native_heap_arena_lease(const struct kui_vmu_native_heap *owner,uint32_t begin,
+    uint32_t bytes,uint32_t lease_bytes,struct kui_vmu_native_heap_lease *out) {
+    if(!owner || !out || overlaps((uintptr_t)owner,sizeof(*owner),(uintptr_t)out,sizeof(*out)) ||
+       bytes!=lease_bytes) return false;
+    struct kui_vmu_native_heap_lease l={.version=KUI_VMU_NATIVE_HEAP_VERSION,.bytes=sizeof(l),.phase=2u,
+        .initializations=1u,.owner=*owner,.begin=begin,.heap_bytes=bytes,.lease_bytes=lease_bytes,
+        .payload=begin};
+    if(!arena_lease(&l,1u)) return false;
+    *out=l;return true;
 }
 static bool read_is(kui_vmu_native_heap_read read,void *ctx,uint32_t at,uint32_t expected) {
     uint32_t value;return read && !(at&3u) && span(at,4u) && read(ctx,at,&value) && value==expected;
@@ -530,6 +623,8 @@ bool kui_vmu_native_heap_lease_valid_with_release(const struct kui_vmu_native_he
 }
 bool kui_vmu_native_heap_lease_valid(const struct kui_vmu_native_heap_lease *l,
     kui_vmu_native_heap_read read,void *ctx,uint32_t initializations) {
+    /* No allocator manages an arena lease: its exact geometry is the proof. */
+    if(l && l->owner.family==KUI_VMU_NATIVE_HEAP_ARENA) return arena_lease(l,initializations);
     return kui_vmu_native_heap_lease_valid_with_release(l,read,ctx,initializations,0u,NULL);
 }
 #include "vmu_native_heap_bottom_code.inc"

@@ -59,3 +59,18 @@ bool kui_vmu_native_stage_bottom_allocation_safe(const struct kui_vmu_native_hea
        !excludes_stage(heap->dispatch_table,8u,stage,limit)) return false;
     return !overlap(begin,begin+arena_bytes,RAM_FIRST,RAM_FIRST+exec_bytes);
 }
+/* An arena lease is the whole arena and holds no allocator metadata. Admit
+ * 32-byte aligned main RAM outside both the live stage and the loaded
+ * executable; the lease itself names the exact arena and its size. */
+bool kui_vmu_native_stage_arena_safe(uint32_t exec_bytes,uint32_t stage_begin,uint32_t stage_end,
+    uint32_t arena_begin,uint32_t arena_bytes) {
+    uint32_t stage=physical(stage_begin),limit=physical(stage_end),begin=physical(arena_begin);
+    if(!exec_bytes || exec_bytes>EXEC_MAX ||
+       !alias(stage_begin) || !alias(stage_end) ||
+       ((stage_begin^stage_end)&UINT32_C(0xe0000000)) ||
+       stage<RAM_FIRST || stage>=RAM_END || limit<=stage || limit>RAM_END ||
+       overlap(stage,limit,RAM_FIRST,RAM_FIRST+exec_bytes) ||
+       !span(arena_begin,arena_bytes) || ((arena_begin|arena_bytes)&31u)) return false;
+    return !overlap(begin,begin+arena_bytes,stage,limit) &&
+        !overlap(begin,begin+arena_bytes,RAM_FIRST,RAM_FIRST+exec_bytes);
+}

@@ -102,8 +102,9 @@ def worker_geometry(worker):
     lean=lean_worker_profile(worker)
     from native_runtime_layout import layout_for
     span=layout_for(worker[4]).WORKER_BYTES if lean else 0x20000
+    stack=layout_for(worker[4]).WORKER_STACK_BYTES if lean else 0x1000
     return dict(lean=lean,begin=0x0c100000,end=0x0c100000+span,
-                stack_begin=0x0c100000+span-0x1000)
+                stack_begin=0x0c100000+span-stack,stack_bytes=stack)
 
 
 def require(ok,message):
@@ -966,7 +967,7 @@ def mutations(resident,worker,layout):
             except ValueError:geometry_schemas+=1
             else:raise ValueError('lean witness accepted an inexact compact worker marker')
         c=WitnessCPU(resident,worker,layout)
-        require(c.owned_stack_address(stack_begin,0x1000) and
+        require(c.owned_stack_address(stack_begin,geometry['stack_bytes']) and
                 not c.owned_worker_address(worker_end) and
                 not c.owned_worker_address(worker_end-1,2) and
                 not c.owned_stack_address(stack_begin-1),

@@ -516,7 +516,8 @@ static void __attribute__((noinline)) ram_map_report(void) {
         word|=same;
         if(!(bit<<=1)) {*out++=word;word=0u;bit=1u;}
     } while(a!=KUI_RETAIL_RAM_END);
-    retail_display_values("RAM UNUSED",unused,KUI_NATIVE_RAM_MAP_WORDS);
+    /* A three-letter label: the low resident has no bytes to spare. */
+    retail_display_values("RAM",unused,KUI_NATIVE_RAM_MAP_WORDS);
 }
 #endif
 /* The separate VMU reader keeps compact terminal fields in its unchanged

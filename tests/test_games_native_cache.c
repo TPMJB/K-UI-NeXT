@@ -276,9 +276,78 @@ static void fixed_arena_needs_dual(void) {
         CHECK(io.reads==1u && io.replays==1u && !io.builds && !io.writes && !io.renames);
     }
 }
+/* An arena lease (kind 3) is the whole lease: only a combined module whose own
+ * lease is exactly the record's arena is seeded with it, for either
+ * background reader. A single-reader module, or a combined module with
+ * another lease, is never seeded; a cache hit changes nothing. */
+static void arena_needs_compact_dual(void) {
+    uint8_t boot[1024];for(unsigned i=0;i<sizeof(boot);i++)boot[i]=(uint8_t)(i*31u+11u);
+    const uint32_t leases[]={0u,KUI_NATIVE_DUAL_COMPACT_LEASE_BYTES,KUI_NATIVE_DUAL_GENERAL_LEASE_BYTES,
+        KUI_NATIVE_DUAL_DIAGNOSTIC_LEASE_BYTES};
+    unsigned seeded=0u;
+    for(unsigned reader=KUI_RETAIL_READER_STANDARD;reader<=KUI_RETAIL_READER_ASYNC_EAGER;reader++)
+        for(unsigned lease=0u;lease<sizeof(leases)/sizeof(leases[0]);lease++) {
+            setup(boot,sizeof(boot));map.reader=reader;
+            if(leases[lease]) {
+                const struct kui_native_dual_capability cap={KUI_NATIVE_DUAL_MAGIC0,KUI_NATIVE_DUAL_MAGIC1,
+                    1u,KUI_NATIVE_DUAL_CAPABILITY_BYTES,KUI_RETAIL_READER_ASYNC,
+                    KUI_RETAIL_READER_ASYNC_EAGER,leases[lease],0u};
+                memcpy(module+3072u,&cap,sizeof(cap));
+            }
+            memcpy(before,module,sizeof(module));
+            char path[120];cache_path(path,boot,sizeof(boot));unsigned n=node_add(path,false);
+            struct kui_vmu_native_resolution source;mock(boot,sizeof(boot),&source);arena_record(&source);
+            source.call.entry_bytes=KUI_NATIVE_DUAL_COMPACT_LEASE_BYTES;
+            CHECK(kui_vmu_native_resolution_cache_encode(&source,disk[n].data,1024u));
+            CHECK(get32(disk[n].data+20u)==3u);disk[n].size=1024u;
+            const bool ready=reader!=KUI_RETAIL_READER_STANDARD &&
+                leases[lease]==KUI_NATIVE_DUAL_COMPACT_LEASE_BYTES;
+            CHECK(prepare(true,reader,false,"/Games/Arena")==(ready?NATIVE_CACHE_READY:NATIVE_CACHE_SKIPPED));
+            /* A background reader without a combined module never reads. */
+            const unsigned reads=reader==KUI_RETAIL_READER_STANDARD || leases[lease]?1u:0u;
+            CHECK(io.reads==reads && io.replays==reads && !io.builds && !io.writes && !io.renames);
+            seeded+=ready;
+        }
+    CHECK(seeded==2u);
+}
+/* The owner's arena executable (kind 3, no SDK allocator): the compact
+ * combined module is seeded for either background reader. A combined module
+ * with another lease is not; New then takes the reader-only module, which the
+ * executable's SDK SCI family admits. A single-reader module never is. */
+static void actual_arena_frontend(uint8_t *boot,size_t bytes) {
+    const uint32_t leases[]={KUI_NATIVE_DUAL_COMPACT_LEASE_BYTES,KUI_NATIVE_DUAL_GENERAL_LEASE_BYTES};
+    for(unsigned reader=KUI_RETAIL_READER_STANDARD;reader<=KUI_RETAIL_READER_ASYNC_EAGER;reader++)
+        for(unsigned lease=0u;lease<2u;lease++) {
+            setup(boot,bytes);map.reader=reader;
+            const struct kui_native_dual_capability cap={KUI_NATIVE_DUAL_MAGIC0,KUI_NATIVE_DUAL_MAGIC1,
+                1u,KUI_NATIVE_DUAL_CAPABILITY_BYTES,KUI_RETAIL_READER_ASYNC,
+                KUI_RETAIL_READER_ASYNC_EAGER,leases[lease],0u};
+            memcpy(module+3072u,&cap,sizeof(cap));memcpy(before,module,sizeof(module));
+            bool standalone=false;source_proof=(struct native_cache_source_proof){0};
+            enum native_cache_result result=native_cache_prepare(&game,&map,true,reader,false,&package,
+                "/Games/Arena",true,logger,cancelled,&source_proof,&standalone);
+            const bool dual=reader!=KUI_RETAIL_READER_STANDARD;
+            CHECK(io.opens==io.closed && io.builds==1u && io.renames==1u && source_proof.complete);
+            CHECK(result==(dual && !lease?NATIVE_CACHE_READY:NATIVE_CACHE_SKIPPED));
+            CHECK(standalone==(lease && reader==KUI_RETAIL_READER_ASYNC));
+            if(result!=NATIVE_CACHE_READY) {CHECK(!memcmp(module,before,sizeof(module)));continue;}
+            const uint8_t *wire=NULL,*pin=NULL;struct kui_vmu_native_resolution out;
+            CHECK(kui_vmu_native_cache_seed_read(module+128u,1120u,&wire,&pin) && get32(wire+20u)==3u);
+            CHECK(kui_vmu_native_resolution_cache_replay(boot,bytes,load,wire,1024u,pin,&out));
+            CHECK(out.heap.family==KUI_VMU_NATIVE_HEAP_ARENA &&
+                  out.call.entry_bytes==KUI_NATIVE_DUAL_COMPACT_LEASE_BYTES);
+        }
+    free(boot);
+}
 static void actual_frontend(const char *path) {
     FILE *f=fopen(path,"rb");CHECK(f && !fseek(f,0,SEEK_END));long length=ftell(f);CHECK(length>128 && length<=0xc00000);rewind(f);
     size_t bytes=(size_t)length;uint8_t *boot=malloc(bytes);CHECK(boot && fread(boot,1,bytes,f)==bytes && !fclose(f));
+    {
+        uint8_t wire[1024];size_t program_bytes;
+        CHECK(kui_vmu_native_program_extent(boot,bytes,load,&program_bytes));
+        if(kui_vmu_native_resolution_cache_build(boot,program_bytes,load,wire,sizeof(wire),NULL) &&
+           get32(wire+20u)==3u) {actual_arena_frontend(boot,bytes);return;}
+    }
     setup(boot,bytes);CHECK(prepare(true,0u,false,"/Games/PS2")==NATIVE_CACHE_READY);
     CHECK(io.builds==1u && io.writes==1u && io.syncs==1u && io.renames==1u);
     char name[120];cache_path(name,boot,bytes);int stored=node_find(name);CHECK(stored>=0 && disk[stored].size==1024u);
@@ -365,8 +434,8 @@ static void actual_frontend(const char *path) {
     free(boot);
 }
 int main(int argc,char **argv) {
-    CHECK(argc>=1 && argc<=3);codec_and_trust_tests();gates_and_hits();dual_gates_and_hits();
-    fixed_arena_needs_dual();
+    CHECK(argc>=1 && argc<=4);codec_and_trust_tests();gates_and_hits();dual_gates_and_hits();
+    fixed_arena_needs_dual();arena_needs_compact_dual();
     for(int i=1;i<argc;i++) actual_frontend(argv[i]);
     printf("Native launcher cache: %u checks passed%s\n",checks,argc>1?" including actual-image rebuild/publication faults":"");return 0;
 }

@@ -58,10 +58,14 @@ void __attribute__((noipa)) kui_native_standalone_bind(void) {
     const uint32_t owner=KUI_NATIVE_STANDALONE_SOURCE_VBR;
 #endif
     const volatile uint32_t *original=(const void *)(uintptr_t)source->vector;
-    for(unsigned word=0u;word<24u;++word) {
-        if(word==20u)continue; /* Copied vector's original mutable R0 scratch. */
+    /* The early family publishes its one common handler as both roles: its
+     * live INTEVT copy is 13 words, R0 scratch at 11 and the common at 12. */
+    const bool early=source->normal==source->fpu;
+    const unsigned words=early?13u:24u,scratch=early?11u:20u,common=early?12u:22u;
+    for(unsigned word=0u;word<words;++word) {
+        if(word==scratch)continue; /* Copied vector's original mutable R0 scratch. */
         uint32_t live=rd32(owner+UINT32_C(0x600)+4u*word);
-        if(word==22u) {
+        if(word==common) {
             if((live!=source->normal && live!=source->fpu) ||
                (original[word]!=source->normal && original[word]!=source->fpu))return;
         } else if(live!=original[word])return;

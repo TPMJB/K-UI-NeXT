@@ -83,6 +83,21 @@ static bool native_cache_file_publish(const char *path,const uint8_t wire[1024],
     if(!valid) (void)f_unlink(temporary);
     return valid;
 }
+/* The combined module's stage refuses this executable. Only then may New
+ * use the reader-only module, if its SDK family exists. */
+static void native_cache_standalone(const uint8_t *boot,const struct kui_retail_manifest *map,
+    bool *standalone) {
+    struct kui_native_sdk_sci_family family;
+    if(standalone && map->reader==KUI_RETAIL_READER_ASYNC &&
+       kui_native_sdk_sci_family_find(boot,map->boot_bytes,KUI_RETAIL_EXEC_ADDRESS,&family)==1)
+        *standalone=true;
+}
+/* The lease a combined module's stage allocates, from its own descriptor. */
+static uint32_t native_cache_dual_lease(const struct kui_runtime_image *package) {
+    size_t at=0u;
+    if(kui_native_dual_descriptor_find(package->data,package->info.payload_bytes,&at)!=1) return 0u;
+    return kui_native_dual_u32((const uint8_t *)package->data+at+24u);
+}
 /* A completed source read proves bytes/CRC only. Keep its eligibility shared
  * with checksum reuse; SDK resolution and live ownership stay independent. */
 static bool native_cache_source_eligible(const struct kui_game_image *image,
@@ -160,12 +175,7 @@ static enum native_cache_result native_cache_prepare(const struct kui_game_image
         if(log)log("Native VMU mapping: scanning SDK families");
         if(!kui_vmu_native_resolution_cache_build(boot,program_bytes,KUI_RETAIL_EXEC_ADDRESS,
             work->wire,sizeof(work->wire),&work->resolution)) {
-            /* The combined module's stage refuses this executable. Only then
-             * may New use the reader-only module, if its SDK family exists. */
-            struct kui_native_sdk_sci_family family;
-            if(standalone && map->reader==KUI_RETAIL_READER_ASYNC &&
-               kui_native_sdk_sci_family_find(boot,map->boot_bytes,KUI_RETAIL_EXEC_ADDRESS,&family)==1)
-                *standalone=true;
+            native_cache_standalone(boot,map,standalone);
             goto finished;
         }
         if(native_cache_cancelled(cancel)) {result=NATIVE_CACHE_CANCELLED;goto finished;}
@@ -177,9 +187,20 @@ static enum native_cache_result native_cache_prepare(const struct kui_game_image
     if(native_cache_cancelled(cancel)) {result=NATIVE_CACHE_CANCELLED;goto finished;}
     /* A reviewed fixed arena (no initializer slot) borrows a startup call
      * that only the combined module's stage redirects. Other modules are
-     * never seeded with one; their stage refuses the game as before. */
-    if(!dual && !work->resolution.heap.initializer_slot) {
-        if(log) log("Native VMU mapping: this executable's fixed arena needs the New virtual-A2 module");
+     * never seeded with one; their stage refuses the game as before. An
+     * arena lease (an executable without an SDK allocator) borrows the same
+     * call and is the whole lease: only a combined module whose own lease is
+     * exactly that arena installs it; otherwise New may use the reader-only
+     * module, as for an executable without any proof. */
+    const bool arena=work->resolution.heap.family==KUI_VMU_NATIVE_HEAP_ARENA;
+    if(!dual && (arena || !work->resolution.heap.initializer_slot)) {
+        if(log) log(arena?"Native VMU mapping: this executable's RAM arena needs the compact Background module":
+            "Native VMU mapping: this executable's fixed arena needs the New virtual-A2 module");
+        goto finished;
+    }
+    if(arena && native_cache_dual_lease(package)!=work->resolution.call.entry_bytes) {
+        if(log) log("Native VMU mapping: this executable's RAM arena needs the compact Background module");
+        native_cache_standalone(boot,map,standalone);
         goto finished;
     }
     if(kui_vmu_native_cache_seed_fill((uint8_t *)package->data+slot,

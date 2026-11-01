@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Decode the RAM UNUSED row of the standalone RAM-map test's return screen.
+"""Decode the RAM row (RAM UNUSED in older builds) of the standalone RAM-map test's return screen.
 
 Give the four hex words in the order shown. Bit i of word w is the 128 KiB
 page at 0x8c000000 + (32*w + i) * 0x20000; a set bit means every word of that

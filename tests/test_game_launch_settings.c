@@ -8,7 +8,8 @@ static struct kui_game_launch_table table, decoded, before;
 static uint8_t record[KUI_GAME_LAUNCH_SETTINGS_RECORD_MAX + 1u], damaged[sizeof(record)];
 
 static void same(struct kui_game_launch_settings a, struct kui_game_launch_settings b) {
-    assert(a.reader == b.reader && a.cdda == b.cdda && a.encoding == b.encoding && a.codec == b.codec);
+    assert(a.reader == b.reader && a.cdda == b.cdda && a.encoding == b.encoding && a.codec == b.codec &&
+           a.vmu_slot == b.vmu_slot);
     for(unsigned i=0;i<2;i++) {
         assert(a.patches.entries[i].address==b.patches.entries[i].address);
         assert(a.patches.entries[i].value==b.patches.entries[i].value);
@@ -123,7 +124,7 @@ static void wire_contract(void) {
     for(size_t n=0;n<sizeof(fixture);n++) rejects(fixture,n);
     memcpy(damaged,fixture,sizeof(fixture));damaged[sizeof(fixture)]=0;rejects(damaged,sizeof(fixture)+1);
     const unsigned offsets[]={0,8,12,16,24,28,32,34,35,36,37,38,39,40,56};
-    const uint8_t values[]={'X',4,71,0,129,1,0,KUI_GAME_READER_COUNT,2,KUI_GAME_ENCODING_COUNT,4,1,1,0x51,'G'};
+    const uint8_t values[]={'X',5,71,0,129,1,0,KUI_GAME_READER_COUNT,2,KUI_GAME_ENCODING_COUNT,4,1,1,0x51,'G'};
     for(unsigned i=0;i<sizeof(offsets)/sizeof(offsets[0]);i++) {
         memcpy(damaged,fixture,sizeof(fixture));
         if(offsets[i]==16) memset(damaged+16,0,8);else damaged[offsets[i]]=values[i];
@@ -163,6 +164,40 @@ static void wire_contract(void) {
     assert(size==123 && !memcmp(record,damaged,sizeof(record)));
     rejects(NULL,sizeof(fixture));
     puts("PASS launch record: independent v1/v2 migration fixtures and v3 explicit codecs, patch validation, corruption and output atomicity");
+}
+/* The virtual card slot is byte 7: v4 only when some entry puts its card in
+ * A1, so a card with every game in A2 keeps the exact v3 record. */
+static void virtual_card_slot(void) {
+    struct kui_game_launch_settings a2={.reader=KUI_GAME_READER_BACKGROUND},a1=a2;
+    a1.vmu_slot=KUI_GAME_VMU_SLOT_A1;
+    size_t size=0;uint64_t sequence=0;
+    kui_game_launch_table_clear(&table);
+    assert(kui_game_launch_table_upsert(&table,"/games/a.gdi",&a2));
+    assert(kui_game_launch_settings_encode(record,sizeof(record),&size,&table,7));
+    assert(record[8]==3 && record[39]==0);
+    assert(kui_game_launch_settings_decode(&decoded,&sequence,record,size));
+    same(decoded.entries[0].settings,a2);
+    assert(kui_game_launch_table_upsert(&table,"/games/b.gdi",&a1));
+    assert(kui_game_launch_settings_encode(record,sizeof(record),&size,&table,8));
+    assert(record[8]==4 && record[39]==0 && record[32+24+12+7]==1);
+    assert(kui_game_launch_settings_decode(&decoded,&sequence,record,size) && sequence==8 && decoded.count==2);
+    same(decoded.entries[0].settings,a2);same(decoded.entries[1].settings,a1);
+    /* Unknown slots and codecs fail in v4 too, and v3 keeps byte 7 zero. */
+    memcpy(damaged,record,size);damaged[32+24+12+7]=2;reseal(damaged,size);rejects(damaged,size);
+    memcpy(damaged,record,size);damaged[32+24+12+6]=2;reseal(damaged,size);rejects(damaged,size);
+    memcpy(damaged,record,size);damaged[8]=3;reseal(damaged,size);rejects(damaged,size);
+    for(unsigned bit=0;bit<size*8u;bit++) {
+        memcpy(damaged,record,size);damaged[bit/8]^=(uint8_t)(1u<<(bit%8));rejects(damaged,size);
+    }
+    a1.vmu_slot=KUI_GAME_VMU_SLOT_COUNT;
+    assert(!kui_game_launch_settings_valid(&a1) && !kui_game_launch_table_upsert(&table,"/games/b.gdi",&a1));
+    /* Back to A2 everywhere: the record returns to v3. */
+    assert(kui_game_launch_table_upsert(&table,"/games/b.gdi",&a2));
+    assert(kui_game_launch_settings_encode(record,sizeof(record),&size,&table,9));
+    assert(record[8]==3 && record[39]==0 && record[32+24+12+7]==0);
+    assert(kui_game_launch_settings_decode(&decoded,&sequence,record,size));
+    same(decoded.entries[1].settings,a2);
+    puts("PASS launch record: v4 virtual card slot only when some game uses A1, v3 otherwise, unknown slots refused");
 }
 static void maximum_record(void) {
     kui_game_launch_table_clear(&table);
@@ -235,7 +270,8 @@ static void legacy_json(void) {
 }
 int main(void) {
     struct kui_game_launch_settings defaults;memset(&defaults,0xa5,sizeof(defaults));kui_game_launch_settings_default(&defaults);
-    assert(defaults.reader==KUI_GAME_READER_STANDARD && !defaults.cdda && defaults.encoding==KUI_GAME_ENCODING_AUTO);
+    assert(defaults.reader==KUI_GAME_READER_STANDARD && !defaults.cdda && defaults.encoding==KUI_GAME_ENCODING_AUTO &&
+           defaults.vmu_slot==KUI_GAME_VMU_SLOT_A2);
     for(unsigned i=0;i<2;i++) assert(!defaults.patches.entries[i].enabled && !defaults.patches.entries[i].address && !defaults.patches.entries[i].value);
-    paths_and_capacity();wire_contract();maximum_record();legacy_json();return 0;
+    paths_and_capacity();wire_contract();virtual_card_slot();maximum_record();legacy_json();return 0;
 }

@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Compact Background whose virtual card answers as A1 instead of A2, for games
+# whose save code only uses A1. A2 stays physical, as A1 does in the default
+# build. Same module and card paths as the default compact module.
+BUILD ?= build/native-background-compact-a1
+include Makefile.vmu-native-background-compact
+FLAGS += -DKUI_VMU_VIRTUAL_A1=1
+NATIVE_FLAGS += -DKUI_VMU_VIRTUAL_A1=1
+
+# The resident, split-controller and chain tests with the slots exchanged.
+.PHONY: virtual-a1-host-tests
+virtual-a1-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(SPLIT_PREFETCH_HOST_FLAGS) -DKUI_VMU_VIRTUAL_A1=1 -DKUI_VMU_EXPERIMENTAL=1 \
+	 -DKUI_VMU_NATIVE_PERSISTENT_PROBE=1 -DKUI_VMU_NATIVE_CACHED_CODE=1 \
+	 -DKUI_NATIVE_DUAL_READERS=1 -DKUI_NATIVE_SPLIT_CONTROLLER_ISOLATION=1 \
+	 -DKUI_NATIVE_SPLIT_CONTROLLER_GENERAL=1 -DKUI_NATIVE_SPLIT_CONTROLLER_PREFETCH=1 \
+	 -DKUI_NATIVE_SPLIT_CONTROLLER_STREAM_GUARD=1 -DKUI_NATIVE_GENERAL_LEAN_LAYOUT=1 \
+	 tests/test_vmu_native_split_prefetch.c $(COMPAT_WORKER_HOST_SRC) \
+	 -Wl,--gc-sections -Wl,--section-start=.isolation_tick=0x8c71e000 \
+	 -o $(BUILD)/test-split-controller-stream-guard-a1
+	$(BUILD)/test-split-controller-stream-guard-a1
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) -DKUI_VMU_VIRTUAL_A1=1 -DKUI_VMU_EXPERIMENTAL=1 \
+	 tests/test_vmu_native_persistent.c $(COMPAT_WORKER_HOST_SRC) -Wl,--gc-sections \
+	 -o $(BUILD)/test-native-persistent-a1
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-native-persistent-a1
+	$(HOST_CC) -std=c11 -O1 -fno-pie -no-pie -Wall -Wextra -Werror -pedantic -fsanitize=address,undefined \
+	 -g -Iinclude -DKUI_VMU_VIRTUAL_A1=1 src/loader/vmu_volatile_chain.c tests/test_vmu_volatile_chain.c \
+	 -o $(BUILD)/test-volatile-chain-a1
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-volatile-chain-a1

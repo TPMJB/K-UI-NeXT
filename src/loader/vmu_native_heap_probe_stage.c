@@ -206,12 +206,21 @@ static struct kui_vmu_native_discovery native_driver;
 static struct kui_vmu_native_heap native_heap;
 static struct kui_vmu_native_heap_call native_call;
 static uint8_t native_heap_code_sha[32];
+#if KUI_NATIVE_DUAL_READERS
+/* An executable that links no SDK allocator: its reviewed arena is the whole
+ * lease (KUI_VMU_NATIVE_HEAP_ARENA). No allocator code is called or hooked. */
+static uint32_t native_arena;
+#else
+#define native_arena 0u
+#endif
 /* The relay's ordinary high stack is retired before the game calls its heap
  * initializer. Its post-initializer callback must use separately protected
  * stage memory: a legal tail allocation may contain the old relay stack. */
 static uint8_t native_installer_stack[UINT32_C(0x10000)] __attribute__((aligned(32)));
 extern const uint8_t __retail_stage_bss_end[] __asm__("__retail_stage_bss_end");
 static bool __attribute__((noipa)) allocation_safe(uint32_t begin,uint32_t bytes) {
+    if(native_arena) return kui_vmu_native_stage_arena_safe(exec_bytes,
+        KUI_RETAIL_STAGE_ADDRESS,(uint32_t)(uintptr_t)__retail_stage_bss_end,begin,bytes);
 #if KUI_NATIVE_CURRENT_BOTTOM_HEAP
     return kui_vmu_native_stage_bottom_allocation_safe(&native_heap,exec_bytes,
         KUI_RETAIL_STAGE_ADDRESS,(uint32_t)(uintptr_t)__retail_stage_bss_end,begin,bytes);
@@ -270,9 +279,12 @@ static uint32_t native_word(uint32_t address) {return *(volatile const uint32_t 
 static void native_publish(uint32_t address) {
     __asm__ volatile("ocbp @%0"::"r"(address&~31u):"memory");
 }
+/* The allocator's code, unchanged from discovery through installation. An
+ * arena lease has none: its digest covers the borrowed call site instead. */
 static void code_sha(uint8_t out[32]) {
     struct kui_sha256 h;kui_sha256_init(&h);
-    kui_sha256_update(&h,(const void *)(uintptr_t)native_heap.initializer,0x1d0u);
+    if(native_arena) kui_sha256_update(&h,(const void *)(uintptr_t)native_call.load,6u);
+    else kui_sha256_update(&h,(const void *)(uintptr_t)native_heap.initializer,0x1d0u);
     kui_sha256_digest(&h,out);
 }
 static bool native_read(void *context,uint32_t address,uint32_t *out) {
@@ -323,6 +335,9 @@ struct native_fixed_call {uint32_t heap_hook,begin,bytes,target,slot;};
 struct native_fixed_call native_fixed_call __attribute__((used));
 extern const char kui_native_fixed_call_hook[] __asm__("_kui_native_fixed_call_hook");
 extern const char kui_native_fixed_call_return[] __asm__("_kui_native_fixed_call_return");
+/* An arena lease's initializer: the low heap hook calls it with the arena as
+ * its arguments, and nothing is initialized. */
+extern const char kui_native_fixed_call_noop[] __asm__("_kui_native_fixed_call_noop");
 __asm__(".section .text.native_fixed_call,\"ax\"\n.align 2\n"
     ".global _kui_native_fixed_call_hook\n.type _kui_native_fixed_call_hook,@function\n"
     "_kui_native_fixed_call_hook:\n"
@@ -333,7 +348,10 @@ __asm__(".section .text.native_fixed_call,\"ax\"\n.align 2\n"
     ".global _kui_native_fixed_call_return\n_kui_native_fixed_call_return:\n"
     "mov.l @r15+,r1\nmov.l @r15+,r0\nlds.l @r15+,pr\nrts\nnop\n"
     ".align 2\n1: .long _native_fixed_call+0x20000000\n"
-    ".size _kui_native_fixed_call_hook,.-_kui_native_fixed_call_hook\n.previous\n");
+    ".size _kui_native_fixed_call_hook,.-_kui_native_fixed_call_hook\n"
+    ".global _kui_native_fixed_call_noop\n.type _kui_native_fixed_call_noop,@function\n"
+    "_kui_native_fixed_call_noop:\nrts\nnop\n"
+    ".size _kui_native_fixed_call_noop,.-_kui_native_fixed_call_noop\n.previous\n");
 /* Select the reviewed plan for this exact image; a replayed record must
  * name exactly the planned call and arena. */
 static bool __attribute__((noipa)) native_fixed_plan_bind(bool replayed) {
@@ -347,8 +365,21 @@ static bool __attribute__((noipa)) native_fixed_plan_bind(bool replayed) {
     native_heap.initializer_target=native_heap.initializer;
     native_fixed=1u;return true;
 }
-/* The low heap hook returns into the trampoline for a fixed arena. */
-static uint32_t native_hook_return(void) {
+/* An exact executable without an SDK allocator: borrow the reviewed call as
+ * for a fixed arena; the arena plan's owner names only the image and the
+ * borrowed literal. A replayed record must name exactly the planned arena. */
+static bool __attribute__((noipa)) native_arena_plan_bind(bool replayed) {
+    struct kui_vmu_native_heap owner;struct kui_vmu_native_heap_call planned;
+    if(!kui_vmu_native_heap_arena_plan((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,exec_bytes,
+           native_driver.image_sha256,KUI_RETAIL_EXEC_ADDRESS,&owner,&planned,&native_fixed_hook) ||
+       (replayed && (memcmp(&owner,&native_heap,sizeof(owner)) ||
+                     memcmp(&planned,&native_call,sizeof(planned))))) return false;
+    native_heap=owner;native_call=planned;
+    native_fixed=native_arena=1u;return true;
+}
+/* The low heap hook returns into the trampoline for a fixed arena. Inline at
+ * each use, as the fixed-arena audit executes the arm without callees. */
+static inline __attribute__((always_inline)) uint32_t native_hook_return(void) {
     return native_fixed?(uint32_t)(uintptr_t)kui_native_fixed_call_return&UINT32_C(0x1fffffff):
         native_call.return_pr&UINT32_C(0x1fffffff);
 }
@@ -422,6 +453,30 @@ static void __attribute__((noipa)) native_allocate_bottom(
     control()->lease=payload;
 }
 #endif
+#if KUI_NATIVE_DUAL_READERS
+/* An arena lease's installation. The low heap hook's call was the no-op, so
+ * nothing was initialized or allocated: the hook's arguments must be exactly
+ * the planned arena, entered from the trampoline on an owner stack, and the
+ * arena itself becomes the lease. */
+static void __attribute__((noipa)) native_arena_install(volatile struct kui_vmu_observe_boot_control *c) {
+    struct kui_vmu_native_heap_lease lease;
+    if(c->heap_begin!=native_call.entry_begin || c->heap_bytes!=native_call.entry_bytes ||
+       !allocation_safe(c->heap_begin,c->heap_bytes) ||
+       !kui_vmu_native_heap_arena_lease(&native_heap,c->heap_begin,c->heap_bytes,
+           KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES,&lease))
+        native_report(4u,c->heap_begin);
+    uint32_t pr=c->original_pr&0x1fffffffu,sp=c->entry_sp&0x1fffffffu;
+    if((c->original_pr&1u) || pr!=native_hook_return() ||
+       (sp&3u) || sp<KUI_VMU_NATIVE_OWNER_STACK_LOW || sp>KUI_VMU_NATIVE_OWNER_STACK_HIGH)
+        native_report(5u,c->entry_sp);
+    c->lease=lease.payload;c->status=KUI_VMU_OBS_BOOT_LEASED;
+#if KUI_VMU_NATIVE_PASSIVE_PROBE
+    native_passive_run(&lease);
+#else
+    native_report(7u,lease.lease_bytes);
+#endif
+}
+#endif
 void kui_vmu_observe_stage_install(void) {
     volatile struct kui_vmu_observe_boot_control *c=control();uint8_t digest[32];
     uint32_t sr;__asm__ volatile("stc sr,%0":"=r"(sr));
@@ -432,6 +487,9 @@ void kui_vmu_observe_stage_install(void) {
 #endif
     code_sha(digest);
     if(memcmp(digest,native_heap_code_sha,sizeof(digest))) native_report(3u,native_heap.initializer);
+#if KUI_NATIVE_DUAL_READERS
+    if(native_arena) {native_arena_install(c);return;}
+#endif
     uint32_t begin=(c->heap_begin+31u)&~31u,bytes=c->heap_bytes&~31u;
     struct kui_vmu_native_heap_lease lease;
     if(c->heap_begin!=native_call.entry_begin || c->heap_bytes!=native_call.entry_bytes ||
@@ -515,8 +573,9 @@ static void __attribute__((noipa)) native_arm_fixed_call(const uint32_t *frame) 
     for(unsigned i=0;i<8u;i++) if(original[i]) native_report(2u,low->heap_original+4u*i);
     uint32_t slot=native_heap.initializer_slot,hook=(uint32_t)(uintptr_t)kui_native_fixed_call_hook;
     if(!native_fixed || native_word(slot)!=native_fixed_hook.target) native_report(2u,slot);
-    retail_display_line("FIXED RAM ARENA FROM REVIEWED RAM MAP");
-    *original=native_heap.initializer_target;
+    retail_display_line(native_arena?"RAM ARENA LEASE FROM REVIEWED RAM MAP":
+        "FIXED RAM ARENA FROM REVIEWED RAM MAP");
+    *original=native_arena?(uint32_t)(uintptr_t)kui_native_fixed_call_noop:native_heap.initializer_target;
     original[1]=native_call.entry_begin;original[2]=native_call.entry_bytes;
     original[3]=native_hook_return();
     native_fixed_call=(struct native_fixed_call){low->heap_hook,native_call.entry_begin,
@@ -620,10 +679,14 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     int heap=kui_vmu_native_heap_discover((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
         exec_bytes,KUI_RETAIL_EXEC_ADDRESS,&native_heap);
 #if KUI_NATIVE_DUAL_READERS
-    if(driver!=KUI_VMU_NATIVE_RESOLVED || heap!=KUI_VMU_NATIVE_HEAP_FOUND)
+    /* No SDK allocator at all: only a reviewed arena plan for this exact
+     * executable can provide the lease. */
+    if(driver==KUI_VMU_NATIVE_RESOLVED && heap==KUI_VMU_NATIVE_HEAP_NONE && native_arena_plan_bind(false))
+        retail_display_line("NO SDK ALLOCATOR - REVIEWED RAM ARENA");
+    else if(driver!=KUI_VMU_NATIVE_RESOLVED || heap!=KUI_VMU_NATIVE_HEAP_FOUND)
         native_report(2u,heap==KUI_VMU_NATIVE_HEAP_FOUND?0u:(uint32_t)heap);
-    if(!(native_heap.initializer_slot?kui_vmu_native_heap_call_discover((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
-         exec_bytes,&native_heap,&native_call):native_fixed_plan_bind(false)) ||
+    if(!(native_arena || (native_heap.initializer_slot?kui_vmu_native_heap_call_discover((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
+         exec_bytes,&native_heap,&native_call):native_fixed_plan_bind(false))) ||
        !allocation_safe(native_call.entry_begin,native_call.entry_bytes))
         native_report(2u,native_heap.initializer_slot);
 #else

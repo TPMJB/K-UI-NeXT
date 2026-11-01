@@ -208,6 +208,7 @@ IRQ_REARM_PREPARED_PINS = {
 
 def prepared_symbol_records(worker):
     span = layout_for(worker[4]).WORKER_BYTES
+    stack_bytes = layout_for(worker[4]).WORKER_STACK_BYTES
     data, _, _, sections, _ = worker
     records = []
     for section in sections:
@@ -237,7 +238,8 @@ def prepared_symbol_records(worker):
     # Failure diagnostics can materialize stack_bottom+256. Retain the exact
     # zero-size linker-bound labels above, and admit an interior reference only
     # through this unique, allocated, private P2 NOBITS stack section. Its
-    # complete4KiB extent must match both bound symbols and the worker lease.
+    # complete extent (the profile's exact stack bytes) must match both bound
+    # symbols and the worker lease.
     # Runtime callbacks use its P1 alias for ephemeral frames; only this exact
     # owned section and its two boundaries gain typed cached views. Persistent
     # mutable objects must still resolve at their original P2 addresses.
@@ -249,8 +251,8 @@ def prepared_symbol_records(worker):
     stack = sections[owner]
     require(names[stack[0]:].split(b"\0", 1)[0] == b".stack" and
             stack[1] == 8 and stack[2] & 7 == 3 and
-            bottom[0] == stack[3] == P2 + span - 4096 and
-            top[0] == bottom[0] + stack[5] == P2 + span and stack[5] == 4096 and
+            bottom[0] == stack[3] == P2 + span - stack_bytes and
+            top[0] == bottom[0] + stack[5] == P2 + span and stack[5] == stack_bytes and
             not (bottom[0] & 31) and not (top[0] & 31),
             "prepared private stack lacks exact P2 NOBITS ownership")
     require(sum(names[s[0]:].split(b"\0", 1)[0] == b".stack" for s in sections) == 1,
@@ -1430,7 +1432,9 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
         selected_callbacks=callbacks is not None
         require(not lean_stage or selected_callbacks,
                 'Lean General publication requires its selected low callbacks')
-        i=(0x49a if compact_stage else 0x480 if lean_stage else 0x464 if callbacks is not None else 0x46c)//2
+        # The compact stage's arena-lease branches (The House of the Dead 2)
+        # moved this unchanged block from +0x49a to +0x498.
+        i=(0x498 if compact_stage else 0x480 if lean_stage else 0x464 if callbacks is not None else 0x46c)//2
         prior=words[i-4:i]
         # The selected low-reader accessors move this complete block by8B.
         # Keep its actual refusal branch tied to the original phase/detail
@@ -1908,7 +1912,8 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
                 wire=struct.pack('<20I',*(moved(value) for value in struct.unpack('<20I',exports)))
                 if lean_stage:
                     require(struct.unpack('<20I',wire)[9:12]==
-                            (self.header+span-4096,self.header+span,self.header+span),
+                            (self.header+span-layout_for(stage[4]).WORKER_STACK_BYTES,
+                             self.header+span,self.header+span),
                             'Lean publication replay lost its relocated exact private-stack endpoints')
                 self.store_block(self.header,wire)
                 self.resume,self.consumer=struct.unpack_from('<2I',wire,48)
@@ -2184,12 +2189,13 @@ def check_cached_stack_guard(worker, self_test=False):
     """Admit only cold P2 and armed P1, including every actual canary load."""
     prepared_symbol_records(worker)  # Independently establish the complete section ownership.
     bottom=worker[4]["__vmu_native_worker_stack_bottom"][0]
+    size=layout_for(worker[4]).WORKER_STACK_BYTES
     cases=0
     for armed in (0, 1):
         for mask in range(16):
             for alias in (bottom, bottom-0x20000000, physical(bottom)):
-                for offset in (0, 252, 256, 260, 2048, 4092, 4096, 4100):
-                    valid = mask==15 and alias==bottom-(0x20000000 if armed else 0) and 256<=offset<4096
+                for offset in (0, 252, 256, 260, 2048, size-4, size, size+4):
+                    valid = mask==15 and alias==bottom-(0x20000000 if armed else 0) and 256<=offset<size
                     CachedStackGuard(worker,armed,mask,alias+offset).check(valid);cases+=1
         for bad in range(16):
             CachedStackGuard(worker,armed,15,bottom-(0x20000000 if armed else 0)+2048,bad).check(False);cases+=1
@@ -3215,7 +3221,10 @@ def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_
             "vmu_emulation.c": {"kui_vmu_emulation_handle"},
             "vmu_native_heap.c": {"read_is", "kui_vmu_native_heap_lease_valid", "kui_vmu_native_heap_lease_valid_with_release"},
             "vmu_native_layout.c": {"kui_vmu_native_layout_bind_checked"},
-            "vmu_native_lifetime.c": {"kui_vmu_native_lifetime_release_safe_ranges"},
+            # An arena lease's identity words are read through the same
+            # reader at prepare (the worker's protect_sdk passes read_heap).
+            "vmu_native_lifetime.c": {"kui_vmu_native_lifetime_release_safe_ranges",
+                                      "kui_vmu_native_lifetime_prepare"},
             "vmu_native_live.c": {"kui_vmu_native_live_check"},
             "vmu_native_runtime.c": {"kui_vmu_native_runtime_check"},
             "vmu_store.c": {"write_sync", "kui_vmu_store_open", "kui_vmu_store_read", "kui_vmu_store_sync"},
@@ -3288,7 +3297,8 @@ def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_
         # stack_valid requires that border; the linked deepest call path
         # must establish it independently of the sampled SP checks.
         total = answer[0] + 80 + 256
-        require(total <= 4096, f"private stack path {root} needs{total} bytes")
+        available = layout_for(worker[4]).WORKER_STACK_BYTES
+        require(total <= available, f"private stack path {root} needs{total} bytes of{available}")
         paths[root] = {"c_frame_bytes": answer[0], "assembly_and_guard_margin": 336,
                        "conservative_bytes": total, "worst_path": answer[1]}
     require(null_sites, "missing independently guarded optional writer block callback")
@@ -3347,7 +3357,7 @@ def check_stacks(directory, worker, fault_proof=None, coherence_proof=None, *, b
         ordinary,available=low_stack["worst_total_bytes"],low_stack["available_bytes"]
     require(ordinary <= available, f"ordinary native GD stack sum {ordinary} exceeds{available}")
     return {"worker_c_frame_sum": high_sum, "resident_callback_c_frame_sum": low_sum,
-            "conservative_worker_bytes": total, "available_worker_bytes": 4096,
+            "conservative_worker_bytes": total, "available_worker_bytes": layout_for(worker[4]).WORKER_STACK_BYTES,
             "ordinary_low_stack_bytes": ordinary, "ordinary_low_available_bytes": available,
             "lease_only_frame_bytes": lease[0][1], "required_worker_frames": len(required), "callgraph": call_paths}
 
@@ -3385,7 +3395,8 @@ def check(directory, *, self_test=False, trace_startup=None):
     require(fields[3] == header[4] and all(not p & 1 and code_base + 80 <= p < code_base + len(binary) for p in fields[3:7]),
             "worker entry/hook points outside initialized code")
     require(P2 + len(binary) == fields[7] <= fields[8] <= fields[9] and
-            fields[9:12] == (P2 + span - 4096, P2 + span, P2 + span), "worker BSS/stack layout differs")
+            fields[9:12] == (P2 + span - layout_for(worker[4]).WORKER_STACK_BYTES, P2 + span, P2 + span),
+            "worker BSS/stack layout differs")
     address, exported, section = symbol_bytes(worker, "_kui_vmu_native_worker_exports", 1)
     require(address == P2 and exported == binary[:80] and section[2] & 7 == 2,
             "exports must be typed immutable header")
@@ -3557,7 +3568,8 @@ def check(directory, *, self_test=False, trace_startup=None):
     general_tick=stacks['callgraph']['verified_general_inlined_tick'].get('enabled') is True
     report = {"schema": "kui.native.persistent.probe.artifact.v1", "allocator_bootstrap_audit": base,
               "module_sha256": base["module_sha256"], "runtime": base["runtime"],
-              "worker_bytes": len(binary), "worker_span": span, "worker_stack_bytes": 4096,
+              "worker_bytes": len(binary), "worker_span": span,
+              "worker_stack_bytes": layout_for(worker[4]).WORKER_STACK_BYTES,
               "worker_load_policy": policy, "cached_code": cached,
               "prepared_lifetime_admission": prepared_lifetime,
               "bottom_heap_reservation": bottom_heap,

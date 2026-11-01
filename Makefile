@@ -139,7 +139,7 @@ build/test-games-native-cache: tests/test_games_native_cache.c tests/test_vmu_na
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie -Iinclude tests/test_games_native_cache.c $(NATIVE_CACHE_SOURCES) src/core/hash.c src/core/data.c -o $@
 .PHONY: test-games-native-cache
 test-games-native-cache: build/test-games-native-cache
-	ASAN_OPTIONS=detect_leaks=0 ./build/test-games-native-cache $(if $(STARTUP),'$(STARTUP)',) $(if $(EVOLUTION2_STARTUP),'$(EVOLUTION2_STARTUP)',)
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-games-native-cache $(if $(STARTUP),'$(STARTUP)',) $(if $(EVOLUTION2_STARTUP),'$(EVOLUTION2_STARTUP)',) $(if $(HOTD2_STARTUP),'$(HOTD2_STARTUP)',)
 build/test-vmu-launch-package: tests/test_vmu_launch_package.c src/core/vmu_launch_package.c src/core/retail_image.c src/core/hash.c include/kui/vmu_launch_package.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -ffunction-sections -fdata-sections tests/test_vmu_launch_package.c src/core/vmu_launch_package.c src/core/retail_image.c src/core/hash.c -Wl,--gc-sections -o $@

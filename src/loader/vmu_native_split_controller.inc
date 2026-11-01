@@ -57,7 +57,7 @@ static inline __attribute__((always_inline)) bool split_controller_capture(
         return false;
     uint32_t sp=current_sp(),low=active_stack_low();
     unsigned mask=(f->sr>>4)&15u;
-    if(((current_sr()>>4)&15u)!=15u || sp<low+256u || sp>=low+0x1000u ||
+    if(((current_sr()>>4)&15u)!=15u || sp<low+256u || sp>=low+KUI_VMU_NATIVE_PASSIVE_STACK_BYTES ||
        (mask!=6u && mask!=15u) || f->r12!=1u ||
        !ram(f->r14,4u,4u) || physical(f->r14)!=physical(config.driver.manager_cell)) return false;
     uint32_t source,manager,lock,value;

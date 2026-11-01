@@ -818,7 +818,7 @@ def check_cold_binder(stage,resident,*,self_test=False,refused_artifact=False,ow
                 c.plan_mutation=(word,value)
                 try:c.run_bind()
                 except BinderStop as stop:
-                    assert (stop.phase,stop.detail)==(10,7)
+                    assert (stop.phase,stop.detail)==(10,12)
                     assert not c.flushes and not c.ready
                     assert not any(address in (ERI_SLOT,RXI_SLOT,c.region+0x530,c.region+0x534,c.region+0x538)
                                    for _,address,_,_ in c.writes)

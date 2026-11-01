@@ -282,6 +282,20 @@ static enum map_result map_track(struct files *files,FATFS *fs,const struct kui_
     free(allocated);
     return result;
 }
+/* After a background map refusal, count the separate pieces of each data
+ * track's file on the card: audio is dropped before the refusal, so a data
+ * file in more pieces than the map holds is the cause. Only counts; the
+ * caller rebuilds or abandons the map. */
+static void fragmented_data_track(struct files *files,FATFS *fs,const struct kui_volume *volume,
+    const struct kui_game_image *image,struct kui_retail_manifest *map,unsigned *track,uint32_t *pieces) {
+    *track=0u;*pieces=0u;
+    for(unsigned i=0;i<image->count && !stopped(files);i++) {
+        if(!image->tracks[i].control) continue;
+        struct map_stats stats={.complete=true};
+        if(map_track(files,fs,volume,&image->tracks[i],map,i,0u,true,&stats)==MAP_FAILED) continue;
+        if(stats.max_track_extents>*pieces) {*pieces=stats.max_track_extents;*track=i+1u;}
+    }
+}
 static enum map_result map_cdda_tracks(struct files *files,FATFS *fs,const struct kui_volume *volume,
     const struct kui_game_image *image,struct kui_retail_manifest *map,uint32_t capacity,
     struct map_stats *stats) {
@@ -315,19 +329,39 @@ static enum map_result map_tracks(struct files *files,FATFS *fs,const struct kui
  * the stage; a cooked boot has no sector headers, so its expected executable
  * CRC is prepared here and checked against the detached physical read. */
 static enum kui_game_result extent_crc(const struct kui_game_image *image,
-    uint32_t lba,uint32_t bytes,uint32_t *crc) {
+    uint32_t lba,uint32_t bytes,uint32_t *crc,uint32_t *failed) {
     if(!bytes) return KUI_GAME_INVALID;
     enum kui_game_result result=kui_game_image_check(image,lba,(bytes+2047u)/2048u,
         KUI_GAME_SECTOR_MODE1);
     if(result!=KUI_GAME_OK) return result;
     uint8_t sector[2048];uint32_t value=0;
     for(uint32_t done=0;done<bytes;) {
+        if(failed) *failed=lba;
         result=kui_game_image_read(image,lba++,1,KUI_GAME_SECTOR_MODE1,sector,sizeof(sector));
         if(result!=KUI_GAME_OK) return result;
         uint32_t take=bytes-done;if(take>sizeof(sector)) take=sizeof(sector);
         value=kui_retail_crc32(value,sector,take);done+=take;
     }
     *crc=value;return KUI_GAME_OK;
+}
+/* Name the sector an executable read stopped at, with its raw header, so an
+ * unusual or damaged image can be told apart from an unsupported layout. */
+static void log_bad_sector(const struct kui_game_image *image,uint32_t lba,kui_log_fn log) {
+    for(unsigned i=0;i<image->count;i++) {
+        const struct kui_game_image_track *t=&image->tracks[i];
+        if(lba<t->start_lba || lba>=t->end_lba) continue;
+        log("Retail boot: executable sector LBA %u, track %u %s: %u-byte %s sectors, mode %u",
+            lba,t->number,t->name,t->sector_bytes,t->control?"data":"audio",t->sector_mode);
+        static uint8_t raw[KUI_GAME_RAW_BYTES];
+        if(t->sector_bytes!=KUI_GAME_DATA_BYTES &&
+           kui_game_image_read(image,lba,1,KUI_GAME_SECTOR_RAW,raw,sizeof(raw))==KUI_GAME_OK) {
+            char hex[49];
+            for(unsigned j=0;j<24u;j++) snprintf(hex+2u*j,3,"%02x",raw[j]);
+            log("Retail boot: its first 24 raw bytes %s",hex);
+        }
+        return;
+    }
+    log("Retail boot: executable sector LBA %u is outside every track",lba);
 }
 /* Hash the complete IP-selected kernel before choosing an ABI. File size,
  * product strings and a similar-looking header never select native addresses. */
@@ -477,7 +511,9 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     if(!patches) patches=&off;
     if(!kui_game_ram_patches_valid(patches)) {log("RAM patches: invalid address or duplicate target");return false;}
     const bool patched=kui_game_ram_patches_enabled(patches);
-    const uint32_t requested_options=reader;
+    /* The virtual card's slot chooses the module; it is not a launch option.
+     * An A1 game takes the same preparation, proofs and card as A2. */
+    const uint32_t requested_options=reader&~KUI_GAMES_RETAIL_VIRTUAL_A1;
     struct kui_game_ram_patches applied_patches={0};
     const bool zso=zso_path(path);
     const enum kui_zso_codec codec=(reader&KUI_GAMES_RETAIL_LZO)?KUI_ZSO_LZO1X:KUI_ZSO_LZ4;
@@ -487,11 +523,12 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     const bool plain=(reader&KUI_GAMES_RETAIL_BOOT_PLAIN)!=0;
     const bool cdda=(reader&KUI_GAMES_RETAIL_CDDA)!=0;
     const bool ce_excerpt=(reader&KUI_GAMES_RETAIL_CE_EXCERPT)!=0;
+    const bool virtual_a1=(reader&KUI_GAMES_RETAIL_VIRTUAL_A1)!=0;
     if(patched && (ce || cdda || ce_excerpt)) {
         log("RAM patches require a native game with CD music Off");return false;
     }
-    reader&=~(KUI_GAMES_RETAIL_CE_PROBE | KUI_GAMES_RETAIL_DESCRAMBLE |
-        KUI_GAMES_RETAIL_BOOT_PLAIN | KUI_GAMES_RETAIL_CDDA | KUI_GAMES_RETAIL_CE_EXCERPT | KUI_GAMES_RETAIL_LZO);
+    reader&=~(KUI_GAMES_RETAIL_CE_PROBE | KUI_GAMES_RETAIL_DESCRAMBLE | KUI_GAMES_RETAIL_BOOT_PLAIN |
+        KUI_GAMES_RETAIL_CDDA | KUI_GAMES_RETAIL_CE_EXCERPT | KUI_GAMES_RETAIL_LZO | KUI_GAMES_RETAIL_VIRTUAL_A1);
     if(zso && (ce || cdda || ce_excerpt || patched || reader!=KUI_RETAIL_READER_STANDARD)) {
         log("ZSO needs native Standard reader, CD music Off and RAM patches Off");return false;
     }
@@ -539,7 +576,11 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
 #endif
     enum kui_wince_cdda_profile music_profile=KUI_WINCE_CDDA_NONE;
     const char *launch_package=zso?(codec==KUI_ZSO_LZO1X?KUI_GAMES_RETAIL_LZO_PACKAGE:KUI_GAMES_RETAIL_ZSO_PACKAGE):ce?KUI_GAMES_RETAIL_CE_PACKAGE:KUI_GAMES_RETAIL_PACKAGE;
-    if(native_dual)launch_package=KUI_GAMES_RETAIL_NATIVE_DUAL_PACKAGE;
+    /* With Virtual VMU Off neither module emulates a card, so Off always
+     * takes the A2 module and its unchanged reader. */
+    const bool dual_a1=native_dual && virtual_a1 && emulation_enabled;
+    if(native_dual)launch_package=dual_a1?KUI_GAMES_RETAIL_NATIVE_DUAL_A1_PACKAGE:KUI_GAMES_RETAIL_NATIVE_DUAL_PACKAGE;
+    if(dual_a1) log("Virtual card in A1 for this game: %s",KUI_GAMES_RETAIL_NATIVE_DUAL_A1_PACKAGE);
 #if KUI_VMU_GAME_CARDS
     if(native_standard && !emulation_enabled) launch_package=KUI_GAMES_RETAIL_PHYSICAL_PACKAGE;
 #else
@@ -549,7 +590,8 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     if(!cdda && !ce_excerpt) {
         rr=kui_runtime_read(launch_package,package,log,cancel);
         if(rr!=KUI_RUNTIME_OK) {
-            problem=native_dual?"native X/Y virtual-A2 module missing or unreadable; install the matching candidate":kui_runtime_result_name(rr);goto done;
+            problem=dual_a1?"A1 Background module (retail-native-dual-a1.kui) missing or unreadable; install the update or set the card to A2":
+                native_dual?"native X/Y virtual-A2 module missing or unreadable; install the matching candidate":kui_runtime_result_name(rr);goto done;
         }
         if(!layout_codec(package,ce,zso,codec)) {problem="unsupported game-launch package layout";goto done;}
 #if KUI_VMU_GAME_CARDS
@@ -732,7 +774,7 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
             audio_info.candidate_tracks);
     else if(!cdda && !ce_excerpt && audio_info.classification==KUI_GAME_AUDIO_UNKNOWN)
         log("Retail audio: bare ISO/raw image has no original audio-track inventory; CD audio playback remains unsupported");
-    r=extent_crc(image,map->session_lba,KUI_RETAIL_IP_BYTES,&map->ip_crc32);
+    r=extent_crc(image,map->session_lba,KUI_RETAIL_IP_BYTES,&map->ip_crc32,NULL);
     if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
     r=kui_game_image_check(image,map->boot_lba,(map->boot_bytes+2047u)/2048u,KUI_GAME_SECTOR_MODE1);
     if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
@@ -756,7 +798,9 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
         map->flags|=KUI_RETAIL_IMAGE_BOOT_CRC;
         if(!defer_boot_crc) {
             log("Retail boot: checking exact executable CRC before detached launch");
-            r=extent_crc(image,map->boot_lba,map->boot_bytes,&map->boot_crc32);
+            uint32_t failed=map->boot_lba;
+            r=extent_crc(image,map->boot_lba,map->boot_bytes,&map->boot_crc32,&failed);
+            if(r==KUI_GAME_MODE) log_bad_sector(image,failed,log);
             if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
             log("Retail boot: executable CRC32=%08x",map->boot_crc32);
         }
@@ -802,8 +846,17 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     } else if(background) {
         mapped=map_tracks(&files,&fs,&volume,image,map,KUI_RETAIL_ASYNC_SLOTS,&audio);
         if(mapped==MAP_FULL) {
-            if(ce) {problem="Windows CE background map exceeds 64 slots; defragment or use cooked tracks";goto done;}
-            if(native_dual) {problem="native X/Y virtual-A2 map exceeds 64 slots; defragment or use supported cooked tracks";goto done;}
+            static char refusal[128];
+            unsigned track;uint32_t pieces;
+            fragmented_data_track(&files,&fs,&volume,image,map,&track,&pieces);
+            if(track) {
+                log("Retail boot: track %u is in %u pieces on the card; copying the game folder off the card and back makes it contiguous",
+                    track,(unsigned)pieces);
+                snprintf(refusal,sizeof(refusal),"%s map exceeds 64 slots: track %u is in %u pieces; recopy the game folder",
+                    ce?"Windows CE background":"Background",track,(unsigned)pieces);
+            }
+            if(ce) {problem=track?refusal:"Windows CE background map exceeds 64 slots; defragment or use cooked tracks";goto done;}
+            if(native_dual) {problem=track?refusal:"Background map exceeds 64 slots; defragment or use supported cooked tracks";goto done;}
             log("Retail boot: the map needs more than the background reader's %u slots; using the standard reader",
                 KUI_RETAIL_ASYNC_SLOTS);
             background=false;
@@ -834,8 +887,8 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     if(background) {
         map->reader=reader;
         if(ce) log("Retail boot reader: background SCI stream (test, Windows CE interrupts)");
-        else if(native_dual)log("Retail boot reader: %s with virtual A2; SDK families are checked at startup",
-            reader==KUI_RETAIL_READER_ASYNC?"New background (X)":"Legacy background (Y)");
+        else if(native_dual)log("Retail boot reader: %s with virtual %s; SDK families are checked at startup",
+            reader==KUI_RETAIL_READER_ASYNC?"New background (X)":"Legacy background (Y)",dual_a1?"A1":"A2");
         else log("Retail boot reader: background SCI stream (test, %s)",
             reader==KUI_RETAIL_READER_ASYNC_EAGER?"25 blocks per call":"20 blocks per call");
     }
@@ -973,7 +1026,9 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
         if(source_proof.complete)map->boot_crc32=source_proof.crc32;
         else {
             log("Retail boot: checking exact executable CRC after native preflight skipped");
-            r=extent_crc(image,map->boot_lba,map->boot_bytes,&map->boot_crc32);
+            uint32_t failed=map->boot_lba;
+            r=extent_crc(image,map->boot_lba,map->boot_bytes,&map->boot_crc32,&failed);
+            if(r==KUI_GAME_MODE) log_bad_sector(image,failed,log);
             if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
         }
         log("Retail boot: executable CRC32=%08x",map->boot_crc32);

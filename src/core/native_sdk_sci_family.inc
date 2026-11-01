@@ -31,6 +31,16 @@ static const uint8_t compact_fpu[32]={
 static const uint8_t compact_default[32]={
     0xd4,0xbb,0x5d,0x00,0xfb,0x05,0xa1,0x1d,0x21,0x44,0x3c,0x92,0xf8,0xfe,0x79,0x18,
     0xda,0x0d,0x92,0x9e,0xdb,0xd1,0xfb,0xb7,0x1d,0x6d,0xae,0x26,0x76,0x18,0x52,0xfb};
+/* The round-toward-zero (Shinobi "zr") build of the full family: each of the
+ * four FPSCR set-ups inserts one ADD #1,R0, so the common handlers grow by four
+ * bytes each and the event word moves to +0x3a0. Every other instruction,
+ * branch, literal role, default, initializer and helper is the full family's. */
+static const uint8_t zero_normal[32]={
+    0x5c,0xc1,0x4c,0xfc,0xa0,0x83,0x95,0x67,0x74,0x91,0xb8,0xc1,0x05,0x28,0x33,0x82,
+    0x0d,0x25,0x7f,0x60,0xa1,0x68,0xca,0x24,0xe1,0x9f,0xa0,0x2f,0x69,0xec,0xf0,0x37};
+static const uint8_t zero_fpu[32]={
+    0x1a,0xfe,0xb9,0xb8,0x50,0x47,0x04,0xb3,0x9c,0x10,0x4e,0x72,0x05,0x50,0x8d,0x99,
+    0x36,0x0e,0x44,0x28,0x11,0xac,0xc8,0x26,0xc1,0xf2,0x71,0xf7,0x1a,0xa6,0x52,0x4b};
 static const uint8_t family_init[32]={
     0x6c,0x5b,0x89,0x76,0x4f,0xba,0x51,0xb3,0x7c,0x25,0xa3,0xbf,0xa6,0x6c,0x83,0xe6,
     0x01,0x16,0xfa,0x56,0xe0,0xc1,0x77,0xa2,0x00,0x9c,0xc0,0x67,0xf5,0xa4,0x9f,0x87};
@@ -78,4 +88,136 @@ static bool literal_at(const uint8_t *p,uint32_t address,size_t instruction,
     uint16_t op=u16(p+instruction);
     return (op&0xff00u)==(uint16_t)(0xd000u|(reg<<8)) &&
         (((address+(uint32_t)instruction+4u)&~3u)+4u*(op&255u))==address+wanted;
+}
+/* The early Shinobi (1.41-1.43) interrupt family. Two 0x34-byte stubs, the
+ * EXPEVT one copied to VBR+0x100/+0x400 and the INTEVT one to VBR+0x600,
+ * record their event code in one word and jump to a single common handler.
+ * That handler saves the FPU and dispatches through the full family's table
+ * (VBR+0x200+(code-0x200)/8), filled by the same reviewed initializer. The
+ * default has no debug helper: it unwinds the common frame and enters the
+ * same system return path the full family's default takes after its helper.
+ * FPSCR is round-toward-zero throughout. Every instruction is fingerprinted;
+ * only the event, R0 scratch, common and event-relative literals are holes. */
+static const uint8_t early_expevt[32]={
+    0x1c,0x2c,0x17,0xac,0x31,0xcf,0xf3,0x95,0x91,0x8a,0x7e,0x21,0x6e,0x07,0xc0,0x53,
+    0xb6,0x7b,0x15,0xf2,0x83,0xf1,0x80,0x15,0x6c,0x90,0x5f,0x28,0xe6,0x00,0xbd,0x22};
+static const uint8_t early_intevt[32]={
+    0xb5,0x19,0x32,0x94,0x3f,0xb6,0x9d,0xf8,0x2c,0x16,0x2d,0xec,0x6b,0x15,0x72,0xe9,
+    0xef,0xf8,0x5e,0x21,0x86,0xb0,0xba,0x06,0x9e,0xe7,0xad,0x59,0x69,0xde,0xb1,0x9c};
+static const uint8_t early_common[32]={
+    0x8b,0xff,0xd9,0xdf,0x8f,0x7a,0x4b,0x54,0x44,0x08,0x89,0xdf,0x44,0xd5,0x96,0x72,
+    0xbf,0xea,0x16,0x30,0xc6,0xfa,0xcb,0x4c,0xf1,0x65,0x47,0xca,0x89,0x57,0xf4,0xbd};
+static const uint8_t early_default[32]={
+    0x1f,0xdf,0x9e,0xd9,0x98,0x1b,0xc3,0xcb,0xcd,0x9e,0x6f,0x7e,0xba,0x89,0x36,0x00,
+    0x4e,0x85,0x4d,0xb0,0xb0,0xe6,0x86,0xf5,0xaa,0x01,0x98,0x21,0x65,0x78,0xca,0xec};
+/* The install routine (it copies both stubs, then calls the table initializer
+ * 0x15a bytes on) chooses the stubs' common handler from its argument: when
+ * it is 0x80000000, the nesting handler that directly follows the plain one.
+ * That handler counts nesting levels and, on the first, saves SP and enters
+ * the game's own interrupt stack; it then saves and dispatches exactly as
+ * the plain one. Its code up to the variables before the event word is
+ * fingerprinted with the event literal as the only hole. */
+static const uint8_t early_install[32]={
+    0x84,0xc3,0x0a,0x9f,0x20,0x0e,0x26,0xa3,0xc0,0x7e,0xb3,0x8b,0x3f,0xc8,0xd5,0xe9,
+    0x1d,0xb6,0xa9,0xa4,0x97,0xe6,0x1e,0xba,0x26,0xf5,0x33,0x44,0x53,0x89,0xe7,0xa1};
+static const uint8_t early_nesting[32]={
+    0xae,0x51,0xf5,0x33,0x48,0x62,0xb3,0x74,0x6b,0x2d,0x10,0x43,0x31,0xb4,0x62,0xcb,
+    0x90,0x23,0xb7,0xd3,0x8d,0x99,0x6d,0x07,0x3e,0x26,0x3d,0xbf,0x42,0x35,0x13,0xed};
+#define EARLY_STUB_BYTES 0x34u
+#define EARLY_SCRATCH_WORD 11u
+#define EARLY_COMMON_BYTES 0x14cu
+#define EARLY_NESTING_BYTES 0x180u
+#define EARLY_NESTING_EVENT 0x17cu
+#define EARLY_INSTALL_BEFORE_INIT 0x15au
+#define EARLY_INSTALL_BYTES 0x84u
+#define EARLY_EVENT_OFFSET 0x2d4u
+#define EARLY_DEFAULT_BYTES 0xc4u
+_Static_assert(EARLY_COMMON_BYTES+EARLY_NESTING_BYTES+8u==EARLY_EVENT_OFFSET,
+    "The nesting handler ends at the saved-SP word, eight bytes before the event word");
+/* nesting is 0 unless the install routine and the nesting handler are both
+ * exactly the reviewed ones. selected is the handler both stub templates name:
+ * the install routine writes its choice into the templates in the executable
+ * itself, then copies them, so a running game's image holds the nesting
+ * handler there when it chose that mode. */
+struct early_family {size_t stub_at,default_at;uint32_t stub,common,nesting,selected,original,event;};
+/* The value of the install routine's MOV.L @(disp,PC),Rn at instruction. */
+static bool install_literal(const uint8_t *p,size_t n,uint32_t load,size_t install,
+    size_t instruction,unsigned reg,uint32_t *value) {
+    uint16_t op=u16(p+install+instruction);
+    if((op&0xff00u)!=(uint16_t)(0xd000u|(reg<<8)))return false;
+    size_t at=(((load+(uint32_t)(install+instruction)+4u)&~3u)+4u*(op&255u))-load;
+    if(at>n || n-at<4u)return false;
+    *value=u32(p+at);return true;
+}
+static uint32_t early_nesting_common(const uint8_t *p,size_t n,uint32_t load,size_t init_at,
+    size_t expevt_at,size_t stub_at,size_t common_at,uint32_t area,uint32_t event) {
+    static const uint16_t nesting_hole[]={EARLY_NESTING_EVENT};
+    size_t nesting_at=common_at+EARLY_COMMON_BYTES;
+    if(init_at<EARLY_INSTALL_BEFORE_INIT || n-nesting_at<EARLY_NESTING_BYTES)return 0u;
+    size_t install=init_at-EARLY_INSTALL_BEFORE_INIT;
+    if(n-install<EARLY_INSTALL_BYTES ||
+       !normalized(p+install,EARLY_INSTALL_BYTES,NULL,0u,early_install) ||
+       !normalized(p+nesting_at,EARLY_NESTING_BYTES,nesting_hole,1u,early_nesting) ||
+       u32(p+nesting_at+EARLY_NESTING_EVENT)!=event)return 0u;
+    const uint32_t nesting=((load+(uint32_t)nesting_at)&UINT32_C(0x1fffffff))|area;
+    const uint32_t common=((load+(uint32_t)common_at)&UINT32_C(0x1fffffff))|area;
+    /* Its four role literals: the INTEVT and EXPEVT stubs' common words, and
+     * the nesting and plain handlers it stores there. */
+    const struct {size_t instruction;unsigned reg;uint32_t value;} roles[]={
+        {0x1eu,7u,((load+(uint32_t)stub_at+0x30u)&UINT32_C(0x1fffffff))|area},
+        {0x2eu,0u,((load+(uint32_t)expevt_at+0x30u)&UINT32_C(0x1fffffff))|area},
+        {0x30u,4u,nesting},{0x42u,4u,common}};
+    for(size_t i=0u;i<sizeof(roles)/sizeof(roles[0]);i++) {
+        uint32_t value;
+        if(!install_literal(p,n,load,install,roles[i].instruction,roles[i].reg,&value) ||
+           value!=roles[i].value)return 0u;
+    }
+    return nesting;
+}
+/* Image-only roles of the early family: 1 found, 0 none, -1 malformed or
+ * ambiguous. Callers try it only when no full/compact vector prefix exists. */
+static int early_family(const uint8_t *p,size_t n,uint32_t load,struct early_family *out) {
+    static const uint16_t early_stub_holes[]={0x28u,0x2cu,0x30u};
+    static const uint16_t early_common_hole[]={0x148u};
+    static const uint16_t early_default_holes[]={0xb8u,0xbcu,0xc0u};
+    static const uint16_t early_init_holes[]={0x2au};
+    size_t stub_at=0u;unsigned stubs=0u;
+    for(size_t at=EARLY_STUB_BYTES;at<n && n-at>=2u*EARLY_STUB_BYTES+EARLY_COMMON_BYTES;at+=4u) {
+        if(u32(p+at)!=UINT32_C(0x00090009) || u16(p+at+0xau)!=0x2f16u ||
+           !normalized(p+at,EARLY_STUB_BYTES,early_stub_holes,3u,early_intevt))continue;
+        stub_at=at;if(++stubs>1u)return -1;
+    }
+    if(!stubs)return 0;
+    size_t expevt_at=stub_at-EARLY_STUB_BYTES,common_at=stub_at+EARLY_STUB_BYTES;
+    const uint8_t *s=p+stub_at,*x=p+expevt_at,*c=p+common_at;
+    uint32_t event=u32(s+0x28u),area=event&UINT32_C(0xe0000000);
+    uint32_t common=((load+(uint32_t)common_at)&UINT32_C(0x1fffffff))|area;
+    uint32_t raw_event=((load+(uint32_t)common_at+EARLY_EVENT_OFFSET)&UINT32_C(0x1fffffff))|area;
+    /* Both templates name one handler; which one is decided below. */
+    const uint32_t selected=u32(s+0x30u);
+    if((area!=0u && area!=UINT32_C(0x80000000)) || event!=raw_event ||
+       n-common_at<EARLY_EVENT_OFFSET+4u ||
+       !normalized(x,EARLY_STUB_BYTES,early_stub_holes,3u,early_expevt) ||
+       u32(x+0x28u)!=event || u32(x+0x2cu) || u32(s+0x2cu) || u32(x+0x30u)!=selected ||
+       !normalized(c,EARLY_COMMON_BYTES,early_common_hole,1u,early_common) || u32(c+0x148u)!=event)return -1;
+    unsigned initializers=0u;bool bound=false;uint32_t original=0u;size_t init_at=0u;
+    for(size_t at=0u;at<n && n-at>=0x2eu;at+=2u) {
+        if(u16(p+at)!=0x9511u || u16(p+at+2u)!=0x9411u ||
+           !normalized(p+at,0x2eu,early_init_holes,1u,family_init))continue;
+        if(++initializers>1u)return -1;
+        bound=literal_at(p+at,load+(uint32_t)at,4u,7u,0x2au);
+        original=u32(p+at+0x2au);init_at=at;
+    }
+    size_t default_at;
+    if(initializers!=1u || !bound || (original&3u) ||
+       !owner_span(original,EARLY_DEFAULT_BYTES,area,load,n,&default_at))return -1;
+    const uint8_t *d=p+default_at;
+    if(!normalized(d,EARLY_DEFAULT_BYTES,early_default_holes,3u,early_default) ||
+       u32(d+0xb8u)!=event+4u || u32(d+0xbcu)!=event-8u || u32(d+0xc0u)!=event-4u)return -1;
+    uint32_t nesting=early_nesting_common(p,n,load,init_at,expevt_at,stub_at,common_at,area,event);
+    /* The plain handler, or the nesting one only when it and its install
+     * routine are exactly the reviewed ones. */
+    if(selected!=common && (!nesting || selected!=nesting))return -1;
+    *out=(struct early_family){stub_at,default_at,load+(uint32_t)stub_at,common,nesting,selected,original,event};
+    return 1;
 }
