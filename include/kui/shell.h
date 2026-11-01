@@ -151,14 +151,15 @@ enum kui_shell_action {
     KUI_SHELL_VMU_COLLECTION_COPY_COMMIT, KUI_SHELL_REPAIR_IN_PLACE, KUI_SHELL_REPAIR_NEW_COPY,
     KUI_SHELL_SALVAGE_RESUME_DEFER, KUI_SHELL_VMU_WIZARD_RUN,
     KUI_SHELL_VMU_EMULATION_LOAD, KUI_SHELL_VMU_EMULATION_SAVE,
-    KUI_SHELL_VMU_RENAME, KUI_SHELL_VMU_GAME_INFO, KUI_SHELL_VMU_GAME_CARD_DEFAULT
+    KUI_SHELL_VMU_RENAME, KUI_SHELL_VMU_GAME_INFO, KUI_SHELL_VMU_GAME_CARD_DEFAULT,
+    KUI_SHELL_GD_CHECK, KUI_SHELL_GD_DIRECT_BOOT
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
 struct kui_shell {
     enum kui_shell_page page;
     unsigned home_selected, setting_selected, scroll;
-    bool confirm_new, confirm_quick_resume, confirm_gd_boot;
+    bool confirm_new, confirm_quick_resume, confirm_gd_boot, confirm_gd_direct;
     struct kui_settings saved, draft;
     struct kui_system_settings system_saved, system_draft;
     unsigned system_selected;

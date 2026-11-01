@@ -1906,12 +1906,28 @@ static void gd_play(struct paint *p,const struct kui_shell_view *v) {
         v->inserted_title&&v->inserted_title[0]?v->inserted_title:"No disc detected");
     label(p,40,138,CYAN,line);
     panel(p,32,174,576,224,PANEL);
-    art(p,60,214,128,128,kui_art_icons[0]);
-    label(p,216,198,WHITE,"A Boot via console BIOS");
-    words(p,216,232,592,MUTED,"Exits K-UI and starts the console BIOS.",false);
-    words(p,216,258,592,MUTED,"Region and autostart settings still apply.",false);
-    words(p,216,284,592,MUTED,"Use the BIOS Play option if needed.",false);
-    words(p,216,326,592,MUTED,"The current boot disc can start K-UI again.",false);
+    label(p,48,190,WHITE,"A Boot via console BIOS");
+    label(p,48,214,CYAN,"X Check native disc   Y Direct boot test");
+    label(p,48,240,AMBER,"Direct test: physical VMUs only");
+    const struct kui_app_status *status=v->app_status;
+    words(p,48,268,592,MUTED,status && status->message[0]?status->message:
+        "Check reads the disc. Direct boot tests our new native launcher.",false);
+    if(v->busy && status && status->done) {
+        snprintf(line,sizeof(line),"Read %llu KiB from disc",(unsigned long long)(status->done/1024u));
+        label(p,48,294,CYAN,line);
+    }
+    if(status) for(unsigned i=0;i<status->line_count && i<3u;i++)
+        label(p,48,320+(int)i*22,MUTED,status->lines[i]);
+}
+static void gd_direct_confirmation(struct paint *p) {
+    box(p,32,154,576,262,NAVY);
+    panel(p,48,160,544,220,PANEL);box(p,52,164,536,4,PINK);
+    label(p,72,188,WHITE,"TEST DIRECT PHYSICAL-DISC BOOT?");
+    label(p,72,222,MUTED,"Native GD-ROM only. This closes K-UI.");
+    label(p,72,246,MUTED,"Starts the disc using our new boot path.");
+    label(p,72,276,AMBER,"Virtual VMU is disabled in this first boot test.");
+    label(p,72,302,MUTED,"Use a physical VMU for saves. No BIOS flashing.");
+    label(p,72,344,CYAN,"A Direct boot");label(p,368,344,WHITE,"B Cancel");
 }
 static void gd_boot_confirmation(struct paint *p) {
     box(p,32,154,576,262,NAVY);
@@ -2943,6 +2959,7 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     footer(&p,s,v);
     if(s->confirm_new || s->confirm_quick_resume) confirmation(&p,s,s->confirm_quick_resume);
     if(s->confirm_gd_boot) gd_boot_confirmation(&p);
+    if(s->confirm_gd_direct) gd_direct_confirmation(&p);
     if(s->confirm_storage_test) storage_test_confirmation(&p,s,v);
     if(s->confirm_clock || s->confirm_defaults || s->confirm_vmu_restore || s->confirm_vmu_delete ||
        s->confirm_vmu_copy || s->confirm_vmu_copy_all || s->confirm_music_clear || s->confirm_restart || s->confirm_salvage || s->confirm_salvage_check || s->confirm_repair_in_place ||

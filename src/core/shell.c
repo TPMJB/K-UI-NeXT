@@ -1825,6 +1825,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
                 ++s->vmu_collection_copy_generation;
             s->confirm_storage_test=false;
             s->confirm_new=false; s->confirm_quick_resume=false; s->confirm_gd_boot=false;
+            s->confirm_gd_direct=false;
             s->confirm_clock=false;s->confirm_defaults=false;s->confirm_vmu_restore=false;
             s->confirm_vmu_delete=false;s->confirm_vmu_copy=false;s->confirm_vmu_copy_all=false;
             s->confirm_vmu_import=false;s->confirm_music_clear=false;s->confirm_restart=false;s->confirm_salvage=false;
@@ -1944,6 +1945,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(s->page==KUI_SHELL_VMU_RESTORE) {s->page=s->vmu_backups_return;return KUI_SHELL_NONE;}
         if(s->confirm_quick_resume) { s->confirm_quick_resume=false; return KUI_SHELL_NONE; }
         if(s->confirm_gd_boot) { s->confirm_gd_boot=false; return KUI_SHELL_NONE; }
+        if(s->confirm_gd_direct) { s->confirm_gd_direct=false; return KUI_SHELL_NONE; }
         if(s->confirm_new) { s->confirm_new = false; return KUI_SHELL_NONE; }
         if(s->page==KUI_SHELL_RIPPER || s->page==KUI_SHELL_GD_PLAY) {
             s->page=KUI_SHELL_DISC_TOOLS;return KUI_SHELL_NONE;
@@ -2105,7 +2107,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
      * worker cannot load a different song yet. B and modal confirmations keep
      * priority, and simultaneous triggers do not choose an arbitrary song. */
     bool song_page=s->page==KUI_SHELL_HOME || s->page==KUI_SHELL_RIPPER;
-    bool confirming=s->confirm_new || s->confirm_quick_resume || s->confirm_gd_boot ||
+    bool confirming=s->confirm_new || s->confirm_quick_resume || s->confirm_gd_boot || s->confirm_gd_direct ||
         s->confirm_storage_test || s->confirm_clock || s->confirm_defaults || s->confirm_vmu_restore ||
         s->confirm_vmu_delete || s->confirm_vmu_copy || s->confirm_vmu_copy_all || s->confirm_vmu_import || s->confirm_music_clear || s->confirm_restart || s->confirm_salvage || s->confirm_salvage_check ||
         s->confirm_repair_in_place || s->confirm_wifi_forget || s->confirm_wifi_update || s->confirm_vmu_wizard_reset || s->page==KUI_SHELL_GAMES_PROBE_CONFIRM || s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ||
@@ -2222,6 +2224,12 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     }
     if(s->confirm_vmu_restore) {
         if(buttons&KUI_SHELL_A) {s->confirm_vmu_restore=false;return KUI_SHELL_VMU_RESTORE_COMMIT;}
+        return KUI_SHELL_NONE;
+    }
+    if(s->confirm_gd_direct) {
+        if(buttons&KUI_SHELL_A) {
+            s->confirm_gd_direct=false; return KUI_SHELL_GD_DIRECT_BOOT;
+        }
         return KUI_SHELL_NONE;
     }
     if(s->confirm_gd_boot) {
@@ -3078,6 +3086,8 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         break;
     case KUI_SHELL_GD_PLAY:
         if(buttons & KUI_SHELL_A) s->confirm_gd_boot=true;
+        else if(buttons & KUI_SHELL_X) return KUI_SHELL_GD_CHECK;
+        else if(buttons & KUI_SHELL_Y) s->confirm_gd_direct=true;
         break;
     case KUI_SHELL_CD_AUDIO:
         if(buttons&KUI_SHELL_START) {s->page=KUI_SHELL_HOME;break;}

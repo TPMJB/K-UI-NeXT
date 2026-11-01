@@ -37,6 +37,8 @@
 #include <arch/exec.h>
 #include "kui/splash.h"
 #include "kui/gd_play.h"
+#include "kui/disc_launcher.h"
+#include "kui/disc_launch.h"
 #include "kui/recovery_scan.h"
 #include "kui/repair_copy.h"
 #include "kui/drive_speed_probe.h"
@@ -97,7 +99,7 @@ static uint16_t *shell_frame_prepare(bool working) {
     return shell_frame;
 }
 static void shell_frame_release_for_action(unsigned action) {
-    if(action==19u || (action>=56u && action<=58u) || action==62u || action==79u) {
+    if(action==19u || (action>=56u && action<=58u) || action==62u || action==79u || action==104u) {
         free(shell_frame);shell_frame=NULL;
     }
 }
@@ -217,7 +219,7 @@ static bool repair_in_place_pending,repair_new_copy_pending,recovery_cd_pending,
 static bool repair_new_copy_created; /* Worker publishes under lock after creating a transaction. */
 static unsigned active_app;
 static bool splash_active,boot_ready,startup_skip,startup_finished;
-static bool probe_launch_ready,probe_launch_failed;
+static bool probe_launch_ready,probe_launch_failed,probe_launch_disc;
 static struct kui_runtime_image probe_image;
 static struct kui_app_status probe_status;
 static uint64_t splash_deadline;
@@ -303,6 +305,9 @@ static bool is_capture_action(unsigned action) {
 #define LINE_BYTES 77
 #define VISIBLE_LINES 19
 static mutex_t lock = MUTEX_INITIALIZER;
+static void disc_launch_progress(const struct kui_app_status *status) {
+    mutex_lock(&lock);probe_status=*status;mutex_unlock(&lock);
+}
 static char lines[LOG_LINES][LINE_BYTES];
 static unsigned line_count;
 static bool log_truncated, busy, cancel_requested, saving_report;
@@ -2168,7 +2173,7 @@ static void files_song_result(const struct kui_app_status *result) {
 }
 static bool needs_cd_handoff(unsigned action) {
     return action==1 || (action>=4 && action<=7) || action==12 || action==22 ||
-        action==24 || action==25 || action==56 || action==57 || action==58 || action==65 || action==79 || action==81 || action==96 || action==97 || (action>=68 && action<=71) || (action>=46 && action<=48);
+        action==24 || action==25 || action==56 || action==57 || action==58 || action==65 || action==79 || action==81 || action==96 || action==97 || action==103 || action==104 || (action>=68 && action<=71) || (action>=46 && action<=48);
 }
 static bool games_page(enum kui_shell_page page) {
     return page==KUI_SHELL_GAMES || page==KUI_SHELL_GAMES_ADVANCED ||
@@ -2212,7 +2217,7 @@ static bool games_action_invalidates(unsigned action) {
         action==25 || action==30 || action==33 || action==38 || action==40 ||
         (action>=42 && action<=48) || (action>=56 && action<=58) || action==62 ||
         action==64 || action==65 || action==67 || action==79 || action==81 || action==96 || action==97 || action==82 ||
-        action==83 || action==85 || action==86 || action==90 || action==92 || action==95 || action==98 || action==100 || (action>=68 && action<=71);
+        action==83 || action==85 || action==86 || action==90 || action==92 || action==95 || action==98 || action==100 || action==104 || (action>=68 && action<=71);
 }
 static bool games_action_changes_content(unsigned action) {
     /* Directory-changing writers can add/remove launch selectors. Saved
@@ -2585,7 +2590,11 @@ static void *worker(void *unused) {
             if(action>=46 && action<=48) {salvage_status.complete=true;salvage_status.errors=1;snprintf(salvage_status.message,sizeof(salvage_status.message),"Audio CD stop failed; salvage refused.");}
             if(action==81 || action==96 || action==97) {scan_status=(struct kui_app_status){.complete=true,.errors=1};
                 snprintf(scan_status.message,sizeof(scan_status.message),"Audio CD stop failed; repair did not start.");}
-            if(action==56 || action==57 || action==58) probe_launch_failed=true;
+            if(action==56 || action==57 || action==58 || action==104) probe_launch_failed=true;
+            if(action==103 || action==104) {
+                probe_status=(struct kui_app_status){.complete=true,.errors=1};
+                snprintf(probe_status.message,sizeof(probe_status.message),"Audio CD stop failed; disc test did not start.");
+            }
             if(action==79) {
                 probe_status=(struct kui_app_status){.complete=true,.errors=1};
                 snprintf(probe_status.message,sizeof(probe_status.message),"Audio CD stop failed; executable check did not start.");
@@ -2728,6 +2737,10 @@ static void *worker(void *unused) {
                 probe_status=(struct kui_app_status){.complete=true,.stopped=true};
                 snprintf(probe_status.message,sizeof(probe_status.message),"Executable check stopped before starting.");
             }
+            if(action==103) {
+                probe_status=(struct kui_app_status){.complete=true,.stopped=true};
+                snprintf(probe_status.message,sizeof(probe_status.message),"Physical-disc check stopped before starting.");
+            }
             if(action==76) {
                 memcpy(games_launch_result_path,games_launch_path_pending,sizeof(games_launch_result_path));
                 games_launch_saved=false;++games_launch_result_generation;
@@ -2739,7 +2752,7 @@ static void *worker(void *unused) {
                 snprintf(vmu_game_info_snapshot.notice,sizeof(vmu_game_info_snapshot.notice),"Card preference operation stopped; reopen game options.");
                 vmu_game_info_request_result=vmu_game_default_generation;++vmu_game_info_generation;
             }
-            if(action==56 || action==57 || action==58) {
+            if(action==56 || action==57 || action==58 || action==104) {
                 probe_status=(struct kui_app_status){.stopped=true};
                 snprintf(probe_status.message,sizeof(probe_status.message),"Games handoff stopped before starting.");
                 probe_launch_failed=true;
@@ -3095,10 +3108,17 @@ static void *worker(void *unused) {
                     "Executable check failed. See Diagnostics for the exact reason.");
                 mutex_lock(&lock);probe_status=checked;mutex_unlock(&lock);
             }
-            if(action==56 || action==57 || action==58) {
-                (void)games_selection_store(true);
+            if(action==103) {
+                struct kui_app_status result;
+                kui_disc_launcher_check(&result,kui_log,kui_cancelled,disc_launch_progress);
+                disc_launch_progress(&result);
+            }
+            if(action==56 || action==57 || action==58 || action==104) {
+                if(action!=104) (void)games_selection_store(true);
                 kui_sd_set_params(KUI_STORAGE_AUTO,true);
-                bool prepared=action==58?
+                struct kui_app_status disc_result;
+                bool prepared=action==104?
+                    kui_disc_launcher_prepare(&probe_image,&disc_result,kui_log,kui_cancelled,disc_launch_progress):action==58?
                     kui_games_retail_prepare_launch_card(games_path_pending,games_reader_pending,&games_patches_pending,
                         &games_vmu_selection_pending,&probe_image,
                         kui_log,kui_cancelled):action==57?
@@ -3110,7 +3130,7 @@ static void *worker(void *unused) {
                      * image. arch_exec performs the final KOS teardown. */
                     mutex_lock(&lock);kui_menu_sound_shutdown();mutex_unlock(&lock);
                     kui_music_shutdown();publish_music();
-                    mutex_lock(&lock);probe_launch_ready=true;mutex_unlock(&lock);
+                    mutex_lock(&lock);probe_launch_disc=action==104;probe_launch_ready=true;mutex_unlock(&lock);
                     for(;;) {
                         thd_sleep(16);
                         mutex_lock(&lock);bool waiting=probe_launch_ready;mutex_unlock(&lock);
@@ -3402,7 +3422,7 @@ static void *worker(void *unused) {
 #ifdef KUI_SD_RUNTIME
         if(action!=12 && action!=27 && action!=60) kui_log("Operation ended. Diagnostics page: Y saves the log to SD.");
         if(action==12 || action==1 || (action>=4 && action<=7) || action==22 ||
-           action==49 || action==81 || action==96 || action==97 || (action>=46 && action<=48)) {
+           action==49 || action==81 || action==96 || action==97 || action==103 || action==104 || (action>=46 && action<=48)) {
             if(!kui_cd_audio_owns_drive() && !kui_disc_stop())salvage_session_forget();
             if(action!=12) kui_disc_identity_invalidate(&disc_identity);
             mutex_lock(&lock);
@@ -3570,7 +3590,7 @@ static void draw_shell(void) {
         (shell.page==KUI_SHELL_GAMES_PROBE_CONFIRM || shell.page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ||
          shell.page==KUI_SHELL_GAMES_RETAIL_CONFIRM || shell.page==KUI_SHELL_GAMES_LAUNCH_OPTIONS ||
          shell.page==KUI_SHELL_GAMES_EXTRA_OPTIONS || shell.page==KUI_SHELL_GAMES_TESTS ||
-         shell.page==KUI_SHELL_GAMES_INFO || shell.page==KUI_SHELL_GAMES_CHECK)?probe_status:
+         shell.page==KUI_SHELL_GAMES_INFO || shell.page==KUI_SHELL_GAMES_CHECK || shell.page==KUI_SHELL_GD_PLAY)?probe_status:
         shell.page==KUI_SHELL_NETWORK?network_test_status:
         shell.page==KUI_SHELL_MUSIC?player_status:
         shell.page==KUI_SHELL_CRC_SCAN?scan_status:
@@ -3719,6 +3739,8 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_VMU_EMULATION_SAVE:return 100;
         case KUI_SHELL_VMU_RENAME:return 101;
         case KUI_SHELL_VMU_GAME_CARD_DEFAULT:return 102;
+        case KUI_SHELL_GD_CHECK:return 103;
+        case KUI_SHELL_GD_DIRECT_BOOT:return 104;
         default: return 0;
     }
 }
@@ -4134,7 +4156,7 @@ int main(void) {
         if(cd_drive_owned && requested==KUI_SHELL_MUSIC_STOP) requested=KUI_SHELL_CD_STOP;
         if(requested==KUI_SHELL_VMU_GAME_INFO && !busy) vmu_game_info_request_start();
         unsigned action = worker_action(requested);
-        if(drive_reset_required && (action==1 || (action>=4 && action<=7) || action==22 || action==81 || action==96 || action==97 || (action>=46 && action<=53))) {
+        if(drive_reset_required && (action==1 || (action>=4 && action<=7) || action==22 || action==81 || action==96 || action==97 || action==103 || action==104 || (action>=46 && action<=53))) {
             snprintf(capture_message,sizeof(capture_message),
                 "Drive reset required. Reboot, then Resume the partial dump.");
             if(action>=46 && action<=48) {
@@ -4150,6 +4172,10 @@ int main(void) {
             }
             if(action==81 || action==96 || action==97) {scan_status=(struct kui_app_status){.complete=true,.errors=1};
                 snprintf(scan_status.message,sizeof(scan_status.message),"Drive reset required. Use System Tools > Restart.");}
+            if(action==103 || action==104) {
+                probe_status=(struct kui_app_status){.complete=true,.errors=1};
+                snprintf(probe_status.message,sizeof(probe_status.message),"Drive reset required. Use System Tools > Restart.");
+            }
             if(action>=49 && action<=53) {
                 cd_audio_snapshot.poisoned=true;
                 snprintf(cd_audio_snapshot.message,sizeof(cd_audio_snapshot.message),"Drive reset required. Use System Tools > Restart.");
@@ -4377,6 +4403,11 @@ int main(void) {
                 probe_status=(struct kui_app_status){0};
                 snprintf(probe_status.message,sizeof(probe_status.message),"Reading executable, checking its package and preparing the launch map...");
             }
+            if(action==103 || action==104) {
+                probe_status=(struct kui_app_status){0};
+                snprintf(probe_status.message,sizeof(probe_status.message),"Checking native GD boot bytes...");
+                probe_launch_failed=false;
+            }
             if(action==56 || action==57 || action==58) {
                 probe_status=(struct kui_app_status){0};
                 snprintf(probe_status.message,sizeof(probe_status.message),"%s",action==58?
@@ -4424,7 +4455,7 @@ int main(void) {
         mutex_lock(&lock);bool exiting=boot_ready;mutex_unlock(&lock);
         if(exiting) kui_gd_play_boot();
         mutex_lock(&lock);
-        bool launch_probe=probe_launch_ready,probe_failed=probe_launch_failed;
+        bool launch_probe=probe_launch_ready,probe_failed=probe_launch_failed,launch_disc=probe_launch_disc;
         probe_launch_failed=false;
         mutex_unlock(&lock);
         if(probe_failed) {shell.page=KUI_SHELL_DIAGNOSTICS;shell.scroll=0;}
@@ -4433,13 +4464,16 @@ int main(void) {
             __asm__ __volatile__("mov r15,%0" : "=r"(stack));
             uintptr_t source=(uintptr_t)probe_image.data;
             size_t length=probe_image.info.payload_bytes;
+            struct kui_disc_launch_plan disc_plan;
             /* arch_exec copies forward to low RAM and executes its trampoline
              * on main's stack. High resident relocation occurs only afterwards. */
             bool safe=source>=KUI_RUNTIME_ADDRESS && source<0x8d000000u && !(source&3u) &&
                 length && !(length&3u) &&
-                length<=KUI_IMAGE_RESIDENT_BLOB_OFFSET+KUI_IMAGE_RESIDENT_MAX_BYTES &&
                 length<=0x8d000000u-source && stack>0x8c200000u &&
                 source+length<=stack-65536u;
+            if(safe) safe=launch_disc?
+                kui_disc_launch_validate(probe_image.data,length,&disc_plan):
+                length<=KUI_IMAGE_RESIDENT_BLOB_OFFSET+KUI_IMAGE_RESIDENT_MAX_BYTES;
             if(safe && !kui_cancelled()) arch_exec(probe_image.data,(uint32_t)length);
             kui_runtime_free(&probe_image);
             kui_log("Games handoff refused: %s",safe?"cancelled":"unsafe staging range");
