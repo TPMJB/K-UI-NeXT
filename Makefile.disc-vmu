@@ -20,8 +20,7 @@ DISC_SOURCES = src/loader/disc_vmu_stage.c src/core/disc_launch.c src/core/hash.
  src/core/vmu_store.c src/core/vmu_image.c src/core/vmu_durable.c src/core/vmu_native_discovery.c \
  src/core/vmu_native_heap.c src/core/vmu_native_program.c src/core/vmu_native_stage_placement.c \
  src/core/vmu_native_layout.c src/core/vmu_native_patch.c src/core/vmu_native_exit.c \
- src/core/vmu_native_relocate.c src/loader/vmu_native_trace.c src/core/retail_image.c \
- src/core/disc_vmu_entry.c
+ src/core/vmu_native_relocate.c src/loader/vmu_native_trace.c src/core/retail_image.c
 DISC_OBJECTS = $(patsubst %.c,$(BUILD)/disc/%.o,$(DISC_SOURCES)) \
  $(BUILD)/disc/stage_asm.o $(BUILD)/disc/heap_boot.o $(BUILD)/disc/worker_call.o
 $(DISC_OBJECTS): $(BUILD)/readonly-config

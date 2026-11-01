@@ -3,7 +3,6 @@
  * original-game allocator lease; firmware GD code and low RAM stay intact. */
 #include "kui/disc_launch.h"
 #include "kui/disc_vmu_layout.h"
-#include "kui/disc_vmu_entry.h"
 #include "kui/disc_vmu_support.h"
 #include "kui/hash.h"
 #include "kui/storage.h"
@@ -46,6 +45,7 @@ static struct kui_vmu_durable_handoff native_persist_handoff;
 static struct kui_loader_sd native_persist_card;
 static bool native_persist_ready;
 static uint32_t native_heap_hook, native_terminal;
+static uint32_t native_disc_entry_return_frame,native_disc_entry_return_entry;
 #define NATIVE_LOW_HEAP_HOOK native_heap_hook
 #define NATIVE_LOW_RETURN_HOOK native_terminal
 #define KUI_VMU_OBSERVE_LOW_HEAP_HOOK native_heap_hook
@@ -87,6 +87,11 @@ static void native_report(uint32_t phase,uint32_t detail) __attribute__((noretur
 static void native_report(uint32_t phase,uint32_t detail) {
     retail_display_restore(&display);retail_display_line("PHYSICAL DISC VMU INSTALL REFUSED");
     retail_display_hex("PHASE",phase);retail_display_hex("DETAIL",detail);
+    if(phase==2u && detail>=0x70u && detail<=0x74u) {
+        retail_display_hex("RETURN FRAME",native_disc_entry_return_frame);
+        retail_display_hex("RETURN ENTRY",native_disc_entry_return_entry);
+        retail_display_hex("RETURN TARGET",native_terminal);
+    }
     retail_display_hex("SDK SUBMIT",native_driver.submit);
     retail_display_hex("HEAP INITIALIZER",native_heap.initializer);
     retail_display_hex("HEAP POINTER",native_heap.initializer_slot);
@@ -108,6 +113,7 @@ extern const uint8_t __disc_support_reloc_end[] __asm__("__disc_support_reloc_en
 static void native_disc_support_bind(const struct kui_vmu_native_passive_exports *,
     uint32_t,uint32_t,const struct kui_vmu_native_heap_lease *,struct kui_vmu_native_passive_config *);
 #include "vmu_native_passive_stage.inc"
+#include "disc_vmu_return_stage.inc"
 
 static int persist_identity(void *context,struct kui_vmu_persist_session_identity *out) {
     struct kui_vmu_sd_identity id;
@@ -261,17 +267,6 @@ void kui_disc_vmu_stage_main(void) {
        !kui_disc_launch_validate(payload,plan.payload_bytes,&plan)) stopped("DISC VMU HASH OR LAYOUT REFUSED",2u);
     original_gd=native_word(UINT32_C(0xac0000bc));
     if(!firmware_target(original_gd)) stopped("ORIGINAL GD VECTOR REFUSED",original_gd);
-    struct kui_disc_vmu_entry_failure entry_failure;
-    if(!kui_disc_vmu_entry_drops_inherited_pr(payload+plan.exec_offset,plan.exec_bytes,
-       KUI_DISC_LAUNCH_EXEC_ADDRESS,&entry_failure)) {
-        retail_display_restore(&display);
-        retail_display_line("NATIVE ENTRY RETURN LIFETIME NOT SUPPORTED YET");
-        retail_display_hex("ENTRY PC",entry_failure.address);
-        retail_display_hex("ENTRY OPCODE",entry_failure.opcode);
-        retail_display_hex("ENTRY REASON",entry_failure.reason);
-        retail_display_line("PHOTO THEN POWER OFF / TRY PHYSICAL VMU BOOT");
-        for(;;) __asm__ volatile("nop");
-    }
     native_persist_prepare(payload+plan.vmu_profile_offset);
     uint32_t low_crc=kui_crc32(0u,(const void *)(uintptr_t)UINT32_C(0x8c000000),0x8000u);
     memmove((void *)(uintptr_t)KUI_DISC_LAUNCH_IP_ADDRESS,payload+plan.ip_offset,KUI_DISC_LAUNCH_IP_BYTES);
@@ -321,6 +316,9 @@ void kui_disc_vmu_stage_relay(const uint32_t *frame,uint32_t ccr) {
     native_terminal=(uint32_t)(uintptr_t)kui_vmu_observe_return_hook;
     native_passive_prepare();
     if(!native_crt_bootstrap_prearm()) native_report(2u,0x67u);
+    if(!native_disc_entry_return_bind((uint32_t *)(uintptr_t)f)) {
+        native_report(2u,native_disc_entry_return_error);
+    }
     code_sha(native_heap_code_sha);
     volatile struct kui_vmu_observe_boot_control *c=control();
     for(unsigned i=0;i<sizeof(*c)/4u;i++) if(((volatile uint32_t *)c)[i]) native_report(2u,0x68u);
@@ -335,9 +333,9 @@ void kui_disc_vmu_stage_relay(const uint32_t *frame,uint32_t ccr) {
     *(volatile uint32_t *)(uintptr_t)native_heap.initializer_slot=native_heap_hook;
     native_publish(native_heap.initializer_slot);
     if(native_word(native_heap.initializer_slot|UINT32_C(0x20000000))!=native_heap_hook) native_report(2u,0x6bu);
-    /* Keep the native bootstrap's original PR. No temporary-stage return
-     * pointer may survive into gameplay; exact native exit wrappers become
-     * owned terminal veneers when the worker is armed. */
+    /* PR now names the exact game-owned SDK exit veneer. The existing worker
+     * installer replaces its temporary target with the owned support terminal
+     * before the original allocator returns to gameplay. */
 }
 void kui_disc_vmu_stage_returned(void) {stopped("DISC BOOTSTRAP RETURNED",8u);}
 void kui_vmu_observe_low_failure(void) {native_report(11u,control()->error);}

@@ -5,6 +5,12 @@ the repeated logo sequence disappeared and it booted directly into the game.
 This package adds a separate SCI virtual-VMU route to that physical-disc menu.
 **The new VMU route still needs its first console save/reboot/load test.**
 
+Build `71cfaaff012b` refused an ordinary `STS.L PR,@-R15` startup prologue
+at `8C010002`. This revision gives the entry a verified return address inside
+the game's existing SDK exit hook. The hook is protected during installation
+and points to the owned resident terminal before gameplay resumes. Saving PR
+in a normal prologue no longer requires preserving a temporary-stage address.
+
 ## Copy the KUI folder
 
 With the Dreamcast powered off, back up the existing matching files to your PC,

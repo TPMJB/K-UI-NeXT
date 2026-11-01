@@ -1,0 +1,15 @@
+{
+  "schema": "kui.owner.console.observation.v1",
+  "date": "2026-11-01",
+  "build": "71cfaaff012b",
+  "game": null,
+  "game_note": "The title is not displayed in the supplied error photograph.",
+  "route": "physical native GD with virtual VMU",
+  "screen": "NATIVE ENTRY RETURN LIFETIME NOT SUPPORTED YET",
+  "entry_pc": "8C010002",
+  "entry_opcode": "00004F22",
+  "entry_reason": "00000003",
+  "decoded_instruction": "STS.L PR,@-R15",
+  "interpretation": "The conservative pre-bootstrap guard rejected an ordinary startup prologue that saves PR. This is an admission refusal, not an observed game crash or SD read failure.",
+  "console_vmu_save_load_verified": false
+}
