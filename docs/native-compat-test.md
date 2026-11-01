@@ -1,10 +1,25 @@
-# Compatibility test 7: The House of the Dead 2 saves on the virtual card
+# Compatibility test 7b: The House of the Dead 2 saves on the virtual card
 
-| File | What changed |
+Test 7 stopped The House of the Dead 2 while loading, on the screen with
+`PHASE 0000000A / DETAIL 00000007`. Everything before that step had worked.
+The game's memory was set aside for the virtual card (`ENTRY HEAP BEGIN
+8CDB9000`, `BYTES 00047000`), and the card's code had installed. The step that
+failed connects the reader to the game's interrupt code. This game's SDK
+starts its interrupts through a second handler: the SDK's own option that
+moves interrupts to their own stack. The loader only knew the first one, so it
+stopped, as it is meant to when something unexpected is found.
+
+| File | What changed since test 7 |
 |---|---|
-| Background module, card in A2 and in A1 | The House of the Dead 2 now runs on it, with the virtual card. The game has no memory allocator of its own, so the card's 284 KiB sit in a fixed part of RAM that your RAM-map sessions showed the game never writes, just below the loader. A check that would have stopped the game at its second card or controller transfer is fixed. |
-| Standalone New reader | Back to the normal build: no RAM-map screens. Sonic Adventure, Time Stalkers, Elemental Gimmick Gear and Silver still run on it, without a virtual card. |
-| GUI | Sends The House of the Dead 2 to the Background module, with Virtual VMU On or Off, instead of the standalone reader. |
+| Background module, card in A2 and in A1 | The interrupt check also accepts that second handler. It does so only when the SDK code that installs it and the handler itself match the reviewed code exactly. Both handlers call the reader in the same way. |
+| Standalone New reader | Behaves as in test 7. It shares the image check with the Background module, which now also recognizes the second handler, but this reader does not use it yet. |
+| GUI | Behaves as in test 7. The same shared image check gives every game the same result as before. |
+
+As in test 7, The House of the Dead 2 runs on the Background module with the
+virtual card. The game has no memory allocator of its own, so the card's 284
+KiB sit in a fixed part of RAM, just below the loader. Your RAM-map sessions
+showed the game never writes there. The GUI sends the game to the Background
+module, with Virtual VMU On or Off.
 
 This test includes checks 1 to 3 of test 6. If you have not run test 6, skip it.
 
@@ -33,8 +48,9 @@ and leave the jump pack out: vibration is not passed through yet.
 1. **The House of the Dead 2, Virtual VMU On** (card in A2, the default).
    1. Launch with **Background, New (X)**. While loading, the loader shows
       `NO SDK ALLOCATOR - REVIEWED RAM ARENA`, then `RAM ARENA LEASE FROM
-      REVIEWED RAM MAP`, and the start screen shows `NEW READER / VIRTUAL A2
-      ON`.
+      REVIEWED RAM MAP`, then `SDK SCI ROUTE READY / LEVEL 1` (test 7 stopped
+      just before this line), and the start screen shows `NEW READER / VIRTUAL
+      A2 ON`.
    2. The game should find a memory card in A2. The first time, it is this
       game's own empty card. Let the game create its save file.
    3. Play as far as you can, ideally the whole story, then Boss Mode and
@@ -68,6 +84,17 @@ behaviour until the next package.
 
 ## What was and was not verified before delivery
 
+- On console (test 7): The House of the Dead 2 loaded up to the interrupt
+  step, with the virtual card's memory set aside and its code installed.
+  Nothing after that step has run on a console yet.
+- The fix: host tests that rebuild the SDK's install code and both handlers
+  from your executables. They refuse every changed byte of the second
+  handler and of the install code, every changed address word, every changed
+  live code byte, and every failed memory read. They admit both handlers on
+  all five games that share this SDK: The House of the Dead 2, Sonic
+  Adventure, Time Stalkers, Elemental Gimmick Gear and Silver. Every other
+  game in your library gets the same result as before. The reader's existing
+  interrupt tests pass unchanged.
 - Host tests: the worker with the arena lease (its hooks, the witnessed
   borrowed literal, the poll of the arena's first words, and the refusal of
   every free and of a changed lease); the early driver, its exit pair and the
@@ -86,8 +113,9 @@ behaviour until the next package.
 - On the 21 executables of your library only The House of the Dead 2's
   resolution changes; every other game's record is byte-identical.
 - The compact Background audit, with every changed function re-pinned after
-  review, and the fixed-RAM audit, which executes the compiled arm for both
+  review (the interrupt check grew; every other changed word is a moved
+  address), and the fixed-RAM audit, which executes the compiled arm for both
   Crazy Taxi 2's and The House of the Dead 2's routes.
 - The RAM-map evidence covers only what was played in those sessions; it is
   not a proof that the game never uses that RAM.
-- Nothing in this package has run on a console yet.
+- This package itself has not run on a console yet.
