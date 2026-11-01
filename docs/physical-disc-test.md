@@ -70,6 +70,14 @@ both reads pass. Initial admission and all command ownership, media, size,
 buffer guard and content checks remain in effect. Console boot still needs
 testing beyond that checkpoint.
 
+The subsequent 550edf18ef33 test reached Power Stone but showed a second
+Dreamcast/Sega boot sequence. Its stage entered the lower IP bootstrap at
+`0xac008300` while labeling it bootstrap 2. This revision enters the same
+native bootstrap 2 address as K-UI's working image launcher, `0xac00e000`,
+with the already staged executable. A linked-stage audit now checks the
+actual handoff target and CPU literals. On this test, record whether the
+full Dreamcast logo repeats and whether Power Stone still reaches gameplay.
+
 For each result, send **the exact build number, game/product, X Check result,
 Y Direct boot result, last visible screen, and approximate time**. Photograph
 the complete failure screen and retain the text log using **R Save log**. Also
