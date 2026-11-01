@@ -1426,6 +1426,7 @@ test-disc-vmu: test-disc-native build/test-disc-launch-vmu
 	python3 tests/test_disc_vmu_transport.py
 	python3 tests/test_disc_vmu_persist_stage.py
 	python3 tests/test_disc_vmu_support.py
+	python3 tests/test_disc_vmu_return_stage.py
 	python3 tests/test_disc_region.py
 	$(MAKE) -f Makefile.disc-vmu disc-vmu-entry-host-tests
 build/test-disc-launch-vmu: tests/test_disc_launch_vmu.c $(DISC_LAUNCH_CORE) include/kui/disc_launch.h

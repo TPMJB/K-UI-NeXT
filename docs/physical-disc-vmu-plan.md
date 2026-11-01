@@ -62,8 +62,12 @@ stacks, bounded Maple transfers and physical-device passthrough. Link and audit
 the independent SD/entry bridge. The linked permanent reservation is now
 80 KiB: the full 72 KiB worker/private stack and 8 KiB serial support. The
 cross-ELF runtime stack audit includes both modules. Original low BIOS RAM
-and the GD firmware vector are retained. A bounded immutable-entry proof
-refuses startup paths that might retain a temporary-stage return pointer.
+and the GD firmware vector are retained. The actual saved entry PR is rebound
+to a separately verified SDK exit veneer inside the game's protected executable;
+installation retargets that veneer to the owned terminal before gameplay.
+This supports ordinary startup prologues that save PR without leaving a
+return into temporary-stage memory. The earlier immutable-entry-only guard
+was too restrictive, as the `71cfaaff012b` console refusal demonstrated.
 
 ## 4. Connect existing per-game card choices
 

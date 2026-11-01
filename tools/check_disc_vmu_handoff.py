@@ -152,7 +152,150 @@ def audit_stage(data):
         c.op(op, 'restore SR from frame offset before final jump')
     c.literal(0, 0xac010000, 'original executable entry')
     c.op(0x402b, 'resume original executable'); c.op(0x60f6, 'restore r0 and original SP in delay')
+    audit_entry_return(image, w)
     return image, w
+
+
+def typed(image, name, kind):
+    """Resolve one exact local/global typed record without nearest symbols."""
+    found = []
+    for table in image.sections:
+        if table[1] != 2:
+            continue
+        strings = image.sections[table[6]]
+        names = image.data[strings[4]:strings[4]+strings[5]]
+        for at in range(table[4], table[4]+table[5], SYM.size):
+            n, address, size, info, _, owner = SYM.unpack_from(image.data, at)
+            end = names.find(b'\0', n)
+            if n and end >= 0 and names[n:end].decode('ascii') == name:
+                found.append((address, size, info & 15, owner))
+    if len(found) != 1 or found[0][2] != kind or not found[0][1]:
+        raise ValueError('Requires one exact typed return-binding record: '+name)
+    address, size, _, owner = found[0]
+    if owner >= len(image.sections):
+        raise ValueError('Return-binding record lacks a section: '+name)
+    section = image.sections[owner]
+    if (not section[2] & 2 or not section[3] <= address < address+size <= section[3]+section[5] or
+            (kind == 2 and (section[1] != 1 or not section[2] & 4 or address & 1))):
+        raise ValueError('Return-binding record escapes its exact section: '+name)
+    return address, size
+
+
+def function_ops(image, name):
+    begin, size = typed(image, name, 2)
+    literals, ops = set(), []
+    for pc in range(begin, begin+size, 2):
+        if pc in literals:
+            continue
+        op = struct.unpack('<H', image.read(pc, 2))[0]
+        ops.append((pc, op))
+        if op >> 12 == 0xd:
+            literal = ((pc+4) & ~3)+(op & 255)*4
+            literals.update((literal, literal+2))
+        elif op >> 12 == 9:
+            literals.add(pc+4+(op & 255)*2)
+    return ops
+
+
+def linked_call(image, caller, callee, witnesses):
+    """Pin the actual controlling literal, call and its bounded argument slot."""
+    target, _ = typed(image, callee, 2)
+    ops = dict(function_ops(image, caller))
+    found = []
+    for pc, op in ops.items():
+        if op >> 12 != 0xd:
+            continue
+        literal = ((pc+4) & ~3)+(op & 255)*4
+        if struct.unpack('<I', image.read(literal, 4))[0] != target:
+            continue
+        register = op >> 8 & 15
+        for gap in (2, 4, 6, 8):
+            call = pc+gap
+            if ops.get(call) != 0x400b | register << 8:
+                continue
+            # A bounded group of scalar argument setup instructions may
+            # separate the target load/call; none may overwrite that target.
+            between = [ops.get(at, 0) for at in range(pc+2, call, 2)]
+            if any(op >> 12 not in (5, 6, 7, 0xd, 0xe) or op >> 8 & 15 == register for op in between):
+                continue
+            found.append((pc, literal, call))
+    if len(found) != 1:
+        raise ValueError('Requires one direct resolved return-binding call: '+caller+' -> '+callee)
+    pc, literal, call = found[0]
+    witnesses.extend(((callee+' controlling load', pc, 2), (callee+' controlling literal', literal, 4),
+                      (callee+' exact call', call, 2)))
+    return call
+
+
+def audit_entry_return(image, witnesses):
+    """Narrow compiled-C ABI witnesses; host tests cover refusal semantics.
+
+    Keep the original 84-byte assembly interface unchanged. Prove the relay
+    feeds its retained input frame into the noipa binder, that this happens
+    before heap arming, and that the compiled binder publishes only PR word5
+    after its exit veneer/captured-window update. No C function-body hash or
+    source line number is used as authority.
+    """
+    helper = '_native_disc_entry_return_bind'
+    relay = '_kui_disc_vmu_stage_relay'
+    before = linked_call(image, relay, '_native_crt_bootstrap_prearm', witnesses)
+    bind = linked_call(image, relay, helper, witnesses)
+    after = linked_call(image, relay, '_code_sha', witnesses)
+    if not before < bind < after:
+        raise ValueError('Entry PR binding must follow CRT prearm and precede heap arming')
+    relay_ops = dict(function_ops(image, relay))
+    # The compiler's fixed outgoing frame retains original R4 at SP+12. The
+    # call's argument slot reloads that same word; no other store replaces it.
+    saves = [(pc, op) for pc, op in relay_ops.items() if pc < bind and op & 0xff0f == 0x1f03]
+    if len(saves) != 1 or saves[0][1] != 0x1f43 or relay_ops.get(bind+2) != 0x54f3:
+        raise ValueError('Return binder does not receive the original saved owner frame')
+    witnesses.append(('retain original owner-frame argument', saves[0][0], 2))
+    witnesses.append(('pass exact original owner-frame argument', bind+2, 2))
+    patch = linked_call(image, helper, '_readonly_patch_entry', witnesses)
+    capture = linked_call(image, helper, '_memcpy', witnesses)
+    ops = dict(function_ops(image, helper))
+    stores = [(pc, op) for pc, op in ops.items() if pc > capture and op >> 12 == 1 and op & 15 == 5]
+    if len(stores) != 1 or not patch < capture < stores[0][0]:
+        raise ValueError('Entry PR store must follow exit publication and capture update')
+    pc, op = stores[0]
+    base, value = op >> 8 & 15, op >> 4 & 15
+    prior = ops.get(pc-2, 0)
+    constant = prior >> 4 & 15
+    if prior != 0x200b | base << 8 | constant << 4:
+        raise ValueError('Entry PR write must use an explicitly uncached owner-frame alias')
+    load = ops.get(pc-4, 0)
+    if load & 0xff00 != 0xd000 | constant << 8:
+        raise ValueError('Entry PR uncached alias lacks a controlling literal')
+    literal = ((pc & ~3)+(load & 255)*4)
+    if struct.unpack('<I', image.read(literal, 4))[0] != 0xa0000000:
+        raise ValueError('Entry PR write must use P2')
+    read = ops.get(pc+6, 0)
+    dest = read >> 8 & 15
+    if read != 0x5005 | dest << 8 | base << 4 or ops.get(pc+8) != 0x3000 | dest << 8 | value << 4:
+        raise ValueError('Entry PR write must reread and compare the exact same word5')
+    edge = ops.get(pc+10, 0)
+    if edge >> 8 != 0x8b:
+        raise ValueError('Entry PR readback mismatch must refuse')
+    displacement = edge & 255
+    if displacement & 128:
+        displacement -= 256
+    failed = pc+14+2*displacement
+    branch, zero = ops.get(failed, 0), ops.get(failed+2, 0)
+    if branch >> 12 != 0xa or zero & 0xf0ff != 0xe000:
+        raise ValueError('Entry PR failed readback must select false before returning')
+    displacement = branch & 4095
+    if displacement & 2048:
+        displacement -= 4096
+    result = failed+4+2*displacement
+    if ops.get(result) != 0x6003 | (zero >> 8 & 15) << 4:
+        raise ValueError('Entry PR failed readback must return the selected false result')
+    for label, address, size in (
+            ('entry PR P2 alias load', pc-4, 2), ('entry PR P2 alias', literal, 4),
+            ('entry PR P2 selection', pc-2, 2), ('entry PR word5 store', pc, 2),
+            ('entry PR word5 readback', pc+6, 2), ('entry PR target comparison', pc+8, 2),
+            ('entry PR failed readback edge', pc+10, 2), ('entry PR refusal return edge', failed, 2),
+            ('entry PR refusal selects false', failed+2, 2), ('entry PR refusal returns false', result, 2)):
+        witnesses.append((label, address, size))
 
 
 def audit_support(data):
