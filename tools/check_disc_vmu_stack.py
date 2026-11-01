@@ -107,7 +107,11 @@ def check(directory):
             'vmu_native_heap.c': ({'read_is', 'kui_vmu_native_heap_lease_valid',
                                   'kui_vmu_native_heap_lease_valid_with_release'}, ('read_heap',)),
             'vmu_native_layout.c': ({'kui_vmu_native_layout_bind_checked'}, ('read_value',)),
-            'vmu_native_lifetime.c': ({'kui_vmu_native_lifetime_release_safe_ranges'}, ('read_heap',)),
+            # prepare_protected_ranges supplies this same immutable worker
+            # read_heap callback. Include arena identity sampling even though
+            # the physical-disc installer only admits allocator leases.
+            'vmu_native_lifetime.c': ({'kui_vmu_native_lifetime_release_safe_ranges',
+                                     'kui_vmu_native_lifetime_prepare'}, ('read_heap',)),
             'vmu_native_live.c': ({'kui_vmu_native_live_check'}, ('boundary_read',)),
             'vmu_native_runtime.c': ({'kui_vmu_native_runtime_check'}, ('boundary_read',)),
             'vmu_store.c': ({'write_sync', 'kui_vmu_store_open', 'kui_vmu_store_read', 'kui_vmu_store_sync'},

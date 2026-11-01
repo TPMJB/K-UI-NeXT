@@ -13,6 +13,21 @@ with tempfile.TemporaryDirectory(prefix="disc-return-binder-") as directory:
     # Exercise the existing installer's actual exit loop, not a second copy of
     # its checks. All surrounding high-stage/SH machinery has separate audits.
     source=(ROOT/"src/loader/vmu_native_passive_stage.inc").read_text()
+    def function(name):
+        start=source.index("static void "+name+"(")
+        brace=source.index("{",start)
+        end=brace+1
+        depth=1
+        while depth:
+            depth+=(source[end]=="{")-(source[end]=="}")
+            end+=1
+        return source[start:end]
+    # The early pair shares its literal across two entries. Exercise the
+    # production writer as well as its production retarget loop.
+    (Path(directory)/"disc-vmu-exit-writer-fixture.h").write_text(
+        function("readonly_patch_head")+"\n"+
+        function("readonly_patch_entry").replace("static void readonly_patch_entry(",
+            "static void actual_patch_entry(")+"\n")
     marker=source.index("readonly_patch_entry(native_heap.release,e->release_hook);")
     start=source.index("for(unsigned i=0;i<native_exits.count;i++) {",marker)
     brace=source.index("{",start)

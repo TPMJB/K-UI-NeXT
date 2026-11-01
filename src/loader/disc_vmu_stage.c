@@ -38,6 +38,9 @@ static uint8_t original_entry[128];
 static struct kui_vmu_native_discovery native_driver;
 static struct kui_disc_vmu_probe native_probe;
 static struct kui_vmu_native_heap native_heap;
+/* This installer admits original allocator leases only. The shared worker
+ * installer also serves the image launcher's separately reviewed arena path. */
+#define native_arena 0u
 static struct kui_vmu_native_heap_call native_call;
 static uint8_t native_heap_code_sha[32];
 static uint8_t native_installer_stack[0x10000] __attribute__((aligned(32)));

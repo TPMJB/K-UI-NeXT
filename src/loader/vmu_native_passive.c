@@ -673,9 +673,9 @@ static bool diagnostic_gesture(uint32_t controls) {
 /* A deliberate request for this worker's failure page and counters, for a
  * game that stops responding while its controller is still polled: both
  * triggers fully pressed with A, B, X and Y (raw active-low bits 1, 2, 9 and
- * 10, not Start) in 180 consecutive completed full transfers. A
- * controller-only fast transfer restarts the count, so only drivers whose
- * every transfer takes the full path (the early driver) can request it. */
+ * 10, not Start) in 180 consecutive completed transfers. Early drivers
+ * also count controller-only fast completions; other drivers' fast
+ * completions retain their existing reset of the count. */
 #define HELD_REPORT_FRAMES 180u
 static uint32_t held_report;
 static bool held_report_gesture(uint32_t controls) {
@@ -1628,6 +1628,7 @@ static void controller_complete(const struct kui_vmu_native_passive_frame *f) {
             CONTROLLER_FAIL(3u,i,address,value,controller_pair.snapshot[i]);
     }
     uint32_t parent_response=0u;
+    bool held=false;
     for(unsigned i=0;i<controller_pair.count;i++) {
         uint32_t response,function;uint32_t rx=controller_pair.frames[i].rx;
         unsigned port=(controller_pair.frames[i].header>>14)&3u;
@@ -1666,11 +1667,19 @@ static void controller_complete(const struct kui_vmu_native_passive_frame *f) {
             if(!reader_only() && (response&occupied))
                 CONTROLLER_FAIL(10u,i,address,response,response&~occupied);
             parent_response=response;
+            if(NATIVE_HOT_CONFIG.driver.family==KUI_VMU_NATIVE_FAMILY_EARLY_V1 && command==9u) {
+                uint32_t controls;
+                if(!read_value(NULL,address+8u,4u,&controls))
+                    CONTROLLER_FAIL(12u,i,address+8u,UINT32_MAX,0u);
+                held=held_report_gesture(controls);
+            }
         }
         if(!i) state.first_response=response;
         state.last_response=response;
     }
     if(!controller_context_valid(f,1u)) fail(0x47u);
+    held_report=held?held_report+1u:0u;
+    if(held_report>=HELD_REPORT_FRAMES) fail(0x4fu);
     uint8_t *parent=readonly_rx(controller_pair.frames[controller_pair.parent].rx,1024u);
     if(!parent) CONTROLLER_FAIL(11u,controller_pair.parent,
         controller_pair.frames[controller_pair.parent].rx,0u,1024u);
@@ -1837,7 +1846,6 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
 #endif
     if(controller_pair.pending) {
         controller_complete(f);
-        held_report=0u;
 #if KUI_NATIVE_COOP_PUMP
         reader_cooperative_service();
 #endif

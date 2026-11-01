@@ -70,6 +70,8 @@ static void prefetch_suite(void) {
     tick_case(split_full_fallback,0u);
     tick_case(split_warm_tag_refusals,2u);    /* Only each first, proved completion. */
 #if KUI_NATIVE_SPLIT_CONTROLLER_GENERAL
+    tick_case(split_early_sessions,256u);    /* Early IRQ/alias/lease combinations keep one TICK per split completion. */
+    tick_case(split_early_refusals,0u);      /* An early lock/hook refusal grants no reader visit. */
     tick_case(split_long_sessions,30u);      /* Old cap and uint32 wrap keep TICK usable. */
 #endif
 }
@@ -124,7 +126,7 @@ int KUI_SPLIT_PREFETCH_TEST_MAIN(void) {
         split_prepare();input.diagnostics=mode;
         CHECK(kui_vmu_native_passive_arm(&input,NULL)==-2 && !state.armed);
     }
-    CHECK(tick_visits==80u);
+    CHECK(tick_visits==592u);
 #if KUI_NATIVE_SPLIT_CONTROLLER_STREAM_GUARD
     printf("Split controller stream guard host checks: %u; %u TICK visits, none after a refusal; "
         "%u guarded-frame visits, paused while streaming\n",checks,tick_visits,guard_visits);

@@ -74,6 +74,13 @@ static void split_submit_ok(void) {
     CHECK(!measured_work.heap && !measured_work.hooks && !measured_work.runtime &&
           !measured_work.layout && !measured_work.storage && !measured_work.chain);
 }
+#if KUI_NATIVE_SPLIT_CONTROLLER_GENERAL
+static void split_full_submit_ok(void) {
+    if(setjmp(terminal)==0) kui_vmu_native_passive_split_submit(&frame);
+    else {fprintf(stderr,"Split fallback refused %u/%08x\n",terminal_error,state.runtime_result);CHECK(false);}
+    CHECK(!controller_pair.pending && overlay.pending);
+}
+#endif
 static void split_success(void) {
     split_setup();
     for(unsigned round=0u;round<8u;round++) {
@@ -185,6 +192,138 @@ static void split_identity(void) {
     split_other_identity=false;
 }
 #if KUI_NATIVE_SPLIT_CONTROLLER_GENERAL
+/* The early server can be called at any inherited IMASK and keeps its own
+ * U0/P1 lock pointer. Exercise the same deferred publication proof, on both
+ * an allocator lease and HOTD2's no-allocator arena, without any SD loan for
+ * controller-only transfers. */
+static void split_early_setup(unsigned cached,unsigned arena) {
+    split_prepare();input.driver.family=KUI_VMU_NATIVE_FAMILY_EARLY_V1;
+    if(cached) input.driver.lock_cell|=UINT32_C(0x80000000);
+    put(input.driver.lock_cell,4u,kui_vmu_native_lock_pointer(&input.driver));
+    if(arena) {
+        const struct kui_vmu_native_heap owner={.version=KUI_VMU_NATIVE_HEAP_VERSION,
+            .bytes=sizeof(owner),.family=KUI_VMU_NATIVE_HEAP_ARENA,
+            .image_bytes=input.driver.image_bytes,.load=input.driver.load_address,
+            .initializer_slot=physical(input.lease.owner.initializer_slot)|UINT32_C(0x80000000)};
+        CHECK(kui_vmu_native_heap_arena_lease(&owner,input.lease.payload,input.lease.lease_bytes,
+            input.lease.lease_bytes,&input.lease));
+        kui_vmu_native_readonly_release_resume=input.lease.owner.release+20u;
+        for(unsigned i=0u;i<8u;i++) put(input.lease.payload+4u*i,4u,0x4b554900u+i);
+    }
+    input.exits.family=KUI_VMU_NATIVE_EXIT_EARLY_PAIR;input.exits.count=2u;
+    input.exits.entries[1]=input.exits.entries[0]+8u;
+    input.exits.entries[2]=input.exits.exec_thunk=0u;
+    arm();install_hooks();
+    uint16_t patch[4];CHECK(kui_vmu_native_patch_encode_head(input.exits.entries[0],patch));
+    for(unsigned byte=0u;byte<8u;byte++)
+        put(input.exits.entries[0]+byte,1u,(patch[byte/2u]>>(8u*(byte&1u)))&255u);
+    CHECK(installed_hooks_valid() && split_controller_geometry() && !live_plan.ready);
+    held_report=0u;
+}
+static void split_early_sessions(void) {
+    unsigned sessions=0u;
+    for(unsigned cached=0u;cached<2u;cached++) for(unsigned arena=0u;arena<2u;arena++)
+        for(unsigned level=0u;level<16u;level++) {
+            split_early_setup(cached,arena);
+            submit_sr=0x60000101u|(level<<4);
+            complete_sr=0x60000101u|(((level*7u)&15u)<<4);
+            for(unsigned round=0u;round<4u;round++) {
+                unsigned conditions=round==1u?0u:1u,allinfo=round==1u?15u:0u;
+                split_batch(conditions,allinfo,round&1u);
+                uint32_t source=value_at(0xa05f6c04u);
+                uint8_t tx[128];memcpy(tx,memory+source-0x0c000000u,sizeof(tx));
+                split_submit_ok();
+                CHECK(value_at(0xa05f6c04u)==source && !memcmp(tx,memory+source-0x0c000000u,sizeof(tx)));
+                split_done(conditions,allinfo,0x01000000u);
+                uint8_t before[4][1024];
+                for(unsigned port=0u;port<4u;port++) memcpy(before[port],rx_bytes(port*6u),1024u);
+                complete_return();before[0][2]|=VIRTUAL;
+                for(unsigned port=0u;port<4u;port++) CHECK(!memcmp(before[port],rx_bytes(port*6u),1024u));
+                CHECK(live_plan.ready && !state.pending && !controller_pair.pending);
+                CHECK(!measured_work.storage && !lease_calls && !block_callbacks && !sd.bytes && !sd.writes);
+            }
+            /* Virtual requests still take the complete overlay/storage route. */
+            stage_batch(11u,42u);CHECK(!split_controller_capture(&frame));
+            split_full_submit_ok();
+            physical_complete();complete_return();
+            CHECK(durable_card.reads==1u && lease_calls==1u && sd.bytes && !sd.writes);
+            ++sessions;
+        }
+    printf("Early split controller: %u sessions across both lock aliases, both lease kinds and all inherited levels\n",sessions);
+}
+static void split_early_refusals(void) {
+    /* A fast-path miss cannot weaken the ordinary family's IRQ contract. */
+    for(unsigned level=0u;level<16u;level++) {
+        if(level==6u || level==15u) continue;
+        split_setup();submit_sr=0x60000101u|(level<<4);split_batch(1u,0u,0u);
+        CHECK(!split_controller_capture(&frame) && !state.pending && !controller_pair.pending);
+        CHECK(!lease_calls && !sd.bytes && !sd.writes);
+    }
+    for(unsigned cached=0u;cached<2u;cached++) for(unsigned mutation=0u;mutation<5u;mutation++) {
+        split_early_setup(cached,1u);submit_sr=complete_sr=0x60000101u;
+        split_batch(1u,0u,0u);
+        if(mutation<2u) {
+            if(!mutation) put(kui_vmu_native_lock_pointer(&input.driver),1u,0u);
+            else put(input.driver.lock_cell,4u,
+                (physical(input.driver.lock_cell)+4u)|UINT32_C(0xa0000000));
+            CHECK(!split_controller_capture(&frame) && !state.pending && !controller_pair.pending);
+            continue;
+        }
+        split_submit_ok();split_done(1u,0u,0x01000000u);
+        if(mutation==2u) put(kui_vmu_native_lock_pointer(&input.driver),1u,0u);
+        else if(mutation==3u) put(input.driver.submit,4u,0u);
+        else put(input.lease.payload,4u,0u);
+        uint8_t before[4][1024];
+        for(unsigned port=0u;port<4u;port++) memcpy(before[port],rx_bytes(port*6u),1024u);
+        reject_complete();
+        for(unsigned port=0u;port<4u;port++) CHECK(!memcmp(before[port],rx_bytes(port*6u),1024u));
+        CHECK(!lease_calls && !block_callbacks && !sd.bytes && !sd.writes);
+    }
+}
+static void split_early_held_round(uint32_t controls,bool full,bool report) {
+    if(full) begin_batch(1u,0u,0u,NULL);
+    else {split_batch(1u,0u,0u);split_submit_ok();}
+    if(full) physical_complete();else split_done(1u,0u,0x01000000u);
+    put(rx_at(0)+8u,4u,controls);
+    if(!report) {complete_return();return;}
+    uint8_t before[4][1024];
+    for(unsigned port=0u;port<4u;port++) memcpy(before[port],rx_bytes(port*6u),1024u);
+    reject_complete();CHECK(terminal_error==0x4fu);
+    for(unsigned port=0u;port<4u;port++) CHECK(!memcmp(before[port],rx_bytes(port*6u),1024u));
+    CHECK(!lease_calls && !block_callbacks && !sd.bytes && !sd.writes);
+}
+static void split_early_report(void) {
+    const uint32_t held=UINT32_C(0xfffff9f9);
+    const uint32_t near[]={UINT32_C(0xc7fff9f9),UINT32_C(0xffc7f9f9),UINT32_C(0xfffff9fd),
+        UINT32_C(0xfffff9fb),UINT32_C(0xfffffbf9),UINT32_C(0xfffffdf9),UINT32_MAX};
+    split_early_setup(1u,1u);submit_sr=complete_sr=0x60000101u;
+    for(unsigned i=0u;i<sizeof(near)/sizeof(*near);i++) {
+        for(unsigned round=0u;round<179u;round++) split_early_held_round(held,false,false);
+        split_early_held_round(near[i],false,false);CHECK(!held_report);
+    }
+    /* Port A INFO carries no controls and resets the held count. */
+    for(unsigned round=0u;round<179u;round++) split_early_held_round(held,false,false);
+    split_batch(0u,0u,0u);split_submit_ok();split_done(0u,0u,0x01000000u);complete_return();
+    CHECK(!held_report);
+    /* Alternating full and split completions preserve one continuous hold. */
+    for(unsigned round=0u;round<179u;round++) split_early_held_round(held,round&1u,false);
+    CHECK(held_report==179u);split_early_held_round(held,false,true);
+    /* Every read on the cold early completion fails closed, including the
+     * diagnostic control word, before any parent-byte or virtual/SD write. */
+    split_early_setup(1u,1u);submit_sr=complete_sr=0x60000101u;
+    split_batch(1u,0u,0u);split_submit_ok();split_done(1u,0u,0x01000000u);complete_return();
+    unsigned count=measured_complete_reads;
+    for(unsigned which=1u;which<=count;which++) {
+        split_early_setup(1u,1u);submit_sr=complete_sr=0x60000101u;
+        split_batch(1u,0u,0u);split_submit_ok();split_done(1u,0u,0x01000000u);
+        uint8_t before[4][1024];
+        for(unsigned port=0u;port<4u;port++) memcpy(before[port],rx_bytes(port*6u),1024u);
+        fail_read=bus_reads+which;reject_complete();
+        for(unsigned port=0u;port<4u;port++) CHECK(!memcmp(before[port],rx_bytes(port*6u),1024u));
+        CHECK(!lease_calls && !block_callbacks && !sd.bytes && !sd.writes);
+    }
+    printf("Early split report: 180-frame hold across mixed paths; %u completion read faults refused before publication\n",count);
+}
 static void split_long_sessions(void) {
     const uint32_t starts[]={PAIR_LIMIT-1u,PAIR_LIMIT,PAIR_LIMIT+1u,
         UINT32_MAX-1u,UINT32_MAX,0u};
@@ -234,7 +373,7 @@ int KUI_SPLIT_CONTROLLER_TEST_MAIN(void) {
     split_success();split_geometry_refusals();split_deferred_refusals();split_full_fallback();
     split_warm_tag_refusals();split_identity();
 #if KUI_NATIVE_SPLIT_CONTROLLER_GENERAL
-    split_long_sessions();
+    split_early_sessions();split_early_refusals();split_early_report();split_long_sessions();
 #endif
     printf("Split controller host checks: %u\n",checks);return 0;
 }

@@ -57,8 +57,11 @@ static inline __attribute__((always_inline)) bool split_controller_capture(
         return false;
     uint32_t sp=current_sp(),low=active_stack_low();
     unsigned mask=(f->sr>>4)&15u;
+    /* The early server holds the same TAS lock at its caller's IRQ level;
+     * its initializer also retains the literal's original U0/P1 pointer.
+     * Match the full transfer proof without accepting alternate aliases. */
     if(((current_sr()>>4)&15u)!=15u || sp<low+256u || sp>=low+KUI_VMU_NATIVE_PASSIVE_STACK_BYTES ||
-       (mask!=6u && mask!=15u) || f->r12!=1u ||
+       (mask!=6u && mask!=15u && config.driver.family!=KUI_VMU_NATIVE_FAMILY_EARLY_V1) || f->r12!=1u ||
        !ram(f->r14,4u,4u) || physical(f->r14)!=physical(config.driver.manager_cell)) return false;
     uint32_t source,manager,lock,value;
     if(!split_controller_word(UINT32_C(0xa05f6c04),&source)) return false;
@@ -69,7 +72,7 @@ static inline __attribute__((always_inline)) bool split_controller_capture(
     if(!split_controller_word(f->r14,&manager) ||
        !ram(manager,0x1100u,4u) || physical(manager)!=physical(config.driver.manager_initial) ||
        !split_controller_word(config.driver.lock_cell,&lock) ||
-       lock!=((physical(config.driver.lock_cell)+4u)|UINT32_C(0xa0000000)) ||
+       lock!=kui_vmu_native_lock_pointer(&config.driver) ||
        !read_value(NULL,lock,1u,&value) || value!=0x80u) return false;
 #define SPLIT_EXPECT(address,expected) do { \
     if(!split_controller_word((address),&value) || value!=(expected)) return false; \

@@ -1,0 +1,71 @@
+{
+  "schema": "kui.native.compact.offline-change-review.v1",
+  "baseline_commit": "15e2e5fe7d67",
+  "comparison_label": "15e2e5fe7d67",
+  "comparison": {
+    "native-worker": {
+      "functions_reviewed": 115,
+      "typed_relocations": 534,
+      "readonly_pointer_relocations": 8,
+      "unresolved": []
+    },
+    "stage": {
+      "functions_reviewed": 111,
+      "typed_relocations": 542,
+      "readonly_pointer_relocations": 6,
+      "unresolved": []
+    }
+  },
+  "components": {
+    "native-worker": {
+      "baseline_elf_sha256": "83590b366155329bd4be538389af4dae9f9bee20d0de5438d04596ce2cfde1fe",
+      "candidate_elf_sha256": "b08318a4aa517474f81bd9dbc795b0682ed8c72d68cad2564cc38a320d1f8d0c"
+    },
+    "stage": {
+      "baseline_elf_sha256": "614e4469ba6f6f2da18559fed2e34f84d45c722069cf823dbb9dc70eb46592f6",
+      "candidate_elf_sha256": "6743a4b9c486372d96272be728e020d401e2db1bd629adeeaa399d645fe95003"
+    },
+    "resident-sci": {
+      "baseline_elf_sha256": "999cf4b49fba25048be378806e961ece5084545fe74a78054d22a1f87498f871",
+      "candidate_elf_sha256": "f34488b8b60048a1b6d1232826d1fbd5fab7a3d3a805501954151948071825d3",
+      "all_bounded_function_bodies_byte_identical": true,
+      "function_count": 59
+    },
+    "resident-legacy": {
+      "baseline_elf_sha256": "540c9af313b0c50c37898ebbfb02985eddee10fbac4e8043f8f385e99ff08bbf",
+      "candidate_elf_sha256": "e67adc8e3c61ba0c54123b1db57890c5537be960fdd0b577a8dc6329c01739ff",
+      "all_bounded_function_bodies_byte_identical": true,
+      "function_count": 51
+    },
+    "native-ra-aux": {
+      "baseline_elf_sha256": "7658f37b4143cc6a40113f5a1812fe5cce5aadaff843292976f6c3548bb466e0",
+      "candidate_elf_sha256": "b6abfab92e547ebf848450f20fe55666d504b0e4a0315e88e11ead4bed2d4fa4",
+      "all_bounded_function_bodies_byte_identical": true,
+      "function_count": 25
+    }
+  },
+  "semantic_changes": {
+    "_kui_vmu_native_passive_complete": {
+      "baseline_bytes": 4000,
+      "candidate_bytes": 4110,
+      "baseline_sha256": "4c634b95fb684abfd6d4a98ab5c6519529b56a2d27547e65e514d63e8789dc54",
+      "candidate_sha256": "2a16b599e2752aeddab3699d75de3d9b998dcd185d3a74a35a121d8b37695de5"
+    },
+    "_kui_vmu_native_passive_split_submit": {
+      "baseline_bytes": 860,
+      "candidate_bytes": 916,
+      "baseline_sha256": "11228de4b135e08c4137449f95761f05960e2dc6bebdf01d2b4ebf9c7a7c6a1e",
+      "candidate_sha256": "349397e19d78a9921480f16580ee47462e6a45829716237c9387ca4d9364e5b6"
+    }
+  },
+  "limits": [
+    "Some inherited raw pins already differed from the fresh baseline; source and whole linked closure were reviewed against that baseline before replacing their exact address-dependent signatures.",
+    "Static linked comparison and host execution do not establish console performance, cache timing, or universal compatibility."
+  ],
+  "review_notes": [
+    "Every changed halfword in all other function bodies was checked as a complete aligned32-bit relocation preserving ELF FILE-qualified symbol identity and target offset.",
+    "Complete anonymous constant tails were compared word by word, permitting only independently typed target relocation (8 worker pointers and6 stage pointers).",
+    "The entire _chain compiler switch table is byte-identical; only its compiler-local object name changes353 to357.",
+    "Reviewed semantic changes: early-family inherited IMASK and exact original lock alias in split submit; early command9 fast completions count the held report gesture after all completion/context checks."
+  ]
+}

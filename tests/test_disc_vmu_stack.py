@@ -55,6 +55,10 @@ def main():
         recursion = ('edge: { sourcename: "kui_vmu_native_passive_submit" '
                      'targetname: "kui_vmu_native_passive_submit" label: "vmu_native_passive.c:1:1" }\n')
         refuses(native, lambda t: t+recursion, 'Recursive private-stack path')
+        lifetime = work/'native/src/core/vmu_native_lifetime.ci'
+        refuses(lifetime, lambda t: t.replace(
+            'targetname: "__indirect_call" label: "src/core/vmu_native_lifetime.c:',
+            'targetname: "__indirect_call" label: "unreviewed.c:'), 'Unexpected worker callback')
     print(f'PASS physical-disc stack evidence mutations: {cases} refused; '
           f'original cross-ELF depth {report["worst_bytes"]}/4096 bytes')
 

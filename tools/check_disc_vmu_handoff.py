@@ -61,7 +61,7 @@ class Image:
 
 class Cursor:
     def __init__(self, image, name, witnesses):
-        self.image, self.pc, self.witnesses = image, image.symbol(name), witnesses
+        self.image, self.pc, self.witnesses = image, image.symbol(name) if isinstance(name, str) else name, witnesses
 
     def op(self, code, label):
         actual = struct.unpack('<H', self.image.read(self.pc, 2))[0]
@@ -227,6 +227,42 @@ def linked_call(image, caller, callee, witnesses):
     return call
 
 
+def snapshot_capture(image, helper, witnesses):
+    """Pin the bounded paired-window copy loop and its sole memcpy call.
+
+    Unlike the scalar calls, this callee stays in R9 across a short loop.
+    Bind its actual literal and every argument/count/loop instruction rather
+    than widening linked_call's permissible target-load gap.
+    """
+    target, _ = typed(image, '_memcpy', 2)
+    loads = []
+    for pc, op in function_ops(image, helper):
+        if op >> 12 == 0xd:
+            literal = ((pc+4) & ~3)+(op & 255)*4
+            if struct.unpack('<I', image.read(literal, 4))[0] == target:
+                loads.append(pc)
+    if len(loads) != 1:
+        raise ValueError('Requires one exact paired snapshot-copy callee load')
+    c = Cursor(image, loads[0]-2, witnesses)
+    c.literal(12, 0x20000000, 'snapshot source P2 alias')
+    c.literal(9, target, 'snapshot copy callee')
+    loop = c.pc
+    for op in (0x50f4, 0xe10c, 0x52f2, 0xe60c, 0x201e, 0x6526):
+        c.op(op, 'snapshot index, twelve-byte span and source entry')
+    c.literal(1, typed(image, '_persistent_exit_windows', 1)[0], 'snapshot destination array')
+    for op in (0x041a, 0x1f22, 0x25cb):
+        c.op(op, 'snapshot destination index and uncached source')
+    call = c.pc
+    c.op(0x490b, 'snapshot exact memcpy call')
+    c.op(0x341c, 'snapshot destination argument delay')
+    for op in (0x51f4, 0xe001, 0x52f5, 0x7101, 0x3216):
+        c.op(op, 'snapshot bounded pair-loop increment and limit')
+    displacement = (loop-(c.pc+4))//2
+    c.op(0x8d00 | (displacement & 255), 'snapshot bounded pair-loop edge')
+    c.op(0x1f04, 'snapshot second window index')
+    return call
+
+
 def audit_entry_return(image, witnesses):
     """Narrow compiled-C ABI witnesses; host tests cover refusal semantics.
 
@@ -252,7 +288,7 @@ def audit_entry_return(image, witnesses):
     witnesses.append(('retain original owner-frame argument', saves[0][0], 2))
     witnesses.append(('pass exact original owner-frame argument', bind+2, 2))
     patch = linked_call(image, helper, '_readonly_patch_entry', witnesses)
-    capture = linked_call(image, helper, '_memcpy', witnesses)
+    capture = snapshot_capture(image, helper, witnesses)
     ops = dict(function_ops(image, helper))
     stores = [(pc, op) for pc, op in ops.items() if pc > capture and op >> 12 == 1 and op & 15 == 5]
     if len(stores) != 1 or not patch < capture < stores[0][0]:
@@ -260,26 +296,35 @@ def audit_entry_return(image, witnesses):
     pc, op = stores[0]
     base, value = op >> 8 & 15, op >> 4 & 15
     prior = ops.get(pc-2, 0)
-    constant = prior >> 4 & 15
-    if prior != 0x200b | base << 8 | constant << 4:
+    source = prior >> 4 & 15
+    if prior != 0x200b | base << 8 | source << 4:
         raise ValueError('Entry PR write must use an explicitly uncached owner-frame alias')
     load = ops.get(pc-4, 0)
-    if load & 0xff00 != 0xd000 | constant << 8:
+    if load & 0xff00 != 0xd000 | base << 8:
         raise ValueError('Entry PR uncached alias lacks a controlling literal')
     literal = ((pc & ~3)+(load & 255)*4)
     if struct.unpack('<I', image.read(literal, 4))[0] != 0xa0000000:
         raise ValueError('Entry PR write must use P2')
-    read = ops.get(pc+6, 0)
+    read = ops.get(pc+2, 0)
     dest = read >> 8 & 15
-    if read != 0x5005 | dest << 8 | base << 4 or ops.get(pc+8) != 0x3000 | dest << 8 | value << 4:
+    if read != 0x5005 | dest << 8 | base << 4 or ops.get(pc+6) != 0x3000 | value << 8 | dest << 4:
         raise ValueError('Entry PR write must reread and compare the exact same word5')
-    edge = ops.get(pc+10, 0)
-    if edge >> 8 != 0x8b:
+    error = ops.get(pc+4, 0)
+    if error & 0xf0ff != 0xe074:
+        raise ValueError('Entry PR readback error must identify frame publication')
+    edge = ops.get(pc+8, 0)
+    if edge >> 8 != 0x8d:
         raise ValueError('Entry PR readback mismatch must refuse')
     displacement = edge & 255
     if displacement & 128:
         displacement -= 256
-    failed = pc+14+2*displacement
+    success = pc+12+2*displacement
+    failed = pc+12
+    if success != pc+16:
+        raise ValueError('Entry PR readback equality must skip only the refusal edge')
+    error_store = ops.get(pc+10, 0)
+    if error_store & 0xf00f != 0x2002 or error_store >> 4 & 15 != error >> 8 & 15:
+        raise ValueError('Entry PR readback must publish its exact error detail')
     branch, zero = ops.get(failed, 0), ops.get(failed+2, 0)
     if branch >> 12 != 0xa or zero & 0xf0ff != 0xe000:
         raise ValueError('Entry PR failed readback must select false before returning')
@@ -292,8 +337,9 @@ def audit_entry_return(image, witnesses):
     for label, address, size in (
             ('entry PR P2 alias load', pc-4, 2), ('entry PR P2 alias', literal, 4),
             ('entry PR P2 selection', pc-2, 2), ('entry PR word5 store', pc, 2),
-            ('entry PR word5 readback', pc+6, 2), ('entry PR target comparison', pc+8, 2),
-            ('entry PR failed readback edge', pc+10, 2), ('entry PR refusal return edge', failed, 2),
+            ('entry PR word5 readback', pc+2, 2), ('entry PR readback error detail', pc+4, 2),
+            ('entry PR target comparison', pc+6, 2), ('entry PR failed readback edge', pc+8, 2),
+            ('entry PR readback error publication', pc+10, 2), ('entry PR refusal return edge', failed, 2),
             ('entry PR refusal selects false', failed+2, 2), ('entry PR refusal returns false', result, 2)):
         witnesses.append((label, address, size))
 

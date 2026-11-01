@@ -301,8 +301,12 @@ the exact executable (bytes and SHA-256), like Crazy Taxi 2's plan:
   checks that the pd 1.50 driver is still refused at levels other than 6
   and 15, and that an unheld lock or a P2 lock pointer is refused, by both
   the full proof and the live check.
-- Controller-only frames of the early driver always take the full submit:
-  the split capture requires the P2 lock pointer, which only pd 1.50 stores.
+- At this checkpoint, controller-only frames of the early driver always took
+  the full submit: split capture required the P2 lock pointer stored by pd
+  1.50. The subsequent shared-core review extends capture to the early
+  driver's exact lock pointer and inherited interrupt levels; see
+  `universal-vmu-review-2026-11-01.md`. The full path's later controller-only
+  optimization remains in place for transfers that do not use split capture.
 - Stage (dual builds): when heap discovery finds no allocator, the relay
   binds the arena plan for this exact image and shows `NO SDK ALLOCATOR -
   REVIEWED RAM ARENA`. The arena takes the fixed arena's route: the borrowed
@@ -363,9 +367,11 @@ the exact executable (bytes and SHA-256), like Crazy Taxi 2's plan:
   busy.
 - Test 7d adds a report gesture to the worker: both triggers fully pressed
   with A, B, X and Y in port A's condition reply, held for 180 consecutive
-  completed full transfers. A controller-only fast transfer restarts the
-  count, so it serves drivers whose every transfer takes the full path, such
-  as the early driver. Its read fails closed like every completion read. The worker then shows its failure page with detail 0x4F
+  completed full transfers. Originally a controller-only fast transfer
+  restarted the count. The subsequent shared-core review also counts early
+  split completions, preserving the gesture when those transfers become
+  eligible for split capture. Other drivers' fast completions still reset it.
+  Its read fails closed like every completion read. The worker then shows its failure page with detail 0x4F
   and its counters: transfers, card reads, write phases and saves, SD reads,
   busy loans, faults, the last loan result and block, and the last card
   request and reply.

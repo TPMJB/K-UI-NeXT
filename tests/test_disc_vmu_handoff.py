@@ -53,11 +53,38 @@ def frame_contract():
     assert frame[sp] == 'r0' and (sp+1)*4 == 84
 
 
+def paired_snapshot_mutations(path):
+    """Keep the new paired-copy loop's ABI failures explicit and named."""
+    original = path.read_bytes()
+    image, witnesses = audit_stage(original)
+    by_label = {label: (address, size) for label, address, size in witnesses}
+    changes = (
+        ('snapshot source P2 alias value', 0),
+        ('snapshot exact memcpy call', 0x480b),  # wrong target register
+        ('snapshot bounded pair-loop edge', 0x0009),
+        ('snapshot second window index', 0x1f14),  # caller value instead of index one
+        ('entry PR word5 store', 0x11a6),  # wrong owner-frame word
+        ('entry PR failed readback edge', 0x8f02),  # inverted readback condition
+    )
+    for label, value in changes:
+        address, size = by_label[label]
+        data = bytearray(original)
+        struct.pack_into('<I' if size == 4 else '<H', data, image.offset(address, size), value)
+        try:
+            audit_stage(data)
+        except (ValueError, struct.error):
+            pass
+        else:
+            raise AssertionError('Audit admitted invalid paired-return ABI: '+label)
+    return len(changes)
+
+
 def main():
     if len(sys.argv) != 3:
         raise SystemExit('Usage: test_disc_vmu_handoff.py <disc-stage.elf> <support.elf>')
     frame_contract()
-    cases = mutations(Path(sys.argv[1]), audit_stage)+mutations(Path(sys.argv[2]), audit_support)
+    cases = (mutations(Path(sys.argv[1]), audit_stage)+mutations(Path(sys.argv[2]), audit_support)+
+             paired_snapshot_mutations(Path(sys.argv[1])))
     print(f'PASS physical VMU linked handoff mutations: {cases} corruptions refused; '
           'saved84-byte frame/late SR offset independently checked')
 
