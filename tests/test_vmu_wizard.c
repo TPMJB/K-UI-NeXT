@@ -18,7 +18,7 @@
 #include <string.h>
 static unsigned checks,captures,inspects,imports,assigns,visiting;
 static unsigned fail_import,fail_assign,scan_mode,cancel_after,cancel_calls;
-static bool mounted,capture_error;
+static bool mounted,capture_error,capture_stopped;
 static unsigned automatic_fixture,excluded_publications;
 static unsigned cid=1;
 static struct kui_volume volume={2048,65536,true};
@@ -154,8 +154,16 @@ bool kui_games_inspect(const char *path,struct kui_games_detail *detail,kui_log_
 }
 bool kui_vmu_capture_run(unsigned slot,void *image,size_t bytes,struct kui_vmu_image_summary *summary,
     struct kui_vmu_view *view,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
+    (void)slot;(void)image;(void)bytes;(void)summary;(void)view;
+    (void)log;(void)cancel;(void)progress;
+    CHECK(!"Wizard must use whole-save recovery, never strict raw/legacy capture");return false;
+}
+bool kui_vmu_capture_recover_run(unsigned slot,void *image,size_t bytes,struct kui_vmu_image_summary *summary,
+    struct kui_vmu_view *view,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
     (void)log;(void)cancel;(void)progress;++captures;memset(view,0,sizeof(*view));
+    CHECK(!mounted && !visiting && slot<8u && bytes==KUI_VMU_IMAGE_BYTES);
     if(capture_error) {strcpy(view->status.message,"Source removed");view->status.errors=1;return false;}
+    if(capture_stopped) {strcpy(view->status.message,"Source capture stopped");view->status.stopped=true;return false;}
     struct kui_vmu_image_file files[10]={0};uint8_t payload[10][512];unsigned count=slot==3?10u:1u;
     if(automatic_fixture) {
         count=slot==0?4u:3u;
@@ -439,7 +447,14 @@ int main(void) {
     request.slot=1;run(KUI_VMU_WIZARD_CAPTURE);CHECK(result.cards==2 && result.summary[0].files==1 && result.summary[1].files==1);
     request.slot=0;run(KUI_VMU_WIZARD_CAPTURE);CHECK(result.cards==3 && result.sources==3);
     request.slot=2;run(KUI_VMU_WIZARD_CAPTURE);CHECK(result.cards==4 && result.card==3);
-    capture_error=true;run(KUI_VMU_WIZARD_CAPTURE);CHECK(result.status.errors && result.cards==4 && result.sources==4);capture_error=false;
+    unsigned captured_before=captures,published_before=imports,archived_before=archives;
+    request.card=3;capture_error=true;run(KUI_VMU_WIZARD_CAPTURE);
+    CHECK(result.status.errors && result.cards==4 && result.sources==4 && result.card==3);
+    CHECK(captures==captured_before+1u && imports==published_before && archives==archived_before && !result.publication_started);
+    capture_error=false;capture_stopped=true;run(KUI_VMU_WIZARD_CAPTURE);
+    CHECK(result.status.stopped && !result.status.errors && result.cards==4 && result.sources==4 && result.card==3);
+    CHECK(captures==captured_before+2u && imports==published_before && archives==archived_before && !result.publication_started);
+    capture_stopped=false;
     request.card=0;manual_games();CHECK(result.stage==KUI_VMU_WIZARD_GAMES_STAGE && result.total==13);
     CHECK(strstr(result.status.message,"1 deeper folders not scanned"));
     CHECK(inspects==15 && !strcmp(result.games[0].title,"Alpha") && !result.games[1].supported);

@@ -779,11 +779,12 @@ build/test-network-app: tests/test_network_app.c src/apps/network_test.c src/app
 
 build/test-vmu-app: tests/test_vmu_app.c $(CORE) $(DESTINATION) src/core/storage_probe.c $(FATFS) $(VMU_MANAGEMENT) src/core/hash.c src/apps/vmu.c src/apps/vmu_collection.inc include/kui/apps.h include/kui/vmu_read_bounded.h $(wildcard tests/vmu_stubs/dc/*.h tests/vmu_stubs/dc/maple/*.h)
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie -DKUI_VMU_CAPTURE_TEST_WRAP_CRC=1 $(INCLUDES) -Itests/vmu_stubs -Isrc/dreamcast $(CORE) $(DESTINATION) src/core/storage_probe.c $(FATFS) $(VMU_MANAGEMENT) src/core/hash.c src/apps/vmu.c tests/test_vmu_app.c -Wl,--wrap=kui_crc32 -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie -DKUI_VMU_CAPTURE_TEST_WRAP_CRC=1 $(INCLUDES) -Itests/vmu_stubs -Isrc/dreamcast $(CORE) $(DESTINATION) src/core/storage_probe.c $(FATFS) $(VMU_MANAGEMENT) src/core/hash.c src/apps/vmu.c tests/test_vmu_app.c -Wl,--wrap=kui_crc32,--wrap=kui_vmu_image_pack -o $@
 
 .PHONY: test-vmu-read-recovery
 test-vmu-read-recovery: build/test-vmu-app
 	python3 tests/test_vmu_read_recovery.py
+	python3 tests/test_vmu_capture_recover.py
 
 build/test-vmu-save-format: tests/test_vmu_save_format.c src/core/vmu_save_format.c src/core/crc16.c include/kui/vmu_import.h include/kui/crc16.h
 	@mkdir -p $(@D)

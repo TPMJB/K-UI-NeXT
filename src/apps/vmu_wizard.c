@@ -277,7 +277,7 @@ static bool capture(struct operation *s,const struct kui_vmu_wizard_request *req
     struct kui_vmu_image_summary summary;
     if(!incoming || !physical) {free(incoming);free(physical);return fail(s,"Not enough memory to read this VMU");}
     notice(s,"Reading physical VMU; keep it connected");
-    bool ok=kui_vmu_capture_run(request->slot,incoming,KUI_VMU_IMAGE_BYTES,&summary,
+    bool ok=kui_vmu_capture_recover_run(request->slot,incoming,KUI_VMU_IMAGE_BYTES,&summary,
         physical,s->log,s->cancel,s->progress);
     if(!ok) {
         s->out->status=physical->status;

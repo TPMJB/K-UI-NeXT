@@ -91,10 +91,19 @@ READ_RECOVERY = ("read-recovery-healthy", "read-recovery-once", "read-recovery-l
                  "read-recovery-timeout", "read-recovery-malformed", "read-recovery-oversize", "read-recovery-prior-oversize",
                  "read-recovery-identity", "read-recovery-cancel", "read-recovery-between-passes",
                  "read-recovery-recovered-then-changed", "read-recovery-mapped-change", "read-recovery-retained-change")
+WHOLE_RECOVERY = ("whole-recovery-healthy", "whole-recovery-stable", "whole-recovery-source-wave",
+                  "whole-recovery-aabbb", "whole-recovery-last", "whole-recovery-alternating",
+                  "whole-recovery-two-only", "whole-recovery-mixed", "whole-recovery-strict",
+                  "whole-recovery-cancel", "whole-recovery-cancel-exhaustion", "whole-recovery-timeout",
+                  "whole-recovery-malformed", "whole-recovery-oversize", "whole-recovery-identity",
+                  "whole-recovery-metadata-pre", "whole-recovery-metadata-post", "whole-recovery-metadata-final",
+                  "whole-recovery-retained-ram", "whole-recovery-candidate-ram", "whole-recovery-candidate-overwrite",
+                  "whole-recovery-candidate-postmeta", "whole-recovery-unrelated-ram", "whole-recovery-local-noise",
+                  "whole-recovery-late-cancel", "whole-recovery-late-identity")
 CAPTURE = ("capture-ok", "capture-opaque", "capture-empty", "capture-orphan",
            "capture-duplicate", "capture-dirty", "capture-missing", "capture-short",
            "capture-oversize", "capture-read-fail", "capture-device-change",
-           "capture-metadata-change", "capture-payload-change", "capture-cancel", "capture-invalid-slot") + READ_RECOVERY
+           "capture-metadata-change", "capture-payload-change", "capture-cancel", "capture-invalid-slot") + READ_RECOVERY + WHOLE_RECOVERY
 
 
 def digest(path):

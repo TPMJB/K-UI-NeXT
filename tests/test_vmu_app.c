@@ -7,6 +7,7 @@
 #include "kui/vmu_read_bounded.h"
 #include "kui/vmu_collection.h"
 #include "kui/hash.h"
+#include "kui/vmu_image_pack.h"
 #include <dc/maple.h>
 #include <dc/vmufs.h>
 #include <assert.h>
@@ -42,6 +43,9 @@ static char comparison_log[2048];
 static size_t comparison_log_bytes;
 static unsigned comparison_pairs;
 static uint8_t *retained_capture_sample;
+static bool whole_mode,whole_cancel,whole_difference,whole_final_metadata,whole_pin_pending;
+static unsigned whole_reads[256],whole_started,whole_attempt,whole_completed,whole_streak,whole_successes;
+static uint8_t *whole_retained_time,*whole_retained_other,*whole_candidate[2];
 static uint8_t original_card[256][512];
 static FILE *image;
 static uint64_t image_blocks;
@@ -57,7 +61,27 @@ uint32_t __wrap_kui_crc32(uint32_t seed,const void *data,size_t bytes) {
     uint32_t crc=__real_kui_crc32(seed,data,bytes);
     if(is("read-recovery-retained-change") && !retained_capture_sample && bytes==512u &&
        !memcmp(data,original_card[128],512u)) retained_capture_sample=(uint8_t *)(uintptr_t)data;
+    if(whole_mode && bytes==512u) {
+        if(!whole_retained_time && !memcmp(data,original_card[128],512u)) whole_retained_time=(uint8_t *)(uintptr_t)data;
+        if(!whole_retained_other && !memcmp(data,original_card[0],512u)) whole_retained_other=(uint8_t *)(uintptr_t)data;
+        if(whole_attempt && whole_pin_pending && data!=whole_retained_time && data!=whole_retained_other &&
+           !memcmp(data,original_card[128],123u) && !memcmp((const uint8_t *)data+124u,original_card[128]+124u,388u)) {
+            unsigned bank=(whole_attempt-1u)&1u;
+            whole_candidate[bank]=(uint8_t *)(uintptr_t)data;whole_pin_pending=false;
+        }
+    }
     return crc;
+}
+int __real_kui_vmu_image_pack(const struct kui_vmu_image_file *,size_t,void *,size_t,
+    struct kui_vmu_image_workspace *,struct kui_vmu_image_summary *);
+int __wrap_kui_vmu_image_pack(const struct kui_vmu_image_file *files,size_t count,void *destination,size_t bytes,
+    struct kui_vmu_image_workspace *work,struct kui_vmu_image_summary *summary) {
+    int result=__real_kui_vmu_image_pack(files,count,destination,bytes,work,summary);
+    if(!result && whole_mode) {
+        if(is("whole-recovery-late-cancel")) {whole_cancel=true;injected=true;}
+        if(is("whole-recovery-late-identity")) {active=1u;injected=true;}
+    }
+    return result;
 }
 #endif
 static void log_line(const char *format,...) {
@@ -78,6 +102,14 @@ static void log_line(const char *format,...) {
         assert(written>=0 && (size_t)written<sizeof(comparison_log)-comparison_log_bytes);
         comparison_log_bytes+=(size_t)written;
         if(strstr(line,"VMU save byte ")) ++comparison_pairs;
+    }
+    if(whole_mode) {
+        if(strstr(line,"VMU save comparison: save 3 (TIME_STK.001)")) whole_difference=true;
+        unsigned attempt,streak;
+        if(sscanf(line,"VMU whole-save recovery: save 3 (TIME_STK.001), acquisition %u/6, streak %u/3",&attempt,&streak)==2) {
+            assert(attempt==whole_completed+1u && attempt<=6u);whole_completed=attempt;whole_streak=streak;
+        }
+        if(strstr(line,"VMU whole-save recovered: save 3 (TIME_STK.001)")) ++whole_successes;
     }
 }
 static void put16(uint8_t *p,unsigned value) {p[0]=(uint8_t)value;p[1]=(uint8_t)(value>>8);}
@@ -116,6 +148,48 @@ maple_device_t *maple_enum_dev(int port,int unit) {
 }
 int vmufs_mutex_lock(void) {assert(!locks);++locks;return 0;}
 int vmufs_mutex_unlock(void) {assert(locks==1);--locks;return 0;}
+static int whole_read(uint8_t storage[256][512],uint16_t block,uint8_t out[512]) {
+    assert(!whole_cancel);++whole_reads[block];
+    if(block==255u && !injected) {
+        if((is("whole-recovery-metadata-pre") && whole_difference) ||
+           (is("whole-recovery-metadata-post") && whole_attempt==1u && whole_reads[143]>=4u) ||
+           (is("whole-recovery-metadata-final") && whole_final_metadata)) {
+            storage[255][48]^=1u;injected=true;
+        }
+        if(is("whole-recovery-candidate-postmeta") && whole_attempt==1u && whole_reads[143]>=4u) {
+            assert(whole_candidate[0]);whole_candidate[0][23]^=1u;injected=true;
+        }
+    }
+    if(block==128u && whole_reads[128]==3u && is("whole-recovery-retained-ram")) {
+        assert(whole_retained_time);whole_retained_time[123]^=1u;injected=true;
+    }
+    if(whole_attempt==1u && block==129u && whole_reads[129]==3u &&
+       (is("whole-recovery-timeout") || is("whole-recovery-malformed"))) {
+        injected=true;return is("whole-recovery-timeout")?-2:-1;
+    }
+    memcpy(out,storage[block],512u);
+    if(block==128u && whole_attempt) whole_pin_pending=true;
+    if(block==128u && !is("whole-recovery-healthy")) {
+        if(!whole_attempt && whole_reads[128]>=3u) out[123]=9u;
+        if(whole_attempt) {
+            unsigned version=9u;
+            if(is("whole-recovery-source-wave") || is("whole-recovery-candidate-overwrite")) version=whole_attempt==1u?8u:9u;
+            if(is("whole-recovery-aabbb")) version=whole_attempt<=2u?8u:9u;
+            if(is("whole-recovery-last")) version=whole_attempt<=3u?7u+whole_attempt:11u;
+            if(is("whole-recovery-alternating") || is("whole-recovery-cancel-exhaustion")) version=(whole_attempt&1u)?8u:9u;
+            if(is("whole-recovery-two-only")) version=8u+(whole_attempt-1u)/2u;
+            if(is("whole-recovery-local-noise") && whole_attempt==1u) version=(whole_reads[128]&1u)?8u:9u;
+            out[123]=(uint8_t)version;
+        }
+    }
+    if(block==129u && whole_attempt && is("whole-recovery-mixed")) out[111]=(whole_attempt&1u)?0x33u:0x44u;
+    if(whole_attempt==1u && block==129u && whole_reads[129]==3u) {
+        if(is("whole-recovery-oversize")) {out[512]=0u;injected=true;}
+        if(is("whole-recovery-identity")) {active=1u;injected=true;}
+    }
+    if(block==7u && whole_reads[7]>=4u && whole_successes) whole_final_metadata=true;
+    return 0;
+}
 const struct kui_vmu_read_bounded_diagnostic *kui_vmu_read_bounded_last(void) {
     return recovery_transport_ready?&recovery_transport:NULL;
 }
@@ -131,6 +205,7 @@ int kui_vmu_read_bounded(maple_device_t *device,uint16_t block,uint8_t out[512])
         if(!metadata && !allocated) ++collection_unowned_reads;
     }
     if(block<200 && storage[254][block*2]==0xfc && storage[254][block*2+1]==0xff) ++free_user_reads;
+    if(whole_mode) return whole_read(storage,block,out);
     if(block==128u && fault && !strncmp(fault,"read-recovery-",14u)) {
         ++recovery_reads;
         if(recovery_reads==3u && (is("read-recovery-timeout") || is("read-recovery-malformed"))) {
@@ -229,6 +304,7 @@ int vmufs_dir_write(maple_device_t *device,vmu_root_t *root,vmu_dir_t *dir) {
     return 0;
 }
 static bool cancelled(void) {
+    if(whole_mode && whole_cancel) return true;
     if(is("read-recovery-cancel") && recovery_reads>=3u) {injected=true;return true;}
     if(is("bulk-cancel-start") || (is("bulk-cancel-data") && vmu_writes) || (is("bulk-cancel-after-one") && reported_done>=1024)) {injected=true;return true;}
     if(is("image-cancel-read") && media_reads>=8) {injected=true;return true;}
@@ -283,6 +359,26 @@ bool kui_sd_connect(void) {
 }
 void kui_sd_disconnect(void) {++disconnects;kui_media_set(NULL);}
 static void progress(const struct kui_app_status *value) {
+    if(whole_mode) {
+        unsigned attempt,streak;
+        if(sscanf(value->message,"Checking save TIME_STK.001: acquisition %u/6; matches %u/3",&attempt,&streak)==2) {
+            if(attempt!=whole_attempt) {assert(attempt==whole_attempt+1u);whole_attempt=attempt;++whole_started;}
+            if(!injected) {
+                if(is("whole-recovery-cancel") || (is("whole-recovery-cancel-exhaustion") && whole_completed==6u)) {
+                    whole_cancel=true;injected=true;
+                }
+                if(is("whole-recovery-candidate-ram") && whole_completed==1u && streak==1u) {
+                    assert(whole_candidate[0]);whole_candidate[0][23]^=1u;injected=true;
+                }
+                if(is("whole-recovery-candidate-overwrite") && attempt==3u && whole_completed==2u) {
+                    assert(whole_candidate[0]);whole_candidate[0][23]^=1u;injected=true;
+                }
+                if(is("whole-recovery-unrelated-ram") && whole_completed==3u && streak==3u) {
+                    assert(whole_retained_other);whole_retained_other[12]^=1u;injected=true;
+                }
+            }
+        }
+    }
     assert(value->done<=value->total);reported_done=value->done;
     if(value->done>=1024 && !injected) {
         if(is("bulk-source-removed-after-one")) {missing=true;injected=true;}
@@ -1031,6 +1127,82 @@ static void test_collection_adapter(const char *mode) {
     assert(reads==before_reads && enumerations==before_enumerations && writes==before_writes && !vmu_writes && !locks);
 }
 
+static void test_whole_recovery(const char *mode) {
+    struct kui_vmu_view out;struct kui_vmu_image_summary summary;
+    uint8_t *captured=malloc(KUI_VMU_IMAGE_BYTES);assert(captured);
+    collection_setup(4);collection_read_guard=true;
+    put16(card[254]+4u*2u,0xfffcu);put16(card[254]+5u*2u,0xfffcu);
+    for(unsigned b=128u;b<144u;b++) {
+        for(unsigned j=0u;j<512u;j++) card[b][j]=(uint8_t)(b*7u+j);
+        put16(card[254]+b*2u,b==143u?0xfffau:b+1u);
+    }
+    card[128][123]=8u;
+    uint8_t *entry=card[253]+2u*32u;memcpy(entry+4u,"TIME_STK.001",12u);
+    put16(entry+2u,128u);put16(entry+24u,16u);put16(entry+26u,0u);
+    memcpy(original_card,card,sizeof(card));memset(captured,0x6d,KUI_VMU_IMAGE_BYTES);
+    whole_mode=true;fault=mode;
+    bool healthy=is("whole-recovery-healthy");
+    bool expected=healthy || is("whole-recovery-stable") || is("whole-recovery-source-wave") ||
+        is("whole-recovery-aabbb") || is("whole-recovery-last");
+    bool ok=is("whole-recovery-strict")?
+        kui_vmu_capture_run(0u,captured,KUI_VMU_IMAGE_BYTES,&summary,&out,log_line,cancelled,progress):
+        kui_vmu_capture_recover_run(0u,captured,KUI_VMU_IMAGE_BYTES,&summary,&out,log_line,cancelled,progress);
+    assert(ok==expected && out.status.passed==expected && out.status.complete==expected);
+    assert(!connects && !disconnects && !writes && !vmu_writes && !source_vmu_writes && !locks);
+    assert(!free_user_reads && !collection_unowned_reads && whole_started<=6u && whole_completed<=whole_started);
+    if(!is("whole-recovery-metadata-pre") && !is("whole-recovery-metadata-post") && !is("whole-recovery-metadata-final"))
+        assert(!memcmp(card,original_card,sizeof(card)));
+    if(expected) {
+        assert(summary.files==4u && summary.used_blocks==22u && summary.free_blocks==178u);
+        unsigned acquisitions=healthy?0u:is("whole-recovery-source-wave")?4u:is("whole-recovery-aabbb")?5u:is("whole-recovery-last")?6u:3u;
+        assert(whole_started==acquisitions && whole_completed==acquisitions && whole_successes==!healthy);
+        assert(whole_reads[128]==4u+2u*acquisitions && !out.status.errors && !out.status.stopped);
+        if(!healthy) assert(whole_streak==3u);
+        for(unsigned file=0u;file<4u;file++) {
+            const uint8_t *before=original_card[253]+file*32u,*after=captured+253u*512u+file*32u;
+            assert(!memcmp(before,after,2u) && !memcmp(before+4u,after+4u,28u));
+            unsigned from=before[2]|(unsigned)before[3]<<8,to=after[2]|(unsigned)after[3]<<8;
+            unsigned count=before[24]|(unsigned)before[25]<<8;
+            for(unsigned n=0u;n<count;n++) {
+                for(unsigned byte=0u;byte<512u;byte++) {
+                    uint8_t wanted=original_card[from][byte];
+                    if(file==2u && n==0u && byte==123u && !healthy) wanted=is("whole-recovery-last")?11u:9u;
+                    assert(captured[to*512u+byte]==wanted);
+                }
+                from=original_card[254][from*2u]|(unsigned)original_card[254][from*2u+1u]<<8;
+                to=captured[254u*512u+to*2u]|(unsigned)captured[254u*512u+to*2u+1u]<<8;
+            }
+            assert(from==0xfffau && to==0xfffau);
+        }
+    } else {
+        assert(!summary.files && !summary.used_blocks && (out.status.errors || out.status.stopped));
+        for(unsigned byte=0u;byte<KUI_VMU_IMAGE_BYTES;byte++) assert(captured[byte]==0x6d);
+        if(is("whole-recovery-alternating") || is("whole-recovery-two-only") || is("whole-recovery-mixed") || is("whole-recovery-cancel-exhaustion")) {
+            assert(whole_started==6u && whole_completed==6u && !whole_successes && whole_streak<3u);
+            assert(whole_reads[128]==16u);
+        } else if(is("whole-recovery-strict") || is("whole-recovery-retained-ram") || is("whole-recovery-metadata-pre")) {
+            assert(!whole_started && !whole_completed && !whole_successes && whole_reads[128]==4u);
+        } else if(is("whole-recovery-candidate-ram")) {
+            assert(whole_started==1u && whole_completed==1u && !whole_successes && whole_reads[128]==6u);
+        } else if(is("whole-recovery-candidate-overwrite")) {
+            assert(whole_started==3u && whole_completed==2u && !whole_successes && whole_reads[128]==8u);
+        } else if(is("whole-recovery-unrelated-ram") || is("whole-recovery-metadata-final") ||
+            is("whole-recovery-late-cancel") || is("whole-recovery-late-identity")) {
+            assert(whole_started==3u && whole_completed==3u && whole_successes==1u && whole_reads[128]==10u);
+        } else {
+            assert(whole_started==1u && !whole_completed && !whole_successes);
+            assert(whole_reads[128]==(is("whole-recovery-cancel")?4u:is("whole-recovery-local-noise")?12u:6u));
+        }
+        if(is("whole-recovery-timeout") || is("whole-recovery-malformed") || is("whole-recovery-oversize") || is("whole-recovery-identity"))
+            assert(whole_reads[129]==3u);
+        if(is("whole-recovery-retained-ram") || is("whole-recovery-candidate-ram") ||
+           is("whole-recovery-candidate-overwrite") || is("whole-recovery-candidate-postmeta") || is("whole-recovery-unrelated-ram"))
+            assert(strstr(out.status.message,"RAM"));
+        if(is("whole-recovery-cancel") || is("whole-recovery-cancel-exhaustion") || is("whole-recovery-late-cancel"))
+            assert(out.status.stopped && !out.status.errors);
+    }
+    free(captured);
+}
 static void test_read_recovery(const char *mode) {
     struct kui_vmu_view out;struct kui_vmu_image_summary summary;
     uint8_t *captured=malloc(KUI_VMU_IMAGE_BYTES);assert(captured);
@@ -1163,6 +1335,9 @@ int main(int argc,char **argv) {
     }
     if(!strncmp(mode,"read-recovery-",14u)) {
         test_read_recovery(mode);assert(!locks);fclose(image);printf("PASS VMU %s\n",mode);return 0;
+    }
+    if(!strncmp(mode,"whole-recovery-",15u)) {
+        test_whole_recovery(mode);assert(!locks);fclose(image);printf("PASS VMU %s\n",mode);return 0;
     }
     if(!strncmp(mode,"description-",12)) {
         test_description_rows(mode);assert(!locks);fclose(image);printf("PASS VMU %s\n",mode);return 0;

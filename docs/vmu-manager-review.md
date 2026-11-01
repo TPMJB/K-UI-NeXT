@@ -48,8 +48,27 @@ canonical card without reading unused physical flash. An exact raw VMD
 backup still reads all 256 blocks twice and refuses disagreement, including
 unstable free blocks. These are intentionally different operations. The
 retry defect can explain refused reads or timeouts; it is not proof of the
-cause of the black VMU's earlier changing allocated block 128. Console
-recovery remains unconfirmed until the owner retries this build.
+cause of the black VMU's earlier changing allocated block 128.
+
+The owner's `4ca1b2142a6a` report isolates `TIME_STK.001`, directory entry 2,
+first physical block 128, 16 blocks. At file offset 123 one accepted value
+changed from `08` to `09`: exactly one differing byte and bit. The pinned and
+retained CRCs both stayed `333b8453`, while the reread was `6332eebc`. The
+reported CRC XOR exactly matches that single-bit change in a 512-byte block.
+This supports different accepted read samples with an unchanged retained
+copy; it does not identify a hardware cause. The unvalidated raw header does
+not supply a trustworthy checksum for choosing one value.
+
+The import wizard now opts into bounded whole-save reacquisition after this
+kind of mismatch. It requires three consecutive identical complete save copies
+within six fresh acquisitions, with exact original metadata and identity
+checked around each one. No earlier partial reread counts as a candidate.
+RAM-pin or transport/identity/metadata failures remain terminal. Only a whole
+accepted file can replace the private capture; no block voting or byte repair
+occurs. The strict public capture API and copy-preview binding remain intact.
+This recovery policy can accept later consistent data after earlier variation;
+it must not be described as proving the source stayed unchanged throughout.
+Console recovery still needs the owner's retest.
 
 ## Delete and copy write paths
 

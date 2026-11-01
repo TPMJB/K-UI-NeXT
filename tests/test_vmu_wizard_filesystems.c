@@ -79,6 +79,12 @@ static struct kui_vmu_image_summary wizard_summary(const uint8_t image[KUI_VMU_I
 }
 bool kui_vmu_capture_run(unsigned slot,void *image,size_t bytes,struct kui_vmu_image_summary *summary,
     struct kui_vmu_view *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
+    (void)slot;(void)image;(void)bytes;(void)summary;(void)out;
+    (void)log;(void)cancel;(void)progress;
+    CHECK(!"Wizard must use whole-save recovery, never strict raw/legacy capture");return false;
+}
+bool kui_vmu_capture_recover_run(unsigned slot,void *image,size_t bytes,struct kui_vmu_image_summary *summary,
+    struct kui_vmu_view *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
     (void)log;(void)progress;CHECK(slot<2u && bytes==KUI_VMU_IMAGE_BYTES);
     if(cancel && cancel()) return false;
     memset(out,0,sizeof(*out));memcpy(image,physical_sources[slot],bytes);
