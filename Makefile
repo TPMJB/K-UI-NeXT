@@ -1419,7 +1419,8 @@ build/test-disc-launcher: tests/test_disc_launcher.c src/apps/disc_launcher.c $(
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) -Isrc/dreamcast tests/test_disc_launcher.c src/apps/disc_launcher.c $(DISC_BOOT_CORE) src/core/disc_launch.c -Wl,--wrap=realloc -o $@
 
 .PHONY: test-disc-vmu
-test-disc-vmu: test-disc-native build/test-disc-launch-vmu
+test-disc-vmu: test-disc-native test-disc-vmu-probe build/test-disc-launch-vmu
+	python3 tests/test_disc_idle.py
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-disc-launch-vmu
 	python3 tests/test_disc_vmu_card.py
 	python3 tests/test_disc_vmu_launcher.py
@@ -1432,3 +1433,12 @@ test-disc-vmu: test-disc-native build/test-disc-launch-vmu
 build/test-disc-launch-vmu: tests/test_disc_launch_vmu.c $(DISC_LAUNCH_CORE) include/kui/disc_launch.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) tests/test_disc_launch_vmu.c $(DISC_LAUNCH_CORE) -o $@
+
+DISC_VMU_PROBE_CORE = src/core/disc_vmu_probe.c src/core/vmu_native_program.c src/core/vmu_native_discovery.c src/core/vmu_native_layout.c src/core/vmu_native_heap.c src/core/vmu_native_exit.c src/core/vmu_native_patch.c src/core/hash.c src/core/data.c
+DISC_VMU_PROBE_WRAPS = -Wl,--wrap=kui_vmu_native_program_extent,--wrap=kui_vmu_native_discover_layout,--wrap=kui_vmu_native_discover,--wrap=kui_vmu_native_heap_discover,--wrap=kui_vmu_native_heap_call_discover
+.PHONY: test-disc-vmu-probe
+test-disc-vmu-probe: build/test-disc-vmu-probe
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-disc-vmu-probe $(if $(STARTUP),'$(STARTUP)',)
+build/test-disc-vmu-probe: tests/test_disc_vmu_probe.c $(DISC_VMU_PROBE_CORE) include/kui/disc_vmu_probe.h include/kui/vmu_native_program.h include/kui/vmu_native_discovery.h include/kui/vmu_native_layout.h include/kui/vmu_native_heap.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) tests/test_disc_vmu_probe.c $(DISC_VMU_PROBE_CORE) $(DISC_VMU_PROBE_WRAPS) -o $@

@@ -13,7 +13,7 @@ DISC_FLAGS = $(NATIVE_FLAGS) -DKUI_ON_CONSOLE=1 -DKUI_RETAIL_LOW_RESIDENT=1 \
  -DKUI_DISC_SUPPORT_BIN='"$(BUILD)/support/support.bin"' \
  -DKUI_DISC_SUPPORT_RELOC='"$(BUILD)/support/support.reloc"' \
  -DKUI_NATIVE_VMU_SCI_RX_PACED=1 -DKUI_RETAIL_TRANSPORT=1 -I$(BUILD)
-DISC_SOURCES = src/loader/disc_vmu_stage.c src/core/disc_launch.c src/core/hash.c src/core/data.c \
+DISC_SOURCES = src/loader/disc_vmu_stage.c src/core/disc_launch.c src/core/disc_vmu_probe.c src/core/hash.c src/core/data.c \
  src/loader/retail_display.c src/loader/minic.c src/loader/sd_reader.c src/loader/sci_sd_bus.c \
  src/dreamcast/sci_sd_storage.c src/loader/vmu_backing.c src/loader/vmu_persist_stage.c \
  src/core/vmu_fs_admission.c src/core/vmu_persist_profile.c src/core/vmu_persist_session.c \

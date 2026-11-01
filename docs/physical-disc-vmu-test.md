@@ -5,11 +5,20 @@ the repeated logo sequence disappeared and it booted directly into the game.
 This package adds a separate SCI virtual-VMU route to that physical-disc menu.
 **The new VMU route still needs its first console save/reboot/load test.**
 
-Build `71cfaaff012b` refused an ordinary `STS.L PR,@-R15` startup prologue
-at `8C010002`. This revision gives the entry a verified return address inside
-the game's existing SDK exit hook. The hook is protected during installation
-and points to the owned resident terminal before gameplay resumes. Saving PR
-in a normal prologue no longer requires preserving a temporary-stage address.
+Build `c84eba792f18` reached native bootstrap 2, then refused at phase `2`,
+detail `0A`: the combined Maple-driver/buffer-layout recognizer failed before
+allocating the resident worker. Its zero address fields did not distinguish
+the two components. This revision checks the complete staged executable in
+GD Play first, names the unsupported component and permits **R Save log**.
+The installer keeps its independent checks and reports more detail if it
+still refuses after shutdown. This is a diagnostic improvement, not added
+support for an unrecognized game's SDK. The earlier entry-return correction
+is retained.
+
+Successful insertion, disc-check and card-review reads now leave the spindle
+ready for **45 seconds** of idle time. A launch queued during that grace does
+not issue an intermediate stop. Errors and cancellation still stop the drive;
+CD audio keeps its existing ownership and stop behavior.
 
 ## Copy the KUI folder
 
@@ -29,11 +38,12 @@ defaults stay in place. Restore the backed-up runtime and matching modules
 to return to the preceding GUI. The ZIP's source/artifact/evidence folders
 stay on the PC. It contains no game images or executables.
 
-## First test: Power Stone on SCI
+## First test: compatibility diagnosis on SCI
 
-1. Use the same SCI SD setup and original Power Stone GD-ROM as the accepted
-   direct-boot test. Use an existing imported Power Stone card, or allow the
-   normal per-game flow to create a blank 200-block card.
+1. Use the same SCI SD setup and the disc that produced the refusal. The earlier
+   Power Stone direct-boot result establishes physical startup only. Existing
+   virtual-VMU hardware evidence covers **Power Stone 2**, not Power Stone 1;
+   the physical-disc VMU route still needs its own test.
 2. Open **Disc tools → GD Play → Y Options** and set **Virtual VMU On**.
    Leave **Region-free On** for the current direct-boot behavior.
    Leave physical A2 empty so the game has
@@ -41,9 +51,16 @@ stay on the PC. It contains no game images or executables.
 3. Return to GD Play and press **A K-UI boot**. It uses the inserted native
    disc's product to select its card. If multiple versions need a choice,
    **A** uses once, **X** saves the default, and **Y** restores Always ask.
-4. Reach gameplay and save to virtual A2. Wait until the game finishes saving.
+4. If GD Play reports an unsupported component, press **R Save log** and send
+   the saved report. It contains the actual product, exact executable CRC and
+   byte counts, recognition results and any independently proven addresses.
+   Do not keep retrying a known refusal with the same build. For the first
+   physical VMU save/load test, an original Power Stone 2 disc is a useful
+   candidate because its native SDK already has virtual-VMU hardware evidence
+   on the SD launch path. Physical-disc integration remains unconfirmed.
+5. If installation succeeds, reach gameplay and save to virtual A2. Wait until the game finishes saving.
    Power off, launch the same disc using **A** again, then load the save.
-5. Set Virtual VMU **Off** in GD Play Options, then repeat **A**: this uses the physical-only
+6. Set Virtual VMU **Off** in GD Play Options, then repeat **A**: this uses the physical-only
    module and skips all virtual-card catalogue, image, journal and profile
    lookup. Confirm normal physical VMU behavior.
 

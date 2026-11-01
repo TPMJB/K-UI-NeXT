@@ -174,14 +174,6 @@ bool kui_disc_launcher_prepare_module(const char *package,kui_disc_launcher_card
     if(!kui_disc_launch_layout(image->data,image->info.payload_bytes,plan.metadata.boot_bytes,&layout)) {
         kui_runtime_free(image);return fail(&s,"This first direct-boot test supports native executables up to 4 MiB.");
     }
-    uint8_t profile[KUI_DISC_LAUNCH_VMU_PROFILE_BYTES];
-    if(card) {
-        s.phase="preparing selected virtual VMU";
-        memset(profile,0,sizeof(profile));
-        if(stopped(&s) || !card(plan.metadata.product,profile,card_context,log,cancel)) {
-            kui_runtime_free(image);return fail(&s,"Virtual VMU preparation refused; check the selected card and Diagnostics.");
-        }
-    }
     s.phase="staging allocation";
     log("Physical disc: allocating %" PRIu32 " byte payload for %" PRIu32 " byte executable",layout.payload_bytes,layout.exec_bytes);
     void *grown=realloc(image->data,layout.payload_bytes);
@@ -208,6 +200,18 @@ bool kui_disc_launcher_prepare_module(const char *package,kui_disc_launcher_card
     layout.ip_crc32=plan.ip_crc32;layout.exec_crc32=plan.boot_crc32;
     memcpy(layout.ip_sha256,plan.ip_sha256,32u);memcpy(layout.exec_sha256,plan.boot_sha256,32u);
     if(card) {
+        s.phase="checking virtual VMU compatibility and card";
+        uint8_t profile[KUI_DISC_LAUNCH_VMU_PROFILE_BYTES]={0};
+        char refusal[KUI_DISC_LAUNCHER_REFUSAL_BYTES]={0};
+        bool ready=!stopped(&s) && card(plan.metadata.product,
+            (const uint8_t *)grown+layout.exec_offset,layout.exec_bytes,
+            profile,refusal,card_context,log,cancel);
+        refusal[sizeof(refusal)-1u]=0;
+        if(!ready) {
+            memset(profile,0,sizeof(profile));kui_runtime_free(image);
+            return fail(&s,refusal[0]?refusal:
+                "Virtual VMU preparation refused; check the selected card and Diagnostics.");
+        }
         memcpy((uint8_t *)grown+layout.vmu_profile_offset,profile,sizeof(profile));
         struct kui_sha256 hash;kui_sha256_init(&hash);
         kui_sha256_update(&hash,profile,sizeof(profile));kui_sha256_digest(&hash,layout.vmu_profile_sha256);

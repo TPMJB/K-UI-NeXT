@@ -5,9 +5,11 @@
 #include "kui/disc_launcher.h"
 #include "kui/disc_launch.h"
 #include "kui/disc_vmu_card.h"
+#include "kui/disc_vmu_probe.h"
 #include "kui/disc_region.h"
 #include "kui/vmu_emulation_settings.h"
 #include "platform.h"
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,16 +20,19 @@ struct scenario {
     bool connected,mounted,enabled,stop,connect_fail,mount_fail,preference_fail,unmount_fail;
     bool identity_fail,info_fail,baseline_fail,module_fail,callback_skipped;
     bool cancel_after_preference,cancel_after_info,cancel_after_card;
+    bool cancel_after_probe;
     bool region_free,region_fail,cancel_after_region;
     char console;
     unsigned region_loads,console_reads;
     struct kui_disc_launcher_region region_forwarded;
     unsigned connect_fail_at,mount_fail_at,unmount_fail_at;
-    unsigned connections,mounts,unmounts,disconnects,preferences,identities,infos,baselines,modules,cards,progress,logs;
+    unsigned connections,mounts,unmounts,disconnects,preferences,identities,infos,baselines,modules,cards,probes,progress,logs;
+    uint32_t probe_stage;
     int card_result;
     const struct kui_vmu_game_selection *expected_selection;
     struct kui_app_status last;
     char actual_product[11];
+    char log_text[4096];size_t log_bytes;
     char trace[256];size_t trace_count;
 } mock;
 static struct kui_vmu_game_info info;
@@ -35,14 +40,24 @@ static struct kui_app_status status;
 static struct kui_runtime_image image;
 static struct kui_vmu_game_selection selected;
 static uint8_t dummy_payload[4];
+static const uint8_t dummy_executable[256]={0x22,0x4f};
 static void event(char code) {CHECK(mock.trace_count+1u<sizeof(mock.trace));mock.trace[mock.trace_count++]=code;mock.trace[mock.trace_count]=0;}
 static bool cancel(void) {return mock.stop;}
-static void log_line(const char *format,...) {(void)format;++mock.logs;}
+static void log_line(const char *format,...) {
+    ++mock.logs;CHECK(mock.log_bytes<sizeof(mock.log_text));
+    va_list args;va_start(args,format);
+    int n=vsnprintf(mock.log_text+mock.log_bytes,sizeof(mock.log_text)-mock.log_bytes,format,args);
+    va_end(args);CHECK(n>=0 && (size_t)n<sizeof(mock.log_text)-mock.log_bytes);
+    mock.log_bytes+=(size_t)n;
+    CHECK(mock.log_bytes+1u<sizeof(mock.log_text));mock.log_text[mock.log_bytes++]='\n';
+    mock.log_text[mock.log_bytes]=0;
+}
 static void progress(const struct kui_app_status *view) {mock.last=*view;++mock.progress;}
 static bool zero(const void *data,size_t bytes) {const uint8_t *p=data;for(size_t i=0;i<bytes;i++)if(p[i])return false;return true;}
 static void setup(void) {
     memset(&mock,0,sizeof(mock));mock.enabled=true;mock.card_result=KUI_DISC_VMU_CARD_READY;
     mock.region_free=true;mock.console='?';
+    mock.probe_stage=KUI_DISC_VMU_PROBE_READY;
     strcpy(mock.actual_product,"ACTUAL-01");
     memset(&info,0xa5,sizeof(info));memset(&status,0xa5,sizeof(status));memset(&image,0xa5,sizeof(image));
     memset(&selected,0,sizeof(selected));strcpy(selected.product,"ACTUAL-01");selected.selected=true;selected.pair=23u;
@@ -97,6 +112,37 @@ void kui_vmu_game_info_run(const char *product,bool native,struct kui_vmu_game_i
     out->known=!mock.info_fail;strcpy(out->notice,mock.info_fail?"info refused":"Choose a card");
     if(mock.cancel_after_info)mock.stop=true;
 }
+bool kui_disc_vmu_probe_run(const void *executable,size_t bytes,uint32_t load,
+    struct kui_disc_vmu_probe *out) {
+    CHECK(!mock.connected && !mock.mounted && executable==dummy_executable &&
+        bytes==sizeof(dummy_executable) && load==KUI_DISC_LAUNCH_EXEC_ADDRESS && out);
+    event('Q');++mock.probes;
+    *out=(struct kui_disc_vmu_probe){.version=KUI_DISC_VMU_PROBE_VERSION,.bytes=sizeof(*out),
+        .stage=mock.probe_stage,.file_bytes=sizeof(dummy_executable),.program_bytes=192u,
+        .file_crc32=0x11223344u,.driver_result=KUI_VMU_NATIVE_NOT_FOUND,
+        .heap_result=KUI_VMU_NATIVE_HEAP_INVALID};
+    if(mock.probe_stage>KUI_DISC_VMU_PROBE_MAPLE_DRIVER) {
+        out->driver_result=KUI_VMU_NATIVE_RESOLVED;out->driver.submit=0x8c012340u;
+        out->driver.initializer=0x8c012380u;
+    }
+    if(mock.probe_stage>KUI_DISC_VMU_PROBE_MAPLE_LAYOUT) {
+        out->layout.initializer=0x8c012400u;out->layout.tx_base=0x8c200000u;out->layout.rx_base=0x8c210000u;
+    }
+    if(mock.probe_stage>KUI_DISC_VMU_PROBE_HEAP_DISCOVERY) {
+        out->heap_result=KUI_VMU_NATIVE_HEAP_FOUND;out->heap.initializer=0x8c012500u;
+        out->heap.initializer_slot=0x8c012600u;out->heap.allocate=0x8c012700u;out->heap.release=0x8c012800u;
+    }
+    if(mock.probe_stage==KUI_DISC_VMU_PROBE_READY) {
+        out->call.load=0x8c012900u;out->call.call=0x8c012902u;out->call.return_pr=0x8c012906u;
+    }
+    if(mock.cancel_after_probe)mock.stop=true;
+    return mock.probe_stage==KUI_DISC_VMU_PROBE_READY;
+}
+const char *kui_disc_vmu_probe_stage_text(uint32_t stage) {
+    static const char *const text[]={"argument","executable extent","Maple driver","Maple buffer layout",
+        "allocator discovery","allocator initializer","allocator startup call","ready"};
+    return stage<sizeof(text)/sizeof(text[0])?text[stage]:"unknown";
+}
 bool kui_disc_launcher_prepare(struct kui_runtime_image *out,struct kui_app_status *view,
     kui_log_fn log,kui_cancel_fn stop,kui_app_progress_fn notify) {
     CHECK(!mock.connected && !mock.mounted && out && zero(out,sizeof(*out)));
@@ -138,11 +184,14 @@ bool kui_disc_launcher_prepare_module(const char *package,kui_disc_launcher_card
     CHECK(view && log==log_line && stop==cancel && notify==progress);event('V');++mock.modules;
     if(mock.module_fail) {*view=(struct kui_app_status){.complete=true,.errors=1u};return false;}
     uint8_t profile[4096];memset(profile,0xa5,sizeof(profile));
-    bool ok=callback(mock.actual_product,profile,context,log,stop);
+    char refusal[KUI_DISC_LAUNCHER_REFUSAL_BYTES]={0};
+    bool ok=callback(mock.actual_product,dummy_executable,sizeof(dummy_executable),profile,
+        refusal,context,log,stop);
     CHECK(!mock.connected && !mock.mounted);
     if(ok) {for(size_t i=0;i<sizeof(profile);i++)CHECK(profile[i]==0x5au);}
     else CHECK(zero(profile,sizeof(profile)));
     *view=(struct kui_app_status){.complete=true,.passed=ok,.errors=ok?0u:1u};
+    snprintf(view->message,sizeof(view->message),"%s",refusal);
     if(ok) {out->data=dummy_payload;out->info.payload_bytes=sizeof(dummy_payload);}
     return ok;
 }
@@ -160,7 +209,7 @@ int main(void) {
     CHECK(status.complete && status.passed && !status.errors && !mock.identities && !mock.infos && !mock.cards);
     CHECK(!strcmp(mock.trace,"CMPUD"));
     setup();mock.enabled=false;CHECK(prepare((const struct kui_vmu_game_selection *)(uintptr_t)1));released();
-    CHECK(mock.baselines==1u && !mock.modules && !mock.identities && !mock.infos && !mock.cards);
+    CHECK(mock.baselines==1u && !mock.modules && !mock.identities && !mock.infos && !mock.cards && !mock.probes);
     CHECK(!strcmp(mock.trace,"RCMPUDB") && mock.region_loads==1u && !mock.console_reads && mock.region_forwarded.region_free);
     setup();mock.enabled=false;mock.baseline_fail=true;CHECK(!prepare((const struct kui_vmu_game_selection *)(uintptr_t)1));released();
     CHECK(!image.data && status.errors==1u && mock.baselines==1u && !mock.modules && !mock.cards);
@@ -170,8 +219,26 @@ int main(void) {
     setup();mock.info_fail=true;info_run();released();CHECK(!status.passed && status.errors==1u && strstr(status.message,"info refused"));
     setup();mock.cancel_after_info=true;info_run();released();CHECK(status.stopped && !status.errors && !status.passed);
     setup();CHECK(prepare(&selected));released();
-    CHECK(mock.modules==1u && !mock.baselines && mock.cards==1u && image.data && status.passed);
-    CHECK(!strcmp(mock.trace,"RCMPUDVCMSUD"));
+    CHECK(mock.modules==1u && !mock.baselines && mock.cards==1u && mock.probes==1u && image.data && status.passed);
+    CHECK(!strcmp(mock.trace,"RCMPUDVQCMSUD"));
+    CHECK(strstr(mock.log_text,"product ACTUAL-01; exact file CRC32 11223344; full bytes 256; program bytes 192"));
+    CHECK(strstr(mock.log_text,"ready; driver result 1; heap result 1") &&
+        strstr(mock.log_text,"Maple submit 8c012340") && strstr(mock.log_text,"initializer 8c012380") &&
+        strstr(mock.log_text,"layout initializer 8c012400; TX 8c200000; RX 8c210000") &&
+        strstr(mock.log_text,"heap initializer 8c012500; slot 8c012600; allocate 8c012700; release 8c012800") &&
+        strstr(mock.log_text,"heap load 8c012900; call 8c012902; return 8c012906"));
+    for(uint32_t stage=KUI_DISC_VMU_PROBE_ARGUMENT;stage<KUI_DISC_VMU_PROBE_READY;stage++) {
+        setup();mock.probe_stage=stage;CHECK(!prepare(&selected));released();
+        CHECK(mock.probes==1u && !mock.cards && mock.connections==1u && !image.data && status.errors==1u);
+        CHECK(!strcmp(mock.trace,"RCMPUDVQ") && strstr(status.message,"Virtual VMU unsupported:") &&
+            strstr(status.message,"R: Save Log") && strstr(mock.log_text,kui_disc_vmu_probe_stage_text(stage)));
+        if(stage==KUI_DISC_VMU_PROBE_MAPLE_DRIVER)
+            CHECK(strstr(status.message,"Maple driver") && strstr(mock.log_text,"driver result 0; heap result -1"));
+        if(stage==KUI_DISC_VMU_PROBE_MAPLE_LAYOUT)
+            CHECK(strstr(status.message,"Maple buffer layout") && strstr(mock.log_text,"driver result 1; heap result -1"));
+    }
+    setup();mock.cancel_after_probe=true;CHECK(!prepare(&selected));released();
+    CHECK(mock.probes==1u && !mock.cards && mock.connections==1u && !image.data);
     setup();CHECK(prepare(NULL));released();CHECK(mock.cards==1u && status.passed);
     setup();strcpy(mock.actual_product,"OTHER-02");CHECK(!prepare(&selected));released();
     CHECK(!mock.cards && !image.data && !status.passed && status.errors==1u && mock.logs==1u && mock.connections==1u);

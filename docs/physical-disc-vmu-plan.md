@@ -26,11 +26,11 @@ next hardware milestone. See `evidence/physical-disc-powerstone-c01.json`.
   the native IP/executable destinations and entering the native bootstrap.
 - Leave real GD-ROM service calls in charge of game reads and disc audio. No
   virtual-card lookup or save writes occur, regardless of Games' VMU setting.
-- Keep X Check and the original BIOS boot accessible so check-only failures and
-  direct-handoff failures can be reported separately.
+- GD Play exposes A K-UI boot, X Stock retail boot and Y Options. The earlier
+  check-only shortcut is no longer shown.
 
-The new path has no console-locale match gate and enters the native bootstrap
-after that gate. This is the region-free design direction; foreign-region game
+The saved Region-free option controls the console-region match gate. With it
+On, this path enters the native bootstrap after that gate; foreign-region game
 compatibility remains a hardware test, including the title's own video behavior.
 
 ## 2. Independent VMU storage owner — SCI integration ready for console test
@@ -68,6 +68,26 @@ installation retargets that veneer to the owned terminal before gameplay.
 This supports ordinary startup prologues that save PR without leaving a
 return into temporary-stage memory. The earlier immutable-entry-only guard
 was too restrictive, as the `71cfaaff012b` console refusal demonstrated.
+
+The next console result, `c84eba792f18`, passed bootstrap 2 and refused at
+phase 2/detail 0A while resolving the Maple driver and allocator. That gate is
+the combined immutable Maple-driver/layout recognizer, before heap discovery
+or worker allocation. The original report cleared both candidate objects, so
+its zero addresses do not identify the unsupported component. The new shared
+immutable probe runs in GD Play against the complete staged executable before
+card preparation and KOS shutdown. It records the exact product, CRC, full and
+program byte counts, component result and independently proven metadata.
+Unsupported input stays on GD Play with a saveable log. Bootstrap admission
+still repeats its own discovery, placement, live-state and installation checks;
+preflight metadata grants no patch or allocation authority. A failure-only
+bootstrap probe improves the fallback screen without relaxing recognition.
+
+Insertion and successful optical review now earn one finite 45-second idle
+grace instead of immediately stopping the spindle. The sole I/O worker consumes
+the deadline before issuing STOP and yields to queued foreground operations.
+Media removal, reset and CD-audio ownership cancel that grace. Failed or
+cancelled optical work keeps immediate cleanup. This changes menu drive
+scheduling only; real GD firmware still owns game reads.
 
 ## 4. Connect existing per-game card choices
 

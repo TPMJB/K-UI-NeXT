@@ -1,0 +1,18 @@
+{
+  "schema": "kui.physical-disc.hardware-report.v1",
+  "build": "c84eba792f18",
+  "reported_date": "2026-11-01",
+  "source": "Owner's before/after console photographs and accompanying report",
+  "before": "RESOLVING DISC MAPLE DRIVER AND ALLOCATOR",
+  "after": "PHYSICAL DISC VMU INSTALL REFUSED",
+  "phase": "00000002",
+  "detail": "0000000A",
+  "sdk_submit": "00000000",
+  "heap_initializer": "00000000",
+  "heap_pointer": "00000000",
+  "allocated_payload": "00000000",
+  "interpretation": "The combined immutable Maple driver/buffer-layout recognizer returned false before allocator discovery or VMU payload allocation. That recognizer clears both outputs on failure; the zero fields cannot distinguish driver failure from layout failure.",
+  "limitations": "The exact product and executable identity are not visible in these photographs. No physical-disc virtual-VMU save/reload success is established. Clear photographs show readable text; no renderer defect is established.",
+  "drive_report": "Owner observed immediate spin-down after insertion identification, another spin-up/down during launch preparation, then spin-up for bootstrap.",
+  "follow_up": "Preflight the exact staged executable in GD Play, retain component diagnostics for R Save log, preserve independent bootstrap admission, and defer successful inspection STOP cleanup with one finite idle grace."
+}

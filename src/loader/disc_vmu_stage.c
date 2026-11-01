@@ -3,6 +3,7 @@
  * original-game allocator lease; firmware GD code and low RAM stay intact. */
 #include "kui/disc_launch.h"
 #include "kui/disc_vmu_layout.h"
+#include "kui/disc_vmu_probe.h"
 #include "kui/disc_vmu_support.h"
 #include "kui/hash.h"
 #include "kui/storage.h"
@@ -35,6 +36,7 @@ static struct kui_disc_launch_plan plan;
 static uint32_t exec_bytes,original_gd;
 static uint8_t original_entry[128];
 static struct kui_vmu_native_discovery native_driver;
+static struct kui_disc_vmu_probe native_probe;
 static struct kui_vmu_native_heap native_heap;
 static struct kui_vmu_native_heap_call native_call;
 static uint8_t native_heap_code_sha[32];
@@ -87,6 +89,20 @@ static void native_report(uint32_t phase,uint32_t detail) __attribute__((noretur
 static void native_report(uint32_t phase,uint32_t detail) {
     retail_display_restore(&display);retail_display_line("PHYSICAL DISC VMU INSTALL REFUSED");
     retail_display_hex("PHASE",phase);retail_display_hex("DETAIL",detail);
+    if(phase==2u && detail==10u) {
+        /* The combined finder deliberately clears both authoritative outputs
+         * on failure. Preserve a separately proved diagnostic candidate only
+         * to identify the unsupported substage, never to authorize a hook. */
+        retail_display_line(kui_disc_vmu_probe_stage_text(native_probe.stage));
+        retail_display_hex("DRIVER RESULT",(uint32_t)native_probe.driver_result);
+        retail_display_hex("PROBE SUBMIT",native_probe.driver.submit);
+        retail_display_hex("PROBE INITIALIZER",native_probe.driver.initializer);
+        retail_display_hex("BOOT BYTES",native_probe.file_bytes);
+        retail_display_hex("PROGRAM BYTES",native_probe.program_bytes);
+        retail_display_hex("FILE CRC",native_probe.file_crc32);
+        retail_display_line("PHOTO THEN POWER OFF");
+        for(;;) __asm__ volatile("nop");
+    }
     if(phase==2u && detail>=0x70u && detail<=0x74u) {
         retail_display_hex("RETURN FRAME",native_disc_entry_return_frame);
         retail_display_hex("RETURN ENTRY",native_disc_entry_return_entry);
@@ -305,7 +321,11 @@ void kui_disc_vmu_stage_relay(const uint32_t *frame,uint32_t ccr) {
     exec_bytes=(uint32_t)program_bytes;
     retail_display_restore(&display);retail_display_line("RESOLVING DISC MAPLE DRIVER AND ALLOCATOR");
     if(!kui_vmu_native_discover_layout((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
-       exec_bytes,KUI_RETAIL_EXEC_ADDRESS,&native_driver,&passive_layout)) native_report(2u,10u);
+       exec_bytes,KUI_RETAIL_EXEC_ADDRESS,&native_driver,&passive_layout)) {
+        (void)kui_disc_vmu_probe_run((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
+            plan.exec_bytes,KUI_RETAIL_EXEC_ADDRESS,&native_probe);
+        native_report(2u,10u);
+    }
     if(kui_vmu_native_heap_discover((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
        exec_bytes,KUI_RETAIL_EXEC_ADDRESS,&native_heap)!=KUI_VMU_NATIVE_HEAP_FOUND ||
        !native_heap.initializer_slot ||
