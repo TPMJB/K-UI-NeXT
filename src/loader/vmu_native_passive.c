@@ -661,6 +661,28 @@ static void diagnostic_report(void) {
 static bool diagnostic_gesture(uint32_t controls) {
     return !(controls&2u) && ((controls>>16)&255u)>=200u && (controls>>24)>=200u;
 }
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+/* A deliberate request for this worker's failure page and counters, for a
+ * game that stops responding while its controller is still polled: both
+ * triggers fully pressed with A, B, X and Y (raw active-low bits 1, 2, 9 and
+ * 10, not Start), held for 180 consecutive completed transfers. */
+#define HELD_REPORT_FRAMES 180u
+static uint32_t held_report;
+static bool held_report_gesture(uint32_t controls) {
+    return !(controls&UINT32_C(0x0606)) && ((controls>>16)&255u)>=200u && (controls>>24)>=200u;
+}
+/* The same gesture in a controller-only transfer: port A's condition reply. */
+static bool held_report_fast(void) {
+    for(unsigned i=0;i<controller_pair.count;i++) {
+        uint32_t header=controller_pair.frames[i].header,response,controls;
+        uint32_t rx=controller_pair.frames[i].rx|UINT32_C(0xa0000000);
+        if(((header>>14)&3u)==0u && (header&255u)==9u)
+            return read_value(NULL,rx,4u,&response) && (response&255u)==8u &&
+                read_value(NULL,rx+8u,4u,&controls) && held_report_gesture(controls);
+    }
+    return false;
+}
+#endif
 static bool diagnostic_fast_gesture(void) {
     for(unsigned i=0;i<controller_pair.count;i++) {
         uint32_t header=controller_pair.frames[i].header,controls;
@@ -1810,6 +1832,8 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
 #endif
     if(controller_pair.pending) {
         controller_complete(f);
+        held_report=held_report_fast()?held_report+1u:0u;
+        if(held_report>=HELD_REPORT_FRAMES) fail(0x4fu);
 #if KUI_NATIVE_COOP_PUMP
         reader_cooperative_service();
 #endif
@@ -1868,7 +1892,7 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
     if(!chain(snapshot.bank,true) || !lease_valid() || !stack_valid()) fail(11u);
 #endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
-    bool capture_gesture=false;
+    bool capture_gesture=false,held=false;
 #endif
     for(unsigned i=0;i<state.descriptors;i++) {
         uint32_t response;
@@ -1878,6 +1902,12 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
         if(!read_value(NULL,receivers[i]|UINT32_C(0xa0000000),4u,&response)) fail(12u);
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
         if(!physical_response_valid(i,response)) fail(0x44u);
+        if(((chain_frames[i].header>>8)&255u)==32u && (chain_frames[i].header&255u)==9u &&
+           (response&255u)==8u) {
+            uint32_t controls;
+            held=read_value(NULL,(receivers[i]+8u)|UINT32_C(0xa0000000),4u,&controls) &&
+                held_report_gesture(controls);
+        }
         if((!KUI_NATIVE_E1_WAIT_CAPTURE && !KUI_NATIVE_METADATA_CACHE_ISOLATION && !KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION && NATIVE_HOT_CONFIG.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE) && ((chain_frames[i].header>>8)&255u)==32u &&
            (chain_frames[i].header&255u)==9u) {
             uint32_t controls;
@@ -1891,6 +1921,10 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
         if(!i) state.first_response=response;
         state.last_response=response;
     }
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    held_report=held?held_report+1u:0u;
+    if(held_report>=HELD_REPORT_FRAMES) fail(0x4fu);
+#endif
 #if !KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(!boundary(f,1u,state.bytes,&snapshot)) fail(13u);
 #endif

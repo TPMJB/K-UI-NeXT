@@ -510,6 +510,33 @@ static unsigned measure_batch(unsigned cmd,unsigned phase,const uint8_t *payload
     transfer_batch(cmd,cmd==10u?0u:42u,phase,payload);
     return measured_submit_reads+measured_complete_reads;
 }
+/* The held report: both triggers fully pressed with A, B, X and Y in port A's
+ * condition reply. Each held transfer completes normally until the 180th in
+ * a row, which shows the failure page with detail 0x4F; a released, partial
+ * or 199-trigger condition restarts the count. Controller-only and full
+ * transfers count alike. */
+static void held_round(unsigned cmd,uint32_t controls,bool report) {
+    begin_batch(cmd,0u,0u,NULL);physical_complete();put(rx_at(0)+8u,4u,controls);
+    if(!report) {complete_return();idle();return;}
+    /* The page follows this transfer's checks; a controller-only transfer
+     * has already completed, a full one has not been published. */
+    if(setjmp(terminal)==0) {kui_vmu_native_passive_complete(&frame);CHECK(false);}
+    CHECK(terminal_error==0x4fu && !state.proof && !lease_calls && !durable_card.commits);
+}
+static void held_report_gesture_session(void) {
+    const uint32_t held=UINT32_C(0xfffff9f9),released=UINT32_C(0xffffffff);
+    const uint32_t near[]={UINT32_C(0xc7fff9f9),UINT32_C(0xffc7f9f9),UINT32_C(0xfffff9fd),
+        UINT32_C(0xfffff9fb),UINT32_C(0xfffffbf9),UINT32_C(0xfffffdf9)};
+    for(unsigned cmd=0u;cmd<2u;cmd++) {
+        setup();
+        for(unsigned i=0u;i<sizeof(near)/sizeof(near[0]);i++)
+            for(unsigned round=0u;round<200u;round++)held_round(cmd,near[i],false);
+        for(unsigned round=0u;round<179u;round++)held_round(cmd,held,false);
+        held_round(cmd,released,false);
+        for(unsigned round=0u;round<179u;round++)held_round(cmd,held,false);
+        held_round(cmd,held,true);
+    }
+}
 static void bounded_controller_work(void) {
     setup();unsigned first=measure_batch(0u,0u,NULL);
     CHECK(first<=400u && full_work()<=10u && !measured_work.storage && !lease_calls);
@@ -1171,6 +1198,7 @@ int main(void) {
     memcpy(target,rx_bytes(VIRTUAL),sizeof(target));reject_complete();
     CHECK(!durable_card.commits && durable_card.faulted && !memcmp(target,rx_bytes(VIRTUAL),sizeof(target)));
     CHECK(!memcmp(sd.media[image_lba(42u)],next,512u));
+    held_report_gesture_session();
     bounded_controller_work();external_boundary_mutations();halfword_exit_hooks();prepared_hook_witnesses();early_pair_hook_witnesses();
     arena_lease_mode();early_arena_session();
     polling_ownership_scope();gameplay_diagnostics();hooks_only_has_no_virtual_card_or_io();raw_chain_preserves_original_dma();completion_context_failures();

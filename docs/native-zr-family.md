@@ -346,6 +346,28 @@ the exact executable (bytes and SHA-256), like Crazy Taxi 2's plan:
   New reader. Host tests cover the routing for all three readers and four
   lease sizes, and on the owner's executable.
 
+### Console test 7c (The House of the Dead 2 on the Background module)
+
+- The SDK SCI route binds (`SDK SCI ROUTE READY / LEVEL 1`), the game finds
+  the virtual card in A2 and saves, and the save loads after a power cycle.
+- With the card On it froze once during the first boss battle in Original
+  mode, with the sound still playing and no failure page. There was also some
+  lag that test 6's standalone reader did not show.
+- A RAM map through the first boss in Original mode (test 6's reader) gave
+  `00000000 00000000 00000000 681CFFF0`: 0x8CC80000-0x8CE00000 untouched,
+  the arena included. Arcade mode gave the same.
+- With Virtual VMU Off on the same module, with the same reader, prefetch and
+  arena, the boss was passed without a freeze. The cause therefore lies in
+  the card-On path: the per-transfer overlay on the early driver's full submit
+  path, or the card's SD loans, each answered "send again" while the reader is
+  busy.
+- Test 7d adds a report gesture to the worker: both triggers fully pressed
+  with A, B, X and Y in port A's condition reply, held for 180 consecutive
+  completed transfers. The worker then shows its failure page with detail 0x4F
+  and its counters: transfers, card reads, write phases and saves, SD reads,
+  busy loans, faults, the last loan result and block, and the last card
+  request and reply.
+
 ### Remaining
 
 - Lease for the syMalloc 1.35 titles: Sonic Adventure, Time Stalkers,
