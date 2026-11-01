@@ -511,31 +511,41 @@ static unsigned measure_batch(unsigned cmd,unsigned phase,const uint8_t *payload
     return measured_submit_reads+measured_complete_reads;
 }
 /* The held report: both triggers fully pressed with A, B, X and Y in port A's
- * condition reply. Each held transfer completes normally until the 180th in
- * a row, which shows the failure page with detail 0x4F; a released, partial
- * or 199-trigger condition restarts the count. Controller-only and full
- * transfers count alike. */
-static void held_round(unsigned cmd,uint32_t controls,bool report) {
-    begin_batch(cmd,0u,0u,NULL);physical_complete();put(rx_at(0)+8u,4u,controls);
-    if(!report) {complete_return();idle();return;}
-    /* The page follows this transfer's checks; a controller-only transfer
-     * has already completed, a full one has not been published. */
+ * condition reply. The page (detail 0x4F) follows the 180th consecutive held
+ * full transfer; a controller-only fast transfer, a release, a 199 trigger or
+ * a missing face button restarts the count. The model below predicts each
+ * transfer independently of whichever path production chooses. */
+static unsigned held_model,held_reports;
+static void held_round(unsigned cmd,uint32_t controls,bool gesture) {
+    begin_batch(cmd,0u,0u,NULL);bool fast=controller_pair.pending!=0u;
+    physical_complete();put(rx_at(0)+8u,4u,controls);
+    held_model=fast || !gesture?0u:held_model+1u;
+    if(held_model<180u) {complete_return();idle();return;}
     if(setjmp(terminal)==0) {kui_vmu_native_passive_complete(&frame);CHECK(false);}
     CHECK(terminal_error==0x4fu && !state.proof && !lease_calls && !durable_card.commits);
+    held_model=0u;++held_reports;
 }
 static void held_report_gesture_session(void) {
     const uint32_t held=UINT32_C(0xfffff9f9),released=UINT32_C(0xffffffff);
     const uint32_t near[]={UINT32_C(0xc7fff9f9),UINT32_C(0xffc7f9f9),UINT32_C(0xfffff9fd),
         UINT32_C(0xfffff9fb),UINT32_C(0xfffffbf9),UINT32_C(0xfffffdf9)};
     for(unsigned cmd=0u;cmd<2u;cmd++) {
-        setup();
+        /* The worker's counter is a static: one process runs every session. */
+        setup();held_report=0u;held_model=held_reports=0u;
         for(unsigned i=0u;i<sizeof(near)/sizeof(near[0]);i++)
             for(unsigned round=0u;round<200u;round++)held_round(cmd,near[i],false);
-        for(unsigned round=0u;round<179u;round++)held_round(cmd,held,false);
+        for(unsigned round=0u;round<179u;round++)held_round(cmd,held,true);
         held_round(cmd,released,false);
-        for(unsigned round=0u;round<179u;round++)held_round(cmd,held,false);
-        held_round(cmd,held,true);
+        for(unsigned round=0u;round<180u && !held_reports;round++)held_round(cmd,held,true);
+        /* Transfers with a virtual request always take the full path. */
+        if(cmd)CHECK(held_reports==1u);
     }
+    /* Mixed: one controller-only transfer inside a held run restarts it. */
+    setup();held_report=0u;held_model=held_reports=0u;
+    for(unsigned round=0u;round<179u;round++)held_round(1u,held,true);
+    held_round(0u,held,true);
+    for(unsigned round=0u;round<180u && !held_reports;round++)held_round(1u,held,true);
+    CHECK(held_reports==1u);
 }
 static void bounded_controller_work(void) {
     setup();unsigned first=measure_batch(0u,0u,NULL);

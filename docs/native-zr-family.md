@@ -363,7 +363,9 @@ the exact executable (bytes and SHA-256), like Crazy Taxi 2's plan:
   busy.
 - Test 7d adds a report gesture to the worker: both triggers fully pressed
   with A, B, X and Y in port A's condition reply, held for 180 consecutive
-  completed transfers. The worker then shows its failure page with detail 0x4F
+  completed full transfers. A controller-only fast transfer restarts the
+  count, so it serves drivers whose every transfer takes the full path, such
+  as the early driver. Its read fails closed like every completion read. The worker then shows its failure page with detail 0x4F
   and its counters: transfers, card reads, write phases and saves, SD reads,
   busy loans, faults, the last loan result and block, and the last card
   request and reply.

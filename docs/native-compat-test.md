@@ -23,9 +23,11 @@ causes fit, so this package adds a way to look instead of guessing.
 | Standalone New reader | Unchanged. |
 | GUI | Unchanged. |
 
-The gesture works in any game on the Background module. It needs all four face
-buttons and both triggers held together for three seconds, which no game asks
-for; Start is not part of it.
+The gesture works in The House of the Dead 2 and any game whose controller
+transfers all take the virtual card's full path. Games with a newer controller
+driver mostly take a faster path, and the count restarts there. It needs all
+four face buttons and both triggers held together for three seconds, which no
+game asks for; Start is not part of it.
 
 ## Install
 
@@ -80,13 +82,14 @@ load and save as before.
   card, saves, and the save loads after a power cycle. It froze once at the
   first boss in Original mode with the card On, and not with the card Off.
 - The gesture: a host session of the actual worker shows the page on exactly
-  the 180th consecutive held transfer, on both the controller-only and the
-  full path. Releasing restarts the count. A trigger at 199, or any one face
-  button released, never shows it, even held for 200 transfers. The worker's
-  whole persistent session suite passes with it.
+  the 180th consecutive held full transfer. A controller-only fast transfer
+  or a release restarts the count. A trigger at 199, or any one face button
+  released, never shows it, even held for 200 transfers. Its controller read
+  fails closed like every other read of the completion; the tests that fail
+  each completion read in turn include it. The worker's persistent,
+  controller fast-lane and cached-stack suites pass with it.
 - The compact Background audit, with the changed worker functions re-pinned
-  after review: the completion grew by the gesture check, the 36-byte
-  gesture helper is pinned for the paths that execute it, and its 4-byte
+  after review: the completion grew by the gesture check, and its 4-byte
   counter is in the reviewed state inventory. Every other changed word is a
   moved address. The fixed-RAM audit executes the compiled arm for both
   arena routes.
