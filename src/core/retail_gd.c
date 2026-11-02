@@ -82,6 +82,10 @@ static void reset(struct kui_retail_gd *s) {
     s->sector_part = 0x2000; s->track_type = 0; s->sector_bytes = 2048;
     s->pending = 0; s->command = 0; s->status = KUI_GD_NOT_FOUND;
     s->completed_bytes = 0; s->error = 0; s->drive_status = 1;
+#if KUI_NATIVE_SESSION_CONTROLS
+    if(s->disc_lid==KUI_RETAIL_DISC_OPEN)s->drive_status=6;
+    else if(s->disc_lid==KUI_RETAIL_DISC_EMPTY)s->drive_status=7;
+#endif
 #ifdef KUI_RETAIL_CE
     s->xfer_left = 0; s->pio_callback = 0; s->callback_due = 0;
 #endif
@@ -121,6 +125,9 @@ void kui_retail_gd_init_validated(struct kui_retail_gd *s,
     s->disc_type=0x80;
     s->position_lba = track_at(s, count > 2 ? 2 : 0)->start_lba;
     s->step = KUI_RETAIL_GD_STEP_SECTORS;
+#if KUI_NATIVE_SESSION_CONTROLS
+    s->disc_generation=1u;
+#endif
     reset(s);
 }
 void kui_retail_gd_set_disc_type(struct kui_retail_gd *s,uint32_t disc_type,uint32_t session_lba) {
@@ -135,7 +142,39 @@ void kui_retail_gd_init_prepared(struct kui_retail_gd *s,const struct kui_retail
     s->step=KUI_RETAIL_GD_STEP_SECTORS;
     s->disc_type=(m->flags & KUI_RETAIL_IMAGE_CD)?0x10u:0x80u;
     s->position_lba=m->session_lba;
+#if KUI_NATIVE_SESSION_CONTROLS
+    s->disc_generation=1u;
+#endif
 }
+#if KUI_NATIVE_SESSION_CONTROLS
+int kui_retail_gd_disc_open(struct kui_retail_gd *s) {
+    if(!s || !s->initialized || s->executing || s->disc_lid!=KUI_RETAIL_DISC_READY ||
+       !s->disc_generation || s->disc_generation==UINT32_MAX)return -1;
+    ++s->disc_generation;s->disc_lid=KUI_RETAIL_DISC_OPEN;
+    s->disc_changed=1u;s->disc_observed=0u;s->drive_status=6u;
+    if(s->pending) {
+        s->pending=0;s->status=KUI_GD_FAILED;s->error=KUI_GD_ERROR_UNAVAILABLE;
+        s->diag.last_error=s->error;
+    }
+    return 0;
+}
+int kui_retail_gd_disc_absent(struct kui_retail_gd *s) {
+    if(!s || !s->initialized || s->executing || s->disc_lid!=KUI_RETAIL_DISC_OPEN)return -1;
+    s->disc_lid=KUI_RETAIL_DISC_EMPTY;s->drive_status=7u;return 0;
+}
+int kui_retail_gd_disc_close(struct kui_retail_gd *s,const struct kui_retail_manifest *m) {
+    if(!s || !m || !s->initialized || s->executing || s->pending ||
+       (s->disc_lid!=KUI_RETAIL_DISC_OPEN && s->disc_lid!=KUI_RETAIL_DISC_EMPTY) ||
+       !s->disc_observed || !m->track_count || m->track_count>KUI_RETAIL_IMAGE_TRACKS ||
+       m->track_count>KUI_RETAIL_MANIFEST_SLOTS)return -1;
+    s->tracks=m->slots;s->track_count=m->track_count;
+    s->disc_type=(m->flags&KUI_RETAIL_IMAGE_CD)?0x10u:0x80u;
+    s->position_lba=m->session_lba;s->drive_status=1u;s->disc_lid=KUI_RETAIL_DISC_READY;
+    s->disc_observed=0u;s->sector_part=0x2000u;s->track_type=0u;s->sector_bytes=2048u;
+    memset(s->mode,0,sizeof(s->mode));
+    return 0;
+}
+#endif
 static int area_bounds(const struct kui_retail_gd *s, uint32_t area,
                        uint32_t *first, uint32_t *last) {
     *first = *last = s->track_count;
@@ -200,6 +239,12 @@ static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) 
         if(!params) REJECT_REQUEST(KUI_RETAIL_GD_REJECT_PARAMETERS);
         for(uint32_t i = 0; i < nparams; ++i) p[i] = get32(params + i * 4u);
     }
+#if KUI_NATIVE_SESSION_CONTROLS
+    const int unavailable=s->disc_lid!=KUI_RETAIL_DISC_READY &&
+        cmd!=KUI_RETAIL_GD_REQ_MODE && cmd!=KUI_RETAIL_GD_SET_MODE &&
+        cmd!=KUI_RETAIL_GD_GET_VERS && cmd!=KUI_GD_NOP;
+    if(unavailable)goto accept_request;
+#endif
     if(cmd == KUI_GD_PIOREAD || cmd == KUI_GD_DMAREAD || stream) {
         s->diag.last_lba = p[0] >= 150 ? p[0] - 150 : UINT32_MAX;
         s->diag.last_count = p[1]; s->diag.last_destination = p[2];
@@ -267,6 +312,9 @@ static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) 
               cmd == KUI_RETAIL_GD_GET_VERS || cmd == KUI_RETAIL_GD_GETSCD ? 1 : 4,
               cmd == KUI_RETAIL_GD_GETSCD ? KUI_RETAIL_MAP_VALIDATE : 1))
         REJECT_REQUEST(KUI_RETAIL_GD_REJECT_DESTINATION);
+#if KUI_NATIVE_SESSION_CONTROLS
+accept_request:
+#endif
     REJECTION_REASON(KUI_RETAIL_GD_REJECT_NONE);
     s->token = s->token >= 0x7fffffffu ? 1 : s->token + 1;
     s->command = cmd; s->lba = lba; s->count = p[1];
@@ -274,6 +322,12 @@ static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) 
     memcpy(s->outputs, p, sizeof(p));
     s->completed_bytes = 0; s->error = 0;
     s->status = KUI_GD_PROCESSING; s->pending = 1;
+#if KUI_NATIVE_SESSION_CONTROLS
+    if(unavailable) {
+        s->request_bytes=0;s->pending=0;s->status=KUI_GD_FAILED;
+        s->error=KUI_GD_ERROR_UNAVAILABLE;s->diag.last_error=s->error;
+    }
+#endif
 #ifdef KUI_RETAIL_CE
     if(stream) s->status = KUI_RETAIL_GD_STREAMING;
     s->xfer_left = 0;
@@ -651,6 +705,14 @@ void kui_retail_gd_progress(struct kui_retail_gd *s, uint32_t sectors, uint32_t 
     s->interrupts |= KUI_RETAIL_GD_IRQ_DRIVE; /* CE's driver waits for it. */
 #endif
 }
+#if KUI_NATIVE_SESSION_CONTROLS
+void kui_retail_gd_progress_epoch(struct kui_retail_gd *s,uint32_t generation,
+    uint32_t token,uint32_t sectors,uint32_t error) {
+    if(!s || s->disc_lid!=KUI_RETAIL_DISC_READY || generation!=s->disc_generation ||
+       !token || token!=s->token)return;
+    kui_retail_gd_progress(s,sectors,error);
+}
+#endif
 #endif
 int32_t kui_retail_gd_dispatch(struct kui_retail_gd *s, uint32_t r4,
                               uint32_t r5, uint32_t r6, uint32_t r7) {
@@ -681,6 +743,12 @@ int32_t kui_retail_gd_dispatch(struct kui_retail_gd *s, uint32_t r4,
     case KUI_GD_DATATYPE: result = datatype(s, r4); break;
     case KUI_GD_DRIVE: {
         uint8_t *out = guest(s, r4, 8, 4, 1);
+#if KUI_NATIVE_SESSION_CONTROLS
+        if(out && s->disc_lid!=KUI_RETAIL_DISC_READY) {
+            put32(out,s->disc_lid==KUI_RETAIL_DISC_OPEN?6u:7u);put32(out+4,0u);
+            s->disc_observed=1u;result=0;break;
+        }
+#endif
 #if KUI_RETAIL_NATIVE_DRIVE_STATE
         if(out) { put32(out, s->drive_status); put32(out + 4, s->disc_type); result = 0; }
 #else

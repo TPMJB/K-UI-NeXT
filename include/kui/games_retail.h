@@ -4,6 +4,7 @@
 #include "kui/runtime.h"
 #include "kui/game_ram_patches.h"
 #include "kui/vmu_game_info.h"
+struct kui_native_session_request;
 #define KUI_GAMES_RETAIL_PACKAGE "0:/KUI/apps/games/retail-boot.kui"
 #define KUI_GAMES_RETAIL_PHYSICAL_PACKAGE "0:/KUI/apps/games/retail-physical.kui"
 /* Native SCI Background X/Y with generic virtual A2. Standard and the
@@ -78,6 +79,12 @@ bool kui_games_retail_prepare_launch(const char *path,uint32_t reader,
 bool kui_games_retail_prepare_launch_card(const char *path,uint32_t reader,
     const struct kui_game_ram_patches *patches,const struct kui_vmu_game_selection *selection,
     struct kui_runtime_image *image,kui_log_fn log,kui_cancel_fn cancelled);
+/* Opt-in session modules additionally receive the prelaunch catalogue's
+ * bounded disc set. Ordinary packages retain their existing preparation. */
+bool kui_games_retail_prepare_launch_session_card(const char *path,uint32_t reader,
+    const struct kui_game_ram_patches *patches,const struct kui_vmu_game_selection *selection,
+    const struct kui_native_session_request *session,struct kui_runtime_image *image,
+    kui_log_fn log,kui_cancel_fn cancelled);
 /* Performs the same executable/package/map checks and preparation report as
  * a launch, then frees the staged package. Never exposes a handoff image or
  * executes a game. Success is preparation evidence, not console compatibility. */

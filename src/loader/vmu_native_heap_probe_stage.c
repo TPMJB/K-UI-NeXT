@@ -5,6 +5,25 @@
 #endif
 #include "kui/vmu_native_mode.h"
 #include "kui/vmu_native_background.h"
+#include "kui/native_session.h"
+#if KUI_NATIVE_SESSION_CONTROLS
+#if !KUI_NATIVE_DUAL_READERS || !KUI_NATIVE_GENERAL_LEAN_LAYOUT || !KUI_NATIVE_READAHEAD || \
+    !KUI_VMU_NATIVE_PERSISTENT_PROBE || KUI_NATIVE_BACKGROUND_COMPACT || KUI_NATIVE_PHYSICAL_DISC
+#error "Session stage requires the dedicated General native background module"
+#endif
+/* The GUI patches exactly this fixed, pointer-free stage object. The worker
+ * consumes it during arm and retains only owned decoded state. The ordinary
+ * compact module does not contain a session descriptor. */
+/* Assembly owns the bytes so the compiler cannot fold the GUI-patched
+ * fields back to the blank initializer. */
+__asm__(".section .rodata.native_session,\"a\"\n.balign 32\n"
+    ".global __native_session_descriptor\n"
+    ".type __native_session_descriptor,@object\n"
+    "__native_session_descriptor:\n.ascii \"KUISES01\"\n.long 1,18432\n.zero 18416\n"
+    ".size __native_session_descriptor,18432\n.previous\n");
+extern const uint8_t kui_native_session_descriptor[KUI_NATIVE_SESSION_WIRE_BYTES]
+    __asm__("__native_session_descriptor");
+#endif
 #if KUI_NATIVE_BACKGROUND_COMPACT && \
     (!KUI_NATIVE_READAHEAD || !KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION || \
      !KUI_NATIVE_SPLIT_CONTROLLER_GENERAL || !KUI_VMU_NATIVE_CACHED_CODE || \

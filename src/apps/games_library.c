@@ -627,3 +627,40 @@ bool kui_games_library_record_played(const struct kui_games_activity_entry *key,
     if(ok && activity) {*activity=*draft;saved.filtered_ready=false;}
     free(draft);return ok;
 }
+bool kui_games_library_session_request(const char *root,const char *path,
+    struct kui_native_session_request *out,kui_log_fn log,kui_cancel_fn cancel) {
+    if(!root || !path || !out || stopped(cancel) || !ensure_library(root,log,cancel))return false;
+    struct kui_native_session_request result={0};
+    for(unsigned i=0;i<saved.count;i++) {
+        struct kui_games_entry selected;
+        if(!decode_record(&saved,i,&selected))return false;
+        bool original=fold_equal(selected.path,path);
+        bool cooked=selected.variant_2048_path[0] && fold_equal(selected.variant_2048_path,path);
+        if(selected.directory || selected.disabled || (!original && !cooked))continue;
+        unsigned group=active_group(&saved,i);
+        if(!group) {
+            snprintf(result.paths[0],sizeof(result.paths[0]),"%s",path);
+            result.count=1u;*out=result;return true;
+        }
+        const struct library_group *g=&saved.groups[group-1u];
+        if(g->count<2u || g->count>KUI_NATIVE_SESSION_DISC_MAX)return false;
+        bool found=false;
+        for(unsigned disc=0;disc<g->count;disc++) {
+            if(stopped(cancel))return false;
+            unsigned index=saved.group_display[g->first+disc];
+            struct kui_games_entry entry;
+            if(!decode_record(&saved,index,&entry) || entry.directory || entry.disabled ||
+               active_group(&saved,index)!=group)return false;
+            const char *member=cooked && entry.variant_2048_path[0]?entry.variant_2048_path:entry.path;
+            snprintf(result.paths[disc],sizeof(result.paths[disc]),"%s",member);
+            if(index==i) {result.selected=disc;found=true;}
+        }
+        if(!found)return false;
+        result.count=g->count;*out=result;return true;
+    }
+    /* Non-catalogue launches do not invent a family from names or titles. */
+    struct kui_games_activity_entry key;
+    if(!kui_games_activity_key(&key,path,""))return false;
+    snprintf(result.paths[0],sizeof(result.paths[0]),"%s",path);
+    result.count=1u;*out=result;return true;
+}

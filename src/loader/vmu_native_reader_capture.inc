@@ -165,6 +165,7 @@ __asm__(".global __kui_native_irq_rearm_reader\n.set __kui_native_irq_rearm_read
 #if KUI_NATIVE_PACED_CHECK
 __asm__(".global __kui_native_paced_reader\n.set __kui_native_paced_reader,1\n");
 #endif
+#if KUI_NATIVE_REQUEST_TIMING || (!KUI_NATIVE_PACED_CHECK && !KUI_NATIVE_IRQ_REARM)
 static struct {
     uint32_t calls,blocks,busy,faults;
     uint32_t max_lba,max_count;
@@ -172,6 +173,7 @@ static struct {
     uint32_t opportunities,expired,clock_bad,max_ticks;
 #endif
 } reader_cooperative;
+#endif
 #if KUI_NATIVE_TIMED_PUMP
 __asm__(".global __kui_native_timed_reader\n.set __kui_native_timed_reader,1\n");
 #define READER_WINDOW_TICKS 586u /* 0.75008 ms in the admitted profile. */
@@ -344,7 +346,7 @@ static void reader_capture_poll(const struct kui_vmu_native_profile_sample *cloc
     const struct kui_retail_async *a=&r->engine;
     const struct kui_sci_stream_stats *s=&r->shared.stream.stats;
     const struct kui_retail_gd *g=&r->shared.service;
-#if KUI_NATIVE_DUAL_READERS
+#if KUI_NATIVE_DUAL_READERS && KUI_NATIVE_REQUEST_TIMING
     const struct kui_retail_manifest *owned=(const void *)(uintptr_t)
         (((config.lease.payload&UINT32_C(0x1fffffff))|UINT32_C(0x80000000))+
          KUI_VMU_NATIVE_BACKGROUND_WORKER_BYTES);

@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/native-session-controls-a1
+include Makefile.vmu-native-session-controls
+FLAGS += -DKUI_VMU_VIRTUAL_A1=1
+NATIVE_FLAGS += -DKUI_VMU_VIRTUAL_A1=1

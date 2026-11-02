@@ -34,6 +34,7 @@
 #include "kui/games_covers.h"
 #include "kui/games_storage.h"
 #include "kui/games_library.h"
+#include "kui/native_session_prepare.h"
 #include "kui/image_loader_layout.h"
 #include <arch/exec.h>
 #include "kui/splash.h"
@@ -2862,7 +2863,7 @@ static void *worker(void *unused) {
                 snprintf(games_listing.message,sizeof(games_listing.message),"%s",action==59?
                     "Box art scan stopped before starting":"Games browse stopped before starting");
                 games_result_offset=action==59?0:games_offset_pending;
-                games_result_restore=action==54 && games_seek_request;games_result_selected=0;
+                games_result_restore=(action==54 || action==109) && games_seek_request;games_result_selected=0;
                 games_result_epoch=games_epoch_pending;games_result_view=games_view_pending;++games_listing_generation;
             }
             if(action==60 || action==62) {
@@ -3151,8 +3152,8 @@ static void *worker(void *unused) {
                     scanned=kui_games_library_scan(games_path_pending,games_rebuild_pending,kui_log,kui_cancelled);
                 }
                 bool stopped_scan=action==54 && games_refresh_pending && !scanned && kui_cancelled();
-                unsigned offset=action==109?0u:games_offset_pending,selected=0;
-                bool restore=action==54 && games_seek_request;
+                unsigned offset=games_offset_pending,selected=0;
+                bool restore=games_seek_request;
                 kui_cancel_fn list_cancel=stopped_scan && kui_games_library_ready(games_path_pending)?NULL:kui_cancelled;
                 if(restore && games_seek_pending[0]) {
                     unsigned found;
@@ -3332,6 +3333,10 @@ static void *worker(void *unused) {
             }
             if(action==56 || action==57 || action==58 || action==104) {
                 kui_sd_set_params(KUI_STORAGE_AUTO,true);
+                struct kui_native_session_request session_request={0};
+                bool session_ready=action==58 && !kui_cancelled() &&
+                    kui_games_library_session_request(games_activity_root_pending,games_path_pending,
+                        &session_request,kui_log,kui_cancelled);
                 struct kui_games_activity_entry recent_key;
                 bool recent_ready=action==58 && !kui_cancelled() &&
                     kui_games_library_activity_key(games_activity_root_pending,games_path_pending,&recent_key,kui_log);
@@ -3346,8 +3351,8 @@ static void *worker(void *unused) {
                     (disc_vmu_launch_pending?
                      kui_disc_launcher_prepare_vmu(&games_vmu_selection_pending,&probe_image,&disc_result,kui_log,kui_cancelled,disc_launch_progress):
                      kui_disc_launcher_prepare(&probe_image,&disc_result,kui_log,kui_cancelled,disc_launch_progress)):action==58?
-                    kui_games_retail_prepare_launch_card(games_path_pending,games_reader_pending,&games_patches_pending,
-                        &games_vmu_selection_pending,&probe_image,
+                    kui_games_retail_prepare_launch_session_card(games_path_pending,games_reader_pending,&games_patches_pending,
+                        &games_vmu_selection_pending,session_ready?&session_request:NULL,&probe_image,
                         kui_log,kui_cancelled):action==57?
                     kui_games_image_probe_prepare(games_path_pending,&probe_image,kui_log,kui_cancelled):
                     kui_games_probe_prepare(&probe_image,kui_log,kui_cancelled);
@@ -4667,8 +4672,10 @@ int main(void) {
                 games_refresh_pending=shell.games_refresh;games_rebuild_pending=shell.games_rebuild;
                 snprintf(games_group_pending,sizeof(games_group_pending),"%s",shell.games_group);
             }
-            if(action==54)snprintf(games_seek_pending,sizeof(games_seek_pending),"%s",shell.games_seek_name);
-            if(action==54)games_seek_request=shell.games_seek;
+            if(action==54 || action==109) {
+                snprintf(games_seek_pending,sizeof(games_seek_pending),"%s",shell.games_seek_name);
+                games_seek_request=shell.games_seek;
+            }
             if(action>=60 && action<=63) {
                 files_request_pending=shell.files_request;
                 files_job_pending=shell.files_job;

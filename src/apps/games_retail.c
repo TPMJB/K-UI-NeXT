@@ -20,6 +20,7 @@
 #include "kui/native_physical_capability.h"
 #include "kui/native_vmu_standard.h"
 #include "kui/vmu_emulation_settings.h"
+#include "kui/native_session_prepare.h"
 #include "kui/media.h"
 #include "../core/games_cdda_profile.h"
 #include "platform.h"
@@ -502,8 +503,116 @@ static bool fill_ram_patches(struct kui_runtime_image *package,
 #include "games_vmu_card.inc"
 #endif
 
+bool kui_native_session_map_gdi(FATFS *fs,const struct kui_volume *volume,
+    const char *path,uint32_t reader,struct kui_retail_manifest *out,
+    char version[7],const char **problem,kui_log_fn log,kui_cancel_fn cancel) {
+    if(out)memset(out,0,sizeof(*out));
+    if(version)version[0]=0;
+    if(problem)*problem="invalid disc-set preparation request";
+    if(!fs || !volume || !out || !version || !problem || !log || !cancel ||
+       reader!=KUI_RETAIL_READER_ASYNC || kui_storage_active()!=KUI_STORAGE_SCI ||
+       !volume->count || (uint64_t)volume->start+volume->count>UINT32_MAX)return false;
+    struct files files={.cancel=cancel};char name[KUI_GAME_NAME_CAP];
+    if(!split(path,&files,name) || stopped(&files))return false;
+    struct kui_game_image *image=malloc(sizeof(*image));
+    struct kui_retail_manifest *map=calloc(1,sizeof(*map));
+    uint8_t *gdi=NULL;bool ok=false;
+    if(!image || !map) {*problem="not enough memory to map another disc";goto done_session_map;}
+    uint64_t bytes=0;
+    if(stat_file(&files,name,&bytes)!=KUI_GAME_OK || !bytes || bytes>KUI_GAME_GDI_LIMIT) {
+        *problem="disc-set member is missing or not a bounded GDI";goto done_session_map;
+    }
+    gdi=malloc((size_t)bytes);
+    if(!gdi || read_file(&files,name,0,gdi,(size_t)bytes)!=KUI_GAME_OK) {
+        *problem="cannot read disc-set GDI";goto done_session_map;
+    }
+    const struct kui_game_file_ops ops={&files,stat_file,read_file};
+    enum kui_game_result r=kui_game_image_open_named(name,&ops,image);
+    if(r!=KUI_GAME_OK) {*problem=kui_game_result_name(r);goto done_session_map;}
+    if(image->format!=KUI_GAME_IMAGE_GDI || image->compressed || image->scrambled || image->cd_image) {
+        *problem="disc switching requires original native GDI images";goto done_session_map;
+    }
+    struct kui_game_metadata metadata;
+    const struct kui_game_metadata_ops metadata_ops={image,metadata_read,metadata_range};
+    enum kui_game_metadata_status ms=kui_game_metadata_read(&metadata_ops,image->data_lba,&metadata);
+    if(ms!=KUI_GAME_METADATA_OK) {*problem=kui_game_metadata_status_text(ms);goto done_session_map;}
+    struct kui_game_audio_info audio;
+    if(!metadata.native_gd || metadata.windows_ce || !metadata.boot_valid ||
+       kui_game_image_audio_info(image,&audio)!=KUI_GAME_OK || audio.candidate_tracks) {
+        *problem="disc switching currently requires native GD without CDDA";goto done_session_map;
+    }
+    if(metadata.boot_bytes<KUI_RETAIL_TRAMPOLINE_BYTES || metadata.boot_bytes>KUI_RETAIL_EXEC_MAX_BYTES ||
+       metadata.boot_lba<image->data_lba+16u ||
+       kui_game_image_check(image,image->data_lba,16u,KUI_GAME_SECTOR_MODE1)!=KUI_GAME_OK) {
+        *problem="disc-set boot extent is outside the admitted data session";goto done_session_map;
+    }
+    map->card_sectors=(uint64_t)volume->start+volume->count;
+    map->partition_start=volume->start;map->partition_end=map->card_sectors;
+    map->track_count=image->count;map->session_lba=image->data_lba;
+    map->boot_lba=metadata.boot_lba;map->boot_bytes=metadata.boot_bytes;
+    map->storage_transport=KUI_STORAGE_SCI;map->reader=reader;
+    map->flags=KUI_RETAIL_IMAGE_BOOT_CRC;
+    map->gdi_crc32=kui_retail_crc32(0,gdi,(size_t)bytes);
+    snprintf(map->title,sizeof(map->title),"%.127s",metadata.title);
+    snprintf(map->product,sizeof(map->product),"%s",metadata.product);
+    snprintf(map->region,sizeof(map->region),"%s",metadata.region);
+    snprintf(map->bootfile,sizeof(map->bootfile),"%s",metadata.bootfile);
+    r=extent_crc(image,map->session_lba,KUI_RETAIL_IP_BYTES,&map->ip_crc32,NULL);
+    if(r==KUI_GAME_OK)r=extent_crc(image,map->boot_lba,map->boot_bytes,&map->boot_crc32,NULL);
+    if(r!=KUI_GAME_OK) {*problem=kui_game_result_name(r);goto done_session_map;}
+    if(!close_reader(&files)) {*problem="cannot close disc-set metadata reader";goto done_session_map;}
+    bool audio_mapped=false;
+    if(map_tracks(&files,fs,volume,image,map,KUI_RETAIL_ASYNC_SLOTS,&audio_mapped)!=MAP_OK ||
+       kui_retail_manifest_validate(map)!=KUI_GAME_OK) {
+        *problem="disc-set member does not fit its checked 64-slot map";goto done_session_map;
+    }
+    if(stopped(&files)) {*problem="disc-set preparation cancelled";goto done_session_map;}
+    *out=*map;snprintf(version,7,"%s",metadata.version);ok=true;
+done_session_map:
+    if(!close_reader(&files)) {ok=false;*problem="cannot close disc-set reader";}
+    free(gdi);free(image);free(map);
+    if(!ok) {memset(out,0,sizeof(*out));version[0]=0;}
+    return ok;
+}
+bool kui_native_session_map_file(FATFS *fs,const struct kui_volume *volume,
+    const char *path,struct kui_retail_extent *extents,unsigned capacity,
+    unsigned *count,uint64_t *file_bytes,const char **problem,kui_cancel_fn cancel) {
+    if(count)*count=0;
+    if(file_bytes)*file_bytes=0;
+    if(problem)*problem="invalid return-file mapping request";
+    if(!fs || !volume || !path || !extents || !capacity || capacity>=KUI_RETAIL_MANIFEST_SLOTS ||
+       !count || !file_bytes || !problem || !cancel)return false;
+    const char *source=!strncmp(path,"0:",2u)?path+2:path;
+    const char *slash=strrchr(source,'/');
+    if(source[0]!='/' || !slash || !slash[1] || strlen(slash+1)>=KUI_GAME_NAME_CAP ||
+       !kui_destination_name_valid(slash+1))return false;
+    struct files files={.cancel=cancel};
+    size_t root_bytes=(size_t)(slash-source);
+    if(root_bytes>=sizeof(files.root))return false;
+    if(root_bytes) {memcpy(files.root,source,root_bytes);files.root[root_bytes]=0;}
+    else strcpy(files.root,"/");
+    char normalized[KUI_DEST_ROOT_CAP];
+    if(!kui_destination_normalize(normalized,files.root) || strcmp(normalized,files.root))return false;
+    uint64_t bytes=0;
+    if(stat_file(&files,slash+1,&bytes)!=KUI_GAME_OK || !bytes || bytes>UINT32_MAX) {
+        *problem="return runtime is missing or too large";return false;
+    }
+    struct kui_retail_manifest *map=calloc(1,sizeof(*map));
+    if(!map) {*problem="not enough memory to map return runtime";return false;}
+    map->track_count=1u;
+    struct kui_game_image_track track={.start_lba=0u,.end_lba=(uint32_t)((bytes+511u)/512u),
+        .number=1u,.control=4u,.sector_bytes=512u,.file_bytes=bytes};
+    snprintf(track.name,sizeof(track.name),"%s",slash+1);
+    bool ok=map_track(&files,fs,volume,&track,map,0u,capacity+1u,true,NULL)==MAP_OK;
+    if(ok) {
+        *count=map->extent_count;*file_bytes=bytes;
+        for(unsigned i=0;i<*count;i++)extents[i]=map->slots[i+1u].extent;
+    } else *problem="return runtime allocation exceeds its bounded map";
+    free(map);return ok;
+}
 static bool prepare_launch(const char *path,uint32_t reader,const struct kui_game_ram_patches *patches,
-    const struct kui_vmu_game_selection *selection,bool reporting,struct kui_runtime_image *package,kui_log_fn log,kui_cancel_fn cancel) {
+    const struct kui_vmu_game_selection *selection,const struct kui_native_session_request *session,
+    bool reporting,struct kui_runtime_image *package,kui_log_fn log,kui_cancel_fn cancel) {
     if(!package) return false;
     *package=(struct kui_runtime_image){0};
     if(!log || !cancel) return false;
@@ -1033,6 +1142,9 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
         }
         log("Retail boot: executable CRC32=%08x",map->boot_crc32);
     }
+    if(!close_reader(&files)) {problem="cannot close reader before preparing in-game controls";goto done;}
+    if(!ce && !cdda && !ce_excerpt && !zso &&
+       !kui_native_session_prepare(&fs,&volume,path,session,map,metadata.version,package,&problem,log,cancel))goto done;
     if(zso) {
         zso_map=malloc(sizeof(*zso_map));
         if(!zso_map) {problem="not enough memory for ZSO launch map";goto done;}
@@ -1085,17 +1197,23 @@ done:
 
 bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
     struct kui_runtime_image *image,kui_log_fn log,kui_cancel_fn cancelled) {
-    return prepare_launch(path,reader,NULL,NULL,false,image,log,cancelled);
+    return prepare_launch(path,reader,NULL,NULL,NULL,false,image,log,cancelled);
 }
 bool kui_games_retail_prepare_launch(const char *path,uint32_t reader,
     const struct kui_game_ram_patches *patches,struct kui_runtime_image *image,
     kui_log_fn log,kui_cancel_fn cancelled) {
-    return prepare_launch(path,reader,patches,NULL,true,image,log,cancelled);
+    return prepare_launch(path,reader,patches,NULL,NULL,true,image,log,cancelled);
 }
 bool kui_games_retail_prepare_launch_card(const char *path,uint32_t reader,
     const struct kui_game_ram_patches *patches,const struct kui_vmu_game_selection *selection,
     struct kui_runtime_image *image,kui_log_fn log,kui_cancel_fn cancelled) {
-    return prepare_launch(path,reader,patches,selection,true,image,log,cancelled);
+    return prepare_launch(path,reader,patches,selection,NULL,true,image,log,cancelled);
+}
+bool kui_games_retail_prepare_launch_session_card(const char *path,uint32_t reader,
+    const struct kui_game_ram_patches *patches,const struct kui_vmu_game_selection *selection,
+    const struct kui_native_session_request *session,struct kui_runtime_image *image,
+    kui_log_fn log,kui_cancel_fn cancelled) {
+    return prepare_launch(path,reader,patches,selection,session,true,image,log,cancelled);
 }
 
 bool kui_games_retail_check_launch(const char *path,uint32_t reader,

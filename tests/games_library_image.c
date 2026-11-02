@@ -270,6 +270,15 @@ static void activity_check(const char *name) {
     struct kui_games_page discs;
     assert(kui_games_library_rows_filter("/Games",skies.group,0,KUI_GAMES_VIEW_LIST,KUI_GAMES_FILTER_FAVORITES,&discs,log_line,cancel));
     assert(discs.count==2 && discs.entries[0].disc==1 && discs.entries[1].disc==2 && discs.entries[0].favorite && discs.entries[1].favorite);
+    struct kui_native_session_request session;
+    assert(kui_games_library_session_request("/Games",discs.entries[0].path,&session,log_line,cancel));
+    assert(session.count==2u && session.selected==0u && !strcmp(session.paths[0],discs.entries[0].path) &&
+        !strcmp(session.paths[1],discs.entries[1].path));
+    assert(kui_games_library_session_request("/Games",discs.entries[1].variant_2048_path,&session,log_line,cancel));
+    assert(session.count==2u && session.selected==1u && !strcmp(session.paths[1],discs.entries[1].variant_2048_path) &&
+        !strcmp(session.paths[0],discs.entries[0].path));
+    assert(kui_games_library_session_request("/Games",standalone.path,&session,log_line,cancel));
+    assert(session.count==1u && !session.selected && !strcmp(session.paths[0],standalone.path));
     struct kui_games_activity_entry first,second,alternate;
     assert(kui_games_library_activity_key("/Games",discs.entries[0].path,&first,log_line));
     assert(kui_games_library_activity_key("/Games",discs.entries[1].path,&second,log_line));

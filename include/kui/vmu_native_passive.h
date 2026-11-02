@@ -4,6 +4,7 @@
 #include "kui/vmu_native_heap.h"
 #include "kui/vmu_native_runtime.h"
 #include "kui/vmu_native_layout.h"
+#include "kui/native_session.h"
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
 #include "kui/vmu_durable.h"
 #include "kui/vmu_native_exit.h"
@@ -80,10 +81,19 @@ struct kui_vmu_native_passive_config {
     uint32_t sd_lease,low_terminal,low_heap_hook;
     struct kui_vmu_native_exit exits;
     uint32_t diagnostics;
+#if KUI_NATIVE_SESSION_CONTROLS
+    /* Temporary stage-owned input, copied and decoded by arm before the
+     * installer retires. No runtime callback may retain these addresses. */
+    uint32_t session_wire,session_wire_bytes,session_control;
+#endif
 #endif
 };
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE && UINTPTR_MAX==UINT32_MAX
+#if KUI_NATIVE_SESSION_CONTROLS
+_Static_assert(sizeof(struct kui_vmu_native_passive_config)==2316u,"Session worker config ABI");
+#else
 _Static_assert(sizeof(struct kui_vmu_native_passive_config)==2304u,"Persistent worker config ABI v4");
+#endif
 #endif
 /* Frame order is shared with the SH gateway. R0 is dead at submission. */
 struct kui_vmu_native_passive_frame {
