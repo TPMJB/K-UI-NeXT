@@ -47,6 +47,7 @@ RUNTIME_OBJECTS += build/dc/src/core/vmu_native_cache_seed.o build/dc/src/core/v
 RUNTIME_OBJECTS += build/dc/src/core/game_image.o build/dc/src/core/game_metadata.o
 RUNTIME_OBJECTS += build/dc/src/core/games_group.o
 RUNTIME_OBJECTS += build/dc/src/core/screenshot.o build/dc/src/core/games_activity.o
+RUNTIME_OBJECTS += build/dc/src/core/native_session.o build/dc/src/core/native_return.o
 # Each game's own virtual card: pair selection, the ownership scan that builds
 # its P2 profile, and the read-only CID query used by that scan.
 RUNTIME_OBJECTS += build/dc/src/core/vmu_game_card.o build/dc/src/core/vmu_game_card_service.o \

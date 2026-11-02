@@ -15,7 +15,7 @@ __asm__(".global __kui_native_standalone_reader_resident\n"
 #if KUI_NATIVE_READAHEAD
 __asm__(".global __kui_native_readahead_resident\n.set __kui_native_readahead_resident,1\n");
 #endif
-#if KUI_NATIVE_IRQ_REARM && (!KUI_NATIVE_REQUEST_TIMING || !KUI_RETAIL_NATIVE_HYBRID || defined(KUI_RETAIL_CE))
+#if KUI_NATIVE_IRQ_REARM && ((!KUI_NATIVE_REQUEST_TIMING && !KUI_NATIVE_SESSION_CONTROLS) || !KUI_RETAIL_NATIVE_HYBRID || defined(KUI_RETAIL_CE))
 #error "Native IRQ rearm diagnostics require the hybrid request-timing counter profile"
 #endif
 #if KUI_NATIVE_IRQ_REARM && (KUI_NATIVE_PACED_CHECK || KUI_NATIVE_TIMED_PUMP)
@@ -491,6 +491,14 @@ static void wake(void) {
 static void write_out(void *unused, uint32_t offset, const uint8_t *bytes, uint32_t count) {
     (void)unused;
     struct kui_retail_gd *s = &R.shared.service;
+#if KUI_NATIVE_SESSION_CONTROLS
+    /* Fence the actual guest write, not merely the later completion report.
+     * Old-medium bytes may never reach a newly accepted request's output. */
+    if(s->disc_lid!=KUI_RETAIL_DISC_READY || !s->pending ||
+       e.disc_generation!=s->disc_generation || e.token!=s->token) {
+        e.failed=KUI_GD_ERROR_UNAVAILABLE;e.active=0u;return;
+    }
+#endif
     uint8_t *out = s->ops.map(s->ops.context, e.destination + offset, count, 1);
     if(out) memcpy(out, bytes, count);
     else e.failed = KUI_GD_ERROR_MEMORY;
@@ -716,7 +724,11 @@ static void report(void) {
      * PIO stream progress remains owned by read_part's service caller. */
     kui_retail_gd_progress(s, e.piece_filled / s->sector_bytes, e.failed);
 #else
+#if KUI_NATIVE_SESSION_CONTROLS
+    kui_retail_gd_progress_epoch(s,e.disc_generation,e.token,e.cursor.done,e.failed);
+#else
     kui_retail_gd_progress(s, e.cursor.done, e.failed);
+#endif
 #endif
 }
 static bool reads(uint32_t command) {
@@ -728,6 +740,9 @@ static bool reads(uint32_t command) {
 static void start(void) {
     struct kui_retail_gd *s = &R.shared.service;
     e.token = s->token;
+#if KUI_NATIVE_SESSION_CONTROLS
+    e.disc_generation=s->disc_generation;
+#endif
 #if KUI_NATIVE_REQUEST_TIMING && !KUI_NATIVE_STANDALONE_READER
     e.stats.hooks=rd32(UINT32_C(0xffd8000c));
 #endif
@@ -862,6 +877,44 @@ enum kui_vmu_native_async_loan_result kui_retail_native_async_loan_end(bool heal
      * Do not restart storage from this still-unwinding loan callback. */
     return KUI_VMU_NATIVE_ASYNC_LOAN_OK;
 }
+#if KUI_NATIVE_SESSION_CONTROLS
+int kui_retail_async_session_begin(struct kui_loader_sd *loan) {
+    if((native_loan_sr()&UINT32_C(0xf0))!=UINT32_C(0xf0) || !loan)return -1;
+    if(e.native_loan_state==KUI_VMU_NATIVE_ASYNC_LOAN_QUARANTINED)return -1;
+    if(native_loan_blocked() || kui_retail_hook_active)return 0;
+    const struct kui_retail_gd *s=&R.shared.service;
+    if(!s->initialized || s->pending || s->executing || e.active || e.in_irq || e.release.depth)return 0;
+    if(R.shared.card.transport!=KUI_STORAGE_SCI || !R.shared.card.device.sd.ready ||
+       R.shared.card.device.sd.slow || !R.shared.card.device.sd.blocks ||
+       R.shared.card.stream.active || R.shared.port.fault ||
+       e.opened!=(uint32_t)R.shared.port.acquired) {
+        native_loan_fault();return -1;
+    }
+#if KUI_NATIVE_READAHEAD
+    /* RESET must reach the auxiliary before loan_begin changes IDLE. A
+     * WRITER/STOPPING visit deliberately refuses cache policy mutations. */
+    if(!native_readahead_visit(KUI_NATIVE_RA_RESET,0u))return 0;
+#endif
+    enum kui_vmu_native_async_loan_result result=kui_retail_native_async_loan_begin(loan);
+    return result==KUI_VMU_NATIVE_ASYNC_LOAN_OK?1:
+        result==KUI_VMU_NATIVE_ASYNC_LOAN_BUSY?0:-1;
+}
+void kui_retail_async_session_rebind(const struct kui_retail_manifest *next) {
+    const struct kui_retail_gd *s=&R.shared.service;
+    if((native_loan_sr()&UINT32_C(0xf0))!=UINT32_C(0xf0) || !next ||
+       e.native_loan_state!=KUI_VMU_NATIVE_ASYNC_LOAN_WRITER || kui_retail_hook_active!=1u ||
+       e.active || e.in_irq || e.opened || e.hooked || e.release.armed || e.release.depth ||
+       R.shared.port.acquired || R.shared.port.fault || kui_sci_stream_busy() || R.shared.stream.state ||
+       !s->initialized || s->pending || s->executing || s->disc_lid!=KUI_RETAIL_DISC_READY ||
+       s->tracks!=next->slots || s->track_count!=next->track_count) {
+        native_loan_fault();return;
+    }
+    e.manifest=next;memset(&e.cursor,0,sizeof(e.cursor));
+    e.token=e.destination=e.since=e.failed=e.retries=0u;
+    e.disc_generation=s->disc_generation;
+    e.target=next->reader==KUI_RETAIL_READER_ASYNC_EAGER?TARGET_Y:TARGET_X;
+}
+#endif
 #endif
 #if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
 #if !defined(KUI_RETAIL_CE) || !defined(KUI_RETAIL_ASYNC)

@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* Host preview uses the same embedded artwork/font and renderer as hardware.
- * Modes: home, ripper, confirm, settings, screenshots, settings-screenshots, diagnostics, complete, partial,
+ * Modes: home, ripper, confirm, settings, diagnostics, complete, partial,
  * stopped, destination, keyboard, advanced, ripper-settings, video, vmu,
  * memory, network, idle, reset, home-vmu, home-memory, home-network,
  * home-music, home-gd, music, gd-play, gd-confirm, quick-resume, dma-fallback,
@@ -535,7 +535,7 @@ int main(int argc,char **argv) {
         if(!strcmp(argv[1],"games-zso-information")) shell.page=KUI_SHELL_GAMES_INFO;
     } else if(!strcmp(argv[1],"games-advanced")) {
         library(&shell,KUI_GAMES_VIEW_LIST);shell.games_selected=1;shell.games_listing.entries[1].favorite=true;
-        shell.page=KUI_SHELL_GAMES_ADVANCED;shell.games_advanced_selected=8;
+        shell.page=KUI_SHELL_GAMES_ADVANCED;shell.games_advanced_selected=6;
     } else if(!strcmp(argv[1],"games-probe") || !strcmp(argv[1],"games-probe-loading")) {
         shell.page=KUI_SHELL_GAMES_PROBE_CONFIRM;
         if(!strcmp(argv[1],"games-probe-loading")) {
@@ -985,8 +985,6 @@ int main(int argc,char **argv) {
         shell.music_listing.entries[0].directory=true;shell.music_selected=3;
         strcpy(shell.music_listing.message,"Choose a WAV or Ogg file to play.");
     } else if(!strcmp(argv[1],"settings")) {shell.page=KUI_SHELL_SETTINGS;shell.system_selected=2;}
-    else if(!strcmp(argv[1],"settings-screenshots")) {shell.page=KUI_SHELL_SETTINGS;shell.system_selected=11;}
-    else if(!strcmp(argv[1],"screenshots")) {shell.page=KUI_SHELL_SCREENSHOTS;}
     else if(!strcmp(argv[1],"ripper-settings")) shell.page=KUI_SHELL_RIPPER_SETTINGS;
     else if(!strncmp(argv[1],"ripper-format-",14)) {
         shell.page=KUI_SHELL_RIPPER_SETTINGS;shell.setting_selected=2;

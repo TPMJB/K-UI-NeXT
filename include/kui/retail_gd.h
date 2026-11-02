@@ -6,6 +6,21 @@
 #include "kui/retail_image.h"
 #include "kui/retail_native_drive.h"
 
+#ifndef KUI_NATIVE_SESSION_CONTROLS
+#define KUI_NATIVE_SESSION_CONTROLS 0
+#endif
+#if KUI_NATIVE_SESSION_CONTROLS != 0 && KUI_NATIVE_SESSION_CONTROLS != 1
+#error "KUI_NATIVE_SESSION_CONTROLS must be exactly zero or one"
+#endif
+#if KUI_NATIVE_SESSION_CONTROLS && defined(KUI_RETAIL_CE)
+#error "Native session controls do not support Windows CE"
+#endif
+#if KUI_NATIVE_SESSION_CONTROLS
+enum kui_retail_disc_lid {
+    KUI_RETAIL_DISC_READY, KUI_RETAIL_DISC_OPEN, KUI_RETAIL_DISC_EMPTY
+};
+#endif
+
 /* This opt-in service is independent of the accepted own-client probe. The
  * native entry must serialize dispatch BEFORE switching to its private stack,
  * preserve the caller's interrupt state, and make P1/P2 data coherent. */
@@ -97,6 +112,11 @@ struct kui_retail_gd {
     /* Sectors one EXEC may read: adapter pacing policy, not drive state.
      * Init sets STEP_SECTORS; values outside 1..STEP_MAX use that default. */
     uint32_t step;
+#if KUI_NATIVE_SESSION_CONTROLS
+    /* Only the separately linked session-control service owns these words.
+     * A generation identifies a medium lifetime, never a request token. */
+    uint32_t disc_generation,disc_lid,disc_changed,disc_observed;
+#endif
 #ifdef KUI_RETAIL_CE
     /* Copies bytes [skip, skip + bytes) of the user data of the sectors
      * from lba on (sector_bytes each); zero only when all were produced.
@@ -146,6 +166,19 @@ void kui_retail_gd_init_prepared(struct kui_retail_gd *, const struct kui_retail
  * INIT/RESET retains this kind; pending commands refuse a reconfiguration. */
 void kui_retail_gd_set_disc_type(struct kui_retail_gd *, uint32_t disc_type,
     uint32_t session_lba);
+#if KUI_NATIVE_SESSION_CONTROLS
+/* Caller has serialized the service and stopped the physical/background
+ * reader first. Zero means success; -1 leaves every service byte unchanged.
+ * OPEN terminates a pending handle as UNAVAILABLE but retains its result
+ * until CHECK acknowledges it. EMPTY is an explicit absent-disc phase.
+ * CLOSE requires the game to have observed OPEN/EMPTY through GD_DRIVE;
+ * maps are fully validated resident-owned manifests prepared before launch.
+ * The prior terminal handle is retained across CLOSE, so a late CHECK cannot
+ * accidentally acknowledge a new request. These APIs do not read storage. */
+int kui_retail_gd_disc_open(struct kui_retail_gd *);
+int kui_retail_gd_disc_absent(struct kui_retail_gd *);
+int kui_retail_gd_disc_close(struct kui_retail_gd *,const struct kui_retail_manifest *);
+#endif
 
 /* Virtual PIOREAD/DMAREAD complete by polling and CPU copy into guest memory;
  * no virtual GD DMA interrupt/callback is generated. The physical sector
@@ -178,6 +211,13 @@ int32_t kui_retail_gd_dispatch(struct kui_retail_gd *, uint32_t r4,
  * every sector is delivered; CHECK then reports it as usual. Calls for
  * anything but a pending read are ignored. ops.read is never called. */
 void kui_retail_gd_progress(struct kui_retail_gd *, uint32_t sectors, uint32_t error);
+#if KUI_NATIVE_SESSION_CONTROLS
+/* The adapter snapshots both values when accepting a read. Progress from a
+ * retired medium or handle is ignored, even if another read is now pending.
+ * It must also fence the actual destination copy before calling this API. */
+void kui_retail_gd_progress_epoch(struct kui_retail_gd *,uint32_t generation,
+    uint32_t token,uint32_t sectors,uint32_t error);
+#endif
 #ifdef KUI_RETAIL_CE
 /* Windows CE's background reader also fills a DMA stream's transfers: total
  * is the request's output bytes written so far (in this transfer and the

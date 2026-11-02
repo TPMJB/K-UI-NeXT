@@ -127,6 +127,11 @@ void kui_retail_toy_data_schedule_play(void) {
 }
 #endif
 uint32_t kui_retail_original_menu;
+#if KUI_NATIVE_SESSION_CONTROLS
+/* The return path starts a fresh KOS runtime, whose BIOS calls must not reach
+ * a game-owned reader lease. Capture every firmware entry we replace. */
+static uint32_t native_session_firmware[9];
+#endif
 extern void kui_retail_menu_hook(void);
 extern void kui_retail_gd_c0_hook(void);
 extern void kui_retail_gd_1000_hook(void);
@@ -359,6 +364,18 @@ static void redirect_entry(uint32_t address,void (*target)(void)) {
     *(volatile uint32_t *)(code+4)=(uint32_t)(uintptr_t)target;
 }
 static void install_hook(void) {
+#if KUI_NATIVE_SESSION_CONTROLS
+    /* Firmware initialization may have dirty P1 lines. Publish them before
+     * taking the immutable P2 snapshot consumed by the returning worker. */
+    purge(0x8c0000bcu,40u);purge(0x8c001000u,12u);purge(0x8c0010f0u,12u);
+    native_session_firmware[0]=*(volatile uint32_t *)(uintptr_t)0xac0000bcu;
+    native_session_firmware[1]=*(volatile uint32_t *)(uintptr_t)0xac0000c0u;
+    native_session_firmware[2]=*(volatile uint32_t *)(uintptr_t)0xac0000e0u;
+    for(unsigned i=0;i<3u;++i) {
+        native_session_firmware[i+3u]=*(volatile uint32_t *)(uintptr_t)(0xac001000u+i*4u);
+        native_session_firmware[i+6u]=*(volatile uint32_t *)(uintptr_t)(0xac0010f0u+i*4u);
+    }
+#endif
     /* Publish adjacent firmware vector writes before touching the shared
      * cache line, then install through P2 with no stale P1 alias left over. */
     purge(KUI_GD_VECTOR_ADDRESS, sizeof(uint32_t));
@@ -380,6 +397,21 @@ static void install_hook(void) {
 #endif
     __asm__ __volatile__("" : : : "memory");
 }
+#if KUI_NATIVE_SESSION_CONTROLS
+/* This tiny BIOS system-call result does not switch stacks or touch storage.
+ * The next successfully mounted image becomes the new comparison baseline. */
+uint32_t kui_retail_native_disc_check(void) {
+    /* A Maple completion can publish the next lid state between BIOS calls.
+     * Keep its generation change indivisible with this one-shot reply. */
+    uint32_t sr;__asm__ volatile("stc sr,%0":"=r"(sr)::"memory");
+    uint32_t masked=sr|UINT32_C(0xf0);
+    __asm__ volatile("ldc %0,sr"::"r"(masked):"memory");
+    uint32_t changed=service.disc_changed;
+    if(service.disc_lid==KUI_RETAIL_DISC_READY)service.disc_changed=0u;
+    __asm__ volatile("ldc %0,sr"::"r"(sr):"memory");
+    return changed?1u:0u;
+}
+#endif
 #if defined(KUI_RETAIL_ASYNC) && !KUI_VMU_NATIVE_BACKGROUND && !KUI_NATIVE_STANDALONE_READER
 /* Counter rows for both screens; every counter is a uint32_t in order. */
 #ifdef KUI_RETAIL_CE
@@ -1060,6 +1092,27 @@ int kui_vmu_native_background_manifest_bind(const struct kui_retail_manifest *te
     uint32_t address=(c->lease&UINT32_C(0x1fffffff))|UINT32_C(0x80000000);
     address+=KUI_VMU_NATIVE_BACKGROUND_REGION_OFFSET;
     kui_retail_async_region_type *retained=(void *)(uintptr_t)address;
+#if KUI_NATIVE_SESSION_CONTROLS
+    /* The temporary stage has verified the complete copied snapshots and
+     * rebased the retained region before entry. This low publication step
+     * retains its own execution, allocation and current-identity admission. */
+    if((sr&UINT32_C(0x400000f0))!=UINT32_C(0x400000f0) ||
+       c->status!=KUI_VMU_OBS_BOOT_LEASED || kui_retail_hook_active ||
+       !kui_vmu_native_background_stage_region_address((uint32_t)(uintptr_t)previous) ||
+       !kui_vmu_native_background_stage_map_address((uint32_t)(uintptr_t)temporary) ||
+       !kui_vmu_native_background_map_address(c->lease,(uint32_t)(uintptr_t)owned) ||
+       vbr==(uint32_t)(uintptr_t)previous-UINT32_C(0x100) ||
+       native_background_manifest!=temporary || previous->engine.manifest!=temporary)
+        return 0;
+    kui_retail_hook_active=1u;
+    native_background_manifest=owned;
+    kui_retail_async_region_storage=retained;
+    purge((uint32_t)(uintptr_t)__retail_resident_bss_begin,
+        (uint32_t)(__retail_resident_bss_end-__retail_resident_bss_begin));
+    kui_retail_hook_active=0u;
+    purge((uint32_t)(uintptr_t)&kui_retail_hook_active,sizeof(kui_retail_hook_active));
+    return 1;
+#else
     if((sr&UINT32_C(0x400000f0))!=UINT32_C(0x400000f0) ||
        c->status!=KUI_VMU_OBS_BOOT_LEASED || kui_retail_hook_active ||
        !kui_vmu_native_background_stage_region_address((uint32_t)(uintptr_t)previous) ||
@@ -1095,6 +1148,7 @@ int kui_vmu_native_background_manifest_bind(const struct kui_retail_manifest *te
     kui_retail_hook_active=0u;
     purge((uint32_t)(uintptr_t)&kui_retail_hook_active,sizeof(kui_retail_hook_active));
     return 1;
+#endif
 }
 /* NATIVE_BACKGROUND_BIND_END */
 #define service (kui_retail_async_region.shared.service)

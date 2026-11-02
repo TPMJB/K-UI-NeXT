@@ -5,6 +5,9 @@
 #include "kui/vmu_native_patch.h"
 #include "kui/vmu_native_worker.h"
 #include "kui/vmu_native_relocate.h"
+#if KUI_NATIVE_SESSION_CONTROLS
+#include "vmu_native_session_stage.inc"
+#endif
 #if KUI_VMU_NATIVE_BACKGROUND
 #include "kui/vmu_native_background.h"
 #endif
@@ -17,12 +20,14 @@ static void __attribute__((noipa)) native_low_configure(struct kui_vmu_native_pa
     cfg->low_terminal=low->return_hook;
     cfg->low_heap_hook=low->heap_hook;
 }
+#if !KUI_NATIVE_SESSION_CONTROLS
 static int __attribute__((noipa)) native_low_bind_map(
     const struct kui_retail_manifest *source,const struct kui_retail_manifest *owned) {
     int (*bind_map)(const struct kui_retail_manifest *,const struct kui_retail_manifest *)=
         (void *)(uintptr_t)native_low_bindings()->background_bind;
     return bind_map(source,owned);
 }
+#endif
 #endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
 #include "vmu_native_evolution_fault_stage.inc"
@@ -59,6 +64,9 @@ static bool passive_entry(uint32_t entry,uint32_t begin,uint32_t bytes) {
 #endif
 #if KUI_NATIVE_READAHEAD
 #include "vmu_native_readahead_stage.inc"
+#endif
+#if KUI_NATIVE_SESSION_CONTROLS
+#include "native_session_cold_bind.inc"
 #endif
 #if KUI_NATIVE_LOADER_TIMELINE
 /* The existing40B trace table remains unchanged. Its new adjacent typed
@@ -331,6 +339,9 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
 #endif
     cfg.exits=native_exits;
     cfg.diagnostics=native_runtime_diagnostics();
+#if KUI_NATIVE_SESSION_CONTROLS
+    native_session_stage_configure(&cfg);
+#endif
 #endif
 #if KUI_VMU_NATIVE_BACKGROUND
     /* The retained map and reader region are outside the worker's
@@ -360,8 +371,13 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
      * the listed data pointers in the gaps between these vector entries. */
     kui_native_passive_publish(region_address,region_address+KUI_VMU_NATIVE_BACKGROUND_REGION_BYTES);
 #if KUI_NATIVE_DUAL_READERS
+#if KUI_NATIVE_SESSION_CONTROLS
+    if(native_session_cold_bind(cfg.session_control,native_low_bindings()->background_bind,
+        &manifest,(const void *)(uintptr_t)map_address)!=1)native_report(8u,0x49u);
+#else
     if(native_low_bind_map(&manifest,(const void *)(uintptr_t)map_address)!=1)
         native_report(8u,0x49u);
+#endif
 #else
     int (*bind_map)(const struct kui_retail_manifest *,const struct kui_retail_manifest *)=
         (void *)(uintptr_t)KUI_VMU_NATIVE_BACKGROUND_BIND;

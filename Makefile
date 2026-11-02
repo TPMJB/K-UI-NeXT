@@ -567,6 +567,44 @@ build/games-image-probe: tests/games_image_probe.c $(GAMES_IMAGE_PROBE) $(CORE) 
 
 GAMES_RETAIL = src/core/vmu_launch_package.c src/core/retail_zso.c src/apps/game_launch_report.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/apps/games_retail.c src/core/hash.c src/core/retail_image.c src/core/retail_cursor.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c src/core/game_metadata.c $(DESTINATION) src/core/runtime_image.c src/core/runtime_file.c src/core/storage_probe.c src/core/vmu_emulation_settings.c
 GAMES_RETAIL += $(NATIVE_CACHE_SOURCES)
+GAMES_RETAIL += src/apps/native_session_prepare.c src/core/native_session.c src/core/native_return.c src/core/storage_policy.c
+
+NATIVE_SESSION_CORE = src/core/native_session.c src/core/native_return.c src/core/storage_policy.c
+NATIVE_SESSION_PREP_TEST = tests/test_native_session_prepare.c src/apps/native_session_prepare.c $(NATIVE_SESSION_CORE) src/core/runtime_image.c src/core/retail_image.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/data.c
+.PHONY: test-native-session-controls
+test-native-session-controls: build/test-native-return build/test-native-session-stage build/test-native-session-prepare build/test-native-disc-set build/test-native-return-hardware build/test-retail-gd-disc build/test-retail-gd-disc-async
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-native-return
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-native-session-stage
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-native-session-prepare
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-native-disc-set
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-native-return-hardware
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-retail-gd-disc
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-retail-gd-disc-async
+	python3 tests/test_native_session_worker.py
+	python3 tests/test_native_session_cold_bind.py
+	python3 tests/test_native_session_switch.py
+	python3 tests/test_retail_async_session.py
+build/test-native-return: tests/test_native_return.c src/core/native_return.c src/core/storage_policy.c src/core/data.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $^ -o $@
+build/test-native-session-stage: tests/test_native_session_stage.c $(NATIVE_SESSION_CORE) src/core/retail_image.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/loader -DKUI_NATIVE_SESSION_CONTROLS=1 -DKUI_VMU_NATIVE_PERSISTENT_PROBE=1 $^ -o $@
+build/test-native-session-prepare: $(NATIVE_SESSION_PREP_TEST)
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $^ -o $@
+build/test-native-disc-set: tests/test_native_disc_set.c src/core/native_disc_set.c src/core/native_session.c src/core/retail_image.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -DKUI_NATIVE_SESSION_CONTROLS=1 -DKUI_RETAIL_MANIFEST_SLOTS=64 $^ -o $@
+build/test-native-return-hardware: tests/test_native_return_hardware.c src/loader/native_return_hardware.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/loader -DKUI_NATIVE_RETURN_HARDWARE_HOST_TEST=1 $^ -o $@
+build/test-retail-gd-disc: tests/test_retail_gd_disc.c src/core/retail_gd.c src/core/retail_image.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -DKUI_NATIVE_SESSION_CONTROLS=1 $^ -o $@
+build/test-retail-gd-disc-async: tests/test_retail_gd_disc.c src/core/retail_gd.c src/core/retail_image.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -DKUI_NATIVE_SESSION_CONTROLS=1 -DKUI_RETAIL_GD_ASYNC=1 $^ -o $@
 build/games-retail: tests/games_retail.c $(GAMES_RETAIL) $(CORE) $(FATFS) include/kui/games_retail.h include/kui/ce_load_plan.h include/kui/retail_image.h include/kui/retail_loader_layout.h include/kui/game_image.h include/kui/game_metadata.h include/kui/runtime.h include/kui/destination.h include/kui/media.h src/dreamcast/platform.h config/ffconf.h .deps/fatfs/source/ff.h include/kui/game_ram_patches.h include/kui/game_launch_settings.h include/kui/game_launch_report.h include/kui/retail_zso.h include/kui/zso.h
 build/games-retail: src/apps/games_native_cache.inc include/kui/native_standalone_capability.h include/kui/native_sdk_sci_family.h
 	@mkdir -p $(@D)

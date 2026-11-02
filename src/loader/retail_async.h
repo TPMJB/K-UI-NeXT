@@ -88,6 +88,9 @@ struct kui_retail_async {
     /* since: blocks delivered since the previous EXEC or CHECK; target: the
      * blocks each of them makes sure of. */
     uint32_t token, destination, since;
+#if KUI_NATIVE_SESSION_CONTROLS
+    uint32_t disc_generation; /* Snapshotted before any destination copy. */
+#endif
     uint32_t active, failed, opened, retries, in_irq, hooked, target;
     struct kui_retail_async_stats stats;
 #if KUI_VMU_NATIVE_BACKGROUND
@@ -196,6 +199,18 @@ extern struct kui_retail_async_region kui_retail_async_region;
 /* Once, at resident init: install nothing yet, copy the vectors; the
  * manifest's reader chooses how long GD calls may wait for blocks. */
 void kui_retail_async_init(const struct kui_retail_manifest *);
+#if KUI_NATIVE_SESSION_CONTROLS
+/* Masked native worker only, with no pending request/receiver/return frame.
+ * RESET invalidates all read-ahead bytes while its loan state is still IDLE,
+ * before the existing writer loan closes SCI. Returns1 claimed,0 busy,-1
+ * context/transport fault. End the successful loan with the ordinary native
+ * loan_end; never resume a game or begin another request while it is owned. */
+int kui_retail_async_session_begin(struct kui_loader_sd *loan);
+/* Rebind a newly selected, prevalidated owned map after GD disc_close and
+ * while the successful session loan remains WRITER. Clears retired cursor
+ * and request state without disturbing the SDK vectors/release metadata. */
+void kui_retail_async_session_rebind(const struct kui_retail_manifest *next);
+#endif
 /* KUI_ARMADA_CE_STREAM adds a checked static SCI descriptor and bounded
  * arbitration visits. The GD engine/cursor/token/spill remain DATA-owned;
  * the high controller owns audio jobs and any parked checked blocks. */

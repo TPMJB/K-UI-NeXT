@@ -8,40 +8,40 @@ before taking another picture. Screenshots are written to `/KUI/screenshots`
 on the selected SD volume as **640 x 480 BMP** files. Copy the BMP files to a
 computer for release threads or other sharing.
 
-**Settings → Screenshots** documents the shortcut, destination and format.
-Opening this information page does not save or discard an unfinished Settings
-draft. B returns to the same Settings row.
+The screenshot shortcut works directly from K-UI. The old screenshot
+description has been removed from Settings.
 
-In-game screenshots are **not available yet**. The information page keeps this
-future capability clearly unavailable; it does not expose an inactive toggle.
+In-game screenshots are **not available yet**. No inactive toggle is exposed for this future capability.
 Menu capture does not add a screenshot service to the game loader.
 
-## Planned return to K-UI
+## Games library
 
-The current native VMU diagnostic shortcut is both triggers plus A+B+X+Y,
-without Start, held across 180 completed controller polls. It deliberately
-shows a terminal diagnostic page. A requested follow-up is to retain that
-shortcut, display an intentional-exit screen briefly, and return to K-UI.
+Games now has visible **All games**, **Favorites**, and **Recently played**
+tabs. Press **Y** to cycle tabs and **X** to favorite or unfavorite the
+highlighted game. **START → Library options** contains scanning, rebuilding,
+folder browsing, box art and layout selection. Layout changes keep the active
+tab and selected row. See [Favorites and recently played](games-favorites-recent.md)
+for storage and history behavior.
 
-The existing BIOS-menu return handler reboots through the console boot ROM.
-That starts K-UI when the K-UI bootstrap disc is still inserted; it does not
-provide a direct SD reload, particularly when a physical game disc is present.
-Direct return needs its own freestanding reload path, a checked runtime extent
-map, safe code/stack placement, and orderly retirement of reader/DMA and VMU
-transactions. The old KOS shell cannot resume after game handoff. Fatal error
-pages should retain their evidence rather than inherit an automatic timeout.
+## Optional in-game controls
 
-## Planned in-game disc switching
+The separate native session-controls modules implement a first, bounded disc
+switch and direct-return path for **SCI / Background New**, uncompressed
+native GDI games with virtual VMU enabled. Installing the updated K-UI runtime
+alone does not enable these controls. The ordinary compact modules remain
+available; the optional modules use a larger resident reservation.
 
-Games catalogue grouping already selects a disc before launch. Runtime
-switching needs a separate loader feature: prepare checked maps for the disc
-set before handoff; model virtual lid-open/change/close; retire pending reads
-and invalidate old prefetch/cache data; select the replacement map and update
-TOC, position and disc-change responses. The same virtual VMU should remain
-attached throughout the change.
+* **Next disc:** hold **L + R + Start**, with A/B/X/Y released, for 90 completed
+  controller polls. Release before requesting another change. This cycles the
+  checked catalogue disc set while retaining the virtual VMU.
+* **Return:** hold the existing **L + R + A + B + X + Y** diagnostic gesture,
+  without Start, for 180 completed controller polls. On the intentional exit
+  screen, release the buttons, then press **Start** to reload K-UI from SD.
+  There is no automatic five-second return. Unexpected fault reports remain
+  diagnostic screens.
 
-Start with a native two-disc, non-CDDA profile such as Skies of Arcadia, using
-a synthetic two-disc protocol harness before console testing. WinCE and CDDA
-need their own interrupt/audio transition validation. Any new resident code
-or disc maps must pass the existing complete lease, placement and stack checks;
-the compact 72 KiB worker is part of an occupied 284 KiB reservation.
+The poll counts are not fixed wall-clock timers. Save and read activity can
+defer either transition. The implementation does not yet establish console
+compatibility for any multi-disc title. See [Native session controls](native-session-controls.md)
+for installation and limits, and the [hardware test draft](native-session-controls-hardware-test.md)
+for the Skies of Arcadia, then Code: Veronica acceptance sequence.

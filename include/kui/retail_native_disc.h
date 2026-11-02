@@ -4,8 +4,10 @@
 
 /* BIOS system E0 function 2 checks whether the boot disc is unchanged.
  * Native games must check the selected image instead of the physical drive,
- * which may hold K-UI's boot disc. The mounted image is immutable throughout
- * a launch, so this optional native control returns zero (unchanged).
+ * which may hold K-UI's boot disc. Ordinary profiles keep an immutable image
+ * and return zero. The optional native session-control profile reports its
+ * independently modelled lid/change cycle and acknowledges a newly mounted
+ * image only after that complete transition.
  * Keep it separate from CE's existing entry and the Toy pilot experiments. */
 #ifndef KUI_RETAIL_NATIVE_DISC_CHECK
 #define KUI_RETAIL_NATIVE_DISC_CHECK 0

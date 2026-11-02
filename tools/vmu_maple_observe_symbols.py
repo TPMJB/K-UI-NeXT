@@ -83,6 +83,9 @@ def generate(path, prefix=""):
     }
     if background:
         names["KUI_VMU_NATIVE_BACKGROUND_BIND"]=background_name
+    session_entry="_kui_retail_native_session_control"
+    if session_entry in image["symbols"]:
+        names["KUI_NATIVE_SESSION_CONTROL"]=session_entry
     optional_lease = "_kui_vmu_observe_sd_lease"
     if optional_lease in image["symbols"]:
         names["KUI_VMU_OBSERVE_LOW_SD_LEASE"] = optional_lease
@@ -102,7 +105,7 @@ def generate(path, prefix=""):
         address, size, kind, section = typed.get(name, (0, 0, 0, None))
         if not size or section is None or not section[3] <= address < address + size <= section[3] + section[5]:
             raise ValueError("Missing or unbounded typed observer symbol: " + name)
-        if macro.endswith("CONTROL") or macro=="KUI_VMU_NATIVE_HEAP_ORIGINAL":
+        if (macro.endswith("CONTROL") and macro!="KUI_NATIVE_SESSION_CONTROL") or macro=="KUI_VMU_NATIVE_HEAP_ORIGINAL":
             expected,reserved=(32,32) if macro=="KUI_VMU_NATIVE_HEAP_ORIGINAL" else (56,64)
             if (size != expected or kind != 1 or address & 31 or section[1] != 8 or
                     section[2] & 7 != 3 or

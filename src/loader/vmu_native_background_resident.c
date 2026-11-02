@@ -14,6 +14,10 @@ __asm__(".global __kui_vmu_native_background_resident\n"
 #include "kui/vmu_sd_lease.h"
 #include "kui/vmu_native_async_loan.h"
 #include "kui/vmu_native_background.h"
+#if KUI_NATIVE_SESSION_CONTROLS
+#include "kui/native_disc_set.h"
+#include "kui/native_session_binding.h"
+#endif
 #if KUI_NATIVE_GENERAL_LEAN_LAYOUT
 __asm__(".global __kui_native_general_lean_resident_layout\n"
         ".set __kui_native_general_lean_resident_layout,1\n");
@@ -65,6 +69,9 @@ static bool native_resident_destination(const volatile struct kui_vmu_observe_bo
        c->worker_end!=(c->lease|UINT32_C(0xa0000000))+NATIVE_RESIDENT_WORKER_BYTES) return false;
     return physical>=end || physical+bytes<=begin;
 }
+#if KUI_NATIVE_SESSION_CONTROLS
+__attribute__((noinline))
+#endif
 static bool native_resident_terminal(const volatile struct kui_vmu_observe_boot_control *c) {
     uint32_t terminal=c->terminal;
     uint32_t begin,end;
@@ -194,3 +201,20 @@ void kui_vmu_observe_low_failure(void) {
     retail_display_restore(&display);
     for(;;) __asm__ volatile("nop");
 }
+#if KUI_NATIVE_SESSION_CONTROLS
+static const struct kui_native_session_binding native_session_binding={
+    KUI_NATIVE_SESSION_BINDING_MAGIC,KUI_NATIVE_SESSION_BINDING_VERSION,
+    sizeof(struct kui_native_session_binding),
+    (uint32_t)(uintptr_t)&kui_retail_async_region_storage,
+    (uint32_t)(uintptr_t)&native_background_manifest,
+    (uint32_t)(uintptr_t)native_session_firmware
+};
+/* The exact entry is pinned by the installer. It publishes only an immutable
+ * descriptor; session operations execute on the owned worker stack through
+ * its existing serialized storage gateway. No call here changes hardware. */
+int __attribute__((noipa)) kui_retail_native_session_control(uint32_t operation,
+    const struct kui_retail_manifest *next,struct kui_loader_sd *return_card) {
+    (void)next;(void)return_card;
+    return operation==KUI_NATIVE_SESSION_BIND?(int)(uintptr_t)&native_session_binding:-1;
+}
+#endif

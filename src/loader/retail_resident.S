@@ -366,8 +366,14 @@ C_SYMBOL(kui_retail_menu_hook):
 #elif KUI_RETAIL_NATIVE_DISC_CHECK
     cmp/eq #2,r0
     bf .Lmenu_forward
+#if KUI_NATIVE_SESSION_CONTROLS
+    mov.l .Lnative_disc_check,r0
+    jmp @r0
+    nop
+#else
     rts
     mov #0,r0
+#endif
 #endif
 .Lmenu_forward:
     mov.l .Lmenu_original,r0
@@ -390,6 +396,9 @@ C_SYMBOL(kui_retail_menu_hook):
     nop
     .align 2
 .Lmenu_original: .long C_SYMBOL(kui_retail_original_menu)
+#if KUI_NATIVE_SESSION_CONTROLS
+.Lnative_disc_check: .long C_SYMBOL(kui_retail_native_disc_check)
+#endif
 .Lmenu_mask: .long 0x100000f0
 #if KUI_TOY_PILOT_PRIVATE_P2
 .Lmenu_stack: .long KUI_RETAIL_HOOK_STACK-16+0x20000000

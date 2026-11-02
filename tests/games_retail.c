@@ -11,6 +11,7 @@
 #include "kui/native_standalone_capability.h"
 #include "kui/native_sdk_sci_family.h"
 #include "kui/vmu_emulation_settings.h"
+#include "kui/native_session_prepare.h"
 #include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -1014,6 +1015,49 @@ static void check_native_standard(const char *directory) {
         test.hash_reads[1],test.hash_max[1],1u,result);
     kui_runtime_free(&image);export_launch_files(directory);
 }
+static void check_session_mapping(const char *directory) {
+    struct kui_retail_manifest *map=malloc(sizeof(*map));assert(map);
+    struct kui_retail_extent extents[32];unsigned count=0;uint64_t bytes=0;
+    const char *problem=NULL;char version[7];
+    assert(kui_sd_connect() && kui_mount(&fs,log_line));
+    const struct kui_volume volume=*kui_media_volume();
+    unsigned writes=test.writes;
+    assert(kui_native_session_map_gdi(&fs,&volume,selected,KUI_RETAIL_READER_ASYNC,
+        map,version,&problem,log_line,cancel));
+    assert(version[0] && map->reader==KUI_RETAIL_READER_ASYNC && (map->flags&KUI_RETAIL_IMAGE_BOOT_CRC));
+    assert(kui_native_session_map_file(&fs,&volume,package,extents,32u,&count,&bytes,&problem,cancel));
+    assert(count && bytes);
+    assert(f_mount(NULL,"0:",0)==FR_OK);kui_sd_disconnect();
+    assert(test.writes==writes && !test.files);
+    struct kui_retail_image reader;
+    assert(kui_retail_image_init(&reader,map,detached_block,NULL)==KUI_GAME_OK);
+    uint8_t sector[2048];uint32_t crc=0;
+    for(unsigned n=0;n<16u;n++) {
+        assert(kui_retail_image_read(&reader,map->session_lba+n,1u,KUI_GAME_SECTOR_MODE1,sector,sizeof(sector))==KUI_GAME_OK);
+        crc=kui_crc32(crc,sector,sizeof(sector));
+    }
+    assert(crc==map->ip_crc32);
+    crc=0;
+    for(uint32_t at=0;at<map->boot_bytes;) {
+        assert(kui_retail_image_read(&reader,map->boot_lba+at/2048u,1u,KUI_GAME_SECTOR_MODE1,sector,sizeof(sector))==KUI_GAME_OK);
+        uint32_t take=map->boot_bytes-at;if(take>sizeof(sector))take=sizeof(sector);
+        crc=kui_crc32(crc,sector,take);at+=take;
+    }
+    assert(crc==map->boot_crc32);
+    size_t expected_bytes;uint8_t *expected=host_file(directory,"retail-boot.kui",&expected_bytes);
+    assert(expected_bytes==bytes);
+    uint32_t block=0;
+    for(unsigned i=0;i<count;i++) {
+        assert(extents[i].file_block==block);
+        for(unsigned j=0;j<extents[i].blocks;j++,block++) {
+            assert(detached_block(NULL,extents[i].card_lba+j,sector)==0);
+            size_t at=(size_t)block*512u,take=bytes-at;if(take>512u)take=512u;
+            assert(!memcmp(sector,expected+at,take));
+        }
+    }
+    assert(block==(bytes+511u)/512u);free(expected);free(map);
+    puts("Session map PASS: native GDI IP/boot CRCs and runtime-file physical extents match source bytes after all FatFs files close");
+}
 static void check(const char *directory) {
     struct kui_runtime_image image = {0};
     if(native_dual_case()) {check_native_dual(directory);return;}
@@ -1088,6 +1132,7 @@ static void check(const char *directory) {
     if(valid) check_mapping(directory, &image);
     else assert(!image.data && !image.info.payload_bytes && !image.info.memory_bytes);
     kui_runtime_free(&image);
+    if(!strcmp(test.fault,"async-on-sci") || !strcmp(test.fault,"async-cooked-2048"))check_session_mapping(directory);
     if(!strcmp(test.fault, "cancel-before")) assert(!test.read_calls && !test.connects);
 }
 int main(int argc, char **argv) {

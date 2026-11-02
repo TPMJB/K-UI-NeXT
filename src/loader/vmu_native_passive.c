@@ -2,6 +2,14 @@
 /* Passive one-pair proof, or a separately enabled bounded read-only bridge. */
 #include "kui/vmu_native_passive.h"
 #include "kui/vmu_native_background.h"
+#include "kui/native_session.h"
+#if KUI_NATIVE_SESSION_CONTROLS
+#include "kui/native_return.h"
+#include "kui/native_disc_set.h"
+#include "kui/native_session_binding.h"
+#include "kui/native_readahead.h"
+#include "native_return_hardware.h"
+#endif
 #if KUI_NATIVE_BACKGROUND_COMPACT && \
     (!KUI_NATIVE_READAHEAD || !KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION || \
      !KUI_NATIVE_SPLIT_CONTROLLER_GENERAL || !KUI_VMU_NATIVE_CACHED_CODE || \
@@ -28,6 +36,19 @@ extern uint32_t kui_vmu_native_readonly_release_resume;
 #include "vmu_native_fault_capture.h"
 #include "vmu_native_sdk_coherence.h"
 #include "sd_reader.h"
+#if KUI_NATIVE_SESSION_CONTROLS
+_Static_assert(KUI_VMU_READONLY_OVERLAY_STAGED_FRAMES==1u,
+    "Session controls owns one virtual receive slot per bank");
+__asm__(".global __kui_native_session_controls_worker\n"
+        ".set __kui_native_session_controls_worker,1\n");
+#if KUI_VMU_NATIVE_VIRTUAL_ADDRESS == 1u
+__asm__(".global __kui_native_session_virtual_slot\n"
+        ".set __kui_native_session_virtual_slot,1\n");
+#else
+__asm__(".global __kui_native_session_virtual_slot\n"
+        ".set __kui_native_session_virtual_slot,2\n");
+#endif
+#endif
 __asm__(".global __kui_native_controller_failure_witness_worker\n"
         ".set __kui_native_controller_failure_witness_worker,1\n");
 __asm__(".global __kui_native_terminal_dispatch_worker\n"
@@ -685,6 +706,16 @@ static bool diagnostic_gesture(uint32_t controls) {
  * completions retain their existing reset of the count. */
 #define HELD_REPORT_FRAMES 180u
 static uint32_t held_report;
+#if KUI_NATIVE_SESSION_CONTROLS
+static struct kui_native_disc_set session_discs;
+static struct kui_native_return_plan session_return_plan;
+static struct {uint32_t active,operation;const struct kui_retail_manifest *next;
+    struct kui_loader_sd card;int result;} session_switch;
+static struct {uint32_t configured,return_available,disc_hold,disc_latched,exit_pending;
+    uint32_t active,result,attempted,return_prepared;} session;
+static int native_session_return_transaction(struct kui_loader_sd *loan);
+static int native_session_switch_transaction(struct kui_loader_sd *loan);
+#endif
 static bool held_report_gesture(uint32_t controls) {
     return !(controls&UINT32_C(0x0606)) && ((controls>>16)&255u)>=200u && (controls>>24)>=200u;
 }
@@ -744,6 +775,14 @@ static uint32_t issued_physical(void) {
         address-begin<=WORKER_SPAN-sizeof(issued_chain)?address:0u;
 }
 int kui_vmu_native_persistent_sd_transaction(void *context,struct kui_loader_sd *loan) {
+#if KUI_NATIVE_SESSION_CONTROLS
+    if(context==&session_switch && session_switch.active==UINT32_C(0x4b535754)) {
+        return native_session_switch_transaction(loan);
+    }
+    if(context==&session && session.active==UINT32_C(0x4b52544e)) {
+        return native_session_return_transaction(loan);
+    }
+#endif
     if(reader_only() || context!=&durable_card || !loan || !persistent_context_guard()) {
         if(loan) loan->ready=false;
         return -1;
@@ -911,6 +950,10 @@ static uint8_t *readonly_rx(uint32_t address,unsigned bytes) {
 }
 #endif
 static void report(void) __attribute__((noreturn));
+static void fail(uint32_t code) __attribute__((noreturn));
+#if KUI_NATIVE_SESSION_CONTROLS
+#include "native_session_worker.inc"
+#endif
 static void report(void) {
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(kui_vmu_native_trace_enabled()) {
@@ -986,6 +1029,9 @@ static void report(void) {
     retail_display_line("IMAGE/JOURNAL ONLY");
 #else
     retail_display_line("STORAGE WAS READ ONLY");
+#endif
+#if KUI_NATIVE_SESSION_CONTROLS
+    if(state.error==UINT32_C(0x4f))native_session_return_menu();
 #endif
     for(;;) __asm__ volatile("nop");
 #endif
@@ -1098,6 +1144,9 @@ int kui_vmu_native_passive_arm(const struct kui_vmu_native_passive_config *c,voi
     }
 #endif
     if(!lease_valid()) {memset(&config,0,sizeof(config));return -2;}
+#if KUI_NATIVE_SESSION_CONTROLS
+    if(!native_session_worker_prepare()) {memset(&config,0,sizeof(config));return -2;}
+#endif
 #if KUI_VMU_NATIVE_READONLY_PROBE || KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(kui_vmu_native_readonly_release_resume!=config.lease.owner.release+20u) {
         memset(&config,0,sizeof(config));return -3;
@@ -1636,6 +1685,9 @@ static void controller_complete(const struct kui_vmu_native_passive_frame *f) {
     }
     uint32_t parent_response=0u;
     bool held=false;
+#if KUI_NATIVE_SESSION_CONTROLS
+    uint32_t session_controls=UINT32_MAX;
+#endif
     for(unsigned i=0;i<controller_pair.count;i++) {
         uint32_t response,function;uint32_t rx=controller_pair.frames[i].rx;
         unsigned port=(controller_pair.frames[i].header>>14)&3u;
@@ -1674,11 +1726,18 @@ static void controller_complete(const struct kui_vmu_native_passive_frame *f) {
             if(!reader_only() && (response&occupied))
                 CONTROLLER_FAIL(10u,i,address,response,response&~occupied);
             parent_response=response;
+#if KUI_NATIVE_SESSION_CONTROLS
+            if(command==9u) {
+#else
             if(NATIVE_HOT_CONFIG.driver.family==KUI_VMU_NATIVE_FAMILY_EARLY_V1 && command==9u) {
+#endif
                 uint32_t controls;
                 if(!read_value(NULL,address+8u,4u,&controls))
                     CONTROLLER_FAIL(12u,i,address+8u,UINT32_MAX,0u);
                 held=held_report_gesture(controls);
+#if KUI_NATIVE_SESSION_CONTROLS
+                session_controls=controls;
+#endif
             }
         }
         if(!i) state.first_response=response;
@@ -1686,7 +1745,13 @@ static void controller_complete(const struct kui_vmu_native_passive_frame *f) {
     }
     if(!controller_context_valid(f,1u)) fail(0x47u);
     held_report=held?held_report+1u:0u;
-    if(held_report>=HELD_REPORT_FRAMES) fail(0x4fu);
+    if(held_report>=HELD_REPORT_FRAMES) {
+#if KUI_NATIVE_SESSION_CONTROLS
+        session.exit_pending=1u;
+#else
+        fail(0x4fu);
+#endif
+    }
     uint8_t *parent=readonly_rx(controller_pair.frames[controller_pair.parent].rx,1024u);
     if(!parent) CONTROLLER_FAIL(11u,controller_pair.parent,
         controller_pair.frames[controller_pair.parent].rx,0u,1024u);
@@ -1703,6 +1768,9 @@ static void controller_complete(const struct kui_vmu_native_passive_frame *f) {
     ++overlay.stats.completed;
     controller_pair.pending=0u;state.pending=0u;++state.completed;state.error=0u;
     state.proof=durable_card.commits!=0u;
+#if KUI_NATIVE_SESSION_CONTROLS
+    native_session_controller_complete(session_controls);
+#endif
 }
 #undef CONTROLLER_FAIL
 #undef controller_reject
@@ -1919,6 +1987,9 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
 #endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     bool capture_gesture=false,held=false;
+#if KUI_NATIVE_SESSION_CONTROLS
+    uint32_t session_controls=UINT32_MAX;
+#endif
 #endif
     for(unsigned i=0;i<state.descriptors;i++) {
         uint32_t response;
@@ -1934,6 +2005,9 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
             uint32_t controls;
             if(!read_value(NULL,(receivers[i]+8u)|UINT32_C(0xa0000000),4u,&controls)) fail(12u);
             held=held_report_gesture(controls);
+#if KUI_NATIVE_SESSION_CONTROLS
+            session_controls=controls;
+#endif
         }
         if((!KUI_NATIVE_E1_WAIT_CAPTURE && !KUI_NATIVE_METADATA_CACHE_ISOLATION && !KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION && NATIVE_HOT_CONFIG.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE) && ((chain_frames[i].header>>8)&255u)==32u &&
            (chain_frames[i].header&255u)==9u) {
@@ -1950,7 +2024,13 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
     }
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     held_report=held?held_report+1u:0u;
-    if(held_report>=HELD_REPORT_FRAMES) fail(0x4fu);
+    if(held_report>=HELD_REPORT_FRAMES) {
+#if KUI_NATIVE_SESSION_CONTROLS
+        session.exit_pending=1u;
+#else
+        fail(0x4fu);
+#endif
+    }
 #endif
 #if !KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(!boundary(f,1u,state.bytes,&snapshot)) fail(13u);
@@ -1986,6 +2066,9 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
     /* A durable commit remains visible to the game. Power-off/reboot readback
      * is a hardware test, never inferred from this in-session counter. */
     state.proof=durable_card.commits!=0u;
+#if KUI_NATIVE_SESSION_CONTROLS
+    native_session_controller_complete(session_controls);
+#endif
     kui_vmu_native_trace_point(0x2fu,f,state.submitted,state.completed);
     if((!KUI_NATIVE_E1_WAIT_CAPTURE && !KUI_NATIVE_METADATA_CACHE_ISOLATION && !KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION && NATIVE_HOT_CONFIG.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE))
         diagnostic_complete(&span,capture_gesture,false);

@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/retail_image.h"
+#include "kui/native_session.h"
 #include <stdbool.h>
 #include <string.h>
 
@@ -9,7 +10,7 @@ _Static_assert(RECORD_BASE + KUI_RETAIL_WIRE_SLOTS * RECORD_BYTES <= KUI_RETAIL_
                "manifest wire capacity");
 _Static_assert(sizeof(struct kui_retail_manifest) < 4096u, "bounded manifest");
 
-#if KUI_RETAIL_MANIFEST_SLOTS == KUI_RETAIL_WIRE_SLOTS
+#if KUI_RETAIL_MANIFEST_SLOTS == KUI_RETAIL_WIRE_SLOTS || KUI_NATIVE_SESSION_CONTROLS
 static uint32_t get32(const uint8_t *p) {
     return (uint32_t)p[0] | (uint32_t)p[1] << 8 |
            (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
@@ -40,7 +41,7 @@ uint32_t kui_retail_crc32(uint32_t previous, const void *data, size_t bytes) {
     }
     return crc ^ UINT32_MAX;
 }
-#if KUI_RETAIL_MANIFEST_SLOTS == KUI_RETAIL_WIRE_SLOTS
+#if KUI_RETAIL_MANIFEST_SLOTS == KUI_RETAIL_WIRE_SLOTS || KUI_NATIVE_SESSION_CONTROLS
 static uint32_t wire_crc(const uint8_t *wire) {
     static const uint8_t zero[4];
     uint32_t crc = kui_retail_crc32(0, wire, 16);
@@ -125,7 +126,7 @@ enum kui_game_result kui_retail_image_check(const struct kui_retail_manifest *m,
     if(!tracks_valid(m)) return KUI_GAME_INVALID;
     return kui_retail_image_check_validated(m, lba, count, format);
 }
-#if KUI_RETAIL_MANIFEST_SLOTS == KUI_RETAIL_WIRE_SLOTS
+#if KUI_RETAIL_MANIFEST_SLOTS == KUI_RETAIL_WIRE_SLOTS || KUI_NATIVE_SESSION_CONTROLS
 static const struct kui_retail_track *extent_owner(const struct kui_retail_manifest *m,uint32_t index,uint32_t *owner) {
     for(uint32_t i=0;i<m->track_count;i++) {
         const struct kui_retail_track *t=&m->slots[i].track;
@@ -162,7 +163,7 @@ enum kui_game_result kui_retail_manifest_validate(const struct kui_retail_manife
            (m->storage_transport != KUI_STORAGE_SCI || m->track_count > KUI_RETAIL_ASYNC_SLOTS ||
             m->extent_count > KUI_RETAIL_ASYNC_SLOTS - m->track_count)) ||
        m->partition_start >= m->partition_end || m->partition_end > m->card_sectors ||
-       !m->extent_count || m->extent_count > KUI_RETAIL_WIRE_SLOTS - m->track_count ||
+       !m->extent_count || m->extent_count > KUI_RETAIL_MANIFEST_SLOTS - m->track_count ||
        !text_valid(m->title, sizeof(m->title), true) ||
        !text_valid(m->product, sizeof(m->product), false) ||
        !text_valid(m->bootfile, sizeof(m->bootfile), true) ||
@@ -256,8 +257,8 @@ enum kui_game_result kui_retail_manifest_decode(
         return KUI_GAME_INVALID;
     m->track_count = get32(wire + 20); m->extent_count = get32(wire + 24);
     m->storage_transport = get32(wire + 28);
-    if(m->track_count > KUI_RETAIL_IMAGE_TRACKS ||
-       m->extent_count > KUI_RETAIL_WIRE_SLOTS - m->track_count) goto invalid;
+    if(m->track_count > KUI_RETAIL_IMAGE_TRACKS || m->track_count > KUI_RETAIL_MANIFEST_SLOTS ||
+       m->extent_count > KUI_RETAIL_MANIFEST_SLOTS - m->track_count) goto invalid;
     const uint32_t used = m->track_count + m->extent_count;
     const uint8_t *unused = wire + RECORD_BASE + used * RECORD_BYTES;
     if(!zeroes(unused, (size_t)(wire + KUI_RETAIL_IMAGE_WIRE_BYTES - unused))) goto invalid;

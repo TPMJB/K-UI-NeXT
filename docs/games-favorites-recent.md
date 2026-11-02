@@ -1,20 +1,24 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 # Favorites and recently played
 
-In Games, select a game and press **START**. Library options retains the
-existing browse, scan and test controls, then adds:
+Games opens with three visible tabs: **All games**, **Favorites**, and
+**Recently played**. Press **Y** to move to the next tab; the tab bar always
+shows which list is active. Tab changes start at the first page of `/Games`.
 
-- **Favorites**: favorite games from `/Games`, in the normal alphabetical order.
-- **Recently played**: prepared game launches from `/Games`, newest first.
-- **Add selected favorite / Remove selected favorite**: saves that choice for
-  the game highlighted before opening Library options.
+Highlight a game and press **X** to add or remove its favorite star directly.
+An amber `*` identifies favorites in list, compact and gallery layouts. The
+highlighted game is retained when it remains in the resulting list. Folders
+cannot be favorites; a clear message explains that refusal.
 
-An amber `*` identifies favorites in list, compact and gallery views. A disc
-set has one favorite and one recent position; choosing it still opens its
-ordinary disc chooser. Original and 2048-byte copies share the same activity
-entry when they are a paired catalogue row. Folders cannot be favorites.
-**Game library** returns to the complete list. X still scans for changes and Y
-still changes the visual layout.
+A disc set has one favorite and one recent position; A still opens its ordinary
+disc chooser. Original and 2048-byte copies share activity when they form a
+paired catalogue row. **Recently played** is ordered newest first.
+
+**START → Library options** contains the less frequent actions: open the full
+Game library, browse other SD folders, scan box art, run developer tests, scan
+for changes, rebuild the saved library, or change between List, Compact and
+Gallery layouts. Changing layout keeps the active tab and highlighted row.
+A normal rescan seeks the remembered game again after discovery completes.
 
 Opening game details, inspecting an executable or running a read test does not
 update history. History is written only after game preparation succeeds,
