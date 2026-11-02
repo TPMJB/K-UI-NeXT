@@ -584,9 +584,6 @@ enum kui_runtime_result kui_runtime_read(const char *path,struct kui_runtime_ima
 void kui_runtime_free(struct kui_runtime_image *out) {
     free(out->data);*out=(struct kui_runtime_image){0};
 }
-const char *kui_runtime_result_name(enum kui_runtime_result result) {
-    (void)result;return "fixture runtime result";
-}
 enum kui_game_metadata_status kui_game_metadata_read(const struct kui_game_metadata_ops *ops,
         uint32_t session_lba,struct kui_game_metadata *out) {
     CHECK(ops && ops->ctx && ops->read_sector && ops->data_range && session_lba==45000u);

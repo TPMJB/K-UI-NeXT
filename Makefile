@@ -134,6 +134,10 @@ NATIVE_CACHE_SOURCES := src/core/vmu_native_program.c src/core/vmu_native_cache_
     src/core/vmu_native_discovery.c src/core/vmu_native_layout.c src/core/vmu_native_heap.c \
     src/core/vmu_native_exit.c src/core/vmu_native_patch.c src/core/native_sdk_sci_family.c
 ARMADA_PREPARE_TEST_SOURCES += $(NATIVE_CACHE_SOURCES)
+# Both WinCE preparation fixtures include the production Games launcher;
+# retain its real optional-session boundary even for ordinary CE packages.
+ARMADA_PREPARE_TEST_SOURCES += src/apps/native_session_prepare.c src/core/native_session.c \
+    src/core/native_return.c src/core/storage_policy.c src/core/runtime_image.c
 build/test-games-native-cache: tests/test_games_native_cache.c tests/test_vmu_native_resolution_cache.c src/apps/games_native_cache.inc $(NATIVE_CACHE_SOURCES) src/core/hash.c src/core/data.c
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie -Iinclude tests/test_games_native_cache.c $(NATIVE_CACHE_SOURCES) src/core/hash.c src/core/data.c -o $@
