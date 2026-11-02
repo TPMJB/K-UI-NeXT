@@ -12,6 +12,7 @@
 #include "kui/games.h"
 #include "kui/game_launch_settings.h"
 #include "kui/games_selection.h"
+#include "kui/games_activity.h"
 #include "kui/games_covers.h"
 #include "kui/files.h"
 #include "kui/ftp.h"
@@ -58,7 +59,8 @@ enum kui_shell_page { KUI_SHELL_HOME, KUI_SHELL_RIPPER,
     KUI_SHELL_GAMES_TESTS, KUI_SHELL_GAMES_INFO, KUI_SHELL_GAMES_PATCHES, KUI_SHELL_GAMES_CODEC, KUI_SHELL_GAMES_CHECK, KUI_SHELL_VMU_IMAGE, KUI_SHELL_VMU_IMPORT,
     KUI_SHELL_VMU_COLLECTION, KUI_SHELL_VMU_TOOLS, KUI_SHELL_VMU_WIZARD,
     KUI_SHELL_DISC_TOOLS, KUI_SHELL_VMU_CARD, KUI_SHELL_SALVAGE_DRIVE,
-    KUI_SHELL_SALVAGE_OPTIONS, KUI_SHELL_GAMES_VMU_CARD, KUI_SHELL_GD_OPTIONS };
+    KUI_SHELL_SALVAGE_OPTIONS, KUI_SHELL_GAMES_VMU_CARD, KUI_SHELL_GD_OPTIONS,
+    KUI_SHELL_SCREENSHOTS };
 enum kui_shell_recovery_row {
     KUI_SHELL_RECOVERY_CONTINUE, KUI_SHELL_RECOVERY_NEW, KUI_SHELL_RECOVERY_OPTIONS,
     KUI_SHELL_RECOVERY_DIAGNOSTICS, KUI_SHELL_RECOVERY_COUNT
@@ -154,7 +156,7 @@ enum kui_shell_action {
     KUI_SHELL_VMU_EMULATION_LOAD, KUI_SHELL_VMU_EMULATION_SAVE,
     KUI_SHELL_VMU_RENAME, KUI_SHELL_VMU_GAME_INFO, KUI_SHELL_VMU_GAME_CARD_DEFAULT,
     KUI_SHELL_GD_CHECK, KUI_SHELL_GD_DIRECT_BOOT, KUI_SHELL_GD_VMU_INFO,
-    KUI_SHELL_GD_OPTIONS_LOAD, KUI_SHELL_GD_REGION_SAVE
+    KUI_SHELL_GD_OPTIONS_LOAD, KUI_SHELL_GD_REGION_SAVE, KUI_SHELL_GAMES_FAVORITE
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
@@ -243,7 +245,8 @@ struct kui_shell {
     unsigned games_variant_selected;
     unsigned games_page, games_selected, games_advanced_selected;
     /* KUI_GAMES_VIEW_SAVED until a listing reports the card's saved view. */
-    unsigned games_view;
+    unsigned games_view,games_filter;
+    char games_favorite_path[KUI_GAMES_FILE_CAP],games_favorite_group[33],games_activity_notice[128];
     unsigned games_generation;
     bool games_loading,games_art_loading;
     /* A page turn keeps drawing the page it left, with its page number and

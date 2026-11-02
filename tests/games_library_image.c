@@ -223,6 +223,82 @@ static void cold_check(void) {
     assert(find("Duplicate Disc 01",&duplicate) && !duplicate.group[0]);
     assert(find("Duplicate Disc 2",&duplicate) && !duplicate.group[0]);
 }
+static void activity_check(const char *name) {
+    struct kui_games_entry skies,standalone;
+    assert(find("Skies of Arcadia",&skies) && skies.group[0]);
+    assert(find("Standalone",&standalone) && !standalone.group[0]);
+    struct kui_games_page result;
+    assert(kui_games_library_rows_filter("/Games","",0,KUI_GAMES_VIEW_LIST,KUI_GAMES_FILTER_FAVORITES,&result,log_line,cancel));
+    assert(!result.count && !result.total && result.filter==KUI_GAMES_FILTER_FAVORITES);
+    assert(kui_games_library_rows_filter("/Games","",0,KUI_GAMES_VIEW_LIST,KUI_GAMES_FILTER_RECENT,&result,log_line,cancel));
+    assert(!result.count && !result.total);
+    assert(kui_games_library_favorite_toggle("/Games",skies.group,skies.path,log_line));
+
+    if(!strcmp(name,"activity-write-fail")) {
+        test.fail_write=true;
+        assert(!kui_games_library_favorite_toggle("/Games",skies.group,skies.path,log_line));
+        assert(kui_games_library_rows_filter("/Games","",0,KUI_GAMES_VIEW_LIST,KUI_GAMES_FILTER_FAVORITES,&result,log_line,cancel));
+        assert(result.count==1 && result.entries[0].favorite && !strcmp(result.entries[0].group,skies.group));
+        test.fail_write=false;clear();
+        assert(kui_games_library_rows_filter("/Games","",0,KUI_GAMES_VIEW_LIST,KUI_GAMES_FILTER_FAVORITES,&result,log_line,cancel));
+        assert(result.count==1 && result.entries[0].favorite);
+        assert(kui_games_library_favorite_toggle("/Games",skies.group,skies.path,log_line));
+        clear();
+        assert(kui_games_library_rows_filter("/Games","",0,KUI_GAMES_VIEW_LIST,KUI_GAMES_FILTER_FAVORITES,&result,log_line,cancel));
+        assert(!result.count);
+        puts("EVIDENCE failed favorite write kept RAM and last good disk generation; next successful removal persisted");
+        return;
+    }
+    assert(kui_games_library_favorite_toggle("/Games","",standalone.path,log_line));
+    if(!strcmp(name,"activity-corrupt")) {
+        corrupt("0:/KUI/games-library/activity-b.bin","BROKEN!!");clear();
+        assert(kui_games_library_rows_filter("/Games","",0,KUI_GAMES_VIEW_LIST,KUI_GAMES_FILTER_FAVORITES,&result,log_line,cancel));
+        assert(result.count==1 && !strcmp(result.entries[0].group,skies.group));
+        corrupt("0:/KUI/games-library/activity-a.bin","BROKEN!!");clear();
+        assert(find("Standalone",NULL));unsigned writes=test.writes;
+        assert(!kui_games_library_rows_filter("/Games","",0,KUI_GAMES_VIEW_LIST,KUI_GAMES_FILTER_FAVORITES,&result,log_line,cancel));
+        assert(!kui_games_library_favorite_toggle("/Games",skies.group,skies.path,log_line));
+        assert(test.writes==writes);
+        puts("EVIDENCE damaged latest activity recovered its prior generation; two damaged records did not overwrite user history or hide All games");
+        return;
+    }
+
+    assert(kui_games_library_rows_filter("/Games","",0,KUI_GAMES_VIEW_LIST,KUI_GAMES_FILTER_FAVORITES,&result,log_line,cancel));
+    assert(result.count==2 && result.total==2 && !result.has_more);
+    assert(!strcmp(result.entries[0].group,skies.group) && !strcmp(result.entries[1].path,standalone.path));
+    assert(result.entries[0].favorite && result.entries[1].favorite);
+    struct kui_games_page discs;
+    assert(kui_games_library_rows_filter("/Games",skies.group,0,KUI_GAMES_VIEW_LIST,KUI_GAMES_FILTER_FAVORITES,&discs,log_line,cancel));
+    assert(discs.count==2 && discs.entries[0].disc==1 && discs.entries[1].disc==2 && discs.entries[0].favorite && discs.entries[1].favorite);
+    struct kui_games_activity_entry first,second,alternate;
+    assert(kui_games_library_activity_key("/Games",discs.entries[0].path,&first,log_line));
+    assert(kui_games_library_activity_key("/Games",discs.entries[1].path,&second,log_line));
+    assert(!strcmp(first.path,"/games") && !strcmp(first.path,second.path) && !strcmp(first.group,second.group));
+    assert(discs.entries[1].variant_2048_path[0]);
+    assert(kui_games_library_activity_key("/Games",discs.entries[1].variant_2048_path,&alternate,log_line));
+    assert(!strcmp(first.path,alternate.path) && !strcmp(first.group,alternate.group));
+    assert(kui_games_library_record_played(&second,log_line));
+    assert(kui_games_library_activity_key("/Games",standalone.path,&second,log_line));
+    assert(kui_games_library_record_played(&second,log_line));
+    assert(kui_games_library_record_played(&first,log_line));
+    clear();unsigned dirs=test.readdirs,source_reads=test.game_opens,writes=test.writes;
+    assert(kui_games_library_rows_filter("/Games","",0,KUI_GAMES_VIEW_LIST,KUI_GAMES_FILTER_RECENT,&result,log_line,cancel));
+    assert(result.count==2 && result.total==2 && !strcmp(result.entries[0].group,skies.group));
+    assert(!strcmp(result.entries[1].path,standalone.path));
+    assert(test.readdirs==dirs && test.game_opens==source_reads && test.writes==writes);
+    unsigned offset=100;
+    assert(kui_games_library_find_filter("/Games","",discs.entries[1].name,KUI_GAMES_FILTER_RECENT,&offset,log_line,cancel) && !offset);
+    assert(kui_games_library_rows_filter("/Games",skies.group,0,KUI_GAMES_VIEW_LIST,KUI_GAMES_FILTER_RECENT,&discs,log_line,cancel));
+    assert(discs.count==2 && discs.entries[0].disc==1 && discs.entries[1].disc==2);
+    assert(kui_games_library_invalidate("/Games",log_line));
+    assert(kui_games_library_scan("/Games",true,log_line,cancel));clear();
+    assert(kui_games_library_rows_filter("/Games","",0,KUI_GAMES_VIEW_LIST,KUI_GAMES_FILTER_FAVORITES,&result,log_line,cancel));
+    assert(result.count==2);
+    add_game(true);assert(kui_games_library_scan("/Games",false,log_line,cancel));clear();
+    assert(kui_games_library_rows_filter("/Games","",0,KUI_GAMES_VIEW_LIST,KUI_GAMES_FILTER_RECENT,&result,log_line,cancel));
+    assert(result.count==1 && !strcmp(result.entries[0].group,skies.group));
+    puts("EVIDENCE favorites and recent launches survived cold reload/rebuild; disc 1/disc 2/2048 share one recent group; removed images did not become ghost rows");
+}
 static void check(const char *name) {
     test.active=true;
     if(!strcmp(name,"first-write-fail")) {
@@ -231,7 +307,8 @@ static void check(const char *name) {
         test.fail_write=false;clear();assert(kui_games_library_scan("/Games",false,log_line,cancel));cold_check();
     } else {
         assert(kui_games_library_scan("/Games",false,log_line,cancel));assert(kui_games_library_ready("/Games"));
-        if(!strcmp(name,"cold") || !strcmp(name,"groups"))cold_check();
+        if(!strncmp(name,"activity",8))activity_check(name);
+        else if(!strcmp(name,"cold") || !strcmp(name,"groups"))cold_check();
         else if(!strcmp(name,"stale")) {
             add_game(true);assert(find("Standalone",NULL) && !find("New Arrival",NULL));clear();
             assert(find("Standalone",NULL) && !find("New Arrival",NULL));

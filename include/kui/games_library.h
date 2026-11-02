@@ -2,6 +2,7 @@
 #ifndef KUI_GAMES_LIBRARY_H
 #define KUI_GAMES_LIBRARY_H
 #include "kui/games.h"
+#include "kui/games_activity.h"
 
 /* Storage-worker APIs. A checked, sorted catalogue survives reboot; opening
  * a valid catalogue never walks game folders or stats their images. group is
@@ -11,6 +12,19 @@ bool kui_games_library_rows(const char *root,const char *group,unsigned offset,
     unsigned view,struct kui_games_page *out,kui_log_fn log,kui_cancel_fn cancel);
 bool kui_games_library_find(const char *root,const char *group,const char *name,
     unsigned *offset,kui_log_fn log,kui_cancel_fn cancel);
+bool kui_games_library_rows_filter(const char *root,const char *group,unsigned offset,
+    unsigned view,unsigned filter,struct kui_games_page *out,kui_log_fn log,kui_cancel_fn cancel);
+bool kui_games_library_find_filter(const char *root,const char *group,const char *name,
+    unsigned filter,unsigned *offset,kui_log_fn log,kui_cancel_fn cancel);
+/* A group favorite uses root+group; an ordinary image uses its exact path.
+ * Call from the storage worker. Failures preserve the in-memory selection. */
+bool kui_games_library_favorite_toggle(const char *root,const char *group,const char *path,kui_log_fn log);
+/* Resolve before launch preparation releases catalogue memory, then record
+ * only after preparation succeeds. A recent entry means a prepared launch,
+ * never an inspection, read test or proof of gameplay success. */
+bool kui_games_library_activity_key(const char *root,const char *path,
+    struct kui_games_activity_entry *out,kui_log_fn log);
+bool kui_games_library_record_played(const struct kui_games_activity_entry *,kui_log_fn log);
 /* Scans build a complete replacement from fresh directory/title discovery.
  * Rebuild additionally permits repair of a damaged catalogue-generation
  * ledger after removing only generated index files. Stop before commit or a

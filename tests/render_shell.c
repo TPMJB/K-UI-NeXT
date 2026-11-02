@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* Host preview uses the same embedded artwork/font and renderer as hardware.
- * Modes: home, ripper, confirm, settings, diagnostics, complete, partial,
+ * Modes: home, ripper, confirm, settings, screenshots, settings-screenshots, diagnostics, complete, partial,
  * stopped, destination, keyboard, advanced, ripper-settings, video, vmu,
  * memory, network, idle, reset, home-vmu, home-memory, home-network,
  * home-music, home-gd, music, gd-play, gd-confirm, quick-resume, dma-fallback,
@@ -449,6 +449,17 @@ int main(int argc,char **argv) {
             strcpy(shell.games_listing.message,"Choose a disc.");
         }
     } else if(!strcmp(argv[1],"games-list-art")) library(&shell,KUI_GAMES_VIEW_LIST);
+    else if(!strcmp(argv[1],"games-favorites") || !strcmp(argv[1],"games-recent")) {
+        library(&shell,KUI_GAMES_VIEW_LIST);
+        shell.games_filter=!strcmp(argv[1],"games-favorites")?KUI_GAMES_FILTER_FAVORITES:KUI_GAMES_FILTER_RECENT;
+        shell.games_listing.filter=shell.games_filter;shell.games_listing.count=shell.games_listing.total=4;
+        shell.games_listing.has_more=false;shell.games_page=0;shell.games_selected=1;
+        shell.games_listing.entries[0].directory=false;strcpy(shell.games_listing.entries[0].name,"Armada");
+        strcpy(shell.games_listing.entries[0].title,"ARMADA");
+        for(unsigned i=0;i<4;i++)shell.games_listing.entries[i].favorite=shell.games_filter==KUI_GAMES_FILTER_FAVORITES || i==1;
+        strcpy(shell.games_listing.message,shell.games_filter==KUI_GAMES_FILTER_FAVORITES?
+            "Favorite games. START opens library options.":"Recent prepared launches, newest first.");
+    }
     else if(!strcmp(argv[1],"games-art-loading")) {
         library(&shell,KUI_GAMES_VIEW_LIST);shell.games_listing.entries[shell.games_selected].cover=false;
         shell.games_art_loading=true;
@@ -523,7 +534,8 @@ int main(int argc,char **argv) {
         }
         if(!strcmp(argv[1],"games-zso-information")) shell.page=KUI_SHELL_GAMES_INFO;
     } else if(!strcmp(argv[1],"games-advanced")) {
-        shell.page=KUI_SHELL_GAMES_ADVANCED;shell.games_advanced_selected=2;
+        library(&shell,KUI_GAMES_VIEW_LIST);shell.games_selected=1;shell.games_listing.entries[1].favorite=true;
+        shell.page=KUI_SHELL_GAMES_ADVANCED;shell.games_advanced_selected=8;
     } else if(!strcmp(argv[1],"games-probe") || !strcmp(argv[1],"games-probe-loading")) {
         shell.page=KUI_SHELL_GAMES_PROBE_CONFIRM;
         if(!strcmp(argv[1],"games-probe-loading")) {
@@ -973,6 +985,8 @@ int main(int argc,char **argv) {
         shell.music_listing.entries[0].directory=true;shell.music_selected=3;
         strcpy(shell.music_listing.message,"Choose a WAV or Ogg file to play.");
     } else if(!strcmp(argv[1],"settings")) {shell.page=KUI_SHELL_SETTINGS;shell.system_selected=2;}
+    else if(!strcmp(argv[1],"settings-screenshots")) {shell.page=KUI_SHELL_SETTINGS;shell.system_selected=11;}
+    else if(!strcmp(argv[1],"screenshots")) {shell.page=KUI_SHELL_SCREENSHOTS;}
     else if(!strcmp(argv[1],"ripper-settings")) shell.page=KUI_SHELL_RIPPER_SETTINGS;
     else if(!strncmp(argv[1],"ripper-format-",14)) {
         shell.page=KUI_SHELL_RIPPER_SETTINGS;shell.setting_selected=2;

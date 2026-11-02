@@ -147,6 +147,7 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->page==KUI_SHELL_HOME ? "D-pad Select   A Open   Y Volume   L/R Songs" :
         s->page==KUI_SHELL_DISC_TOOLS ? "D-pad Select   A Open   B Home" :
         s->page==KUI_SHELL_SETTINGS ? "A Save / Open   B Back / discard" :
+        s->page==KUI_SHELL_SCREENSHOTS ? "Hold L + R, press Y   B Settings" :
         s->page==KUI_SHELL_RIPPER_SETTINGS ? "A Save   B Back / discard" :
         s->page==KUI_SHELL_CLOCK ? "A Set clock   X Reload   B Settings" :
         s->page==KUI_SHELL_CRC_SCAN && s->scan_return==KUI_SHELL_DISC_TOOLS ? "A Verify saved dump   B Disc tools" :
@@ -648,15 +649,15 @@ static void system_settings(struct paint *p,const struct kui_shell *s,const stru
     title(p,40,108,"System settings");
     label(p,40,136,MUTED,"UP/DOWN Choose   LEFT/RIGHT Change");
     const char *names[]={"Video mode","Home memory display","Background music","Music volume",
-        "Startup chime","Start in","Console clock","Restore defaults","Safe area","System tools","Menu sounds"};
+        "Startup chime","Start in","Console clock","Restore defaults","Safe area","System tools","Menu sounds","Screenshots"};
     char volume[16];snprintf(volume,sizeof(volume),"%u%%",s->system_draft.music_volume);
     const char *values[]={kui_system_video_name(s->system_draft.video_mode),
         s->system_draft.show_memory?"ON":"OFF",s->system_draft.music_enabled?"ON":"OFF",volume,
         s->system_draft.startup_chime?"ON":"OFF",kui_system_startup_name(s->system_draft.startup_app),
         "A Edit local time","A Review",s->system_draft.screen_inset==2?"32 px sides":
-        s->system_draft.screen_inset==1?"16 px sides":"Full width","A Open",s->system_draft.menu_sounds?"ON":"OFF"};
+        s->system_draft.screen_inset==1?"16 px sides":"Full width","A Open",s->system_draft.menu_sounds?"ON":"OFF","A Open"};
     unsigned first=s->system_selected>=8?s->system_selected-6:0;
-    for(unsigned i=first;i<first+8 && i<11;i++) {
+    for(unsigned i=first;i<first+8 && i<12;i++) {
         unsigned y=158+(i-first)*25;
         panel(p,32,y,576,23,i==s->system_selected?SELECTED:PANEL);
         if(i==s->system_selected) box(p,32,y+3,3,17,PINK);
@@ -672,11 +673,22 @@ static void system_settings(struct paint *p,const struct kui_shell *s,const stru
         s->system_selected==7?"Resets the draft. Save to apply; B keeps your saved settings.":
         s->system_selected==8?"Inset the display for TVs that crop the picture at its sides.":
         s->system_selected==9?"Inspect hardware, save verified backups, or restart K-UI.":
+        s->system_selected==11?"Save a picture of the current K-UI screen to SD.":
         "Play a short sound for menu movement and selection.";
     label(p,40,366,MUTED,detail);
     label(p,40,390,kui_shell_system_dirty(s)?AMBER:CYAN,kui_shell_system_dirty(s)?
         "Unsaved changes. A saves; B discards.":v->settings_notice&&v->settings_notice[0]?
-        v->settings_notice:"A saves preferences; clock, defaults and tools open separately.");
+        v->settings_notice:"A saves preferences; informational pages open separately.");
+}
+static void screenshots_page(struct paint *p) {
+    title(p,40,108,"Screenshots");
+    label(p,40,142,MUTED,"Capture K-UI screens for sharing and release threads.");
+    panel(p,32,170,576,94,PANEL);
+    label(p,48,182,CYAN,"Hold L + R, press Y");
+    label(p,48,210,WHITE,"Save to: /KUI/screenshots");
+    label(p,48,238,MUTED,"Format: 640 x 480 BMP");
+    label(p,40,294,MUTED,"In-game screenshots: Not available yet");
+    label(p,40,326,MUTED,"This shortcut captures the K-UI menus only.");
 }
 static void clock_page(struct paint *p,const struct kui_shell *s) {
     title(p,40,108,"Console clock");
@@ -2101,9 +2113,10 @@ static void games_scan(struct paint *p,const struct kui_shell_view *v) {
 static void games(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
     const struct kui_games_page *l=&s->games_listing;
     unsigned view=kui_shell_games_view(s),count=l->count<KUI_GAMES_ROWS?l->count:KUI_GAMES_ROWS;
-    title(p,40,108,s->games_group[0]?"Discs":"Games");
+    title(p,40,108,s->games_group[0]?"Discs":s->games_filter==KUI_GAMES_FILTER_FAVORITES?"Favorites":
+        s->games_filter==KUI_GAMES_FILTER_RECENT?"Recent":"Games");
     char line[180];snprintf(line,sizeof(line),"%s",s->games_group[0]?l->group_name:s->games_path);
-    words(p,150,116,392,CYAN,line,false);
+    words(p,s->games_filter==KUI_GAMES_FILTER_FAVORITES && !s->games_group[0]?190:150,116,392,CYAN,line,false);
     unsigned pages=l->total?(l->total+KUI_GAMES_ROWS-1)/KUI_GAMES_ROWS:0;
     unsigned page=shown_page(s);
     if(pages) snprintf(line,sizeof(line),"Page %u of %u   %u items",page+1,
@@ -2119,6 +2132,7 @@ static void games(struct paint *p,const struct kui_shell *s,const struct kui_she
         if(view==KUI_GAMES_VIEW_COMPACT) {
             unsigned x=32+(i/4)*292,y=142+(i%4)*62;
             if(i==chosen) panel(p,x,y,284,58,SELECTED);
+            if(e->favorite)label(p,x+270,y+2,AMBER,"*");
             entry_art(p,s,v,i,x+4,y+1,KUI_COVER_SMALL);
             words(p,x+70,y+10,x+280,ink,entry_text(e),false);
             words(p,x+70,y+32,x+280,MUTED,e->group[0]?"Choose a disc":e->directory?"Folder":e->variant_2048_path[0]?
@@ -2126,11 +2140,13 @@ static void games(struct paint *p,const struct kui_shell *s,const struct kui_she
         } else if(view==KUI_GAMES_VIEW_GALLERY) {
             unsigned x=32+(i%4)*144,y=134+(i/4)*130;
             if(i==chosen) panel(p,x+10,y-3,124,130,SELECTED);
+            if(e->favorite)label(p,x+120,y+2,AMBER,"*");
             entry_art(p,s,v,i,x+20,y+2,KUI_COVER_MEDIUM);
             centred(p,x+12,y+110,120,ink,entry_text(e));
         } else {
             unsigned y=146+i*30;
             if(i==chosen) panel(p,32,y-5,388,28,SELECTED);
+            if(e->favorite)label(p,34,y,AMBER,"*");
             words(p,44,y,e->directory || e->group[0]?368:412,ink,entry_text(e),false);
             if(e->directory) words(p,378,y,412,MUTED,"DIR",false);
             else if(e->group[0]) words(p,372,y,412,MUTED,"DISCS",false);
@@ -2145,7 +2161,7 @@ static void games(struct paint *p,const struct kui_shell *s,const struct kui_she
             s->games_art_loading?"Loading box art...":l->artwork?"No box art found":"No box art yet");
     }
     if(!count && !v->busy) label(p,40,210,MUTED,"No selectable disc images or folders in this view.");
-    label(p,40,398,v->busy?CYAN:AMBER,!v->busy && count && l->entries[chosen].group[0]?
+    label(p,40,398,v->busy?CYAN:AMBER,l->activity_notice?l->message:!v->busy && count && l->entries[chosen].group[0]?
         "A chooses a disc. X scans for library changes.":!v->busy && count && l->entries[chosen].variant_2048_path[0]?
         "A chooses Original or 2048-byte copy.":!v->busy && count && !l->artwork?
         "No box art yet: press START, then Scan box art.":l->message);
@@ -2238,19 +2254,24 @@ static void games_information(struct paint *p,const struct kui_shell *s) {
     label(p,48,376,MUTED,"Metadata checks do not verify every saved sector.");
 }
 static void games_advanced(struct paint *p,const struct kui_shell *s) {
-    title(p,40,108,"Games / Advanced");
-    label(p,40,142,CYAN,"Source: SD card");
+    title(p,40,108,"Games / Library options");
+    const struct kui_games_entry *entry=s->games_selected<s->games_listing.count?&s->games_listing.entries[s->games_selected]:NULL;
+    words(p,40,138,608,CYAN,entry?entry_text(entry):"Source: SD card",false);
     const char *names[]={"Game library","Browse SD folders","Scan box art","Developer tests",
-        "Scan for changes","Rebuild library"};
+        "Scan for changes","Rebuild library","Favorites","Recently played",
+        entry && entry->favorite?"Remove selected favorite":"Add selected favorite"};
     const char *details[]={"Open /Games","Find a disc image elsewhere on the card",
         "Covers and titles for every game in /Games","Image and loader read tests",
-        "Find added, moved or removed games","Build a fresh saved list; keep game settings"};
-    for(unsigned i=0;i<6;i++) {
-        unsigned y=156+i*38;
-        panel(p,32,y,576,35,s->games_advanced_selected==i?SELECTED:PANEL);
-        label(p,48,y+2,WHITE,names[i]);label(p,48,y+18,MUTED,details[i]);
+        "Find added, moved or removed games","Build a fresh saved list; keep game settings",
+        "Your favorite games in /Games","Prepared game launches, newest first",
+        "Save or remove the selected game; disc sets stay together"};
+    for(unsigned i=0;i<9;i++) {
+        unsigned y=158+i*25;
+        panel(p,32,y,576,23,s->games_advanced_selected==i?SELECTED:PANEL);
+        label(p,48,y+3,WHITE,names[i]);
     }
-    label(p,40,396,MUTED,"IDE / CF sources are not available yet.");
+    words(p,40,396,608,s->games_activity_notice[0]?AMBER:MUTED,s->games_activity_notice[0]?
+        s->games_activity_notice:details[s->games_advanced_selected<9?s->games_advanced_selected:0],false);
 }
 static void games_probe_confirmation(struct paint *p,const struct kui_shell_view *v) {
     title(p,40,108,"Games / Loader read test");
@@ -2974,6 +2995,7 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     case KUI_SHELL_DISC_TOOLS: disc_tools(&p,s,v); break;
     case KUI_SHELL_RIPPER: ripper(&p,s,v); break;
     case KUI_SHELL_SETTINGS: system_settings(&p,s,v); break;
+    case KUI_SHELL_SCREENSHOTS: screenshots_page(&p); break;
     case KUI_SHELL_RIPPER_SETTINGS: ripper_settings(&p,s,v); break;
     case KUI_SHELL_DIAGNOSTICS: diagnostics(&p,s,v); break;
     case KUI_SHELL_STORAGE_TESTS: storage_tests(&p,s,v); break;

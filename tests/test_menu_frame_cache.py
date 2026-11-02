@@ -36,6 +36,7 @@ program=r'''
 #include <stdio.h>
 static _Alignas(32) uint8_t pool[640u*480u*2u];
 static uint16_t *shell_frame;
+static bool shell_frame_ready;
 static unsigned attempts,releases;
 static bool live,fail_next;
 static void *tracked_allocate(size_t alignment,size_t bytes) {
@@ -59,8 +60,9 @@ int main(void) {
     /* Ordinary frames and small storage operations reuse the same cache. */
     assert(shell_frame_prepare(false)==frame && attempts==1u);
     assert(shell_frame_prepare(true)==frame && attempts==1u);
+    shell_frame_ready=true;
     shell_frame_release_for_action(58u);
-    assert(!shell_frame && !live && releases==1u);
+    assert(!shell_frame && !shell_frame_ready && !live && releases==1u);
     /* No cache allocation competes with game preloading after dispatch. */
     assert(!shell_frame_prepare(true) && attempts==1u);
     /* A failed launch returns to idle; the cache may be recreated then. */
@@ -71,12 +73,14 @@ int main(void) {
     assert(!shell_frame_prepare(true) && !live);
     assert(shell_frame_prepare(false)==frame && live);
     shell_frame_release_for_action(58u);
-    for(unsigned action=0;action<=102u;action++) {
+    for(unsigned action=0;action<=109u;action++) {
         assert(shell_frame_prepare(false) && live);
-        bool large=action==19u || (action>=56u && action<=58u) || action==62u || action==79u;
+        shell_frame_ready=true;
+        bool large=action==19u || (action>=56u && action<=58u) || action==62u || action==79u || action==104u;
         unsigned before=releases;
         shell_frame_release_for_action(action);
         assert((shell_frame==NULL)==large && live==!large);
+        assert(shell_frame_ready==!large);
         assert(releases==before+(large?1u:0u));
         shell_frame_release_for_action(58u);
         assert(!shell_frame && !live);

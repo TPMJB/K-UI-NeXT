@@ -3,6 +3,8 @@
 """Saved Games catalogue behavior and failure recovery on FAT32 and exFAT."""
 from pathlib import Path
 import argparse
+import os
+import shlex
 import shutil
 import sys
 import tempfile
@@ -13,7 +15,27 @@ ROOT = Path(__file__).resolve().parents[1]
 BINARY = str(ROOT / "build/games-library-image")
 CASES = ("cold", "groups", "stale", "cancel", "cancel-before", "cancel-readback",
          "first-write-fail", "load-read-fail", "corrupt-newer", "pending-newer", "epoch", "corrupt-epoch",
-         "volume-identity", "generation-read-fail", "source-read-fail", "failed-invalidation-readonly")
+         "volume-identity", "generation-read-fail", "source-read-fail", "failed-invalidation-readonly",
+         "activity", "activity-write-fail", "activity-corrupt")
+
+
+def private_formatter(base):
+    """Enable only the formatter's private host copy of the production config."""
+    config = (ROOT / "config/ffconf.h").read_text()
+    marker = "#define FF_USE_MKFS 0"
+    assert config.count(marker) == 1
+    header = base / "formatter-ffconf.h"
+    header.write_text(config.replace(marker, "#define FF_USE_MKFS 1"))
+    binary = base / "format-fatfs-fixture"
+    run(*shlex.split(os.environ.get("HOST_CC", "cc")), "-std=c11", "-O1", "-g",
+        "-Wall", "-Wextra", "-Werror", "-Wpedantic",
+        "-fsanitize=address,undefined", "-fno-sanitize-recover=all",
+        "-fno-omit-frame-pointer", "-fno-pie", "-no-pie", "-include", str(header),
+        "-I" + str(ROOT / "include"), "-I" + str(ROOT / ".deps/fatfs/source"),
+        str(ROOT / "tests/format_fatfs_fixture.c"),
+        str(ROOT / ".deps/fatfs/source/ff.c"),
+        str(ROOT / ".deps/fatfs/source/ffunicode.c"), "-o", str(binary))
+    return binary
 
 
 def fixture(base):
@@ -53,11 +75,21 @@ def main():
         base = Path(temp)
         source = base / "fixture"
         fixture(source)
+        formatter = None
         for kind in ("fat32", "exfat"):
             clean = base / f"{kind}-clean.img"
-            with clean.open("wb") as stream:
-                stream.truncate(96 * 1024 * 1024)
-            run("mkfs.fat", "-F", "32", str(clean)) if kind == "fat32" else run("mkfs.exfat", str(clean))
+            mkfs = shutil.which("mkfs.fat" if kind == "fat32" else "mkfs.exfat")
+            if mkfs:
+                with clean.open("wb") as stream:
+                    stream.truncate(96 * 1024 * 1024)
+                run(mkfs, "-F", "32", str(clean)) if kind == "fat32" else run(mkfs, str(clean))
+            else:
+                if formatter is None:
+                    formatter = private_formatter(base)
+                print(run(str(formatter), kind, str(clean)).strip())
+            checker = shutil.which("fsck.fat" if kind == "fat32" else "fsck.exfat")
+            if not checker:
+                print(f"NOTE {kind}: fsck unavailable; validating through production FatFs only")
             for case in args.case or CASES:
                 card = base / f"{kind}-{case}.img"
                 shutil.copyfile(clean, card)
@@ -67,7 +99,8 @@ def main():
                 for line in output.splitlines():
                     if line.startswith("EVIDENCE "):
                         print(f"{kind}/{case}: {line}")
-                run("fsck.fat" if kind == "fat32" else "fsck.exfat", "-n", str(card))
+                if checker:
+                    run(checker, "-n", str(card))
                 card.unlink()
                 print(f"PASS {kind} saved Games catalogue: {case}")
     print("PASS saved Games catalogue images")
