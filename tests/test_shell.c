@@ -1041,9 +1041,8 @@ static void games_controls(void) {
 
     /* The accepted synthetic probe remains available independently of a game. */
     reset(KUI_SHELL_GAMES_ADVANCED);
-    press(KUI_SHELL_UP,false);assert(s.games_advanced_selected==5);
-    press(KUI_SHELL_UP,false);assert(s.games_advanced_selected==4);
-    press(KUI_SHELL_UP,false);assert(s.games_advanced_selected==3);
+    press(KUI_SHELL_UP,false);assert(s.games_advanced_selected==8);
+    for(unsigned selected=7;selected>=3;selected--) {press(KUI_SHELL_UP,false);assert(s.games_advanced_selected==selected);}
     assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_ADVANCED);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_TESTS);
     assert(s.game_tests_selected==1 && !s.games_tests_from_options);
@@ -1060,6 +1059,9 @@ static void games_controls(void) {
     press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_GAMES_ADVANCED);
     press(KUI_SHELL_DOWN,false);assert(s.games_advanced_selected==4);
     press(KUI_SHELL_DOWN,false);assert(s.games_advanced_selected==5);
+    press(KUI_SHELL_DOWN,false);assert(s.games_advanced_selected==6);
+    press(KUI_SHELL_DOWN,false);assert(s.games_advanced_selected==7);
+    press(KUI_SHELL_DOWN,false);assert(s.games_advanced_selected==8);
     press(KUI_SHELL_DOWN,false);assert(s.games_advanced_selected==0);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST && !strcmp(s.games_path,"/Games"));
 
@@ -1552,6 +1554,30 @@ static void music_and_boot_rendering(void) {
     assert(strstr(drawn,"test.wav") && strstr(drawn,"Albums") && strstr(drawn,"WAV"));
     assert(strstr(drawn,"B Parent") && strstr(drawn,"START Home") && !strstr(drawn,"CD playback"));
     assert(strstr(drawn,"Y Stop") && strstr(drawn,"Cached 0.0 MiB / 8 MiB"));
+}
+static void screenshots_settings_page(void) {
+    reset(KUI_SHELL_SETTINGS);
+    s.system_draft.music_volume=65u;
+    const struct kui_system_settings draft=s.system_draft,saved=s.system_saved;
+    assert(kui_shell_system_dirty(&s));
+    /* The appended row does not renumber any existing preference. */
+    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.system_selected==11u);
+    assert(press(KUI_SHELL_LEFT|KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE);
+    assert(!memcmp(&draft,&s.system_draft,sizeof(draft)));
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_SCREENSHOTS);
+    assert(s.system_selected==11u && kui_shell_system_dirty(&s));
+    struct kui_shell_view view={0};render(&view);
+    assert(strstr(drawn,"Screenshots") && strstr(drawn,"Hold L + R, press Y"));
+    assert(strstr(drawn,"/KUI/screenshots") && strstr(drawn,"640 x 480 BMP"));
+    assert(strstr(drawn,"In-game screenshots: Not available yet"));
+    assert(press(KUI_SHELL_A|KUI_SHELL_START|KUI_SHELL_DOWN,false)==KUI_SHELL_NONE);
+    assert(s.page==KUI_SHELL_SCREENSHOTS);
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_SETTINGS);
+    assert(s.system_selected==11u && !memcmp(&draft,&s.system_draft,sizeof(draft)));
+    assert(!memcmp(&saved,&s.system_saved,sizeof(saved)) && kui_shell_system_dirty(&s));
+    render(&view);assert(strstr(drawn,"Screenshots") && strstr(drawn,"Save a picture"));
+    assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && s.system_selected==0u);
+    puts("PASS screenshot settings: discoverable shortcut, explicit unavailable in-game support, no implicit save, draft/selection retained and row wrapping");
 }
 static void round_four_rendering(void) {
     struct kui_shell_view v={.music_cache_bytes=4674286};
@@ -3012,6 +3038,51 @@ static void games_disc_group_controls(void) {
         assert(press(KUI_SHELL_Y,false)==KUI_SHELL_GAMES_LIST && !s.games_rebuild);
     }
     puts("PASS Games disc sets: real paths, exact disc/variant selection, remembered parent, stale publications, refresh and rebuild controls");
+}
+static void games_activity_controls(void) {
+    static const char group[]="0123456789abcdef0123456789abcdef";
+    struct kui_games_page page={.count=2,.total=2,.view=KUI_GAMES_VIEW_LIST};
+    strcpy(page.root,"/Games");strcpy(page.entries[0].name,"One");strcpy(page.entries[0].path,"/Games/One/disc.gdi");
+    strcpy(page.entries[1].name,"Skies of Arcadia Disc 1");strcpy(page.entries[1].path,"/Games/Skies Disc 1/disc.gdi");
+    strcpy(page.entries[1].group,group);page.entries[1].favorite=true;page.entries[1].disc=2;
+    reset(KUI_SHELL_GAMES);s.games_view=KUI_GAMES_VIEW_LIST;kui_shell_set_games_listing(&s,&page);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_ADVANCED);
+    s.games_advanced_selected=8;
+    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_FAVORITE && s.page==KUI_SHELL_GAMES && s.games_loading);
+    assert(!strcmp(s.games_favorite_path,page.entries[0].path) && !s.games_favorite_group[0] && !s.games_selected_path[0]);
+
+    reset(KUI_SHELL_GAMES);s.games_view=KUI_GAMES_VIEW_LIST;kui_shell_set_games_listing(&s,&page);s.games_selected=1;
+    press(KUI_SHELL_START,false);s.games_advanced_selected=8;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_FAVORITE);
+    assert(!strcmp(s.games_favorite_group,group) && !strcmp(s.games_favorite_path,page.entries[1].path));
+
+    reset(KUI_SHELL_GAMES_ADVANCED);s.games_advanced_selected=6;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST && s.games_filter==KUI_GAMES_FILTER_FAVORITES && !s.games_group[0]);
+    unsigned generation=s.games_generation;
+    assert(!kui_shell_set_games_rows(&s,&page,generation,0,s.games_view) && s.games_loading);
+    page.filter=KUI_GAMES_FILTER_FAVORITES;
+    assert(kui_shell_set_games_rows(&s,&page,generation,0,s.games_view) && !s.games_loading);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_GAMES_LIST && s.games_filter==KUI_GAMES_FILTER_FAVORITES);
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_GAMES_LIST && s.games_refresh && s.games_filter==KUI_GAMES_FILTER_FAVORITES);
+    press(KUI_SHELL_START,false);s.games_advanced_selected=7;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST && s.games_filter==KUI_GAMES_FILTER_RECENT);
+    page.filter=KUI_GAMES_FILTER_RECENT;kui_shell_set_games_listing(&s,&page);
+    s.games_selected=1;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST && !strcmp(s.games_group,group) && s.games_filter==KUI_GAMES_FILTER_RECENT);
+    struct kui_games_page discs={.count=1,.total=1,.view=KUI_GAMES_VIEW_LIST,.filter=KUI_GAMES_FILTER_RECENT};
+    strcpy(discs.root,"/Games");strcpy(discs.group,group);strcpy(discs.entries[0].name,"Disc 1");
+    strcpy(discs.entries[0].path,page.entries[1].path);discs.entries[0].disc=1;
+    kui_shell_set_games_listing(&s,&discs);
+    press(KUI_SHELL_START,false);s.games_advanced_selected=8;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_FAVORITE && !strcmp(s.games_favorite_group,group));
+    assert(!strcmp(s.games_favorite_path,discs.entries[0].path));
+
+    reset(KUI_SHELL_GAMES_ADVANCED);s.games_filter=KUI_GAMES_FILTER_RECENT;s.games_advanced_selected=0;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST && s.games_filter==KUI_GAMES_FILTER_ALL);
+    press(KUI_SHELL_START,false);s.games_advanced_selected=8;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES_ADVANCED && s.games_activity_notice[0]);
+    puts("PASS Games favorites/recent controls: busy guards, exact image/group keys, stale-filter rejection, scan/view preservation and All reset");
 }
 static void games_async_publication(void) {
     reset(KUI_SHELL_HOME);s.home_selected=home_index(KUI_SHELL_GAMES);
@@ -5439,13 +5510,13 @@ int main(int argc,char **argv) {
     vmu_continuous_scrolling();vmu_catalog_scrolling();vmu_scroll_rendering();small_tools_controls();small_tools_rendering();
     vmu_copy_all_controls();vmu_import_controls();vmu_bulk_import_rendering();
     vmu_collection_copy_controls();vmu_collection_controls();vmu_collection_rendering();
-    games_remembered_selection(); games_disc_group_controls(); games_controls(); games_background_titles(); games_views(); games_async_publication(); games_retail_controls(); games_armada_ce_music_controls(); games_bam4_ce_music_controls(); games_cdda_compatibility_status(); games_launch_options_controls(); games_cd_controls(); games_saved_launch_controls(); games_patch_controls(); games_image_defaults_controls(); games_zso_controls(); games_codec_controls(); games_check_baseline_controls(); games_variant_controls();
+    games_remembered_selection(); games_disc_group_controls(); games_activity_controls(); games_controls(); games_background_titles(); games_views(); games_async_publication(); games_retail_controls(); games_armada_ce_music_controls(); games_bam4_ce_music_controls(); games_cdda_compatibility_status(); games_launch_options_controls(); games_cd_controls(); games_saved_launch_controls(); games_patch_controls(); games_image_defaults_controls(); games_zso_controls(); games_codec_controls(); games_check_baseline_controls(); games_variant_controls();
     if(argc==2 && !strcmp(argv[1],"--games-controls")) { puts("PASS Games navigation and launch controls"); return 0; }
     games_rendering(); games_native_reader_choices(); games_new_reader_defaults(); games_patch_rendering(); games_zso_rendering(); games_selected_art_rendering(); games_variant_rendering();
     if(argc==2 && !strcmp(argv[1],"--games")) { puts("PASS Games navigation, launch eligibility and rendering"); return 0; }
     storage_test_controls();storage_test_rendering();
     launcher_and_confirmation(); operation_lock_and_stop(); settings_transaction(); ripper_export_rendering();
-    system_transaction_and_video(); app_navigation_and_vmu(); clock_and_defaults(); restore_and_scan_controls(); phase_eta();
+    system_transaction_and_video(); screenshots_settings_page(); app_navigation_and_vmu(); clock_and_defaults(); restore_and_scan_controls(); phase_eta();
     diagnostics(); destination_transaction(); keyboard_transaction(); advanced_navigation();ripper_parity_controls();
     ripper_saved_job_controls();ripper_folder_label_controls();ripper_label_keyboard_purpose_controls();
     ripper_saved_job_rendering();

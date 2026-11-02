@@ -33,9 +33,14 @@ struct library {
     uint8_t identity[32];
     char root[KUI_DEST_ROOT_CAP];
     bool resource_error;
+    uint32_t filtered[2][KUI_GAMES_ACTIVITY_CAP];
+    unsigned filtered_count[2];
+    bool filtered_ready;
 };
 static struct library saved;
 static bool distrust_disk;
+static struct kui_games_activity *activity;
+static bool activity_attempted;
 static bool stopped(kui_cancel_fn cancel) {return cancel && cancel();}
 static uint16_t get16(const uint8_t *p) {return (uint16_t)(p[0]|(unsigned)p[1]<<8);}
 static uint32_t get32(const uint8_t *p) {return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24;}
@@ -55,7 +60,7 @@ static bool fold_equal(const char *a,const char *b) {
 static void library_free(struct library *lib) {
     free(lib->wire);free(lib->offsets);free(lib->groups);free(lib->members);free(lib->display);free(lib->group_display);memset(lib,0,sizeof(*lib));
 }
-void kui_games_library_clear(void) {library_free(&saved);}
+void kui_games_library_clear(void) {library_free(&saved);free(activity);activity=NULL;activity_attempted=false;}
 bool kui_games_library_ready(const char *root) {return root && saved.wire && !strcmp(saved.root,root);}
 static bool safe_path(const char *root,const char *path,bool directory) {
     size_t n=strlen(root);
@@ -414,6 +419,7 @@ static bool scan_mounted(const char *root,bool rebuild,bool allow_unsaved,const 
 bool kui_games_library_scan(const char *root,bool rebuild,kui_log_fn log,kui_cancel_fn cancel) {
     char normalized[KUI_DEST_ROOT_CAP];
     if(!root || !kui_destination_normalize(normalized,root) || strcmp(root,normalized) || stopped(cancel))return false;
+    free(activity);activity=NULL;activity_attempted=false;
     if(kui_games_storage_open(log)!=KUI_GAMES_STORAGE_OK)return false;
     uint8_t identity[32];uint64_t epoch=0;unsigned slot=0;bool corrupt=false;
     bool ok=volume_identity(identity);
@@ -469,20 +475,64 @@ static unsigned active_group(const struct library *lib,unsigned index) {
     unsigned group=lib->members[index].group;
     return group && lib->groups[group-1].valid?group:0;
 }
-static bool fill_page(const char *group,unsigned offset,struct kui_games_page *out,kui_cancel_fn cancel) {
+static bool ensure_activity(kui_log_fn log) {
+    if(activity_attempted)return activity!=NULL;
+    activity_attempted=true;
+    activity=calloc(1,sizeof(*activity));
+    bool ok=activity && kui_games_storage_open(log)==KUI_GAMES_STORAGE_OK && kui_games_activity_load(activity,log);
+    if(!kui_games_storage_done(ok))ok=false;
+    if(!ok) {free(activity);activity=NULL;}
+    return ok;
+}
+static const struct kui_games_activity_entry *row_activity(unsigned index) {
+    if(!activity)return NULL;
+    unsigned g=active_group(&saved,index);
+    if(g)return kui_games_activity_find(activity,saved.root,saved.groups[g-1].key);
+    struct kui_games_entry entry;
+    if(!decode_record(&saved,index,&entry) || entry.directory || entry.disabled)return NULL;
+    const struct kui_games_activity_entry *a=kui_games_activity_find(activity,entry.path,"");
+    if(!a && entry.variant_2048_path[0])a=kui_games_activity_find(activity,entry.variant_2048_path,"");
+    return a;
+}
+static void activity_lists(void) {
+    if(saved.filtered_ready)return;
+    saved.filtered_count[0]=saved.filtered_count[1]=0;
+    for(unsigned at=0;at<saved.display_count;at++) {
+        unsigned index=saved.display[at];const struct kui_games_activity_entry *a=row_activity(index);
+        if(!a)continue;
+        if(a->favorite && saved.filtered_count[0]<KUI_GAMES_ACTIVITY_CAP)saved.filtered[0][saved.filtered_count[0]++]=index;
+        if(a->played && saved.filtered_count[1]<KUI_GAMES_ACTIVITY_CAP) {
+            unsigned position=saved.filtered_count[1]++;
+            while(position) {
+                const struct kui_games_activity_entry *previous=row_activity(saved.filtered[1][position-1u]);
+                if(previous && previous->played>=a->played)break;
+                saved.filtered[1][position]=saved.filtered[1][position-1u];--position;
+            }
+            saved.filtered[1][position]=index;
+        }
+    }
+    saved.filtered_ready=true;
+}
+static bool fill_page(const char *group,unsigned offset,unsigned filter,struct kui_games_page *out,kui_cancel_fn cancel) {
     unsigned requested_group=0;
     if(group && group[0]) {
         for(unsigned i=0;i<saved.group_count;i++)if(saved.groups[i].valid && !strcmp(saved.groups[i].key,group)) {requested_group=i+1;break;}
         if(!requested_group) {snprintf(out->message,sizeof(out->message),"Disc group changed; return to Games and scan again.");return false;}
         strcpy(out->group,group);strcpy(out->group_name,saved.groups[requested_group-1].name);
     }
-    unsigned total=requested_group?saved.groups[requested_group-1].count:saved.display_count;
+    if(filter>=KUI_GAMES_FILTER_COUNT)return false;
+    out->filter=filter;
+    if(!requested_group && filter!=KUI_GAMES_FILTER_ALL)activity_lists();
+    unsigned total=requested_group?saved.groups[requested_group-1].count:
+        filter==KUI_GAMES_FILTER_ALL?saved.display_count:saved.filtered_count[filter-1u];
     /* Group members are sorted once when the catalogue is admitted. */
     for(unsigned at=offset;at<total && at-offset<KUI_GAMES_ROWS;at++) {
         if(stopped(cancel))return false;
-        unsigned index=requested_group?saved.group_display[saved.groups[requested_group-1].first+at]:saved.display[at];
+        unsigned index=requested_group?saved.group_display[saved.groups[requested_group-1].first+at]:
+            filter==KUI_GAMES_FILTER_ALL?saved.display[at]:saved.filtered[filter-1u][at];
         unsigned g=active_group(&saved,index);
         struct kui_games_entry *entry=&out->entries[out->count++];if(!decode_record(&saved,index,entry))return false;
+        const struct kui_games_activity_entry *a=row_activity(index);entry->favorite=a && a->favorite;
         if(requested_group) {
             entry->disc=saved.members[index].disc;
             snprintf(entry->title,sizeof(entry->title),"Disc %u",entry->disc);
@@ -492,26 +542,39 @@ static bool fill_page(const char *group,unsigned offset,struct kui_games_page *o
         }
     }
     out->total=total;out->has_more=offset<total && total-offset>out->count;
-    snprintf(out->message,sizeof(out->message),"%s",requested_group?"Choose a disc.":"Select a game. X scans for changes.");return true;
+    snprintf(out->message,sizeof(out->message),"%s",requested_group?"Choose a disc.":
+        !total && filter==KUI_GAMES_FILTER_FAVORITES?"No favorites here. START opens library options.":
+        !total && filter==KUI_GAMES_FILTER_RECENT?"No recent launches here yet.":
+        filter==KUI_GAMES_FILTER_RECENT?"Recent prepared launches, newest first.":"Select a game. START opens library options.");return true;
 }
 bool kui_games_library_rows(const char *root,const char *group,unsigned offset,unsigned view,
     struct kui_games_page *out,kui_log_fn log,kui_cancel_fn cancel) {
+    return kui_games_library_rows_filter(root,group,offset,view,KUI_GAMES_FILTER_ALL,out,log,cancel);
+}
+bool kui_games_library_rows_filter(const char *root,const char *group,unsigned offset,unsigned view,unsigned filter,
+    struct kui_games_page *out,kui_log_fn log,kui_cancel_fn cancel) {
     if(!out)return false;
     memset(out,0,sizeof(*out));
+    out->filter=filter;
     if(!root || !kui_destination_normalize(out->root,root) || strcmp(root,out->root) || offset>LIBRARY_ROWS ||
-       (group && strlen(group)>32))return false;
+       (group && strlen(group)>32) || filter>=KUI_GAMES_FILTER_COUNT)return false;
     if(group)strcpy(out->group,group);
     if(stopped(cancel)) {snprintf(out->message,sizeof(out->message),"Games library stopped.");return false;}
     if(!ensure_library(root,log,cancel)) {snprintf(out->message,sizeof(out->message),"Cannot load Games library; scan or check storage.");return false;}
+    if(!ensure_activity(log) && filter!=KUI_GAMES_FILTER_ALL) {snprintf(out->message,sizeof(out->message),"Favorites/recent history unavailable. Use Game library for all games.");return false;}
     out->view=kui_games_library_view(view,log,cancel);out->artwork=true;
-    return out->view<KUI_GAMES_VIEW_COUNT && fill_page(group,offset,out,cancel);
+    return out->view<KUI_GAMES_VIEW_COUNT && fill_page(group,offset,filter,out,cancel);
 }
 bool kui_games_library_find(const char *root,const char *group,const char *name,unsigned *offset,kui_log_fn log,kui_cancel_fn cancel) {
+    return kui_games_library_find_filter(root,group,name,KUI_GAMES_FILTER_ALL,offset,log,cancel);
+}
+bool kui_games_library_find_filter(const char *root,const char *group,const char *name,unsigned filter,unsigned *offset,kui_log_fn log,kui_cancel_fn cancel) {
     char normalized[KUI_DEST_ROOT_CAP];
     if(!root || !name || !offset || !kui_destination_normalize(normalized,root) || strcmp(root,normalized) ||
-       (group && strlen(group)>32) || !kui_destination_name_valid(name) || !ensure_library(root,log,cancel))return false;
+       (group && strlen(group)>32) || filter>=KUI_GAMES_FILTER_COUNT || !kui_destination_name_valid(name) || !ensure_library(root,log,cancel))return false;
+    if(!ensure_activity(log) && filter!=KUI_GAMES_FILTER_ALL)return false;
     for(unsigned at=0;at<=LIBRARY_ROWS;at+=KUI_GAMES_ROWS) {
-        struct kui_games_page page={0};if(!fill_page(group,at,&page,cancel))return false;
+        struct kui_games_page page={0};if(!fill_page(group,at,filter,&page,cancel))return false;
         for(unsigned i=0;i<page.count;i++) {
             const struct kui_games_entry *entry=&page.entries[i];bool match=fold_equal(entry->name,name);
             if(!match && (!group || !group[0]) && entry->group[0]) {
@@ -525,4 +588,42 @@ bool kui_games_library_find(const char *root,const char *group,const char *name,
         if(!page.has_more)break;
     }
     return false;
+}
+bool kui_games_library_activity_key(const char *root,const char *path,struct kui_games_activity_entry *out,kui_log_fn log) {
+    if(!root || !path || !out || !ensure_library(root,log,NULL))return false;
+    for(unsigned i=0;i<saved.count;i++) {
+        struct kui_games_entry entry;if(!decode_record(&saved,i,&entry))return false;
+        if(entry.directory || entry.disabled || (!fold_equal(entry.path,path) &&
+           (!entry.variant_2048_path[0] || !fold_equal(entry.variant_2048_path,path))))continue;
+        unsigned group=active_group(&saved,i);
+        return kui_games_activity_key(out,group?root:entry.path,group?saved.groups[group-1u].key:"");
+    }
+    /* A File Manager launch may be outside this immediate catalogue. Keep
+     * its exact path without inventing a disc-set identity. */
+    return kui_games_activity_key(out,path,"");
+}
+bool kui_games_library_favorite_toggle(const char *root,const char *group,const char *path,kui_log_fn log) {
+    if(!root || !group || !path || !ensure_library(root,log,NULL) || !ensure_activity(log))return false;
+    struct kui_games_activity_entry key;
+    if(group[0]) {
+        bool found=false;
+        for(unsigned i=0;i<saved.group_count;i++)if(saved.groups[i].valid && !strcmp(saved.groups[i].key,group))found=true;
+        if(!found || !kui_games_activity_key(&key,root,group))return false;
+    } else if(!kui_games_library_activity_key(root,path,&key,log))return false;
+    struct kui_games_activity *draft=malloc(sizeof(*draft));if(!draft)return false;*draft=*activity;
+    const struct kui_games_activity_entry *old=kui_games_activity_find(draft,key.path,key.group);
+    bool ok=kui_games_activity_favorite(draft,key.path,key.group,!(old && old->favorite)) &&
+        kui_games_storage_open(log)==KUI_GAMES_STORAGE_OK && kui_games_activity_save(draft,log);
+    if(!kui_games_storage_done(ok))ok=false;
+    if(ok) {*activity=*draft;saved.filtered_ready=false;}
+    free(draft);return ok;
+}
+bool kui_games_library_record_played(const struct kui_games_activity_entry *key,kui_log_fn log) {
+    if(!key)return false;
+    struct kui_games_activity *draft=calloc(1,sizeof(*draft));if(!draft)return false;
+    bool ok=kui_games_storage_open(log)==KUI_GAMES_STORAGE_OK && kui_games_activity_load(draft,log) &&
+        kui_games_activity_played(draft,key->path,key->group) && kui_games_activity_save(draft,log);
+    if(!kui_games_storage_done(ok))ok=false;
+    if(ok && activity) {*activity=*draft;saved.filtered_ready=false;}
+    free(draft);return ok;
 }

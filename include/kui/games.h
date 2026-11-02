@@ -22,7 +22,7 @@ struct kui_games_entry {
      * Empty for ordinary rows. Disc members retain their own exact paths. */
     char group[33];
     unsigned disc;
-    bool directory, disabled, cover;
+    bool directory, disabled, cover, favorite;
 };
 struct kui_games_page {
     struct kui_games_entry entries[KUI_GAMES_ROWS];
@@ -31,8 +31,8 @@ struct kui_games_page {
     unsigned total;
     /* Set by the cover loader: the view its pixels suit, and whether a box
      * art folder exists at all. */
-    unsigned view;
-    bool has_more, artwork;
+    unsigned view,filter;
+    bool has_more, artwork,activity_notice;
     char root[KUI_DEST_ROOT_CAP], message[128];
     char group[33],group_name[KUI_DEST_NAME_CAP];
 };

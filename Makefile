@@ -956,6 +956,26 @@ build/test-cover-image: tests/test_cover_image.c src/apps/cover_image.c include/
 
 GAMES = src/apps/games.c src/apps/games_storage.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c src/core/game_metadata.c src/core/destination.c src/core/storage_probe.c src/core/hash.c
 GAMES_COVERS = $(GAMES) src/core/game_launch_settings.c src/core/game_ram_patches.c src/apps/game_launch_settings_file.c src/apps/games_covers.c src/apps/cover_image.c src/core/game_cover.c src/core/pvr_texture.c src/core/retail_image.c
+GAMES_ACTIVITY = src/core/games_activity.c src/apps/games_activity_file.c
+
+.PHONY: test-screenshots
+test-screenshots: build/test-screenshot build/test-screenshot-file
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-screenshot
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-screenshot-file
+	python3 tests/test_screenshot_images.py
+build/test-screenshot: tests/test_screenshot.c src/core/screenshot.c include/kui/screenshot.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) tests/test_screenshot.c src/core/screenshot.c -o $@
+build/test-screenshot-file: tests/test_screenshot_file.c src/core/screenshot.c src/apps/screenshot_file.c include/kui/screenshot.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) tests/test_screenshot_file.c src/core/screenshot.c src/apps/screenshot_file.c -o $@
+
+.PHONY: test-games-activity
+test-games-activity: build/test-games-activity
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-games-activity
+build/test-games-activity: tests/test_games_activity.c src/core/games_activity.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/data.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $^ -o $@
 
 GAMES_COVERS_WRAP = -Wl,--wrap=f_open,--wrap=f_close,--wrap=f_opendir,--wrap=f_closedir,--wrap=f_write
 build/test-games-group: tests/test_games_group.c src/core/games_group.c include/kui/games_group.h src/core/destination.c src/core/data.c
@@ -963,13 +983,14 @@ build/test-games-group: tests/test_games_group.c src/core/games_group.c include/
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/games_group.c src/core/destination.c src/core/data.c tests/test_games_group.c -o $@
 
 GAMES_LIBRARY_WRAP = -Wl,--wrap=f_open,--wrap=f_close,--wrap=f_read,--wrap=f_write,--wrap=f_opendir,--wrap=f_closedir,--wrap=f_readdir,--wrap=f_stat,--wrap=f_mkdir,--wrap=f_unlink,--wrap=f_rename
-build/games-library-image: tests/games_library_image.c $(GAMES_COVERS) src/apps/games_library.c src/core/games_group.c include/kui/games_library.h include/kui/games_group.h $(CORE) $(FATFS)
+build/games-library-image: tests/games_library_image.c $(GAMES_COVERS) $(GAMES_ACTIVITY) src/apps/games_library.c src/core/games_group.c include/kui/games_library.h include/kui/games_group.h $(CORE) $(FATFS)
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast $(GAMES_COVERS) src/apps/games_library.c src/core/games_group.c $(CORE) $(FATFS) tests/games_library_image.c $(GAMES_LIBRARY_WRAP) -lm -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast $(GAMES_COVERS) $(GAMES_ACTIVITY) src/apps/games_library.c src/core/games_group.c $(CORE) $(FATFS) tests/games_library_image.c $(GAMES_LIBRARY_WRAP) -lm -o $@
 
 .PHONY: test-games-library
-test-games-library: build/test-games-group build/games-library-image build/test-shell
+test-games-library: build/test-games-group build/games-library-image build/test-shell build/test-games-activity
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-games-group
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-games-activity
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-shell --games
 	ASAN_OPTIONS=detect_leaks=0 python3 tests/test_games_library_images.py
 
