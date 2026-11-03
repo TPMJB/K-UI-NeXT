@@ -14,8 +14,8 @@ struct kui_problem_report_view {
     uint64_t bytes;
 };
 /* Sole storage worker, mounted volume. log_data is a frozen session log.
- * Collects only fixed launch reports, package headers and an optional menu
- * screenshot. Does not mount, traverse arbitrary folders, or alter sources.
+ * Collects only fixed launch/scan reports, package headers and an optional
+ * menu screenshot. Does not mount, traverse arbitrary folders, or alter sources.
  * A new directory becomes public only after every included file is reread
  * and checked; incomplete .part directories are never completed reports. */
 bool kui_problem_report_export_mounted(const struct kui_problem_report_options *,

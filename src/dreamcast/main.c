@@ -5,6 +5,7 @@
 #include "kui/ui_rate.h"
 #include "kui/report.h"
 #include "kui/clock_platform.h"
+#include "kui/worker_stack.h"
 #ifndef KUI_SD_RUNTIME
 #include "kui/boot_ui.h"
 #endif
@@ -34,6 +35,7 @@
 #include "kui/games_covers.h"
 #include "kui/games_storage.h"
 #include "kui/games_library.h"
+#include "kui/games_scan_log.h"
 #include "kui/native_session_prepare.h"
 #include "kui/image_loader_layout.h"
 #include <arch/exec.h>
@@ -759,6 +761,7 @@ static void music_step(int direction) {
     publish_music();
 }
 static void system_operation(bool save) {
+    static bool scan_log_shown;
     struct kui_system_settings value;
     bool legacy_memory;
     mutex_lock(&lock); value=system_pending; legacy_memory=settings_current.show_memory; mutex_unlock(&lock);
@@ -768,6 +771,9 @@ static void system_operation(bool save) {
     if(kui_sd_connect()) {
         FATFS fs;
         if(kui_mount(&fs,kui_log)) {
+            if(!save && !scan_log_shown) {
+                kui_games_scan_log_show(kui_log);scan_log_shown=true;
+            }
             ok=!kui_cancelled() && (save?kui_system_settings_save(&value,kui_log):
                 kui_system_settings_load(&value,legacy_memory,kui_log));
             f_mount(NULL,"0:",0);
@@ -4490,7 +4496,7 @@ int main(void) {
 #else
     kui_boot_ui_init(&boot_ui,timer_ms_gettime64());
 #endif
-    kthread_attr_t attrs = {.stack_size = 64 * 1024, .label = "kui-io"};
+    kthread_attr_t attrs = {.stack_size = KUI_IO_WORKER_STACK_BYTES, .label = "kui-io"};
     kthread_t *io_worker=thd_create_ex(&attrs,worker,NULL);
 #ifndef KUI_SD_RUNTIME
     boot_worker_available=io_worker!=NULL;

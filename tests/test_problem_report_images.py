@@ -25,7 +25,7 @@ def main():
             '-Wall','-Wextra','-Werror','-Wpedantic','-fsanitize=address,undefined',
             '-fno-sanitize-recover=all','-fno-omit-frame-pointer','-fno-pie','-no-pie',
             '-include',str(header),'-Iinclude','-I.deps/fatfs/source',
-            'tests/problem_report_image.c','src/apps/problem_report.c','src/core/data.c',
+            'tests/problem_report_image.c','src/apps/problem_report.c','src/apps/games_scan_log.c','src/core/data.c',
             'src/core/runtime_image.c','src/core/clock.c',
             '.deps/fatfs/source/ff.c','.deps/fatfs/source/ffunicode.c',
             *[f'-Wl,--wrap={name}' for name in wrappers],'-o',str(binary)],cwd=ROOT,check=True)
@@ -40,7 +40,7 @@ def main():
             assert manifest['launch_reports_describe_preparation'] is True
             assert manifest['unavailable_optional_inputs']==0
             files=manifest['files'];names=[row['name'] for row in files]
-            expected={'session-log.txt','module-headers.txt','last-launch-a.txt','last-launch-b.txt'}
+            expected={'session-log.txt','module-headers.txt','last-launch-a.txt','last-launch-b.txt','games-scan.txt'}
             if 'REPORT-000001-' in manifest_path.name:expected.add('screenshot.bmp')
             assert len(names)==len(set(names)) and set(names)==expected
             prefix=manifest_path.name.removesuffix('manifest.json')

@@ -19,6 +19,7 @@ log or change the source launch reports, screenshots, game files or saves.
 | `session-log.txt` | A frozen snapshot taken when Export is queued, with runtime/build and log-truncation information. The bounded live log holds up to 1,500 lines; this is not an unlimited boot history. |
 | `module-headers.txt` | Header-derived build, payload size, memory size and recorded CRC32 for a fixed list of runtime/loader packages. Missing or invalid headers are identified. Payloads are not reread, so this is not a full module-integrity check. |
 | `last-launch-a.txt`, `last-launch-b.txt` | The fixed prior launch-preparation reports, when present and within their size bounds. They describe preparation, not successful gameplay or a clean return. |
+| `games-scan.txt` | The last valid durable Games scan checkpoint, including its build, phase, root and candidate image path. It survives a reset when the card confirms the write; a checkpoint identifies progress rather than proving the cause of a crash. |
 | `screenshot.bmp` | Optional copy of the latest numbered K-UI menu BMP, selected by saved date/number. This is an existing saved capture, not a new capture taken by report export. It may be absent when no suitable capture exists. |
 | `manifest.json` | Report schema `kui.support-report.v1`, version/build, RTC validity/local timestamp, included source-file byte lengths and CRC32 values, and the count of unavailable optional inputs. |
 
@@ -42,8 +43,10 @@ An interrupted `.part` directory may remain for inspection. The next export
 uses another fresh name. The browser rejects `.part` files and directories,
 including direct requests to them. Do not rename one into a completed report.
 
-Missing optional launch reports or a missing screenshot are counted rather
-than invented. A real input/storage error can fail export. The report-directory
+Missing optional launch/scan reports or a missing screenshot are counted rather
+than invented. The Games checkpoint is recovered only from its two fixed CRC
+checked slots; game paths recorded as text are never opened by the exporter.
+A real input/storage error can fail export. The report-directory
 and screenshot searches each have a 4,096-entry bound; many retained reports or
 unfinished directories may require copying old material to a computer first.
 

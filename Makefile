@@ -992,6 +992,15 @@ build/test-game-image: tests/test_game_image.c src/core/game_image.c src/core/zs
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/game_image.c src/core/zso.c src/core/lzo1x.c tests/test_game_image.c -o $@
 
+build/test-game-image-workspace: tests/test_game_image_workspace.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c include/kui/game_image.h include/kui/zso.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/zso.c src/core/lzo1x.c tests/test_game_image_workspace.c -o $@
+
+.PHONY: test-game-image-workspace
+test-game-image-workspace: build/test-game-image-workspace
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-game-image-workspace
+test: test-game-image-workspace
+
 build/test-game-metadata: tests/test_game_metadata.c src/core/game_metadata.c include/kui/game_metadata.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/game_metadata.c tests/test_game_metadata.c -o $@
@@ -1011,7 +1020,7 @@ build/test-cover-image: tests/test_cover_image.c src/apps/cover_image.c include/
 GAMES = src/apps/games.c src/apps/games_storage.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c src/core/game_metadata.c src/core/destination.c src/core/storage_probe.c src/core/hash.c src/core/game_profile.c src/apps/game_profile_file.c src/core/game_launch_settings.c src/core/game_ram_patches.c
 GAMES_COVERS = $(sort $(GAMES) src/apps/game_launch_settings_file.c src/apps/games_covers.c src/apps/cover_image.c src/core/game_cover.c src/core/pvr_texture.c src/core/retail_image.c)
 GAMES_ACTIVITY = src/core/games_activity.c src/apps/games_activity_file.c
-GAMES_LIBRARY_EXTRA = src/core/games_query.c src/core/games_metadata.c src/apps/games_metadata_file.c src/apps/games_identity.c
+GAMES_LIBRARY_EXTRA = src/core/games_query.c src/core/games_metadata.c src/apps/games_metadata_file.c src/apps/games_identity.c src/apps/games_scan_log.c
 
 build/test-shell build/render-shell: src/core/game_profile.c src/core/hash.c src/core/games_query.c include/kui/game_profile.h include/kui/games_query.h
 
@@ -1120,12 +1129,15 @@ build/test-games-metadata: tests/test_games_metadata.c $(GAMES_METADATA_TEST) in
 .PHONY: test-v3-medium
 test-v3-medium: export ASAN_OPTIONS=detect_leaks=0
 test-v3-medium: build/test-shell build/test-shell-font build/test-ui-rate build/test-system-settings build/test-browser \
+    build/test-game-image build/test-game-image-workspace \
     build/test-game-profile build/test-games-query build/test-games-group build/test-games-metadata build/test-cover-image \
     build/test-games-vmu-card build/test-vmu-game-candidates build/vmu-template-profile.bin \
     build/browser-image build/games-library-image build/games-covers-image build/system-settings-image build/files-image
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-shell
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-shell-font
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-ui-rate
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-game-image
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-game-image-workspace
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-system-settings
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-browser
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-game-profile
@@ -1149,6 +1161,7 @@ test-v3-medium: build/test-shell build/test-shell-font build/test-ui-rate build/
 	python3 tests/test_files_images.py
 	python3 tests/test_vmu_history.py
 	python3 tests/test_problem_report_images.py
+	python3 tests/test_games_scan_log_images.py
 build/games-covers-image: tests/games_covers_image.c $(GAMES_COVERS) $(CORE) $(FATFS) include/kui/games_covers.h include/kui/games.h include/kui/game_cover.h include/kui/pvr_texture.h include/kui/cover_image.h third_party/stb/stb_image.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast $(GAMES_COVERS) $(CORE) $(FATFS) tests/games_covers_image.c $(GAMES_COVERS_WRAP) -lm -o $@

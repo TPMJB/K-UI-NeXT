@@ -2,6 +2,7 @@
 #include "kui/problem_report.h"
 #include "kui/clock.h"
 #include "kui/game_launch_report.h"
+#include "kui/games_scan_log.h"
 #include "kui/runtime.h"
 #include "kui/screenshot.h"
 #include <stdarg.h>
@@ -198,6 +199,15 @@ static bool latest_screenshot(char path[96],size_t *bytes,struct builder *b) {
     if(f_closedir(&directory)!=FR_OK)ok=false;
     return ok;
 }
+static bool scan_breadcrumb(struct builder *b,kui_log_fn log) {
+    char *text=malloc(KUI_GAMES_SCAN_LOG_TEXT_MAX+1u);size_t bytes=0u;
+    if(!text) {++b->out->unavailable;return true;}
+    bool loaded=kui_games_scan_log_load(text,KUI_GAMES_SCAN_LOG_TEXT_MAX+1u,&bytes,log);
+    bool ok=true;
+    if(loaded && bytes)ok=item(b,"games-scan.txt",NULL,text,bytes,true);
+    else ++b->out->unavailable;
+    free(text);return ok;
+}
 bool kui_problem_report_export_mounted(const struct kui_problem_report_options *options,
     const char *version,const char *build,const void *log_data,size_t log_bytes,
     struct kui_problem_report_view *out,kui_log_fn log,kui_cancel_fn cancel) {
@@ -218,6 +228,7 @@ bool kui_problem_report_export_mounted(const struct kui_problem_report_options *
     static const char empty_log[]="No session log was available.\n";
     if(ok)ok=item(b,"session-log.txt",NULL,log_bytes?log_data:empty_log,log_bytes?log_bytes:sizeof(empty_log)-1u,true);
     if(ok)ok=module_headers(b);
+    if(ok)ok=scan_breadcrumb(b,log);
     static const char *const launch_paths[]={KUI_GAME_LAUNCH_REPORT_PATH_A,KUI_GAME_LAUNCH_REPORT_PATH_B};
     static const char *const launch_names[]={"last-launch-a.txt","last-launch-b.txt"};
     for(unsigned i=0u;ok && i<2u;++i) {

@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/problem_report.h"
 #include "kui/game_launch_report.h"
+#include "kui/games_scan_log.h"
 #include "kui/runtime.h"
 #include "kui/screenshot.h"
 #include "diskio.h"
@@ -24,6 +25,7 @@ struct open_file {FIL *file;char path[192];BYTE mode;};
 static struct open_file open_files[16];
 static unsigned open_count;
 static const char session[]="Frozen support log: preparation does not establish gameplay.\n";
+static const char scan_text[]="build=scan-fixture\nphase=before-image-open\nimage_path=/Games/Shenmue (2)/disc.gdi\n";
 static uint8_t long_log[2303];
 static const char *const source_paths[]={
     "0:/KUI/runtime.kui","0:/KUI/apps/games/retail-boot.kui",
@@ -33,7 +35,8 @@ static const char *const source_paths[]={
     "0:/KUI/screenshots/KUI-000003.bmp","0:/KUI/screenshots/KUI-000004.bmp",
     "0:/KUI/screenshots/KUI-000020.part","0:/KUI/screenshots/private.bmp",
     "0:/KUI/ftp-password.txt","0:/Games/Secret/1ST_READ.BIN",
-    "0:/KUI/vmu/private-card.vmd","0:/KUI/backups/system/secret-flash.bin"
+    "0:/KUI/vmu/private-card.vmd","0:/KUI/backups/system/secret-flash.bin",
+    "0:/KUI/games-library/scan-a.txt","0:/KUI/games-library/scan-b.txt"
 };
 struct original {uint8_t *bytes;size_t size;};
 static struct original originals[sizeof(source_paths)/sizeof(source_paths[0])];
@@ -80,7 +83,7 @@ FRESULT __wrap_f_open(FIL *file,const TCHAR *path,BYTE mode) {
         else if(!report_path(path)) {
             bool screenshot=!strcmp(path,"0:/KUI/screenshots/KUI-000003.bmp");
             assert(module_path(path) || !strcmp(path,KUI_GAME_LAUNCH_REPORT_PATH_A) ||
-                !strcmp(path,KUI_GAME_LAUNCH_REPORT_PATH_B) || screenshot);
+                !strcmp(path,KUI_GAME_LAUNCH_REPORT_PATH_B) || !strcmp(path,source_paths[16]) || !strcmp(path,source_paths[17]) || screenshot);
             ++source_reads;if(screenshot)++screenshot_reads;
         }
     }
@@ -202,7 +205,8 @@ static void seed(void) {
     write_file(source_paths[11],"PRIVATE IMAGE NEVER INCLUDED",27u);
     folder("0:/KUI/screenshots/KUI-999998.bmp");
     static const char *const secrets[]={"FTP PASSWORD SECRET","GAME EXECUTABLE SECRET","VMU SAVE SECRET","SETTINGS FLASH SECRET"};
-    for(unsigned i=12u;i<source_count;i++)write_file(source_paths[i],secrets[i-12u],strlen(secrets[i-12u]));
+    for(unsigned i=12u;i<16u;i++)write_file(source_paths[i],secrets[i-12u],strlen(secrets[i-12u]));
+    assert(kui_games_scan_log_write("phase=begin\n",12u,log_line) && kui_games_scan_log_write(scan_text,sizeof(scan_text)-1u,log_line));
     for(unsigned i=0;i<source_count;i++)originals[i].bytes=read_file(source_paths[i],&originals[i].size);
 }
 static void originals_unchanged(void) {
@@ -230,10 +234,11 @@ static void host_export(const char *folder_path,const char *name,const void *dat
 }
 static void check_report(const struct kui_problem_report_view *view,bool screenshot,bool save_host) {
     assert(view->status.complete && view->status.passed && !view->status.errors && !view->status.stopped);
-    assert(view->files==(screenshot?6u:5u) && view->unavailable==0u && exists(view->path));
+    assert(view->files==(screenshot?7u:6u) && view->unavailable==0u && exists(view->path));
     compare_file(view->path,"session-log.txt",long_log,sizeof(long_log));
     compare_file(view->path,"last-launch-a.txt",originals[4].bytes,originals[4].size);
     compare_file(view->path,"last-launch-b.txt",originals[5].bytes,originals[5].size);
+    compare_file(view->path,"games-scan.txt",scan_text,sizeof(scan_text)-1u);
     if(screenshot)compare_file(view->path,"screenshot.bmp",originals[8].bytes,originals[8].size);
     char path[192];snprintf(path,sizeof(path),"%s/module-headers.txt",view->path);
     size_t size;uint8_t *data=read_file(path,&size);
@@ -252,7 +257,7 @@ static void check_report(const struct kui_problem_report_view *view,bool screens
         char name[48];unsigned bytes,crc;
         assert(sscanf(cursor,"{\"name\":\"%47[^\"]\",\"bytes\":%u,\"crc32\":\"%x\"}",name,&bytes,&crc)==3);
         bool allowed=!strcmp(name,"session-log.txt") || !strcmp(name,"module-headers.txt") ||
-            !strcmp(name,"last-launch-a.txt") || !strcmp(name,"last-launch-b.txt") || (screenshot && !strcmp(name,"screenshot.bmp"));
+            !strcmp(name,"last-launch-a.txt") || !strcmp(name,"last-launch-b.txt") || !strcmp(name,"games-scan.txt") || (screenshot && !strcmp(name,"screenshot.bmp"));
         assert(allowed);snprintf(path,sizeof(path),"%s/%s",view->path,name);
         size_t actual;uint8_t *included=read_file(path,&actual);
         assert(actual==bytes && kui_crc32(0,included,actual)==crc);
@@ -307,7 +312,7 @@ static void missing_and_invalid(BYTE fmt,BYTE expected,const char *label) {
     format_name=label;format(fmt,expected);struct kui_problem_report_view view;
     const struct kui_problem_report_options options={true};activate("none");
     assert(kui_problem_report_export_mounted(&options,"3.0.0","aabbccddeeff",NULL,0,&view,log_line,cancel));active=false;
-    assert(view.files==3u && view.unavailable==3u && !open_count);
+    assert(view.files==3u && view.unavailable==4u && !open_count);
     compare_file(view.path,"session-log.txt","No session log was available.\n",30u);
     activate("none");cancelled=true;assert(!export(false,&view));active=false;
     assert(view.status.stopped && !view.path[0] && !open_count);

@@ -128,7 +128,8 @@ endif
 
 # Refresh the visible source identifier after every commit, even if main.c did
 # not change. Relinking also records the exact source state used by packaging.
-build/dc/src/dreamcast/main.o build/dc/main-runtime.o: force-build-id
+build/dc/src/dreamcast/main.o build/dc/main-runtime.o \
+    build/dc/src/apps/games_retail.o build/dc/src/apps/games_library.o: force-build-id
 force-build-id:
 
 build/dc/%.o: %.c
@@ -672,3 +673,9 @@ $(RETAIL_PHYSICAL_DIR)/entry.elf: $(RETAIL_PHYSICAL_DIR)/retail_entry_asm.o src/
 $(RETAIL_PHYSICAL_DIR)/retail-physical.kui: $(RETAIL_PHYSICAL_DIR)/entry.elf tools/check_retail_physical.py
 	python3 tools/runtime_package.py build $< $@ --build-id $(BUILD_ID)
 -include $(RETAIL_PHYSICAL_DIR)/retail_stage.d $(RETAIL_PHYSICAL_DIR)/retail_stage_asm.d $(RETAIL_PHYSICAL_DIR)/retail_entry_asm.d
+
+# Separate compiler-report objects; never alter the runtime's linked objects.
+.PHONY: check-games-scan-stack
+check-games-scan-stack:
+	python3 tools/check_games_scan_stack.py --build --directory build/games-scan-stack
+	python3 tests/test_games_scan_stack.py build/games-scan-stack

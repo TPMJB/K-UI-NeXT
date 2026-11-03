@@ -3,6 +3,7 @@
 #include "kui/games_covers.h"
 #include "kui/games_group.h"
 #include "kui/games_storage.h"
+#include "kui/games_scan_log.h"
 #include "kui/hash.h"
 #include "kui/cover_image.h"
 #include "kui/media.h"
@@ -21,6 +22,9 @@
 #define RECORD_HEADER 16u
 #define GROUP_EVIDENCE_BYTES (11u+7u+129u+9u)
 #define EPOCH_BYTES 64u
+#ifndef KUI_BUILD_ID
+#define KUI_BUILD_ID "local-unversioned"
+#endif
 struct library_group {char key[33],name[KUI_DEST_NAME_CAP];unsigned count,first,representative,label_set;bool valid,metadata;};
 struct library_member {unsigned group,disc;};
 struct library {
@@ -51,6 +55,40 @@ static struct kui_games_activity *activity;
 static bool activity_attempted;
 static struct kui_games_metadata *edits;
 static bool edits_attempted;
+/* Only the sole worker's explicit scan enables these checkpoints. The small
+ * persistent record is closed before descending through discovery/parsers. */
+static struct {
+    bool active,warned;
+    kui_log_fn log;
+    char root[KUI_DEST_ROOT_CAP],image[KUI_GAMES_FILE_CAP];
+    char text[KUI_GAMES_SCAN_LOG_TEXT_MAX+1u];
+    const char *last_work;
+    unsigned index,count,offset;
+} scan_trace;
+static void scan_checkpoint(const char *phase,const char *image,unsigned index,unsigned count,unsigned offset,bool terminal) {
+    if(!scan_trace.active)return;
+    if(image)snprintf(scan_trace.image,sizeof(scan_trace.image),"%s",image);
+    if(!terminal)scan_trace.last_work=phase;
+    scan_trace.index=index;scan_trace.count=count;scan_trace.offset=offset;
+    uintptr_t sp=0;
+#if defined(__sh__)
+    __asm__ __volatile__("mov r15,%0":"=r"(sp));
+#endif
+    int length=snprintf(scan_trace.text,sizeof(scan_trace.text),
+        "build=%s\nphase=%s\nlast_work_phase=%s\nroot=%s\nentry_index=%u\nentry_count=%u\npage_offset=%u\nimage_path=%s\ntransport=%u\nstack_pointer=%08lx\n",
+        KUI_BUILD_ID,phase,scan_trace.last_work?scan_trace.last_work:"none",scan_trace.root,
+        index,count,offset,scan_trace.image,kui_storage_active(),(unsigned long)sp);
+    bool ok=length>0 && (size_t)length<sizeof(scan_trace.text) &&
+        kui_games_storage_open(scan_trace.log)==KUI_GAMES_STORAGE_OK &&
+        kui_games_scan_log_write(scan_trace.text,(size_t)length,scan_trace.log);
+    if(!ok && !scan_trace.warned) {
+        scan_trace.warned=true;
+        if(scan_trace.log)scan_trace.log("Games scan breadcrumb not saved; prior usable phase retained");
+    }
+}
+static void scan_phase(const char *phase) {
+    scan_checkpoint(phase,NULL,scan_trace.index,scan_trace.count,scan_trace.offset,false);
+}
 static bool stopped(kui_cancel_fn cancel) {return cancel && cancel();}
 static uint16_t get16(const uint8_t *p) {return (uint16_t)(p[0]|(unsigned)p[1]<<8);}
 static uint32_t get32(const uint8_t *p) {return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24;}
@@ -151,6 +189,7 @@ static bool write_checked(const char *path,const uint8_t *wire,size_t bytes,kui_
     if(f_sync(&file)!=FR_OK)ok=false;
     if(f_close(&file)!=FR_OK)ok=false;
     if(!ok || stopped(cancel))return false;
+    scan_phase("publish-readback");
     if(f_open(&file,path,FA_READ)!=FR_OK)return false;
     ok=f_size(&file)==bytes;at=0;uint8_t buffer[512];
     while(ok && at<bytes) {
@@ -511,7 +550,10 @@ static bool build_group_evidence(struct library *lib,kui_log_fn log,kui_cancel_f
         struct kui_games_entry entry;if(!decode_record(lib,i,&entry)) {ok=false;break;}
         if(kui_games_storage_open(log)!=KUI_GAMES_STORAGE_OK) {ok=false;break;}
         struct kui_games_group_evidence evidence={0};
+        scan_checkpoint("before-image-open",entry.path,i+1u,lib->count,0,false);
         enum kui_games_group_read_result result=kui_games_identity_group(entry.path,&evidence,cancel);
+        scan_phase(result==KUI_GAMES_GROUP_READ_OK?"image-open-ok":result==KUI_GAMES_GROUP_READ_CANCELLED?
+            "image-open-cancelled":result==KUI_GAMES_GROUP_READ_IO?"image-open-io-error":"image-open-unsupported");
         if(result==KUI_GAMES_GROUP_READ_IO || result==KUI_GAMES_GROUP_READ_CANCELLED) {
             if(log)log("Disc grouping: %.72s: header read failed; previous catalogue retained",entry.name);
             ok=false;break;
@@ -539,29 +581,37 @@ static bool build_catalogue(struct library *out,const char *root,const uint8_t i
     memset(out,0,sizeof(*out));out->version=4;strcpy(out->root,root);memcpy(out->identity,identity,32);out->epoch=epoch;
     out->bytes=LIBRARY_HEADER+strlen(root);out->wire=calloc(1,out->bytes);if(!out->wire)return false;
     memcpy(out->wire+LIBRARY_HEADER,root,strlen(root));
+    /* Listing can descend through image discovery and filesystem callbacks.
+     * Keep this large page off the bounded storage-worker stack. */
+    struct kui_games_page *page=malloc(sizeof(*page));if(!page)return false;
+    bool ok=true;
     for(unsigned offset=0;;offset+=KUI_GAMES_ROWS) {
-        struct kui_games_page page;
-        if(stopped(cancel) || !kui_games_list_rows(root,offset,KUI_GAMES_VIEW_SAVED,&page,log,cancel) ||
-           page.total>LIBRARY_ROWS || (page.has_more && !page.count))return false;
-        (void)kui_games_prefetch_titles(&page,log,cancel);
-        if(stopped(cancel) || !kui_games_list_rows(root,offset,KUI_GAMES_VIEW_SAVED,&page,log,cancel))return false;
-        for(unsigned i=0;i<page.count;i++) {
-            (void)kui_games_cached_region(&page.entries[i],page.entries[i].region);
-            if(out->count==LIBRARY_ROWS || !append_record(out,&page.entries[i]))return false;
+        scan_checkpoint("before-list-page",NULL,out->count,out->count,offset,false);
+        if(stopped(cancel) || !kui_games_list_rows(root,offset,KUI_GAMES_VIEW_SAVED,page,log,cancel) ||
+           page->total>LIBRARY_ROWS || (page->has_more && !page->count)) {ok=false;break;}
+        (void)kui_games_prefetch_titles(page,log,cancel);
+        if(stopped(cancel) || !kui_games_list_rows(root,offset,KUI_GAMES_VIEW_SAVED,page,log,cancel)) {ok=false;break;}
+        for(unsigned i=0;i<page->count;i++) {
+            (void)kui_games_cached_region(&page->entries[i],page->entries[i].region);
+            if(out->count==LIBRARY_ROWS || !append_record(out,&page->entries[i])) {ok=false;break;}
         }
-        if(!page.has_more)break;
+        if(!ok || !page->has_more)break;
     }
-    return !stopped(cancel) && kui_games_cache_complete(root) && build_group_evidence(out,log,cancel);
+    free(page);
+    return ok && !stopped(cancel) && kui_games_cache_complete(root) && build_group_evidence(out,log,cancel);
 }
 static bool prepare_catalogue(struct library *draft,uint64_t sequence,unsigned slot) {
     uint8_t *p=draft->wire;memcpy(p,"KUIGLIB4",8);put32(p+8,4);put32(p+12,(uint32_t)draft->bytes);
     put64(p+16,sequence);put64(p+24,draft->epoch);memcpy(p+32,draft->identity,32);
     put16(p+64,(unsigned)strlen(draft->root));put16(p+66,draft->count);
     put32(p+68,kui_crc32(0,p+LIBRARY_HEADER,draft->bytes-LIBRARY_HEADER));put32(p+72,kui_crc32(0,p,72));
-    if(!library_validate(draft,draft->root,draft->identity,draft->epoch) || !library_groups(draft))return false;
+    if(!library_validate(draft,draft->root,draft->identity,draft->epoch))return false;
+    scan_phase("before-group-sort");
+    if(!library_groups(draft))return false;
     draft->sequence=sequence;draft->slot=slot;return true;
 }
 static bool publish_catalogue(struct library *draft,kui_cancel_fn cancel) {
+    scan_phase("before-publish");
     if(!mkdirs())return false;
     char path[96];library_path(path,draft->root,draft->slot);
     uint8_t header[LIBRARY_HEADER];memcpy(header,draft->wire,sizeof(header));
@@ -572,11 +622,14 @@ static bool publish_catalogue(struct library *draft,kui_cancel_fn cancel) {
     /* Commit only after the whole pending file was synced and read back.
      * This tiny final header transaction is not cancellable: a stop arriving
      * here observes a complete committed generation and success. */
+    scan_phase("before-publish-commit");
     FIL file;if(f_open(&file,path,FA_WRITE)!=FR_OK)return false;UINT done=0;
     ok=f_write(&file,header,sizeof(header),&done)==FR_OK && done==sizeof(header);
     if(f_sync(&file)!=FR_OK)ok=false;
     if(f_close(&file)!=FR_OK)ok=false;
-    if(!ok || f_open(&file,path,FA_READ)!=FR_OK)return false;
+    if(!ok)return false;
+    scan_phase("commit-readback");
+    if(f_open(&file,path,FA_READ)!=FR_OK)return false;
     uint8_t check[LIBRARY_HEADER];done=0;ok=f_size(&file)==draft->bytes &&
         f_read(&file,check,sizeof(check),&done)==FR_OK && done==sizeof(check) && !memcmp(header,check,sizeof(header));
     if(f_close(&file)!=FR_OK)ok=false;
@@ -584,6 +637,7 @@ static bool publish_catalogue(struct library *draft,kui_cancel_fn cancel) {
 }
 static bool scan_mounted(const char *root,bool rebuild,bool allow_unsaved,const uint8_t identity[32],uint64_t epoch,kui_log_fn log,kui_cancel_fn cancel) {
     struct library previous={0},draft={0};
+    scan_phase("before-load-catalogue");
     if(saved.wire && !strcmp(saved.root,root) && !memcmp(saved.identity,identity,32) && saved.epoch==epoch) {
         /* Retain the complete RAM generation until the replacement is saved. */
         previous.sequence=saved.sequence;previous.slot=saved.slot;
@@ -595,11 +649,13 @@ static bool scan_mounted(const char *root,bool rebuild,bool allow_unsaved,const 
     /* Either explicit scan discovers host edits, even in a warm session.
      * Saved cover records remain on card; only stale RAM labels are dropped. */
     kui_games_cache_clear();kui_games_covers_cache_clear();
+    scan_phase("before-build-catalogue");
     bool built=previous.sequence!=UINT64_MAX && build_catalogue(&draft,root,identity,epoch,log,cancel);
     uint8_t current_identity[32];uint64_t current_epoch=0;unsigned current_slot=0;
     bool unchanged=built && kui_games_storage_open(log)==KUI_GAMES_STORAGE_OK &&
         volume_identity(current_identity) && !memcmp(identity,current_identity,32) &&
         epoch_load(identity,&current_epoch,&current_slot,NULL) && current_epoch==epoch;
+    if(unchanged)scan_checkpoint("before-prepare",NULL,draft.count,draft.count,scan_trace.offset,false);
     bool prepared=unchanged && prepare_catalogue(&draft,previous.sequence+1,previous.sequence?previous.slot^1u:0u);
     bool persisted=prepared && publish_catalogue(&draft,cancel);
     bool ok=persisted || (allow_unsaved && prepared && !stopped(cancel));
@@ -623,8 +679,14 @@ bool kui_games_library_scan(const char *root,bool rebuild,kui_log_fn log,kui_can
         uint8_t wire[EPOCH_BYTES]={0};ok=epoch!=UINT64_MAX && mkdirs() && !stopped(cancel);
         if(ok) {memcpy(wire,"KUIGGEN1",8);put64(wire+8,epoch+1);memcpy(wire+16,identity,32);put32(wire+60,kui_crc32(0,wire,60));char path[80];epoch_path(path,slot^1u);ok=write_checked(path,wire,sizeof(wire),cancel);if(ok)++epoch;}
     }
-    if(ok)ok=scan_mounted(root,rebuild,false,identity,epoch,log,cancel);
+    if(ok) {
+        memset(&scan_trace,0,sizeof(scan_trace));scan_trace.active=true;scan_trace.log=log;
+        strcpy(scan_trace.root,normalized);scan_phase("begin");
+        ok=scan_mounted(root,rebuild,false,identity,epoch,log,cancel);
+    }
     if(ok)distrust_disk=false;
+    scan_checkpoint(ok?"complete":stopped(cancel)?"cancelled":"failed",NULL,scan_trace.index,scan_trace.count,scan_trace.offset,true);
+    scan_trace.active=false;
     if(!kui_games_storage_done(ok || stopped(cancel)))ok=false;
     if(!ok && log)log("Games library: %s; previous complete catalogue retained",stopped(cancel)?"scan stopped":"scan failed");
     return ok;

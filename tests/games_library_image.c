@@ -3,6 +3,7 @@
 #include "kui/games_library.h"
 #include "kui/games_covers.h"
 #include "kui/games_storage.h"
+#include "kui/games_scan_log.h"
 #include "kui/hash.h"
 #include "kui/media.h"
 #include "kui/storage.h"
@@ -22,8 +23,8 @@ static struct {
     FILE *image;
     uint64_t blocks;
     bool active,connected,cancelled,cancel_directory,cancel_readback,fail_write,fail_read,fail_source,fail_group_ip,cancel_group_ip;
-    unsigned block_reads,block_writes,opens,game_opens,dir_opens,readdirs,stats,writes,unlinks,files,dirs,fail_generation,group_reads,group_bytes;
-    struct {FIL *file;bool index,generation,source,ip;} opened[16];
+    unsigned block_reads,block_writes,opens,game_opens,dir_opens,readdirs,stats,writes,non_trace_writes,trace_writes,unlinks,files,dirs,fail_generation,group_reads,group_bytes;
+    struct {FIL *file;bool index,generation,source,ip,trace;} opened[16];
 } test;
 static FATFS fs;
 static void log_line(const char *format,...) {
@@ -70,6 +71,7 @@ FRESULT __wrap_f_open(FIL *file,const TCHAR *path,BYTE flags) {
         test.opened[i].generation=strstr(path,"/games-library/generation-")!=NULL;
         test.opened[i].source=strstr(path,"/Games/") && strstr(path,".gdi");
         test.opened[i].ip=strstr(path,"/Games/") && strstr(path,"track03.bin");
+        test.opened[i].trace=!strcmp(path,"0:/KUI/games-library/scan-a.txt") || !strcmp(path,"0:/KUI/games-library/scan-b.txt");
     }
     return result;
 }
@@ -79,7 +81,7 @@ FRESULT __wrap_f_close(FIL *file) {
     if(test.active) {
         assert(test.files);--test.files;unsigned i=0;for(;i<16 && test.opened[i].file!=file;i++);
         assert(i<16);test.opened[i].file=NULL;
-        test.opened[i].index=test.opened[i].generation=test.opened[i].source=test.opened[i].ip=false;
+        test.opened[i].index=test.opened[i].generation=test.opened[i].source=test.opened[i].ip=test.opened[i].trace=false;
     }
     return result;
 }
@@ -102,6 +104,8 @@ FRESULT __real_f_write(FIL *,const void *,UINT,UINT *);
 FRESULT __wrap_f_write(FIL *file,const void *data,UINT count,UINT *put) {
     if(test.active) {
         ++test.writes;
+        bool trace=false;for(unsigned i=0;i<16;i++)if(test.opened[i].file==file)trace=test.opened[i].trace;
+        if(trace)++test.trace_writes;else ++test.non_trace_writes;
         if(test.fail_write) {*put=0;return FR_DISK_ERR;}
     }
     return __real_f_write(file,data,count,put);
@@ -163,6 +167,18 @@ static void seed(const char *host) {
     assert(!fclose(list));
 }
 static void clear(void) {assert(kui_games_storage_release());kui_games_library_clear();kui_games_cache_clear();kui_games_covers_cache_clear();}
+static void breadcrumb_check(const char *phase,const char *image) {
+    clear();test.active=false;mounted(true);test.active=true;
+    unsigned writes=test.writes,blocks_written=test.block_writes;
+    char *text=malloc(KUI_GAMES_SCAN_LOG_TEXT_MAX+1u);size_t bytes=0;assert(text);
+    assert(kui_games_scan_log_load(text,KUI_GAMES_SCAN_LOG_TEXT_MAX+1u,&bytes,log_line) && bytes);
+    char expected[80];snprintf(expected,sizeof(expected),"\nphase=%s\n",phase);assert(strstr(text,expected));
+    assert(strstr(text,"build=") && strstr(text,"last_work_phase=") && strstr(text,"root=/Games\n") && strstr(text,"transport="));
+    if(image)assert(strstr(text,image));
+    assert(test.writes==writes && test.block_writes==blocks_written);
+    free(text);test.active=false;mounted(false);test.active=true;
+    printf("EVIDENCE durable Games scan phase=%s%s survived full cache clear/remount; breadcrumb read caused zero writes\n",phase,image?" with exact candidate image path":"");
+}
 static void page(unsigned offset,struct kui_games_page *out) {assert(kui_games_library_rows("/Games","",offset,KUI_GAMES_VIEW_LIST,out,log_line,cancel));}
 static bool find(const char *name,struct kui_games_entry *out) {
     for(unsigned offset=0;;offset+=KUI_GAMES_ROWS) {
@@ -645,8 +661,8 @@ static void capture_groups_check(const char *name) {
     }
     if(!strcmp(name,"capture-read-fail") || !strcmp(name,"capture-cancel")) {
         test.fail_group_ip=!strcmp(name,"capture-read-fail");test.cancel_group_ip=!test.fail_group_ip;
-        unsigned writes=test.writes;assert(!kui_games_library_scan("/Games",false,log_line,cancel));
-        assert(test.writes==writes && kui_games_library_ready("/Games"));
+        unsigned writes=test.non_trace_writes;assert(!kui_games_library_scan("/Games",false,log_line,cancel));
+        assert(test.non_trace_writes==writes && kui_games_library_ready("/Games"));
         test.fail_group_ip=test.cancel_group_ip=test.cancelled=false;
         assert(find("Shenmue",&shenmue) && shenmue.group[0]);
     }
@@ -692,9 +708,9 @@ static void check(const char *name) {
             assert(!kui_games_library_rows("/Games","",0,KUI_GAMES_VIEW_LIST,&result,log_line,cancel));
             assert(test.writes==writes && !kui_games_library_ready("/Games"));test.fail_read=false;cold_check();
         } else if(!strcmp(name,"source-read-fail")) {
-            add_game(false);test.fail_source=true;unsigned writes=test.writes;
+            add_game(false);test.fail_source=true;unsigned writes=test.non_trace_writes;
             assert(!kui_games_library_scan("/Games",false,log_line,cancel));
-            assert(test.writes==writes && kui_games_library_ready("/Games"));
+            assert(test.non_trace_writes==writes && kui_games_library_ready("/Games"));
             test.fail_source=false;assert(!find("New Arrival",NULL));clear();assert(!find("New Arrival",NULL));
             puts("EVIDENCE source descriptor I/O failure did not seal an incomplete catalogue or replace the previous one");
         } else if(!strcmp(name,"failed-invalidation-readonly")) {
@@ -760,6 +776,11 @@ static void check(const char *name) {
             puts("EVIDENCE corrupt-ledger recovery purged an uppercase old-generation catalogue for another root");
         } else assert(!"unknown catalogue test");
     }
+    if(!strcmp(name,"cold") || !strcmp(name,"groups") || !strcmp(name,"capture-groups"))breadcrumb_check("complete",NULL);
+    else if(!strcmp(name,"capture-read-fail"))breadcrumb_check("failed","image_path=/Games/Shenmue/disc.gdi\n");
+    else if(!strcmp(name,"capture-cancel"))breadcrumb_check("cancelled","image_path=/Games/Shenmue/disc.gdi\n");
+    else if(!strcmp(name,"source-read-fail"))breadcrumb_check("failed",NULL);
+    else if(!strcmp(name,"cancel") || !strcmp(name,"cancel-readback"))breadcrumb_check("cancelled",NULL);
     clear();assert(!test.connected && !test.files && !test.dirs);
     printf("PASS Games catalogue %s; production writes stayed under KUI\n",name);
 }
