@@ -1,0 +1,43 @@
+{
+  "source_base": "c5854ecb472240d4a78709ae091ef3d1120e4266",
+  "checks": [
+    {
+      "command": "build/test-disc-launch",
+      "checks": 2683,
+      "result": "pass"
+    },
+    {
+      "command": "build/test-disc-launch-adversarial",
+      "checks": 1655,
+      "result": "pass"
+    },
+    {
+      "command": "build/test-disc-vmu-storage",
+      "checks": 1343,
+      "result": "pass"
+    },
+    {
+      "command": "python3 tests/test_disc_region.py",
+      "checks": 4887,
+      "result": "pass",
+      "skipped": "Filesystem boundary subtest requires absent mkfs.fat/mkfs.exfat"
+    },
+    {
+      "command": "python3 tests/test_disc_vmu_launcher.py",
+      "checks": 64074,
+      "result": "pass"
+    },
+    {
+      "command": "python3 tests/test_disc_handoff_gui.py",
+      "result": "pass"
+    },
+    {
+      "command": "git diff --check",
+      "result": "pass"
+    }
+  ],
+  "sanitizers": "ASan and UBSan for C host fixtures",
+  "hardware_verified": false,
+  "source_contains_current_main": true,
+  "review": "Independent source review found no blocking defects. PIO1 confirmed through CD_CMD_PIOREAD; no optical endpoint truncation."
+}

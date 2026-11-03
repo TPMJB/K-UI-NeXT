@@ -86,7 +86,10 @@ note physical-VMU save/reload and CD audio.
 ## Current boundaries
 
 - Native, unscrambled **GD-ROM with Mode 1 data sectors only**, with the boot
-  content in one contiguous high-density data extent. CD/MIL-CD, Mode 2 and
+  file extents wholly inside checked high-density DATA spans. Later data
+  tracks after intervening audio are supported; reads into audio or gaps
+  remain refused. See `shenmue-ii-disc-test.md` for bounded boot-read recovery.
+  CD/MIL-CD, Mode 2 and
   Windows CE require later paths.
 - X Check accepts boot files up to **12 MiB**. This first Y Direct boot stage
   accepts up to **4 MiB**, subject to available contiguous staging RAM.

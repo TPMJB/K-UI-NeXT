@@ -78,6 +78,18 @@ enum kui_runtime_result kui_bootstrap_measure(unsigned transport_filter,
     kui_cancel_fn cancelled);
 bool kui_disc_prepare(struct kui_toc sessions[2]);
 bool kui_disc_prepare_capture(struct kui_toc sessions[2],bool *is_cd);
+/* Explicit GD Play readiness only. Capture/idle preparation retains its old
+ * behavior. Known media spin-up/change responses share a10s readiness budget;
+ * normal command abort allowance is at most1s. No reset or data-read retry.
+ * The callback is checked between firmware calls; command cancellation uses
+ * the adapter's normal global Stop callback. Outputs are empty on refusal. */
+enum kui_disc_launch_prepare_result {
+    KUI_DISC_LAUNCH_PREPARED,KUI_DISC_LAUNCH_OPEN,KUI_DISC_LAUNCH_NO_DISC,
+    KUI_DISC_LAUNCH_WAIT_TIMEOUT,KUI_DISC_LAUNCH_CANCELLED,
+    KUI_DISC_LAUNCH_UNAVAILABLE,KUI_DISC_LAUNCH_IO_FAILED
+};
+enum kui_disc_launch_prepare_result kui_disc_prepare_launch(
+    struct kui_toc sessions[2],bool *is_cd,kui_cancel_fn cancel);
 /* New direct native-GD launch only, after exclusive raw startup reads and
  * before arch_exec. Restore ordinary Mode1 2048-byte firmware reads, then
  * recheck the admitted first IP sector twice in guarded static buffers.
@@ -112,6 +124,21 @@ bool kui_disc_g1_probe_end(bool restored);
  * Content anchors remain the recovery worker's responsibility after success. */
 bool kui_disc_recover(void *ctx,const struct kui_capture_plan *expected);
 enum kui_read_result kui_disc_read_raw(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out);
+/* Explicit physical-boot acquisition. Raw reads are always repeated with
+ * different initial fills, independent of the previous capture timing phase.
+ * Both boot readers allow 30 seconds per command and 5 seconds to confirm an
+ * abort; partial buffers are never published and failed aborts stay fatal.
+ * The cooked alternative is one Mode1 2048-byte sector, repeated exactly. Its
+ * integrity comes from firmware correction/status and repeat equality; it
+ * carries no external raw address or EDC evidence. The launcher controls when
+ * this separately reported fallback is allowed. */
+enum kui_disc_boot_read_result {
+    KUI_BOOT_READ_OK, KUI_BOOT_READ_RETRY, KUI_BOOT_READ_CANCELLED, KUI_BOOT_READ_FATAL
+};
+/* CANCELLED is a clean Stop after ownership is released, not a late button
+ * observation which could conceal a device, guard, length or repeat failure. */
+enum kui_disc_boot_read_result kui_disc_read_boot_raw(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out);
+enum kui_disc_boot_read_result kui_disc_read_boot_cooked(void *ctx,uint32_t fad,uint8_t out[KUI_DATA_BYTES]);
 /* Explicit damaged-disc salvage only: same ownership checks as raw, with a
  * 30-second read and 5-second abort-drain window. A released, guard-clean
  * ordinary medium-error command may return KUI_READ_PARTIAL and tentative

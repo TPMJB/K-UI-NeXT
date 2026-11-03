@@ -1,0 +1,108 @@
+{
+  "purpose": "Physical GD-Play admission for separated high-density DATA tracks",
+  "validation": "PASS",
+  "commands": [
+    {
+      "argv": [
+        "make",
+        "build/test-disc-boot",
+        "build/test-disc-launcher",
+        "-j2"
+      ],
+      "exit_code": 0,
+      "stdout": "make: 'build/test-disc-boot' is up to date.\nmake: 'build/test-disc-launcher' is up to date.\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "./build/test-disc-boot"
+      ],
+      "exit_code": 0,
+      "stdout": "Physical GD boot preflight: 49755 checks; bounded runs and singleton fallback, exact hashes/limits, regions, malformed ISO, read faults and cancellation\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "./build/test-disc-launcher"
+      ],
+      "exit_code": 0,
+      "stdout": "Physical GD launcher app: 34064 checks; actual optical planner/packet hashes, read cuts, changed bytes, bounded SD lifecycle and no VMU file access\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "python3",
+        "tests/test_disc_handoff_gui.py"
+      ],
+      "exit_code": 0,
+      "stdout": "PASS direct-disc GUI handoff: actual staging bounds, validation ordering, retained failure/Stop routes, explicit memory diagnostics, drained menu cache and idle music recovery\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "tested_source_sha256": {
+    "include/kui/disc_boot.h": "069cc63f9140ab174082caffd436b9240f5fba29b88873867e465ad3ecf0c0e7",
+    "src/core/disc_boot.c": "2e83ba2b0ee36f47dec36ac89e6a32747c197dcdbdb77ca469f632fc90885930",
+    "src/apps/disc_launcher.c": "cb31ffe55ff11b0dbfce891c897396f5de3fe43d49bd5e1138d7bb8227f29c3a",
+    "tests/test_disc_boot.c": "0520a3bb45ac319404ec355e74e2d8fa6285de42d4c3f40e78653dd2d1676b5c",
+    "tests/test_disc_launcher.c": "603940a4d855e80798b5b45573d4c3dcfbb3c08eeaf1f97d549dddef560dcf95"
+  },
+  "fixture": {
+    "kind": "Authored host fixture with sparse synthetic game bytes; no retail executable or disc image",
+    "observed_shenmue_ii_disc_1_hd_toc_fad": [
+      {
+        "track": 3,
+        "control": 4,
+        "start": 45150,
+        "end": 102021
+      },
+      {
+        "track": 4,
+        "control": 0,
+        "start": 102021,
+        "end": 102621
+      },
+      {
+        "track": 5,
+        "control": 0,
+        "start": 102621,
+        "end": 103462
+      },
+      {
+        "track": 6,
+        "control": 4,
+        "start": 103462,
+        "end": 549300
+      }
+    ],
+    "synthetic_root_fad": 103462,
+    "synthetic_boot_fad": 103470,
+    "region_case": "Authored E-only IP metadata; NTSC U console; Region-free enabled; actual launcher staging/hash/handoff functions",
+    "data_track_gap_policy": "Conservative declared 150-sector DATA-to-audio transition gap, matching existing capture convention; not measured INDEX 00",
+    "checks": [
+      "directory and executable in later DATA range",
+      "unchanged singleton and bounded-run hash paths",
+      "exact staged executable bytes and validated launch packet",
+      "audio/gap starts and DATA-to-gap crossings refused before requested optical callback",
+      "leadout/exclusive-end and arithmetic overflow refused",
+      "malformed, overlapping or unsorted DATA maps refused before first read",
+      "corrupt TOC order, controls and bounds refused before first read",
+      "source range map/output alias rejected without clearing caller map"
+    ]
+  },
+  "limits": [
+    "Host fixtures do not establish successful real Shenmue II launch or gameplay",
+    "The physical drive, raw disc bytes, readiness, drive handoff and storage loading are authored callbacks",
+    "No proof of hardware optical timing, PAL video behavior or game-specific compatibility",
+    "Console testing remains required"
+  ]
+}

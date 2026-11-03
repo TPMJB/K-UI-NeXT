@@ -508,6 +508,20 @@ static void save_report(const char *trigger,const char *outcome,bool automatic) 
     mutex_lock(&lock);saving_report=false;mutex_unlock(&lock);
 }
 #ifdef KUI_SD_RUNTIME
+/* Only call after the failed app has released its optical buffers and SD
+ * ownership. This keeps the original GD Play message/range visible while the
+ * usual report writer preserves the detailed read log. A successful boot
+ * must never acquire storage again after its checked drive handoff. */
+static void disc_launch_failure_report(const char *trigger,const struct kui_app_status *status) {
+    if(!status || !status->complete || status->passed || status->stopped || !status->errors) return;
+    kui_log("GD Play failure: %s",status->message);
+    for(unsigned i=0u;i<status->line_count && i<KUI_APP_LINES;i++)
+        kui_log("  %s",status->lines[i]);
+    kui_log("Saving GD Play failure report automatically; B cancels report save.");
+    save_report(trigger,status->message,true);
+}
+#endif
+#ifdef KUI_SD_RUNTIME
 /* Settings share the same single I/O owner as capture and reports. No menu
  * callback mounts the card or competes with an active rip. */
 static void settings_operation(bool save) {
@@ -3330,6 +3344,7 @@ static void *worker(void *unused) {
                 kui_disc_launcher_check(&result,kui_log,kui_cancelled,disc_launch_progress);
                 inspection_passed=inspection_read=result.complete && result.passed && !result.stopped;
                 disc_launch_progress(&result);
+                disc_launch_failure_report("auto GD Play check failure",&result);
             }
             if(action==56 || action==57 || action==58 || action==104) {
                 kui_sd_set_params(KUI_STORAGE_AUTO,true);
@@ -3395,8 +3410,15 @@ static void *worker(void *unused) {
                     kui_menu_sound_config(system_current.menu_sounds,system_current.music_volume);
                     mutex_unlock(&lock);
                     publish_music();
+                    if(action==104) {
+                        /* Main released the rejected payload before clearing
+                         * probe_launch_ready. No successful launch returns. */
+                        mutex_lock(&lock);disc_result=probe_status;mutex_unlock(&lock);
+                        disc_launch_failure_report("auto GD Play handoff failure",&disc_result);
+                    }
                 } else {
                     mutex_lock(&lock);probe_launch_failed=true;mutex_unlock(&lock);
+                    if(action==104) disc_launch_failure_report("auto GD Play boot failure",&disc_result);
                 }
             }
             if(action==25 || action==44) {

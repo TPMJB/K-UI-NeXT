@@ -1,0 +1,29 @@
+{
+  "base": "5b1d3f193f5a",
+  "command": "make test-disc-native -j4",
+  "result": "PASS",
+  "exit_code": 0,
+  "stdout_sha256": "15b2600b4f746ee1b83865301acce7a964a416946fded7871642d2a304e22914",
+  "source_sha256": {
+    "Makefile": "d6c897e322f116ad7095190331d2306245fa7b25e8c7d3479eff23fb79d81bea",
+    "src/apps/disc_launcher.c": "705587f6a471488b0d0964963240b7d08acf856b5f0cc01f94faee78dd4cf8c7",
+    "src/core/disc_boot.c": "61007e1c9c65eda5f50daed1365d22df839dd7a6c5842b1ddbce46f344774742",
+    "include/kui/disc_boot.h": "d44a4d25811ec36ed0855991bff6a31a234bc093ea37e84225dfd548f1e11042",
+    "src/dreamcast/disc.c": "0256b097dd7d26c2ee5bb61c767b352d21cab54f89f3c0a238b70accdf331ca1",
+    "src/dreamcast/main.c": "b95c695f4e78ad3bbfe49f46e37bbb4e25f00a0b6e6d24931d480e79a6f465bf",
+    "src/dreamcast/platform.h": "9110d11b92c2aea81a89f179175ad6f3f27e523378d104d48ef9cccad1646f1d"
+  },
+  "coverage": [
+    "core metadata/IP/executable preflight",
+    "launch packet and adversarial hashes/geometry",
+    "virtual card storage owner",
+    "physical launcher full preparation",
+    "complete shell behavior/rendering regression",
+    "GUI handoff validation",
+    "whole-run publication fault matrix",
+    "automatic failure report gate/writer"
+  ],
+  "independent_review": "No remaining blockers after typed cancellation and scoped handoff receipt changes.",
+  "hardware_verified": false,
+  "limits": "Authored optical/scheduler/storage doubles; physical-drive recovery and Shenmue II execution still require console testing."
+}

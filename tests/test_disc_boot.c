@@ -18,6 +18,8 @@ static struct fixture {
     uint32_t run_fads[SECTORS],run_counts[SECTORS],run_calls,run_sectors;
     uint32_t run_fail_at,run_cancel_at,run_unknown_at,run_stop_at;
     uint32_t cancel_checks,cancel_check_at;
+    uint32_t refused_lba,refused_count,refusals;
+    struct kui_disc_boot_data_range ranges[3];
     bool stop,stop_after_read,change_ip;
     struct kui_disc_boot_source source;
 } fixture;
@@ -73,6 +75,9 @@ static enum kui_disc_boot_io_result read_run(void *context,uint32_t fad,
     memcpy(data,f->data[fad-FIRST],count*2048u);
     if(f->change_ip && fad==FIRST)data[128]^=1u;
     return KUI_DISC_BOOT_IO_OK;
+}
+static void extent_refused(void *context,uint32_t lba,uint32_t count) {
+    struct fixture *f=context;f->refused_lba=lba;f->refused_count=count;++f->refusals;
 }
 static bool cancelled(void *context) {
     struct fixture *f=context;
@@ -196,6 +201,64 @@ static void geometry_and_metadata(void) {
     /* Byte order and flags fail before executable reads, with no partial plan. */
     setup();unsigned original=boot_record()[0];memcpy(boot_record()+original,boot_record(),original);
     refused(KUI_DISC_BOOT_ISO);
+}
+static void mapped_setup(bool root_later) {
+    setup();
+    fixture.ranges[0]=(struct kui_disc_boot_data_range){FIRST,FIRST+(root_later?18u:36u)};
+    fixture.ranges[1]=(struct kui_disc_boot_data_range){FIRST+(root_later?ROOT:BOOT),FIRST+SECTORS};
+    fixture.source.data_ranges=fixture.ranges;fixture.source.data_range_count=2u;
+    fixture.source.extent_refused=extent_refused;
+}
+static void separated_data_extents(void) {
+    /* The same absolute ISO addresses are valid when the boot file alone, or
+     * both its directory and file, live after an excluded audio/gap interval. */
+    for(unsigned root_later=0u;root_later<2u;root_later++)
+        for(unsigned batched=0u;batched<2u;batched++) {
+            mapped_setup(root_later!=0u);fixture.source.read_run=batched?read_run:NULL;
+            struct kui_disc_boot_plan plan;
+            CHECK(kui_disc_boot_prepare(&fixture.source,&plan)==KUI_DISC_BOOT_OK);
+            CHECK(plan.boot_fad==FIRST+BOOT && plan.metadata.root_lba==FIRST-150u+ROOT);
+            CHECK(!fixture.refusals);
+            uint8_t sha[32];digest(fixture.data[BOOT],BOOT_BYTES,sha);
+            CHECK(!memcmp(plan.boot_sha256,sha,32u));
+        }
+    /* Starts in an audio/gap interval, crossing out of DATA, the exclusive
+     * leadout and arithmetic overflow are all rejected before a device read. */
+    const uint32_t bad[]={FIRST+36u,FIRST+39u,FIRST+SECTORS,FIRST+SECTORS-1u,UINT32_MAX-1u};
+    for(unsigned i=0u;i<sizeof(bad)/sizeof(bad[0]);i++) {
+        mapped_setup(false);dual32(boot_record()+2u,bad[i]-150u);
+        refused(KUI_DISC_BOOT_ISO);CHECK(fixture.reads==3u && fixture.refusals==1u);
+        CHECK(fixture.refused_lba==bad[i]-150u && fixture.refused_count==2u);
+    }
+    mapped_setup(false);dual32(boot_record()+2u,FIRST+35u-150u);
+    refused(KUI_DISC_BOOT_ISO);CHECK(fixture.reads==3u && fixture.refusals==1u);
+    mapped_setup(true);dual32(fixture.data[16]+156u+2u,FIRST+25u-150u);
+    refused(KUI_DISC_BOOT_ISO);CHECK(fixture.reads==2u && fixture.refusals==1u);
+    CHECK(fixture.refused_lba==FIRST+25u-150u && fixture.refused_count==1u);
+    /* Invalid maps never authorize even the initial IP read. */
+    for(unsigned invalid=0u;invalid<9u;invalid++) {
+        mapped_setup(false);
+        switch(invalid) {
+        case 0u:fixture.source.data_ranges=NULL;break;
+        case 1u:fixture.source.data_range_count=0u;break;
+        case 2u:fixture.source.data_range_count=100u;break;
+        case 3u:fixture.ranges[0].first_fad++;break;
+        case 4u:fixture.ranges[0].end_fad=FIRST+17u;break;
+        case 5u:fixture.ranges[1].first_fad=FIRST+35u;break;
+        case 6u:fixture.ranges[1].end_fad++;break;
+        case 7u:fixture.ranges[1].end_fad--;break;
+        case 8u:fixture.ranges[1].first_fad=fixture.ranges[1].end_fad;break;
+        }
+        refused(KUI_DISC_BOOT_ARGUMENT);CHECK(!fixture.reads && !fixture.run_calls);
+    }
+    /* Clearing an output must not overwrite a caller's overlapping map. */
+    mapped_setup(false);
+    union {struct kui_disc_boot_plan plan;struct kui_disc_boot_data_range map[2];} alias;
+    memcpy(alias.map,fixture.ranges,sizeof(alias.map));
+    uint8_t saved[sizeof(alias)];memcpy(saved,&alias,sizeof(alias));
+    fixture.source.data_ranges=alias.map;
+    CHECK(kui_disc_boot_prepare(&fixture.source,&alias.plan)==KUI_DISC_BOOT_ARGUMENT);
+    CHECK(!memcmp(saved,&alias,sizeof(alias)) && !fixture.reads);
 }
 static void batched_extents(void) {
     static const uint32_t sizes[]={1u,2048u,2049u,BOOT_BYTES,16383u,16384u,
@@ -332,7 +395,7 @@ static void fault_and_cancel(void) {
     CHECK(strstr(kui_disc_boot_status_text(KUI_DISC_BOOT_CHANGED),"changed"));
 }
 int main(void) {
-    success_and_regions();geometry_and_metadata();batched_extents();execution_limits();
+    success_and_regions();geometry_and_metadata();separated_data_extents();batched_extents();execution_limits();
     batched_fault_and_cancel();fault_and_cancel();
     printf("Physical GD boot preflight: %u checks; bounded runs and singleton fallback, exact hashes/limits, regions, malformed ISO, read faults and cancellation\n",checks);
     return 0;

@@ -1,0 +1,55 @@
+{
+  "schema": 1,
+  "result": "PASS",
+  "command": "ASAN_OPTIONS=detect_leaks=0 python3 tests/test_capture_tail_images.py",
+  "exit_code": 0,
+  "stdout_log": "evidence/shenmue-capture-tail-host.log",
+  "sanitizers": [
+    "AddressSanitizer",
+    "UndefinedBehaviorSanitizer"
+  ],
+  "source_sha256": {
+    "src/core/capture.c": "5b2ce377ce60936679538ac9fef5d7405dd0d712401b5373d08bb580c0f7e535",
+    "tests/capture_image.c": "3d6ea543faf6f954d3c206963d5bb4e7822014b498a47b17c6ad967897acebcc",
+    "tests/format_test_image.c": "0700a5e340bd67609aa4283c90902943365de9d058b85a414a126bc4c22e355b",
+    "tests/test_capture_tail_images.py": "46c3133baa1e7a5f9ab615da3c6d92a1c0b917df8bd3d803343f5bf892c38b27"
+  },
+  "runtime_path": "actual src/core/capture.c acquisition/checkpoint/resume engine with upstream FatFs R0.16",
+  "filesystems": [
+    "FAT32",
+    "exFAT"
+  ],
+  "checks": [
+    "Complete normal PIO, overlapped DMA, and CRC-only/no-end-readback jobs retain identical track-file hashes.",
+    "Authored optical adapter rejects any multi-sector PIO request that touches or crosses into the final150-sector region.",
+    "Authored DMA adapter rejects any prefetch that touches or crosses into the final150-sector region.",
+    "Complete acquisition reports150 single-sector tail reads and exports all813 sectors of track06.",
+    "Cancellation after8 tail sectors leaves a checkpoint and813-142 saved sectors, without public GDI/manifest completion metadata.",
+    "Fatal optical result after8 tail sectors preserves the same incomplete prefix without successful completion metadata.",
+    "Resume from either incomplete job reads all142 remaining sectors, verifies saved data and matches uninterrupted full-track hashes.",
+    "Raw GDI output/TOC extent/identity/checkpoint formats are not truncated or changed."
+  ],
+  "fixture": {
+    "authored": true,
+    "synthetic_track06_fad": [
+      51000,
+      51813
+    ],
+    "tail_fad": [
+      51663,
+      51813
+    ],
+    "resume_fad": [
+      51671,
+      51813
+    ],
+    "raw_sector_bytes": 2352,
+    "source": "deterministic host fixture with valid Mode1 FAD/EDC"
+  },
+  "limitations": [
+    "Synthetic sectors and authored optical scheduling; no Dreamcast hardware, real GD-ROM firmware timing, damaged-media behavior or Shenmue II retail sectors execute.",
+    "The fixture reproduces142 remaining sectors relative to the leadout; it does not reproduce the physical FAD549158 timeout itself.",
+    "Single-sector PIO is a conservative bounded mitigation, not proof of the original DMA/PIO timeout cause or proof that the real disc now completes.",
+    "Existing fatal/failed-abort safety remains unchanged. A poisoned hardware adapter still requires a console reset."
+  ]
+}

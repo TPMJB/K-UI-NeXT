@@ -1,0 +1,285 @@
+PASS boot optical policy: boot-raw-phase
+PASS boot optical policy: boot-raw-slow
+PASS boot optical policy: boot-raw-underfill
+PASS boot optical policy: boot-raw-repeat
+PASS boot optical policy: boot-raw-short
+PASS boot optical policy: boot-raw-long
+PASS boot optical policy: boot-raw-error
+PASS boot optical policy: boot-raw-second-error
+PASS boot optical policy: boot-raw-timeout
+PASS boot optical policy: boot-raw-abort-fail
+PASS boot optical policy: boot-raw-guard-before
+PASS boot optical policy: boot-raw-guard-after
+PASS boot optical policy: boot-raw-cancel-entry
+PASS boot optical policy: boot-raw-cancel-running
+PASS boot optical policy: boot-raw-cancel-terminal
+PASS boot optical policy: boot-raw-media
+PASS boot optical policy: boot-raw-notready
+PASS boot optical policy: boot-raw-mode
+PASS boot optical policy: boot-raw-invalid
+PASS boot optical policy: boot-raw-command-owned
+PASS boot optical policy: boot-raw-dma-owned
+PASS boot optical policy: boot-raw-g1-owned
+PASS boot optical policy: boot-raw-command-owned-late-stop
+PASS boot optical policy: boot-raw-dma-owned-late-stop
+PASS boot optical policy: boot-raw-g1-owned-late-stop
+PASS boot optical policy: boot-raw-error-late-stop
+PASS boot optical policy: boot-raw-short-late-stop
+PASS boot optical policy: boot-raw-repeat-late-stop
+PASS boot optical policy: boot-raw-guard-late-stop
+PASS boot optical policy: boot-raw-mode-late-stop
+PASS boot optical policy: boot-raw-timeout-late-stop
+PASS boot optical policy: boot-raw-cancel-mode
+PASS boot optical policy: boot-raw-cancel-between
+PASS boot optical policy: boot-raw-invalid-late-stop
+PASS boot optical policy: boot-cooked-phase
+PASS boot optical policy: boot-cooked-slow
+PASS boot optical policy: boot-cooked-underfill
+PASS boot optical policy: boot-cooked-repeat
+PASS boot optical policy: boot-cooked-short
+PASS boot optical policy: boot-cooked-long
+PASS boot optical policy: boot-cooked-error
+PASS boot optical policy: boot-cooked-second-error
+PASS boot optical policy: boot-cooked-timeout
+PASS boot optical policy: boot-cooked-abort-fail
+PASS boot optical policy: boot-cooked-guard-before
+PASS boot optical policy: boot-cooked-guard-after
+PASS boot optical policy: boot-cooked-cancel-entry
+PASS boot optical policy: boot-cooked-cancel-running
+PASS boot optical policy: boot-cooked-cancel-terminal
+PASS boot optical policy: boot-cooked-media
+PASS boot optical policy: boot-cooked-notready
+PASS boot optical policy: boot-cooked-mode
+PASS boot optical policy: boot-cooked-invalid
+PASS boot optical policy: boot-cooked-command-owned
+PASS boot optical policy: boot-cooked-dma-owned
+PASS boot optical policy: boot-cooked-g1-owned
+PASS boot optical policy: boot-cooked-command-owned-late-stop
+PASS boot optical policy: boot-cooked-dma-owned-late-stop
+PASS boot optical policy: boot-cooked-g1-owned-late-stop
+PASS boot optical policy: boot-cooked-error-late-stop
+PASS boot optical policy: boot-cooked-short-late-stop
+PASS boot optical policy: boot-cooked-repeat-late-stop
+PASS boot optical policy: boot-cooked-guard-late-stop
+PASS boot optical policy: boot-cooked-mode-late-stop
+PASS boot optical policy: boot-cooked-timeout-late-stop
+PASS boot optical policy: boot-cooked-cancel-mode
+PASS boot optical policy: boot-cooked-cancel-between
+PASS boot optical policy: boot-cooked-invalid-late-stop
+PASS boot handoff receipt: boot-handoff-raw-playing
+PASS boot handoff receipt: boot-handoff-raw-consumed
+PASS boot handoff receipt: boot-handoff-raw-init
+PASS boot handoff receipt: boot-handoff-raw-format
+PASS boot handoff receipt: boot-handoff-raw-ordinary-read
+PASS boot handoff receipt: boot-handoff-raw-failed
+PASS boot handoff receipt: boot-handoff-raw-cancelled
+PASS boot handoff receipt: boot-handoff-raw-invalid
+PASS boot handoff receipt: boot-handoff-raw-slow
+PASS boot handoff receipt: boot-handoff-raw-bad-ip
+PASS boot handoff receipt: boot-handoff-raw-media
+PASS boot handoff receipt: boot-handoff-cooked-playing
+PASS boot handoff receipt: boot-handoff-cooked-consumed
+PASS boot handoff receipt: boot-handoff-cooked-init
+PASS boot handoff receipt: boot-handoff-cooked-format
+PASS boot handoff receipt: boot-handoff-cooked-ordinary-read
+PASS boot handoff receipt: boot-handoff-cooked-failed
+PASS boot handoff receipt: boot-handoff-cooked-cancelled
+PASS boot handoff receipt: boot-handoff-cooked-invalid
+PASS boot handoff receipt: boot-handoff-cooked-slow
+PASS boot handoff receipt: boot-handoff-cooked-bad-ip
+PASS boot handoff receipt: boot-handoff-cooked-media
+PASS explicit disc readiness: launch-ready-good;INIT1 queries4 simulated_us72366
+PASS explicit disc readiness: launch-ready-spinning;INIT2 queries9 simulated_us744423
+PASS explicit disc readiness: launch-ready-seeking;INIT1 queries8 simulated_us488378
+PASS explicit disc readiness: launch-ready-scanning;INIT1 queries8 simulated_us488378
+PASS explicit disc readiness: launch-ready-retry;INIT2 queries5 simulated_us328411
+PASS explicit disc readiness: launch-ready-ok-then-retry;INIT2 queries6 simulated_us352492
+PASS explicit disc readiness: launch-ready-timeout-ok-retry;INIT36 queries72 simulated_us10004536
+PASS explicit disc readiness: launch-ready-not-ready-stable;INIT3 queries6 simulated_us584456
+PASS explicit disc readiness: launch-ready-stale-cd;INIT1 queries4 simulated_us72366
+PASS explicit disc readiness: launch-ready-stale-status;INIT1 queries4 simulated_us72366
+PASS explicit disc readiness: launch-ready-open;INIT0 queries1 simulated_us3
+PASS explicit disc readiness: launch-ready-empty;INIT0 queries1 simulated_us3
+PASS explicit disc readiness: launch-ready-open-after-change;INIT1 queries2 simulated_us256048
+PASS explicit disc readiness: launch-ready-empty-after-change;INIT1 queries2 simulated_us256048
+PASS explicit disc readiness: launch-ready-timeout-mechanical;INIT1 queries97 simulated_us10000411
+PASS explicit disc readiness: launch-ready-timeout-not-ready;INIT40 queries40 simulated_us10001800
+PASS explicit disc readiness: launch-ready-timeout-command;INIT1 queries1 simulated_us10000452
+PASS explicit disc readiness: launch-ready-abort-failed;INIT1 queries1 simulated_us11003676
+PASS explicit disc readiness: launch-ready-cancel-before;INIT0 queries0 simulated_us0
+PASS explicit disc readiness: launch-ready-cancel-wait;INIT1 queries1 simulated_us104045
+PASS explicit disc readiness: launch-ready-cancel-command;INIT1 queries1 simulated_us8082
+PASS explicit disc readiness: launch-ready-real-init-error;INIT1 queries1 simulated_us45
+PASS explicit disc readiness: launch-ready-status-error;INIT1 queries2 simulated_us24126
+PASS explicit disc readiness: launch-ready-query-error;INIT1 queries2 simulated_us24126
+PASS explicit disc readiness: launch-ready-unsupported;INIT1 queries3 simulated_us24126
+PASS explicit disc readiness: launch-ready-cd;INIT1 queries4 simulated_us48246
+PASS explicit disc readiness: launch-ready-bad-toc;INIT1 queries3 simulated_us48246
+PASS explicit disc readiness: launch-ready-toc-io;INIT1 queries3 simulated_us24168
+PASS explicit disc readiness: launch-ready-toc-guard;INIT1 queries3 simulated_us48246
+PASS explicit disc readiness: launch-ready-open-after-toc;INIT1 queries4 simulated_us72366
+PASS explicit disc readiness: launch-ready-empty-after-toc;INIT1 queries4 simulated_us72366
+PASS explicit disc readiness: launch-ready-change-after-toc;INIT1 queries4 simulated_us72366
+PASS explicit disc readiness: launch-ready-cd-after-toc;INIT1 queries4 simulated_us72366
+PASS explicit disc readiness: launch-ready-gd-after-cd-toc;INIT1 queries4 simulated_us48246
+PASS explicit disc readiness: launch-ready-init-failed-late-stop;INIT1 queries1 simulated_us45
+PASS explicit disc readiness: launch-ready-init-notready-late-stop;INIT1 queries1 simulated_us45
+PASS explicit disc readiness: launch-ready-timeout-late-stop;INIT1 queries1 simulated_us10000452
+PASS explicit disc readiness: launch-ready-abort-failed-late-stop;INIT1 queries1 simulated_us11003676
+PASS explicit disc readiness: launch-ready-toc-failed-late-stop;INIT1 queries3 simulated_us24168
+PASS explicit disc readiness: launch-ready-toc-bad-late-stop;INIT1 queries3 simulated_us48246
+PASS explicit disc readiness: launch-ready-toc-guard-late-stop;INIT1 queries3 simulated_us48246
+PASS native disc handoff: handoff-uninitialized
+PASS native disc handoff: handoff-good
+PASS native disc handoff: handoff-slow-seek
+PASS native disc handoff: handoff-paused
+PASS native disc handoff: handoff-standby
+PASS native disc handoff: handoff-invalid
+PASS native disc handoff: handoff-playing-entry
+PASS native disc handoff: handoff-after-cdda
+PASS native disc handoff: handoff-after-cdrom
+PASS native disc handoff: handoff-after-query-failure
+PASS native disc handoff: handoff-after-query-failure-negative
+PASS native disc handoff: handoff-mode-failure
+PASS native disc handoff: handoff-mode-cancel
+PASS native disc handoff: handoff-underfill
+PASS native disc handoff: handoff-size-short
+PASS native disc handoff: handoff-size-long
+PASS native disc handoff: handoff-content-first
+PASS native disc handoff: handoff-content-second
+PASS native disc handoff: handoff-guard-before
+PASS native disc handoff: handoff-guard-after
+PASS native disc handoff: handoff-read-failure
+PASS native disc handoff: handoff-failure-guard
+PASS native disc handoff: handoff-read-timeout
+PASS native disc handoff: handoff-read-cancel
+PASS native disc handoff: handoff-abort-failure
+PASS native disc handoff: handoff-media-during-read
+PASS native disc handoff: handoff-media-after-read
+PASS native disc handoff: handoff-cancel-entry
+PASS native disc handoff: handoff-controls-active
+PASS native disc handoff: handoff-g1-active
+PASS native disc handoff: handoff-dma-active
+PASS native disc handoff: handoff-command-active
+PASS native disc handoff: handoff-known-media-change
+PASS native disc handoff: handoff-drive-query-failure
+PASS native disc handoff: handoff-drive-not-gd
+PASS native disc handoff: handoff-drive-not-ready
+PASS native disc handoff: handoff-after-read-fail
+PASS native disc handoff: handoff-after-busy
+PASS native disc handoff: handoff-after-seeking
+PASS native disc handoff: handoff-after-scanning
+PASS native disc handoff: handoff-after-open
+PASS native disc handoff: handoff-after-no-disc
+PASS native disc handoff: handoff-after-retry
+PASS native disc handoff: handoff-after-error
+PASS native disc handoff: handoff-after-fatal
+PASS native disc handoff: handoff-after-unknown
+PASS optical preparation: unchanged default GD path, explicit ready CD TOC, status/errors/types, zero second area, GD opt-in and guarded refusal
+PASS drive recovery: recover-gd
+PASS drive recovery: recover-cd
+PASS drive recovery: recover-audio
+PASS drive recovery: recover-timeout
+PASS drive recovery: recover-init-timeout
+PASS drive recovery: recover-layout
+PASS drive recovery: recover-profile
+PASS drive recovery: recover-cancel
+PASS drive recovery: recover-command-live
+PASS drive recovery: recover-abort-fail
+PASS drive recovery: recover-init-abort-fail
+PASS drive recovery: recover-dma-disabled
+PASS salvage optical policy: salvage-slow
+PASS salvage optical policy: salvage-medium-delay
+PASS salvage optical policy: salvage-drain
+PASS salvage optical policy: salvage-cancel
+PASS salvage optical policy: salvage-mode-fail
+PASS salvage optical policy: salvage-abort-fail
+PASS salvage optical policy: salvage-cancel-abort-fail
+PASS salvage optical policy: salvage-guard
+PASS salvage optical policy: salvage-media-change
+PASS salvage partial policy: salvage-partial-medium
+PASS salvage partial policy: salvage-partial-size-untrusted
+PASS salvage partial policy: salvage-partial-empty
+PASS salvage partial policy: salvage-partial-normal-raw
+PASS salvage partial policy: salvage-partial-other-sense
+PASS salvage partial policy: salvage-partial-not-found
+PASS salvage partial policy: salvage-partial-submit-fail
+PASS salvage partial policy: salvage-partial-timeout
+PASS salvage partial policy: salvage-partial-cancel
+PASS salvage partial policy: salvage-partial-unknown-abort
+PASS salvage partial policy: salvage-partial-guard
+PASS salvage partial policy: salvage-partial-media
+PASS native drive controls: controls-default
+PASS native drive controls: controls-apply
+PASS native drive controls: controls-speed-only
+PASS native drive controls: controls-retry-only
+PASS native drive controls: controls-cancel
+PASS native drive controls: controls-live
+PASS native drive controls: controls-query-fail
+PASS native drive controls: controls-query-short
+PASS native drive controls: controls-width-speed
+PASS native drive controls: controls-width-standby
+PASS native drive controls: controls-width-flags
+PASS native drive controls: controls-width-retries
+PASS native drive controls: controls-query-timeout
+PASS native drive controls: controls-set-timeout
+PASS native drive controls: controls-query-abort-fail
+PASS native drive controls: controls-set-abort-fail
+PASS native drive controls: controls-guard-before
+PASS native drive controls: controls-guard-after
+PASS native drive controls: controls-rejected
+PASS native drive controls: controls-ignored
+PASS native drive controls: controls-set-short
+PASS native drive controls: controls-reapply
+PASS native drive controls: controls-reapply-ignored
+PASS native drive controls: controls-restore-fail
+PASS native drive controls: controls-media-change
+PASS native drive controls: controls-format-retained
+PASS native drive controls: controls-format-speed
+PASS native drive controls: controls-format-standby
+PASS native drive controls: controls-format-flags
+PASS native drive controls: controls-format-retries
+PASS native drive controls: controls-format-query-fail
+PASS native drive controls: controls-format-guard
+PASS native drive controls: controls-format-abort-fail
+PASS native control trial: trial-native-switches
+PASS native control trial: trial-native-baseline-init
+PASS native control trial: trial-native-selected-init
+PASS native control trial: trial-native-rejected
+PASS native control trial: trial-native-ignored
+PASS native control trial: trial-native-query-failure
+PASS native control trial: trial-native-rollback-fatal
+PASS native control trial: trial-native-abort-fatal
+PASS native control trial: trial-native-cancel-admission
+PASS native control trial: trial-native-cancel
+PASS native control trial: trial-native-cancel-during-switch
+PASS native control trial: trial-native-owned
+PASS native control trial: trial-native-format-changed
+PASS native control trial: trial-native-baseline-format-changed
+PASS native control trial: trial-native-invalid
+PASS native speed probe controls: speed-native-all
+PASS native speed probe controls: speed-native-ignored-speed
+PASS native speed probe controls: speed-native-changed-flags
+PASS native speed probe controls: speed-native-query-failure
+PASS native speed probe controls: speed-native-set-failure
+PASS native speed probe controls: speed-native-rollback-fatal
+PASS native speed probe controls: speed-native-cancel
+PASS native speed probe controls: speed-native-cancel-during-select
+PASS native speed probe controls: speed-native-owned
+PASS native speed probe controls: speed-native-media-change
+PASS native speed probe controls: speed-native-invalid
+PASS native direct G1 gate: g1-gate-uninitialized
+PASS native direct G1 gate: g1-gate-exclusive
+PASS native direct G1 gate: g1-gate-command-owned
+PASS native direct G1 gate: g1-gate-dma-owned
+PASS native direct G1 gate: g1-gate-controls-owned
+PASS native direct G1 gate: g1-gate-entry-cancel
+PASS native direct G1 gate: g1-gate-entry-query-failure
+PASS native direct G1 gate: g1-gate-end-cancel
+PASS native direct G1 gate: g1-gate-unrestored
+PASS native direct G1 gate: g1-gate-end-speed
+PASS native direct G1 gate: g1-gate-end-standby
+PASS native direct G1 gate: g1-gate-end-flags
+PASS native direct G1 gate: g1-gate-end-retries
+PASS native direct G1 gate: g1-gate-end-query-failure
+PASS optical: paired identity, single capture, transfer size, bounded fast service, periodic scheduling, busy submit, deadlines, cancel and guards

@@ -1,0 +1,109 @@
+{
+  "schema": 1,
+  "result": "PASS",
+  "commands": [
+    {
+      "command": "make build/test-disc-launcher && ASAN_OPTIONS=detect_leaks=0 ./build/test-disc-launcher",
+      "checks": 44644,
+      "exit_code": 0
+    },
+    {
+      "command": "python3 tests/test_disc_read_recovery.py",
+      "checks": 115321,
+      "exit_code": 0
+    },
+    {
+      "command": "python3 tests/test_disc_vmu_launcher.py",
+      "checks": 64074,
+      "exit_code": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "source_sha256": {
+    "src/apps/disc_launcher.c": "705587f6a471488b0d0964963240b7d08acf856b5f0cc01f94faee78dd4cf8c7",
+    "src/core/disc_boot.c": "61007e1c9c65eda5f50daed1365d22df839dd7a6c5842b1ddbce46f344774742",
+    "include/kui/disc_boot.h": "d44a4d25811ec36ed0855991bff6a31a234bc093ea37e84225dfd548f1e11042",
+    "src/dreamcast/platform.h": "9110d11b92c2aea81a89f179175ad6f3f27e523378d104d48ef9cccad1646f1d",
+    "src/core/game_metadata.c": "e1237e8ee4cfd4b6411947d1f1dfdaf9dd26aabeb8f59cbc97e4823565166fb1",
+    "src/core/disc_launch.c": "b23926c2081081089fd6af549121e5587e1200c48fc83d8218b201a7725e375c",
+    "src/core/hash.c": "1dda19d3dc6a645396d24484cd8842c72bba811dce38f317660a2eeda7dc0d67",
+    "src/core/data.c": "07ee1b7bcbcadd20dced6d9ad441815558d8b417939d0706a753375b4bc6d16c",
+    "tests/test_disc_launcher.c": "735066a4377639cd9b6fea6e58a4cdbaffa3965c98dffed6b3eb7f60de3ee089",
+    "tests/test_disc_read_recovery.c": "3b04e7ec2f7af81296b33cf7d3b455a8bc7ddee2c2760913785cbdbd3e9f565f",
+    "tests/test_disc_read_recovery.py": "09ce4eab7ac52a9fc32ee9e694994965e8c577a5b49bd5551d8149efc840c6ea"
+  },
+  "sanitizers": [
+    "AddressSanitizer",
+    "UndefinedBehaviorSanitizer"
+  ],
+  "checks": [
+    "All39 baseline optical read cuts separately recover from transient RETRY, EDC error and correctly resealed wrong-FAD error using raw retries.",
+    "Fatal reads and userStop at all39 cuts remain refused with bootstrap/card ownership released.",
+    "A rejected bulk run reduces all later raw reads to single-sector requests; successful recovery retains byte-exact staged executable.",
+    "Persistent raw EDC and terminal transport retries can select cooked acquisition; subsequent I/O stays in cooked mode.",
+    "A persistently wrong raw sector address cannot select cooked fallback, including after an earlier sector in the same raw run selected cooked mode.",
+    "Fatal, PARTIAL and unknown adapter outcomes refuse without further acquisition or handoff.",
+    "Cooked retry is bounded; cooked failure, clean cancellation and genuine fatal+lateStop preserve typed outcome precedence.",
+    "Valid but changed cooked executable bytes between preflight and staging fail existing full-payload hashes.",
+    "Observed Shenmue II HD geometry is tested with authored rootFAD549150 and bootFAD549158 or549298; the second executable ends exactly at leadout549300, with every tail requestcount1.",
+    "Direct actual private read_run tests preserve all caller-buffer bytes and surrounding canaries on rawfatal, cleanStop, partial, wrong-address and cooked failure, even after earlier sectors were recovered.",
+    "Direct read_run publishes the exact complete run only after every sector succeeds; acceptedprogress does not advance over a failed run.",
+    "Current physical-disc VMU frontdoor region, preference-firstOff and storage-release fixture remains passing."
+  ],
+  "fixture": {
+    "authored": true,
+    "retail_payloads": false,
+    "high_density_toc": [
+      {
+        "track": 3,
+        "control": 4,
+        "fad": [
+          45150,
+          102021
+        ]
+      },
+      {
+        "track": 4,
+        "control": 0,
+        "fad": [
+          102021,
+          102621
+        ]
+      },
+      {
+        "track": 5,
+        "control": 0,
+        "fad": [
+          102621,
+          103462
+        ]
+      },
+      {
+        "track": 6,
+        "control": 4,
+        "fad": [
+          103462,
+          549300
+        ]
+      }
+    ],
+    "root_fad": 549150,
+    "boot_fads": [
+      549158,
+      549298
+    ],
+    "boot_bytes": 3001,
+    "pal_region": "E",
+    "console_region": "U",
+    "region_free": true
+  },
+  "limitations": [
+    "Optical API outcomes and payloads are authored doubles. This suite executes the actual launcher, ISO parser, hash admission, staging and private bounded reader; it does not execute disc.c firmware PIO, sector-mode ABI or scheduler timing.",
+    "The cooked stub models an atomic released and already-verified bootAPI result; actual paired2048 firmware transport tests are recorded separately by the adapter fixture.",
+    "No physical disc, motor seek, damaged media, raw-drive ECC behavior, game execution or Shenmue II retail sector contents are reproduced.",
+    "High-FAD and leadout cases exercise address arithmetic and request policy, not the observed FAD549158 physical timeout."
+  ]
+}

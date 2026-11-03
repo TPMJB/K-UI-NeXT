@@ -1,0 +1,4 @@
+cc -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic -fsanitize=address,undefined -fno-omit-frame-pointer -fno-pie -no-pie -Iinclude -I.deps/fatfs/source -Ifirmware/kui-wifi/components/kwlink/include -Isrc/dreamcast tests/test_disc_launcher.c src/apps/disc_launcher.c src/core/disc_boot.c src/core/game_metadata.c src/core/hash.c src/core/data.c src/core/disc_launch.c -Wl,--wrap=realloc -o build/test-disc-launcher
+Physical GD launcher app: 44644 checks; actual planner/packet hashes, bounded raw/cooked recovery, high-FAD reads, read cuts, changed bytes and released storage
+Physical disc bounded read publication: 115321 checks; actual read_run preserves complete caller canaries on fatal/Stop/partial/wrong-address/cooked failure and publishes only complete recovered runs
+PASS physical-disc VMU frontdoor: 64074 checks; region policy, preference-first Off, actual disc identity, exact selection, storage release and cleared failures

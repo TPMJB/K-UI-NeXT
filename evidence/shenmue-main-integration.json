@@ -1,0 +1,34 @@
+{
+  "integration_base": "34e0ddce89b35208e4c166ee461773d052d32375",
+  "hardware_accepted_source": "afb1b3a3d7cfa8152f8456831aa297a5731e6cf7",
+  "owner_report_date": "2026-11-03",
+  "owner_report": {
+    "game": "Shenmue II PAL",
+    "console_region": "NTSC",
+    "gd_play_boot": "passed",
+    "rip_to_sd": "passed",
+    "readback_or_catalogue_match": "not reported"
+  },
+  "hardware_identical_files": [
+    "include/kui/disc_boot.h",
+    "src/core/disc_boot.c",
+    "src/apps/disc_launcher.c",
+    "src/dreamcast/disc.c",
+    "src/dreamcast/platform.h",
+    "tests/test_disc.c",
+    "tests/test_disc_launcher.c"
+  ],
+  "host_commands": [
+    {
+      "command": "make test-disc-native test-capture-tail build/test-disc -j4",
+      "result": "PASS"
+    },
+    {
+      "command": "ASAN_OPTIONS=detect_leaks=0 build/test-disc",
+      "result": "PASS"
+    }
+  ],
+  "host_log_sha256": "fab384f7fc197e34aa89f2f5370a54bb863e7acbd86261f96c854d875c85f3c8",
+  "scope": "Two Shenmue commits plus their scoped physical-disc readiness prerequisites. Existing main menu/session behavior and capture naming retained. VC2/MMU experiments excluded.",
+  "new_console_run_of_main_integration": false
+}
