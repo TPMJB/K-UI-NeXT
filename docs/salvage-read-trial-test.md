@@ -82,11 +82,16 @@ verification, read errors, validation results, and per-method totals under
 `READTRIAL` lines. A ten-minute result may contain an incomplete set of steps;
 unattempted reads are not failures.
 
-If that first report is healthy, the same comparison can be rerun with
-**Firmware retries: 4**, then **8**. Each run freezes the then-current unresolved
-sample; save each report, since changing the remaining set prevents treating
-separate runs as a perfectly controlled comparison. The initial test keeps
-retry count constant so a read-pattern benefit is easier to identify.
+Keep **Firmware retries: 1** for the initial comparison. Firmware retry count
+is a separate variable from the read approach; this diagnostic does not
+increase it automatically. The existing read and abort deadlines still apply.
+A drive command that cannot be stopped ends the operation and requires a
+restart, while committed repairs are retained.
+
+Each run freezes the then-current unresolved sample. Save each report:
+changing the remaining set prevents treating separate runs as a perfectly
+controlled comparison. The initial test keeps retry count constant so a
+read-pattern benefit is easier to identify.
 
 ## Recovery guarantees and scope
 
