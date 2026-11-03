@@ -1252,9 +1252,9 @@ build/repair-copy-image: tests/repair_copy_image.c tests/repair_expansion_cases.
 .PHONY: test-native-cdda-compat test-games-cdda-identity-io
 test-games-cdda-identity-io: build/test-games-cdda-identity-io
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-games-cdda-identity-io
-build/test-games-cdda-identity-io: tests/test_games_cdda_identity_io.c tests/test_games_cdda_status.c src/apps/games.c include/kui/games_cdda_status.h src/core/game_image.c src/core/zso.c src/core/lzo1x.c src/core/hash.c src/core/data.c src/core/destination.c
+build/test-games-cdda-identity-io: tests/test_games_cdda_identity_io.c tests/test_games_cdda_status.c src/apps/games.c include/kui/games_cdda_status.h src/core/game_image.c src/core/zso.c src/core/lzo1x.c src/core/hash.c src/core/data.c src/core/destination.c src/core/game_profile.c src/apps/game_profile_file.c src/core/game_launch_settings.c src/core/game_ram_patches.c include/kui/game_profile.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast -ffunction-sections -fdata-sections tests/test_games_cdda_identity_io.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c src/core/hash.c src/core/data.c src/core/destination.c -Wl,--gc-sections -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast -ffunction-sections -fdata-sections tests/test_games_cdda_identity_io.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c src/core/hash.c src/core/data.c src/core/destination.c src/core/game_profile.c src/apps/game_profile_file.c src/core/game_launch_settings.c src/core/game_ram_patches.c -Wl,--gc-sections -o $@
 
 test-native-cdda-compat: build/test-native-cdda-compat
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-native-cdda-compat
