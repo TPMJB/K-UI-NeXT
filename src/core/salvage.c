@@ -971,6 +971,7 @@ static bool store_repair(struct salvage *s,unsigned index,const struct target *t
     return apply_patch(s,index);
 }
 #include "salvage_control_trial.inc"
+#include "salvage_read_trial.inc"
 static void repair_message(struct salvage *s,unsigned index,const struct target *t) {
     s->status->track=t->track+1;s->status->fad=s->plan->tracks[t->track].start+t->sector;
     if(s->options->passes)
@@ -1293,7 +1294,7 @@ static void session_state_clear(struct salvage *s) {
 }
 static bool session_try(struct salvage *s,bool available,enum kui_salvage_action action) {
     const struct kui_salvage_options *o=s->options;uint8_t digest[32];
-    if(!available || !o->session_epoch || !o->session_card || action!=KUI_SALVAGE_RESUME || o->defer_next_range || o->control_trial)return false;
+    if(!available || !o->session_epoch || !o->session_card || action!=KUI_SALVAGE_RESUME || o->defer_next_range || o->control_trial || o->read_trial)return false;
     session_seal(digest);
     if(memcmp(digest,session.seal,32) || o->session_epoch!=session.epoch || memcmp(o->session_card,session.card,32) ||
        strcmp(s->status->job,session.job) || memcmp(s->identity,session.identity,32)) {
@@ -1353,6 +1354,7 @@ enum kui_salvage_result kui_salvage_run(const struct kui_capture_plan *plan,cons
     memset(status,0,sizeof(*status));
     if(!plan_valid(plan) || !ops || !ops->read || !ops->log || !options || action<KUI_SALVAGE_NEW || action>KUI_SALVAGE_RECOVER ||
        (options->control_trial && (action!=KUI_SALVAGE_RECOVER || !options->trial_select || !ops->now_ms)) ||
+       (options->read_trial && (action!=KUI_SALVAGE_RECOVER || options->control_trial || options->defer_next_range || !ops->now_ms)) ||
        (options->defer_next_range && action!=KUI_SALVAGE_RESUME) ||
        (options->passes!=0 && options->passes!=1 && options->passes!=5 && options->passes!=10 && options->passes!=20 && options->passes!=50)) {
         snprintf(status->message,sizeof(status->message),"Invalid salvage request or pass limit");return status->result;
@@ -1360,6 +1362,7 @@ enum kui_salvage_result kui_salvage_run(const struct kui_capture_plan *plan,cons
     struct salvage *s=calloc(1,sizeof(*s));if(!s) {snprintf(status->message,sizeof(status->message),"Not enough memory for bounded salvage state");return status->result;}
     s->patch=(uint8_t *)(((uintptr_t)s->patch_storage+31u)&~(uintptr_t)31u);
     s->plan=plan;s->ops=ops;s->options=options;s->status=status;status->tracks=plan->count;status->total=plan->bytes;status->pass_limit=options->passes;
+    status->trial_read_strategy=options->read_trial;
     s->started=ops->now_ms?ops->now_ms(ops->ctx):0;
     FATFS fs;bool mounted=false,ok=false,ready_at_admission=false,warm=false,checked=false,repair_entered=false,retained=false;
     if(stop(s))goto done;
@@ -1387,7 +1390,9 @@ enum kui_salvage_result kui_salvage_run(const struct kui_capture_plan *plan,cons
     if(!reconcile_patch_tail(s))goto done;
     ops->log("Salvage job: %s; unverified sectors are recorded as unresolved placeholders",status->job);
     ops->log("Salvage format: version=%u; candidates=%s",header_version(s),s->packed?"packed":"legacy files");
-    if(options->passes)ops->log("Salvage: automatic recovery, up to %u alternating passes",options->passes);
+    if(options->read_trial)ops->log("Salvage: bounded read approach comparison; at most 16 data targets, 4 methods, ten-minute soft budget after saved-data checks");
+    else if(options->control_trial)ops->log("Salvage: bounded drive settings comparison; at most 8 data targets, four fixed profiles");
+    else if(options->passes)ops->log("Salvage: automatic recovery, up to %u alternating passes",options->passes);
     else ops->log("Salvage: automatic alternating recovery passes until resolved or stopped");
     if(action==KUI_SALVAGE_RECOVER && !s->ready) {fail(s,"First pass is incomplete; use Continue recovery before targeted trials");goto done;}
     if(!warm && !reconcile(s))goto done;
@@ -1400,7 +1405,7 @@ enum kui_salvage_result kui_salvage_run(const struct kui_capture_plan *plan,cons
         if(!collected || !sync_file(s,&s->index))goto done;
     }
     repair_entered=true;
-    if(!(options->control_trial?control_trial(s):repair(s)) || !close_salvage_files(s))goto done;
+    if(!(options->read_trial?read_trial(s):options->control_trial?control_trial(s):repair(s)) || !close_salvage_files(s))goto done;
     if(stop(s) || !finish(s))goto done;
     ok=true;
 done:
@@ -1408,7 +1413,7 @@ done:
     if(s->index_open && !io_close(s,&s->index,true))ok=false;
     if(s->journal_open && !io_close(s,&s->journal,true))ok=false;
     if(mounted && checked && repair_entered && action==KUI_SALVAGE_RESUME && s->packed && s->ready && !s->completed && !s->failed &&
-       !options->control_trial && !options->defer_next_range && options->session_epoch && options->session_card &&
+       !options->control_trial && !options->read_trial && !options->defer_next_range && options->session_epoch && options->session_card &&
        !s->pending_count && s->patch_count==s->recovered_count && s->target_count>s->recovered_count &&
        (uint64_t)s->target_count*TARGET_BYTES<=SESSION_INDEX_LIMIT)
         retained=session_capture(s);
@@ -1420,7 +1425,7 @@ done:
     else s->ops->log("Salvage session not retained: %s",
         s->failed?"operation or cleanup failed":!options->session_epoch || !options->session_card?"no physical-card session lease":
         !checked?"full ready-job reconciliation was not completed":!repair_entered?"recovery did not begin":
-        action!=KUI_SALVAGE_RESUME || options->control_trial || options->defer_next_range?"not ordinary Continue recovery":
+        action!=KUI_SALVAGE_RESUME || options->control_trial || options->read_trial || options->defer_next_range?"not ordinary Continue recovery":
         !s->packed || !s->ready?"job is not a collected packed job":s->completed || s->target_count==s->recovered_count?"no unresolved recovery remains":
         s->pending_count || s->patch_count!=s->recovered_count?"an interrupted publication needs cold reconciliation":
         (uint64_t)s->target_count*TARGET_BYTES>SESSION_INDEX_LIMIT?"derived index exceeds bounded session limit":
@@ -1433,8 +1438,8 @@ done:
     if(status->result==KUI_SALVAGE_STOPPED)snprintf(status->message,sizeof(status->message),"Stopped; committed good data and repair candidates retained");
     else if(status->result==KUI_SALVAGE_RESOLVED)snprintf(status->message,sizeof(status->message),"All targets resolved; PC saved-file verification is still required");
     else if(status->result==KUI_SALVAGE_UNRESOLVED && (status->trial_complete || status->trial_budget_expired))
-        snprintf(status->message,sizeof(status->message),"Drive trial %s; %" PRIu32 " unresolved sectors; saved repairs retained",
-            status->trial_budget_expired?"budget reached":"finished",status->remaining);
+        snprintf(status->message,sizeof(status->message),"%s trial %s; %" PRIu32 " unresolved sectors; saved repairs retained",
+            options->read_trial?"Read strategy":"Drive",status->trial_budget_expired?"budget reached":"finished",status->remaining);
     else if(status->result==KUI_SALVAGE_UNRESOLVED)snprintf(status->message,sizeof(status->message),"%" PRIu32 " unresolved sectors after %u passes; Continue recovery to retry",status->remaining,status->pass);
     ops->log("Salvage: %s; targets=%u recovered=%u remaining=%u",status->message,status->targets,status->recovered,status->remaining);
     update(s,true);enum kui_salvage_result result=status->result;free(s);return result;

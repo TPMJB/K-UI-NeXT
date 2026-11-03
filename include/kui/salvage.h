@@ -25,6 +25,7 @@ enum kui_salvage_sd_phase { KUI_SALVAGE_SD_NONE, KUI_SALVAGE_SD_JOURNAL,
     KUI_SALVAGE_SD_TARGETS, KUI_SALVAGE_SD_DIRECTORY };
 #define KUI_SALVAGE_TRIAL_PROFILES 4u
 #define KUI_SALVAGE_TRIAL_TARGETS 8u
+#define KUI_SALVAGE_READ_TRIAL_TARGETS 16u
 struct kui_salvage_status {
     enum kui_salvage_result result;
     bool first_pass_complete, complete, collection_active;
@@ -73,6 +74,8 @@ struct kui_salvage_status {
     uint32_t final_crc[99]; /* Available only for a resolved complete job. */
     uint8_t identity[32]; /* SHA-256 of the exact immutable header, same receipt. */
     char job[KUI_DEST_JOB_CAP], message[128];
+    /* trial_* counters describe read approaches rather than drive settings. */
+    bool trial_read_strategy;
 };
 struct kui_salvage_options {
     bool zero_fill; /* Deprecated/ignored: salvage always records unresolved holes. */
@@ -102,6 +105,16 @@ struct kui_salvage_options {
      * displayed title or from persistent cache metadata. */
     uint64_t session_epoch;
     const uint8_t *session_card;
+    /* Explicit RECOVER-only comparison on a collected job, exclusive with
+     * control_trial/defer_next_range. Freezes up to 16 unresolved DATA targets,
+     * rotates single/leading4/centered16/verified-anchor+leading16 reads, and
+     * uses the caller's unchanged drive policy throughout. Ten-minute soft
+     * budget starts after ordinary saved-data reconciliation. Every accepted
+     * target uses the normal durable repair protocol; later profiles must
+     * byte-match an already repaired target. Requires now_ms, no trial_select.
+     * No session receipt is reused or retained. trial_profile_reads counts
+     * admitted method attempts; ms includes approach and target reads. */
+    bool read_trial;
 };
 /* Single-worker/idle use only. Erases the private RAM receipt; no files or
  * persistent settings are changed. Reboot also starts without a receipt. */

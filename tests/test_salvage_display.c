@@ -10,7 +10,7 @@ static void render(const struct kui_salvage_status *status) {
     kui_salvage_display_status(&view,status);
     assert(view.line_count==7);
     if(status->sd_phase==KUI_SALVAGE_SD_NONE &&
-       (status->trial_active || status->trial_complete || status->trial_sample_count || status->trial_budget_expired))
+       (status->trial_read_strategy || status->trial_active || status->trial_complete || status->trial_sample_count || status->trial_budget_expired))
         assert(view.done==status->trial_done && view.total==status->trial_total);
     else if(status->sd_phase==KUI_SALVAGE_SD_NONE)
         assert(view.done==status->done && view.total==status->total);
@@ -262,5 +262,30 @@ int main(void) {
     assert(strstr(view.lines[1],"trial stopped"));
     status.sd_phase=KUI_SALVAGE_SD_TARGETS;status.sd_done=2;status.sd_total=32;render(&status);
     assert(strstr(view.lines[2],"Saved checks 2/32"));
+    /* Read-pattern comparison uses its own names and includes the approach
+     * cost in I/O time. Empty/preparation snapshots never show speed profiles. */
+    status=(struct kui_salvage_status){.trial_read_strategy=true};render(&status);
+    assert(strstr(view.lines[0],"Preparing the fixed"));
+    assert(strstr(view.lines[2],"Single: qualification pending"));
+    status.trial_sample_count=16;status.trial_total=64;status.trial_done=37;
+    status.trial_qualification_done=true;status.remaining=673;status.recovered=6344;
+    status.fad=549299;
+    for(unsigned p=0;p<4;++p) {
+        status.trial_qualified[p]=true;status.trial_profile_reads[p]=16;
+        status.trial_profile_valid[p]=16;status.trial_profile_repairs[p]=16;
+        status.trial_profile_ms[p]=600123;
+    }
+    render(&status);
+    assert(strstr(view.lines[0],"Read steps 37/64; 16 sampled sectors"));
+    assert(strstr(view.lines[2],"Single: valid 16/16  new 16  I/O 600.1s"));
+    assert(strstr(view.lines[3],"Lead-in 4:"));
+    assert(strstr(view.lines[4],"Centered 16:"));
+    assert(strstr(view.lines[5],"Reseek + 16:"));
+    status.trial_qualified[3]=false;render(&status);
+    assert(strstr(view.lines[5],"not qualified / skipped"));
+    status.result=KUI_SALVAGE_STOPPED;render(&status);
+    assert(strstr(view.lines[1],"trial stopped"));
+    status.result=KUI_SALVAGE_UNRESOLVED;status.trial_budget_expired=true;render(&status);
+    assert(strstr(view.lines[1],"budget reached"));
     puts("PASS salvage display: attempts, collection percent/rate, saved-data checks, bounded trial results and text width");
 }

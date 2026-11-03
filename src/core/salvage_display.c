@@ -107,24 +107,28 @@ static void saved_progress(struct kui_app_status *out,
 }
 static void trial_progress(struct kui_app_status *out,const struct kui_salvage_status *status) {
     static const char *const names[]={"Original","Original / 1 retry","4x / 1 retry","2x / 1 retry"};
+    static const char *const read_names[]={"Single","Lead-in 4","Centered 16","Reseek + 16"};
+    bool read_trial=status->trial_read_strategy;
     out->done=status->trial_done;out->total=status->trial_total;
     if(status->trial_qualification_done)
-        snprintf(out->lines[0],KUI_APP_LINE_CAP,"Trial steps %u/%u; %u sampled sectors; FAD %" PRIu32,
-            status->trial_done,status->trial_total,status->trial_sample_count,status->fad);
+        snprintf(out->lines[0],KUI_APP_LINE_CAP,"%s steps %u/%u; %u sampled sectors; FAD %" PRIu32,
+            read_trial?"Read":"Trial",status->trial_done,status->trial_total,status->trial_sample_count,status->fad);
+    else if(read_trial)snprintf(out->lines[0],KUI_APP_LINE_CAP,"Preparing the fixed unresolved-sector sample");
     else snprintf(out->lines[0],KUI_APP_LINE_CAP,"Qualifying profile %u/4 against saved disc anchors",
         status->trial_profile<4?status->trial_profile+1:4);
     snprintf(out->lines[1],KUI_APP_LINE_CAP,"Saved repairs %" PRIu32 "  remaining %" PRIu32 "; trial %s",
         status->recovered,status->remaining,status->trial_budget_expired?"budget reached":
         out->stopped?"stopped":status->trial_complete?"finished":"running");
     for(unsigned p=0;p<KUI_SALVAGE_TRIAL_PROFILES;++p) {
+        const char *name=read_trial?read_names[p]:names[p];
         if(!status->trial_qualified[p]) {
-            snprintf(out->lines[2+p],KUI_APP_LINE_CAP,"%s: %s",names[p],
+            snprintf(out->lines[2+p],KUI_APP_LINE_CAP,"%s: %s",name,
                 status->trial_qualification_done?"not qualified / skipped":"qualification pending");
         } else {
             uint64_t tenths=status->trial_profile_ms[p]/100u;
-            snprintf(out->lines[2+p],KUI_APP_LINE_CAP,"%s: valid %" PRIu32 "/%" PRIu32 "  new %" PRIu32 "  read %" PRIu64 ".%" PRIu64 "s",
-                names[p],status->trial_profile_valid[p],status->trial_profile_reads[p],
-                status->trial_profile_repairs[p],tenths/10u,tenths%10u);
+            snprintf(out->lines[2+p],KUI_APP_LINE_CAP,"%s: valid %" PRIu32 "/%" PRIu32 "  new %" PRIu32 "  %s %" PRIu64 ".%" PRIu64 "s",
+                name,status->trial_profile_valid[p],status->trial_profile_reads[p],
+                status->trial_profile_repairs[p],read_trial?"I/O":"read",tenths/10u,tenths%10u);
         }
     }
     snprintf(out->lines[6],KUI_APP_LINE_CAP,"%.76s",status->job);
@@ -136,7 +140,7 @@ void kui_salvage_display_status(struct kui_app_status *out,
         .line_count=7};
     snprintf(out->message,sizeof(out->message),"%s",status->message);
     if(status->sd_phase!=KUI_SALVAGE_SD_NONE) {saved_progress(out,status);return;}
-    if(status->trial_active || status->trial_complete || status->trial_sample_count || status->trial_budget_expired) {
+    if(status->trial_read_strategy || status->trial_active || status->trial_complete || status->trial_sample_count || status->trial_budget_expired) {
         trial_progress(out,status);return;
     }
     const char *where=status->track?"Track":"Identity";
