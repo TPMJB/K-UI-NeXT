@@ -26,6 +26,7 @@
 #include "kui/vmu_image.h"
 #include "kui/vmu_game_info.h"
 #include "kui/drive_controls.h"
+#include "kui/disc_cards.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -71,7 +72,8 @@ enum kui_shell_page { KUI_SHELL_HOME, KUI_SHELL_RIPPER,
     KUI_SHELL_GAMES_TESTS, KUI_SHELL_GAMES_INFO, KUI_SHELL_GAMES_PATCHES, KUI_SHELL_GAMES_CODEC, KUI_SHELL_GAMES_CHECK, KUI_SHELL_VMU_IMAGE, KUI_SHELL_VMU_IMPORT,
     KUI_SHELL_VMU_COLLECTION, KUI_SHELL_VMU_TOOLS, KUI_SHELL_VMU_WIZARD,
     KUI_SHELL_DISC_TOOLS, KUI_SHELL_VMU_CARD, KUI_SHELL_SALVAGE_DRIVE,
-    KUI_SHELL_SALVAGE_OPTIONS, KUI_SHELL_GAMES_VMU_CARD, KUI_SHELL_GD_OPTIONS, KUI_SHELL_CONTROLS, KUI_SHELL_BROWSER, KUI_SHELL_VMU_HISTORY, KUI_SHELL_GAMES_QUERY, KUI_SHELL_GAMES_EDIT, KUI_SHELL_REPORT, KUI_SHELL_GAME_PROFILE };
+    KUI_SHELL_SALVAGE_OPTIONS, KUI_SHELL_GAMES_VMU_CARD, KUI_SHELL_GD_OPTIONS, KUI_SHELL_CONTROLS, KUI_SHELL_BROWSER, KUI_SHELL_VMU_HISTORY, KUI_SHELL_GAMES_QUERY, KUI_SHELL_GAMES_EDIT, KUI_SHELL_REPORT, KUI_SHELL_GAME_PROFILE,
+    KUI_SHELL_DISC_CARDS };
 enum kui_shell_recovery_row {
     KUI_SHELL_RECOVERY_CONTINUE, KUI_SHELL_RECOVERY_NEW, KUI_SHELL_RECOVERY_OPTIONS,
     KUI_SHELL_RECOVERY_DIAGNOSTICS, KUI_SHELL_RECOVERY_COUNT
@@ -171,7 +173,7 @@ enum kui_shell_action {
     KUI_SHELL_GD_OPTIONS_LOAD, KUI_SHELL_GD_REGION_SAVE, KUI_SHELL_GAMES_FAVORITE, KUI_SHELL_BROWSER_START,
     KUI_SHELL_VMU_HISTORY_RUN, KUI_SHELL_GAMES_EDIT_LOAD, KUI_SHELL_GAMES_EDIT_SAVE,
     KUI_SHELL_GAMES_JUMP, KUI_SHELL_GAMES_IDENTITY_VERIFY, KUI_SHELL_PROBLEM_REPORT,
-    KUI_SHELL_GAMES_LAYOUT_SAVE, KUI_SHELL_VMU_BACKUP_SAVES
+    KUI_SHELL_GAMES_LAYOUT_SAVE, KUI_SHELL_VMU_BACKUP_SAVES, KUI_SHELL_DISC_CARDS_RUN
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
@@ -403,6 +405,13 @@ struct kui_shell {
     struct kui_wifi_request wifi_request;
     uint8_t wifi_security; /* of the network being joined; 0xff: not known */
     bool wifi_keyboard, wifi_typing_name, confirm_wifi_forget, confirm_wifi_update;
+    /* Disc management has no launch state. Confirmations own exact review
+     * pins and source identities, never a pointer into a later listing. */
+    unsigned disc_cards_generation,disc_cards_selected;
+    bool disc_cards_loading,disc_cards_select_last,disc_cards_confirming;
+    struct kui_disc_cards_request disc_cards_request,disc_cards_confirm_request;
+    struct kui_disc_cards_row disc_cards_confirm_row;
+    struct kui_disc_cards_view disc_cards;
 };
 /* Home's apps, top to bottom: A on row home_selected opens
  * kui_shell_home_pages[home_selected]. Drawing looks each app up by page. */
@@ -434,6 +443,7 @@ void kui_shell_set_vmu(struct kui_shell *shell, const struct kui_vmu_view *view)
 void kui_shell_set_vmu_wizard(struct kui_shell *,const struct kui_vmu_wizard_view *);
 void kui_shell_set_game_vmu_cards(struct kui_shell *,unsigned generation,const struct kui_vmu_game_info *);
 void kui_shell_set_disc_vmu_cards(struct kui_shell *,unsigned generation,const struct kui_vmu_game_info *);
+void kui_shell_set_disc_cards(struct kui_shell *,const struct kui_disc_cards_view *);
 void kui_shell_set_disc_region(struct kui_shell *,unsigned generation,bool enabled,bool ok,const char *notice);
 /* Global preference results echo the exact outstanding request generation.
  * Failed/uncertain saves preserve the last confirmed value and require reload. */

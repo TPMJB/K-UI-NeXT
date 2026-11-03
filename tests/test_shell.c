@@ -1536,6 +1536,7 @@ static void music_and_boot_rendering(void) {
     reset(KUI_SHELL_GD_PLAY);render(&v);
     assert(strstr(drawn,"Inserted: MDK2") && strstr(drawn,"A K-UI boot"));
     assert(strstr(drawn,"X Stock retail boot") && strstr(drawn,"Y Options"));
+    assert(strstr(drawn,"START Save cards") && strstr(drawn,"START Cards"));
     assert(!strstr(drawn,"Check native disc") && !strstr(drawn,"Direct boot test"));
     s.page=KUI_SHELL_GD_OPTIONS;s.gd_region_known=s.vmu_emulation_known=true;
     render(&v);assert(strstr(drawn,"Virtual VMU") && strstr(drawn,"Region-free"));
@@ -5360,6 +5361,122 @@ static void disc_vmu_picker_controls(void) {
     assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_DISC_TOOLS);
     puts("PASS disc VMU picker: optical product source, exact versions/default, physical-only comparison, Off without product, blank-card launch, cancellation and stale results");
 }
+static struct kui_disc_cards_view disc_cards_snapshot(void) {
+    struct kui_disc_cards_view v={.stage=KUI_DISC_CARDS_LINKED_STAGE,.identified=true,
+        .token=1234,.candidates_sequence=17,.count=2,.total=2,.linked_count=2,.default_pair=11};
+    v.status.complete=v.status.passed=true;v.metadata.ip_valid=v.metadata.native_gd=true;
+    strcpy(v.product,"MK-51007");strcpy(v.metadata.product,"MK-51007");strcpy(v.metadata.title,"TOY COMMANDER");
+    strcpy(v.metadata.region,"JUE");strcpy(v.metadata.version,"V1.000");v.signature[0]=0x67;
+    v.storage.card_sectors=1000000;v.storage.partition_first=2048;v.storage.partition_end=999000;
+    v.storage.cid[0]=0x42;v.storage.high_capacity=1;
+    for(unsigned i=0;i<v.count;i++) {
+        struct kui_disc_cards_row *row=&v.rows[i];row->pair=11+i;row->identity[0]=11+i;
+        row->active=row->linked=row->readable=true;row->files=9+i;row->free_blocks=100-i;
+        snprintf(row->label,sizeof(row->label),"%s VMU saves",i?"Black":"White");
+        snprintf(row->path,sizeof(row->path),"0:/KUI/vmu-test/p%04u/card.vmd",row->pair);
+        strcpy(row->contents,"Toy Commander progress");row->is_default=row->pair==v.default_pair;
+    }
+    return v;
+}
+static void publish_disc_cards(struct kui_disc_cards_view *v) {
+    v->generation=s.disc_cards_generation;kui_shell_set_disc_cards(&s,v);
+}
+static void disc_cards_controls(void) {
+    struct kui_shell_view view={0};struct kui_disc_cards_view v=disc_cards_snapshot();
+    reset(KUI_SHELL_GD_PLAY);s.vmu_emulation_known=true;s.vmu_emulation_enabled=false;
+    strcpy(s.games_detail.title,"Unrelated SD game");s.gd_auto_launch=true;
+    assert(press(KUI_SHELL_START,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_GD_PLAY);
+    assert(press(KUI_SHELL_START|KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_DISC_CARDS_RUN && s.page==KUI_SHELL_DISC_CARDS);
+    assert(s.disc_cards_loading && s.disc_cards_request.op==KUI_DISC_CARDS_IDENTIFY && !s.disc_cards_request.token);
+    assert(!s.gd_auto_launch && !s.gd_vmu_launch && !s.games_vmu_pick_pending_launch);
+    unsigned first=s.disc_cards_generation;v.generation=first+1;kui_shell_set_disc_cards(&s,&v);
+    assert(s.disc_cards_loading && !s.disc_cards.identified);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && press(KUI_SHELL_START,false)==KUI_SHELL_NONE);
+    publish_disc_cards(&v);assert(!s.disc_cards_loading && !s.vmu_emulation_enabled);
+    render(&view);assert(strstr(drawn,"Disc / linked save cards") && strstr(drawn,"TOY COMMANDER"));
+    assert(strstr(drawn,"MK-51007 / Region JUE / Version V1.000") && strstr(drawn,"White VMU saves"));
+    assert(strstr(drawn,"Y Link imported card") && !strstr(drawn,"Unrelated SD game"));
+    assert(press(0,false)==KUI_SHELL_NONE && press(KUI_SHELL_A|KUI_SHELL_START,false)==KUI_SHELL_NONE);
+    assert(!s.disc_cards_confirming && s.disc_cards_generation==first);
+    assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && s.disc_cards_selected==1);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.disc_cards_confirming);
+    render(&view);assert(strstr(drawn,"Use this card by default?") && strstr(drawn,"Black VMU saves"));
+    assert(press(KUI_SHELL_A|KUI_SHELL_X,false)==KUI_SHELL_NONE && s.disc_cards_generation==first);
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_NONE && press(KUI_SHELL_L,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_B|KUI_SHELL_A,false)==KUI_SHELL_NONE && !s.disc_cards_confirming);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.disc_cards_confirming);
+    /* The reviewed source and storage are owned values, even if UI rows move. */
+    s.disc_cards.rows[1].pair=99;s.disc_cards.rows[1].identity[0]=99;
+    strcpy(s.disc_cards.rows[1].path,"0:/wrong/card.vmd");
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_DISC_CARDS_RUN);
+    assert(s.disc_cards_request.op==KUI_DISC_CARDS_DEFAULT && s.disc_cards_request.pair==12);
+    assert(s.disc_cards_request.identity[0]==12 && !strcmp(s.disc_cards_request.path,v.rows[1].path));
+    assert(s.disc_cards_request.token==v.token && s.disc_cards_request.signature[0]==0x67 &&
+        s.disc_cards_request.storage.cid[0]==0x42 && s.disc_cards_request.candidates_sequence==17 &&
+        !strcmp(s.disc_cards_request.product,"MK-51007"));
+    publish_disc_cards(&v);
+    assert(press(KUI_SHELL_R,false)==KUI_SHELL_NONE && s.disc_cards_confirming);
+    render(&view);assert(strstr(drawn,"Clear the saved default?") && strstr(drawn,"all linked cards are kept"));
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_DISC_CARDS_RUN && s.disc_cards_request.op==KUI_DISC_CARDS_ASK);
+    assert(!s.disc_cards_request.path[0] && !s.disc_cards_request.pair);publish_disc_cards(&v);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE && s.disc_cards_confirming);
+    render(&view);assert(strstr(drawn,"empty 200-block VMU") && strstr(drawn,"No game image or SD rip is required"));
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && !s.disc_cards_confirming);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_DISC_CARDS_RUN && s.disc_cards_request.op==KUI_DISC_CARDS_CREATE);
+    assert(!s.disc_cards_request.path[0] && !s.disc_cards_request.pair);publish_disc_cards(&v);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_DISC_CARDS_RUN && s.disc_cards_request.op==KUI_DISC_CARDS_IMPORTS);
+    v.stage=KUI_DISC_CARDS_IMPORTS_STAGE;v.rows[1].active=v.rows[1].linked=false;v.rows[1].pair=0;v.rows[1].link_copies=true;
+    strcpy(v.rows[1].path,"0:/KUI/vmu/cards/v0002/card.vmd");v.rows[1].suggested=true;
+    publish_disc_cards(&v);s.disc_cards_selected=0;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && !s.disc_cards_confirming);
+    s.disc_cards_selected=1;s.disc_cards.rows[1].readable=false;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && !s.disc_cards_confirming);
+    s.disc_cards.rows[1].readable=true;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.disc_cards_confirming);
+    render(&view);assert(strstr(drawn,"Link this save card?") && strstr(drawn,"imported backup is kept"));
+    assert(strstr(drawn,"Black VMU saves") && strstr(drawn,"Card ID 0C") && strstr(drawn,v.rows[1].path));
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_DISC_CARDS_RUN && s.disc_cards_request.op==KUI_DISC_CARDS_LINK);
+    assert(!strcmp(s.disc_cards_request.path,v.rows[1].path) && !s.disc_cards_request.pair);
+    v=disc_cards_snapshot();publish_disc_cards(&v);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_DISC_CARDS_RUN);v.stage=KUI_DISC_CARDS_IMPORTS_STAGE;
+    v.rows[1].linked=false;publish_disc_cards(&v);s.disc_cards_selected=1;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);render(&view);
+    assert(strstr(drawn,"save changes are shared") && strstr(drawn,"Other games linked to this card"));
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE);
+    s.disc_cards.rows[1].link_copies=true;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);render(&view);
+    assert(strstr(drawn,"separate playable copy; the source is kept") && !strstr(drawn,"changes are shared"));
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_DISC_CARDS_RUN && s.disc_cards_request.op==KUI_DISC_CARDS_LINKED);
+    /* Continuous browsing crosses pages without making any write request. */
+    v=disc_cards_snapshot();v.count=8;v.total=v.linked_count=17;publish_disc_cards(&v);s.disc_cards_selected=7;
+    assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_DISC_CARDS_RUN && s.disc_cards_request.page==1 &&
+        s.disc_cards_request.op==KUI_DISC_CARDS_LINKED);
+    v.page=1;publish_disc_cards(&v);assert(!s.disc_cards_selected);
+    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_DISC_CARDS_RUN && s.disc_cards_select_last);
+    v.page=0;publish_disc_cards(&v);assert(s.disc_cards_selected==7);
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_DISC_CARDS_RUN && s.disc_cards_request.page==1);
+    v.page=1;publish_disc_cards(&v);assert(!s.disc_cards_selected);
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_DISC_CARDS_RUN);v.page=2;v.count=1;publish_disc_cards(&v);
+    assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && press(KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE);
+    /* Failure cannot leave a usable old choice; refresh discards all pins. */
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_DISC_CARDS_RUN && s.disc_cards_request.op==KUI_DISC_CARDS_IDENTIFY);
+    assert(!s.disc_cards_request.token && !s.disc_cards_request.product[0] && !s.disc_cards_request.storage.card_sectors);
+    v.status.passed=false;strcpy(v.status.message,"Disc changed; refresh before linking");publish_disc_cards(&v);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE && press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && !s.disc_cards_confirming);
+    render(&view);assert(strstr(drawn,"Disc changed; refresh before linking"));
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_DISC_CARDS_RUN);unsigned stopped=s.disc_cards_generation;
+    assert(press(KUI_SHELL_B|KUI_SHELL_A,true)==KUI_SHELL_STOP && s.page==KUI_SHELL_GD_PLAY && !s.disc_cards_loading);
+    v=disc_cards_snapshot();v.generation=stopped;kui_shell_set_disc_cards(&s,&v);
+    assert(s.page==KUI_SHELL_GD_PLAY && !s.gd_auto_launch && press(KUI_SHELL_A,true)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_DISC_CARDS_RUN);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_STOP && s.page==KUI_SHELL_GD_PLAY);
+    assert(!s.vmu_emulation_enabled && s.vmu_emulation_known);
+    puts("PASS disc save-card management: real release view, Off browsing, separate exact-source confirmations, share/copy explanation, pinned requests, read-only pages, refresh and cancelled/stale reply guards");
+}
 static void game_vmu_version_picker_controls(void) {
     struct kui_games_detail detail=launch_detail(false,false);strcpy(detail.product,"T-12345");
     struct kui_vmu_game_info info=chooser_snapshot();
@@ -5932,7 +6049,7 @@ int main(int argc,char **argv) {
         puts("PASS salvage drive settings: default, navigation, wrap, busy guard, boot reset and rendering");return 0;
     }
     vmu_menu_cleanup_controls();game_vmu_card_info_controls();
-    game_vmu_version_picker_controls();disc_vmu_picker_controls();vmu_wizard_save_picker_controls();vmu_wizard_details_controls();vmu_automatic_import_controls();
+    game_vmu_version_picker_controls();disc_vmu_picker_controls();disc_cards_controls();vmu_wizard_save_picker_controls();vmu_wizard_details_controls();vmu_automatic_import_controls();
     disc_virtual_slot_controls();vmu_emulation_controls();
     vmu_wizard_controls();vmu_wizard_library_scrolling();vmu_wizard_publication_lock();vmu_wizard_rendering();
     if(argc==2 && !strcmp(argv[1],"--vmu-wizard")) return 0;

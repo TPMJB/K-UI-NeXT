@@ -151,7 +151,14 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->confirm_storage_test ? "A Start test   B Cancel" :
         s->confirm_wifi_forget ? "A Forget the network   B Cancel" :
         s->confirm_wifi_update ? "A Update firmware   B Cancel" :
-        s->page==KUI_SHELL_GD_PLAY ? "A K-UI   X Stock retail   Y Options   B Back" :
+        s->page==KUI_SHELL_GD_PLAY ? "A K-UI   X Stock retail   Y Options   START Cards   B Back" :
+        s->page==KUI_SHELL_DISC_CARDS ? (s->disc_cards_loading?"B Stop safely":
+            s->disc_cards_confirming?"A Confirm   B Cancel":
+            !s->disc_cards.identified || !s->disc_cards.status.passed || !s->disc_cards.count?
+                "X Refresh   B GD Play":
+            s->disc_cards.stage==KUI_DISC_CARDS_IMPORTS_STAGE?
+                "D-pad Select/page   A Review link   X Refresh   B Back":
+                "D-pad Select/page   A Default   X Refresh   B GD Play") :
         s->page==KUI_SHELL_GD_OPTIONS ? "D-pad Select   A Change   X Reload   B GD Play" :
         s->page==KUI_SHELL_HOME ? "D-pad Select   A Open   Y Volume   L/R Songs" :
         s->page==KUI_SHELL_DISC_TOOLS ? "D-pad Select   A Open   B Home" :
@@ -262,7 +269,7 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->page==KUI_SHELL_GAMES_CODEC ? "D-pad Select   A Save and inspect   B Details" :
         s->page==KUI_SHELL_CD_AUDIO ? "B SD music   START Home   R Refresh" :
         s->page==KUI_SHELL_MUSIC ? "B Parent   START Home   L Audio CD   LEFT/RIGHT Page" : "B Home";
-    words(p,40,430,song_page||s->page==KUI_SHELL_MUSIC||s->page==KUI_SHELL_CD_AUDIO||s->page==KUI_SHELL_VMU_RESTORE||s->page==KUI_SHELL_VMU_COLLECTION||s->page==KUI_SHELL_VMU_CARD||s->page==KUI_SHELL_VMU_IMAGE||s->page==KUI_SHELL_VMU_IMPORT||s->page==KUI_SHELL_VMU_WIZARD||s->page==KUI_SHELL_VMU_ACTIONS||s->page==KUI_SHELL_VMU||s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM||s->page==KUI_SHELL_GAMES_LAUNCH_OPTIONS||s->page==KUI_SHELL_GAMES_EXTRA_OPTIONS||s->page==KUI_SHELL_GAMES_PATCHES||s->page==KUI_SHELL_GAMES_TESTS||s->page==KUI_SHELL_GAMES_INFO?608:500,MUTED,controls,false);
+    words(p,40,430,song_page||s->page==KUI_SHELL_GD_PLAY||s->page==KUI_SHELL_DISC_CARDS||s->page==KUI_SHELL_MUSIC||s->page==KUI_SHELL_CD_AUDIO||s->page==KUI_SHELL_VMU_RESTORE||s->page==KUI_SHELL_VMU_COLLECTION||s->page==KUI_SHELL_VMU_CARD||s->page==KUI_SHELL_VMU_IMAGE||s->page==KUI_SHELL_VMU_IMPORT||s->page==KUI_SHELL_VMU_WIZARD||s->page==KUI_SHELL_VMU_ACTIONS||s->page==KUI_SHELL_VMU||s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM||s->page==KUI_SHELL_GAMES_LAUNCH_OPTIONS||s->page==KUI_SHELL_GAMES_EXTRA_OPTIONS||s->page==KUI_SHELL_GAMES_PATCHES||s->page==KUI_SHELL_GAMES_TESTS||s->page==KUI_SHELL_GAMES_INFO?608:500,MUTED,controls,false);
 }
 /* Each Home app by page, so its row can move without touching this table.
  * All icons are embedded RGB565 assets with separate list-sized artwork. */
@@ -2054,6 +2061,7 @@ static void gd_play(struct paint *p,const struct kui_shell_view *v) {
     label(p,48,190,WHITE,"A K-UI boot");
     label(p,48,214,CYAN,"X Stock retail boot");
     label(p,48,238,CYAN,"Y Options");
+    label(p,352,238,CYAN,"START Save cards");
     const struct kui_app_status *status=v->app_status;
     gd_message(p,status && status->message[0]?status->message:
         "Boot the inserted disc with your K-UI save and region options.",
@@ -2064,6 +2072,89 @@ static void gd_play(struct paint *p,const struct kui_shell_view *v) {
     }
     if(status) for(unsigned i=0;i<status->line_count && i<3u;i++)
         label(p,48,346+(int)i*18,MUTED,status->lines[i]);
+}
+static void disc_cards(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
+    const struct kui_disc_cards_view *d=&s->disc_cards;
+    bool imports=d->stage==KUI_DISC_CARDS_IMPORTS_STAGE;
+    const struct kui_disc_cards_request *review=&s->disc_cards_confirm_request;
+    const struct kui_disc_cards_row *chosen=&s->disc_cards_confirm_row;
+    title(p,40,108,s->disc_cards_confirming?
+        (review->op==KUI_DISC_CARDS_LINK?"Link this save card?":review->op==KUI_DISC_CARDS_CREATE?
+         "Create a blank save card?":review->op==KUI_DISC_CARDS_DEFAULT?"Use this card by default?":"Clear the saved default?"):
+        imports?"Disc / link imported card":"Disc / linked save cards");
+    label(p,40,138,CYAN,d->identified && d->metadata.title[0]?d->metadata.title:
+        s->disc_cards_loading?"Identifying the inserted disc...":"No identified disc");
+    char line[240];
+    if(d->identified) {
+        snprintf(line,sizeof(line),"%s / Region %s / Version %s",d->product,
+            d->metadata.region[0]?d->metadata.region:"?",d->metadata.version[0]?d->metadata.version:"?");
+        words(p,40,160,s->disc_cards_confirming?608u:478u,MUTED,line,false);
+        if(!s->disc_cards_confirming) {
+            snprintf(line,sizeof(line),"Page %u/%u",d->page+1u,d->total?(d->total-1u)/KUI_DISC_CARDS_ROWS+1u:1u);
+            label(p,486,160,MUTED,line);
+        }
+    }
+    if(s->disc_cards_confirming) {
+        panel(p,32,188,576,194,PANEL);
+        bool has_card=review->op==KUI_DISC_CARDS_LINK || review->op==KUI_DISC_CARDS_DEFAULT;
+        if(has_card) {
+            snprintf(line,sizeof(line),"Card: %s",chosen->label[0]?chosen->label:"Unnamed save card");label(p,48,200,WHITE,line);
+            char id[33];for(unsigned i=0;i<16u;i++) snprintf(id+2u*i,3,"%02X",review->identity[i]);
+            snprintf(line,sizeof(line),"Card ID %s",id);label(p,48,224,MUTED,line);
+            snprintf(line,sizeof(line),"%u saves / %u free blocks. %s",chosen->files,chosen->free_blocks,chosen->contents);
+            words(p,48,250,592,MUTED,line,false);
+        }
+        if(review->op==KUI_DISC_CARDS_LINK) {
+            label(p,48,282,WHITE,!chosen->link_copies?"Uses the same active card; save changes are shared.":
+                chosen->active?"Creates a separate playable copy; the source is kept.":
+                    "Creates a playable copy; the imported backup is kept.");
+            label(p,48,306,MUTED,!chosen->link_copies?"Other games linked to this card see the same saves.":
+                "Future game saves use the new copy.");
+            words(p,48,350,592,MUTED,review->path,false);
+        } else if(review->op==KUI_DISC_CARDS_CREATE) {
+            label(p,48,206,WHITE,"Create an empty 200-block VMU for this disc.");
+            label(p,48,238,MUTED,"Links to the exact disc release shown above.");
+            label(p,48,270,MUTED,"Existing cards and the launch default are kept.");
+            label(p,48,314,CYAN,"No game image or SD rip is required.");
+        } else if(review->op==KUI_DISC_CARDS_DEFAULT) {
+            label(p,48,288,WHITE,"Use this card automatically for this disc.");
+            label(p,48,320,MUTED,"Other linked save versions remain available.");
+        } else {
+            label(p,48,206,WHITE,"Show the card picker when this disc has a choice.");
+            label(p,48,238,MUTED,"Clears the saved default; all linked cards are kept.");
+        }
+        return;
+    }
+    if(d->identified && d->status.passed && !s->disc_cards_loading) {
+        if(imports) label(p,40,184,MUTED,"Suggested = save text hint; review the contents before linking.");
+        else label(p,40,184,CYAN,"Y Link imported card   START New blank   R Clear default");
+    }
+    unsigned count=d->count>KUI_DISC_CARDS_ROWS?KUI_DISC_CARDS_ROWS:d->count;
+    for(unsigned i=0;i<count;i++) {
+        const struct kui_disc_cards_row *row=&d->rows[i];unsigned y=207u+i*20u;
+        if(i==s->disc_cards_selected) panel(p,40,y,544,20,SELECTED);
+        words(p,48,y+1,462,i==s->disc_cards_selected?WHITE:MUTED,
+            row->label[0]?row->label:"Unnamed save card",false);
+        words(p,466,y+1,584,!row->readable?AMBER:CYAN,!row->readable?"Unavailable":
+            row->is_default?"Default":row->linked?"Linked":row->suggested?"Suggested":row->active?"Active":"Backup",false);
+    }
+    if(!count) {
+        label(p,48,230,MUTED,s->disc_cards_loading?"Reading save cards...":!d->identified?
+            "X identifies the inserted disc and reads its save links.":imports?"No imported or active cards are available.":
+            "No save cards are linked to this disc yet.");
+        if(d->identified && !imports) label(p,48,262,MUTED,"Link an imported card or create a new blank card above.");
+    }
+    if(s->disc_cards_selected<count) {
+        const struct kui_disc_cards_row *row=&d->rows[s->disc_cards_selected];
+        snprintf(line,sizeof(line),"%u saves / %u free blocks. %s",row->files,row->free_blocks,row->contents);
+        words(p,40,374,608,MUTED,line,false);
+    }
+    const struct kui_app_status *status=(v->busy && v->app_status)?v->app_status:&d->status;
+    if(status->message[0]) words(p,40,396,608,status->errors?AMBER:MUTED,status->message,false);
+    else if(d->identified) {
+        snprintf(line,sizeof(line),"%u linked cards. Virtual VMU Off does not block management.",d->linked_count);
+        words(p,40,396,608,MUTED,line,false);
+    }
 }
 static void gd_options(struct paint *p,const struct kui_shell *s) {
     title(p,40,108,"GD Play / Options");
@@ -3278,6 +3369,7 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     case KUI_SHELL_CLOCK: clock_page(&p,s); break;
     case KUI_SHELL_CRC_SCAN: crc_scan(&p,s,v); break;
     case KUI_SHELL_GD_PLAY: gd_play(&p,v); break;
+    case KUI_SHELL_DISC_CARDS: disc_cards(&p,s,v); break;
     case KUI_SHELL_GD_OPTIONS: gd_options(&p,s); break;
     case KUI_SHELL_CD_AUDIO: cd_audio(&p,s,v); break;
     case KUI_SHELL_MUSIC: music_player(&p,s,v); break;

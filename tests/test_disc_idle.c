@@ -33,12 +33,12 @@ int main(void) {
         CHECK(idle.deadline==46000u);
     }
     CHECK(kui_disc_idle_take_stop(&idle,46000u,true,false,false,false));
-    for(unsigned action=0u;action<=108u;action++) {
+    for(unsigned action=0u;action<=119u;action++) {
         bool cleanup=action==1u || (action>=4u && action<=7u) || action==12u || action==22u ||
             (action>=46u && action<=49u) || action==81u || action==96u || action==97u ||
-            (action>=103u && action<=105u);
+            (action>=103u && action<=105u) || action==119u;
         CHECK(kui_disc_idle_cleanup(action)==cleanup);
-        bool inspect=action==12u || action==103u || action==105u;
+        bool inspect=action==12u || action==103u || action==105u || action==119u;
         CHECK(kui_disc_idle_inspection(action)==inspect);
         for(unsigned passed=0u;passed<2u;passed++) {
             idle=(struct kui_disc_idle){45000u,true};

@@ -37,6 +37,7 @@ static struct fixture {
     bool callback_fill_refusal;
     bool saw_wait,saw_check,cancel_on_wait,cancel_after_ready_error;
     bool multitrack,saw_extent_refusal;
+    unsigned metadata_change_on_prepare;
     enum kui_disc_launch_prepare_result launch_ready;
     struct kui_app_status last;
 } fixture;
@@ -142,6 +143,20 @@ void *__wrap_realloc(void *p,size_t bytes) {
 bool kui_disc_prepare(struct kui_toc sessions[2]) {
     ++fixture.preparations;CHECK(!fixture.connected && !fixture.mounted);
     if(fixture.prepare_fail)return false;
+    if(fixture.preparations==2u) switch(fixture.metadata_change_on_prepare) {
+    case 1u:memcpy(fixture.data[0]+64u,"T-54321",7u);break;
+    case 2u:memcpy(fixture.data[0]+74u,"V1.001",6u);break;
+    case 3u:memset(fixture.data[0]+48u,' ',8u);fixture.data[0][48u]='U';break;
+    case 4u:fixture.data[0][128u]='X';break;
+    case 5u:++fixture.toc[0].tracks[0].end;break;
+    case 6u:fixture.data[16][300u]^=1u;break;
+    case 7u:fixture.data[ROOT][18u]^=1u;break;
+    case 8u:return false;
+    case 9u:fixture.is_cd=true;break;
+    case 10u:fixture.data[0][62u]='1';break;
+    case 11u:++fixture.toc[1].tracks[0].end;break;
+    default:break;
+    }
     memcpy(sessions,fixture.toc,sizeof(fixture.toc));return true;
 }
 enum kui_disc_launch_prepare_result kui_disc_prepare_launch(struct kui_toc sessions[2],bool *is_cd,kui_cancel_fn cancel) {
@@ -531,8 +546,97 @@ static void outer_rim_paths(void) {
         kui_runtime_free(&image);
     }
 }
+static void metadata_no_storage(void) {
+    CHECK(!fixture.connected && !fixture.mounted && !fixture.connections && !fixture.disconnects);
+    CHECK(!fixture.mounts && !fixture.unmounts && !fixture.runtime_reads && !fixture.runtime_frees);
+    CHECK(!fixture.callbacks && !fixture.handoffs && !fixture.reallocations && !fixture.saw_boot_phase);
+}
+static void metadata_refusal(bool stop) {
+    struct kui_game_metadata metadata;uint8_t signature[32];struct kui_app_status status;
+    memset(&metadata,0xa5,sizeof(metadata));memset(signature,0xa5,sizeof(signature));
+    CHECK(!kui_disc_launcher_metadata(&metadata,signature,&status,log_line,cancelled,progress));
+    CHECK(status.complete && !status.passed && status.stopped==stop && status.errors==(stop?0u:1u));
+    for(size_t n=0;n<sizeof(metadata);n++) CHECK(!((const uint8_t *)&metadata)[n]);
+    for(unsigned n=0;n<sizeof(signature);n++) CHECK(!signature[n]);
+    metadata_no_storage();
+}
+static void metadata_success_trace(bool multitrack) {
+    metadata_no_storage();
+    CHECK(fixture.preparations==2u && fixture.raw_reads==6u && fixture.io_count==6u);
+    for(unsigned i=0;i<fixture.io_count;i++) {
+        uint32_t expected=i%3u==0u?FIRST:i%3u==1u?FIRST+16u:multitrack?103462u:FIRST+ROOT;
+        CHECK(!fixture.io_trace[i].cooked && fixture.io_trace[i].count==1u && fixture.io_trace[i].fad==expected);
+    }
+}
+static void metadata_paths(void) {
+    struct kui_game_metadata metadata;uint8_t original[32],signature[32];struct kui_app_status status;
+    setup();CHECK(kui_disc_launcher_metadata(&metadata,original,&status,log_line,cancelled,progress));
+    CHECK(status.complete && status.passed && !status.stopped && !status.errors);
+    CHECK(metadata.ip_valid && metadata.boot_valid && metadata.native_gd && !metadata.windows_ce);
+    CHECK(!strcmp(metadata.product,"T-12345") && !strcmp(metadata.version,"V1.000"));
+    CHECK(!strcmp(metadata.region,"JUE") && !strcmp(metadata.title,"SYNTHETIC PHYSICAL GD"));
+    CHECK(metadata.boot_bytes==BOOT_BYTES && metadata.boot_lba==FIRST-150u+BOOT);
+    CHECK(metadata.sectors_read==3u);metadata_success_trace(false);
+    bool nonzero=false;for(unsigned i=0;i<sizeof(original);i++) nonzero|=original[i]!=0u;CHECK(nonzero);
+    setup();CHECK(kui_disc_launcher_metadata(&metadata,signature,&status,log_line,cancelled,NULL));
+    CHECK(!memcmp(original,signature,sizeof(original)) && !fixture.progress);metadata_success_trace(false);
+    /* Release identity depends on checked bytes and TOC, including fields not
+     * consumed by the parser. No executable sector participates in this API. */
+    for(unsigned change=0u;change<8u;change++) {
+        setup();
+        if(change==0u)memcpy(fixture.data[0]+64u,"T-54321",7u);
+        if(change==1u)memcpy(fixture.data[0]+74u,"V1.001",6u);
+        if(change==2u){memset(fixture.data[0]+48u,' ',8u);fixture.data[0][48u]='E';}
+        if(change==3u)fixture.data[0][128u]='X';
+        if(change==4u)++fixture.toc[0].tracks[0].end;
+        if(change==5u)fixture.data[16][300u]^=1u;
+        if(change==6u)fixture.data[ROOT][18u]^=1u;
+        if(change==7u)++fixture.toc[1].tracks[0].end;
+        CHECK(kui_disc_launcher_metadata(&metadata,signature,&status,log_line,cancelled,progress));
+        CHECK(memcmp(original,signature,sizeof(original)));metadata_success_trace(false);
+    }
+    for(unsigned ce=0u;ce<2u;ce++) {
+        setup();if(ce)fixture.data[0][62u]='1';
+        /* Large native and CE extents are admitted without launch's 4 MiB
+         * cap. Their declared sector range is checked but never read. */
+        fixture.toc[1].tracks[0].end=FIRST+10000u;dual32(fixture.data[16]+80u,10000u);
+        dual32(fixture.data[ROOT]+68u+10u,6u*1024u*1024u);
+        CHECK(kui_disc_launcher_metadata(&metadata,signature,&status,log_line,cancelled,progress));
+        CHECK(metadata.windows_ce==(ce!=0u) && metadata.native_gd==(ce==0u));
+        CHECK(metadata.boot_bytes==6u*1024u*1024u);metadata_success_trace(false);
+    }
+    multitrack_setup();CHECK(kui_disc_launcher_metadata(&metadata,signature,&status,log_line,cancelled,progress));
+    CHECK(!strcmp(metadata.region,"E") && metadata.root_lba==103312u && metadata.boot_lba==103320u);
+    CHECK(!fixture.saw_extent_refusal);metadata_success_trace(true);
+    for(unsigned change=1u;change<=11u;change++) {
+        setup();fixture.metadata_change_on_prepare=change;metadata_refusal(false);
+        CHECK(fixture.preparations==2u);
+    }
+    for(unsigned at=1u;at<=6u;at++) {
+        setup();fixture.read_fatal=at;metadata_refusal(false);CHECK(fixture.raw_reads==at);
+        setup();fixture.cancel_at=at;metadata_refusal(true);CHECK(fixture.raw_reads==at);
+    }
+    setup();fixture.stop=true;metadata_refusal(true);CHECK(!fixture.preparations && !fixture.raw_reads);
+    setup();fixture.cancel_on_wait=true;metadata_refusal(true);CHECK(!fixture.preparations && !fixture.raw_reads);
+    setup();fixture.launch_ready=KUI_DISC_LAUNCH_NO_DISC;metadata_refusal(false);CHECK(!fixture.raw_reads);
+    setup();fixture.is_cd=true;metadata_refusal(false);CHECK(!fixture.raw_reads);
+    setup();fixture.toc[1].tracks[0].control=0u;metadata_refusal(false);CHECK(!fixture.raw_reads);
+    setup();fixture.data[0][0]='X';metadata_refusal(false);
+    setup();fixture.data[0][63]='X';metadata_refusal(false);
+    setup();memcpy(fixture.data[0]+37u,"CD-ROM",6u);metadata_refusal(false);
+    setup();memset(fixture.data[0]+64u,' ',10u);metadata_refusal(false);
+    setup();fixture.data[0][64u]='?';metadata_refusal(false);
+    setup();memcpy(fixture.data[0]+64u,"0000-00000",10u);metadata_refusal(false);
+    setup();fixture.persistent_address_fad=FIRST;metadata_refusal(false);CHECK(!fixture.cooked_reads);
+    setup();fixture.read_fatal=1u;fixture.fatal_sets_stop=true;metadata_refusal(false);
+    setup();fixture.persistent_edc_fad=FIRST;
+    CHECK(kui_disc_launcher_metadata(&metadata,signature,&status,log_line,cancelled,progress));
+    CHECK(!memcmp(original,signature,sizeof(original)) && fixture.cooked_reads && fixture.saw_cooked_fallback);
+    metadata_no_storage();
+    puts("PASS physical metadata: two checked passes, release/TOC witness, native/CE GD, no executable or SD reads, PAL split data and refusal paths");
+}
 int main(void) {
-    successful_paths();region_paths();separated_disc_paths();staged_callback_paths();preparation_failures();check_only_failures();readiness_failures();every_optical_cut();read_recovery_paths();outer_rim_paths();
+    successful_paths();region_paths();separated_disc_paths();staged_callback_paths();preparation_failures();check_only_failures();readiness_failures();every_optical_cut();read_recovery_paths();outer_rim_paths();metadata_paths();
     printf("Physical GD launcher app: %u checks; actual planner/packet hashes, bounded raw/cooked recovery, high-FAD reads, read cuts, changed bytes and released storage\n",checks);
     return 0;
 }

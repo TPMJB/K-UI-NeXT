@@ -1585,6 +1585,15 @@ build/test-disc-launcher: tests/test_disc_launcher.c src/apps/disc_launcher.c $(
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) -Isrc/dreamcast tests/test_disc_launcher.c src/apps/disc_launcher.c $(DISC_BOOT_CORE) src/core/disc_launch.c -Wl,--wrap=realloc -o $@
 
+.PHONY: test-disc-cards
+test-disc-cards: build/test-disc-launcher build/test-shell
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-disc-launcher
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-shell
+	python3 tests/test_disc_cards.py
+	python3 tests/test_disc_cards_dispatch.py
+	python3 tests/test_disc_idle.py
+build/test-shell build/render-shell: include/kui/disc_cards.h
+
 .PHONY: test-disc-vmu
 test-disc-vmu: test-disc-native test-disc-vmu-probe build/test-disc-launch-vmu
 	python3 tests/test_disc_idle.py

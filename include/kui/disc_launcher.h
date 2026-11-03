@@ -34,6 +34,20 @@ bool kui_disc_launcher_prepare_module(const char *package,kui_disc_launcher_card
     kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
 bool kui_disc_launcher_identity(struct kui_disc_boot_plan *plan,struct kui_app_status *out,
     kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
+/* Read-only release identification for card management; caller owns exclusive
+ * optical access with SD storage released. Native and Windows CE GD metadata
+ * are admitted independently of executable size or launch compatibility.
+ * There is no executable read/hash, bootstrap load or storage write.
+ *
+ * Two bounded metadata passes must agree. signature is SHA-256 over canonical
+ * TOC fields for both sessions followed by each exact metadata LBA/payload in
+ * parser order (IP header, descriptors and root directory). It is a stable
+ * release witness, not a unique serial number for physically identical discs.
+ * Reidentify and compare before linking/creating a release's card. Both output
+ * buffers are cleared on every failure; status records the refusal or Stop. */
+bool kui_disc_launcher_metadata(struct kui_game_metadata *metadata,uint8_t signature[32],
+    struct kui_app_status *out,kui_log_fn log,kui_cancel_fn cancel,
+    kui_app_progress_fn progress);
 void kui_disc_launcher_vmu_info(struct kui_vmu_game_info *info,struct kui_app_status *out,
     kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
 bool kui_disc_launcher_prepare_vmu(const struct kui_vmu_game_selection *selection,

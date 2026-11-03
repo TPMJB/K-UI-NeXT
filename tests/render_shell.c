@@ -4,6 +4,8 @@
  * stopped, destination, keyboard, advanced, ripper-settings, video, vmu,
  * memory, network, idle, reset, home-vmu, home-memory, home-network,
  * home-music, home-gd, music, gd-play, gd-confirm, quick-resume, dma-fallback,
+ * gd-cards-linked, gd-cards-empty, gd-cards-imports, gd-cards-link, gd-cards-share,
+ * gd-cards-copy, gd-cards-blank, gd-cards-default, gd-cards-ask, gd-cards-loading, gd-cards-error,
  * music-queued, advanced-destination, clock, clock-confirm, defaults,
  * vmu-restore, vmu-restore-confirm, vmu-card-backup, vmu-image, vmu-image-working,
  * vmu-copy-all, vmu-copy-all-confirm, vmu-copy-all-partial, vmu-import-pick,
@@ -974,6 +976,49 @@ int main(int argc,char **argv) {
         shell.gd_options_selected=2u;
         snprintf(shell.vmu_emulation_notice,sizeof(shell.vmu_emulation_notice),
             "Virtual VMU On; disc slot %s. Applies on next launch.",shell.vmu_emulation_slot==KUI_GAME_VMU_SLOT_A1?"A1":"A2");
+    }
+    else if(!strncmp(argv[1],"gd-cards-",9)) {
+        shell.page=KUI_SHELL_GD_PLAY;shell.vmu_emulation_known=true;shell.vmu_emulation_enabled=false;
+        (void)kui_shell_input(&shell,KUI_SHELL_START,false);
+        if(!strcmp(argv[1],"gd-cards-loading")) {
+            view.busy=true;view.app_status=&status;strcpy(status.message,"Reading the inserted disc release ID...");
+        } else {
+            struct kui_disc_cards_view cards={.generation=shell.disc_cards_generation,.identified=true,
+                .token=17,.candidates_sequence=9,.count=8,.total=11,.linked_count=11,.default_pair=11};
+            cards.status.complete=cards.status.passed=true;cards.metadata.ip_valid=cards.metadata.native_gd=true;
+            strcpy(cards.product,"MK-51007");strcpy(cards.metadata.product,"MK-51007");
+            strcpy(cards.metadata.title,"TOY COMMANDER");strcpy(cards.metadata.region,"JUE");
+            strcpy(cards.metadata.version,"V1.000");cards.signature[0]=0x67;
+            cards.storage.card_sectors=1000000;cards.storage.partition_first=2048;cards.storage.partition_end=999000;
+            cards.storage.cid[0]=0x42;cards.storage.high_capacity=1;
+            static const char *const names[]={"White VMU / main progress","Black VMU / alternate run","Mission medal collection",
+                "Imported card / family saves","Weekend playthrough","Original VMU backup","Challenge run saves","Shared game card"};
+            bool imports=!strcmp(argv[1],"gd-cards-imports") || !strcmp(argv[1],"gd-cards-link") ||
+                !strcmp(argv[1],"gd-cards-share") || !strcmp(argv[1],"gd-cards-copy");
+            cards.stage=imports?KUI_DISC_CARDS_IMPORTS_STAGE:KUI_DISC_CARDS_LINKED_STAGE;
+            for(unsigned i=0;i<cards.count;i++) {
+                struct kui_disc_cards_row *row=&cards.rows[i];row->identity[0]=11+i;row->pair=11+i;
+                row->active=!imports || i==0;row->linked=!imports;row->readable=true;row->suggested=imports && i==1;
+                row->link_copies=imports && i!=0;
+                row->is_default=!imports && row->pair==cards.default_pair;row->files=7+i;row->free_blocks=123-i*7;
+                snprintf(row->path,sizeof(row->path),"0:/KUI/%s/%c%04u/card.vmd",row->active?"vmu-test":"vmu/cards",row->active?'p':'v',row->pair);
+                snprintf(row->label,sizeof(row->label),"%s",names[i]);strcpy(row->contents,"Toy Commander / medal and mission progress");
+            }
+            if(!strcmp(argv[1],"gd-cards-empty")) cards.count=cards.total=cards.linked_count=cards.default_pair=0;
+            if(!strcmp(argv[1],"gd-cards-error")) {
+                cards.status.passed=cards.identified=false;cards.count=0;cards.status.errors=1;
+                strcpy(cards.status.message,"Disc changed; refresh before linking or creating a card.");
+            }
+            kui_shell_set_disc_cards(&shell,&cards);shell.disc_cards_selected=1;
+            if(!strcmp(argv[1],"gd-cards-link")) (void)kui_shell_input(&shell,KUI_SHELL_A,false);
+            else if(!strcmp(argv[1],"gd-cards-share")) {shell.disc_cards_selected=0;(void)kui_shell_input(&shell,KUI_SHELL_A,false);}
+            else if(!strcmp(argv[1],"gd-cards-copy")) {
+                shell.disc_cards.rows[1].active=true;(void)kui_shell_input(&shell,KUI_SHELL_A,false);
+            }
+            else if(!strcmp(argv[1],"gd-cards-blank")) (void)kui_shell_input(&shell,KUI_SHELL_START,false);
+            else if(!strcmp(argv[1],"gd-cards-default")) (void)kui_shell_input(&shell,KUI_SHELL_A,false);
+            else if(!strcmp(argv[1],"gd-cards-ask")) (void)kui_shell_input(&shell,KUI_SHELL_R,false);
+        }
     }
     else if(!strncmp(argv[1],"gd-vmu-",7)) {
         shell.page=KUI_SHELL_GD_PLAY;

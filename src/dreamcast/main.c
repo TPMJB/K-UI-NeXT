@@ -42,6 +42,7 @@
 #include "kui/splash.h"
 #include "kui/gd_play.h"
 #include "kui/disc_launcher.h"
+#include "kui/disc_cards.h"
 #include "kui/disc_region.h"
 #include "kui/disc_launch.h"
 #include "kui/recovery_scan.h"
@@ -176,6 +177,9 @@ static uint8_t vmu_name_identity_pending[16];
 static struct kui_vmu_game_info vmu_game_info_snapshot,disc_vmu_info_snapshot;
 static unsigned disc_vmu_info_generation,disc_vmu_info_request_pending,disc_vmu_info_request_result;
 static bool disc_vmu_launch_pending;
+static struct kui_disc_cards_request disc_cards_pending;
+static struct kui_disc_cards_view disc_cards_snapshot;
+static unsigned disc_cards_generation;
 static unsigned disc_region_request,disc_region_result,disc_region_generation;
 static bool disc_region_requested,disc_region_enabled=true,disc_region_ok;
 static char disc_region_note[128];
@@ -378,6 +382,15 @@ static void disc_vmu_info_failure(unsigned generation,const char *message) {
     snprintf(disc_vmu_info_snapshot.notice,sizeof(disc_vmu_info_snapshot.notice),"%s",message);
     snprintf(disc_vmu_info_snapshot.label,sizeof(disc_vmu_info_snapshot.label),"Unavailable");
     disc_vmu_info_request_result=generation;++disc_vmu_info_generation;
+}
+/* Caller holds lock; complete blocked/queued requests through the same
+ * generation path as the worker so the page never retains a Loading state. */
+static void disc_cards_failure(unsigned generation,bool stopped,const char *message) {
+    memset(&disc_cards_snapshot,0,sizeof(disc_cards_snapshot));
+    disc_cards_snapshot.generation=generation;
+    disc_cards_snapshot.status=(struct kui_app_status){.complete=true,.stopped=stopped,.errors=stopped?0u:1u};
+    snprintf(disc_cards_snapshot.status.message,sizeof(disc_cards_snapshot.status.message),"%s",message);
+    ++disc_cards_generation;
 }
 /* Keep the actual refusal available to the disc page. This only classifies
  * the existing staging guards; it never enlarges the admitted RAM ranges. */
@@ -801,6 +814,7 @@ static void app_progress(const struct kui_app_status *status) {
     else if(active_app==93 || active_app==101) vmu_collection_snapshot.status=*status;
     else if(active_app==94 || active_app==95) vmu_collection_copy_snapshot.status=*status;
     else if(active_app==98) vmu_wizard_snapshot.status=*status;
+    else if(active_app==119) disc_cards_snapshot.status=*status;
     else if(active_app==24) player_status=*status;
     else if(active_app==31) vmu_backups.status=*status;
     else vmu_snapshot.status=*status;
@@ -2456,7 +2470,7 @@ static void files_song_result(const struct kui_app_status *result) {
 }
 static bool needs_cd_handoff(unsigned action) {
     return action==1 || (action>=4 && action<=7) || action==12 || action==22 ||
-        action==24 || action==25 || action==56 || action==57 || action==58 || action==65 || action==79 || action==81 || action==96 || action==97 || action==103 || action==104 || action==105 || (action>=68 && action<=71) || (action>=46 && action<=48);
+        action==24 || action==25 || action==56 || action==57 || action==58 || action==65 || action==79 || action==81 || action==96 || action==97 || action==103 || action==104 || action==105 || action==119 || (action>=68 && action<=71) || (action>=46 && action<=48);
 }
 static bool games_page(enum kui_shell_page page) {
     return page==KUI_SHELL_GAMES || page==KUI_SHELL_GAMES_ADVANCED ||
@@ -2505,7 +2519,7 @@ static bool games_action_invalidates(unsigned action) {
         action==25 || action==30 || action==33 || action==38 || action==40 ||
         (action>=42 && action<=48) || (action>=56 && action<=58) || action==62 ||
         action==64 || action==65 || action==67 || action==79 || action==81 || action==96 || action==97 || action==82 ||
-        action==83 || action==118 || action==85 || action==86 || action==90 || action==92 || action==95 || action==98 || action==100 || action==104 || action==105 || action==106 || action==107 || (action>=68 && action<=71);
+        action==83 || action==118 || action==119 || action==85 || action==86 || action==90 || action==92 || action==95 || action==98 || action==100 || action==104 || action==105 || action==106 || action==107 || (action>=68 && action<=71);
 }
 static bool games_action_changes_content(unsigned action) {
     /* Directory-changing writers can add/remove launch selectors. Saved
@@ -3042,6 +3056,8 @@ static void *worker(void *unused) {
             publish_cd_audio();
             mutex_lock(&lock);
             snprintf(capture_message,sizeof(capture_message),"Audio CD stop failed; no new optical operation started.");
+            if(action==119) disc_cards_failure(disc_cards_pending.generation,false,
+                "Audio CD stop failed; disc cards were not checked.");
             if(is_capture_action(action)) {capture_outcome=KUI_SHELL_OUTCOME_FAILED;observing_capture=false;}
             if(action==24) {player_status.errors=1;snprintf(player_status.message,sizeof(player_status.message),"Audio CD stop failed; SD playback refused.");}
             if(action>=46 && action<=48) {salvage_status.complete=true;salvage_status.errors=1;snprintf(salvage_status.message,sizeof(salvage_status.message),"Audio CD stop failed; salvage refused.");}
@@ -3298,6 +3314,8 @@ static void *worker(void *unused) {
                     "Import wizard stopped before starting.");
                 ++vmu_wizard_generation;
             }
+            if(action==119) disc_cards_failure(disc_cards_pending.generation,true,
+                "Disc card operation stopped before starting.");
             if(action==106 || action==107) {
                 disc_region_result=disc_region_request;disc_region_ok=false;
                 snprintf(disc_region_note,sizeof(disc_region_note),"Preference operation stopped; X Reload to retry.");
@@ -3914,6 +3932,14 @@ static void *worker(void *unused) {
                 kui_vmu_wizard_run(&vmu_wizard_pending,&result,kui_log,kui_cancelled,app_progress);
                 mutex_lock(&lock);vmu_wizard_snapshot=result;++vmu_wizard_generation;mutex_unlock(&lock);
             }
+            if(action==119) {
+                struct kui_disc_cards_view result;
+                active_app=action;kui_sd_set_params(KUI_STORAGE_AUTO,true);
+                kui_disc_cards_run(&disc_cards_pending,&result,kui_log,kui_cancelled,app_progress);
+                inspection_passed=result.status.complete && result.status.passed && !result.status.stopped;
+                inspection_read=result.identified;
+                mutex_lock(&lock);disc_cards_snapshot=result;++disc_cards_generation;mutex_unlock(&lock);
+            }
             if(action==101) {
                 struct kui_vmu_backup_view result;
                 active_app=action;kui_sd_set_params(KUI_STORAGE_AUTO,true);
@@ -4187,6 +4213,7 @@ static void draw_shell(void) {
         shell.page==KUI_SHELL_VMU_IMPORT?vmu_import_snapshot.status:
         shell.page==KUI_SHELL_VMU_COLLECTION?vmu_collection_snapshot.status:
         shell.page==KUI_SHELL_VMU_WIZARD?vmu_wizard_snapshot.status:
+        shell.page==KUI_SHELL_DISC_CARDS?disc_cards_snapshot.status:
         shell.page==KUI_SHELL_VMU_ACTIONS && shell.vmu_copy_slot==8 &&
             (shell.vmu_action_selected==1 || shell.vmu_action_selected==3)?vmu_collection_copy_snapshot.status:
         shell.page==KUI_SHELL_VMU_ACTIONS && shell.vmu_action_selected==3?vmu_bulk_snapshot.status:
@@ -4350,6 +4377,7 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_GAMES_IDENTITY_VERIFY:return 115;
         case KUI_SHELL_PROBLEM_REPORT:return 116;
         case KUI_SHELL_VMU_BACKUP_SAVES:return 118;
+        case KUI_SHELL_DISC_CARDS_RUN:return 119;
         default: return 0;
     }
 }
@@ -4533,6 +4561,7 @@ int main(void) {
     unsigned seen_vmu_history_generation=0,seen_games_edit_generation=0;
     unsigned seen_vmu_collection=0,seen_vmu_collection_copy=0,seen_vmu_wizard=0,seen_vmu_emulation=0;
     unsigned seen_vmu_game_info=0,seen_disc_vmu_info=0,seen_disc_region=0;
+    unsigned seen_disc_cards=0;
     bool startup_routed=false;
     unsigned held_navigation = 0;
     uint64_t repeat_at = 0;
@@ -4711,6 +4740,9 @@ int main(void) {
             kui_shell_set_disc_vmu_cards(&shell,disc_vmu_info_request_result,&disc_vmu_info_snapshot);
             seen_disc_vmu_info=disc_vmu_info_generation;
         }
+        if(seen_disc_cards!=disc_cards_generation) {
+            kui_shell_set_disc_cards(&shell,&disc_cards_snapshot);seen_disc_cards=disc_cards_generation;
+        }
         if(seen_vmu_game_info!=vmu_game_info_generation) {
             kui_shell_set_game_vmu_cards(&shell,vmu_game_info_request_result,&vmu_game_info_snapshot);
             seen_vmu_game_info=vmu_game_info_generation;
@@ -4821,9 +4853,11 @@ int main(void) {
         if(cd_drive_owned && requested==KUI_SHELL_MUSIC_STOP) requested=KUI_SHELL_CD_STOP;
         if(requested==KUI_SHELL_VMU_GAME_INFO && !busy) vmu_game_info_request_start();
         unsigned action = worker_action(requested);
-        if(drive_reset_required && (action==1 || (action>=4 && action<=7) || action==22 || action==81 || action==96 || action==97 || action==103 || action==104 || action==105 || (action>=46 && action<=53))) {
+        if(drive_reset_required && (action==1 || (action>=4 && action<=7) || action==22 || action==81 || action==96 || action==97 || action==103 || action==104 || action==105 || action==119 || (action>=46 && action<=53))) {
             snprintf(capture_message,sizeof(capture_message),
                 "Drive reset required. Reboot, then Resume the partial dump.");
+            if(action==119) disc_cards_failure(shell.disc_cards_request.generation,false,
+                "Drive reset required. Use System Tools > Restart.");
             if(action>=46 && action<=48) {
                 salvage_defer_pending=false;
                 salvage_trial_pending=false;
@@ -4989,6 +5023,10 @@ int main(void) {
                 vmu_wizard_pending=shell.vmu_wizard_request;
                 vmu_wizard_snapshot=shell.vmu_wizard;
                 vmu_wizard_snapshot.status=(struct kui_app_status){0};
+            }
+            if(action==119) {
+                disc_cards_pending=shell.disc_cards_request;disc_cards_snapshot=shell.disc_cards;
+                disc_cards_snapshot.status=(struct kui_app_status){0};
             }
             if(action==99 || action==100 || action==106) {
                 vmu_emulation_request=shell.vmu_emulation_generation;
