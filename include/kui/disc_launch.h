@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "kui/disc_launch_limits.h"
 
 /* Native physical-GD handoff. Flags 1 retain the validated physical-only
  * baseline; flags 3 require an independently admitted virtual-card profile.
@@ -26,7 +27,6 @@
 #define KUI_DISC_LAUNCH_IP_ADDRESS 0x8c008000u
 #define KUI_DISC_LAUNCH_IP_BYTES 32768u
 #define KUI_DISC_LAUNCH_EXEC_ADDRESS 0x8c010000u
-#define KUI_DISC_LAUNCH_EXEC_MAX_BYTES 0x400000u
 #define KUI_DISC_LAUNCH_FLAGS 1u /* controlled native-GD bootstrap, no region gate */
 #define KUI_DISC_LAUNCH_VMU_FLAGS 3u /* independent virtual-card service */
 #define KUI_DISC_LAUNCH_VMU_PROFILE_BYTES 4096u
@@ -41,6 +41,8 @@ struct kui_disc_launch_plan {
 /* Read-only admission of a freshly loaded template: exact capability shape,
  * linker geometry and an entirely zero configuration. No physical disc read.
  * Returns the complete appended allocation geometry for executable_bytes.
+ * Legacy 4 MiB templates remain usable within their advertised limit. New
+ * templates admit up to 12 MiB, subject to actual staging RAM and geometry.
  * Output is cleared on refusal. Inputs and output must be disjoint. */
 bool kui_disc_launch_layout(const void *module,size_t module_bytes,
     uint32_t executable_bytes,struct kui_disc_launch_plan *out);

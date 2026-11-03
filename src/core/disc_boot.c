@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/disc_boot.h"
 #include "kui/hash.h"
+#include "../loader/stage_fast_crc32.h"
 #include <stddef.h>
 #include <string.h>
 
@@ -119,7 +120,7 @@ static enum kui_disc_boot_status hash_extent(struct preparation *p,uint32_t fad,
         }
         uint32_t amount=bytes-done;
         if(amount>count*2048u)amount=count*2048u;
-        checked=kui_crc32(checked,sectors,amount);kui_sha256_update(&sha,sectors,amount);
+        checked=kui_stage_crc32(checked,sectors,amount);kui_sha256_update(&sha,sectors,amount);
         done+=amount;
     }
     *crc=checked;kui_sha256_digest(&sha,digest);return KUI_DISC_BOOT_OK;

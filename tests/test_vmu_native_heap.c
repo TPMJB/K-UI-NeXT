@@ -295,7 +295,34 @@ static void patch_dependency_tests(void) {
         CHECK(!kui_vmu_native_heap_call_discover(image,sizeof(image),&h,&call));
     }
 }
+static void fixture_alignment_tests(void) {
+    const uint32_t aliases[]={0u,0x80000000u,0xa0000000u};
+    for(unsigned alias=0u;alias<3u;alias++) for(unsigned half=0u;half<2u;half++) {
+        size_t at=0x800u+2u*half;
+        struct kui_vmu_native_heap expected=fixture(at,aliases[alias],true);
+        for(unsigned offset=0u;offset<8u;offset++) {
+            /* End the authored file at the allocation's ASan redzone, while
+             * moving its valid heap/literals across every host alignment. */
+            uint8_t *shifted=malloc(sizeof(image)+offset);CHECK(shifted!=NULL);
+            memset(shifted,0xa5,offset);memcpy(shifted+offset,image,sizeof(image));
+            struct kui_vmu_native_heap got;
+            CHECK(kui_vmu_native_heap_discover(shifted+offset,sizeof(image),0x8c010000u,&got)==KUI_VMU_NATIVE_HEAP_FOUND);
+            CHECK(!memcmp(&got,&expected,sizeof(got)));
+            CHECK(!memcmp(shifted+offset,image,sizeof(image)));
+            for(unsigned guard=0u;guard<offset;guard++)CHECK(shifted[guard]==0xa5u);
+            /* Recognition must still reject a damaged allocator body, rather
+             * than merely returning plausible metadata on an unaligned file. */
+            shifted[offset+at]^=1u;
+            CHECK(kui_vmu_native_heap_discover(shifted+offset,sizeof(image),0x8c010000u,&got)==KUI_VMU_NATIVE_HEAP_NONE);
+            const struct kui_vmu_native_heap empty={0};CHECK(!memcmp(&got,&empty,sizeof(got)));
+            shifted[offset+at]^=1u;CHECK(!memcmp(shifted+offset,image,sizeof(image)));
+            free(shifted);
+        }
+    }
+    puts("Authored heap alignment: offsets 0..7, both instruction halfword positions and all RAM aliases preserve exact metadata and reject body damage");
+}
 int main(int argc,char **argv) {
+    fixture_alignment_tests();
     const uint32_t aliases[]={0u,0x80000000u,0xa0000000u};
     for(unsigned a=0;a<3u;a++) for(unsigned half=0;half<2u;half++) {
         size_t at=0x800u+2u*half;struct kui_vmu_native_heap h=fixture(at,aliases[a],true);

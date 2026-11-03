@@ -263,6 +263,81 @@ def snapshot_capture(image, helper, witnesses):
     return call
 
 
+def cached_prearm_call(image, relay, witnesses):
+    """Exact cache-profile mapping call and hook-store schedule before prearm.
+
+    The compiler schedules two stores between the callee load and call. Pin
+    their actual typed targets and every instruction instead of admitting
+    arbitrary memory operations in linked_call's scalar argument window.
+    """
+    target, _ = typed(image, '_native_crt_bootstrap_prearm', 2)
+    found = []
+    for pc, op in function_ops(image, relay):
+        if op >> 12 != 0xd:
+            continue
+        literal = ((pc+4) & ~3)+(op & 255)*4
+        if struct.unpack('<I', image.read(literal, 4))[0] != target:
+            continue
+        local = []
+        c = Cursor(image, pc-10, local)
+        try:
+            c.literal(1, typed(image, '_native_disc_mapping_prepare', 2)[0], 'cached mapping callee')
+            c.literal(8, typed(image, '_native_heap_hook', 1)[0], 'cached heap hook cell')
+            c.op(0x410b, 'cached mapping exact call'); c.op(0x0009, 'cached mapping call delay')
+            c.literal(1, image.symbol('_kui_vmu_observe_heap_hook'), 'cached heap hook target')
+            c.literal(0, target, 'cached prearm callee')
+            c.literal(2, image.symbol('_kui_vmu_observe_return_hook'), 'cached return hook target')
+            c.op(0x2812, 'cached heap hook publication')
+            c.literal(1, typed(image, '_native_terminal', 1)[0], 'cached terminal hook cell')
+            call = c.pc
+            c.op(0x400b, 'cached prearm exact call')
+            c.op(0x2122, 'cached terminal hook publication delay')
+        except ValueError:
+            continue
+        found.append((call, local))
+    if len(found) != 1:
+        raise ValueError('Requires exact cached mapping/hook/prearm instruction schedule')
+    call, local = found[0]
+    witnesses.extend(local)
+    return call
+
+
+def writes_gpr(op, register):
+    """Conservative SH integer register-write predicate for retained-frame proof.
+
+    Stores do not replace their base except predecrement; loads may also
+    replace a postincrement source. Calls use the compiler's callee-saved
+    register ABI. Unknown integer/system encodings conservatively refuse.
+    """
+    top, n, m, low = op >> 12, op >> 8 & 15, op >> 4 & 15, op & 15
+    if top in (5, 6, 7, 9, 0xd, 0xe):
+        return n == register or (top == 6 and low in (4, 5, 6) and m == register)
+    if top == 1 or top in (0xa, 0xb):
+        return False
+    if top == 0xc:
+        return op & 0xff00 == 0xc300  # TRAPA is not a callee-saved C call
+    if top == 2:
+        return n == register and low not in (0, 1, 2, 7, 8, 0xc, 0xe, 0xf)
+    if top == 3:
+        return n == register and low not in (0, 2, 3, 5, 6, 7, 0xd)
+    if top == 4:
+        return n == register or (low == 0xf and m == register)
+    if top == 8:
+        # Displacement byte/word loads target R0; branches do not write a GPR.
+        return register == 0 and (op & 0xff00) in (0x8400, 0x8500)
+    if top == 0:
+        if op in (0x0009, 0x0008, 0x0018, 0x0019, 0x0028):
+            return False
+        if low in (4, 5, 6, 7):
+            return False  # indexed stores and MUL.L do not update GPRs
+        if low == 0xf:
+            return n == register or m == register  # MAC.L postincrements both
+        if low in (2, 0xa, 9, 0xc, 0xd, 0xe):
+            return n == register
+        return True
+    return True
+
+
 def audit_entry_return(image, witnesses):
     """Narrow compiled-C ABI witnesses; host tests cover refusal semantics.
 
@@ -274,18 +349,51 @@ def audit_entry_return(image, witnesses):
     """
     helper = '_native_disc_entry_return_bind'
     relay = '_kui_disc_vmu_stage_relay'
-    before = linked_call(image, relay, '_native_crt_bootstrap_prearm', witnesses)
+    cached = '__native_resolution_cache_seed_start' in image.symbols
+    before = (cached_prearm_call(image, relay, witnesses) if cached else
+              linked_call(image, relay, '_native_crt_bootstrap_prearm', witnesses))
+    if cached:
+        image_sha = linked_call(image, relay, '_kui_sha256_digest', witnesses)
+        extent = linked_call(image, relay, '_kui_vmu_native_program_extent', witnesses)
+        mapping = linked_call(image, relay, '_native_disc_mapping_prepare', witnesses)
+        if not image_sha < extent < mapping < before:
+            raise ValueError('Disc mapping must follow the full-file SHA and program extent, before live prearm')
     bind = linked_call(image, relay, helper, witnesses)
     after = linked_call(image, relay, '_code_sha', witnesses)
     if not before < bind < after:
         raise ValueError('Entry PR binding must follow CRT prearm and precede heap arming')
     relay_ops = dict(function_ops(image, relay))
-    # The compiler's fixed outgoing frame retains original R4 at SP+12. The
-    # call's argument slot reloads that same word; no other store replaces it.
-    saves = [(pc, op) for pc, op in relay_ops.items() if pc < bind and op & 0xff0f == 0x1f03]
-    if len(saves) != 1 or saves[0][1] != 0x1f43 or relay_ops.get(bind+2) != 0x54f3:
-        raise ValueError('Return binder does not receive the original saved owner frame')
-    witnesses.append(('retain original owner-frame argument', saves[0][0], 2))
+    if cached:
+        # The smaller cache-profile relay retains the incoming R4 in R9.
+        # Prove its entry copy precedes every call and no intervening opcode
+        # writes R9, including a memory instruction's address update.
+        begin, _ = typed(image, relay, 2)
+        c = Cursor(image, begin, witnesses)
+        c.op(0x2f86, 'cached relay saves r8')
+        c.op(0x2f96, 'cached relay saves r9')
+        retain = c.pc
+        c.op(0x6943, 'retain original owner-frame argument')
+        # This profile's prefix is contiguous code; its literal pools follow
+        # the binder. Do not let a mutated PC-relative load label a later
+        # executable instruction as data and hide a retained-register write.
+        for pc in range(retain+2, bind+2, 2):
+            op = struct.unpack('<H', image.read(pc, 2))[0]
+            if op >> 12 in (9, 0xd):
+                literal = (pc+4+(op & 255)*2 if op >> 12 == 9 else
+                           ((pc+4) & ~3)+(op & 255)*4)
+                size = 2 if op >> 12 == 9 else 4
+                if literal < bind+4 and begin < literal+size:
+                    raise ValueError('Cached relay literal overlaps retained-frame code prefix')
+            if writes_gpr(op, 9):
+                raise ValueError('Return binder loses the original R9 owner frame')
+        if relay_ops.get(bind+2) != 0x6493:
+            raise ValueError('Return binder does not retain/pass the original R9 owner frame')
+    else:
+        # Historical compiler profile retains original R4 at SP+12.
+        saves = [(pc, op) for pc, op in relay_ops.items() if pc < bind and op & 0xff0f == 0x1f03]
+        if len(saves) != 1 or saves[0][1] != 0x1f43 or relay_ops.get(bind+2) != 0x54f3:
+            raise ValueError('Return binder does not receive the original saved owner frame')
+        witnesses.append(('retain original owner-frame argument', saves[0][0], 2))
     witnesses.append(('pass exact original owner-frame argument', bind+2, 2))
     patch = linked_call(image, helper, '_readonly_patch_entry', witnesses)
     capture = snapshot_capture(image, helper, witnesses)

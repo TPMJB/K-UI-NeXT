@@ -9,7 +9,7 @@
 #define KUI_VMU_WIZARD_ROWS 8u
 enum kui_vmu_wizard_stage { KUI_VMU_WIZARD_SOURCES, KUI_VMU_WIZARD_GAMES_STAGE,
     KUI_VMU_WIZARD_REVIEW, KUI_VMU_WIZARD_DONE, KUI_VMU_WIZARD_SAVES,
-    KUI_VMU_WIZARD_GROUPS, KUI_VMU_WIZARD_GROUP_GAME };
+    KUI_VMU_WIZARD_GROUPS, KUI_VMU_WIZARD_GROUP_GAME, KUI_VMU_WIZARD_DETAILS };
 enum kui_vmu_wizard_op { KUI_VMU_WIZARD_OPEN, KUI_VMU_WIZARD_RESET,
     KUI_VMU_WIZARD_CAPTURE, KUI_VMU_WIZARD_LIST_GAMES, KUI_VMU_WIZARD_TOGGLE,
     KUI_VMU_WIZARD_SHOW_SOURCES, KUI_VMU_WIZARD_SHOW_REVIEW, KUI_VMU_WIZARD_COMMIT,
@@ -19,7 +19,9 @@ enum kui_vmu_wizard_op { KUI_VMU_WIZARD_OPEN, KUI_VMU_WIZARD_RESET,
     KUI_VMU_WIZARD_REVIEW_PAGE, KUI_VMU_WIZARD_SHOW_GROUPS,
     KUI_VMU_WIZARD_OPEN_GROUP, KUI_VMU_WIZARD_RESOLVE_GROUP,
     KUI_VMU_WIZARD_SKIP_GROUP, KUI_VMU_WIZARD_GROUP_GAME_PAGE,
-    KUI_VMU_WIZARD_CONFIRM_MISSING, KUI_VMU_WIZARD_CANCEL_MISSING };
+    KUI_VMU_WIZARD_CONFIRM_MISSING, KUI_VMU_WIZARD_CANCEL_MISSING,
+    KUI_VMU_WIZARD_OPEN_DETAILS, KUI_VMU_WIZARD_DETAILS_PAGE,
+    KUI_VMU_WIZARD_CLOSE_DETAILS };
 struct kui_vmu_wizard_request {
     enum kui_vmu_wizard_op op;
     /* OPEN_SAVES index: global game row. Within SAVES, OPEN_SAVES changes
@@ -27,7 +29,10 @@ struct kui_vmu_wizard_request {
      * TOGGLE_BLANK index: global game row. SHOW_GAMES uses game page.
      * OPEN_GROUP/SKIP_GROUP index: stable visible group ID, page: group page.
      * RESOLVE_GROUP index: global game row in GROUP_GAME's displayed page.
-     * SHOW_GROUPS/GROUP_GAME_PAGE page the unresolved queue / game picker. */
+     * SHOW_GROUPS/GROUP_GAME_PAGE page the unresolved queue / game picker.
+     * OPEN_DETAILS index is a visible group ID or SAVES directory ordinal;
+     * page/card must match its source view. DETAILS_PAGE changes only the
+     * read-only member page; CLOSE_DETAILS restores the originating view. */
     unsigned generation,slot,card,page,index;
     unsigned group_index; /* Expected group ID for a GROUP_GAME answer. */
     bool view_only;
@@ -51,8 +56,8 @@ struct kui_vmu_wizard_game {
 struct kui_vmu_wizard_save {
     /* index is the inspected directory ordinal, slot its original VMU slot.
      * Neither is a displayed page-relative row number. */
-    unsigned index,slot,blocks,type;
-    char name[13],short_description[17],long_description[33];
+    unsigned index,slot,blocks,type,header_offset;
+    char name[13],short_description[17],long_description[33],application[17];
     bool picked,suggested;
 };
 struct kui_vmu_wizard_group {
@@ -85,6 +90,7 @@ struct kui_vmu_wizard_view {
     struct kui_vmu_wizard_group groups[KUI_VMU_WIZARD_ROWS];
     unsigned group_index,group_source,group_source_slot,group_files,group_blocks;
     char group_label[49];
+    enum kui_vmu_wizard_stage details_return_stage;
 };
 /* Storage worker owns the RAM-only session. Every returned view is a copy;
  * physical sources remain read-only. Publication requires COMMIT from review. */

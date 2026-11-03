@@ -3,6 +3,7 @@
 #include "kui/disc_boot.h"
 #include "kui/disc_launch.h"
 #include "kui/hash.h"
+#include "../loader/stage_fast_crc32.h"
 #include "platform.h"
 #include <inttypes.h>
 #include <stdio.h>
@@ -23,8 +24,14 @@ struct optical_source {
     uint32_t last_fad,last_count;
     uint32_t leadout_tail,leadout_end;
     const char *phase;
+    uint8_t *toc_digest; /* Optional release-only witness; baseline is unchanged. */
     struct kui_disc_boot_data_range data_ranges[KUI_DISC_BOOT_MAX_DATA_RANGES];
 };
+static void hash_word(struct kui_sha256 *hash,uint32_t value) {
+    uint8_t bytes[4];
+    for(unsigned i=0;i<4u;i++)bytes[i]=(uint8_t)(value>>(8u*i));
+    kui_sha256_update(hash,bytes,sizeof(bytes));
+}
 static void publish(struct optical_source *s) {
     if(s->progress) s->progress(s->status);
 }
@@ -190,6 +197,21 @@ static const char *source_open(struct optical_source *s,struct kui_disc_boot_sou
     }
     if(is_cd) return "Inserted media is not a native GD-ROM.";
     if(!toc[1].count || toc[1].count>99u) return "Native GD data track unavailable; check the disc and drive log.";
+    if(s->toc_digest) {
+        if(toc[0].count>99u)return "Low-density GD track bounds are invalid.";
+        struct kui_sha256 hash;kui_sha256_init(&hash);
+        static const char domain[]="KUI physical release TOC v1";
+        kui_sha256_update(&hash,domain,sizeof(domain));
+        for(unsigned session=0;session<2u;session++) {
+            hash_word(&hash,session);hash_word(&hash,toc[session].count);
+            for(unsigned i=0;i<toc[session].count;i++) {
+                const struct kui_track *track=&toc[session].tracks[i];
+                hash_word(&hash,track->number);hash_word(&hash,track->control);
+                hash_word(&hash,track->start);hash_word(&hash,track->end);
+            }
+        }
+        kui_sha256_digest(&hash,s->toc_digest);
+    }
     /* Keep every high-density DATA span. ISO extents use absolute LBAs and
      * may legitimately reside after intervening audio tracks (Shenmue II).
      * Use the same declared 150-sector type-transition gap as GDI capture;
@@ -272,7 +294,7 @@ static bool inspect(struct optical_source *s,struct kui_disc_boot_source *source
     publish(s);
     enum kui_disc_boot_status result=kui_disc_boot_prepare(source,plan);
     if(result!=KUI_DISC_BOOT_OK) return fail(s,result==KUI_DISC_BOOT_LIMIT && limit==KUI_DISC_LAUNCH_EXEC_MAX_BYTES?
-        "Direct boot currently supports native executables up to 4 MiB.":kui_disc_boot_status_text(result));
+        "Native executable exceeds the 12 MiB GD Play limit.":kui_disc_boot_status_text(result));
     describe(s,plan);return true;
 }
 void kui_disc_launcher_check(struct kui_app_status *out,kui_log_fn log,
@@ -295,9 +317,121 @@ bool kui_disc_launcher_identity(struct kui_disc_boot_plan *plan,struct kui_app_s
     if(!inspect(&s,&source,plan,KUI_DISC_LAUNCH_EXEC_MAX_BYTES)) return false;
     out->complete=out->passed=true;free(s.raw);s.raw=NULL;publish(&s);return true;
 }
+struct release_metadata {
+    struct optical_source *optical;
+    const struct kui_disc_boot_source *source;
+    struct kui_sha256 hash;
+    bool gd_header;
+};
+static bool release_range(void *context,uint32_t lba,uint32_t count) {
+    struct release_metadata *r=context;
+    if(!count || lba>UINT32_MAX-150u)return false;
+    uint32_t fad=lba+150u;
+    for(uint32_t i=0;i<r->source->data_range_count;i++) {
+        const struct kui_disc_boot_data_range *range=r->source->data_ranges+i;
+        if(fad<range->first_fad)break;
+        if(fad<range->end_fad)return count<=range->end_fad-fad;
+    }
+    extent_refused(r->optical,lba,count);return false;
+}
+static enum kui_game_metadata_io_result release_sector(void *context,uint32_t lba,uint8_t out[2048]) {
+    struct release_metadata *r=context;struct optical_source *s=r->optical;
+    if(!release_range(context,lba,1u))return KUI_GAME_METADATA_IO_ERROR;
+    uint32_t fad=lba+150u;
+    read_phase(s,fad==r->source->first_fad?"release IP header":
+        fad>=r->source->first_fad+16u && fad<r->source->first_fad+32u?
+            "release ISO descriptors":"release ISO directory");
+    enum kui_disc_boot_io_result result=read_sector(s,fad,out);
+    if(result==KUI_DISC_BOOT_IO_CANCELLED)return KUI_GAME_METADATA_IO_CANCELLED;
+    if(result!=KUI_DISC_BOOT_IO_OK)return KUI_GAME_METADATA_IO_ERROR;
+    if(fad==r->source->first_fad)r->gd_header=!memcmp(out+37u,"GD-ROM",6u);
+    hash_word(&r->hash,lba);kui_sha256_update(&r->hash,out,2048u);
+    return KUI_GAME_METADATA_IO_OK;
+}
+static bool release_product(const char *product) {
+    unsigned used=0u;bool significant=false;
+    for(;used<11u && product[used];used++) {
+        unsigned c=(unsigned char)product[used];
+        if(!((c>='A' && c<='Z') || (c>='a' && c<='z') ||
+             (c>='0' && c<='9') || c=='-'))return false;
+        if((c>='A' && c<='Z') || (c>='a' && c<='z') || (c>='1' && c<='9'))significant=true;
+    }
+    return used>0u && used<11u && significant;
+}
+bool kui_disc_launcher_metadata(struct kui_game_metadata *metadata,uint8_t signature[32],
+    struct kui_app_status *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
+    if(metadata)memset(metadata,0,sizeof(*metadata));
+    if(signature)memset(signature,0,32u);
+    if(!out)return false;
+    *out=(struct kui_app_status){0};
+    if(!metadata || !signature || !log || !cancel) {
+        out->complete=true;out->errors=1u;
+        snprintf(out->message,sizeof(out->message),"Invalid physical-disc release request.");
+        if(progress)progress(out);
+        return false;
+    }
+    struct kui_game_metadata first={0};uint8_t first_signature[32]={0};uint32_t reads=0u;
+    for(unsigned pass=0;pass<2u;pass++) {
+        uint8_t toc[32];struct optical_source s={.log=log,.cancel=cancel,.progress=progress,
+            .status=out,.reads=reads,.phase="release spin-up and identification",.toc_digest=toc};
+        snprintf(out->message,sizeof(out->message),"Waiting for the inserted disc to become ready...");publish(&s);
+        struct kui_disc_boot_source source;
+        const char *problem=source_open(&s,&source,0u);
+        if(problem)return fail(&s,problem);
+        struct release_metadata reader={.optical=&s,.source=&source};
+        kui_sha256_init(&reader.hash);
+        static const char domain[]="KUI physical release metadata v1";
+        kui_sha256_update(&reader.hash,domain,sizeof(domain));
+        kui_sha256_update(&reader.hash,toc,sizeof(toc));
+        const struct kui_game_metadata_ops ops={&reader,release_sector,release_range};
+        struct kui_game_metadata current;
+        enum kui_game_metadata_status result=kui_game_metadata_read(&ops,source.first_fad-150u,&current);
+        if(result!=KUI_GAME_METADATA_OK)return fail(&s,kui_game_metadata_status_text(result));
+        if(!reader.gd_header || (!current.native_gd && !current.windows_ce))
+            return fail(&s,"Inserted disc has no supported GD game release metadata.");
+        if(!release_product(current.product))return fail(&s,"Inserted disc has no usable release ID.");
+        uint8_t digest[32];kui_sha256_digest(&reader.hash,digest);
+        if(pass && (memcmp(first_signature,digest,sizeof(digest)) || memcmp(&first,&current,sizeof(first))))
+            return fail(&s,"Inserted disc metadata changed; read the disc again before linking a card.");
+        if(stopped(&s))return fail(&s,"Physical-disc release identification stopped.");
+        reads=s.reads;free(s.raw);s.raw=NULL;
+        if(!pass) {first=current;memcpy(first_signature,digest,sizeof(first_signature));}
+    }
+    *metadata=first;memcpy(signature,first_signature,32u);
+    out->complete=out->passed=true;
+    out->line_count=2u;
+    snprintf(out->lines[0],KUI_APP_LINE_CAP,"%.70s",metadata->title);
+    snprintf(out->lines[1],KUI_APP_LINE_CAP,"Product %.10s / region %.8s / %.6s",
+        metadata->product,metadata->region,metadata->version);
+    snprintf(out->message,sizeof(out->message),"Disc release identified: %.10s",metadata->product);
+    if(progress)progress(out);
+    return true;
+}
 bool kui_disc_launcher_prepare(struct kui_runtime_image *image,
     struct kui_app_status *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
     return kui_disc_launcher_prepare_module(KUI_DISC_LAUNCH_PACKAGE,NULL,NULL,NULL,image,out,log,cancel,progress);
+}
+/* Staging and preflight each need a bounded sector buffer, but never at the
+ * same time. Keep this frame separate so the I/O worker does not reserve both
+ * buffers while hashing the physical disc during inspect(). */
+static bool __attribute__((noinline)) stage_boot_bytes(struct optical_source *s,
+    const struct kui_disc_boot_plan *plan,const struct kui_disc_launch_plan *layout,
+    uint8_t *payload) {
+    uint8_t sectors[KUI_DISC_BOOT_RUN_SECTORS*2048u];
+    for(unsigned which=0;which<2u;which++) {
+        read_phase(s,which?"boot executable staging":"IP.BIN staging");
+        uint32_t bytes=which?layout->exec_bytes:KUI_DISC_BOOT_IP_BYTES;
+        uint32_t fad=which?plan->boot_fad:plan->first_fad;
+        uint8_t *destination=payload+(which?layout->exec_offset:layout->ip_offset);
+        for(uint32_t done=0;done<bytes;) {
+            uint32_t count=(bytes-done+2047u)/2048u;
+            if(count>KUI_DISC_BOOT_RUN_SECTORS) count=KUI_DISC_BOOT_RUN_SECTORS;
+            if(read_run(s,fad,count,sectors)!=KUI_DISC_BOOT_IO_OK) return false;
+            uint32_t n=bytes-done;if(n>count*2048u) n=count*2048u;
+            memcpy(destination+done,sectors,n);done+=n;fad+=count;
+        }
+    }
+    return true;
 }
 bool kui_disc_launcher_prepare_module(const char *package,kui_disc_launcher_card_fn card,
     void *card_context,const struct kui_disc_launcher_region *region,struct kui_runtime_image *image,
@@ -331,7 +465,7 @@ bool kui_disc_launcher_prepare_module(const char *package,kui_disc_launcher_card
         kui_runtime_free(image);return fail(&s,"Disc region differs from console; enable Region-free in GD Play Options.");
     }
     if(!kui_disc_launch_layout(image->data,image->info.payload_bytes,plan.metadata.boot_bytes,&layout)) {
-        kui_runtime_free(image);return fail(&s,"This first direct-boot test supports native executables up to 4 MiB.");
+        kui_runtime_free(image);return fail(&s,"Installed GD Play module has a smaller executable limit; copy the matching update.");
     }
     s.phase="staging allocation";
     log("Physical disc: allocating %" PRIu32 " byte payload for %" PRIu32 " byte executable",layout.payload_bytes,layout.exec_bytes);
@@ -341,21 +475,8 @@ bool kui_disc_launcher_prepare_module(const char *package,kui_disc_launcher_card
     memset((uint8_t *)grown+layout.module_bytes,0,layout.payload_bytes-layout.module_bytes);
     snprintf(out->message,sizeof(out->message),"Staging checked physical-disc boot bytes...");publish(&s);
     s.phase="staging disc bytes";
-    uint8_t sectors[KUI_DISC_BOOT_RUN_SECTORS*2048u];
-    for(unsigned which=0;which<2u;which++) {
-        read_phase(&s,which?"boot executable staging":"IP.BIN staging");
-        uint32_t bytes=which?layout.exec_bytes:KUI_DISC_BOOT_IP_BYTES;
-        uint32_t fad=which?plan.boot_fad:plan.first_fad;
-        uint8_t *destination=(uint8_t *)grown+(which?layout.exec_offset:layout.ip_offset);
-        for(uint32_t done=0;done<bytes;) {
-            uint32_t count=(bytes-done+2047u)/2048u;
-            if(count>KUI_DISC_BOOT_RUN_SECTORS) count=KUI_DISC_BOOT_RUN_SECTORS;
-            if(read_run(&s,fad,count,sectors)!=KUI_DISC_BOOT_IO_OK) {
-                kui_runtime_free(image);return fail(&s,"Physical-disc read stopped or failed while staging boot bytes.");
-            }
-            uint32_t n=bytes-done;if(n>count*2048u) n=count*2048u;
-            memcpy(destination+done,sectors,n);done+=n;fad+=count;
-        }
+    if(!stage_boot_bytes(&s,&plan,&layout,grown)) {
+        kui_runtime_free(image);return fail(&s,"Physical-disc read stopped or failed while staging boot bytes.");
     }
     layout.ip_crc32=plan.ip_crc32;layout.exec_crc32=plan.boot_crc32;
     memcpy(layout.ip_sha256,plan.ip_sha256,32u);memcpy(layout.exec_sha256,plan.boot_sha256,32u);
@@ -388,7 +509,7 @@ bool kui_disc_launcher_prepare_module(const char *package,kui_disc_launcher_card
         kui_runtime_free(image);return fail(&s,"Could not restore checked 2048-byte drive reads for the game.");
     }
     image->info.payload_bytes=image->info.memory_bytes=layout.payload_bytes;
-    image->info.crc32=kui_crc32(0,grown,layout.payload_bytes);
+    image->info.crc32=kui_stage_crc32(0,grown,layout.payload_bytes);
     out->complete=out->passed=true;
     snprintf(out->message,sizeof(out->message),"%s",card?
         "Direct-disc boot prepared with the selected virtual VMU.":

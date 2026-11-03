@@ -5,11 +5,15 @@
 #include "kui/disc_vmu_probe.h"
 #include "kui/disc_region.h"
 #include "kui/vmu_emulation_settings.h"
+#include "kui/vmu_native_cache_seed.h"
+#include "kui/vmu_native_resolution_cache.h"
+#include "kui/vmu_native_program.h"
 #include "platform.h"
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "../loader/stage_fast_crc32.h"
 
 static bool preference(bool *enabled,unsigned *slot,kui_log_fn log,kui_cancel_fn cancel) {
     if(cancel && cancel()) return false;
@@ -46,11 +50,31 @@ void kui_disc_launcher_vmu_info(struct kui_vmu_game_info *info,struct kui_app_st
         snprintf(info->label,sizeof(info->label),"Physical VMUs");
         snprintf(info->notice,sizeof(info->notice),"Virtual VMU is Off. Direct boot uses physical VMUs.");
     } else {
-        struct kui_disc_boot_plan plan;
-        if(!kui_disc_launcher_identity(&plan,out,log,cancel,progress)) {
+        /* Preview needs the checked release ID, not whole executable hashes.
+         * Identify afresh for every preview; actual launch still stages and
+         * verifies the complete physical-disc file before VMU preflight. */
+        struct kui_game_metadata metadata={0};uint8_t signature[32];
+        if(!kui_disc_launcher_metadata(&metadata,signature,out,log,cancel,progress)) {
             snprintf(info->notice,sizeof(info->notice),"%.127s",out->message);return;
         }
-        kui_vmu_game_info_run(plan.metadata.product,true,info,log,cancel);
+        const char *problem=NULL;char key[KUI_VMU_GAME_CARD_KEY_BYTES];
+        if(cancel()) problem="Disc card check stopped.";
+        else if(!metadata.ip_valid || !metadata.boot_valid)
+            problem="Physical-disc boot metadata is incomplete.";
+        else if(metadata.windows_ce)
+            problem="Windows CE needs its separate disc launch path.";
+        else if(!metadata.native_gd || metadata.native_cd)
+            problem="This launch path requires a native GD-ROM disc.";
+        else if(metadata.boot_bytes<128u || metadata.boot_bytes>KUI_DISC_LAUNCH_EXEC_MAX_BYTES)
+            problem="Physical disc boot data exceeds launch limits.";
+        else if(!memchr(metadata.product,0,sizeof(metadata.product)) ||
+                !kui_vmu_game_card_key(metadata.product,key))
+            problem="Inserted disc has no usable release ID.";
+        if(problem) {
+            snprintf(info->notice,sizeof(info->notice),"%s",problem);
+            (void)failure(out,problem,cancel,progress);return;
+        }
+        kui_vmu_game_info_run(metadata.product,true,info,log,cancel);
         if(cancel()) {(void)failure(out,"Disc card check stopped.",cancel,progress);return;}
         if(!info->known) {(void)failure(out,info->notice,cancel,progress);return;}
     }
@@ -74,10 +98,21 @@ static const char *probe_refusal(uint32_t stage) {
         return "Virtual VMU unsupported: executable format. R: Save Log; disable VMU in Options.";
     }
 }
+/* This fresh per-launch proof is never written to a cache file. The producer
+ * runs while K-UI still owns the complete immutable disc executable and its
+ * cached runtime. Only its value record is copied into the trusted module;
+ * no launcher address or callback survives the handoff. */
+struct disc_vmu_preflight {
+    const struct kui_vmu_game_selection *selection;
+    uint8_t wire[KUI_VMU_NATIVE_RESOLUTION_CACHE_BYTES];
+    bool ready;
+};
 static bool selected_card(const char *product,const void *executable,uint32_t executable_bytes,
     uint8_t profile[4096],char refusal[KUI_DISC_LAUNCHER_REFUSAL_BYTES],void *context,
     kui_log_fn log,kui_cancel_fn cancel) {
-    const struct kui_vmu_game_selection *selection=context;
+    struct disc_vmu_preflight *preflight=context;
+    const struct kui_vmu_game_selection *selection=preflight->selection;
+    preflight->ready=false;
     memset(profile,0,4096u);
     if(selection && selection->product[0]) {
         char key[KUI_VMU_GAME_CARD_KEY_BYTES];
@@ -88,11 +123,28 @@ static bool selected_card(const char *product,const void *executable,uint32_t ex
         }
     }
     if(cancel()) return false;
-    /* Immutable diagnostics only. Bootstrap installation repeats its own
-     * admission and live checks; these addresses grant no patch authority. */
+    /* Produce the complete immutable proof once, including uniqueness and
+     * guarded exit windows. The cold stage independently hashes the exact
+     * post-bootstrap program, then rebinds live ownership before any hook. */
     struct kui_disc_vmu_probe probe={0};
-    bool compatible=kui_disc_vmu_probe_run(executable,executable_bytes,
-        KUI_DISC_LAUNCH_EXEC_ADDRESS,&probe);
+    struct kui_vmu_native_resolution resolution;size_t program_bytes;
+    bool compatible=kui_vmu_native_program_extent(executable,executable_bytes,
+        KUI_DISC_LAUNCH_EXEC_ADDRESS,&program_bytes) &&
+        kui_vmu_native_resolution_cache_build(executable,program_bytes,KUI_DISC_LAUNCH_EXEC_ADDRESS,
+            preflight->wire,sizeof(preflight->wire),&resolution) &&
+        resolution.heap.family==KUI_VMU_NATIVE_HEAP_TAIL32 && resolution.heap.initializer_slot;
+    if(compatible) {
+        probe.version=KUI_DISC_VMU_PROBE_VERSION;probe.bytes=sizeof(probe);
+        probe.stage=KUI_DISC_VMU_PROBE_READY;probe.file_bytes=executable_bytes;
+        probe.program_bytes=(uint32_t)program_bytes;probe.file_crc32=kui_stage_crc32(0u,executable,executable_bytes);
+        probe.driver_result=KUI_VMU_NATIVE_RESOLVED;probe.heap_result=KUI_VMU_NATIVE_HEAP_FOUND;
+        probe.driver=resolution.driver;probe.layout=resolution.layout;probe.heap=resolution.heap;probe.call=resolution.call;
+        preflight->ready=true;
+    } else {
+        /* Re-run partial discovery only on refusal, to retain the useful
+         * Maple/layout/allocator diagnosis without slowing successful boots. */
+        (void)kui_disc_vmu_probe_run(executable,executable_bytes,KUI_DISC_LAUNCH_EXEC_ADDRESS,&probe);
+    }
     log("Physical disc VMU preflight: product %s; exact file CRC32 %08" PRIx32
         "; full bytes %" PRIu32 "; program bytes %" PRIu32,
         product,probe.file_crc32,probe.file_bytes,probe.program_bytes);
@@ -108,7 +160,8 @@ static bool selected_card(const char *product,const void *executable,uint32_t ex
     log("Physical disc VMU preflight: proven heap load %08" PRIx32 "; call %08" PRIx32
         "; return %08" PRIx32,probe.call.load,probe.call.call,probe.call.return_pr);
     if(!compatible) {
-        snprintf(refusal,KUI_DISC_LAUNCHER_REFUSAL_BYTES,"%s",probe_refusal(probe.stage));
+        snprintf(refusal,KUI_DISC_LAUNCHER_REFUSAL_BYTES,"%s",probe.stage==KUI_DISC_VMU_PROBE_READY?
+            "Virtual VMU unsupported: complete lifetime proof. R: Save Log; disable VMU in Options.":probe_refusal(probe.stage));
         return false;
     }
     if(cancel() || !kui_sd_connect()) return false;
@@ -123,6 +176,30 @@ static bool selected_card(const char *product,const void *executable,uint32_t ex
     else if(card && card->choice.problem[0]) log("Physical disc virtual VMU: %s",card->choice.problem);
     if(card) {memset(card,0,sizeof(*card));free(card);}
     return ok;
+}
+static bool disc_vmu_seed_prepare(const struct disc_vmu_preflight *preflight,
+    struct kui_runtime_image *image,struct kui_app_status *out,kui_log_fn log,
+    kui_cancel_fn cancel,kui_app_progress_fn progress) {
+    struct kui_disc_launch_plan plan;
+    if(cancel() || !preflight->ready || !image->data ||
+       image->info.payload_bytes<KUI_DISC_LAUNCH_CONFIG_OFFSET+KUI_DISC_LAUNCH_CONFIG_BYTES ||
+       !kui_disc_launch_decode((const uint8_t *)image->data+KUI_DISC_LAUNCH_CONFIG_OFFSET,&plan) ||
+       plan.flags!=KUI_DISC_LAUNCH_VMU_FLAGS || plan.payload_bytes!=image->info.payload_bytes ||
+       plan.module_bytes>image->info.payload_bytes) {
+        kui_runtime_free(image);
+        return failure(out,"Disc VMU mapping handoff stopped or invalid; no game launched.",cancel,progress);
+    }
+    size_t at=kui_vmu_native_cache_seed_find(image->data,plan.module_bytes);
+    if(at!=SIZE_MAX && kui_vmu_native_cache_seed_fill((uint8_t *)image->data+at,
+        KUI_VMU_NATIVE_CACHE_SEED_BYTES,preflight->wire,sizeof(preflight->wire))) {
+        image->info.crc32=kui_stage_crc32(0u,image->data,image->info.payload_bytes);
+        log("Physical disc VMU: complete fresh preflight proof seeded; post-bootstrap image SHA and live ownership remain checked");
+    } else {
+        /* Older modules, a damaged slot or multiple markers get the existing
+         * full cold discovery. A seed miss never skips structural checks. */
+        log("Physical disc VMU: no unique valid mapping seed; retaining complete cold discovery");
+    }
+    return true;
 }
 bool kui_disc_launcher_prepare_vmu(const struct kui_vmu_game_selection *selection,
     struct kui_runtime_image *image,struct kui_app_status *out,kui_log_fn log,
@@ -145,6 +222,9 @@ bool kui_disc_launcher_prepare_vmu(const struct kui_vmu_game_selection *selectio
         NULL,&region,image,out,log,cancel,progress);
     const char *package=slot==KUI_GAME_VMU_SLOT_A1?
         KUI_DISC_LAUNCH_VMU_A1_PACKAGE:KUI_DISC_LAUNCH_VMU_PACKAGE;
-    return kui_disc_launcher_prepare_module(package,selected_card,
-        (void *)selection,&region,image,out,log,cancel,progress);
+    struct disc_vmu_preflight preflight={.selection=selection};
+    bool prepared=kui_disc_launcher_prepare_module(package,selected_card,
+        &preflight,&region,image,out,log,cancel,progress);
+    if(prepared) prepared=disc_vmu_seed_prepare(&preflight,image,out,log,cancel,progress);
+    memset(&preflight,0,sizeof(preflight));return prepared;
 }

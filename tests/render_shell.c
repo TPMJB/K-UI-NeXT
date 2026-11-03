@@ -4,6 +4,8 @@
  * stopped, destination, keyboard, advanced, ripper-settings, video, vmu,
  * memory, network, idle, reset, home-vmu, home-memory, home-network,
  * home-music, home-gd, music, gd-play, gd-confirm, quick-resume, dma-fallback,
+ * gd-cards-linked, gd-cards-empty, gd-cards-imports, gd-cards-link, gd-cards-share,
+ * gd-cards-copy, gd-cards-blank, gd-cards-default, gd-cards-ask, gd-cards-loading, gd-cards-error,
  * music-queued, advanced-destination, clock, clock-confirm, defaults,
  * vmu-restore, vmu-restore-confirm, vmu-card-backup, vmu-image, vmu-image-working,
  * vmu-copy-all, vmu-copy-all-confirm, vmu-copy-all-partial, vmu-import-pick,
@@ -303,7 +305,26 @@ int main(int argc,char **argv) {
         .music_playing=true,.music_volume=75};
     struct kui_app_status status={.complete=true,.passed=true};
     view.music_cache_bytes=1111209;
-    if(!strncmp(argv[1],"vmu-auto-",9)) {
+    if(!strcmp(argv[1],"vmu-save-details") || !strcmp(argv[1],"vmu-save-details-companion") ||
+       !strcmp(argv[1],"vmu-save-details-empty")) {
+        shell.page=KUI_SHELL_VMU_WIZARD;
+        struct kui_vmu_wizard_view *w=&shell.vmu_wizard;
+        w->stage=KUI_VMU_WIZARD_DETAILS;w->details_return_stage=KUI_VMU_WIZARD_GROUPS;
+        w->cards=2u;w->saves_total=10u;w->saves_count=8u;
+        struct kui_vmu_wizard_save *save=&w->saves[0];
+        strcpy(save->name,"SONIC2__S01");strcpy(save->short_description,"MAIN FILE");
+        strcpy(save->long_description,"SONIC ADVENTURE 2 / Main File");strcpy(save->application,"SONIC2");
+        save->slot=1u;save->blocks=18u;save->type=0x33u;save->header_offset=0u;
+        if(!strcmp(argv[1],"vmu-save-details-companion")) {
+            w->saves_page=1u;w->saves_count=2u;
+            strcpy(save->name,"PSO______GCD");strcpy(save->short_description,"GUILD_CARD");
+            strcpy(save->long_description,"Phantasy Star Online Guild Card");strcpy(save->application,"SEGA");
+            save->slot=2u;save->blocks=30u;save->header_offset=1u;
+        } else if(!strcmp(argv[1],"vmu-save-details-empty")) {
+            save->short_description[0]=save->long_description[0]=save->application[0]=0;
+            save->type=0xccu;save->header_offset=1u;
+        }
+    } else if(!strncmp(argv[1],"vmu-auto-",9)) {
         shell.page=KUI_SHELL_VMU_WIZARD;shell.vmu_emulation_known=shell.vmu_emulation_enabled=true;
         struct kui_vmu_wizard_view *w=&shell.vmu_wizard;w->automatic=true;w->cards=w->sources=2;
         w->stage=KUI_VMU_WIZARD_REVIEW;w->selected_games=17;w->variants=18;w->total=17;w->count=8;
@@ -956,6 +977,49 @@ int main(int argc,char **argv) {
         snprintf(shell.vmu_emulation_notice,sizeof(shell.vmu_emulation_notice),
             "Virtual VMU On; disc slot %s. Applies on next launch.",shell.vmu_emulation_slot==KUI_GAME_VMU_SLOT_A1?"A1":"A2");
     }
+    else if(!strncmp(argv[1],"gd-cards-",9)) {
+        shell.page=KUI_SHELL_GD_PLAY;shell.vmu_emulation_known=true;shell.vmu_emulation_enabled=false;
+        (void)kui_shell_input(&shell,KUI_SHELL_START,false);
+        if(!strcmp(argv[1],"gd-cards-loading")) {
+            view.busy=true;view.app_status=&status;strcpy(status.message,"Reading the inserted disc release ID...");
+        } else {
+            struct kui_disc_cards_view cards={.generation=shell.disc_cards_generation,.identified=true,
+                .token=17,.candidates_sequence=9,.count=8,.total=11,.linked_count=11,.default_pair=11};
+            cards.status.complete=cards.status.passed=true;cards.metadata.ip_valid=cards.metadata.native_gd=true;
+            strcpy(cards.product,"MK-51007");strcpy(cards.metadata.product,"MK-51007");
+            strcpy(cards.metadata.title,"TOY COMMANDER");strcpy(cards.metadata.region,"JUE");
+            strcpy(cards.metadata.version,"V1.000");cards.signature[0]=0x67;
+            cards.storage.card_sectors=1000000;cards.storage.partition_first=2048;cards.storage.partition_end=999000;
+            cards.storage.cid[0]=0x42;cards.storage.high_capacity=1;
+            static const char *const names[]={"White VMU / main progress","Black VMU / alternate run","Mission medal collection",
+                "Imported card / family saves","Weekend playthrough","Original VMU backup","Challenge run saves","Shared game card"};
+            bool imports=!strcmp(argv[1],"gd-cards-imports") || !strcmp(argv[1],"gd-cards-link") ||
+                !strcmp(argv[1],"gd-cards-share") || !strcmp(argv[1],"gd-cards-copy");
+            cards.stage=imports?KUI_DISC_CARDS_IMPORTS_STAGE:KUI_DISC_CARDS_LINKED_STAGE;
+            for(unsigned i=0;i<cards.count;i++) {
+                struct kui_disc_cards_row *row=&cards.rows[i];row->identity[0]=11+i;row->pair=11+i;
+                row->active=!imports || i==0;row->linked=!imports;row->readable=true;row->suggested=imports && i==1;
+                row->link_copies=imports && i!=0;
+                row->is_default=!imports && row->pair==cards.default_pair;row->files=7+i;row->free_blocks=123-i*7;
+                snprintf(row->path,sizeof(row->path),"0:/KUI/%s/%c%04u/card.vmd",row->active?"vmu-test":"vmu/cards",row->active?'p':'v',row->pair);
+                snprintf(row->label,sizeof(row->label),"%s",names[i]);strcpy(row->contents,"Toy Commander / medal and mission progress");
+            }
+            if(!strcmp(argv[1],"gd-cards-empty")) cards.count=cards.total=cards.linked_count=cards.default_pair=0;
+            if(!strcmp(argv[1],"gd-cards-error")) {
+                cards.status.passed=cards.identified=false;cards.count=0;cards.status.errors=1;
+                strcpy(cards.status.message,"Disc changed; refresh before linking or creating a card.");
+            }
+            kui_shell_set_disc_cards(&shell,&cards);shell.disc_cards_selected=1;
+            if(!strcmp(argv[1],"gd-cards-link")) (void)kui_shell_input(&shell,KUI_SHELL_A,false);
+            else if(!strcmp(argv[1],"gd-cards-share")) {shell.disc_cards_selected=0;(void)kui_shell_input(&shell,KUI_SHELL_A,false);}
+            else if(!strcmp(argv[1],"gd-cards-copy")) {
+                shell.disc_cards.rows[1].active=true;(void)kui_shell_input(&shell,KUI_SHELL_A,false);
+            }
+            else if(!strcmp(argv[1],"gd-cards-blank")) (void)kui_shell_input(&shell,KUI_SHELL_START,false);
+            else if(!strcmp(argv[1],"gd-cards-default")) (void)kui_shell_input(&shell,KUI_SHELL_A,false);
+            else if(!strcmp(argv[1],"gd-cards-ask")) (void)kui_shell_input(&shell,KUI_SHELL_R,false);
+        }
+    }
     else if(!strncmp(argv[1],"gd-vmu-",7)) {
         shell.page=KUI_SHELL_GD_PLAY;
         (void)kui_shell_input(&shell,KUI_SHELL_A,false);
@@ -1072,18 +1136,27 @@ int main(int argc,char **argv) {
         const char *names[]={"Grandia II","Resident Evil Code Veronica","Sonic Adventure 2","Toy Commander"};
         for(unsigned i=0;i<4;i++) snprintf(shell.vmu_wizard.games[i].title,sizeof(shell.vmu_wizard.games[i].title),"%s",names[i]);
     } else if(!strcmp(argv[1],"vmu-tools") || !strcmp(argv[1],"vmu-tools-a1") || !strcmp(argv[1],"vmu-tools-off") ||
-              !strcmp(argv[1],"vmu-tools-saving") || !strcmp(argv[1],"vmu-tools-unavailable")) {
+              !strcmp(argv[1],"vmu-tools-saving") || !strcmp(argv[1],"vmu-tools-unavailable") ||
+              !strcmp(argv[1],"vmu-tools-physical") || !strcmp(argv[1],"vmu-tools-slot") ||
+              !strcmp(argv[1],"vmu-tools-long-notice")) {
         shell.page=KUI_SHELL_VMU_TOOLS;shell.vmu_tools_selected=4;shell.vmu_emulation_known=true;
         shell.vmu_emulation_enabled=strcmp(argv[1],"vmu-tools-off")!=0;
         if(!strcmp(argv[1],"vmu-tools-a1")) {
             shell.vmu_emulation_slot=KUI_GAME_VMU_SLOT_A1;shell.vmu_tools_selected=5u;
         }
+        if(!strcmp(argv[1],"vmu-tools-physical")) {
+            shell.vmu_tools_selected=1u;shell.vmu_emulation_enabled=false;
+            strcpy(shell.vmu_emulation_notice,"Virtual VMU Off; disc slot A2. Applies on next launch.");
+        } else if(!strcmp(argv[1],"vmu-tools-slot")) shell.vmu_tools_selected=5u;
         if(!strcmp(argv[1],"vmu-tools-saving")) {
             shell.vmu_emulation_loading=true;shell.vmu_emulation_requested=false;
             strcpy(shell.vmu_emulation_notice,"Saving virtual VMU preference...");
         } else if(!strcmp(argv[1],"vmu-tools-unavailable")) {
             shell.vmu_emulation_known=false;
             strcpy(shell.vmu_emulation_notice,"Preference not confirmed. X Reload before changing it.");
+        } else if(!strcmp(argv[1],"vmu-tools-long-notice")) {
+            shell.vmu_emulation_known=false;shell.vmu_tools_selected=1u;
+            strcpy(shell.vmu_emulation_notice,"Preference not confirmed. X Reload before changing it; the previous cards, assignments and game settings are retained.");
         }
     } else if(!strncmp(argv[1],"vmu-wizard-",11)) {
         shell.page=KUI_SHELL_VMU_WIZARD;shell.vmu_wizard_slot=2;shell.vmu_emulation_known=true;

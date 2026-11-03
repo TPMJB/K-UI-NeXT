@@ -82,7 +82,8 @@ def readme(guide, head, public):
     text = re.sub(r"\]\((?![a-z]+:|/|#)([^)]+\.md(?:#[^)]+)?)\)", r"](docs/\1)", text)
     title, _, rest = text.partition("\n")
     return (title + "\n\n" +
-            f"Local build: `{head[:12]}`. Public source commit: `{public}`.\n\n" +
+            (f"Local build: `{head[:12]}`. Public source commit: `{public}`.\n\n" if public else
+             f"Local build: `{head[:12]}`. Source is included in this ZIP; this update is not published to GitHub.\n\n") +
             "Copy only `KUI/runtime.kui` onto the existing SD installation with the console powered off. "
             "No Python installer or loader-module replacement is needed. Before testing, back up the "
             "working runtime and preferences/game-choice metadata (or the complete existing KUI folder). "
@@ -118,7 +119,9 @@ def package(args):
     head = clean_head()
     base = commit(args.base)
     subprocess.run(["git", "merge-base", "--is-ancestor", base, head], cwd=ROOT, check=True)
-    source = public_mapping(head, args.public_commit)
+    source = public_mapping(head, args.public_commit) if args.public_commit else {
+        "local_commit": head, "local_tree": git("rev-parse", head + "^{tree}").decode().strip(),
+        "public_commit": None, "public_tree_mapping": "not published; exact source included in ZIP"}
     baseline = public_mapping(base, args.public_base)
     output = args.output.resolve()
     require(output.suffix.lower() == ".zip", "Output must be a ZIP path")
@@ -190,7 +193,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--base", required=True, help="Local source base commit (abbreviated SHA accepted)")
-    parser.add_argument("--public-commit", required=True)
+    parser.add_argument("--public-commit", help="Published source commit, when available; otherwise package local source only")
     parser.add_argument("--public-base", required=True)
     parser.add_argument("--runtime", type=Path, default=ROOT / "build/runtime.kui")
     parser.add_argument("--elf", type=Path, default=ROOT / "build/kui-runtime.elf")

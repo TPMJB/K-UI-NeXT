@@ -218,6 +218,14 @@ static bool __attribute__((noipa)) native_resolution_replay(void) {
     native_driver=native_cached_resolution.driver;passive_layout=native_cached_resolution.layout;
     native_heap=native_cached_resolution.heap;native_call=native_cached_resolution.call;
     native_exits=native_cached_resolution.exits;
+#if KUI_NATIVE_PHYSICAL_DISC
+    /* Disc installation supports original allocator leases only. A mapping
+     * produced for another module kind must miss before any allocator entry
+     * is dereferenced, even though the shared record codec also admits image
+     * launches' reviewed fixed/arena plans. */
+    if(native_heap.family!=KUI_VMU_NATIVE_HEAP_TAIL32 || !native_heap.initializer_slot)
+        return false;
+#endif
     /* A replayed arena or fixed-arena record must name exactly the plan
      * reviewed for this image; an arena lease has no allocator entries. */
     if(

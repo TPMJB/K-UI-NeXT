@@ -91,8 +91,9 @@ note physical-VMU save/reload and CD audio.
   remain refused. See `shenmue-ii-disc-test.md` for bounded boot-read recovery.
   CD/MIL-CD, Mode 2 and
   Windows CE require later paths.
-- X Check accepts boot files up to **12 MiB**. This first Y Direct boot stage
-  accepts up to **4 MiB**, subject to available contiguous staging RAM.
+- X Check and direct boot accept boot files up to **12 MiB**, subject to
+  available contiguous staging RAM. Direct boot needs matching updated modules
+  for executables above the older 4 MiB module limit.
 - Disc read, metadata, EDC, hashes and handoff admission can refuse the launch.
   Passing host checks does not establish a successful console boot.
 - This build has no resident virtual VMU, no SD save writes, no cheat menu and

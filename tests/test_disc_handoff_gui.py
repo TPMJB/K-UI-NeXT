@@ -85,6 +85,22 @@ int main(void) {
     assert(packet_calls==1u);
     assert(strstr(probe_handoff_refusal(0x8c800000u,0x400000u,0x8cc10000u,false,&payload),"Image-loader"));
     assert(packet_calls==1u);
+    /* Synthetic length only: the known Skies file size plus the largest
+     * admitted VMU module, IP, profile and alignment allowance. The actual
+     * packet/hash tests separately establish the payload's admission. */
+    const size_t large_disc_bytes=5460080u+KUI_DISC_LAUNCH_STAGE_OFFSET+
+        KUI_DISC_LAUNCH_VMU_STAGE_MAX_BYTES+KUI_DISC_LAUNCH_IP_BYTES+
+        KUI_DISC_LAUNCH_VMU_PROFILE_BYTES+32u;
+    const uintptr_t large_source=0x8c800000u;
+    const uintptr_t large_stack=large_source+large_disc_bytes+65536u;
+    assert(large_disc_bytes>0x400000u && large_stack<0x8d000000u);
+    packet_calls=0u;
+    assert(!probe_handoff_refusal(large_source,large_disc_bytes,large_stack,true,&payload));
+    assert(packet_calls==1u);
+    assert(strstr(probe_handoff_refusal(large_source,large_disc_bytes,large_stack,false,&payload),"Image-loader"));
+    assert(packet_calls==1u);
+    refused(large_source,large_disc_bytes,large_stack-4u,"main-stack margin");
+    refused(0x8d000004u-large_disc_bytes,large_disc_bytes,0x8cff0000u,"beyond main RAM");
     size_t image_max=KUI_IMAGE_RESIDENT_BLOB_OFFSET+KUI_IMAGE_RESIDENT_MAX_BYTES;
     assert(!probe_handoff_refusal(0x8c200000u,image_max,0x8cff0000u,false,&payload));
     assert(strstr(probe_handoff_refusal(0x8c200000u,image_max+4u,0x8cff0000u,false,&payload),"Image-loader"));
@@ -108,7 +124,7 @@ int main(void) {
         assert(!music_cache_attempted && music_request_generation==13u);
         assert(music_requested==(mode?-1:2));
     }
-    puts("PASS direct-disc GUI handoff: actual staging bounds, validation ordering, retained failure/Stop routes, explicit memory diagnostics, drained menu cache and idle music recovery");
+    puts("PASS direct-disc GUI handoff: large native payload and staging boundaries, unchanged image-loader limit, validation ordering, retained failure/Stop routes, explicit memory diagnostics, drained menu cache and idle music recovery");
     return 0;
 }
 '''

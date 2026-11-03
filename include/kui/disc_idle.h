@@ -15,10 +15,10 @@ static inline void kui_disc_idle_cancel(struct kui_disc_idle *idle) {
 static inline bool kui_disc_idle_cleanup(unsigned action) {
     return action==12u || action==1u || (action>=4u && action<=7u) || action==22u ||
         action==49u || action==81u || action==96u || action==97u || action==103u ||
-        action==104u || action==105u || (action>=46u && action<=48u);
+        action==104u || action==105u || action==119u || (action>=46u && action<=48u);
 }
 static inline bool kui_disc_idle_inspection(unsigned action) {
-    return action==12u || action==103u || action==105u;
+    return action==12u || action==103u || action==105u || action==119u;
 }
 /* The sole I/O worker owns this state. A successful real read earns one finite
  * idle grace; successful VMU-Off review performs no optical I/O and preserves

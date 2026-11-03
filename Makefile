@@ -827,10 +827,25 @@ build/test-vmu-app: tests/test_vmu_app.c $(CORE) $(DESTINATION) src/core/storage
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie -DKUI_VMU_CAPTURE_TEST_WRAP_CRC=1 $(INCLUDES) -Itests/vmu_stubs -Isrc/dreamcast $(CORE) $(DESTINATION) src/core/storage_probe.c $(FATFS) $(VMU_MANAGEMENT) src/core/hash.c src/apps/vmu.c tests/test_vmu_app.c -Wl,--wrap=kui_crc32,--wrap=kui_vmu_image_pack -o $@
 
+build/test-vmu-menu-backup: tests/test_vmu_menu_backup.c tests/test_vmu_app.c $(CORE) $(DESTINATION) src/core/storage_probe.c $(FATFS) $(VMU_MANAGEMENT) src/core/hash.c src/apps/vmu.c src/apps/vmu_collection.inc include/kui/apps.h include/kui/vmu_read_bounded.h $(wildcard tests/vmu_stubs/dc/*.h tests/vmu_stubs/dc/maple/*.h)
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie -DKUI_VMU_CAPTURE_TEST_WRAP_CRC=1 $(INCLUDES) -Itests/vmu_stubs -Isrc/dreamcast $(CORE) $(DESTINATION) src/core/storage_probe.c $(FATFS) $(VMU_MANAGEMENT) src/core/hash.c src/apps/vmu.c tests/test_vmu_menu_backup.c -Wl,--wrap=kui_crc32,--wrap=kui_vmu_image_pack -o $@
+
+.PHONY: test-vmu-menu-backup
+test-vmu-menu-backup: build/test-vmu-menu-backup
+	python3 tests/test_vmu_menu_backup.py
+
 .PHONY: test-vmu-read-recovery
 test-vmu-read-recovery: build/test-vmu-app
 	python3 tests/test_vmu_read_recovery.py
 	python3 tests/test_vmu_capture_recover.py
+
+.PHONY: test-vmu-match-memory
+test-vmu-match-memory: build/test-vmu-match-memory
+	ASAN_OPTIONS=detect_leaks=0 python3 tests/test_vmu_match_memory.py
+build/test-vmu-match-memory: tests/test_vmu_match_memory.c src/apps/vmu_match_memory.c src/core/vmu_import_plan.c src/core/vmu_image_subset.c src/core/vmu_image.c src/core/hash.c src/core/data.c $(FATFS) include/kui/vmu_match_memory.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) tests/test_vmu_match_memory.c src/apps/vmu_match_memory.c src/core/vmu_import_plan.c src/core/vmu_image_subset.c src/core/vmu_image.c src/core/hash.c src/core/data.c $(FATFS) -Wl,--wrap=f_open,--wrap=f_read,--wrap=f_write,--wrap=f_sync,--wrap=f_rename,--wrap=f_unlink -o $@
 
 build/test-vmu-save-format: tests/test_vmu_save_format.c src/core/vmu_save_format.c src/core/crc16.c include/kui/vmu_import.h include/kui/crc16.h
 	@mkdir -p $(@D)
@@ -1569,6 +1584,32 @@ build/test-disc-vmu-storage: tests/test_disc_vmu_storage.c src/loader/disc_vmu_s
 build/test-disc-launcher: tests/test_disc_launcher.c src/apps/disc_launcher.c $(DISC_BOOT_CORE) src/core/disc_launch.c include/kui/disc_launcher.h include/kui/disc_launch.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) -Isrc/dreamcast tests/test_disc_launcher.c src/apps/disc_launcher.c $(DISC_BOOT_CORE) src/core/disc_launch.c -Wl,--wrap=realloc -o $@
+
+build/test-disc-launch build/test-disc-launch-adversarial build/test-disc-launch-vmu build/test-disc-launcher: include/kui/disc_launch_limits.h
+build/test-disc-boot build/test-disc-launcher: src/loader/stage_fast_crc32.h
+
+.PHONY: test-disc-preflight
+test-disc-preflight: test-disc-large
+	python3 tests/test_disc_vmu_cache_stage.py
+	python3 tests/test_disc_fast_crc.py
+
+.PHONY: test-disc-large
+test-disc-large: build/test-disc-launch build/test-disc-launch-adversarial build/test-disc-launch-vmu build/test-disc-launcher
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-disc-launch
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-disc-launch-adversarial
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-disc-launch-vmu
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-disc-launcher
+	python3 tests/test_disc_handoff_gui.py
+	python3 tests/test_disc_vmu_launcher.py
+
+.PHONY: test-disc-cards
+test-disc-cards: build/test-disc-launcher build/test-shell
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-disc-launcher
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-shell
+	python3 tests/test_disc_cards.py
+	python3 tests/test_disc_cards_dispatch.py
+	python3 tests/test_disc_idle.py
+build/test-shell build/render-shell: include/kui/disc_cards.h
 
 .PHONY: test-disc-vmu
 test-disc-vmu: test-disc-native test-disc-vmu-probe build/test-disc-launch-vmu

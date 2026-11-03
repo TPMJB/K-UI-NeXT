@@ -1536,6 +1536,7 @@ static void music_and_boot_rendering(void) {
     reset(KUI_SHELL_GD_PLAY);render(&v);
     assert(strstr(drawn,"Inserted: MDK2") && strstr(drawn,"A K-UI boot"));
     assert(strstr(drawn,"X Stock retail boot") && strstr(drawn,"Y Options"));
+    assert(strstr(drawn,"START Save cards") && strstr(drawn,"START Cards"));
     assert(!strstr(drawn,"Check native disc") && !strstr(drawn,"Direct boot test"));
     s.page=KUI_SHELL_GD_OPTIONS;s.gd_region_known=s.vmu_emulation_known=true;
     render(&v);assert(strstr(drawn,"Virtual VMU") && strstr(drawn,"Region-free"));
@@ -4374,8 +4375,9 @@ static void games_remembered_selection(void) {
 }
 
 static void small_tools_controls(void) {
-    /* Full image backup includes an empty readable card; existing selected
-     * and all-save actions retain their independent dispatch. */
+    /* Save-image and exact raw backups have separate dispatch. A readable
+     * empty source still exposes both actions; the worker checks its saves.
+     * Selected/all-save bundle actions stay independent. */
     reset(KUI_SHELL_VMU);s.vmu.present=true;
     assert(press(KUI_SHELL_L,true)==KUI_SHELL_MSTATS && s.page==KUI_SHELL_VMU);
     assert(press(KUI_SHELL_L,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_VMU_ACTIONS);
@@ -4384,6 +4386,10 @@ static void small_tools_controls(void) {
     press(KUI_SHELL_DOWN,false);assert(s.vmu_action_selected==2);
     assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE);
     assert(press(KUI_SHELL_A|KUI_SHELL_B,true)==KUI_SHELL_STOP && s.page==KUI_SHELL_VMU_ACTIONS);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_BACKUP_SAVES);
+    s.vmu.present=false;assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    s.vmu.present=true;s.vmu_action_selected=6;
+    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_BACKUP_CARD);
     s.vmu.present=false;assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
     press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_VMU);
@@ -4471,7 +4477,11 @@ static void small_tools_controls(void) {
 static void small_tools_rendering(void) {
     struct kui_shell_view view={0};
     reset(KUI_SHELL_VMU_ACTIONS);s.vmu_action_selected=2;render(&view);
-    assert(strstr(drawn,"Back up card image") && strstr(drawn,"all 128 KiB") && strstr(drawn,"No selected save"));
+    assert(strstr(drawn,"Back up saves to one file") && strstr(drawn,"Back up exact raw image") &&
+        strstr(drawn,"Rebuilds the card layout") && strstr(drawn,"No selected save"));
+    s.vmu_action_selected=6;render(&view);
+    assert(strstr(drawn,"all 256 blocks") && strstr(drawn,"Two full reads must agree") &&
+        strstr(drawn,"unstable free blocks refuse") && !strstr(drawn,"Rebuilds the card layout"));
     reset(KUI_SHELL_VMU_IMAGE);strcpy(s.vmu_image_path,"/KUI/backups/vmu/A1-0001/card.vmd");
     s.vmu_image.present=true;s.vmu_image.count=8;s.vmu_image.total=13;
     for(unsigned i=0;i<8;i++) {
@@ -4510,9 +4520,9 @@ static void vmu_copy_all_controls(void) {
     assert(press(KUI_SHELL_L,true)==KUI_SHELL_MSTATS && s.page==KUI_SHELL_VMU);
     assert(press(KUI_SHELL_L,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_VMU_ACTIONS);
     assert(s.vmu_copy_slot==0);
-    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.vmu_action_selected==5);
+    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.vmu_action_selected==6);
     assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && s.vmu_action_selected==0);
-    press(KUI_SHELL_UP,false);press(KUI_SHELL_UP,false);press(KUI_SHELL_UP,false);
+    press(KUI_SHELL_UP,false);press(KUI_SHELL_UP,false);press(KUI_SHELL_UP,false);press(KUI_SHELL_UP,false);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE); /* No readable source. */
     s.vmu.present=true;
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE); /* Empty source. */
@@ -4804,6 +4814,7 @@ static void vmu_collection_controls(void) {
     reset(KUI_SHELL_VMU);s.vmu_slot=5;s.backups.count=1;
     strcpy(s.backups.entries[0].path,"/KUI/backups/vmu/A1-0001/ORIGINAL.vms");
     assert(press(KUI_SHELL_L,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.vmu_action_selected==6);
     assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.vmu_action_selected==5);
     assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.vmu_action_selected==4);
     assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE);
@@ -4926,7 +4937,8 @@ static void disc_virtual_slot_controls(void) {
      * remains separate when the physical-disc default is changed. */
     s.games_launch_vmu_slot=KUI_GAME_VMU_SLOT_A1;
     s.page=KUI_SHELL_VMU_TOOLS;s.vmu_tools_selected=5u;render(&view);
-    assert(strstr(drawn,"Disc virtual slot: A1") && strstr(drawn,"image games keep their saved slot"));
+    assert(strstr(drawn,"Disc virtual slot\n") && strstr(drawn,"\nA1\n") &&
+        strstr(drawn,"image games keep their saved slot"));
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_EMULATION_SAVE);
     assert(s.vmu_emulation_slot_change && s.vmu_emulation_slot_requested==KUI_GAME_VMU_SLOT_A2);
     kui_shell_set_vmu_emulation_full(&s,s.vmu_emulation_generation,false,KUI_GAME_VMU_SLOT_A2,true,false,NULL);
@@ -5005,10 +5017,11 @@ static void vmu_emulation_controls(void) {
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_EMULATION_LOAD && s.page==KUI_SHELL_VMU_TOOLS);
     kui_shell_set_vmu_emulation(&s,s.vmu_emulation_generation,false,true,false,NULL);
     s.vmu_tools_selected=4;render(&view);
-    assert(strstr(drawn,"Use virtual VMU: Off") && strstr(drawn,"supported native games") &&
-        strstr(drawn,"next launch") && strstr(drawn,"X Reload") && strstr(drawn,"independent of reader"));
+    assert(strstr(drawn,"Use virtual VMU\n") && strstr(drawn,"\nOff\n") &&
+        strstr(drawn,"supported native games") && strstr(drawn,"next launch") &&
+        strstr(drawn,"X Reload") && strstr(drawn,"Independent of reader"));
     s.vmu_emulation_notice[0]=0;render(&view);
-    assert(strstr(drawn,"prefetch settings stay unchanged") && strstr(drawn,"cards are kept"));
+    assert(strstr(drawn,"Independent of reader and prefetch") && strstr(drawn,"cards are kept"));
     assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_HOME);
     puts("PASS VMU emulation preference: confirmed On/Off, stale and duplicate results, uncertain save reload, unchanged reader/cards, and wizard Off state");
 }
@@ -5120,7 +5133,17 @@ static void vmu_wizard_library_scrolling(void) {
 static void vmu_wizard_rendering(void) {
     struct kui_shell_view view={0};reset(KUI_SHELL_VMU_TOOLS);render(&view);
     assert(strstr(drawn,"VMU tools") && strstr(drawn,"Physical VMUs") && strstr(drawn,"Import saves"));
-    s.page=KUI_SHELL_VMU_WIZARD;s.vmu_wizard_slot=7;s.vmu_emulation_known=true;
+    s.vmu_tools_selected=1u;s.vmu_emulation_known=true;s.vmu_emulation_enabled=false;
+    strcpy(s.vmu_emulation_notice,"Virtual VMU Off; disc slot A2. Applies on next launch.");render(&view);
+    assert(strstr(drawn,"Virtual VMUs") && strstr(drawn,"Backups & restore") &&
+        strstr(drawn,"Use virtual VMU\n") && strstr(drawn,"Disc virtual slot\n") &&
+        strstr(drawn,"\nOff\n") && strstr(drawn,"\nA2\n"));
+    assert(!strstr(drawn,"supported native games") && !strstr(drawn,"Virtual VMU Off; disc slot A2."));
+    strcpy(s.vmu_emulation_notice,"Preference not confirmed. X Reload before changing it.");
+    s.vmu_emulation_known=false;render(&view);
+    assert(strstr(drawn,"Unavailable") && strstr(drawn,"Preference not confirmed. X Reload"));
+    s.vmu_emulation_loading=true;render(&view);assert(strstr(drawn,"Reading..."));
+    reset(KUI_SHELL_VMU_WIZARD);s.vmu_wizard_slot=7;s.vmu_emulation_known=true;
     struct kui_vmu_wizard_view *w=&s.vmu_wizard;w->sources=4;w->cards=2;
     w->summary[0]=(struct kui_vmu_wizard_card){.files=20,.blocks=194,.games=3};
     w->summary[1]=(struct kui_vmu_wizard_card){.files=12,.blocks=84,.games=2};
@@ -5338,6 +5361,122 @@ static void disc_vmu_picker_controls(void) {
     assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_DISC_TOOLS);
     puts("PASS disc VMU picker: optical product source, exact versions/default, physical-only comparison, Off without product, blank-card launch, cancellation and stale results");
 }
+static struct kui_disc_cards_view disc_cards_snapshot(void) {
+    struct kui_disc_cards_view v={.stage=KUI_DISC_CARDS_LINKED_STAGE,.identified=true,
+        .token=1234,.candidates_sequence=17,.count=2,.total=2,.linked_count=2,.default_pair=11};
+    v.status.complete=v.status.passed=true;v.metadata.ip_valid=v.metadata.native_gd=true;
+    strcpy(v.product,"MK-51007");strcpy(v.metadata.product,"MK-51007");strcpy(v.metadata.title,"TOY COMMANDER");
+    strcpy(v.metadata.region,"JUE");strcpy(v.metadata.version,"V1.000");v.signature[0]=0x67;
+    v.storage.card_sectors=1000000;v.storage.partition_first=2048;v.storage.partition_end=999000;
+    v.storage.cid[0]=0x42;v.storage.high_capacity=1;
+    for(unsigned i=0;i<v.count;i++) {
+        struct kui_disc_cards_row *row=&v.rows[i];row->pair=11+i;row->identity[0]=11+i;
+        row->active=row->linked=row->readable=true;row->files=9+i;row->free_blocks=100-i;
+        snprintf(row->label,sizeof(row->label),"%s VMU saves",i?"Black":"White");
+        snprintf(row->path,sizeof(row->path),"0:/KUI/vmu-test/p%04u/card.vmd",row->pair);
+        strcpy(row->contents,"Toy Commander progress");row->is_default=row->pair==v.default_pair;
+    }
+    return v;
+}
+static void publish_disc_cards(struct kui_disc_cards_view *v) {
+    v->generation=s.disc_cards_generation;kui_shell_set_disc_cards(&s,v);
+}
+static void disc_cards_controls(void) {
+    struct kui_shell_view view={0};struct kui_disc_cards_view v=disc_cards_snapshot();
+    reset(KUI_SHELL_GD_PLAY);s.vmu_emulation_known=true;s.vmu_emulation_enabled=false;
+    strcpy(s.games_detail.title,"Unrelated SD game");s.gd_auto_launch=true;
+    assert(press(KUI_SHELL_START,true)==KUI_SHELL_NONE && s.page==KUI_SHELL_GD_PLAY);
+    assert(press(KUI_SHELL_START|KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_DISC_CARDS_RUN && s.page==KUI_SHELL_DISC_CARDS);
+    assert(s.disc_cards_loading && s.disc_cards_request.op==KUI_DISC_CARDS_IDENTIFY && !s.disc_cards_request.token);
+    assert(!s.gd_auto_launch && !s.gd_vmu_launch && !s.games_vmu_pick_pending_launch);
+    unsigned first=s.disc_cards_generation;v.generation=first+1;kui_shell_set_disc_cards(&s,&v);
+    assert(s.disc_cards_loading && !s.disc_cards.identified);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && press(KUI_SHELL_START,false)==KUI_SHELL_NONE);
+    publish_disc_cards(&v);assert(!s.disc_cards_loading && !s.vmu_emulation_enabled);
+    render(&view);assert(strstr(drawn,"Disc / linked save cards") && strstr(drawn,"TOY COMMANDER"));
+    assert(strstr(drawn,"MK-51007 / Region JUE / Version V1.000") && strstr(drawn,"White VMU saves"));
+    assert(strstr(drawn,"Y Link imported card") && !strstr(drawn,"Unrelated SD game"));
+    assert(press(0,false)==KUI_SHELL_NONE && press(KUI_SHELL_A|KUI_SHELL_START,false)==KUI_SHELL_NONE);
+    assert(!s.disc_cards_confirming && s.disc_cards_generation==first);
+    assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && s.disc_cards_selected==1);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.disc_cards_confirming);
+    render(&view);assert(strstr(drawn,"Use this card by default?") && strstr(drawn,"Black VMU saves"));
+    assert(press(KUI_SHELL_A|KUI_SHELL_X,false)==KUI_SHELL_NONE && s.disc_cards_generation==first);
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_NONE && press(KUI_SHELL_L,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_B|KUI_SHELL_A,false)==KUI_SHELL_NONE && !s.disc_cards_confirming);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.disc_cards_confirming);
+    /* The reviewed source and storage are owned values, even if UI rows move. */
+    s.disc_cards.rows[1].pair=99;s.disc_cards.rows[1].identity[0]=99;
+    strcpy(s.disc_cards.rows[1].path,"0:/wrong/card.vmd");
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_DISC_CARDS_RUN);
+    assert(s.disc_cards_request.op==KUI_DISC_CARDS_DEFAULT && s.disc_cards_request.pair==12);
+    assert(s.disc_cards_request.identity[0]==12 && !strcmp(s.disc_cards_request.path,v.rows[1].path));
+    assert(s.disc_cards_request.token==v.token && s.disc_cards_request.signature[0]==0x67 &&
+        s.disc_cards_request.storage.cid[0]==0x42 && s.disc_cards_request.candidates_sequence==17 &&
+        !strcmp(s.disc_cards_request.product,"MK-51007"));
+    publish_disc_cards(&v);
+    assert(press(KUI_SHELL_R,false)==KUI_SHELL_NONE && s.disc_cards_confirming);
+    render(&view);assert(strstr(drawn,"Clear the saved default?") && strstr(drawn,"all linked cards are kept"));
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_DISC_CARDS_RUN && s.disc_cards_request.op==KUI_DISC_CARDS_ASK);
+    assert(!s.disc_cards_request.path[0] && !s.disc_cards_request.pair);publish_disc_cards(&v);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE && s.disc_cards_confirming);
+    render(&view);assert(strstr(drawn,"empty 200-block VMU") && strstr(drawn,"No game image or SD rip is required"));
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && !s.disc_cards_confirming);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_DISC_CARDS_RUN && s.disc_cards_request.op==KUI_DISC_CARDS_CREATE);
+    assert(!s.disc_cards_request.path[0] && !s.disc_cards_request.pair);publish_disc_cards(&v);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_DISC_CARDS_RUN && s.disc_cards_request.op==KUI_DISC_CARDS_IMPORTS);
+    v.stage=KUI_DISC_CARDS_IMPORTS_STAGE;v.rows[1].active=v.rows[1].linked=false;v.rows[1].pair=0;v.rows[1].link_copies=true;
+    strcpy(v.rows[1].path,"0:/KUI/vmu/cards/v0002/card.vmd");v.rows[1].suggested=true;
+    publish_disc_cards(&v);s.disc_cards_selected=0;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && !s.disc_cards_confirming);
+    s.disc_cards_selected=1;s.disc_cards.rows[1].readable=false;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && !s.disc_cards_confirming);
+    s.disc_cards.rows[1].readable=true;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE && s.disc_cards_confirming);
+    render(&view);assert(strstr(drawn,"Link this save card?") && strstr(drawn,"imported backup is kept"));
+    assert(strstr(drawn,"Black VMU saves") && strstr(drawn,"Card ID 0C") && strstr(drawn,v.rows[1].path));
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_DISC_CARDS_RUN && s.disc_cards_request.op==KUI_DISC_CARDS_LINK);
+    assert(!strcmp(s.disc_cards_request.path,v.rows[1].path) && !s.disc_cards_request.pair);
+    v=disc_cards_snapshot();publish_disc_cards(&v);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_DISC_CARDS_RUN);v.stage=KUI_DISC_CARDS_IMPORTS_STAGE;
+    v.rows[1].linked=false;publish_disc_cards(&v);s.disc_cards_selected=1;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);render(&view);
+    assert(strstr(drawn,"save changes are shared") && strstr(drawn,"Other games linked to this card"));
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE);
+    s.disc_cards.rows[1].link_copies=true;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);render(&view);
+    assert(strstr(drawn,"separate playable copy; the source is kept") && !strstr(drawn,"changes are shared"));
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_DISC_CARDS_RUN && s.disc_cards_request.op==KUI_DISC_CARDS_LINKED);
+    /* Continuous browsing crosses pages without making any write request. */
+    v=disc_cards_snapshot();v.count=8;v.total=v.linked_count=17;publish_disc_cards(&v);s.disc_cards_selected=7;
+    assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_DISC_CARDS_RUN && s.disc_cards_request.page==1 &&
+        s.disc_cards_request.op==KUI_DISC_CARDS_LINKED);
+    v.page=1;publish_disc_cards(&v);assert(!s.disc_cards_selected);
+    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_DISC_CARDS_RUN && s.disc_cards_select_last);
+    v.page=0;publish_disc_cards(&v);assert(s.disc_cards_selected==7);
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_DISC_CARDS_RUN && s.disc_cards_request.page==1);
+    v.page=1;publish_disc_cards(&v);assert(!s.disc_cards_selected);
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_DISC_CARDS_RUN);v.page=2;v.count=1;publish_disc_cards(&v);
+    assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && press(KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE);
+    /* Failure cannot leave a usable old choice; refresh discards all pins. */
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_DISC_CARDS_RUN && s.disc_cards_request.op==KUI_DISC_CARDS_IDENTIFY);
+    assert(!s.disc_cards_request.token && !s.disc_cards_request.product[0] && !s.disc_cards_request.storage.card_sectors);
+    v.status.passed=false;strcpy(v.status.message,"Disc changed; refresh before linking");publish_disc_cards(&v);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE && press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_NONE && !s.disc_cards_confirming);
+    render(&view);assert(strstr(drawn,"Disc changed; refresh before linking"));
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_DISC_CARDS_RUN);unsigned stopped=s.disc_cards_generation;
+    assert(press(KUI_SHELL_B|KUI_SHELL_A,true)==KUI_SHELL_STOP && s.page==KUI_SHELL_GD_PLAY && !s.disc_cards_loading);
+    v=disc_cards_snapshot();v.generation=stopped;kui_shell_set_disc_cards(&s,&v);
+    assert(s.page==KUI_SHELL_GD_PLAY && !s.gd_auto_launch && press(KUI_SHELL_A,true)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_DISC_CARDS_RUN);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_STOP && s.page==KUI_SHELL_GD_PLAY);
+    assert(!s.vmu_emulation_enabled && s.vmu_emulation_known);
+    puts("PASS disc save-card management: real release view, Off browsing, separate exact-source confirmations, share/copy explanation, pinned requests, read-only pages, refresh and cancelled/stale reply guards");
+}
 static void game_vmu_version_picker_controls(void) {
     struct kui_games_detail detail=launch_detail(false,false);strcpy(detail.product,"T-12345");
     struct kui_vmu_game_info info=chooser_snapshot();
@@ -5455,6 +5594,67 @@ static void vmu_wizard_save_picker_controls(void) {
 }
 
 
+static void vmu_wizard_details_controls(void) {
+    static const enum kui_vmu_wizard_stage origins[]={KUI_VMU_WIZARD_GROUPS,KUI_VMU_WIZARD_GROUP_GAME,KUI_VMU_WIZARD_SAVES};
+    struct kui_shell_view paint={0};
+    for(unsigned origin=0;origin<3u;origin++) {
+        reset(KUI_SHELL_VMU_WIZARD);
+        struct kui_vmu_wizard_view original={.stage=origins[origin],.automatic=true,.cards=2u,.card=1u,
+            .page=1u,.count=8u,.total=20u,.groups_page=1u,.groups_count=2u,.groups_total=10u,
+            .saves_page=1u,.saves_count=8u,.saves_total=20u,.group_index=17u};
+        for(unsigned i=0;i<8u;i++) {
+            original.games[i].index=8u+i;
+            original.saves[i].index=8u+i;strcpy(original.saves[i].name,"SONIC2__S01");
+            strcpy(original.saves[i].short_description,"MAIN FILE");
+            strcpy(original.saves[i].long_description,"SONIC ADVENTURE 2 / Main File");
+        }
+        original.groups[0].index=200u;original.groups[1].index=201u;
+        kui_shell_set_vmu_wizard(&s,&original);
+        unsigned selected=origin==0u?1u:origin==1u?2u:3u;s.vmu_wizard_selected=selected;
+        render(&paint);assert(strstr(drawn,"Y Details"));
+        if(origin==2u) assert(strstr(drawn,"SONIC ADVENTURE 2 / Main File"));
+        assert(press(KUI_SHELL_Y,false)==KUI_SHELL_VMU_WIZARD_RUN &&
+            s.vmu_wizard_request.op==KUI_VMU_WIZARD_OPEN_DETAILS);
+        assert(s.vmu_wizard_request.index==(origin==0u?201u:origin==1u?17u:11u) &&
+            s.vmu_wizard_request.card==1u && s.vmu_wizard_request.page==1u);
+        assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+        struct kui_vmu_wizard_view details=original;details.stage=KUI_VMU_WIZARD_DETAILS;
+        details.details_return_stage=original.stage;details.saves_page=origin==2u?1u:0u;
+        details.saves_count=8u;details.saves_total=20u;details.generation=s.vmu_wizard_generation;
+        for(unsigned i=0;i<8u;i++) {
+            details.saves[i].slot=1u;details.saves[i].blocks=8u;details.saves[i].type=0x33u;
+            details.saves[i].header_offset=2u;strcpy(details.saves[i].application,"SONIC2");
+        }
+        --details.generation;kui_shell_set_vmu_wizard(&s,&details);
+        assert(s.vmu_wizard_loading && s.vmu_wizard.stage==original.stage);
+        ++details.generation;kui_shell_set_vmu_wizard(&s,&details);
+        assert(s.vmu_wizard_selected==(origin==2u?selected:0u));
+        render(&paint);
+        assert(strstr(drawn,"Save details") && strstr(drawn,"Filename: SONIC2__S01") &&
+            strstr(drawn,"Short label: MAIN FILE") && strstr(drawn,"Long description: SONIC ADVENTURE 2 / Main File") &&
+            strstr(drawn,"Application ID: SONIC2") && strstr(drawn,"Source VMU A2") &&
+            strstr(drawn,"8 blocks / 4096 bytes") && strstr(drawn,"Data save (0x33)") &&
+            strstr(drawn,"Header offset: 2 blocks / 1024 bytes") && strstr(drawn,"Your import choices stay as they are"));
+        static const unsigned inert[]={KUI_SHELL_A,KUI_SHELL_X,KUI_SHELL_Y,KUI_SHELL_START,KUI_SHELL_L,KUI_SHELL_R};
+        for(unsigned i=0;i<sizeof(inert)/sizeof(inert[0]);i++) assert(press(inert[i],false)==KUI_SHELL_NONE);
+        s.vmu_wizard_selected=7u;
+        assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_VMU_WIZARD_RUN &&
+            s.vmu_wizard_request.op==KUI_VMU_WIZARD_DETAILS_PAGE &&
+            s.vmu_wizard_request.page==details.saves_page+1u);
+        assert(press(KUI_SHELL_B,true)==KUI_SHELL_STOP);
+        ++details.saves_page;details.generation=s.vmu_wizard_generation;kui_shell_set_vmu_wizard(&s,&details);
+        assert(!s.vmu_wizard_selected);
+        assert(press(KUI_SHELL_UP,false)==KUI_SHELL_VMU_WIZARD_RUN && s.vmu_wizard_select_last);
+        --details.saves_page;details.generation=s.vmu_wizard_generation;kui_shell_set_vmu_wizard(&s,&details);
+        assert(s.vmu_wizard_selected==7u);
+        assert(press(KUI_SHELL_B,false)==KUI_SHELL_VMU_WIZARD_RUN &&
+            s.vmu_wizard_request.op==KUI_VMU_WIZARD_CLOSE_DETAILS);
+        original.generation=s.vmu_wizard_generation;kui_shell_set_vmu_wizard(&s,&original);
+        assert(s.vmu_wizard.stage==origins[origin] && s.vmu_wizard_selected==selected &&
+            s.vmu_wizard.card==1u && s.vmu_wizard.page==1u && s.vmu_wizard.saves_page==1u);
+    }
+    puts("PASS save details: three entry points, full metadata, companion paging, inert assignment buttons, stale guards and exact return selection");
+}
 static void vmu_automatic_import_controls(void) {
     reset(KUI_SHELL_VMU_WIZARD);
     struct kui_vmu_wizard_view w={.automatic=true,.stage=KUI_VMU_WIZARD_GROUPS,.cards=2,.sources=2,
@@ -5849,7 +6049,7 @@ int main(int argc,char **argv) {
         puts("PASS salvage drive settings: default, navigation, wrap, busy guard, boot reset and rendering");return 0;
     }
     vmu_menu_cleanup_controls();game_vmu_card_info_controls();
-    game_vmu_version_picker_controls();disc_vmu_picker_controls();vmu_wizard_save_picker_controls();vmu_automatic_import_controls();
+    game_vmu_version_picker_controls();disc_vmu_picker_controls();disc_cards_controls();vmu_wizard_save_picker_controls();vmu_wizard_details_controls();vmu_automatic_import_controls();
     disc_virtual_slot_controls();vmu_emulation_controls();
     vmu_wizard_controls();vmu_wizard_library_scrolling();vmu_wizard_publication_lock();vmu_wizard_rendering();
     if(argc==2 && !strcmp(argv[1],"--vmu-wizard")) return 0;

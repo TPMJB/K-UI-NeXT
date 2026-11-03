@@ -368,6 +368,12 @@ static bool capture_image(struct session *s,uint8_t *data,bool compare) {
     if(vmufs_mutex_unlock()!=0) return fail(s,"Cannot unlock VMU image reader");
     return ok;
 }
+/* Defined beside the importer's shared recovery machinery below. The menu
+ * pins its listed snapshot; it does not restart a fresh wizard capture. */
+static bool capture_save_image(struct session *s,const struct snapshot *snap,
+    struct snapshot *check,uint8_t *data);
+static bool capture_backup_save(struct session *s,const struct snapshot *snap,
+    struct snapshot *check,const uint8_t *entry,uint8_t *data);
 void kui_vmu_app_run(unsigned action,unsigned slot,unsigned page,unsigned selected,
     struct kui_vmu_view *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
     if(!out) return;
@@ -376,7 +382,7 @@ void kui_vmu_app_run(unsigned action,unsigned slot,unsigned page,unsigned select
     struct session s={out,log,cancel,progress,NULL,slot/2,slot%2+1,false};
     struct snapshot *snap=NULL,*check=NULL;uint8_t *data=NULL;
     bool connected=false,mounted=false,ok=false;FATFS fs;
-    if(slot>=8 || action>3) {fail(&s,"Invalid VMU slot or action");goto done;}
+    if(slot>=8 || action>4) {fail(&s,"Invalid VMU slot or action");goto done;}
     if(cancelled(&s)) goto done;
     s.device=maple_enum_dev((int)s.port,(int)s.unit);
     if(!s.device || !s.device->valid || !(s.device->info.functions&MAPLE_FUNC_MEMCARD)) {
@@ -404,9 +410,9 @@ void kui_vmu_app_run(unsigned action,unsigned slot,unsigned page,unsigned select
     if(action==1 && (page!=out->page || selected>=out->count)) {
         fail(&s,"Selected VMU save is no longer available");goto done;
     }
-    if(action==3) out->status.total=IMAGE_BYTES;
+    if(action>=3) out->status.total=IMAGE_BYTES;
     unsigned first=action==1?page*KUI_VMU_ROWS+selected:0,end=action==1?first+1:snap->count;
-    for(unsigned i=first;action!=3 && i<end;i++) out->status.total+=(uint64_t)le16(snap->directory+snap->entries[i]*32+24)*BLOCK_BYTES;
+    for(unsigned i=first;action<3 && i<end;i++) out->status.total+=(uint64_t)le16(snap->directory+snap->entries[i]*32+24)*BLOCK_BYTES;
     check=malloc(sizeof(*check));
     if(!check) {fail(&s,"Not enough RAM for VMU verification");goto done;}
     kui_sd_set_params(KUI_STORAGE_AUTO,true);
@@ -416,26 +422,39 @@ void kui_vmu_app_run(unsigned action,unsigned slot,unsigned page,unsigned select
     mounted=true;
     char folder[KUI_DEST_JOB_CAP];
     if(!new_folder(&s,folder)) goto done;
-    if(action==3) {
+    if(action>=3) {
+        bool saves_only=action==4;
         data=malloc(IMAGE_BYTES);
         if(!data) {fail(&s,"Not enough RAM for complete VMU image");goto done;}
-        status(&s,"Reading all 256 VMU blocks...");
-        if(!capture_image(&s,data,false) || !capture_image(&s,data,true) || !check_snapshot(&s,snap,check)) goto done;
-        char path[KUI_DEST_PATH_CAP];snprintf(path,sizeof(path),"%s/card.vmd",folder);
-        status(&s,"Saving and verifying complete VMU image...");
+        status(&s,saves_only?"Reading and checking all VMU saves...":"Reading all 256 VMU blocks...");
+        if(saves_only) {
+            if(!capture_save_image(&s,snap,check,data)) goto done;
+        } else if(!capture_image(&s,data,false) || !capture_image(&s,data,true)) goto done;
+        if(!check_snapshot(&s,snap,check)) goto done;
+        const char *leaf=saves_only?"saves.vmd":"card.vmd";
+        char path[KUI_DEST_PATH_CAP];snprintf(path,sizeof(path),"%s/%s",folder,leaf);
+        status(&s,saves_only?"Saving and verifying VMU saves image...":"Saving and verifying complete VMU image...");
         if(!save_file(&s,path,data,IMAGE_BYTES)) goto done;
         strcpy(out->backup_path,path);
         uint8_t proof[32]={0};memcpy(proof,"KUIVMD1",7);
         put32(proof+8,IMAGE_BYTES);put32(proof+12,kui_crc32(0,data,IMAGE_BYTES));
         put32(proof+28,kui_crc32(0,proof,28));
-        snprintf(path,sizeof(path),"%s/card.vmd.crc",folder);
+        snprintf(path,sizeof(path),"%s/%s.crc",folder,leaf);
         if(!save_file(&s,path,proof,sizeof(proof)) || !check_snapshot(&s,snap,check)) goto done;
         static const uint8_t note[]="K-UI complete 131072-byte raw VMU image, blocks 0..255.\n"
             "Source read only; two full captures agreed; SD reread and CRC verified.\n"
             "No whole-card image restore is implemented. Keep card.vmd.crc with card.vmd.\n";
+        static const uint8_t saves_note[]="K-UI all-saves backup: a rebuilt 131072-byte, 200-block VMU image.\n"
+            "Contains every checked save, original filenames, timestamps and file metadata;\n"
+            "allocation pointers are relocated. Unused flash and physical system bytes\n"
+            "are not copied. This is not an exact raw image of the physical VMU.\n"
+            "Source read only. Payloads were independently reread; later differences\n"
+            "require three fresh matching whole-save copies within six acquisitions.\n"
+            "SD files were reread byte-for-byte and CRC verified. Keep saves.vmd.crc.\n"
+            "Browse saves.vmd in K-UI to extract saves; whole-card restore is unavailable.\n";
         snprintf(path,sizeof(path),"%s/complete.txt",folder);
-        if(!save_file(&s,path,note,sizeof(note)-1)) goto done;
-        out->status.done=IMAGE_BYTES;status(&s,"Verified full-card VMD: %s",out->backup_path+2);ok=true;goto done;
+        if(!save_file(&s,path,saves_only?saves_note:note,saves_only?sizeof(saves_note)-1:sizeof(note)-1)) goto done;
+        out->status.done=IMAGE_BYTES;status(&s,saves_only?"Verified saves VMD: %s":"Verified full-card VMD: %s",out->backup_path+2);ok=true;goto done;
     }
     if(log) log("VMU backup: %s (.vms raw payload; .dir original metadata; no VMU writes)",folder+2);
     for(unsigned i=first;i<end;i++) {
@@ -445,7 +464,7 @@ void kui_vmu_app_run(unsigned action,unsigned slot,unsigned page,unsigned select
         status(&s,"Reading %s (%u/%u)...",name,i-first+1,end-first);
         data=malloc(bytes);
         if(!data) {fail(&s,"Not enough RAM for VMU save payload");goto done;}
-        if(!read_save(&s,snap,entry,data) || !check_snapshot(&s,snap,check)) goto done;
+        if(!capture_backup_save(&s,snap,check,entry,data)) goto done;
         status(&s,"Saving and rereading %s...",name);
         snprintf(path,sizeof(path),"%s/%s.dir",folder,base);
         if(!save_file(&s,path,entry,32)) goto done;
@@ -467,7 +486,8 @@ void kui_vmu_app_run(unsigned action,unsigned slot,unsigned page,unsigned select
         "All saved files were closed, reopened and compared byte-for-byte\n"
         "with the VMU bytes read, with CRC32 also checked. The .crc proof\n"
         "records protect the metadata and payload for restore. Preserve them.\n"
-        "The VMU was read only during this backup.\n";
+        "Source saves were independently reread, with bounded whole-save recovery\n"
+        "on later differences. The VMU was read only during this backup.\n";
     char marker[KUI_DEST_PATH_CAP];snprintf(marker,sizeof(marker),"%s/complete.txt",folder);
     if(!save_file(&s,marker,note,sizeof(note)-1)) goto done;
     status(&s,"Verified %u saves: %s",end-first,folder+2);ok=true;
@@ -976,6 +996,42 @@ done:
 }
 
 #include "vmu_collection.inc"
+
+static void backup_source(struct collection_source *source,struct session *s) {
+    source->session=s;source->functions=s->device->info.functions;
+    memcpy(&source->info,&s->device->info,sizeof(source->info));
+}
+static bool capture_save_image(struct session *s,const struct snapshot *snap,
+    struct snapshot *check,uint8_t *data) {
+    struct collection_source source;backup_source(&source,s);
+    struct kui_vmu_image_workspace *workspace=malloc(sizeof(*workspace));
+    if(!workspace) return fail(s,"Not enough RAM for VMU saves image");
+    struct kui_vmu_image_summary summary;
+    bool ok=collection_capture(&source,snap,check,true,0u,data,workspace,&summary,false,true);
+    if(ok) {
+        s->out->bulk_total=s->out->bulk_completed=summary.files;
+        s->log("VMU saves image: %u files, %u blocks; rebuilt card, unused flash not copied",
+            summary.files,summary.used_blocks);
+    }
+    free(workspace);return ok;
+}
+/* The individual-file backup uses the same complete-save acquisition and
+ * recovery checks without repacking, preserving its original .dir bytes. */
+static bool capture_backup_save(struct session *s,const struct snapshot *snap,
+    struct snapshot *check,const uint8_t *entry,uint8_t *data) {
+    struct collection_source source;backup_source(&source,s);
+    struct kui_vmu_image_file file={.payload=data,.bytes=(size_t)le16(entry+24u)*BLOCK_BYTES};
+    memcpy(file.entry,entry,sizeof(file.entry));
+    uint32_t *pins=malloc((size_t)le16(entry+24u)*sizeof(*pins));
+    if(!pins) return fail(s,"Not enough RAM for VMU save verification");
+    bool ok=collection_check_snapshot(&source,snap,check) &&
+        collection_payloads(&source,snap,check,&file,1u,false,pins,false) &&
+        collection_check_snapshot(&source,snap,check) &&
+        collection_payloads(&source,snap,check,&file,1u,true,pins,true) &&
+        collection_check_snapshot(&source,snap,check) &&
+        collection_file_pins(&source,&file,1u,file.payload,pins,"retained");
+    free(pins);return ok;
+}
 
 static bool delete_write(struct session *s,const struct snapshot *original,
                          struct snapshot *check,unsigned entry_index) {

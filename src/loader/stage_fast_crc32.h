@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #ifndef KUI_STAGE_FAST_CRC32_H
 #define KUI_STAGE_FAST_CRC32_H
-/* Stage-only IEEE CRC32, polynomial 0xedb88320. The low resident retains
+/* Loader/preparation IEEE CRC32, polynomial 0xedb88320. The low resident retains
  * its compact nibble table. This is the same full-file check, with one
  * table lookup per byte and four bytes per loop instead of two lookups.
  * No game cache or timer control is changed for verification. */

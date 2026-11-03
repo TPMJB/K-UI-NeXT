@@ -3,6 +3,15 @@
 #include "kui/hash.h"
 #include <string.h>
 
+#if defined(KUI_DISC_STAGE_FAST_CRC32) && KUI_DISC_STAGE_FAST_CRC32
+/* Disc preparation and bootstraps opt into the existing full-equivalent
+ * table CRC. Other callers retain the compact implementation by default. */
+#include "stage_fast_crc32.h"
+#define launch_crc32 kui_stage_crc32
+#else
+#define launch_crc32 kui_crc32
+#endif
+
 static uint32_t word(const uint8_t *p) {
     return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24;
 }
@@ -45,7 +54,10 @@ static bool capability(const uint8_t *p,size_t bytes) {
         KUI_DISC_LAUNCH_VMU_STAGE_MAX_BYTES:KUI_DISC_LAUNCH_STAGE_MAX_BYTES;
     if((flags!=KUI_DISC_LAUNCH_FLAGS && flags!=KUI_DISC_LAUNCH_VMU_FLAGS) ||
        bytes>KUI_DISC_LAUNCH_STAGE_OFFSET+limit) return false;
-    return !memcmp(h,"KUIDISC1",8u) && word(h+8u)==1u &&
+    uint32_t executable_limit=word(h+40u);
+    return (executable_limit==KUI_DISC_LAUNCH_EXEC_MAX_BYTES ||
+            executable_limit==KUI_DISC_LAUNCH_LEGACY_EXEC_MAX_BYTES) &&
+        !memcmp(h,"KUIDISC1",8u) && word(h+8u)==1u &&
         word(h+12u)==KUI_DISC_LAUNCH_HEADER_BYTES &&
         word(h+16u)==KUI_DISC_LAUNCH_CONFIG_OFFSET &&
         word(h+20u)==KUI_DISC_LAUNCH_CONFIG_BYTES &&
@@ -53,7 +65,6 @@ static bool capability(const uint8_t *p,size_t bytes) {
         word(h+28u)==bytes-KUI_DISC_LAUNCH_STAGE_OFFSET &&
         word(h+32u)==KUI_DISC_LAUNCH_STAGE_ADDRESS &&
         word(h+36u)==KUI_DISC_LAUNCH_EXEC_ADDRESS &&
-        word(h+40u)==KUI_DISC_LAUNCH_EXEC_MAX_BYTES &&
         word(h+44u)==KUI_DISC_LAUNCH_STACK &&
         word(h+48u)==KUI_DISC_LAUNCH_STAGE_OFFSET &&
         !word(h+56u) && !word(h+60u);
@@ -73,7 +84,7 @@ bool kui_disc_launch_layout(const void *module,size_t bytes,uint32_t executable_
     plan.exec_offset=plan.ip_offset+KUI_DISC_LAUNCH_IP_BYTES;
     plan.exec_bytes=executable_bytes;
     /* Reject the size before rounding so no input can wrap the addition. */
-    if(executable_bytes>KUI_DISC_LAUNCH_EXEC_MAX_BYTES) return false;
+    if(executable_bytes>word(p+KUI_DISC_LAUNCH_HEADER_OFFSET+40u)) return false;
     plan.payload_bytes=(plan.exec_offset+executable_bytes+3u)&~3u;
     if(plan.flags==KUI_DISC_LAUNCH_VMU_FLAGS) {
         plan.vmu_profile_offset=(plan.payload_bytes+31u)&~31u;
@@ -96,7 +107,7 @@ bool kui_disc_launch_encode(uint8_t packet[KUI_DISC_LAUNCH_CONFIG_BYTES],
     memcpy(packet+48u,p->ip_sha256,32u);memcpy(packet+80u,p->exec_sha256,32u);
     put(packet+116u,p->vmu_profile_offset);put(packet+120u,p->vmu_profile_bytes);put(packet+124u,p->vmu_transport);
     memcpy(packet+128u,p->vmu_profile_sha256,32u);
-    put(packet+112u,kui_crc32(0u,packet,KUI_DISC_LAUNCH_CONFIG_BYTES));return true;
+    put(packet+112u,launch_crc32(0u,packet,KUI_DISC_LAUNCH_CONFIG_BYTES));return true;
 }
 bool kui_disc_launch_decode(const uint8_t packet[KUI_DISC_LAUNCH_CONFIG_BYTES],
     struct kui_disc_launch_plan *out) {
@@ -107,7 +118,7 @@ bool kui_disc_launch_decode(const uint8_t packet[KUI_DISC_LAUNCH_CONFIG_BYTES],
         return false;
     uint8_t copy[KUI_DISC_LAUNCH_CONFIG_BYTES];memcpy(copy,packet,sizeof(copy));
     uint32_t crc=word(copy+112u);put(copy+112u,0u);
-    if(kui_crc32(0u,copy,sizeof(copy))!=crc) return false;
+    if(launch_crc32(0u,copy,sizeof(copy))!=crc) return false;
     for(unsigned i=160u;i<sizeof(copy);i++) if(copy[i]) return false;
     struct kui_disc_launch_plan p={0};
     p.module_bytes=word(packet+16u);p.payload_bytes=word(packet+20u);
@@ -121,7 +132,7 @@ bool kui_disc_launch_decode(const uint8_t packet[KUI_DISC_LAUNCH_CONFIG_BYTES],
     *out=p;return true;
 }
 static bool fingerprint(const uint8_t *p,size_t bytes,uint32_t crc,const uint8_t digest[32]) {
-    if(kui_crc32(0u,p,bytes)!=crc) return false;
+    if(launch_crc32(0u,p,bytes)!=crc) return false;
     struct kui_sha256 s;uint8_t actual[32];
     kui_sha256_init(&s);kui_sha256_update(&s,p,bytes);kui_sha256_digest(&s,actual);
     return !memcmp(actual,digest,sizeof(actual));
@@ -148,6 +159,7 @@ bool kui_disc_launch_validate(const void *payload,size_t bytes,struct kui_disc_l
     const uint8_t *p=payload;struct kui_disc_launch_plan plan;
     if(!kui_disc_launch_decode(p+KUI_DISC_LAUNCH_CONFIG_OFFSET,&plan) ||
        bytes!=plan.payload_bytes || !capability(p,plan.module_bytes) ||
+       plan.exec_bytes>word(p+KUI_DISC_LAUNCH_HEADER_OFFSET+40u) ||
        word(p+KUI_DISC_LAUNCH_HEADER_OFFSET+52u)!=plan.flags ||
        !native_ip(p+plan.ip_offset)) return false;
     for(unsigned i=plan.module_bytes;i<plan.ip_offset;i++) if(p[i]) return false;
