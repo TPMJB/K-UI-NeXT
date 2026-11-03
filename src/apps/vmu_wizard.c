@@ -24,6 +24,7 @@ struct wizard_card {
     struct kui_vmu_import_plan *plan;
     struct kui_vmu_import_matches *matches;
     uint8_t decisions[KUI_VMU_IMAGE_DIRECTORY_ENTRIES];
+    uint8_t confirmed[KUI_VMU_IMAGE_DIRECTORY_ENTRIES];
     struct kui_vmu_wizard_card summary;
     unsigned source_slot,archive_floor;
     bool archive_attempted;
@@ -47,6 +48,9 @@ struct wizard_session {
     enum kui_vmu_wizard_stage stage;
     bool catalogued,publication_started,existing_card,copy_on_commit,view_only,automatic;
     unsigned save_game,save_page,group_page,group_index;
+    enum kui_vmu_wizard_stage details_return_stage;
+    unsigned details_card,details_page,details_group;
+    bool details_filtered;
     struct kui_vmu_game_candidates_repair *repair;
     bool missing_question,repair_confirmed;
     unsigned source_pair;
@@ -184,10 +188,21 @@ static void group_reason(const struct kui_vmu_import_match_group *group,char out
     const char *reason=group->reasons&KUI_VMU_IMPORT_MATCH_CONFLICT?"Save metadata names different games; choose its game":
         group->reasons&KUI_VMU_IMPORT_MATCH_AMBIGUOUS?"More than one game matches; choose the right release":
         group->reasons&KUI_VMU_IMPORT_MATCH_UNSUPPORTED?"The matching game cannot use this native virtual VMU":
+        group->reasons&KUI_VMU_IMPORT_MATCH_KNOWN_MISSING?"Game not found in library; keep its backup or choose a game":
         group->reasons&KUI_VMU_IMPORT_MATCH_TRUNCATED?"The saved title is incomplete; choose its game":
         group->state==KUI_VMU_IMPORT_MATCH_AUTO?"This game's choices were edited; review this additional source":
         "No unique game match; choose its game or keep only the backup";
     snprintf(out,96,"%s",reason);
+}
+static void save_row(struct kui_vmu_wizard_save *row,const struct kui_vmu_import_entry *entry,
+    unsigned source_slot,unsigned index) {
+    row->index=index;row->slot=source_slot;row->blocks=entry->blocks;row->type=entry->type;
+    row->header_offset=entry->header_offset;
+    memcpy(row->name,entry->name,sizeof(row->name));
+    memcpy(row->short_description,entry->short_description,sizeof(row->short_description));
+    memcpy(row->long_description,entry->long_description,sizeof(row->long_description));
+    memcpy(row->application,entry->application,sizeof(row->application));
+    row->suggested=entry->hints!=0;
 }
 static void view(struct operation *s,unsigned generation) {
     struct kui_vmu_wizard_view *out=s->out;
@@ -255,11 +270,22 @@ static void view(struct operation *s,unsigned generation) {
         for(unsigned i=wizard.save_page*KUI_VMU_WIZARD_ROWS;plan && i<plan->entry_count && out->saves_count<KUI_VMU_WIZARD_ROWS;i++) {
             const struct kui_vmu_import_entry *entry=plan->entries+i;
             struct kui_vmu_wizard_save *row=&out->saves[out->saves_count++];
-            row->index=i;row->slot=entry->slot;row->blocks=entry->blocks;row->type=entry->type;
-            memcpy(row->name,entry->name,sizeof(row->name));
-            memcpy(row->short_description,entry->short_description,sizeof(row->short_description));
-            memcpy(row->long_description,entry->long_description,sizeof(row->long_description));
-            row->picked=picked(game,wizard.card,i);row->suggested=entry->hints!=0;
+            save_row(row,entry,wizard.cards[wizard.card].source_slot,i);
+            row->picked=picked(game,wizard.card,i);
+        }
+    }
+    if(wizard.stage==KUI_VMU_WIZARD_DETAILS && wizard.details_card<wizard.card_count) {
+        const struct wizard_card *source=&wizard.cards[wizard.details_card];
+        const struct kui_vmu_import_match_group *group=wizard.details_filtered?group_at(wizard.details_group,NULL,NULL):NULL;
+        out->details_return_stage=wizard.details_return_stage;out->saves_page=wizard.details_page;
+        out->group_source_slot=source->source_slot;
+        if(group) memcpy(out->group_label,group->label,sizeof(out->group_label));
+        position=0;start=wizard.details_page*KUI_VMU_WIZARD_ROWS;
+        for(unsigned i=0;source->plan && i<source->plan->entry_count;i++) {
+            if(group && !(group->members[i/8u]&(1u<<(i%8u)))) continue;
+            ++out->saves_total;
+            if(position++<start || out->saves_count==KUI_VMU_WIZARD_ROWS) continue;
+            save_row(&out->saves[out->saves_count++],&source->plan->entries[i],source->source_slot,i);
         }
     }
     out->status.complete=true;
@@ -353,6 +379,7 @@ static void title_text(char *text) {
 }
 static void catalogue_notice(struct operation *s) {
     if(wizard.view_only) notice(s,"%u games use this virtual VMU (read only)",wizard.game_count);
+    else if(!wizard.game_count) notice(s,"No SD game images; known save titles can still be identified");
     else if(wizard.omitted_folders || wizard.unrecognized)
         notice(s,"%u releases; %u unidentified images; %u deeper folders not scanned",
             wizard.game_count,wizard.unrecognized,wizard.omitted_folders);
@@ -377,7 +404,19 @@ static bool catalogue(struct operation *s,const char *root) {
     }
     notice(s,"Finding games in %s",normalized);
     bool ok=kui_games_storage_open(s->log)==KUI_GAMES_STORAGE_OK;
-    if(ok) ok=discover(&scan,normalized,0);
+    if(ok) {
+        ok=discover(&scan,normalized,0);
+        /* An SD used for saves alone may have no Games directory. This is
+         * an empty release catalogue, not a failure to identify save titles. */
+        if(!ok && !scan.failed && !scan.count && !s->out->status.stopped) {
+            char path[KUI_DEST_ROOT_CAP+3u];FILINFO info;
+            int n=snprintf(path,sizeof(path),"0:%s",normalized);
+            if(n>0 && n<(int)sizeof(path)) {
+                FRESULT r=f_stat(path,&info);
+                if(r==FR_NO_FILE || r==FR_NO_PATH) ok=true;
+            }
+        }
+    }
     if(!kui_games_storage_release()) ok=false;
     unsigned count=0,unrecognized=0;
     if(ok && !scan.failed && !stop(s)) {
@@ -419,6 +458,7 @@ static bool catalogue(struct operation *s,const char *root) {
     for(unsigned i=0;i<wizard.card_count;i++) {
         free(wizard.cards[i].matches);wizard.cards[i].matches=NULL;
         memset(wizard.cards[i].decisions,0,sizeof(wizard.cards[i].decisions));
+        memset(wizard.cards[i].confirmed,0,sizeof(wizard.cards[i].confirmed));
     }
     clear_missing();wizard.automatic=false;wizard.group_page=0;
     free(wizard.games);wizard.games=games;wizard.game_count=count;
@@ -678,6 +718,7 @@ static void assign_match(unsigned source,struct kui_vmu_import_match_group *grou
     for(unsigned i=0;i<WIZARD_PICK_BYTES;i++) game->picks[source][i]|=group->members[i];
     game->accepted=true;game->blank=false;group->game_index=game_index;
 }
+#include "vmu_wizard_memory.inc"
 static bool automatic_plan(struct operation *s) {
     struct kui_vmu_import_match_game *games=calloc(wizard.game_count?wizard.game_count:1u,sizeof(*games));
     struct kui_vmu_import_matches *fresh[KUI_VMU_WIZARD_CARDS]={0};
@@ -697,6 +738,7 @@ static bool automatic_plan(struct operation *s) {
     }
     free(games);
     if(!ok) {for(unsigned i=0;i<wizard.card_count;i++) free(fresh[i]);return false;}
+    if(!remembered_load(s,fresh)) {for(unsigned i=0;i<wizard.card_count;i++) free(fresh[i]);return false;}
     for(unsigned i=0;i<wizard.card_count;i++) if(fresh[i]) {
         clear_missing();wizard.cards[i].matches=fresh[i];
         for(unsigned j=0;j<fresh[i]->group_count;j++) {
@@ -723,6 +765,31 @@ static bool visible_question(unsigned index,unsigned page) {
         }
     return false;
 }
+static bool open_details(struct operation *s,const struct kui_vmu_wizard_request *request) {
+    unsigned source=wizard.card;bool filtered=false;
+    if(request->card!=wizard.card) return fail(s,"Refresh this save view before opening details");
+    if(wizard.stage==KUI_VMU_WIZARD_GROUPS) {
+        if(request->page!=wizard.group_page || !visible_question(request->index,request->page))
+            return fail(s,"Refresh the save groups before opening details");
+        source=request->index/KUI_VMU_IMAGE_DIRECTORY_ENTRIES;filtered=true;
+    } else if(wizard.stage==KUI_VMU_WIZARD_GROUP_GAME) {
+        if(request->page!=wizard.page || request->index!=wizard.group_index || request->group_index!=wizard.group_index)
+            return fail(s,"These details belong to another save group; refresh the picker");
+        source=wizard.group_index/KUI_VMU_IMAGE_DIRECTORY_ENTRIES;filtered=true;
+    } else if(wizard.stage==KUI_VMU_WIZARD_SAVES) {
+        if(source>=wizard.card_count || !wizard.cards[source].plan || request->page!=wizard.save_page ||
+           request->index>=wizard.cards[source].plan->entry_count ||
+           request->index/KUI_VMU_WIZARD_ROWS!=wizard.save_page)
+            return fail(s,"Refresh the save list before opening details");
+    } else return fail(s,"Open a save list or unresolved group before viewing details");
+    if(source>=wizard.card_count || !wizard.cards[source].plan)
+        return fail(s,"Captured save metadata is unavailable");
+    if(filtered && !group_at(request->index,NULL,NULL)) return fail(s,"Save group is unavailable");
+    wizard.details_return_stage=wizard.stage;wizard.details_card=source;
+    wizard.details_filtered=filtered;wizard.details_group=request->index;
+    wizard.details_page=filtered?0u:wizard.save_page;wizard.stage=KUI_VMU_WIZARD_DETAILS;
+    notice(s,"Save metadata is display text; it does not verify which game owns it");return true;
+}
 static void after_question(struct operation *s) {
     group_page(wizard.group_page);wizard.page=0;
     wizard.stage=question_count(NULL)?KUI_VMU_WIZARD_GROUPS:KUI_VMU_WIZARD_REVIEW;
@@ -742,7 +809,7 @@ static bool resolve_group(struct operation *s,const struct kui_vmu_wizard_reques
     struct wizard_card *source=NULL;unsigned ordinal=0;
     struct kui_vmu_import_match_group *group=group_at(index,&source,&ordinal);
     if(!group || source->decisions[ordinal]!=GROUP_PENDING) return fail(s,"This save group has already been answered");
-    if(skip) {clear_missing();source->decisions[ordinal]=GROUP_SKIPPED;}
+    if(skip) {clear_missing();source->decisions[ordinal]=GROUP_SKIPPED;source->confirmed[ordinal]=0u;}
     else {
         if(request->page!=wizard.page || !picker_visible(group,request->index,wizard.page))
             return fail(s,"Refresh the game picker before selecting this row");
@@ -752,6 +819,7 @@ static bool resolve_group(struct operation *s,const struct kui_vmu_wizard_reques
             return fail(s,"Finish this game's advanced save choices before assigning another group");
         clear_missing();assign_match(index/KUI_VMU_IMAGE_DIRECTORY_ENTRIES,group,request->index);
         source->decisions[ordinal]=GROUP_ASSIGNED;
+        source->confirmed[ordinal]=1u;
     }
     after_question(s);return true;
 }
@@ -1131,12 +1199,15 @@ static bool commit_import(struct operation *s) {
         if(r!=KUI_VMU_GAME_CANDIDATES_OK) ok=candidates_error(s,r,"Could not publish game card choices; prepared cards are retained for retry");
         if(ok) {clear_missing();ok=same_storage(s,false);}
     }
+    bool memory_ok=true;
+    if(ok) memory_ok=remembered_save(s);
     if(!kui_games_storage_release()) {ok=false;fail(s,"Could not release the SD card; choices may be saved, retry to confirm");}
     free(image);free(plans);free(entries);free(work);
     if(ok) {
         wizard.stage=KUI_VMU_WIZARD_DONE;
         for(unsigned i=0;i<wizard.card_count;i++) {free(wizard.cards[i].image);wizard.cards[i].image=NULL;}
         notice(s,count?"Ready: full sources archived; separate game cards and choices saved":"Ready: full source backups saved; no game cards were created");
+        if(!memory_ok) notice(s,"Cards and choices saved; some manual matches could not be remembered. See Diagnostics.");
     }
     return ok;
 }
@@ -1148,9 +1219,15 @@ void kui_vmu_wizard_run(const struct kui_vmu_wizard_request *request,
     if(!out) return;
     memset(out,0,sizeof(*out));struct operation s={out,log,cancel,progress};
     if(!request) {fail(&s,"Missing import request");view(&s,0);return;}
-    if(request->slot<8) wizard.slot=request->slot;
-    if(wizard.stage!=KUI_VMU_WIZARD_SAVES && request->card<wizard.card_count) wizard.card=request->card;
+    if(wizard.stage!=KUI_VMU_WIZARD_DETAILS && request->op!=KUI_VMU_WIZARD_OPEN_DETAILS) {
+        if(request->slot<8) wizard.slot=request->slot;
+        if(wizard.stage!=KUI_VMU_WIZARD_SAVES && request->card<wizard.card_count) wizard.card=request->card;
+    }
     if(stop(&s)) {view(&s,request->generation);return;}
+    if(wizard.stage==KUI_VMU_WIZARD_DETAILS && request->op!=KUI_VMU_WIZARD_DETAILS_PAGE &&
+       request->op!=KUI_VMU_WIZARD_CLOSE_DETAILS) {
+        fail(&s,"Save details are read only; return to the previous view first");view(&s,request->generation);return;
+    }
     if(wizard.view_only && (request->op==KUI_VMU_WIZARD_CAPTURE || request->op==KUI_VMU_WIZARD_TOGGLE ||
        request->op==KUI_VMU_WIZARD_SHOW_SOURCES || request->op==KUI_VMU_WIZARD_SHOW_REVIEW ||
        request->op==KUI_VMU_WIZARD_COMMIT || request->op==KUI_VMU_WIZARD_OPEN_SAVES ||
@@ -1196,7 +1273,10 @@ void kui_vmu_wizard_run(const struct kui_vmu_wizard_request *request,
             } else if(automatic_plan(&s)) {
                 group_page(0);wizard.page=0;
                 wizard.stage=question_count(NULL)?KUI_VMU_WIZARD_GROUPS:KUI_VMU_WIZARD_REVIEW;
-                notice(&s,"%u games ready; %u save groups need a game",selected_count(),question_count(NULL));
+                unsigned remembered=remembered_count();
+                if(remembered) notice(&s,"%u games ready; %u groups need a game; %u remembered matches",
+                    selected_count(),question_count(NULL),remembered);
+                else notice(&s,"%u games ready; %u save groups need a game",selected_count(),question_count(NULL));
             }
         }
         break;
@@ -1211,6 +1291,23 @@ void kui_vmu_wizard_run(const struct kui_vmu_wizard_request *request,
     }
     case KUI_VMU_WIZARD_OPEN_SAVES:
         (void)open_saves(&s,request);break;
+    case KUI_VMU_WIZARD_OPEN_DETAILS:
+        (void)open_details(&s,request);break;
+    case KUI_VMU_WIZARD_DETAILS_PAGE: {
+        if(wizard.stage!=KUI_VMU_WIZARD_DETAILS || wizard.details_card>=wizard.card_count) {
+            fail(&s,"Open save details before changing the member page");break;
+        }
+        const struct kui_vmu_import_match_group *group=wizard.details_filtered?group_at(wizard.details_group,NULL,NULL):NULL;
+        unsigned total=group?group->files:wizard.cards[wizard.details_card].plan->entry_count;
+        if(request->card!=wizard.card || !total || request->page>(total-1u)/KUI_VMU_WIZARD_ROWS)
+            fail(&s,"Refresh save details before choosing this member page");
+        else wizard.details_page=request->page;
+        break;
+    }
+    case KUI_VMU_WIZARD_CLOSE_DETAILS:
+        if(wizard.stage!=KUI_VMU_WIZARD_DETAILS) fail(&s,"There are no save details to close");
+        else {wizard.stage=wizard.details_return_stage;notice(&s,"Returned to the same save choices; nothing was changed");}
+        break;
     case KUI_VMU_WIZARD_TOGGLE_SAVE:
         (void)toggle_save(&s,request);break;
     case KUI_VMU_WIZARD_ACCEPT_SAVES:

@@ -1,7 +1,10 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* Real wizard/import-plan/subset/pack/key code, fake read-only devices and publishers.
  * Tests control ownership and interrupted multi-card publication, without
- * mirroring the separately tested FatFs card-service implementation. */
+ * mirroring the separately tested FatFs card-service implementation.
+ * Optional remembered-match persistence is an absent/success service mock;
+ * its real fingerprint remains linked. Persistent behavior is covered by
+ * test_vmu_match_memory.py and test_vmu_wizard_filesystems.py. */
 #include "kui/vmu_wizard.h"
 #include "kui/vmu_game_card_service.h"
 #include "kui/vmu_game_candidates.h"
@@ -12,6 +15,7 @@
 #include "kui/clock.h"
 #include "kui/vmu_backing.h"
 #include "kui/vmu_library.h"
+#include "kui/vmu_match_memory.h"
 #include "kui/media.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -37,6 +41,7 @@ static uint32_t published_crc[64];
 static unsigned library_reads,card_kind,assignment_mode;
 static bool target_changed,swap_storage_on_read,allocation_error,cancel_on_assignment,cancel_latched;
 static uint8_t opened_bytes[KUI_VMU_GAME_ASSIGN_WIRE_BYTES];
+static unsigned memory_lookups,memory_publications;
 #define CHECK(x) do {++checks;if(!(x)){fprintf(stderr,"%s:%u: %s\n",__FILE__,__LINE__,#x);exit(1);}} while(0)
 static bool cancelled(void) {return cancel_latched || (cancel_after && ++cancel_calls>=cancel_after);}
 static void log_line(const char *format,...) {(void)format;}
@@ -49,6 +54,23 @@ const struct kui_volume *kui_media_volume(void) {return &volume;}
 bool kui_sd_vmu_profile_identity(struct kui_vmu_sd_identity *out) {
     CHECK(mounted);memset(out,0,sizeof(*out));out->cid[0]=(uint8_t)cid;
     out->sectors=131072;out->high_capacity=true;return true;
+}
+/* This unit fixture models a card without previously remembered choices.
+ * Production wizard logic still decides when lookup/learning is allowed;
+ * actual durable records and failure recovery belong to the filesystem tests. */
+int kui_vmu_match_memory_load(const struct kui_vmu_import_plan *plan,
+    const struct kui_vmu_import_match_group *group,struct kui_vmu_match_memory_target *target) {
+    CHECK(mounted && plan && group && target);++memory_lookups;
+    memset(target,0,sizeof(*target));return KUI_VMU_MATCH_MEMORY_MISSING;
+}
+int kui_vmu_match_memory_remember(const struct kui_vmu_import_plan *plan,
+    const struct kui_vmu_import_match_group *group,const struct kui_vmu_match_memory_target *target) {
+    CHECK(mounted && plan && group && target && target->product[0] && target->title[0]);
+    ++memory_publications;return KUI_VMU_MATCH_MEMORY_OK;
+}
+int kui_vmu_match_memory_forget(const struct kui_vmu_import_plan *plan,
+    const struct kui_vmu_import_match_group *group) {
+    CHECK(mounted && plan && group);++memory_publications;return KUI_VMU_MATCH_MEMORY_OK;
 }
 bool kui_vmu_library_path(const char *path) {
     return !strcmp(path,"0:/KUI/vmu-test/p0042/card.vmd") ||
@@ -636,5 +658,6 @@ int main(void) {
     cancel_on_assignment=cancel_latched=false;
     assignment_mode=0;
     automatic_regressions();
+    CHECK(memory_lookups && memory_publications);
     init();printf("VMU wizard: %u checks passed\n",checks);return 0;
 }

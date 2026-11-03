@@ -303,7 +303,26 @@ int main(int argc,char **argv) {
         .music_playing=true,.music_volume=75};
     struct kui_app_status status={.complete=true,.passed=true};
     view.music_cache_bytes=1111209;
-    if(!strncmp(argv[1],"vmu-auto-",9)) {
+    if(!strcmp(argv[1],"vmu-save-details") || !strcmp(argv[1],"vmu-save-details-companion") ||
+       !strcmp(argv[1],"vmu-save-details-empty")) {
+        shell.page=KUI_SHELL_VMU_WIZARD;
+        struct kui_vmu_wizard_view *w=&shell.vmu_wizard;
+        w->stage=KUI_VMU_WIZARD_DETAILS;w->details_return_stage=KUI_VMU_WIZARD_GROUPS;
+        w->cards=2u;w->saves_total=10u;w->saves_count=8u;
+        struct kui_vmu_wizard_save *save=&w->saves[0];
+        strcpy(save->name,"SONIC2__S01");strcpy(save->short_description,"MAIN FILE");
+        strcpy(save->long_description,"SONIC ADVENTURE 2 / Main File");strcpy(save->application,"SONIC2");
+        save->slot=1u;save->blocks=18u;save->type=0x33u;save->header_offset=0u;
+        if(!strcmp(argv[1],"vmu-save-details-companion")) {
+            w->saves_page=1u;w->saves_count=2u;
+            strcpy(save->name,"PSO______GCD");strcpy(save->short_description,"GUILD_CARD");
+            strcpy(save->long_description,"Phantasy Star Online Guild Card");strcpy(save->application,"SEGA");
+            save->slot=2u;save->blocks=30u;save->header_offset=1u;
+        } else if(!strcmp(argv[1],"vmu-save-details-empty")) {
+            save->short_description[0]=save->long_description[0]=save->application[0]=0;
+            save->type=0xccu;save->header_offset=1u;
+        }
+    } else if(!strncmp(argv[1],"vmu-auto-",9)) {
         shell.page=KUI_SHELL_VMU_WIZARD;shell.vmu_emulation_known=shell.vmu_emulation_enabled=true;
         struct kui_vmu_wizard_view *w=&shell.vmu_wizard;w->automatic=true;w->cards=w->sources=2;
         w->stage=KUI_VMU_WIZARD_REVIEW;w->selected_games=17;w->variants=18;w->total=17;w->count=8;
@@ -1072,18 +1091,27 @@ int main(int argc,char **argv) {
         const char *names[]={"Grandia II","Resident Evil Code Veronica","Sonic Adventure 2","Toy Commander"};
         for(unsigned i=0;i<4;i++) snprintf(shell.vmu_wizard.games[i].title,sizeof(shell.vmu_wizard.games[i].title),"%s",names[i]);
     } else if(!strcmp(argv[1],"vmu-tools") || !strcmp(argv[1],"vmu-tools-a1") || !strcmp(argv[1],"vmu-tools-off") ||
-              !strcmp(argv[1],"vmu-tools-saving") || !strcmp(argv[1],"vmu-tools-unavailable")) {
+              !strcmp(argv[1],"vmu-tools-saving") || !strcmp(argv[1],"vmu-tools-unavailable") ||
+              !strcmp(argv[1],"vmu-tools-physical") || !strcmp(argv[1],"vmu-tools-slot") ||
+              !strcmp(argv[1],"vmu-tools-long-notice")) {
         shell.page=KUI_SHELL_VMU_TOOLS;shell.vmu_tools_selected=4;shell.vmu_emulation_known=true;
         shell.vmu_emulation_enabled=strcmp(argv[1],"vmu-tools-off")!=0;
         if(!strcmp(argv[1],"vmu-tools-a1")) {
             shell.vmu_emulation_slot=KUI_GAME_VMU_SLOT_A1;shell.vmu_tools_selected=5u;
         }
+        if(!strcmp(argv[1],"vmu-tools-physical")) {
+            shell.vmu_tools_selected=1u;shell.vmu_emulation_enabled=false;
+            strcpy(shell.vmu_emulation_notice,"Virtual VMU Off; disc slot A2. Applies on next launch.");
+        } else if(!strcmp(argv[1],"vmu-tools-slot")) shell.vmu_tools_selected=5u;
         if(!strcmp(argv[1],"vmu-tools-saving")) {
             shell.vmu_emulation_loading=true;shell.vmu_emulation_requested=false;
             strcpy(shell.vmu_emulation_notice,"Saving virtual VMU preference...");
         } else if(!strcmp(argv[1],"vmu-tools-unavailable")) {
             shell.vmu_emulation_known=false;
             strcpy(shell.vmu_emulation_notice,"Preference not confirmed. X Reload before changing it.");
+        } else if(!strcmp(argv[1],"vmu-tools-long-notice")) {
+            shell.vmu_emulation_known=false;shell.vmu_tools_selected=1u;
+            strcpy(shell.vmu_emulation_notice,"Preference not confirmed. X Reload before changing it; the previous cards, assignments and game settings are retained.");
         }
     } else if(!strncmp(argv[1],"vmu-wizard-",11)) {
         shell.page=KUI_SHELL_VMU_WIZARD;shell.vmu_wizard_slot=2;shell.vmu_emulation_known=true;

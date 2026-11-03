@@ -27,7 +27,10 @@ enum kui_vmu_import_match_reason {
     KUI_VMU_IMPORT_MATCH_AMBIGUOUS = 64u,
     KUI_VMU_IMPORT_MATCH_CONFLICT = 128u,
     KUI_VMU_IMPORT_MATCH_UNSUPPORTED = 256u,
-    KUI_VMU_IMPORT_MATCH_UNKNOWN = 512u
+    KUI_VMU_IMPORT_MATCH_UNKNOWN = 512u,
+    /* A vetted game family is identified, but no catalogue game is a
+     * candidate. The group remains unassigned and all files are retained. */
+    KUI_VMU_IMPORT_MATCH_KNOWN_MISSING = 1024u
 };
 struct kui_vmu_import_match_group {
     /* Bits refer to inspected entries[] ordinals, not directory slots. */

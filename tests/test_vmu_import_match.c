@@ -120,6 +120,9 @@ static void representative_metadata_inventory(void) {
     assert(for_entry(17)->state==KUI_VMU_IMPORT_MATCH_CHOOSE_GAME &&
            (for_entry(17)->reasons&KUI_VMU_IMPORT_MATCH_UNSUPPORTED));
     assert(for_entry(28)->candidate_count==0u);
+    assert(!strcmp(for_entry(19)->label,"Sonic Adventure 2"));
+    assert(!strcmp(for_entry(22)->label,"Rayman 2: The Great Escape"));
+    assert(!strcmp(for_entry(28)->label,"UNKNOWN.001"));
     printf("Representative 29-file metadata inventory: %u files in %u automatic game groups; 5 unresolved/ineligible files retained\n",
         automatic_files,automatic_groups);
 }
@@ -156,10 +159,115 @@ static void truncated_long_and_case_punctuation(void) {
     add("HRACER__.CFG","Settings","","Harbor Racer");run(1u);
     assert(matches.group_count==1u && matches.groups[0].files==2u && matches.groups[0].game_index==0u);
 }
+static void expanded_titles_and_informative_labels(void) {
+    game(0,"Worms Armageddon","T-4000N",1);
+    game(1,"Sonic Adventure","T-4001N",1);
+    game(2,"Sonic Adventure 2","T-4002N",1);
+    game(3,"Tony Hawk's Pro Skater 2","T-4003N",1);
+    game(4,"Tony Hawk's Pro Skater","T-4004N",1);
+    game(5,"Prince of Persia 3D","T-4005N",1);
+    game(6,"Dead or Alive 2","T-4006N",1);
+    game(7,"Dead or Alive","T-4007N",1);
+    game(8,"Time Stalkers","T-4008N",1);
+    blank();
+    add("ARMAGEDDONDC","GAME OPTIONS","WORMS ARMAGEDDON","WORMS ARMAGEDDON");
+    add("SONICADV_INT","MAIN_SAVE_FILE","SONIC ADVENTURE / Main Save File","0000000000000000");
+    add("TONYHWK2.G00","Synthetic player","TONY HAWKS PRO SKATER 2","SYNTHETIC");
+    add("PRINCELV.SYS","POP 3D Save File","Prince of Persia 3D Save File","PRNCE OF PRSA3D");
+    add("PRINCELV.OPT","POP 3D Options","Prince of Persia 3D Options","PRNCE OF PRSA3D");
+    add("DEADORALIVE2","MAIN SAVE FILE","DEAD OR ALIVE2 / Main Save File","");
+    add("DOA2DATA_JPN","MAIN SAVE FILE","DEAD OR ALIVE2 / Main Save File","SEGA");
+    /* Corrupt/nontext headers do not block a vetted internal filename, and
+     * the display falls back to the game instead of a row of question marks. */
+    add("TIME_STK.001","\x81\x01\xfe","\x81\x01\xfe","");
+    add("UNKNOWN.001","00.5%","Uninstalled Mountain Adventure","");
+    add("OTHERSAVE","MAIN SAVE FILE","","SYNTHETIC");
+    run(9u);
+    assert(matches.group_count==8u);
+    const unsigned indices[]={0u,1u,3u,5u,5u,6u,6u,8u};
+    for(unsigned i=0;i<8u;i++) {
+        assert(for_entry(i)->state==KUI_VMU_IMPORT_MATCH_AUTO && for_entry(i)->game_index==indices[i]);
+        assert(!strcmp(for_entry(i)->label,games[indices[i]].title));
+    }
+    assert(for_entry(3)==for_entry(4) && for_entry(5)==for_entry(6));
+    assert(for_entry(2)!=for_entry(9) && for_entry(9)->candidate_count==0u);
+    assert(!strcmp(for_entry(8)->label,"Uninstalled Mountain Adventure"));
+    assert(!strcmp(for_entry(9)->label,"OTHERSAVE"));
+    /* The JPN filename is a game-family identifier, never a license to
+     * choose a regional release when more than one is in the catalogue. */
+    game(9,"Dead or Alive 2","T-4006M",1);run(10u);
+    assert(for_entry(5)==for_entry(6) && for_entry(5)->candidate_count==2u &&
+           for_entry(5)->state==KUI_VMU_IMPORT_MATCH_CHOOSE_GAME);
+    assert(!strcmp(for_entry(5)->label,"Dead or Alive 2"));
+}
+static void expanded_family_boundaries_and_role_tails(void) {
+    game(0,"Sonic Adventure","T-4100N",1);game(1,"Sonic Adventure 2","T-4101N",1);
+    game(2,"Worms Armageddon","T-4102N",1);game(3,"Worms World Party","T-4103N",1);
+    game(4,"Tony Hawk's Pro Skater 2","T-4104N",1);
+    blank();
+    add("SONICADV_INT","Save","SONIC ADVENTURE 2","");
+    add("ARMAGEDDONDC","Save","Worms World Party","");
+    add("TONYHWK2.X00","Save","","");
+    add("ROLE_EXACT","Save","Sonic Adventure / Main Save File","");
+    add("ROLE_SEQUEL","Save","Sonic Adventure 20 / Save File","");
+    run(5u);
+    for(unsigned i=0;i<3u;i++) assert(for_entry(i)->state==KUI_VMU_IMPORT_MATCH_CHOOSE_GAME);
+    assert(for_entry(0)->reasons&KUI_VMU_IMPORT_MATCH_CONFLICT);
+    assert(for_entry(1)->reasons&KUI_VMU_IMPORT_MATCH_AMBIGUOUS);
+    assert(for_entry(2)->candidate_count==0u);
+    /* The exact-role entry joins the complete conflicting Sonic family;
+     * it cannot silently rescue a contradictory companion. */
+    assert(for_entry(0)==for_entry(3) && for_entry(3)->state==KUI_VMU_IMPORT_MATCH_CHOOSE_GAME);
+    assert(for_entry(4)->candidate_count==0u && for_entry(4)!=for_entry(0));
+    blank();add("ROLE_EXACT","Save","Sonic Adventure / Main Save File","");run(5u);
+    assert(for_entry(0)->state==KUI_VMU_IMPORT_MATCH_AUTO && for_entry(0)->game_index==0u);
+}
+static void known_games_absent_from_library(void) {
+    game(0,"Skies of Arcadia","T-4200N",1);blank();
+    add("PRINCELV.SYS","POP 3D Save File","Prince of Persia 3D Save File","PRNCE OF PRSA3D");
+    add("PRINCELV.OPT","POP 3D Options","Prince of Persia 3D Options","PRNCE OF PRSA3D");
+    add("PW_BOOKMARKS","Web Favorites","SEGA Dreamcast Browser","");
+    add("UNKNOWN.001","Save","An Unidentified Adventure","");
+    run(1u);
+    const struct kui_vmu_import_match_group *prince=for_entry(0);
+    assert(prince==for_entry(1) && prince->files==2u && prince->candidate_count==0u);
+    assert(prince->state==KUI_VMU_IMPORT_MATCH_CHOOSE_GAME &&
+           prince->game_index==KUI_VMU_IMPORT_MATCH_NO_GAME);
+    assert((prince->reasons&(KUI_VMU_IMPORT_MATCH_KNOWN_MISSING|KUI_VMU_IMPORT_MATCH_UNKNOWN))==
+           (KUI_VMU_IMPORT_MATCH_KNOWN_MISSING|KUI_VMU_IMPORT_MATCH_UNKNOWN));
+    assert(!strcmp(prince->label,"Prince of Persia 3D"));
+    for(unsigned i=2u;i<4u;i++) {
+        assert(for_entry(i)->reasons&KUI_VMU_IMPORT_MATCH_UNKNOWN);
+        assert(!(for_entry(i)->reasons&KUI_VMU_IMPORT_MATCH_KNOWN_MISSING));
+    }
+    assert(!strcmp(for_entry(2)->label,"SEGA Dreamcast Browser"));
+    /* A known game found in the library but ineligible for native VMU is
+     * distinct from an absent game, even though both require user review. */
+    game(0,"Prince of Persia 3D","T-4201N",0);run(1u);
+    assert(for_entry(0)->candidate_count==1u &&
+           (for_entry(0)->reasons&KUI_VMU_IMPORT_MATCH_UNSUPPORTED));
+    assert(!(for_entry(0)->reasons&KUI_VMU_IMPORT_MATCH_KNOWN_MISSING));
+    run(0u);
+    assert(for_entry(0)->reasons&KUI_VMU_IMPORT_MATCH_KNOWN_MISSING);
+    assert(!strcmp(for_entry(0)->label,"Prince of Persia 3D"));
+    /* Conflicting game families take priority over an absent-library label,
+     * including contradictions linked through an otherwise common stem. */
+    blank();add("BRIDGEAA.000","Sonic Adventure","","");
+    add("BRIDGEAA.001","Save","Prince of Persia 3D","");run(0u);
+    assert(for_entry(0)==for_entry(1) && for_entry(0)->files==2u);
+    assert(for_entry(0)->reasons&KUI_VMU_IMPORT_MATCH_CONFLICT);
+    assert(!(for_entry(0)->reasons&KUI_VMU_IMPORT_MATCH_KNOWN_MISSING));
+    blank();add("SONICADV_INT","Save","Prince of Persia 3D","");run(0u);
+    assert(for_entry(0)->reasons&KUI_VMU_IMPORT_MATCH_CONFLICT);
+    assert(!(for_entry(0)->reasons&KUI_VMU_IMPORT_MATCH_KNOWN_MISSING));
+}
 int main(void) {
     representative_metadata_inventory();
     separate_pso_sources_and_release_choice();
     truncated_long_and_case_punctuation();
+    expanded_titles_and_informative_labels();
+    expanded_family_boundaries_and_role_tails();
+    known_games_absent_from_library();
     puts("VMU import matching: admitted snapshots, whole families, source variants and unique-title safety passed");
     return 0;
 }

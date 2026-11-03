@@ -190,6 +190,7 @@ struct kui_shell {
     unsigned vmu_import_generation;
     unsigned tools_selected,disc_tools_selected;
     unsigned vmu_tools_selected,vmu_wizard_generation,vmu_wizard_slot,vmu_wizard_selected;
+    unsigned vmu_wizard_details_return_selected;
     bool vmu_wizard_loading,confirm_vmu_wizard_reset,vmu_wizard_select_last;
     struct kui_vmu_wizard_request vmu_wizard_request;
     struct kui_vmu_wizard_view vmu_wizard;

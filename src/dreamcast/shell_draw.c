@@ -175,11 +175,12 @@ static void footer(struct paint *p, const struct kui_shell *s,
              s->games_vmu_info.candidates_sequence?"A Boot   X Set default   Y Always ask   B Back":"A Boot   B Back"):
             s->games_vmu_info.candidates_sequence?"A Use card   X Set default   Y Always ask   B Back":"A Use card   B Back") :
         s->page==KUI_SHELL_VMU_WIZARD ? (s->vmu_wizard.view_only?
-            "UP/DOWN Scroll   LEFT/RIGHT Page   B Card":s->vmu_wizard.missing_card_confirmation?
+            "UP/DOWN Scroll   LEFT/RIGHT Page   B Card":s->vmu_wizard.stage==KUI_VMU_WIZARD_DETAILS?
+            "UP/DOWN File   LEFT/RIGHT Page   B Back":s->vmu_wizard.missing_card_confirmation?
             "A Use imported saves   B Cancel":s->vmu_wizard.stage==KUI_VMU_WIZARD_GROUPS?
-            "A Choose game   X Backup only   START Review   B Sources":s->vmu_wizard.stage==KUI_VMU_WIZARD_GROUP_GAME?
-            "A Assign game   X Backup only   LEFT/RIGHT Page   B Questions":s->vmu_wizard.stage==KUI_VMU_WIZARD_SAVES?
-            "A Pick   L/R Source   LEFT/RIGHT Page   START Keep   B Games":s->vmu_wizard.stage==KUI_VMU_WIZARD_GAMES_STAGE?
+            "A Choose game   X Backup only   Y Details   START Review":s->vmu_wizard.stage==KUI_VMU_WIZARD_GROUP_GAME?
+            "A Assign game   X Backup only   Y Details   B Questions":s->vmu_wizard.stage==KUI_VMU_WIZARD_SAVES?
+            "A Pick   Y Details   L/R Source   START Keep   B Games":s->vmu_wizard.stage==KUI_VMU_WIZARD_GAMES_STAGE?
             (s->vmu_wizard.publication_started?"L/R Card   LEFT/RIGHT Page   START Retry   B Saves":
              s->vmu_wizard.existing_card?"A Select   L/R Card   LEFT/RIGHT Page   START Review   B Saves":
              "A Saves   X Blank/remove   LEFT/RIGHT Page   START Review   B Sources"):
@@ -829,28 +830,42 @@ static void vmu_page(struct paint *p,const struct kui_shell *s,const struct kui_
 }
 static void vmu_tools(struct paint *p,const struct kui_shell *s) {
     title(p,40,108,"VMU tools");
-    label(p,40,140,MUTED,"Virtual VMU is independent of reader and prefetch settings.");
-    char preference[64],slot[64];
-    snprintf(preference,sizeof(preference),"Use virtual VMU: %s",s->vmu_emulation_known?
-        (s->vmu_emulation_enabled?"On":"Off"):s->vmu_emulation_loading?"Reading...":"Unavailable");
-    snprintf(slot,sizeof(slot),"Disc virtual slot: %s",s->vmu_emulation_known?
-        (s->vmu_emulation_slot==KUI_GAME_VMU_SLOT_A1?"A1":"A2"):s->vmu_emulation_loading?"Reading...":"Unavailable");
-    const char *names[]={"Virtual VMUs","Physical VMUs","Import saves","Backups & restore",preference,slot};
-    const char *details[]={"Cards, saves, free blocks and assigned games.",
-        "Connected cards in controller ports A to D.",
-        "Combine physical saves and choose their game cards.",
-        "Browse saved backups and restore individual saves.",
-        "For supported native games. Applies on next launch.",
-        "Physical discs; image games keep their saved slot."};
+    label(p,40,138,MUTED,"Cards, save backups and virtual VMU settings.");
+    const char *names[]={"Virtual VMUs","Physical VMUs","Import saves","Backups & restore",
+        "Use virtual VMU","Disc virtual slot"};
+    const char *preference=s->vmu_emulation_known?(s->vmu_emulation_enabled?"On":"Off"):
+        s->vmu_emulation_loading?"Reading...":"Unavailable";
+    const char *slot=s->vmu_emulation_known?(s->vmu_emulation_slot==KUI_GAME_VMU_SLOT_A1?"A1":"A2"):
+        s->vmu_emulation_loading?"Reading...":"Unavailable";
     for(unsigned i=0;i<6;i++) {
-        unsigned y=168+i*38;
-        panel(p,32,y,576,34,i==s->vmu_tools_selected?SELECTED:PANEL);
+        unsigned y=164+i*28;
+        panel(p,32,y,576,24,i==s->vmu_tools_selected?SELECTED:PANEL);
         label(p,48,y+3,i==s->vmu_tools_selected?WHITE:CYAN,names[i]);
-        label(p,48,y+20,MUTED,details[i]);
+        if(i>=4u) {
+            const char *value=i==4u?preference:slot;
+            unsigned width=word_width(p,value,false);
+            label(p,592u-width,y+3,s->vmu_emulation_known?CYAN:s->vmu_emulation_loading?MUTED:AMBER,value);
+        }
     }
-    words(p,40,396,608,s->vmu_emulation_known?CYAN:AMBER,
-        s->vmu_emulation_notice[0]?s->vmu_emulation_notice:
-        "Reader and prefetch settings stay unchanged; cards are kept.",false);
+    static const char *const help[][2]={
+        {"Cards, saves, free blocks and assigned games.","Browse, rename or choose which games use each card."},
+        {"Connected cards in controller ports A to D.","Back up saves, copy between cards or import them to SD."},
+        {"Combine physical saves and choose their game cards.","Creates virtual cards on SD; your physical cards are kept."},
+        {"Browse saved backups and restore individual saves.","Open a VMD image to view or extract its saves."},
+        {"For supported native games. Applies on next launch.","Independent of reader and prefetch; cards are kept."},
+        {"Physical discs; image games keep their saved slot.","Use A1 when the game requires it; otherwise A2."}
+    };
+    unsigned selected=s->vmu_tools_selected<6u?s->vmu_tools_selected:0u;
+    label(p,40,350,CYAN,help[selected][0]);
+    label(p,40,372,MUTED,help[selected][1]);
+    /* A routine load echoes both values already shown in the settings rows.
+     * Keep the notice space for progress, stopped operations and errors. */
+    char confirmed[96];
+    snprintf(confirmed,sizeof(confirmed),"Virtual VMU %s; disc slot %s. Applies on next launch.",
+        s->vmu_emulation_enabled?"On":"Off",s->vmu_emulation_slot==KUI_GAME_VMU_SLOT_A1?"A1":"A2");
+    if(s->vmu_emulation_notice[0] && (s->vmu_emulation_loading || !s->vmu_emulation_known ||
+       strcmp(s->vmu_emulation_notice,confirmed)))
+        words(p,40,396,608,s->vmu_emulation_known?CYAN:AMBER,s->vmu_emulation_notice,false);
 }
 static void wizard_message(struct paint *p,const char *message,uint16_t color) {
     unsigned row=0;
@@ -947,8 +962,40 @@ static void vmu_auto_wizard(struct paint *p,const struct kui_shell *s,const stru
         label(p,64,309,WHITE,"A Start over   B Keep this session");
     }
 }
+static void vmu_save_details(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
+    const struct kui_vmu_wizard_view *w=&s->vmu_wizard;
+    title(p,40,108,"Save details");
+    label(p,40,138,MUTED,"Descriptions stored with this save; UP/DOWN browses its files.");
+    unsigned count=w->saves_count<KUI_VMU_WIZARD_ROWS?w->saves_count:KUI_VMU_WIZARD_ROWS;
+    const struct kui_vmu_wizard_save *row=s->vmu_wizard_selected<count?&w->saves[s->vmu_wizard_selected]:NULL;
+    char line[160];
+    snprintf(line,sizeof(line),"File %u of %u%s",row?w->saves_page*KUI_VMU_WIZARD_ROWS+s->vmu_wizard_selected+1u:0u,
+        w->saves_total,w->details_return_stage==KUI_VMU_WIZARD_SAVES?" on this source":" in this save group");
+    panel(p,32,163,576,27,SELECTED);label(p,48,168,WHITE,line);
+    if(row) {
+        snprintf(line,sizeof(line),"Filename: %s",row->name);label(p,40,196,CYAN,line);
+        snprintf(line,sizeof(line),"Short label: %s",row->short_description[0]?row->short_description:"(empty)");label(p,40,224,WHITE,line);
+        snprintf(line,sizeof(line),"Long description: %s",row->long_description[0]?row->long_description:"(empty)");label(p,40,250,WHITE,line);
+        snprintf(line,sizeof(line),"Application ID: %s",row->application[0]?row->application:"(empty)");label(p,40,276,WHITE,line);
+        if(row->slot<8u) snprintf(line,sizeof(line),"Source VMU %c%u   %u blocks / %u bytes",
+            'A'+row->slot/2u,row->slot%2u+1u,row->blocks,row->blocks*512u);
+        else snprintf(line,sizeof(line),"Captured source   %u blocks / %u bytes",row->blocks,row->blocks*512u);
+        label(p,40,304,MUTED,line);
+        snprintf(line,sizeof(line),"Type: %s (0x%02x)",row->type==0xccu?"VMU mini-game":row->type==0x33u?"Data save":"Unknown",row->type);
+        label(p,40,332,MUTED,line);
+        snprintf(line,sizeof(line),"Header offset: %u blocks / %u bytes into this file",row->header_offset,row->header_offset*512u);
+        label(p,40,360,MUTED,line);
+    } else label(p,40,224,MUTED,"No captured save metadata is available on this page.");
+    label(p,40,396,MUTED,"Browse only. Your import choices stay as they are.");
+    if(v->busy || s->vmu_wizard_loading || (w->status.complete && !w->status.passed)) {
+        box(p,32,390,576,26,NAVY);
+        words(p,40,396,608,w->status.complete&&!w->status.passed?AMBER:CYAN,
+            w->status.message[0]?w->status.message:"Loading save details...",false);
+    }
+}
 static void vmu_wizard(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
     const struct kui_vmu_wizard_view *w=&s->vmu_wizard;
+    if(w->stage==KUI_VMU_WIZARD_DETAILS) {vmu_save_details(p,s,v);return;}
     if(w->automatic && (w->stage==KUI_VMU_WIZARD_GROUPS || w->stage==KUI_VMU_WIZARD_GROUP_GAME ||
        w->stage==KUI_VMU_WIZARD_REVIEW || w->stage==KUI_VMU_WIZARD_DONE)) {
         vmu_auto_wizard(p,s,v);return;
@@ -992,7 +1039,9 @@ static void vmu_wizard(struct paint *p,const struct kui_shell *s,const struct ku
         for(unsigned i=0;i<count;i++) {
             const struct kui_vmu_wizard_save *row=&w->saves[i];unsigned y=193+i*21;
             if(i==s->vmu_wizard_selected) panel(p,40,y,544,21,SELECTED);
-            snprintf(line,sizeof(line),"[%c] %s  %s",row->picked?'x':' ',row->name,row->short_description);
+            const char *description=row->long_description[0]?row->long_description:
+                row->short_description[0]?row->short_description:row->name;
+            snprintf(line,sizeof(line),"[%c] %s",row->picked?'x':' ',description);
             words(p,48,y+1,518,i==s->vmu_wizard_selected?WHITE:MUTED,line,false);
             snprintf(line,sizeof(line),"%u blk",row->blocks);words(p,522,y+1,592,row->picked?GREEN:MUTED,line,false);
         }
@@ -1000,8 +1049,7 @@ static void vmu_wizard(struct paint *p,const struct kui_shell *s,const struct ku
         vmu_scrollbar(p,w->saves_page,s->vmu_wizard_selected,w->saves_total);
         if(s->vmu_wizard_selected<count) {
             const struct kui_vmu_wizard_save *row=&w->saves[s->vmu_wizard_selected];
-            snprintf(line,sizeof(line),"%s%s",row->suggested?"Possible match: ":"",row->long_description[0]?
-                row->long_description:row->short_description[0]?row->short_description:row->name);
+            snprintf(line,sizeof(line),"File: %s%s",row->name,row->suggested?"   Possible text match":"");
             words(p,40,374,608,row->suggested?CYAN:MUTED,line,false);
         } else label(p,40,374,MUTED,"Pick related files together; START keeps these choices.");
     } else if(w->stage==KUI_VMU_WIZARD_GAMES_STAGE) {

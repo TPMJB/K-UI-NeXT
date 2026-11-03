@@ -4,7 +4,8 @@
 
 enum family { F_NONE, F_SKIES, F_PSO, F_TOY, F_SILVER, F_EVO, F_EVO2,
     F_GRANDIA2, F_POWERSTONE2, F_RAYMAN2, F_LODOSS, F_CT2, F_NOMAD,
-    F_ARMADA, F_TIME, F_SONIC2, F_RECV, F_ZOMBIE };
+    F_ARMADA, F_TIME, F_SONIC2, F_RECV, F_ZOMBIE, F_WORMS, F_SONIC,
+    F_TONY2, F_PRINCE3D, F_DOA2 };
 static int overlap(const void *a,size_t an,const void *b,size_t bn) {
     uintptr_t x=(uintptr_t)a,y=(uintptr_t)b;
     return an && bn && (x<=y ? y-x<an : x-y<bn);
@@ -34,9 +35,9 @@ static int generic(const char *s) {
         "UBISOFT","ACCLAIM","INFOGRAMES","EIDOS","MIDWAY","ACTIVISION",
         "ELECTRONICARTS","EA","VISUALCONCEPTS","SYSTEM","SYSTEMFILE","SAVE",
         "SAVEDATA","SAVEGAME","SAVEDGAME","GAMEDATA","GAME","DATA","DAT",
-        "FILE","MAINFILE","MAINDATA","SYSTEMDATA","OPTIONS","OPTION",
+        "FILE","MAINFILE","MAINSAVEFILE","SAVEFILE","MAINDATA","SYSTEMDATA","OPTIONS","OPTION",
         "CONFIG","CONFIGURATION","SETTINGS","GUILDCARD","CHARACTER",
-        "CHARACTERDATA","REPLAY","THE","VMU","VMSSAVE"};
+        "CHARACTERDATA","REPLAY","GAMEOPTIONS","THE","VMU","VMSSAVE","0000000000000000"};
     for(unsigned i=0;i<sizeof(words)/sizeof(words[0]);i++)
         if(!strcmp(s,words[i])) return 1;
     return !s[0];
@@ -47,7 +48,7 @@ static int starts(const char *s,const char *prefix) {
 static int role_tail(const char *s) {
     static const char *const roles[]={"SYSTEMFILE","SYSTEMDATA","SYSTEM","SAVEDGAME",
         "SAVEDATA","SAVEGAME","SAVE","GAMEDATA","DATA","DAT","OPTIONS",
-        "OPTION","CONFIGURATION","CONFIG","SETTINGS","MAINFILE","MAINDATA",
+        "OPTION","CONFIGURATION","CONFIG","SETTINGS","MAINFILE","MAINSAVEFILE","SAVEFILE","MAINDATA",
         "GUILDCARD","CHARACTERDATA","CHARACTER","REPLAY","FILE"};
     for(unsigned i=0;i<sizeof(roles)/sizeof(roles[0]);i++) {
         size_t n=strlen(roles[i]);
@@ -78,6 +79,11 @@ static enum family title_family(const char *s) {
     if(!strcmp(s,"SONICADVENTURE2")) return F_SONIC2;
     if(!strcmp(s,"RESIDENTEVILCODEVERONICA") || !strcmp(s,"BIOHAZARDCODEVERONICA")) return F_RECV;
     if(!strcmp(s,"ZOMBIEREVENGE")) return F_ZOMBIE;
+    if(!strcmp(s,"WORMSARMAGEDDON")) return F_WORMS;
+    if(!strcmp(s,"SONICADVENTURE")) return F_SONIC;
+    if(!strcmp(s,"TONYHAWKSPROSKATER2")) return F_TONY2;
+    if(!strcmp(s,"PRINCEOFPERSIA3D")) return F_PRINCE3D;
+    if(!strcmp(s,"DEADORALIVE2")) return F_DOA2;
     return F_NONE;
 }
 static enum family text_family(const char *s) {
@@ -91,7 +97,10 @@ static enum family text_family(const char *s) {
         {"ETERNALARCADIA",F_SKIES},{"SKIESOFARCADIA",F_SKIES},
         {"TOYCOMMANDER",F_TOY},{"SILVER",F_SILVER},
         {"POWERSTONE2",F_POWERSTONE2},{"CRAZYTAXI2",F_CT2},
-        {"SONICADVENTURE2",F_SONIC2},{"ZOMBIEREVENGE",F_ZOMBIE}};
+        {"SONICADVENTURE2",F_SONIC2},{"ZOMBIEREVENGE",F_ZOMBIE},
+        {"WORMSARMAGEDDON",F_WORMS},{"SONICADVENTURE",F_SONIC},
+        {"TONYHAWKSPROSKATER2",F_TONY2},{"PRINCEOFPERSIA3D",F_PRINCE3D},
+        {"DEADORALIVE2",F_DOA2}};
     for(unsigned i=0;i<sizeof(prefixes)/sizeof(prefixes[0]);i++) {
         size_t n=strlen(prefixes[i].text);
         if(!strncmp(s,prefixes[i].text,n) && role_tail(s+n)) return prefixes[i].family;
@@ -118,6 +127,12 @@ static enum family name_family(const char *s) {
     if(starts(s,"SONIC2___") && strlen(s)==12u) return F_SONIC2;
     if(starts(s,"RE_CV") && strlen(s)==12u && s[8]=='.') return F_RECV;
     if(!strcmp(s,"ZOMBIE_U_SYS")) return F_ZOMBIE;
+    if(!strcmp(s,"ARMAGEDDONDC")) return F_WORMS;
+    if(!strcmp(s,"SONICADV_INT")) return F_SONIC;
+    if(starts(s,"TONYHWK2.G") && strlen(s)==12u &&
+       s[10]>='0' && s[10]<='9' && s[11]>='0' && s[11]<='9') return F_TONY2;
+    if(!strcmp(s,"PRINCELV.SYS") || !strcmp(s,"PRINCELV.OPT")) return F_PRINCE3D;
+    if(!strcmp(s,"DEADORALIVE2") || !strcmp(s,"DOA2DATA_JPN")) return F_DOA2;
     return F_NONE;
 }
 static enum family entry_family(const struct kui_vmu_import_entry *e) {
@@ -234,15 +249,25 @@ static void resolve(const struct kui_vmu_import_plan *plan,const struct kui_vmu_
     group->game_index=KUI_VMU_IMPORT_MATCH_NO_GAME;
     group->state=KUI_VMU_IMPORT_MATCH_CHOOSE_GAME;
     group->candidate_count=total;
+    enum family known=F_NONE;
     for(unsigned i=0;i<plan->entry_count;i++) if(member(group->members,i)) {
         if(conflicting_family(&plan->entries[i])) {
             group->reasons|=KUI_VMU_IMPORT_MATCH_CONFLICT;return;
         }
+        enum family family=entry_family(&plan->entries[i]);
+        if(known && family && known!=family) {
+            group->reasons|=KUI_VMU_IMPORT_MATCH_CONFLICT;return;
+        }
+        if(family) known=family;
         if(unknown_product(&plan->entries[i],games,count)) {
             group->reasons|=KUI_VMU_IMPORT_MATCH_CONFLICT | KUI_VMU_IMPORT_MATCH_UNKNOWN;return;
         }
     }
-    if(!total) {group->reasons|=KUI_VMU_IMPORT_MATCH_UNKNOWN;return;}
+    if(!total) {
+        group->reasons|=KUI_VMU_IMPORT_MATCH_UNKNOWN;
+        if(known) group->reasons|=KUI_VMU_IMPORT_MATCH_KNOWN_MISSING;
+        return;
+    }
     unsigned candidate=0;
     if(product_count==1u) {
         for(unsigned g=0;g<count;g++) if(votes[g] && g!=product_game &&
@@ -293,6 +318,63 @@ static int same_application(const struct kui_vmu_import_entry *a,
     const struct kui_vmu_import_entry *b) {
     char x[17],y[17];normalized(a->application,sizeof(a->application),x);
     normalized(b->application,sizeof(b->application),y);return !strcmp(x,y);
+}
+static const char *family_label(enum family family) {
+    static const char *const labels[]={NULL,"Skies of Arcadia","Phantasy Star Online",
+        "Toy Commander","Silver","Evolution","Evolution 2","Grandia II","Power Stone 2",
+        "Rayman 2: The Great Escape","Record of Lodoss War","Crazy Taxi 2",
+        "Omikron: The Nomad Soul","Armada","Time Stalkers","Sonic Adventure 2",
+        "Resident Evil Code: Veronica","Zombie Revenge","Worms Armageddon",
+        "Sonic Adventure","Tony Hawk's Pro Skater 2","Prince of Persia 3D","Dead or Alive 2"};
+    return labels[family];
+}
+static int informative(const char *s,size_t cap) {
+    char text[33];unsigned n=normalized(s,cap,text);
+    if(!n || generic(text)) return 0;
+    /* A completion percentage or a numbered slot is useful save detail,
+     * but it cannot stand in for the game's group label. */
+    for(unsigned i=0;i<n;i++) if(text[i]>='A' && text[i]<='Z') return 1;
+    return 0;
+}
+static void label_group(const struct kui_vmu_import_plan *plan,
+    const struct kui_vmu_import_match_game *games,size_t count,
+    struct kui_vmu_import_match_group *group) {
+    const char *label=NULL;char key[129]={0};int different_titles=0;
+    /* Use the catalogue's full title when every candidate shares it. This
+     * still leaves regional releases in the game chooser. */
+    for(unsigned g=0;g<count;g++) if(member(group->candidates,g)) {
+        char title[129];normalized(games[g].title,sizeof(games[g].title),title);
+        if(!label) {label=games[g].title;memcpy(key,title,strlen(title)+1u);}
+        else if(strcmp(title,key)) different_titles=1;
+    }
+    if(different_titles || !key[0]) label=NULL;
+    if(!label && !(group->reasons&KUI_VMU_IMPORT_MATCH_CONFLICT)) {
+        enum family family=F_NONE;int different_families=0;
+        for(unsigned i=0;i<plan->entry_count;i++) if(member(group->members,i)) {
+            enum family other=entry_family(&plan->entries[i]);
+            if(family && other && family!=other) different_families=1;
+            if(other) family=other;
+        }
+        if(family && !different_families) label=family_label(family);
+    }
+    /* Long descriptions usually carry the game name, while short fields
+     * often carry MAIN FILE, progress, a player label or a location. Never
+     * use an opaque application ID as the fallback display label. */
+    for(unsigned pass=0;!label && pass<2u;pass++)
+        for(unsigned i=0;i<plan->entry_count;i++) if(member(group->members,i)) {
+            const struct kui_vmu_import_entry *e=&plan->entries[i];
+            const char *text=pass?e->short_description:e->long_description;
+            size_t cap=pass?sizeof(e->short_description):sizeof(e->long_description);
+            if(informative(text,cap)) {label=text;break;}
+        }
+    if(!label) for(unsigned i=0;i<plan->entry_count;i++) if(member(group->members,i)) {
+        label=plan->entries[i].name;break;
+    }
+    size_t n=strlen(label);if(n>=sizeof(group->label)) n=sizeof(group->label)-1u;
+    for(size_t i=0;i<n;i++) {
+        unsigned c=(unsigned char)label[i];group->label[i]=(char)(c>=0x20u && c<=0x7eu?c:'?');
+    }
+    group->label[n]=0;
 }
 static int valid(const struct kui_vmu_import_plan *p) {
     if(p->entry_count>200u || p->entry_count!=p->summary.files ||
@@ -352,17 +434,15 @@ int kui_vmu_import_match(const struct kui_vmu_import_plan *plan,
         unsigned root=find(parents,i),g=root_group[root];
         if(g==KUI_VMU_IMPORT_MATCH_NO_GAME) {
             g=out->group_count++;root_group[root]=g;
-            const struct kui_vmu_import_entry *e=&plan->entries[i];
-            const char *label=e->short_description[0]?e->short_description:
-                e->long_description[0]?e->long_description:e->name;
-            size_t n=strlen(label);if(n>=sizeof(out->groups[g].label)) n=sizeof(out->groups[g].label)-1u;
-            memcpy(out->groups[g].label,label,n);
         }
         struct kui_vmu_import_match_group *group=&out->groups[g];
         group->members[i/8u]|=(uint8_t)(1u<<(i%8u));++group->files;
         group->blocks+=plan->entries[i].blocks;
         if(group->files>1u) group->reasons|=KUI_VMU_IMPORT_MATCH_FAMILY;
     }
-    for(unsigned g=0;g<out->group_count;g++) resolve(plan,games,game_count,&out->groups[g]);
+    for(unsigned g=0;g<out->group_count;g++) {
+        resolve(plan,games,game_count,&out->groups[g]);
+        label_group(plan,games,game_count,&out->groups[g]);
+    }
     return 0;
 }

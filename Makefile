@@ -840,6 +840,13 @@ test-vmu-read-recovery: build/test-vmu-app
 	python3 tests/test_vmu_read_recovery.py
 	python3 tests/test_vmu_capture_recover.py
 
+.PHONY: test-vmu-match-memory
+test-vmu-match-memory: build/test-vmu-match-memory
+	ASAN_OPTIONS=detect_leaks=0 python3 tests/test_vmu_match_memory.py
+build/test-vmu-match-memory: tests/test_vmu_match_memory.c src/apps/vmu_match_memory.c src/core/vmu_import_plan.c src/core/vmu_image_subset.c src/core/vmu_image.c src/core/hash.c src/core/data.c $(FATFS) include/kui/vmu_match_memory.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) tests/test_vmu_match_memory.c src/apps/vmu_match_memory.c src/core/vmu_import_plan.c src/core/vmu_image_subset.c src/core/vmu_image.c src/core/hash.c src/core/data.c $(FATFS) -Wl,--wrap=f_open,--wrap=f_read,--wrap=f_write,--wrap=f_sync,--wrap=f_rename,--wrap=f_unlink -o $@
+
 build/test-vmu-save-format: tests/test_vmu_save_format.c src/core/vmu_save_format.c src/core/crc16.c include/kui/vmu_import.h include/kui/crc16.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) tests/test_vmu_save_format.c src/core/vmu_save_format.c src/core/crc16.c -o $@
