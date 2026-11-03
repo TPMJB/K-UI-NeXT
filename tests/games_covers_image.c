@@ -22,6 +22,9 @@ static struct {
     unsigned block_reads,record_opens,opened;
     bool active, connected, cancelled,art_open_fail,art_close_fail,art_cancel_open;
     FIL *art_file;
+    FIL *view_file;
+    const char *view_fault;
+    bool view_read;
 } test;
 static FATFS fs;
 static uint16_t pixels[KUI_GAMES_ROWS][KUI_COVER_PIXELS];
@@ -59,6 +62,8 @@ static void progress(const struct kui_app_status *status) {
 
 FRESULT __real_f_open(FIL *file, const TCHAR *path, BYTE flags);
 FRESULT __wrap_f_open(FIL *file, const TCHAR *path, BYTE flags) {
+    bool view=test.active && !strcmp(path,KUI_GAMES_VIEW_FILE);
+    if(view && (flags&FA_WRITE) && test.view_fault && !strcmp(test.view_fault,"open"))return FR_DISK_ERR;
     if(test.active && (flags&FA_WRITE)) assert(!strncmp(path,"0:/KUI/",7));
     if(test.active && flags==FA_READ && strstr(path,".kcv")) {
         ++test.record_opens;
@@ -66,6 +71,7 @@ FRESULT __wrap_f_open(FIL *file, const TCHAR *path, BYTE flags) {
     }
     FRESULT result = __real_f_open(file, path, flags);
     if(test.active && result == FR_OK) {++test.files;++test.opened;}
+    if(view && result==FR_OK) {test.view_file=file;test.view_read=flags==FA_READ;}
     if(test.active && flags==FA_READ && strstr(path,".kcv") && result==FR_OK) {
         test.art_file=file;
         if(test.art_cancel_open) {test.cancelled=true;test.art_cancel_open=false;}
@@ -74,13 +80,31 @@ FRESULT __wrap_f_open(FIL *file, const TCHAR *path, BYTE flags) {
 }
 FRESULT __real_f_close(FIL *file);
 FRESULT __wrap_f_close(FIL *file) {
+    bool view=file==test.view_file,read=test.view_read;
     FRESULT result = __real_f_close(file);
     if(test.active) { assert(test.files); --test.files; }
     if(file==test.art_file) {
         test.art_file=NULL;
         if(test.art_close_fail) {test.art_close_fail=false;return FR_DISK_ERR;}
     }
+    if(view) {
+        test.view_file=NULL;
+        if(!read && test.view_fault && !strcmp(test.view_fault,"close"))return FR_DISK_ERR;
+    }
     return result;
+}
+FRESULT __real_f_read(FIL *,void *,UINT,UINT *);
+FRESULT __wrap_f_read(FIL *file,void *data,UINT bytes,UINT *got) {
+    bool view=file==test.view_file && test.view_read && test.view_fault;
+    if(view && !strcmp(test.view_fault,"read")) {*got=0;return FR_DISK_ERR;}
+    FRESULT r=__real_f_read(file,data,bytes,got);
+    if(view && !strcmp(test.view_fault,"substitute") && r==FR_OK && *got)((uint8_t *)data)[0]^=1u;
+    return r;
+}
+FRESULT __real_f_sync(FIL *);
+FRESULT __wrap_f_sync(FIL *file) {
+    if(file==test.view_file && test.view_fault && !strcmp(test.view_fault,"sync"))return FR_DISK_ERR;
+    return __real_f_sync(file);
 }
 FRESULT __real_f_opendir(DIR *dir, const TCHAR *path);
 FRESULT __wrap_f_opendir(DIR *dir, const TCHAR *path) {
@@ -96,6 +120,10 @@ FRESULT __wrap_f_closedir(DIR *dir) {
 }
 FRESULT __real_f_write(FIL *file, const void *data, UINT bytes, UINT *written);
 FRESULT __wrap_f_write(FIL *file, const void *data, UINT bytes, UINT *written) {
+    if(file==test.view_file && test.view_fault) {
+        if(!strcmp(test.view_fault,"write")) {*written=0;return FR_DISK_ERR;}
+        if(!strcmp(test.view_fault,"short") && bytes)return __real_f_write(file,data,bytes-1u,written);
+    }
     if(test.active && !strcmp(test.fault, "write-fail")) { *written = 0; return FR_DISK_ERR; }
     return __real_f_write(file, data, bytes, written);
 }
@@ -284,6 +312,19 @@ static void check_scan(const char *host) {
     test.writes = 0;
     list(KUI_GAMES_VIEW_SAVED, &page);
     assert(!test.writes && page.view == KUI_GAMES_VIEW_GALLERY);
+    list(KUI_GAMES_VIEW_FLOW, &page);
+    assert(page.view == KUI_GAMES_VIEW_FLOW && !strcmp(kui_games_view_name(page.view),"flow") &&
+        kui_games_view_size(page.view)==KUI_COVER_SIZE_LARGE);
+    kui_games_covers_cache_clear();
+    test.writes=0;
+    list(KUI_GAMES_VIEW_SAVED,&page);
+    assert(!test.writes && page.view==KUI_GAMES_VIEW_FLOW);
+    entry(&page,"Twiddled Game",&row);
+    selected(&page,"Twiddled Game",KUI_COVER_SIZE_LARGE);
+    check_split(pixels[row],KUI_COVER_LARGE);
+    kui_games_covers_content_clear();
+    list(KUI_GAMES_VIEW_SAVED,&page);
+    assert(page.view==KUI_GAMES_VIEW_FLOW);
     list(KUI_GAMES_VIEW_COMPACT, &page);
     entry(&page, "Twiddled Game", &row);
     selected(&page,"Twiddled Game",KUI_COVER_SIZE_SMALL);
@@ -492,7 +533,28 @@ static void check_titles(void) {
     puts("PASS title prefetch: headers only, later rows need no I/O, repeat reads nothing");
 }
 
+static void check_layout_save(void) {
+    static const char *const faults[]={"open","write","short","sync","close","read","substitute"};
+    assert(kui_games_library_save_view(KUI_GAMES_VIEW_LIST,log_line,cancel));
+    for(unsigned i=0;i<sizeof(faults)/sizeof(faults[0]);i++) {
+        test.view_fault=faults[i];
+        assert(!kui_games_library_save_view(KUI_GAMES_VIEW_FLOW,log_line,cancel));
+        assert(!test.files && !test.dirs && !test.connected);
+        test.view_fault=NULL;
+        assert(kui_games_library_save_view(KUI_GAMES_VIEW_FLOW,log_line,cancel));
+        kui_games_covers_cache_clear();
+        assert(kui_games_library_view(KUI_GAMES_VIEW_SAVED,log_line,cancel)==KUI_GAMES_VIEW_FLOW);
+    }
+    unsigned writes=test.writes;
+    test.cancelled=true;
+    assert(!kui_games_library_save_view(KUI_GAMES_VIEW_COMPACT,log_line,cancel));
+    test.cancelled=false;
+    assert(!kui_games_library_save_view(KUI_GAMES_VIEW_COUNT,log_line,cancel));
+    assert(test.writes==writes && !test.files && !test.dirs && !test.connected);
+    puts("PASS layout-only persistence: exact cold readback, open/write/short/sync/close/read/substitution failures and no-write cancel");
+}
 static void check(const char *host) {
+    if(!strcmp(test.fault,"layout-save")) {check_layout_save();return;}
     if(!strcmp(test.fault,"session")) {check_session();return;}
     if(!strcmp(test.fault,"titles")) {check_titles();return;}
     if(!strcmp(test.fault,"selected-cache")) {check_selected_cache();return;}

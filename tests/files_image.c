@@ -533,6 +533,15 @@ static void case_picture(void) {
     pvr_stride(texture, &texture_bytes);
     mounted(true);
     folder("/Pictures");
+    /* Saved screenshots use this full-size bottom-up BGR24 BMP layout. */
+    const uint32_t bmp_bytes=54u+640u*480u*3u;
+    uint8_t *bmp=calloc(1,bmp_bytes);assert(bmp);bmp[0]='B';bmp[1]='M';
+    const unsigned offsets[]={2u,10u,14u,18u,22u,34u};
+    const uint32_t values[]={bmp_bytes,54u,40u,640u,480u,640u*480u*3u};
+    for(unsigned i=0;i<6u;i++)for(unsigned b=0;b<4u;b++)bmp[offsets[i]+b]=(uint8_t)(values[i]>>(8u*b));
+    bmp[26]=1u;bmp[28]=24u;
+    for(unsigned y=0;y<480u;y++)for(unsigned x=0;x<640u;x++)bmp[54u+(y*640u+x)*3u+(y<240u?0u:2u)]=255u;
+    put_bytes("/Pictures/capture.bmp",bmp,bmp_bytes);free(bmp);
     put_bytes("/Pictures/rgb.png", cover_png_rgb, sizeof(cover_png_rgb));
     put_bytes("/Pictures/alpha.png", cover_png_rgba, sizeof(cover_png_rgba));
     put_bytes("/Pictures/photo.jpg", cover_jpeg, sizeof(cover_jpeg));
@@ -544,6 +553,11 @@ static void case_picture(void) {
     struct kui_files_picture pic;
     assert(kui_files_picture("/Pictures/rgb.png", pixels, &pic, log_line, cancel));
     assert(pic.ok && !strcmp(pic.format, "PNG") && pic.width == 64 && pic.height == 48 && pic.bytes == sizeof(cover_png_rgb));
+    assert(kui_files_picture("/Pictures/capture.bmp",pixels,&pic,log_line,cancel));
+    assert(pic.ok && !strcmp(pic.format,"BMP") && pic.width==640u && pic.height==480u && pic.bytes==bmp_bytes);
+    assert(pixels[60u*KUI_FILES_PICTURE_EDGE+136u]==0xf800u);
+    assert(pixels[210u*KUI_FILES_PICTURE_EDGE+136u]==0x001fu);
+    assert(kui_files_picture("/Pictures/rgb.png",pixels,&pic,log_line,cancel));
     /* Wider than tall: navy above and below, picture in the middle. */
     assert(pixels[0] == 0x0864u && pixels[(KUI_FILES_PICTURE_EDGE / 2u) * KUI_FILES_PICTURE_EDGE + 136u] != 0x0864u);
     assert(kui_files_picture("/Pictures/alpha.png", pixels, &pic, log_line, cancel) && pic.ok);

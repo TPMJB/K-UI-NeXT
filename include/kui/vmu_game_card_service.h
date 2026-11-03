@@ -94,6 +94,30 @@ int kui_vmu_game_card_select_exact(const char *product,
     const struct kui_vmu_game_card_platform *platform,struct kui_vmu_game_card_work *work,
     uint8_t wire[KUI_VMU_PERSIST_PROFILE_WIRE_BYTES],struct kui_vmu_game_card_choice *choice,
     kui_log_fn log,kui_cancel_fn cancel);
+enum kui_vmu_game_card_boundary_phase {
+    KUI_VMU_GAME_CARD_BEFORE_CREATE=1,
+    KUI_VMU_GAME_CARD_RESOLVED=2
+};
+/* Optional launcher boundary. BEFORE_CREATE runs before a new pair allocates
+ * anything (pair is zero, identity is NULL), so the caller can protect its
+ * other managed data. RESOLVED runs after the real exact/default/legacy/new
+ * pair is resolved and its identity rechecked, before profile reuse or any raw
+ * ownership scan/unmount. No card file is open. The callback may create
+ * verified history metadata while mounted but must not edit the selected
+ * image/journal/identity. READY continues; every other result blocks launch.
+ * Old APIs never invoke a boundary. target/storage NULL selects normally. */
+typedef int (*kui_vmu_game_card_boundary)(void *context,enum kui_vmu_game_card_boundary_phase phase,
+    const char *product,unsigned pair,
+    const uint8_t identity[16],const struct kui_vmu_game_candidates_storage *storage,
+    kui_log_fn log,kui_cancel_fn cancel);
+int kui_vmu_game_card_select_boundary(const char *product,
+    const struct kui_vmu_game_candidate_target *target,
+    const struct kui_vmu_game_candidates_storage *storage,
+    uint64_t partition_first,uint64_t partition_end,
+    const struct kui_vmu_fs_range *forbidden,size_t forbidden_count,
+    const struct kui_vmu_game_card_platform *platform,struct kui_vmu_game_card_work *work,
+    uint8_t wire[KUI_VMU_PERSIST_PROFILE_WIRE_BYTES],struct kui_vmu_game_card_choice *choice,
+    kui_vmu_game_card_boundary boundary,void *context,kui_log_fn log,kui_cancel_fn cancel);
 /* Read-only explicit-assignment lookup on mounted FatFs. READY means a
  * complete identity-pinned target exists (choice->pair); UNBOUND means no
  * explicit assignment. FAILED/CANCELLED must refuse launch. This does not

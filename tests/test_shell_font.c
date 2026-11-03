@@ -183,6 +183,67 @@ static void check_blending(bool large) {
     for(unsigned i = 0; i < 32; ++i) count += levels[i];
     assert(saw_mixed && saw_solid && count > 2 && count <= 16);
 }
+static void check_window_clipping(bool large) {
+    const uint16_t background=0x021f,color=0xfbe1;
+    const char *text="AgjW_?";
+    clear(&reference,background);
+    kui_shell_font_draw(reference.pixels,17,91,color,text,large);
+    int first=HEIGHT,last=-1;
+    for(size_t i=0;i<PIXELS;i++) if(reference.pixels[i]!=background) {
+        int row=(int)(i/WIDTH);
+        if(row<first) first=row;
+        if(row>last) last=row;
+    }
+    assert(first<last);
+    int middle=(first+last)/2;
+    const int clips[][2]={
+        {0,HEIGHT},{INT_MIN,INT_MAX},
+        {middle,HEIGHT},{0,middle+1},{middle,middle+1},
+        {INT_MIN,middle+1},{middle,INT_MAX},
+        {middle,middle},{middle+1,middle},{INT_MAX,INT_MIN},
+        {INT_MIN,-1},{HEIGHT,INT_MAX},{HEIGHT+1,INT_MAX},
+        {INT_MIN,INT_MIN},{INT_MAX,INT_MAX}
+    };
+    for(size_t clip=0;clip<sizeof(clips)/sizeof(clips[0]);clip++) {
+        clear(&actual,background);
+        kui_shell_font_draw_clipped(actual.pixels,17,91,color,text,large,clips[clip][0],clips[clip][1]);
+        check_guards(&actual);
+        size_t kept=0,removed=0;
+        for(size_t i=0;i<PIXELS;i++) {
+            int row=(int)(i/WIDTH);
+            bool inside=row>=clips[clip][0] && row<clips[clip][1];
+            uint16_t expected=inside?reference.pixels[i]:background;
+            assert(actual.pixels[i]==expected);
+            if(reference.pixels[i]!=background) {
+                if(inside) ++kept;else ++removed;
+            }
+        }
+        /* Each partial-glyph case must actually retain and cut ink, not just
+         * trim empty line-box padding. The one-row case checks both edges. */
+        if(clip>=2u && clip<=6u) assert(kept && removed);
+        if(clip<2u) assert(!memcmp(actual.pixels,reference.pixels,sizeof(actual.pixels)));
+    }
+    check_guards(&reference);
+
+    const int height=large?KUI_SHELL_FONT_LARGE_HEIGHT:KUI_SHELL_FONT_SMALL_HEIGHT;
+    const int positions[][2]={
+        {-7,10},{WIDTH-9,10},{10,-height/2},{10,HEIGHT-height/2},
+        {INT_MIN,0},{INT_MAX,0},{0,INT_MIN},{0,INT_MAX}
+    };
+    for(size_t pos=0;pos<sizeof(positions)/sizeof(positions[0]);pos++) {
+        clear(&reference,background);clear(&actual,background);
+        kui_shell_font_draw(reference.pixels,positions[pos][0],positions[pos][1],color,text,large);
+        kui_shell_font_draw_clipped(actual.pixels,positions[pos][0],positions[pos][1],color,text,large,INT_MIN,INT_MAX);
+        check_guards(&reference);check_guards(&actual);
+        assert(!memcmp(actual.pixels,reference.pixels,sizeof(actual.pixels)));
+    }
+    clear(&actual,background);
+    kui_shell_font_draw_clipped(NULL,17,91,color,text,large,0,HEIGHT);
+    kui_shell_font_draw_clipped(actual.pixels,17,91,color,NULL,large,0,HEIGHT);
+    kui_shell_font_draw_clipped(actual.pixels,17,91,color,"",large,0,HEIGHT);
+    kui_shell_font_draw_clipped(actual.pixels,17,91,color,"   ",large,0,HEIGHT);
+    check_guards(&actual);assert(!changed(&actual,background));
+}
 int main(void) {
     assert(kui_shell_font_width("Dreamcast", true) > kui_shell_font_width("Dreamcast", false));
     for(unsigned large = 0; large < 2; ++large) {
@@ -192,7 +253,8 @@ int main(void) {
         check_fallback(large != 0);
         check_clipping(large != 0);
         check_blending(large != 0);
+        check_window_clipping(large != 0);
     }
-    puts("PASS shell font: advances, all ASCII, fallback, clipped rendering, extreme coordinates, RGB565 antialiasing");
+    puts("PASS shell font: advances, all ASCII, fallback, framebuffer/window clipping, extreme coordinates, RGB565 antialiasing");
     return 0;
 }

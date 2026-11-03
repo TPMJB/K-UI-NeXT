@@ -96,6 +96,14 @@ void w5500_model_stop(void) {
 }
 void w5500_model_advance(uint64_t ms) { m.offset_ms += ms; }
 struct w5500_model_options *w5500_model_live(void) { return &m.options; }
+unsigned w5500_model_listening_count(uint16_t port) {
+    bool bound=false;unsigned count=0;
+    for(unsigned i=0;i<KUI_W5500_SOCKETS;i++)
+        if(m.listeners[i].fd>=0 && m.listeners[i].port==port)bound=true;
+    if(bound)for(unsigned i=0;i<KUI_W5500_SOCKETS;i++)
+        if(m.s[i].regs[SN_SR]==KUI_W5500_LISTENING && get16(m.s[i].regs+SN_PORT)==port)++count;
+    return count;
+}
 
 /* Checksums and frames for the model's small network. */
 static uint16_t checksum(const uint8_t *p, size_t n) {

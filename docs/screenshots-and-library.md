@@ -8,6 +8,11 @@ before taking another picture. Screenshots are written to `/KUI/screenshots`
 on the selected SD volume as **640 x 480 BMP** files. Copy the BMP files to a
 computer for release threads or other sharing.
 
+Open **File Manager → X Actions → Screenshot gallery** to browse those saved
+captures. Select a BMP and press A to view it; B returns to the gallery and
+then to the folder you came from. The gallery action also works in an empty
+File Manager folder. BMP decoding and folder reads run on the storage worker.
+
 The screenshot shortcut works directly from K-UI. The old screenshot
 description has been removed from Settings.
 

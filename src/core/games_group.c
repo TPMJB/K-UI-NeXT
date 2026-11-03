@@ -101,6 +101,90 @@ bool kui_games_group_parse(const char *name,char base[KUI_GAMES_GROUP_NAME_CAP],
     if(!used || !kui_destination_name_valid(result)) return false;
     memcpy(base,result,used+1u);*disc=value;return true;
 }
+bool kui_games_group_capture_base(const char *name,char base[KUI_GAMES_GROUP_NAME_CAP]) {
+    if(!base || !kui_destination_name_valid(name)) return false;
+    size_t size=image_stem(name,strlen(name));
+    if(size && name[size-1u]==')') {
+        size_t at=size-1u;
+        while(at && digit((unsigned char)name[at-1u])) --at;
+        size_t digits=size-1u-at;
+        if(digits && digits<=4u && name[at]!='0' && at>=2u &&
+           name[at-1u]=='(' && name[at-2u]==' ') {
+            unsigned ordinal=0;
+            for(size_t i=at;i<size-1u;i++) ordinal=ordinal*10u+(unsigned)(name[i]-'0');
+            if(ordinal>=2u && ordinal<=9999u) size=at-2u;
+        }
+    }
+    size_t start=0;
+    while(start<size && name[start]==' ') ++start;
+    while(size>start && name[size-1u]==' ') --size;
+    if(size==start) return false;
+    char result[KUI_GAMES_GROUP_NAME_CAP];
+    memcpy(result,name+start,size-start);result[size-start]=0;
+    if(!kui_destination_name_valid(result)) return false;
+    memcpy(base,result,size-start+1u);return true;
+}
+static bool evidence_field(char *out,const uint8_t *input,size_t size) {
+    for(size_t i=0;i<size;i++) if(input[i]<32u || input[i]>126u) return false;
+    size_t start=0,end=size;
+    while(start<end && input[start]==' ') ++start;
+    while(end>start && input[end-1u]==' ') --end;
+    if(start==end) return false;
+    memcpy(out,input+start,end-start);out[end-start]=0;return true;
+}
+static bool evidence_text(const char *text,size_t cap) {
+    if(!text || !text[0] || text[0]==' ') return false;
+    size_t size=0;
+    while(size<cap && text[size]) {
+        if((unsigned char)text[size]<32u || (unsigned char)text[size]>126u) return false;
+        ++size;
+    }
+    return size<cap && text[size-1u]!=' ';
+}
+static bool evidence_product(const char *product) {
+    bool alpha=false,numeric=false;
+    for(size_t i=0;product[i];i++) {
+        unsigned char c=(unsigned char)product[i];
+        if(c>='A' && c<='Z') alpha=true;
+        else if(digit(c)) numeric=true;
+        else if(c!='-' || !i || !product[i+1u]) return false;
+    }
+    return alpha && numeric;
+}
+static bool evidence_valid(const struct kui_games_group_evidence *e) {
+    return e && e->disc>=1u && e->total>=2u && e->total<=9u && e->disc<=e->total &&
+        evidence_text(e->title,sizeof(e->title)) && evidence_text(e->product,sizeof(e->product)) &&
+        evidence_text(e->version,sizeof(e->version)) && evidence_text(e->region,sizeof(e->region)) &&
+        evidence_product(e->product);
+}
+bool kui_games_group_evidence_read(const uint8_t ip[2048],struct kui_games_group_evidence *out) {
+    if(!ip || !out || memcmp(ip,"SEGA SEGAKATANA ",16u) ||
+       ip[36]!=' ' || memcmp(ip+37u,"GD-ROM",6u) || ip[43]<'1' || ip[43]>'9' ||
+       ip[44]!='/' || ip[45]<'2' || ip[45]>'9' || ip[43]>ip[45] ||
+       ip[46]!=' ' || ip[47]!=' ' || ip[63]!=' ') return false;
+    unsigned flags=0;
+    for(unsigned i=56u;i<63u;i++) {
+        unsigned char c=lower(ip[i]);unsigned value;
+        if(digit(c)) value=(unsigned)(c-'0');
+        else if(c>='a' && c<='f') value=(unsigned)(c-'a')+10u;
+        else return false;
+        flags=(flags<<4)|value;
+    }
+    if(flags&1u) return false;
+    struct kui_games_group_evidence result={0};
+    result.disc=(unsigned)(ip[43]-'0');result.total=(unsigned)(ip[45]-'0');
+    if(!evidence_field(result.title,ip+128u,128u) ||
+       !evidence_field(result.product,ip+64u,10u) ||
+       !evidence_field(result.version,ip+74u,6u) ||
+       !evidence_field(result.region,ip+48u,8u) || !evidence_valid(&result)) return false;
+    *out=result;return true;
+}
+bool kui_games_group_evidence_equal(const struct kui_games_group_evidence *a,
+    const struct kui_games_group_evidence *b) {
+    return evidence_valid(a) && evidence_valid(b) && a->total==b->total &&
+        !strcmp(a->title,b->title) && !strcmp(a->product,b->product) &&
+        !strcmp(a->version,b->version) && !strcmp(a->region,b->region);
+}
 bool kui_games_group_key(const char *base,char key[KUI_GAMES_GROUP_KEY_CAP]) {
     if(!key || !kui_destination_name_valid(base)) return false;
     uint64_t a=UINT64_C(14695981039346656037),b=UINT64_C(7809847782465536322);

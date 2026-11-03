@@ -39,6 +39,8 @@ extern struct wifi_model_join wifi_model_joined;
 struct wifi_model_options *wifi_model_live(void);
 /* A real TCP listener has been bound, rather than merely queued on SPI. */
 bool wifi_model_listening(uint16_t port);
+/* Actual firmware slots listening on an already bound host port. */
+unsigned wifi_model_listening_count(uint16_t port);
 /* Firmware update faults, applied behind the real message/link bridge. */
 struct wifi_model_ota_faults {
     uint8_t begin_status, data_status, end_status;

@@ -355,6 +355,12 @@ bool wifi_model_listening(uint16_t port) {
         if(m.bridge.listener[i].fd >= 0 && m.bridge.listener[i].port == port) return true;
     return false;
 }
+unsigned wifi_model_listening_count(uint16_t port) {
+    unsigned count=0;
+    if(wifi_model_listening(port))for(unsigned i=0;i<KWM_SLOTS;i++)
+        if(m.bridge.slot[i].state==KWM_LISTEN && m.bridge.slot[i].local_port==port)++count;
+    return count;
+}
 void wifi_model_restart(void) {
     m.ota_result.open = false;
     kwb_reset(&m.bridge);

@@ -26,6 +26,8 @@ struct kui_system_settings {
     unsigned startup_app;
     bool menu_sounds;
     unsigned screen_inset; /* 0, 1, 2: horizontal margins 0, 16, 32 pixels. */
+    unsigned menu_repeat; /* 0 Normal (250/80 ms), 1 Slow, 2 Fast. */
+    unsigned stick_deadzone; /* 0 Normal (48), 1 Small, 2 Large. */
 };
 #define KUI_SYSTEM_SETTINGS_RECORD_SIZE 40u
 #define KUI_SYSTEM_SETTINGS_PATH_A "0:/KUI/apps/system/settings-a.bin"
@@ -35,10 +37,13 @@ void kui_system_settings_default(struct kui_system_settings *out);
 bool kui_system_settings_valid(const struct kui_system_settings *settings);
 const char *kui_system_video_name(unsigned mode);
 const char *kui_system_startup_name(unsigned app);
-/* Fixed little-endian version 3, still 40 bytes. Versions 1 and 2 are read
+unsigned kui_system_repeat_delay_ms(const struct kui_system_settings *);
+unsigned kui_system_repeat_interval_ms(const struct kui_system_settings *);
+unsigned kui_system_stick_deadzone_value(const struct kui_system_settings *);
+/* Fixed little-endian version 4, still 40 bytes. Versions 1, 2 and 3 are read
  * without rewriting them; each version retains all of its defined preferences.
  * Missing fields default to startup chime on / Home / full-width safe area /
- * menu sounds off. Unknown flags and reserved bytes are rejected per version.
+ * menu sounds off / Normal menu repeat and stick deadzone. Unknown flags and reserved bytes are rejected per version.
  * The CRC covers all preceding bytes; sequence zero and
  * wrapping are forbidden. The saved startup app selects a screen only, never
  * an automatic hardware operation. RTC edits belong to the clock adapter. */

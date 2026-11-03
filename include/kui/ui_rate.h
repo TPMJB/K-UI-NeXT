@@ -29,6 +29,18 @@ static inline bool kui_ui_menu_redraw_due(bool busy, bool was_busy, unsigned hz,
     if(busy) return kui_ui_redraw_due(busy,was_busy,hz,now_ms,last_draw_ms);
     return changed || was_busy || !last_draw_ms || now_ms-last_draw_ms>=33u;
 }
+/* Motion uses a start-to-start deadline. Painting and waiting for vblank
+ * already consume part of that interval; adding an idle delay afterwards
+ * made the short Flow animation advance in only a few slow frames. */
+static inline bool kui_ui_menu_flow_redraw_due(bool motion,bool busy,bool was_busy,unsigned hz,
+        bool changed,uint64_t now_ms,uint64_t last_draw_ms) {
+    if(busy || !motion)return kui_ui_menu_redraw_due(busy,was_busy,hz,changed,now_ms,last_draw_ms);
+    return changed || was_busy || !last_draw_ms || now_ms-last_draw_ms>=16u;
+}
+static inline uint64_t kui_ui_menu_frame_timestamp(bool busy,bool motion,
+        uint64_t started_ms,uint64_t completed_ms) {
+    return busy || motion?started_ms:completed_ms;
+}
 static inline unsigned kui_ui_menu_poll_delay(bool busy) {
     return busy?33u:8u;
 }
@@ -42,14 +54,18 @@ static inline unsigned kui_ui_menu_wait_ms(bool busy,bool drew) {
 /* held contains only navigation bits; action buttons are never repeated.
  * An initial edge is already in pressed. Direction changes reset the hold
  * timer, while a late loop emits one step rather than a burst of catch-up. */
-static inline unsigned kui_ui_navigation_repeat(unsigned held,unsigned pressed,
-        unsigned *previous_held,uint64_t *repeat_at,uint64_t now_ms) {
+static inline unsigned kui_ui_navigation_repeat_configured(unsigned held,unsigned pressed,
+        unsigned *previous_held,uint64_t *repeat_at,uint64_t now_ms,unsigned delay_ms,unsigned interval_ms) {
     if(held!=*previous_held) {
-        *previous_held=held;*repeat_at=now_ms+250u;
+        *previous_held=held;*repeat_at=now_ms+delay_ms;
     } else if(held && now_ms>=*repeat_at) {
-        pressed|=held;*repeat_at=now_ms+80u;
+        pressed|=held;*repeat_at=now_ms+interval_ms;
     }
     return pressed;
+}
+static inline unsigned kui_ui_navigation_repeat(unsigned held,unsigned pressed,
+        unsigned *previous_held,uint64_t *repeat_at,uint64_t now_ms) {
+    return kui_ui_navigation_repeat_configured(held,pressed,previous_held,repeat_at,now_ms,250u,80u);
 }
 /* Games polls controls faster while idle without repainting the whole screen
  * on every poll. Input and completed listings/details appear immediately;

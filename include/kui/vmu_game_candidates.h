@@ -69,7 +69,7 @@ struct kui_vmu_game_candidates_repair {
     uint32_t count;
     struct kui_vmu_game_assignment entries[KUI_VMU_GAME_CANDIDATES_PRODUCTS];
 };
-/* Read only, including current identity/import marker and card/journal lengths
+/* Read only, including current identity/ready marker and card/journal lengths
  * for every returned target. ABSENT alone permits legacy assign-v1/default
  * fallback. Present + multiple targets + NO_DEFAULT requires a launch choice;
  * a sole target can be selected without persisting a default. Outputs clear on
@@ -122,7 +122,8 @@ int kui_vmu_game_candidates_preflight_confirmed(const struct kui_vmu_game_candid
  * batch is a no-op. Retains all old candidates and explicit defaults. For an
  * affected v1-only product, its old identity-pinned target is migrated first
  * without an implicit default, so adding another version asks at launch.
- * All retained and new targets must be completed imported playable cards. */
+ * All retained and new targets must be completed cards: exact import.bin, or
+ * when that marker is absent, a verified game.bin for this exact product. */
 int kui_vmu_game_candidates_apply(const struct kui_vmu_game_assignment *entries,size_t count,
     const struct kui_vmu_game_candidates_storage *storage,kui_log_fn log,kui_cancel_fn cancel);
 /* Same additive publication with an explicitly confirmed repair. Revalidates
@@ -138,6 +139,13 @@ int kui_vmu_game_candidates_apply_confirmed(const struct kui_vmu_game_assignment
  * v1/v2 batch must choose this authority for the whole batch, never publish v1
  * first and v2 afterwards. Existing v1 targets are migrated as above. */
 int kui_vmu_game_candidates_apply_selected(const struct kui_vmu_game_assignment *entries,size_t count,
+    const struct kui_vmu_game_candidates_storage *storage,kui_log_fn log,kui_cancel_fn cancel);
+/* Add a batch (including several targets for one product) and select one exact
+ * member in the SAME generation. Other products' defaults are retained. The
+ * selected target must occur in entries; all ordinary migration, identity,
+ * capacity and complete-card checks still apply. */
+int kui_vmu_game_candidates_apply_choose(const struct kui_vmu_game_assignment *entries,size_t count,
+    const struct kui_vmu_game_assignment *selected,
     const struct kui_vmu_game_candidates_storage *storage,kui_log_fn log,kui_cancel_fn cancel);
 /* target==NULL clears the default. Otherwise it must exactly match a current
  * candidate. expected_sequence comes from list; a stale snapshot refuses before

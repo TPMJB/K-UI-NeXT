@@ -534,9 +534,14 @@ int main(int argc,char **argv) {
             shell.page=KUI_SHELL_GAMES_EXTRA_OPTIONS;shell.game_tools_selected=KUI_SHELL_GAME_TOOL_PATCHES;
         }
         if(!strcmp(argv[1],"games-zso-information")) shell.page=KUI_SHELL_GAMES_INFO;
-    } else if(!strcmp(argv[1],"games-advanced")) {
+    } else if(!strcmp(argv[1],"games-advanced") || !strcmp(argv[1],"games-layout-flow") || !strcmp(argv[1],"games-layout-unsaved")) {
         library(&shell,KUI_GAMES_VIEW_LIST);shell.games_selected=1;shell.games_listing.entries[1].favorite=true;
         shell.page=KUI_SHELL_GAMES_ADVANCED;shell.games_advanced_selected=6;
+        if(strcmp(argv[1],"games-advanced")) {
+            (void)kui_shell_input(&shell,KUI_SHELL_LEFT,false);
+            (void)kui_shell_set_games_layout_saved(&shell,shell.games_layout_generation,shell.games_view,
+                strcmp(argv[1],"games-layout-unsaved")!=0,NULL);
+        }
     } else if(!strcmp(argv[1],"games-probe") || !strcmp(argv[1],"games-probe-loading")) {
         shell.page=KUI_SHELL_GAMES_PROBE_CONFIRM;
         if(!strcmp(argv[1],"games-probe-loading")) {
@@ -1321,6 +1326,54 @@ int main(int argc,char **argv) {
             strcpy(shell.games_vmu_label,ce?"This loader checks its own VMU":"Grandia II saves");
             strcpy(shell.games_vmu_notice,"Compatibility is checked at game launch.");
         }
+    }
+    if(!strncmp(argv[1],"medium-",7))view.busy=false;
+    if(!strcmp(argv[1],"medium-controls")) {
+        shell.page=KUI_SHELL_CONTROLS;shell.system_draft.menu_repeat=1u;shell.system_draft.stick_deadzone=2u;shell.controls_selected=1u;
+    } else if(!strcmp(argv[1],"medium-query")) {
+        shell.page=KUI_SHELL_GAMES_QUERY;shell.games_query_selected=1u;strcpy(shell.games_query_draft.text,"Skies");shell.games_query_draft.region=KUI_GAMES_REGION_USA;shell.games_query_draft.disc=2;shell.games_jump='S';
+    } else if(!strcmp(argv[1],"medium-edit")) {
+        shell.page=KUI_SHELL_GAMES_EDIT;strcpy(shell.games_edit_path,"/Games/Skies of Arcadia/disc1.gdi");strcpy(shell.games_edit.alias,"Skies of Arcadia");strcpy(shell.games_edit.cover_path,"/Pictures/Skies.png");strcpy(shell.games_edit_notice,"Display choices saved");shell.games_edit_selected=1u;
+    } else if(!strcmp(argv[1],"medium-history") || !strcmp(argv[1],"medium-restore")) {
+        shell.page=KUI_SHELL_VMU_HISTORY;strcpy(shell.vmu_history.card.product,"KUITEST");shell.vmu_history.card.pair=2;shell.vmu_history.known=true;shell.vmu_history.count=8;shell.vmu_history_selected=1u;
+        for(unsigned i=0;i<8;i++) {shell.vmu_history.entries[i].sequence=24u-i;shell.vmu_history.entries[i].timestamp_seconds=1793664000u-i*3600u;strcpy(shell.vmu_history.entries[i].label,i==0?"After return":"Before launch");}
+        strcpy(shell.vmu_history.notice,"8 verified checkpoints. Current card stays available.");shell.confirm_vmu_history_restore=!strcmp(argv[1],"medium-restore");
+    } else if(!strcmp(argv[1],"medium-browser")) {
+        shell.page=KUI_SHELL_BROWSER;view.busy=true;shell.browser.state=KUI_BROWSER_READY;strcpy(shell.browser.url,"http://192.168.1.10:8080/");strcpy(shell.browser.message,"Ready for downloads");strcpy(shell.browser.adapter,"W5500 Ethernet");shell.browser.requests=18;shell.browser.downloads=4;
+    } else if(!strcmp(argv[1],"medium-report")) {
+        shell.page=KUI_SHELL_REPORT;shell.problem_report.status.complete=shell.problem_report.status.passed=true;strcpy(shell.problem_report.status.message,"Verified problem report saved");strcpy(shell.problem_report.path,"0:/KUI/reports/support/report-0001");
+    } else if(!strcmp(argv[1],"medium-profile")) {
+        shell.page=KUI_SHELL_GAME_PROFILE;shell.games_detail.profile.matched=true;shell.games_detail.profile.status=KUI_GAME_PROFILE_EXPERIMENTAL;
+        strcpy(shell.games_detail.profile.name,"Example imported setup");strcpy(shell.games_detail.profile.note,"An exact image match. Applying remains your choice.");strcpy(shell.games_detail.profile.evidence,"Experimental imported profile");
+    } else if(!strcmp(argv[1],"medium-gallery")) {
+        files_folder(&shell,true);shell.files_screenshots=true;strcpy(shell.files_path,"/KUI/screenshots");strcpy(shell.files_listing.path,shell.files_path);shell.files_listing.count=shell.files_listing.total=5;shell.files_selected=1u;
+        for(unsigned i=0;i<5;i++) {struct kui_files_entry *e=&shell.files_listing.entries[i];e->directory=false;snprintf(e->name,sizeof(e->name),"capture-000%u.bmp",i+1u);e->bytes=921654u;}
+    }
+    if(!strncmp(argv[1],"games-flow",10)) {
+        static struct kui_games_page flow[3];
+        static const char *titles[]={"Armada","Crazy Taxi","Dead or Alive 2","Evolution","Evolution 2","Grandia II","Jet Grind Radio","MDK2","Power Stone","Rayman 2","Record of Lodoss War","Resident Evil Code: Veronica","Shenmue","Skies of Arcadia","Sonic Adventure","Soul Calibur","Sword of the Berserk","Toy Commander","Virtua Tennis","Worms Armageddon","ChuChu Rocket!","Ikaruga","Phantasy Star Online","Silver"};
+        shell.page=KUI_SHELL_GAMES;shell.games_view=KUI_GAMES_VIEW_FLOW;view.busy=false;
+        (void)kui_shell_games_flow_tick(&shell,1000u);
+        for(unsigned page=0;page<3u;page++) {
+            struct kui_games_page *rows=&flow[page];strcpy(rows->root,"/Games");rows->view=KUI_GAMES_VIEW_FLOW;
+            rows->count=8;rows->total=24;rows->has_more=page<2u;
+            for(unsigned row=0;row<8u;row++) {
+                unsigned at=page*8u+row;struct kui_games_entry *entry=&rows->entries[row];
+                snprintf(entry->name,sizeof(entry->name),"Game %02u",at);snprintf(entry->title,sizeof(entry->title),"%s",titles[at]);
+                snprintf(entry->path,sizeof(entry->path),"/Games/Game%02u/disc.gdi",at);entry->favorite=at==8u || at==13u;
+            }
+        }
+        kui_shell_set_games_listing(&shell,&flow[0]);
+        if(strcmp(argv[1],"games-flow-cold")) (void)kui_shell_set_games_flow_rows(&shell,&flow[1],shell.games_flow_epoch,1u);
+        uint64_t time=1000u;
+        for(unsigned i=0;i<7u;i++) {(void)kui_shell_input(&shell,KUI_SHELL_DOWN,false);time+=KUI_SHELL_GAMES_FLOW_DURATION_MS;(void)kui_shell_games_flow_tick(&shell,time);}
+        (void)kui_shell_input(&shell,KUI_SHELL_DOWN,false);
+        if(!strncmp(argv[1],"games-flow-t",12)) {unsigned elapsed=(unsigned)strtoul(argv[1]+12,NULL,10);(void)kui_shell_games_flow_tick(&shell,time+(elapsed>KUI_SHELL_GAMES_FLOW_DURATION_MS?KUI_SHELL_GAMES_FLOW_DURATION_MS:elapsed));}
+        else if(!strcmp(argv[1],"games-flow-mid"))(void)kui_shell_games_flow_tick(&shell,time+KUI_SHELL_GAMES_FLOW_DURATION_MS/2u);
+        else if(!strcmp(argv[1],"games-flow-end") || !strcmp(argv[1],"games-flow"))(void)kui_shell_games_flow_tick(&shell,time+KUI_SHELL_GAMES_FLOW_DURATION_MS);
+        else if(!strcmp(argv[1],"games-flow-cold"))view.busy=true;
+        make_cover(detail_cover,KUI_COVER_LARGE,4u);view.game_selected_cover=detail_cover;
+        shell.games_listing.entries[shell.games_selected].cover=!shell.games_loading;
     }
     view.game_covers=(const uint16_t (*)[KUI_COVER_PIXELS])covers;view.game_detail_cover=detail_cover;
     view.files_picture=picture;

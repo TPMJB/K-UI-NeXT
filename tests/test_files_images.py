@@ -7,6 +7,7 @@ from pathlib import Path
 import shutil
 import tempfile
 from test_images import run
+from test_games_library_images import private_formatter
 
 ROOT = Path(__file__).resolve().parents[1]
 BINARY = str(ROOT / "build/files-image")
@@ -17,19 +18,28 @@ CASES = ("list", "copy", "cancel", "write-fail", "verify-fail", "full", "move", 
 def main():
     with tempfile.TemporaryDirectory(prefix="kui-files-") as temp:
         base = Path(temp)
+        formatter = None if shutil.which("mkfs.fat") and shutil.which("mkfs.exfat") else private_formatter(base)
         for kind in ("fat32", "exfat"):
             clean = base / f"{kind}-clean.img"
-            with clean.open("wb") as stream:
-                stream.truncate(96 * 1024 * 1024)
-            run("mkfs.fat", "-F", "32", str(clean)) if kind == "fat32" else run("mkfs.exfat", str(clean))
+            if formatter:
+                run(str(formatter), kind, str(clean))
+            else:
+                with clean.open("wb") as stream:
+                    stream.truncate(96 * 1024 * 1024)
+                run("mkfs.fat", "-F", "32", str(clean)) if kind == "fat32" else run("mkfs.exfat", str(clean))
             for case in CASES:
                 image = base / f"{kind}-{case}.img"
                 shutil.copyfile(clean, image)
                 output = run(BINARY, str(image), case)
                 assert f"PASS File Manager image {case}" in output, output[-2000:]
-                run("fsck.fat" if kind == "fat32" else "fsck.exfat", "-n", str(image))
+                checker = shutil.which("fsck.fat" if kind == "fat32" else "fsck.exfat")
+                if checker:
+                    run(checker, "-n", str(image))
                 image.unlink()
                 print(f"PASS {kind} File Manager: {case}", flush=True)
+
+        if not shutil.which("fsck.fat") or not shutil.which("fsck.exfat"):
+            print("Filesystem behavior passed on real FatFs images; external fsck unavailable and not claimed.", flush=True)
 
 
 if __name__ == "__main__":

@@ -275,11 +275,21 @@ static int target_valid(const struct kui_vmu_game_assignment *e,kui_log_fn log,k
     memcpy(marker,"KUIVMUI1",8u);memcpy(marker+16u,e->identity,16u);
     put32(marker+60u,kui_retail_crc32(0,marker,60u));
     snprintf(path,sizeof(path),"0:/KUI/vmu-test/p%04u/import.bin",(unsigned)e->pair);
-    r=required_record(path,actual,64u);
-    if(r || memcmp(actual,marker,64u)) {
+    bool present,sized;r=read_record(path,actual,64u,&present,&sized);
+    if(!r && !present) {
+        /* A dedicated card's verified game.bin is also its creation-complete
+         * marker. Admit that exact product only; a present damaged import
+         * marker must never be hidden by this legacy alternative. */
+        char key[12];
+        snprintf(path,sizeof(path),"0:/KUI/vmu-test/p%04u/game.bin",(unsigned)e->pair);
+        r=required_record(path,actual,64u);
+        if(!r && (!kui_vmu_game_card_binding_decode(actual,64u,key) || memcmp(key,e->key,12u)))
+            r=KUI_VMU_GAME_CANDIDATES_STALE;
+    } else if(!r && (!sized || memcmp(actual,marker,64u)))r=KUI_VMU_GAME_CANDIDATES_STALE;
+    if(r) {
         if(log)log("Virtual VMU choices: %s p%04u import marker %s (result %d)",e->key,(unsigned)e->pair,
             r==KUI_VMU_GAME_CANDIDATES_IO?"could not be read":"is missing, malformed or changed",r?r:KUI_VMU_GAME_CANDIDATES_STALE);
-        return r?r:KUI_VMU_GAME_CANDIDATES_STALE;
+        return r;
     }
     static const char *const names[2]={"card.vmd","card.journal"};
     static const unsigned bytes[2]={131072u,1024u};
@@ -513,6 +523,7 @@ int kui_vmu_game_candidates_preflight_confirmed(const struct kui_vmu_game_candid
     return preflight(plans,count,storage,repair,NULL,log,cancel);
 }
 static int apply(const struct kui_vmu_game_assignment *entries,size_t count,bool select,
+    const struct kui_vmu_game_assignment *choose,
     const struct kui_vmu_game_candidates_storage *storage,const struct kui_vmu_game_candidates_repair *repair,
     kui_log_fn log,kui_cancel_fn cancel) {
     if(!valid_storage(storage) || !entries || !count || count>KUI_VMU_GAME_CANDIDATES_MAX)
@@ -521,6 +532,12 @@ static int apply(const struct kui_vmu_game_assignment *entries,size_t count,bool
     for(size_t i=0;i<count;i++) {
         if(!valid_entry(entries+i))return KUI_VMU_GAME_CANDIDATES_ARGUMENT;
         if(select)for(size_t j=0;j<i;j++)if(!memcmp(entries[i].key,entries[j].key,12u))return KUI_VMU_GAME_CANDIDATES_ARGUMENT;
+    }
+    if(choose) {
+        bool found=false;
+        if(select || !valid_entry(choose))return KUI_VMU_GAME_CANDIDATES_ARGUMENT;
+        for(size_t i=0;i<count;i++)if(!memcmp(entries+i,choose,sizeof(*choose)))found=true;
+        if(!found)return KUI_VMU_GAME_CANDIDATES_ARGUMENT;
     }
     if(repair && (!valid_repair(repair) || !repair_keys_selected(repair,entries,count,sizeof(*entries))))
         return KUI_VMU_GAME_CANDIDATES_ARGUMENT;
@@ -531,11 +548,12 @@ static int apply(const struct kui_vmu_game_assignment *entries,size_t count,bool
     /* Migrate all affected legacy keys before adding new records. */
     for(size_t i=0;!r && i<count;i++)r=migrate(w,entries[i].key,repair,NULL,log,cancel);
     for(size_t i=0;!r && i<count;i++)r=add(&w->table,entries+i);
-    for(size_t i=0;!r && select && i<count;i++) {
-        unsigned at=first(&w->table,entries[i].key),n=members(&w->table,entries[i].key);
+    for(size_t i=0;!r && i<(choose?1u:select?count:0u);i++) {
+        const struct kui_vmu_game_assignment *selected=choose?choose:entries+i;
+        unsigned at=first(&w->table,selected->key),n=members(&w->table,selected->key);
         for(unsigned j=0;j<n;j++) {
             struct candidate_record *e=w->table.entries+at+j;
-            e->flags=e->target.pair==entries[i].pair?DEFAULT_FLAG:0u;
+            e->flags=e->target.pair==selected->pair?DEFAULT_FLAG:0u;
         }
     }
     if(!r)r=all_targets(&w->table,log,cancel);
@@ -545,17 +563,23 @@ static int apply(const struct kui_vmu_game_assignment *entries,size_t count,bool
 }
 int kui_vmu_game_candidates_apply(const struct kui_vmu_game_assignment *entries,size_t count,
     const struct kui_vmu_game_candidates_storage *storage,kui_log_fn log,kui_cancel_fn cancel) {
-    return apply(entries,count,false,storage,NULL,log,cancel);
+    return apply(entries,count,false,NULL,storage,NULL,log,cancel);
 }
 int kui_vmu_game_candidates_apply_confirmed(const struct kui_vmu_game_assignment *entries,size_t count,
     const struct kui_vmu_game_candidates_storage *storage,const struct kui_vmu_game_candidates_repair *repair,
     kui_log_fn log,kui_cancel_fn cancel) {
     if(!repair)return KUI_VMU_GAME_CANDIDATES_ARGUMENT;
-    return apply(entries,count,false,storage,repair,log,cancel);
+    return apply(entries,count,false,NULL,storage,repair,log,cancel);
 }
 int kui_vmu_game_candidates_apply_selected(const struct kui_vmu_game_assignment *entries,size_t count,
     const struct kui_vmu_game_candidates_storage *storage,kui_log_fn log,kui_cancel_fn cancel) {
-    return apply(entries,count,true,storage,NULL,log,cancel);
+    return apply(entries,count,true,NULL,storage,NULL,log,cancel);
+}
+int kui_vmu_game_candidates_apply_choose(const struct kui_vmu_game_assignment *entries,size_t count,
+    const struct kui_vmu_game_assignment *selected,
+    const struct kui_vmu_game_candidates_storage *storage,kui_log_fn log,kui_cancel_fn cancel) {
+    if(!selected)return KUI_VMU_GAME_CANDIDATES_ARGUMENT;
+    return apply(entries,count,false,selected,storage,NULL,log,cancel);
 }
 int kui_vmu_game_candidates_set_default(const char *product,const struct kui_vmu_game_candidate_target *target,
     uint64_t expected_sequence,const struct kui_vmu_game_candidates_storage *storage,kui_log_fn log,kui_cancel_fn cancel) {

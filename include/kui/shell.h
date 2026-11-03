@@ -16,6 +16,10 @@
 #include "kui/games_covers.h"
 #include "kui/files.h"
 #include "kui/ftp.h"
+#include "kui/browser.h"
+#include "kui/vmu_history.h"
+#include "kui/games_library.h"
+#include "kui/problem_report.h"
 #include "kui/storage_test.h"
 #include "kui/network_wifi.h"
 #include "kui/vmu_wizard.h"
@@ -33,6 +37,14 @@
 struct kui_shell_games_art_key {
     unsigned generation,page,view,row;
     char root[KUI_DEST_ROOT_CAP],path[KUI_GAMES_FILE_CAP];
+};
+#define KUI_SHELL_GAMES_FLOW_NEIGHBORS 2u
+#define KUI_SHELL_GAMES_FLOW_ROW_HEIGHT 28u
+#define KUI_SHELL_GAMES_FLOW_DURATION_MS 60u
+struct kui_shell_games_flow_page {
+    struct kui_games_page rows;
+    unsigned page;
+    bool valid;
 };
 enum kui_shell_button {
     KUI_SHELL_UP = 1u << 0, KUI_SHELL_DOWN = 1u << 1,
@@ -59,7 +71,7 @@ enum kui_shell_page { KUI_SHELL_HOME, KUI_SHELL_RIPPER,
     KUI_SHELL_GAMES_TESTS, KUI_SHELL_GAMES_INFO, KUI_SHELL_GAMES_PATCHES, KUI_SHELL_GAMES_CODEC, KUI_SHELL_GAMES_CHECK, KUI_SHELL_VMU_IMAGE, KUI_SHELL_VMU_IMPORT,
     KUI_SHELL_VMU_COLLECTION, KUI_SHELL_VMU_TOOLS, KUI_SHELL_VMU_WIZARD,
     KUI_SHELL_DISC_TOOLS, KUI_SHELL_VMU_CARD, KUI_SHELL_SALVAGE_DRIVE,
-    KUI_SHELL_SALVAGE_OPTIONS, KUI_SHELL_GAMES_VMU_CARD, KUI_SHELL_GD_OPTIONS };
+    KUI_SHELL_SALVAGE_OPTIONS, KUI_SHELL_GAMES_VMU_CARD, KUI_SHELL_GD_OPTIONS, KUI_SHELL_CONTROLS, KUI_SHELL_BROWSER, KUI_SHELL_VMU_HISTORY, KUI_SHELL_GAMES_QUERY, KUI_SHELL_GAMES_EDIT, KUI_SHELL_REPORT, KUI_SHELL_GAME_PROFILE };
 enum kui_shell_recovery_row {
     KUI_SHELL_RECOVERY_CONTINUE, KUI_SHELL_RECOVERY_NEW, KUI_SHELL_RECOVERY_OPTIONS,
     KUI_SHELL_RECOVERY_DIAGNOSTICS, KUI_SHELL_RECOVERY_COUNT
@@ -102,7 +114,7 @@ enum kui_shell_game_tool {
     KUI_SHELL_GAME_TOOL_ENCODING, KUI_SHELL_GAME_TOOL_SPEED,
     KUI_SHELL_GAME_TOOL_INFO, KUI_SHELL_GAME_TOOL_TESTS,
     KUI_SHELL_GAME_TOOL_PATCHES, KUI_SHELL_GAME_TOOL_DEFAULTS, KUI_SHELL_GAME_TOOL_CHECK, KUI_SHELL_GAME_TOOL_BASELINE,
-    KUI_SHELL_GAME_TOOL_VMU_SLOT, KUI_SHELL_GAME_TOOL_COUNT
+    KUI_SHELL_GAME_TOOL_VMU_SLOT, KUI_SHELL_GAME_TOOL_PROFILE, KUI_SHELL_GAME_TOOL_COUNT
 };
 enum kui_shell_ripper_tool {
     KUI_SHELL_RIPPER_TOOL_VERIFY, KUI_SHELL_RIPPER_TOOL_RESUME,
@@ -156,7 +168,10 @@ enum kui_shell_action {
     KUI_SHELL_VMU_EMULATION_LOAD, KUI_SHELL_VMU_EMULATION_SAVE,
     KUI_SHELL_VMU_RENAME, KUI_SHELL_VMU_GAME_INFO, KUI_SHELL_VMU_GAME_CARD_DEFAULT,
     KUI_SHELL_GD_CHECK, KUI_SHELL_GD_DIRECT_BOOT, KUI_SHELL_GD_VMU_INFO,
-    KUI_SHELL_GD_OPTIONS_LOAD, KUI_SHELL_GD_REGION_SAVE, KUI_SHELL_GAMES_FAVORITE
+    KUI_SHELL_GD_OPTIONS_LOAD, KUI_SHELL_GD_REGION_SAVE, KUI_SHELL_GAMES_FAVORITE, KUI_SHELL_BROWSER_START,
+    KUI_SHELL_VMU_HISTORY_RUN, KUI_SHELL_GAMES_EDIT_LOAD, KUI_SHELL_GAMES_EDIT_SAVE,
+    KUI_SHELL_GAMES_JUMP, KUI_SHELL_GAMES_IDENTITY_VERIFY, KUI_SHELL_PROBLEM_REPORT,
+    KUI_SHELL_GAMES_LAYOUT_SAVE
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
@@ -166,7 +181,7 @@ struct kui_shell {
     bool confirm_new, confirm_quick_resume, confirm_gd_boot, confirm_gd_direct;
     struct kui_settings saved, draft;
     struct kui_system_settings system_saved, system_draft;
-    unsigned system_selected;
+    unsigned system_selected, controls_selected;
     bool video_trial, confirm_defaults, confirm_clock, confirm_vmu_restore;
     bool confirm_vmu_delete, confirm_vmu_copy, confirm_music_clear, confirm_restart;
     bool confirm_vmu_copy_all, confirm_vmu_import, vmu_import_staged;
@@ -247,7 +262,28 @@ struct kui_shell {
     unsigned games_page, games_selected, games_advanced_selected;
     /* KUI_GAMES_VIEW_SAVED until a listing reports the card's saved view. */
     unsigned games_view,games_filter;
+    /* Left/right layout changes use the current rows. Only the worker saves
+     * the latest preference; its acknowledgement cannot change selection. */
+    unsigned games_layout_generation;
+    bool games_layout_saving;
+    char games_layout_notice[128];
     char games_favorite_path[KUI_GAMES_FILE_CAP],games_favorite_group[33],games_activity_notice[128];
+    struct kui_games_query games_query,games_query_draft;
+    unsigned games_query_selected,games_keyboard;
+    char games_jump;
+    struct kui_games_library_edit games_edit;
+    char games_edit_root[KUI_DEST_ROOT_CAP],games_edit_path[KUI_GAMES_FILE_CAP],games_edit_group[33];
+    char games_edit_notice[128];
+    unsigned games_edit_generation,games_edit_selected;
+    bool games_edit_loading,games_edit_known,games_edit_mutation,games_identity_pending,games_rows_stale,confirm_games_identity;
+    /* Flow retains the selected aligned page plus two adjacent row windows.
+     * The dataset epoch changes independently of selection/art generations. */
+    struct kui_shell_games_flow_page games_flow_pages[KUI_SHELL_GAMES_FLOW_NEIGHBORS];
+    unsigned games_flow_epoch,games_flow_primary_page,games_flow_selected;
+    bool games_flow_ready,games_flow_edge_pending,games_flow_motion;
+    uint64_t games_flow_now,games_flow_started;
+    int64_t games_flow_scroll,games_flow_from,games_flow_target;
+    int64_t games_flow_highlight,games_flow_highlight_from,games_flow_highlight_target;
     unsigned games_generation;
     bool games_loading,games_art_loading;
     /* A page turn keeps drawing the page it left, with its page number and
@@ -270,7 +306,7 @@ struct kui_shell {
     unsigned games_launch_codec,games_codec_selected;
     unsigned games_launch_vmu_slot; /* enum kui_game_vmu_slot */
     bool games_codec_override;
-    bool games_baseline;
+    bool games_baseline,games_settings_saved;
     struct kui_game_launch_settings games_baseline_previous;
     char games_launch_notice[128];
     char games_vmu_label[64],games_vmu_notice[128],games_vmu_product[12];
@@ -284,6 +320,10 @@ struct kui_shell {
     struct kui_vmu_game_info games_vmu_info;
     struct kui_vmu_game_selection games_vmu_selection;
     unsigned games_vmu_card_selected;
+    struct kui_vmu_history_request vmu_history_request;
+    struct kui_vmu_history_view vmu_history;
+    unsigned vmu_history_generation,vmu_history_selected;
+    bool vmu_history_loading,confirm_vmu_history_restore;
     bool games_vmu_default_clear,games_vmu_pick_pending_launch,games_vmu_default_saving,games_vmu_pick_check;
     enum kui_shell_page games_vmu_pick_return;
     bool games_launch_cdda, games_retail_scrambled;
@@ -297,7 +337,7 @@ struct kui_shell {
     /* Destination is committed only by a successful worker load/save. Browsing
      * and typing are drafts; neither changes where a new capture is written. */
     char destination[KUI_DEST_ROOT_CAP], browse_path[KUI_DEST_ROOT_CAP];
-    char keyboard[KUI_DEST_ROOT_CAP], keyboard_original[KUI_DEST_ROOT_CAP];
+    char keyboard[KUI_FILES_PATH_CAP], keyboard_original[KUI_DEST_ROOT_CAP];
     char destination_notice[128];
     struct kui_destination_page listing;
     unsigned browser_selected, browser_page, keyboard_selected;
@@ -318,6 +358,8 @@ struct kui_shell {
      * is checked (FILES_CHECK) before it is confirmed and run (FILES_RUN);
      * the run is followed by files_request, which lists the folder again. */
     char files_path[KUI_FILES_PATH_CAP], files_pick_path[KUI_FILES_PATH_CAP];
+    bool files_screenshots;
+    char files_gallery_return[KUI_FILES_PATH_CAP];
     struct kui_files_page files_listing, files_pick;
     struct kui_files_request files_request;
     struct kui_files_job files_job;
@@ -350,6 +392,12 @@ struct kui_shell {
      * taken. The keyboard types the password, or first the name of a
      * network typed by hand (wifi_typing_name). */
     struct kui_wifi_view wifi;
+    struct kui_problem_report_options problem_report_options;
+    struct kui_problem_report_view problem_report;
+    bool problem_report_visible;
+    unsigned network_selected;
+    struct kui_browser_options browser_options;
+    struct kui_browser_status browser;
     unsigned wifi_selected;
     struct kui_wifi_request wifi_request;
     uint8_t wifi_security; /* of the network being joined; 0xff: not known */
@@ -444,6 +492,15 @@ bool kui_shell_games_zso_selected(const struct kui_shell *);
 bool kui_shell_games_image_ready(const struct kui_shell *shell);
 /* The view to draw: the saved view once known, else the list. */
 unsigned kui_shell_games_view(const struct kui_shell *shell);
+bool kui_shell_set_games_layout_saved(struct kui_shell *,unsigned generation,unsigned view,
+    bool ok,const char *notice);
+/* Main-loop publications only. The worker snapshots context while locked and
+ * queues its rows; it never writes shell state while a frame is being drawn. */
+bool kui_shell_games_flow_needed(const struct kui_shell *,unsigned *page,unsigned *epoch);
+bool kui_shell_set_games_flow_rows(struct kui_shell *,const struct kui_games_page *,unsigned epoch,unsigned page);
+bool kui_shell_games_flow_tick(struct kui_shell *,uint64_t now_ms);
+bool kui_shell_games_flow_animating(const struct kui_shell *);
+const struct kui_games_entry *kui_shell_games_flow_entry(const struct kui_shell *,unsigned absolute_row);
 bool kui_shell_games_art_key(const struct kui_shell *,struct kui_shell_games_art_key *);
 bool kui_shell_games_art_same(const struct kui_shell_games_art_key *,const struct kui_shell_games_art_key *);
 bool kui_shell_set_games_art(struct kui_shell *,const struct kui_shell_games_art_key *,
@@ -508,6 +565,12 @@ enum { KUI_SHELL_KEYS_LOWER, KUI_SHELL_KEYS_UPPER, KUI_SHELL_KEYS_SYMBOLS, KUI_S
 const char *kui_shell_key_label(unsigned key, unsigned layer);
 /* The Wi-Fi page's view from the worker. A view without a scan keeps the
  * networks already listed. */
+void kui_shell_set_vmu_history(struct kui_shell *,unsigned generation,
+    const struct kui_vmu_history_request *,const struct kui_vmu_history_view *);
+void kui_shell_set_games_edit(struct kui_shell *,unsigned generation,const char *path,
+    const struct kui_games_library_edit *,bool ok,const char *notice);
+void kui_shell_problem_report_status(struct kui_shell *,const struct kui_problem_report_view *);
+void kui_shell_browser_status(struct kui_shell *,const struct kui_browser_status *);
 void kui_shell_set_wifi(struct kui_shell *shell, const struct kui_wifi_view *view);
 /* Rows on the Wi-Fi page: the band setting, each network, "Other network". */
 unsigned kui_shell_wifi_rows(const struct kui_shell *shell);

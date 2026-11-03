@@ -45,4 +45,6 @@ extern struct w5500_model_counts w5500_model_counts;
 void w5500_model_advance(uint64_t ms);
 /* The options in force, to change while running (a noisier bus, say). */
 struct w5500_model_options *w5500_model_live(void);
+/* Actual TCP slots listening on an already bound host port. */
+unsigned w5500_model_listening_count(uint16_t port);
 #endif

@@ -7,14 +7,14 @@
 static void same(struct kui_system_settings a,struct kui_system_settings b) {
     assert(a.video_mode==b.video_mode && a.show_memory==b.show_memory &&
            a.music_enabled==b.music_enabled && a.music_volume==b.music_volume &&
-           a.startup_chime==b.startup_chime && a.startup_app==b.startup_app && a.screen_inset==b.screen_inset && a.menu_sounds==b.menu_sounds);
+           a.startup_chime==b.startup_chime && a.startup_app==b.startup_app && a.screen_inset==b.screen_inset && a.menu_sounds==b.menu_sounds && a.menu_repeat==b.menu_repeat && a.stick_deadzone==b.stick_deadzone);
 }
 static void crc(uint8_t *record) {
     uint32_t sum=kui_crc32(0,record,36);
     for(unsigned i=0;i<4;i++) record[36+i]=(uint8_t)(sum>>(8*i));
 }
 static void rejects(const void *record,size_t size) {
-    struct kui_system_settings before={KUI_VIDEO_PAL50,false,true,100,false,KUI_STARTUP_MUSIC,false,0},out=before;
+    struct kui_system_settings before={KUI_VIDEO_PAL50,false,true,100,false,KUI_STARTUP_MUSIC,false,0,0,0},out=before;
     uint64_t sequence=123;
     assert(!kui_system_settings_decode(&out,&sequence,record,size));same(out,before);assert(sequence==123);
 }
@@ -44,7 +44,7 @@ int main(void) {
     };
     uint8_t record[KUI_SYSTEM_SETTINGS_RECORD_SIZE+1];uint64_t sequence;
     assert(kui_system_settings_encode(record,&defaults,1));
-    assert(!memcmp(record,fixtures[2],KUI_SYSTEM_SETTINGS_RECORD_SIZE));
+    assert(record[8]==4u && !memcmp(record+24,fixtures[2]+24,12));
     for(unsigned version=0;version<3;version++) {
         const uint8_t *fixture=fixtures[version];
         assert(kui_system_settings_decode(&out,&sequence,fixture,KUI_SYSTEM_SETTINGS_RECORD_SIZE));
@@ -60,7 +60,7 @@ int main(void) {
         for(unsigned i=0;i<sizeof(bytes)/sizeof(bytes[0]);i++) {
             memcpy(record,fixture,KUI_SYSTEM_SETTINGS_RECORD_SIZE);unsigned pos=bytes[i];
             record[pos]=pos==24?KUI_VIDEO_MODE_COUNT:pos==25?(version==2?16:8):pos==26?101:pos==16?0:
-                        pos==8?4:pos==27?KUI_STARTUP_APP_COUNT:pos==28&&version==2?3:(uint8_t)(record[pos]+1);
+                        pos==8?5:pos==27?KUI_STARTUP_APP_COUNT:pos==28&&version==2?3:(uint8_t)(record[pos]+1);
             crc(record);rejects(record,KUI_SYSTEM_SETTINGS_RECORD_SIZE);
         }
     }
@@ -68,7 +68,7 @@ int main(void) {
     for(unsigned mode=0;mode<KUI_VIDEO_MODE_COUNT;mode++) for(unsigned flags=0;flags<8;flags++)
         for(unsigned app=0;app<KUI_STARTUP_APP_COUNT;app++) for(unsigned volume=0;volume<=100;volume++)
             for(unsigned i=0;i<3;i++) {
-                struct kui_system_settings wanted={mode,(flags&1u)!=0,(flags&2u)!=0,volume,(flags&4u)!=0,app,(volume%2)!=0,(volume%3)};
+                struct kui_system_settings wanted={mode,(flags&1u)!=0,(flags&2u)!=0,volume,(flags&4u)!=0,app,(volume%2)!=0,(volume%3),(volume%3),(app%3)};
                 assert(kui_system_settings_encode(record,&wanted,sequences[i]));
                 assert(kui_system_settings_decode(&out,&sequence,record,KUI_SYSTEM_SETTINGS_RECORD_SIZE));
                 same(out,wanted);assert(sequence==sequences[i]);
@@ -79,7 +79,7 @@ int main(void) {
         memcpy(record,fixtures[0],KUI_SYSTEM_SETTINGS_RECORD_SIZE);
         record[24]=(uint8_t)mode;record[25]=(uint8_t)flags;record[26]=10;crc(record);
         assert(kui_system_settings_decode(&out,&sequence,record,KUI_SYSTEM_SETTINGS_RECORD_SIZE));
-        struct kui_system_settings migrated={mode,(flags&1u)!=0,(flags&2u)!=0,10,true,KUI_STARTUP_HOME,false,0};
+        struct kui_system_settings migrated={mode,(flags&1u)!=0,(flags&2u)!=0,10,true,KUI_STARTUP_HOME,false,0,0,0};
         same(out,migrated);
     }
     memcpy(record,fixtures[0],KUI_SYSTEM_SETTINGS_RECORD_SIZE);record[25]|=4;crc(record);rejects(record,KUI_SYSTEM_SETTINGS_RECORD_SIZE);
@@ -98,6 +98,18 @@ int main(void) {
     assert(!kui_system_settings_encode(record,&invalid,1));assert(!memcmp(record,fixtures[1],KUI_SYSTEM_SETTINGS_RECORD_SIZE));
     assert(!kui_system_settings_encode(NULL,&defaults,1));assert(!kui_system_settings_encode(record,NULL,1));
     assert(!kui_system_settings_valid(NULL));kui_system_settings_default(NULL);
-    puts("PASS system settings: v1/v2 migration, v3 safe-area fixtures, bounded fields, reserved bytes, CRC and sequences");
+    for(unsigned i=0;i<3u;i++) {
+        struct kui_system_settings wanted=defaults;wanted.menu_repeat=i;wanted.stick_deadzone=2u-i;
+        assert(kui_system_settings_encode(record,&wanted,22u));
+        assert(kui_system_settings_decode(&out,&sequence,record,KUI_SYSTEM_SETTINGS_RECORD_SIZE));same(out,wanted);
+        assert(kui_system_repeat_delay_ms(&wanted)==(i==0?250u:i==1?400u:180u));
+        assert(kui_system_repeat_interval_ms(&wanted)==(i==0?80u:i==1?120u:50u));
+        assert(kui_system_stick_deadzone_value(&wanted)==(i==0?64u:i==1?32u:48u));
+    }
+    assert(kui_system_repeat_delay_ms(NULL)==250u && kui_system_repeat_interval_ms(NULL)==80u);
+    assert(kui_system_stick_deadzone_value(NULL)==48u);
+    defaults.menu_repeat=3;assert(!kui_system_settings_valid(&defaults));defaults.menu_repeat=0;
+    defaults.stick_deadzone=3;assert(!kui_system_settings_valid(&defaults));
+    puts("PASS system settings: v1/v2/v3 migration, v4 input preferences, bounded fields, reserved bytes, CRC and sequences");
     return 0;
 }

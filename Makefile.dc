@@ -48,6 +48,9 @@ RUNTIME_OBJECTS += build/dc/src/core/game_image.o build/dc/src/core/game_metadat
 RUNTIME_OBJECTS += build/dc/src/core/games_group.o
 RUNTIME_OBJECTS += build/dc/src/core/screenshot.o build/dc/src/core/games_activity.o
 RUNTIME_OBJECTS += build/dc/src/core/native_session.o build/dc/src/core/native_return.o
+RUNTIME_OBJECTS += build/dc/src/core/game_profile.o build/dc/src/core/games_query.o build/dc/src/core/games_metadata.o
+RUNTIME_OBJECTS += build/dc/src/core/vmu_history_record.o build/dc/src/core/vmu_history.o build/dc/src/core/http_protocol.o
+RUNTIME_OBJECTS += build/dc/src/core/vmu_history_session.o
 # Each game's own virtual card: pair selection, the ownership scan that builds
 # its P2 profile, and the read-only CID query used by that scan.
 RUNTIME_OBJECTS += build/dc/src/core/vmu_game_card.o build/dc/src/core/vmu_game_card_service.o \
@@ -91,6 +94,7 @@ build/dc/src/apps/games_retail.o: src/apps/games_vmu_card.inc include/kui/vmu_ga
 build/dc/src/apps/games_retail.o build/dc/sd-runtime.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
 build/dc/src/apps/vmu_wizard.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
 build/dc/src/apps/vmu_game_info.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
+build/dc/src/apps/vmu_history.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
 build/dc/src/apps/disc_vmu_card.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
 # These separately linked, opt-in music modules retain their tested CE layout
 # even when the ordinary native loader uses its lower firmware reservation.
@@ -124,7 +128,8 @@ endif
 
 # Refresh the visible source identifier after every commit, even if main.c did
 # not change. Relinking also records the exact source state used by packaging.
-build/dc/src/dreamcast/main.o build/dc/main-runtime.o: force-build-id
+build/dc/src/dreamcast/main.o build/dc/main-runtime.o \
+    build/dc/src/apps/games_retail.o build/dc/src/apps/games_library.o: force-build-id
 force-build-id:
 
 build/dc/%.o: %.c
@@ -668,3 +673,9 @@ $(RETAIL_PHYSICAL_DIR)/entry.elf: $(RETAIL_PHYSICAL_DIR)/retail_entry_asm.o src/
 $(RETAIL_PHYSICAL_DIR)/retail-physical.kui: $(RETAIL_PHYSICAL_DIR)/entry.elf tools/check_retail_physical.py
 	python3 tools/runtime_package.py build $< $@ --build-id $(BUILD_ID)
 -include $(RETAIL_PHYSICAL_DIR)/retail_stage.d $(RETAIL_PHYSICAL_DIR)/retail_stage_asm.d $(RETAIL_PHYSICAL_DIR)/retail_entry_asm.d
+
+# Separate compiler-report objects; never alter the runtime's linked objects.
+.PHONY: check-games-scan-stack
+check-games-scan-stack:
+	python3 tools/check_games_scan_stack.py --build --directory build/games-scan-stack
+	python3 tests/test_games_scan_stack.py build/games-scan-stack

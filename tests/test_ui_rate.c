@@ -120,6 +120,38 @@ static void all_menu_input_latency(void) {
     }
 }
 
+static void flow_animation_cadence(void) {
+    /* Vblank/painting are part of a moving frame's16ms budget, not followed
+     * by another33ms wait. Static pages retain the quieter old behavior. */
+    for(unsigned cost=1u;cost<=80u;cost++) {
+        uint64_t start=5000u,end=start+cost;
+        uint64_t stamp=kui_ui_menu_frame_timestamp(false,true,start,end);
+        assert(stamp==start);
+        assert(kui_ui_menu_flow_redraw_due(true,false,false,0,false,end,stamp)==(cost>=16u));
+        assert(kui_ui_menu_flow_redraw_due(true,false,false,2,false,start+16u,stamp));
+        assert(!kui_ui_menu_flow_redraw_due(true,false,false,2,false,start+15u,stamp));
+        assert(kui_ui_menu_frame_timestamp(false,false,start,end)==end);
+        assert(!kui_ui_menu_flow_redraw_due(false,false,false,2,false,end,end));
+        assert(kui_ui_menu_frame_timestamp(true,true,start,end)==start);
+    }
+    assert(kui_ui_menu_flow_redraw_due(true,false,false,0,true,5001u,5000u));
+    assert(!kui_ui_menu_flow_redraw_due(true,true,true,0,true,6000u,5000u));
+    assert(!kui_ui_menu_flow_redraw_due(true,true,true,2,true,5499u,5000u));
+    assert(kui_ui_menu_flow_redraw_due(true,true,true,2,true,5500u,5000u));
+    unsigned counts[2]={0};
+    for(unsigned moving=0;moving<2u;moving++) {
+        uint64_t last=0u,previous=0u;
+        for(uint64_t now=1000u;now<2000u;) {
+            if(kui_ui_menu_flow_redraw_due(moving,false,false,2,false,now,last)) {
+                if(previous)assert(now-previous>=16u);
+                previous=now;++counts[moving];
+                last=kui_ui_menu_frame_timestamp(false,moving,now,now+16u);now+=16u;
+            } else now+=kui_ui_menu_wait_ms(false,false);
+        }
+    }
+    assert(counts[1]>=62u && counts[1]<=63u && counts[1]>counts[0]*2u);
+}
+
 static void menu_navigation_edges(void) {
     enum { UP=1u, DOWN=2u, ACTION=4u };
     unsigned held=0;
@@ -151,6 +183,7 @@ static void menu_navigation_edges(void) {
 int main(void) {
     games_idle_cadence();
     all_menu_input_latency();
+    flow_animation_cadence();
     menu_navigation_edges();
     /* Idle always redraws, whatever the cap says. */
     assert(kui_ui_redraw_due(false, false, 0, 5000, 5000));
