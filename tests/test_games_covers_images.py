@@ -14,7 +14,7 @@ from zso_fixture import lzo_block
 
 ROOT = Path(__file__).resolve().parents[1]
 BINARY = str(ROOT / "build/games-covers-image")
-CASES = ("scan", "selected-cache", "session", "titles", "cancel", "write-fail", "missing-root", "format-iso", "format-cue",
+CASES = ("scan", "selected-cache", "session", "titles", "layout-save", "cancel", "write-fail", "missing-root", "format-iso", "format-cue",
          "format-cdi", "format-zso-lzo", "format-compressed", "format-legacy-empty", "format-payloads")
 
 

@@ -22,7 +22,11 @@ CASES = ("cold", "groups", "stale", "cancel", "cancel-before", "cancel-readback"
 EDITOR_CASES = ("query", "editor", "editor-write-fail", "editor-corrupt",
                 "identity-move", "identity-duplicate", "identity-changed", "identity-conflict",
                 "identity-representation", "identity-legacy", "identity-pair")
-CASES += EDITOR_CASES + ("catalogue-v2",)
+CASES += EDITOR_CASES + ("catalogue-v2", "catalogue-v3")
+GROUP_CASES = ("capture-groups", "capture-duplicates", "capture-release-conflict", "capture-invalid",
+               "capture-read-fail", "capture-cancel", "capture-passport", "capture-duplicate-copy", "capture-two-releases", "capture-label-collision",
+               "capture-activity", "capture-activity-explicit", "capture-activity-capacity")
+CASES += GROUP_CASES
 
 
 def private_formatter(base):
@@ -37,14 +41,17 @@ def private_formatter(base):
         "-Wall", "-Wextra", "-Werror", "-Wpedantic",
         "-fsanitize=address,undefined", "-fno-sanitize-recover=all",
         "-fno-omit-frame-pointer", "-fno-pie", "-no-pie", "-include", str(header),
-        "-I" + str(ROOT / "include"), "-I" + str(ROOT / ".deps/fatfs/source"),
+        "-I" + str(ROOT / "include"), "-I" + str(fatfs_source()),
         str(ROOT / "tests/format_fatfs_fixture.c"),
-        str(ROOT / ".deps/fatfs/source/ff.c"),
-        str(ROOT / ".deps/fatfs/source/ffunicode.c"), "-o", str(binary))
+        str(fatfs_source() / "ff.c"),
+        str(fatfs_source() / "ffunicode.c"), "-o", str(binary))
     return binary
 
+def fatfs_source():
+    dependency = ROOT / ".deps/fatfs/source"
+    return dependency if dependency.is_dir() else ROOT / "fatfs/source"
 
-def fixture(base, enhanced=False):
+def fixture(base, enhanced=False, capture_case=None):
     games = base / "Games"
     make_fixture(games / "Skies of Arcadia Disc 1", b"SYNTHETIC DISC ONE")
     make_fixture(games / "Skies of Arcadia Disc 2", b"SYNTHETIC DISC TWO")
@@ -59,6 +66,51 @@ def fixture(base, enhanced=False):
         folder.mkdir(parents=True)
         (folder / "selected.iso").write_bytes(b"SYNTHETIC IMAGE; LISTING ONLY")
     (base / "KUI").mkdir()
+    if capture_case:
+        # Synthetic payloads with factual release fields from Redump's own
+        # published IP headers: https://redump.info/disc/3028 /3029 /3034.
+        # No retail executable, audio or artwork bytes are used.
+        names = ["Shenmue", "Shenmue (2)", "Shenmue (3)"]
+        if capture_case in ("capture-passport", "capture-duplicate-copy"):
+            names.append("Shenmue (4)")
+        elif capture_case == "capture-two-releases":
+            names += ["Shenmue (4)", "Shenmue (5)"]
+        for disc, name in enumerate(names, 1):
+            folder = games / name
+            make_fixture(folder, b"SHENMUE")
+            track = folder / "track03.bin"
+            data = bytearray(track.read_bytes())
+            at = 16
+            actual_disc = 1 if capture_case == "capture-duplicates" and disc == 2 else disc
+            if capture_case == "capture-duplicate-copy" and disc == 4:
+                actual_disc = 1
+            elif capture_case == "capture-two-releases" and disc >= 4:
+                actual_disc = disc - 3
+            data[at+32:at+48] = f"5BFD GD-ROM{actual_disc}/4  ".encode()
+            data[at+48:at+56] = b"E       " if capture_case == "capture-two-releases" and disc >= 4 else b"U       "
+            data[at+56:at+64] = b"0799810 "
+            data[at+64:at+74] = b"MK-51059  "
+            newer = (capture_case == "capture-release-conflict" and disc == 3) or (capture_case in ("capture-passport", "capture-two-releases") and disc >= 4)
+            data[at+74:at+80] = b"V1.004" if newer else b"V1.003"
+            if capture_case == "capture-invalid" and disc == 3:
+                data[at+44] = ord("?")
+            track.write_bytes(data)
+        run(sys.executable, str(ROOT / "tools/gdi_optimize.py"),
+            str(games / "Shenmue (2)/disc.gdi"), str(games / "Shenmue (2)-2048"))
+        if capture_case == "capture-label-collision":
+            long_title = "海" * 36
+            for ordinal in range(1, 5):
+                folder = games / (long_title if ordinal == 1 else f"{long_title} ({ordinal})")
+                make_fixture(folder, b"SYNTHETIC RELEASE A" if ordinal < 3 else b"SYNTHETIC RELEASE B")
+                track = folder / "track03.bin"
+                data = bytearray(track.read_bytes())
+                data[16+32:16+48] = f"0000 GD-ROM{1 if ordinal % 2 else 2}/2  ".encode()
+                data[16+64:16+74] = b"KUI-1234  "
+                track.write_bytes(data)
+        for name in ("Shenmue II D1", "Shenmue II D2", "RE_CODE_VERONICA_D1", "RE_CODE_VERONICA_D2"):
+            folder = games / name
+            folder.mkdir()
+            (folder / "selected.iso").write_bytes(b"SYNTHETIC IMAGE; LISTING ONLY")
     if enhanced:
         make_fixture(games / "Verified", b"SYNTHETIC VERIFIED")
         shutil.copytree(games / "Verified", games / "Copy")
@@ -101,6 +153,11 @@ def main():
         if any(case in EDITOR_CASES for case in args.case or CASES):
             fixture(enhanced, enhanced=True)
         formatter = None
+        capture_sources = {}
+        for case in args.case or CASES:
+            if case in GROUP_CASES:
+                capture_sources[case] = base / case
+                fixture(capture_sources[case], capture_case=case)
         for kind in ("fat32", "exfat"):
             clean = base / f"{kind}-clean.img"
             mkfs = shutil.which("mkfs.fat" if kind == "fat32" else "mkfs.exfat")
@@ -118,7 +175,7 @@ def main():
             for case in args.case or CASES:
                 card = base / f"{kind}-{case}.img"
                 shutil.copyfile(clean, card)
-                selected_source = enhanced if case in EDITOR_CASES else source
+                selected_source = capture_sources.get(case, enhanced if case in EDITOR_CASES else source)
                 run(BINARY, str(card), str(selected_source), "seed", case)
                 output = run(BINARY, str(card), str(selected_source), "check", case)
                 assert f"PASS Games catalogue {case}; production writes stayed under KUI" in output

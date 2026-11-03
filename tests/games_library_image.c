@@ -21,9 +21,9 @@
 static struct {
     FILE *image;
     uint64_t blocks;
-    bool active,connected,cancelled,cancel_directory,cancel_readback,fail_write,fail_read,fail_source;
-    unsigned block_reads,block_writes,opens,game_opens,dir_opens,readdirs,stats,writes,unlinks,files,dirs,fail_generation;
-    struct {FIL *file;bool index,generation,source;} opened[16];
+    bool active,connected,cancelled,cancel_directory,cancel_readback,fail_write,fail_read,fail_source,fail_group_ip,cancel_group_ip;
+    unsigned block_reads,block_writes,opens,game_opens,dir_opens,readdirs,stats,writes,unlinks,files,dirs,fail_generation,group_reads,group_bytes;
+    struct {FIL *file;bool index,generation,source,ip;} opened[16];
 } test;
 static FATFS fs;
 static void log_line(const char *format,...) {
@@ -69,6 +69,7 @@ FRESULT __wrap_f_open(FIL *file,const TCHAR *path,BYTE flags) {
         test.opened[i].index=strstr(path,"/games-library/") && !strstr(path,"/generation-");
         test.opened[i].generation=strstr(path,"/games-library/generation-")!=NULL;
         test.opened[i].source=strstr(path,"/Games/") && strstr(path,".gdi");
+        test.opened[i].ip=strstr(path,"/Games/") && strstr(path,"track03.bin");
     }
     return result;
 }
@@ -78,16 +79,20 @@ FRESULT __wrap_f_close(FIL *file) {
     if(test.active) {
         assert(test.files);--test.files;unsigned i=0;for(;i<16 && test.opened[i].file!=file;i++);
         assert(i<16);test.opened[i].file=NULL;
-        test.opened[i].index=test.opened[i].generation=test.opened[i].source=false;
+        test.opened[i].index=test.opened[i].generation=test.opened[i].source=test.opened[i].ip=false;
     }
     return result;
 }
 FRESULT __real_f_read(FIL *,void *,UINT,UINT *);
 FRESULT __wrap_f_read(FIL *file,void *out,UINT count,UINT *got) {
+    bool ip=false;for(unsigned i=0;i<16;i++)if(test.opened[i].file==file)ip=test.opened[i].ip;
+    if(test.active && test.fail_group_ip && ip) {*got=0;return FR_DISK_ERR;}
     if(test.active && test.fail_read && library_file(file)) {*got=0;return FR_DISK_ERR;}
     if(test.active && test.fail_source && source_file(file)) {*got=0;return FR_DISK_ERR;}
     if(test.active && test.fail_generation==1 && generation_file(file)) {*got=0;return FR_DISK_ERR;}
     FRESULT result=__real_f_read(file,out,count,got);
+    if(test.active && ip) {++test.group_reads;test.group_bytes+=*got;}
+    if(test.active && test.cancel_group_ip && ip)test.cancelled=true;
     if(test.active && test.fail_generation==2 && generation_file(file) && result==FR_OK && *got)--*got;
     if(test.active && test.cancel_readback && library_file(file) && result==FR_OK && *got>=8 && !memcmp(out,"KUIGTMP2",8))
         test.cancelled=true;
@@ -503,30 +508,155 @@ static void identity_check(const char *name) {
 static unsigned read16(const uint8_t *p) {return p[0]|(unsigned)p[1]<<8;}
 static void write16(uint8_t *p,unsigned n) {p[0]=(uint8_t)n;p[1]=(uint8_t)(n>>8);}
 static void write32(uint8_t *p,uint32_t n) {for(unsigned i=0;i<4;i++)p[i]=(uint8_t)(n>>(8*i));}
-static void catalogue_v2_check(void) {
+static void catalogue_legacy_replace(unsigned version) {
     assert(kui_games_storage_release());test.active=false;mounted(true);char path[128];index_path(path,0);
     FIL file;UINT got=0;assert(f_open(&file,path,FA_READ)==FR_OK);size_t bytes=(size_t)f_size(&file);
     uint8_t *newer=malloc(bytes),*older=calloc(1,bytes);assert(newer && older);
     assert(f_read(&file,newer,(UINT)bytes,&got)==FR_OK && got==bytes && f_close(&file)==FR_OK);
-    assert(!memcmp(newer,"KUIGLIB3",8));memcpy(older,newer,96);memcpy(older,"KUIGLIB2",8);write32(older+8,2);
+    assert(!memcmp(newer,"KUIGLIB4",8));memcpy(older,newer,96);memcpy(older,version==3?"KUIGLIB3":"KUIGLIB2",8);write32(older+8,version);
     unsigned root=read16(newer+64),count=read16(newer+66);memcpy(older+96,newer+96,root);size_t source=96u+root,target=source;
     for(unsigned i=0;i<count;i++) {
         unsigned sizes[5];for(unsigned j=0;j<5;j++)sizes[j]=read16(newer+source+2*j);
-        for(unsigned j=0;j<4;j++)write16(older+target+2*j,sizes[j]);
-        older[target+8]=newer[source+10];
-        source+=16;target+=12;
-        for(unsigned j=0;j<5;j++) {if(j<4) {memcpy(older+target,newer+source,sizes[j]);target+=sizes[j];}source+=sizes[j];}
+        unsigned fields=version==3?5u:4u,header=version==3?16u:12u;
+        for(unsigned j=0;j<fields;j++)write16(older+target+2*j,sizes[j]);
+        older[target+fields*2u]=newer[source+10];
+        source+=16;target+=header;
+        for(unsigned j=0;j<5;j++) {if(j<fields) {memcpy(older+target,newer+source,sizes[j]);target+=sizes[j];}source+=sizes[j];}
+        source+=156;
     }
     assert(source==bytes);write32(older+12,(uint32_t)target);write32(older+68,kui_crc32(0,older+96,target-96));write32(older+72,kui_crc32(0,older,72));
-    write_file(path,older,target);free(newer);free(older);mounted(false);test.active=true;clear();cold_check();
+    write_file(path,older,target);free(newer);free(older);mounted(false);test.active=true;clear();
+}
+static void catalogue_legacy_check(unsigned version) {
+    catalogue_legacy_replace(version);cold_check();
     struct kui_games_query query;kui_games_query_default(&query);query.region=KUI_GAMES_REGION_UNKNOWN;struct kui_games_page page;
     query_page("",&query,&page);assert(page.total==16);
     test.fail_write=true;assert(!kui_games_library_scan("/Games",false,log_line,cancel));test.fail_write=false;clear();cold_check();
     assert(kui_games_library_scan("/Games",false,log_line,cancel));clear();cold_check();
-    assert(kui_games_storage_release());test.active=false;mounted(true);index_path(path,1);uint8_t magic[8];
+    assert(kui_games_storage_release());test.active=false;mounted(true);char path[128];index_path(path,1);uint8_t magic[8];FIL file;UINT got=0;
     assert(f_open(&file,path,FA_READ)==FR_OK && f_read(&file,magic,sizeof(magic),&got)==FR_OK && got==sizeof(magic));
-    assert(f_close(&file)==FR_OK && !memcmp(magic,"KUIGLIB3",8));mounted(false);test.active=true;
-    puts("EVIDENCE v2 saved catalogue cold-loaded without discovery I/O, survived failed upgrade and upgraded atomically to v3 on explicit scan");
+    assert(f_close(&file)==FR_OK && !memcmp(magic,"KUIGLIB4",8));mounted(false);test.active=true;
+    printf("EVIDENCE v%u saved catalogue cold-loaded without discovery I/O, survived failed upgrade and upgraded atomically to v4 on explicit scan\n",version);
+}
+static void capture_activity_check(const char *name) {
+    bool explicit_choice=!strcmp(name,"capture-activity-explicit"),capacity=!strcmp(name,"capture-activity-capacity");
+    catalogue_legacy_replace(3);
+    struct kui_games_entry first,second,other;assert(find("Shenmue",&first) && !first.group[0]);
+    assert(find("Shenmue (2)",&second) && !second.group[0] && second.variant_2048_path[0] && find("Standalone",&other));
+    assert(kui_games_library_favorite_toggle("/Games","",first.path,log_line));
+    struct kui_games_activity_entry key;
+    assert(kui_games_library_activity_key("/Games",first.path,&key,log_line) && !key.group[0] && kui_games_library_record_played(&key,log_line));
+    assert(kui_games_library_activity_key("/Games",other.path,&key,log_line) && kui_games_library_record_played(&key,log_line));
+    assert(kui_games_activity_key(&key,second.variant_2048_path,"") && kui_games_library_record_played(&key,log_line));
+    if(capacity) {
+        assert(kui_games_storage_open(log_line)==KUI_GAMES_STORAGE_OK);
+        struct kui_games_activity *full=calloc(1,sizeof(*full));assert(full && kui_games_activity_load(full,log_line));
+        for(unsigned i=0;i<125;i++) {char unrelated[80];snprintf(unrelated,sizeof(unrelated),"/Other/Favorite %03u.iso",i);assert(kui_games_activity_favorite(full,unrelated,"",true));}
+        assert(full->count==KUI_GAMES_ACTIVITY_CAP && kui_games_activity_save(full,log_line));free(full);
+        assert(kui_games_storage_done(false));clear();
+    }
+    unsigned reads=test.group_reads;assert(kui_games_library_scan("/Games",false,log_line,cancel) && test.group_reads==reads+3u);
+    assert(find("Shenmue",&first) && first.group[0] && first.favorite);
+    struct kui_games_page favorites,recent;
+    assert(kui_games_library_rows_filter("/Games","",0,KUI_GAMES_VIEW_LIST,KUI_GAMES_FILTER_FAVORITES,&favorites,log_line,cancel) &&
+        favorites.total==1 && !strcmp(favorites.entries[0].group,first.group));
+    assert(kui_games_library_rows_filter("/Games","",0,KUI_GAMES_VIEW_LIST,KUI_GAMES_FILTER_RECENT,&recent,log_line,cancel) &&
+        recent.total==2 && !strcmp(recent.entries[0].group,first.group));
+    assert(kui_games_library_activity_key("/Games",first.path,&key,log_line) && key.favorite);
+    if(explicit_choice) {
+        /* First launch snapshots the inherited flag before freeing the
+         * catalogue, just as main does during preparation. */
+        clear();assert(kui_games_library_record_played(&key,log_line));
+        assert(find("Shenmue",&first) && first.favorite);
+        assert(kui_games_storage_open(log_line)==KUI_GAMES_STORAGE_OK);
+        struct kui_games_activity *history=calloc(1,sizeof(*history));assert(history && kui_games_activity_load(history,log_line));
+        assert(kui_games_activity_favorite(history,key.path,key.group,false) && kui_games_activity_save(history,log_line));
+        free(history);assert(kui_games_storage_done(false));clear();assert(find("Shenmue",&first) && !first.favorite);
+        /* An existing explicit false group flag overrides raw favorites. */
+        assert(kui_games_library_favorite_toggle("/Games",first.group,first.path,log_line) && find("Shenmue",&first) && first.favorite);
+    }
+    clear();assert(find("Shenmue",&first) && first.favorite);
+    test.fail_write=true;assert(!kui_games_library_favorite_toggle("/Games",first.group,first.path,log_line));test.fail_write=false;
+    assert(find("Shenmue",&first) && first.favorite);clear();assert(find("Shenmue",&first) && first.favorite);
+    /* The first toggle of an inherited favorite turns OFF atomically. */
+    assert(kui_games_library_favorite_toggle("/Games",first.group,first.path,log_line));clear();
+    assert(find("Shenmue",&first) && !first.favorite);
+    assert(kui_games_library_rows_filter("/Games","",0,KUI_GAMES_VIEW_LIST,KUI_GAMES_FILTER_FAVORITES,&favorites,log_line,cancel) && !favorites.total);
+    assert(kui_games_library_rows_filter("/Games","",0,KUI_GAMES_VIEW_LIST,KUI_GAMES_FILTER_RECENT,&recent,log_line,cancel) &&
+        recent.total==2 && !strcmp(recent.entries[0].group,first.group));
+    clear();assert(find("Shenmue",&first) && !first.favorite);
+    if(capacity) {
+        assert(kui_games_storage_open(log_line)==KUI_GAMES_STORAGE_OK);
+        struct kui_games_activity *full=calloc(1,sizeof(*full));assert(full && kui_games_activity_load(full,log_line) && full->count==128);
+        for(unsigned i=0;i<125;i++) {char unrelated[80];snprintf(unrelated,sizeof(unrelated),"/Other/Favorite %03u.iso",i);const struct kui_games_activity_entry *kept=kui_games_activity_find(full,unrelated,"");assert(kept && kept->favorite);}
+        const struct kui_games_activity_entry *kept=kui_games_activity_find(full,second.variant_2048_path,"");assert(kept && kept->played==3 && full->clock==3);
+        free(full);assert(kui_games_storage_done(false));
+    }
+    puts("EVIDENCE pre-group raw/2048 favorites and latest played survived v3-to-v4 rescan/cold reload; inherited first toggle turned off, failed save preserved flags, explicit group choice won, and unfavorite never resurrected legacy favorites");
+}
+static void capture_groups_check(const char *name) {
+    unsigned candidates=!strcmp(name,"capture-label-collision")?7u:!strcmp(name,"capture-two-releases")?5u:
+        !strcmp(name,"capture-passport") || !strcmp(name,"capture-duplicate-copy")?4u:3u;
+    assert(test.group_reads==candidates && test.group_bytes<=2352u*candidates);
+    unsigned ip_reads=test.group_reads,ip_bytes=test.group_bytes;
+    bool grouped=strcmp(name,"capture-duplicates") && strcmp(name,"capture-duplicate-copy");
+    unsigned expected=!strcmp(name,"capture-release-conflict") || !strcmp(name,"capture-invalid")?2u:3u;
+    struct kui_games_entry shenmue;assert(find("Shenmue",&shenmue) && (shenmue.group[0]!=0)==grouped);
+    if(grouped) {
+        struct kui_games_page discs;assert(kui_games_library_rows("/Games",shenmue.group,0,KUI_GAMES_VIEW_LIST,&discs,log_line,cancel));
+        assert(discs.count==expected && discs.total==expected);
+        for(unsigned i=0;i<expected;i++)assert(discs.entries[i].disc==i+1u);
+        assert(strstr(discs.entries[0].path,"/Shenmue/") && strstr(discs.entries[1].path,"/Shenmue (2)/") &&
+            (expected==2u || strstr(discs.entries[2].path,"/Shenmue (3)/")) && strstr(discs.entries[1].variant_2048_path,"-2048/"));
+        struct kui_games_activity_entry first,third,cooked;
+        assert(kui_games_library_activity_key("/Games",discs.entries[0].path,&first,log_line) &&
+            kui_games_library_activity_key("/Games",discs.entries[expected-1u].path,&third,log_line) &&
+            kui_games_library_activity_key("/Games",discs.entries[1].variant_2048_path,&cooked,log_line));
+        assert(!strcmp(first.group,third.group) && !strcmp(first.group,cooked.group));
+        struct kui_native_session_request session;assert(kui_games_library_session_request("/Games",discs.entries[1].variant_2048_path,&session,log_line,cancel));
+        assert(session.count==expected && session.selected==1 && !strcmp(session.paths[1],discs.entries[1].variant_2048_path));
+        if(expected==2u) {struct kui_games_entry separate;assert(find("Shenmue (3)",&separate) && !separate.group[0]);}
+        if(!strcmp(name,"capture-passport")) {struct kui_games_entry passport;assert(find("Shenmue (4)",&passport) && !passport.group[0]);}
+        if(!strcmp(name,"capture-two-releases")) {
+            struct kui_games_entry second;assert(find("Shenmue (4)",&second) && second.group[0] && strcmp(shenmue.group,second.group));
+            assert(strstr(shenmue.title,"U V1.003") && strstr(second.title,"E V1.004") && strcmp(shenmue.title,second.title));
+            assert(kui_games_library_rows("/Games",second.group,0,KUI_GAMES_VIEW_LIST,&discs,log_line,cancel) && discs.count==2);
+        }
+        if(!strcmp(name,"capture-release-conflict")) {
+            struct kui_games_entry singleton;struct kui_games_library_edit edit={0};strcpy(edit.alias,"Other revision");
+            assert(find("Shenmue (3)",&singleton) && singleton.disc==3 &&
+                kui_games_library_set_edit("/Games","",singleton.path,&edit,log_line,cancel));
+            assert(find("Other revision",&singleton) && singleton.disc==3 && !singleton.group[0]);
+        }
+        if(!strcmp(name,"capture-label-collision")) {
+            char title[128],third[128];for(unsigned i=0;i<36;i++)memcpy(title+i*3u,"海",3);title[108]=0;
+            snprintf(third,sizeof(third),"%.108s (3)",title);struct kui_games_entry first,second;
+            assert(find(title,&first) && find(third,&second) && first.group[0] && second.group[0] && strcmp(first.group,second.group));
+            assert(strcmp(first.title,second.title) && kui_destination_name_valid(first.title) && kui_destination_name_valid(second.title));
+            assert(strstr(first.title,"set ") && strstr(second.title,"set ") && strstr(first.title,"KUI-1234"));
+        }
+    } else {
+        struct kui_games_entry second,third;assert(find("Shenmue (2)",&second) && !second.group[0] &&
+            find("Shenmue (3)",&third) && !third.group[0]);
+    }
+    for(unsigned i=0;i<3;i++) {
+        static const char *const titles[]={"Skies of Arcadia","Shenmue II","RE CODE VERONICA"};
+        struct kui_games_entry preserved;assert(find(titles[i],&preserved) && preserved.group[0]);
+    }
+    if(!strcmp(name,"capture-read-fail") || !strcmp(name,"capture-cancel")) {
+        test.fail_group_ip=!strcmp(name,"capture-read-fail");test.cancel_group_ip=!test.fail_group_ip;
+        unsigned writes=test.writes;assert(!kui_games_library_scan("/Games",false,log_line,cancel));
+        assert(test.writes==writes && kui_games_library_ready("/Games"));
+        test.fail_group_ip=test.cancel_group_ip=test.cancelled=false;
+        assert(find("Shenmue",&shenmue) && shenmue.group[0]);
+    }
+    clear();unsigned dirs=test.readdirs,opens=test.game_opens,writes=test.writes;
+    assert(find("Shenmue",&shenmue) && (shenmue.group[0]!=0)==grouped);
+    assert(test.readdirs==dirs && test.game_opens==opens && test.writes==writes);
+    unsigned reads=test.block_reads,files=test.opens;
+    assert(find("Shenmue",&shenmue));assert(test.block_reads==reads && test.opens==files);
+    printf("EVIDENCE collision-named captures %s; %u candidates used %u IP reads (%u bytes); exact release+unique disc proof, Original/2048, session paths and existing explicit sets preserved; cold/warm game I/O=0\n",
+        grouped?"grouped":"refused",candidates,ip_reads,ip_bytes);
 }
 static void check(const char *name) {
     test.active=true;
@@ -540,7 +670,9 @@ static void check(const char *name) {
         else if(!strcmp(name,"query"))query_check();
         else if(!strncmp(name,"editor",6))editor_check(name);
         else if(!strncmp(name,"identity-",9))identity_check(name);
-        else if(!strcmp(name,"catalogue-v2"))catalogue_v2_check();
+        else if(!strcmp(name,"catalogue-v2") || !strcmp(name,"catalogue-v3"))catalogue_legacy_check(!strcmp(name,"catalogue-v3")?3u:2u);
+        else if(!strncmp(name,"capture-activity",16))capture_activity_check(name);
+        else if(!strncmp(name,"capture-",8))capture_groups_check(name);
         else if(!strcmp(name,"cold") || !strcmp(name,"groups"))cold_check();
         else if(!strcmp(name,"stale")) {
             add_game(true);assert(find("Standalone",NULL) && !find("New Arrival",NULL));clear();
@@ -632,6 +764,7 @@ static void check(const char *name) {
     printf("PASS Games catalogue %s; production writes stayed under KUI\n",name);
 }
 int main(int argc,char **argv) {
+    assert(!setvbuf(stdout,NULL,_IONBF,0));
     assert(argc==5);test.image=fopen(argv[1],"r+b");assert(test.image);
     struct stat info;assert(!fstat(fileno(test.image),&info) && info.st_size>0 && !(info.st_size%512));test.blocks=(uint64_t)info.st_size/512;
     if(!strcmp(argv[3],"seed")) {mounted(true);seed(argv[2]);mounted(false);}

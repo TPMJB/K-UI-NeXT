@@ -534,9 +534,14 @@ int main(int argc,char **argv) {
             shell.page=KUI_SHELL_GAMES_EXTRA_OPTIONS;shell.game_tools_selected=KUI_SHELL_GAME_TOOL_PATCHES;
         }
         if(!strcmp(argv[1],"games-zso-information")) shell.page=KUI_SHELL_GAMES_INFO;
-    } else if(!strcmp(argv[1],"games-advanced")) {
+    } else if(!strcmp(argv[1],"games-advanced") || !strcmp(argv[1],"games-layout-flow") || !strcmp(argv[1],"games-layout-unsaved")) {
         library(&shell,KUI_GAMES_VIEW_LIST);shell.games_selected=1;shell.games_listing.entries[1].favorite=true;
         shell.page=KUI_SHELL_GAMES_ADVANCED;shell.games_advanced_selected=6;
+        if(strcmp(argv[1],"games-advanced")) {
+            (void)kui_shell_input(&shell,KUI_SHELL_LEFT,false);
+            (void)kui_shell_set_games_layout_saved(&shell,shell.games_layout_generation,shell.games_view,
+                strcmp(argv[1],"games-layout-unsaved")!=0,NULL);
+        }
     } else if(!strcmp(argv[1],"games-probe") || !strcmp(argv[1],"games-probe-loading")) {
         shell.page=KUI_SHELL_GAMES_PROBE_CONFIRM;
         if(!strcmp(argv[1],"games-probe-loading")) {
@@ -1361,11 +1366,11 @@ int main(int argc,char **argv) {
         kui_shell_set_games_listing(&shell,&flow[0]);
         if(strcmp(argv[1],"games-flow-cold")) (void)kui_shell_set_games_flow_rows(&shell,&flow[1],shell.games_flow_epoch,1u);
         uint64_t time=1000u;
-        for(unsigned i=0;i<7u;i++) {(void)kui_shell_input(&shell,KUI_SHELL_DOWN,false);time+=110u;(void)kui_shell_games_flow_tick(&shell,time);}
+        for(unsigned i=0;i<7u;i++) {(void)kui_shell_input(&shell,KUI_SHELL_DOWN,false);time+=KUI_SHELL_GAMES_FLOW_DURATION_MS;(void)kui_shell_games_flow_tick(&shell,time);}
         (void)kui_shell_input(&shell,KUI_SHELL_DOWN,false);
-        if(!strncmp(argv[1],"games-flow-t",12)) {unsigned elapsed=(unsigned)strtoul(argv[1]+12,NULL,10);(void)kui_shell_games_flow_tick(&shell,time+(elapsed>110u?110u:elapsed));}
-        else if(!strcmp(argv[1],"games-flow-mid"))(void)kui_shell_games_flow_tick(&shell,time+55u);
-        else if(!strcmp(argv[1],"games-flow-end") || !strcmp(argv[1],"games-flow"))(void)kui_shell_games_flow_tick(&shell,time+110u);
+        if(!strncmp(argv[1],"games-flow-t",12)) {unsigned elapsed=(unsigned)strtoul(argv[1]+12,NULL,10);(void)kui_shell_games_flow_tick(&shell,time+(elapsed>KUI_SHELL_GAMES_FLOW_DURATION_MS?KUI_SHELL_GAMES_FLOW_DURATION_MS:elapsed));}
+        else if(!strcmp(argv[1],"games-flow-mid"))(void)kui_shell_games_flow_tick(&shell,time+KUI_SHELL_GAMES_FLOW_DURATION_MS/2u);
+        else if(!strcmp(argv[1],"games-flow-end") || !strcmp(argv[1],"games-flow"))(void)kui_shell_games_flow_tick(&shell,time+KUI_SHELL_GAMES_FLOW_DURATION_MS);
         else if(!strcmp(argv[1],"games-flow-cold"))view.busy=true;
         make_cover(detail_cover,KUI_COVER_LARGE,4u);view.game_selected_cover=detail_cover;
         shell.games_listing.entries[shell.games_selected].cover=!shell.games_loading;

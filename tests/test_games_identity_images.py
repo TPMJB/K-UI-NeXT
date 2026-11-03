@@ -103,7 +103,7 @@ def main():
         wanted = fixture(sources)
         binary = base / "games-identity-image"
         paths = ["tests/games_identity_image.c", "src/apps/games_identity.c", "src/apps/games_storage.c",
-                 "src/core/game_image.c", "src/core/game_metadata.c", "src/core/zso.c", "src/core/lzo1x.c",
+                 "src/core/game_image.c", "src/core/game_metadata.c", "src/core/games_group.c", "src/core/zso.c", "src/core/lzo1x.c",
                  "src/core/destination.c", "src/core/command.c", "src/core/data.c", "src/core/diskio.c",
                  "src/core/clock.c", "src/core/storage_probe.c", "src/core/hash.c",
                  ".deps/fatfs/source/ff.c", ".deps/fatfs/source/ffunicode.c"]

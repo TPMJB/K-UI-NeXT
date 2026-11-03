@@ -64,6 +64,7 @@ class Server:
     def __init__(self, image, port, mode):
         self.lines = []
         self.ready = threading.Event()
+        self.idle = threading.Event()
         self.proc = subprocess.Popen([str(BINARY), str(image), "browser-serve", str(port), mode],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, env=ENV)
@@ -76,6 +77,15 @@ class Server:
             self.lines.append(line.rstrip())
             if line.startswith("BROWSER_READY "):
                 self.ready.set()
+            if line.startswith("BROWSER_IDLE listeners=2 files=0 dirs=0"):
+                self.idle.set()
+
+    def wait_idle(self):
+        self.idle.clear()
+        self.proc.stdin.write("b")
+        self.proc.stdin.flush()
+        assert self.idle.wait(10), "Browser did not close exports and rearm both sockets:\n" + "\n".join(self.lines[-50:])
+        assert self.proc.poll() is None, "\n".join(self.lines[-50:])
 
     def stop(self):
         self.proc.stdin.close()
@@ -137,17 +147,26 @@ def trial(image, mode):
             assert request(port, path)[0] == 403, path
         assert request(port, "/screenshots/%2e%2e%2fruntime.kui")[0] == 400
         assert request(port, "/", "POST")[0] == 405
+        # Ordinary response FIN cleanup is asynchronous. Establish both finite
+        # listener slots before testing that an aborted download leaves a
+        # spare available for the immediately following connection.
+        service.wait_idle()
         # Drop mid-download, then immediately request another page. No handles
         # or old response bytes may survive the closed TCP connection.
         with socket.create_connection(("127.0.0.1", port), timeout=10) as s:
             s.sendall(b"GET /screenshots/large.bmp HTTP/1.0\r\n\r\n")
             assert s.recv(300)
         assert request(port)[0] == 200
+        service.wait_idle()
         # Stop with a partial request still open; gateway cleanup must close it.
         pending = socket.create_connection(("127.0.0.1", port), timeout=10)
         pending.sendall(b"GET /screenshots/")
         service.stop()
         pending.close()
+    except Exception as error:
+        error.add_note(f"Browser adapter={mode} exit={service.proc.poll()} server log:\n" +
+                       "\n".join(service.lines[-50:]))
+        raise
     finally:
         if service.proc.poll() is None:
             service.proc.kill()

@@ -3,6 +3,7 @@
 #define KUI_GAMES_IDENTITY_H
 #include "kui/apps.h"
 #include "kui/zso.h"
+#include "kui/games_group.h"
 struct kui_games_identity {
     uint8_t digest[32];
     char product[11],version[7],region[9],title[129];
@@ -31,4 +32,14 @@ struct kui_games_identity {
  * failures preserve *out. Never called implicitly by directory scanning. */
 bool kui_games_identity_verify(const char *path,enum kui_zso_codec codec,
     struct kui_games_identity *out,kui_log_fn log,kui_cancel_fn cancel);
+enum kui_games_group_read_result {
+    KUI_GAMES_GROUP_READ_OK, KUI_GAMES_GROUP_READ_UNSUPPORTED,
+    KUI_GAMES_GROUP_READ_IO, KUI_GAMES_GROUP_READ_CANCELLED
+};
+/* Bounded worker-only grouping evidence: parse the image descriptor and read
+ * one IP sector, never hash game/audio data. The caller owns a mounted Games
+ * session; all image handles close before return. Output is unchanged unless
+ * OK. Unsupported/malformed metadata is distinct from an I/O failure. */
+enum kui_games_group_read_result kui_games_identity_group(const char *path,
+    struct kui_games_group_evidence *out,kui_cancel_fn cancel);
 #endif

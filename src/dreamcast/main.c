@@ -298,6 +298,10 @@ static bool games_art_request_valid,games_art_result_ready,games_art_done_valid;
 static struct kui_games_page games_titles_page;
 static unsigned games_titles_offset;
 static bool games_titles_ready;
+/* Layout changes are coalesced hints, not foreground listing jobs. */
+static struct {unsigned generation,view;bool valid;} games_layout_request,games_layout_running;
+static unsigned games_layout_seen,games_layout_result_generation,games_layout_result_view;
+static bool games_layout_result_ready,games_layout_result_ok;
 /* Flow neighbors are worker-filled, then copied into shell state by main.
  * The worker never changes a list while the drawing thread can read it. */
 static struct kui_games_page games_flow_rows;
@@ -2520,6 +2524,45 @@ static void games_selection_startup(void) {
     games_selection_saved=games_selection_request;
     mutex_unlock(&lock);
 }
+/* All request/result state is protected by lock; only main applies replies. */
+static void games_layout_request_update(enum kui_shell_action requested) {
+    if(games_layout_seen==shell.games_layout_generation)return;
+    games_layout_seen=shell.games_layout_generation;
+    games_layout_request.valid=requested==KUI_SHELL_GAMES_LAYOUT_SAVE && shell.games_layout_saving;
+    games_layout_request.generation=shell.games_layout_generation;
+    games_layout_request.view=shell.games_view;
+}
+static bool games_layout_current(void) {
+    return games_layout_running.valid && games_layout_request.valid && shell.games_layout_saving &&
+        games_layout_running.generation==games_layout_request.generation &&
+        games_layout_running.generation==shell.games_layout_generation &&
+        games_layout_running.view==games_layout_request.view && games_layout_running.view==shell.games_view;
+}
+static bool games_layout_cancelled(void) {
+    if(games_idle_cancelled())return true;
+    mutex_lock(&lock);bool stop=!games_layout_current();mutex_unlock(&lock);return stop;
+}
+static bool games_layout_idle_work(void) {
+    if(kui_cd_audio_owns_drive() || games_idle_cancelled())return false;
+    mutex_lock(&lock);
+    bool wanted=games_layout_request.valid && !games_layout_result_ready;
+    if(wanted)games_layout_running=games_layout_request;
+    mutex_unlock(&lock);
+    if(!wanted || games_layout_cancelled())return false;
+    kui_sd_set_params(KUI_STORAGE_AUTO,true);
+    bool ok=kui_games_library_save_view(games_layout_running.view,kui_log,games_layout_cancelled);
+    bool stopped=games_layout_cancelled();
+    mutex_lock(&lock);
+    if(!stopped && !busy && !pending && !cancel_requested && !video_preview && !sci_video_quiet.requested &&
+       !boot_ready && !probe_launch_ready && games_layout_current()) {
+        games_layout_result_generation=games_layout_running.generation;
+        games_layout_result_view=games_layout_running.view;games_layout_result_ok=ok;
+        games_layout_result_ready=true;games_layout_request.valid=false;
+    }
+    games_layout_running.valid=false;
+    mutex_unlock(&lock);
+    return true;
+}
 static bool games_selection_store(bool force) {
     if(!force && (kui_cd_audio_owns_drive() || games_idle_cancelled()))return false;
     mutex_lock(&lock);
@@ -2970,7 +3013,7 @@ static void *worker(void *unused) {
                  * resume after another foreground action revokes the receipt. */
                 if(!salvage_session.parked) {
                     games_storage_idle();
-                    if(idle && !games_flow_idle_work() && !games_art_idle_work() && !games_selection_store(false)) {
+                    if(idle && !games_layout_idle_work() && !games_flow_idle_work() && !games_art_idle_work() && !games_selection_store(false)) {
                         music_idle_work();games_warm_idle_work();(void)games_prefetch_idle_work();
                     }
                 }
@@ -4579,6 +4622,12 @@ int main(void) {
             if(kui_shell_set_games_titles(&shell,&games_titles_page,games_titles_offset)) games_ui_changed=true;
             games_titles_ready=false;
         }
+        if(games_layout_result_ready) {
+            if(kui_shell_set_games_layout_saved(&shell,games_layout_result_generation,games_layout_result_view,
+               games_layout_result_ok,games_layout_result_ok?"Layout saved.":"Layout save not confirmed; current layout stays active."))
+                games_ui_changed=true;
+            games_layout_result_ready=false;
+        }
         if(games_flow_ready) {
             if(kui_shell_set_games_flow_rows(&shell,&games_flow_rows,games_flow_result_epoch,games_flow_result_page))
                 games_ui_changed=true;
@@ -4717,7 +4766,8 @@ int main(void) {
         /* UI-thread ownership: worker snapshots are copied under lock before
          * controller dispatch, then stay immutable while this thread draws. */
         shell.salvage_dashboard=recovery_dashboard;
-        (void)kui_shell_games_flow_tick(&shell,input_at);
+        bool flow_moved=kui_shell_games_flow_tick(&shell,input_at);
+        if(flow_moved && !kui_shell_games_flow_animating(&shell))games_ui_changed=true;
         enum kui_shell_action requested=KUI_SHELL_NONE;
         enum kui_shell_page page_before_input=shell.page;
         if(splash_active) {if(pressed&CONT_B) {startup_skip=true;splash_active=false;last_draw=0;}}
@@ -4727,6 +4777,7 @@ int main(void) {
                 kui_menu_sound_play(pressed&CONT_A?KUI_MENU_SOUND_CONFIRM:KUI_MENU_SOUND_MOVE);
         }
         if(page_before_input!=shell.page) games_ui_changed=true;
+        games_layout_request_update(requested);
         if(startup_finished) {
             struct kui_games_selection last;
             if(kui_shell_games_selection(&shell,&last) && !kui_games_selection_equal(&last,&games_selection_requested)) {
@@ -5102,6 +5153,7 @@ int main(void) {
             shell.games_art_loading=loading;
         } else shell.games_art_loading=false;
         games_art_request_valid=art_wanted;
+        bool flow_motion=kui_shell_games_flow_animating(&shell);
         bool is_busy = busy, cd_owned=cd_drive_owned;
         mutex_unlock(&lock);
         if(requested==KUI_SHELL_MUSIC_NEXT && !cd_owned) music_step(1);
@@ -5231,7 +5283,7 @@ int main(void) {
         uint64_t t = timer_ms_gettime64();
 #ifdef KUI_SD_RUNTIME
         bool menu_drew=false;
-        bool due = kui_ui_menu_redraw_due(is_busy,was_busy,hz,
+        bool due = kui_ui_menu_flow_redraw_due(flow_motion,is_busy,was_busy,hz,
             pressed || games_ui_changed,t,last_draw);
 #else
         bool due = kui_ui_redraw_due(is_busy,was_busy,hz,t,last_draw);
@@ -5261,10 +5313,9 @@ int main(void) {
             draw_boot();
 #endif
 #ifdef KUI_SD_RUNTIME
-            /* Count the idle interval from the completed frame. Timestamping
-             * before an expensive paint/vblank can make its next background
-             * repaint immediately due, spending each loop drawing again. */
-            last_draw=is_busy?t:timer_ms_gettime64();
+            /* Short Flow motion uses start-to-start pacing; static idle
+             * screens still leave a full polling interval after painting. */
+            last_draw=kui_ui_menu_frame_timestamp(is_busy,flow_motion,t,timer_ms_gettime64());
 #else
             last_draw = t;
 #endif

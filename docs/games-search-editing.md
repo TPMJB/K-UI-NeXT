@@ -28,10 +28,12 @@ The metadata writer alternates verified generations under
 `KUI/games-library/metadata-a.bin` and `metadata-b.bin`; failed publication keeps
 the previous metadata in memory and the prior valid disk slot.
 
-New catalogue scans write version 3, adding cached IP region fields from
-validated exact-path artwork metadata. Version 2 catalogues remain readable,
-with Unknown region until their metadata is refreshed. Scans still build and
-verify a replacement generation before replacing the admitted catalogue.
+New catalogue scans write version 4, retaining cached IP region fields from
+validated exact-path artwork metadata and bounded disc-set evidence for
+[collision-named captures](games-capture-disc-grouping.md). Version 2 and 3
+catalogues remain readable; older missing region/evidence fields stay unknown
+until an explicit scan. Scans still build and verify a replacement generation
+before replacing the admitted catalogue.
 
 ## Explicit identity verification
 

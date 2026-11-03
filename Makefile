@@ -1034,7 +1034,7 @@ build/test-games-activity: tests/test_games_activity.c src/core/games_activity.c
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $^ -o $@
 
-GAMES_COVERS_WRAP = -Wl,--wrap=f_open,--wrap=f_close,--wrap=f_opendir,--wrap=f_closedir,--wrap=f_write
+GAMES_COVERS_WRAP = -Wl,--wrap=f_open,--wrap=f_close,--wrap=f_opendir,--wrap=f_closedir,--wrap=f_write,--wrap=f_read,--wrap=f_sync
 build/test-games-group: tests/test_games_group.c src/core/games_group.c include/kui/games_group.h src/core/destination.c src/core/data.c
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/games_group.c src/core/destination.c src/core/data.c tests/test_games_group.c -o $@
@@ -1112,22 +1112,25 @@ build/test-games-query: tests/test_games_query.c src/core/games_query.c include/
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) tests/test_games_query.c src/core/games_query.c -o $@
 
-build/test-games-metadata: tests/test_games_metadata.c src/core/games_metadata.c src/core/data.c include/kui/games_metadata.h
+GAMES_METADATA_TEST = src/core/games_metadata.c src/core/games_activity.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/data.c
+build/test-games-metadata: tests/test_games_metadata.c $(GAMES_METADATA_TEST) include/kui/games_metadata.h include/kui/games_activity.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) tests/test_games_metadata.c src/core/games_metadata.c src/core/data.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) tests/test_games_metadata.c $(GAMES_METADATA_TEST) -o $@
 
 .PHONY: test-v3-medium
 test-v3-medium: export ASAN_OPTIONS=detect_leaks=0
-test-v3-medium: build/test-shell build/test-shell-font build/test-system-settings build/test-browser \
-    build/test-game-profile build/test-games-query build/test-games-metadata build/test-cover-image \
+test-v3-medium: build/test-shell build/test-shell-font build/test-ui-rate build/test-system-settings build/test-browser \
+    build/test-game-profile build/test-games-query build/test-games-group build/test-games-metadata build/test-cover-image \
     build/test-games-vmu-card build/test-vmu-game-candidates build/vmu-template-profile.bin \
     build/browser-image build/games-library-image build/games-covers-image build/system-settings-image build/files-image
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-shell
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-shell-font
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-ui-rate
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-system-settings
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-browser
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-game-profile
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-games-query
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-games-group
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-games-metadata
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-cover-image
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-games-vmu-card build/vmu-template-profile.bin
@@ -1135,6 +1138,7 @@ test-v3-medium: build/test-shell build/test-shell-font build/test-system-setting
 	python3 tests/test_companion_dispatch.py
 	python3 tests/test_frontend_job_fences.py
 	python3 tests/test_games_flow_dispatch.py
+	python3 tests/test_games_layout_dispatch.py
 	python3 tests/test_menu_lookup_dispatch.py
 	python3 tests/test_menu_frame_cache.py
 	python3 tests/test_browser_images.py

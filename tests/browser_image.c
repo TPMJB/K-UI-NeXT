@@ -6,6 +6,27 @@
 #undef main
 #include "kui/browser.h"
 
+static bool browser_idle_requested;
+static uint16_t browser_port;
+static bool browser_cancel(void) {
+    struct pollfd in={.fd=0,.events=POLLIN};
+    if(!test.stop && poll(&in,1,0)>0) {
+        char byte;
+        if(read(0,&byte,1)<=0 || byte=='s')test.stop=true;
+        else if(byte=='b')browser_idle_requested=true;
+    }
+    /* A test barrier, not a network retry: both finite service sockets must
+     * have retired earlier requests, closed their exports and rearmed. */
+    if(browser_idle_requested && !test.files && !test.dirs) {
+        unsigned count=test.wifi?wifi_model_listening_count(browser_port):
+            w5500_model_listening_count(browser_port);
+        if(count==2u) {
+            browser_idle_requested=false;
+            printf("BROWSER_IDLE listeners=%u files=%u dirs=%u\n",count,test.files,test.dirs);
+        }
+    }
+    return test.stop;
+}
 static void browser_publish(const struct kui_browser_status *s) {
     if(s->state == KUI_BROWSER_READY && !test.ready) {
         assert(!test.wifi || wifi_model_listening(s->port));
@@ -63,8 +84,9 @@ int main(int argc, char **argv) {
         if(wifi)wifi_model_start(&board);
         const struct kui_net_ports ports={&port,wifi?&wifi_model_port:NULL};
         const struct kui_browser_options options={(uint16_t)atoi(argv[3])};
+        browser_port=options.port;
         struct kui_browser_status status;
-        kui_browser_run(&ports,&options,&status,log_line,cancel,browser_publish);
+        kui_browser_run(&ports,&options,&status,log_line,browser_cancel,browser_publish);
         printf("BROWSER_STOPPED state=%d requests=%u downloads=%u failures=%u bytes=%llu message=%s\n",
             status.state,status.requests,status.downloads,status.failures,(unsigned long long)status.bytes_out,status.message);
         if(wifi)wifi_model_stop();

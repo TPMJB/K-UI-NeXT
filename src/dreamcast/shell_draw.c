@@ -242,7 +242,8 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->page==KUI_SHELL_SCI_ASYNC_PROBE ? "A Quick   X 60s stress   Y With screen   R Speed   B Back" :
         s->page==KUI_SHELL_STORAGE_TEST_HISTORY ? "A View   Y Baseline   X Refresh   B Back" :
         s->page==KUI_SHELL_WIFI ? (s->wifi.found?"A Join   X Scan   Y Forget   START Update   B Network":"X Look again   B Network") :
-        s->page==KUI_SHELL_GAMES_ADVANCED ? "D-pad Select   A Open   B Games" :
+        s->page==KUI_SHELL_GAMES_ADVANCED ? (s->games_advanced_selected==6u?
+            "LEFT/RIGHT Layout   A Next and open   B Games":"D-pad Select   A Open   B Games") :
         s->page==KUI_SHELL_GAMES_PROBE_CONFIRM ? "A Start test   B Tests" :
         s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ? (kui_shell_games_image_ready(s)?
             "A Start test   B Tests":"B Tests") :
@@ -2444,7 +2445,7 @@ static void games_advanced(struct paint *p,const struct kui_shell *s) {
     const char *details[]={"Open every game in /Games","Find a disc image elsewhere on the card",
         "Covers and titles for every game in /Games","Image and loader read tests",
         "Find added, moved or removed games","Build a fresh saved list; keep game settings",
-        "Cycle List, Compact, Gallery and Flow; keep this tab and selection",
+        "LEFT/RIGHT changes layout here; keeps this tab and selection",
         "Search titles, filter region/disc, or jump to a letter",
         "Set a display name and cover without renaming files",
         "Read the complete image to verify its content identity"};
@@ -2453,10 +2454,12 @@ static void games_advanced(struct paint *p,const struct kui_shell *s) {
         unsigned y=164+(i-first)*31;
         panel(p,32,y,576,28,s->games_advanced_selected==i?SELECTED:PANEL);
         label(p,48,y+5,WHITE,names[i]);
-        if(i==6)words(p,440,y+5,596,CYAN,s->games_view==KUI_GAMES_VIEW_COMPACT?"Compact":
-            s->games_view==KUI_GAMES_VIEW_GALLERY?"Gallery":s->games_view==KUI_GAMES_VIEW_FLOW?"Flow":"List",false);
+        if(i==6)words(p,440,y+5,596,CYAN,kui_shell_games_view(s)==KUI_GAMES_VIEW_COMPACT?"< Compact >":
+            kui_shell_games_view(s)==KUI_GAMES_VIEW_GALLERY?"< Gallery >":kui_shell_games_view(s)==KUI_GAMES_VIEW_FLOW?"< Flow >":"< List >",false);
     }
-    words(p,40,396,608,MUTED,s->games_activity_notice[0]?s->games_activity_notice:details[s->games_advanced_selected<10?s->games_advanced_selected:0],false);
+    const char *notice=s->games_advanced_selected==6u && s->games_layout_notice[0]?s->games_layout_notice:
+        s->games_activity_notice[0]?s->games_activity_notice:details[s->games_advanced_selected<10?s->games_advanced_selected:0];
+    words(p,40,396,608,MUTED,notice,false);
 }
 static void games_probe_confirmation(struct paint *p,const struct kui_shell_view *v) {
     title(p,40,108,"Games / Loader read test");

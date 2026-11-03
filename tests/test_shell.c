@@ -5654,6 +5654,58 @@ static void flow_down(unsigned count,uint64_t *now) {
         *now+=KUI_SHELL_GAMES_FLOW_DURATION_MS;(void)kui_shell_games_flow_tick(&s,*now);
     }
 }
+static void games_inline_layout_controls(void) {
+    unsigned page,epoch;uint64_t now=1000u;struct kui_shell_view view={0};
+    flow_fixture(32u);
+    assert(kui_shell_set_games_flow_rows(&s,&flow_pages[1],s.games_flow_epoch,1u));flow_down(10u,&now);
+    assert(s.games_page==1u && s.games_selected==2u);
+    s.games_filter=s.games_query.activity=KUI_GAMES_FILTER_FAVORITES;
+    strcpy(s.games_query.text,"Game");s.games_query.region=KUI_GAMES_REGION_USA;s.games_query.disc=2u;
+    s.games_listing.filter=s.games_filter;s.games_listing.query=s.games_query;
+    strcpy(s.games_group,"discset");strcpy(s.games_listing.group,s.games_group);
+    struct kui_games_query query=s.games_query;
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE);s.games_advanced_selected=6u;
+    s.games_listing.entries[2].cover=true;
+    unsigned generation=s.games_generation,dataset=s.games_flow_epoch;
+    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_GAMES_LAYOUT_SAVE);
+    unsigned first=s.games_layout_generation;
+    assert(first && s.games_layout_saving && !s.games_loading && !s.games_art_loading);
+    assert(s.page==KUI_SHELL_GAMES_ADVANCED && s.games_advanced_selected==6u);
+    assert(s.games_view==KUI_GAMES_VIEW_GALLERY && s.games_listing.view==KUI_GAMES_VIEW_GALLERY);
+    assert(s.games_page==1u && s.games_selected==2u && s.games_filter==KUI_GAMES_FILTER_FAVORITES);
+    assert(!memcmp(&query,&s.games_query,sizeof(query)) && !strcmp(s.games_path,"/Games") && !strcmp(s.games_group,"discset"));
+    assert(s.games_generation!=generation && s.games_flow_epoch!=dataset && !s.games_flow_ready);
+    assert(!s.games_listing.entries[2].cover && !strcmp(s.games_listing.entries[2].path,"/Games/Game10/disc.gdi"));
+    render(&view);assert(strstr(drawn,"< Gallery >") && strstr(drawn,"LEFT/RIGHT Layout") && strstr(drawn,"Saving layout"));
+    assert(press(KUI_SHELL_RIGHT,true)==KUI_SHELL_NONE && s.games_layout_generation==first);
+    assert(press(KUI_SHELL_LEFT|KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE && s.games_layout_generation==first);
+    s.games_advanced_selected=5u;
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_NONE && s.games_layout_generation==first);s.games_advanced_selected=6u;
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_GAMES_LAYOUT_SAVE && s.games_view==KUI_GAMES_VIEW_FLOW);
+    unsigned second=s.games_layout_generation;
+    assert(second!=first && s.games_flow_ready && !s.games_flow_motion && s.games_flow_primary_page==1u && s.games_flow_selected==10u);
+    assert(!kui_shell_set_games_layout_saved(&s,first,KUI_GAMES_VIEW_GALLERY,true,"Old save"));
+    assert(!kui_shell_set_games_layout_saved(&s,second,KUI_GAMES_VIEW_LIST,true,"Wrong layout"));
+    assert(kui_shell_set_games_layout_saved(&s,second,KUI_GAMES_VIEW_FLOW,false,NULL));
+    assert(!s.games_layout_saving && s.games_view==KUI_GAMES_VIEW_FLOW && s.games_selected==2u && s.page==KUI_SHELL_GAMES_ADVANCED);
+    render(&view);assert(strstr(drawn,"Layout not saved") && strstr(drawn,"< Flow >"));
+    assert(!kui_shell_set_games_layout_saved(&s,second,KUI_GAMES_VIEW_FLOW,true,"Duplicate"));
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_GAMES_LAYOUT_SAVE && s.games_view==KUI_GAMES_VIEW_LIST);
+    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_GAMES_LAYOUT_SAVE && s.games_view==KUI_GAMES_VIEW_FLOW);
+    assert(kui_shell_set_games_layout_saved(&s,s.games_layout_generation,KUI_GAMES_VIEW_FLOW,true,NULL));
+    assert(!strcmp(s.games_layout_notice,"Layout saved."));
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_GAMES && !s.games_loading && s.games_selected==2u);
+    assert(kui_shell_games_flow_needed(&s,&page,&epoch) && page==2u && epoch==s.games_flow_epoch);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_INSPECT && !strcmp(s.games_selected_path,"/Games/Game10/disc.gdi"));
+    /* Legacy A still opens Games and reloads; an older LR completion cannot
+     * replace its newer layout or clear the foreground request. */
+    flow_fixture(32u);assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE);s.games_advanced_selected=6u;
+    assert(press(KUI_SHELL_LEFT,false)==KUI_SHELL_GAMES_LAYOUT_SAVE);first=s.games_layout_generation;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_LIST && s.page==KUI_SHELL_GAMES && s.games_view==KUI_GAMES_VIEW_FLOW);
+    assert(s.games_layout_generation!=first && !s.games_layout_saving && s.games_loading);
+    assert(!kui_shell_set_games_layout_saved(&s,first,KUI_GAMES_VIEW_GALLERY,true,"Old save"));
+    puts("PASS in-place layouts: left/right cycling, preserved menu/tab/query/page/selection, worker-save generations and legacy A");
+}
 static void games_flow_controls(void) {
     const int64_t row=(int64_t)KUI_SHELL_GAMES_FLOW_ROW_HEIGHT*256u;
     unsigned page,epoch;uint64_t now=1000u;struct kui_shell_view view={0};
@@ -5673,14 +5725,15 @@ static void games_flow_controls(void) {
     assert(s.games_flow_epoch==dataset && s.games_flow_selected==8u && s.games_flow_scroll==before_scroll);
     assert(!s.games_listing.entries[0].cover && !strcmp(s.games_listing.entries[0].path,"/Games/Game08/disc.gdi"));
     render(&view);static uint16_t before[640u*480u];memcpy(before,pixels+1,sizeof(before));
-    assert(kui_shell_games_flow_tick(&s,now+55u) && kui_shell_games_flow_animating(&s));
+    assert(s.games_flow_highlight==8*row && s.games_flow_highlight==s.games_flow_highlight_target);
+    assert(kui_shell_games_flow_tick(&s,now+30u) && kui_shell_games_flow_animating(&s));
     assert(s.games_flow_scroll>before_scroll && s.games_flow_scroll<s.games_flow_target);
     render(&view);
     for(unsigned y=104u;y<158u;y++)for(unsigned x=32u;x<420u;x++)assert(pixels[1+y*640+x]==before[y*640+x]);
     for(unsigned y=382u;y<480u;y++)for(unsigned x=32u;x<420u;x++)assert(pixels[1+y*640+x]==before[y*640+x]);
     int64_t midpoint=s.games_flow_scroll;
     assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.games_page==0u && s.games_selected==7u);
-    assert(s.games_flow_scroll==midpoint);now+=165u;(void)kui_shell_games_flow_tick(&s,now);
+    assert(s.games_flow_scroll==midpoint && s.games_flow_highlight==7*row);now+=90u;(void)kui_shell_games_flow_tick(&s,now);
     assert(!kui_shell_games_flow_animating(&s) && s.games_flow_scroll==4*row);
     assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_NONE);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_GAMES_INSPECT && !strcmp(s.games_selected_path,"/Games/Game08/disc.gdi"));
@@ -5697,7 +5750,7 @@ static void games_flow_controls(void) {
     (void)kui_shell_games_flow_tick(&s,now+10u);
     assert(s.games_flow_scroll<8*row && kui_shell_games_flow_entry(&s,5u));
     assert(!kui_shell_games_flow_needed(&s,&page,&epoch));
-    (void)kui_shell_games_flow_tick(&s,now+55u);
+    (void)kui_shell_games_flow_tick(&s,now+30u);
     assert(s.games_flow_scroll>=8*row && kui_shell_games_flow_animating(&s));
     assert(kui_shell_games_flow_needed(&s,&page,&epoch) && page==3u);
     assert(kui_shell_set_games_flow_rows(&s,&flow_pages[3],epoch,page));
@@ -5721,7 +5774,7 @@ static void games_flow_controls(void) {
     assert(kui_shell_set_games_flow_rows(&s,&flow_pages[2],dataset,2u));flow_down(10u,&now);
     assert(s.games_flow_selected==18u && s.games_page==2u && s.games_selected==2u);
     assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && s.games_flow_selected==18u);
-    for(unsigned i=0;i<18u;i++) {assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE);now+=110u;(void)kui_shell_games_flow_tick(&s,now);}
+    for(unsigned i=0;i<18u;i++) {assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE);now+=KUI_SHELL_GAMES_FLOW_DURATION_MS;(void)kui_shell_games_flow_tick(&s,now);}
     assert(!s.games_flow_selected && press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && !s.games_flow_selected);
     /* Context fallback must retire every old disc-group window. */
     flow_fixture(32u);dataset=s.games_flow_epoch;
@@ -5763,10 +5816,30 @@ static void games_flow_controls(void) {
     kui_shell_set_games_edit(&s,s.games_edit_generation,s.games_edit_path,&edit,true,"Identity verified");
     assert(!s.games_identity_pending && !s.games_edit_loading && s.games_rows_stale && strstr(s.games_activity_notice,"Identity verified"));
     assert(press(KUI_SHELL_B,false)==KUI_SHELL_GAMES_LIST && s.games_seek && !strcmp(s.games_seek_name,"Game 05"));
-    puts("PASS Games Flow: cached continuous crossing, clipped eased camera/highlight, outgoing window retention, cold failures, exact launch row, endpoints and context epochs");
+    /* Highlight follows every input immediately. The camera is already over
+     * 98% settled by Fast's 50 ms repeat, so retargets do not build a queue. */
+    flow_fixture(32u);now=1000u;dataset=s.games_flow_epoch;
+    assert(kui_shell_set_games_flow_rows(&s,&flow_pages[1],dataset,1u));flow_down(3u,&now);
+    assert(!kui_shell_games_flow_animating(&s) && s.games_flow_highlight==3*row);
+    for(unsigned i=4u;i<=12u;i++) {
+        assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_NONE);
+        assert(s.games_flow_selected==i && s.games_flow_highlight==(int64_t)i*row);
+        if(i==8u)assert(kui_shell_set_games_flow_rows(&s,&flow_pages[2],dataset,2u));
+        now+=16u;assert(kui_shell_games_flow_tick(&s,now));
+        assert(s.games_flow_target-s.games_flow_scroll<row*56/100);
+        now+=34u;assert(kui_shell_games_flow_tick(&s,now));
+        assert(s.games_flow_target-s.games_flow_scroll<row*3/100);
+    }
+    now+=10u;assert(kui_shell_games_flow_tick(&s,now) && !kui_shell_games_flow_animating(&s));
+    assert(s.games_flow_scroll==s.games_flow_target && s.games_flow_highlight==12*row);
+    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.games_flow_highlight==11*row);
+    now+=KUI_SHELL_GAMES_FLOW_DURATION_MS;assert(kui_shell_games_flow_tick(&s,now) && !kui_shell_games_flow_animating(&s));
+    assert(s.games_flow_scroll==8*row);
+    puts("PASS Games Flow: immediate highlight, 60 ms camera, fast repeat, cached crossing, clipping, outgoing retention, cold failures and exact launch row");
 }
 
 int main(int argc,char **argv) {
+    games_inline_layout_controls();
     games_flow_controls();
     if(argc==2 && !strcmp(argv[1],"--flow"))return 0;
     medium_foundations_controls();

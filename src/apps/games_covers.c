@@ -117,9 +117,9 @@ static unsigned view_load(void) {
     for(unsigned v = 0; v < KUI_GAMES_VIEW_COUNT; ++v) if(!strcmp(text, view_names[v])) return v;
     return KUI_GAMES_VIEW_LIST;
 }
-static void view_save(unsigned view, kui_log_fn log) {
+static bool view_save(unsigned view, kui_log_fn log) {
     static const char *const parents[] = {"0:/KUI", "0:/KUI/apps", "0:/KUI/apps/games"};
-    if(!make_folders(parents, 3, log)) return;
+    if(!make_folders(parents, 3, log)) return false;
     char text[16];
     int n = snprintf(text, sizeof(text), "%s\n", view_names[view]);
     FIL file;
@@ -127,10 +127,22 @@ static void view_save(unsigned view, kui_log_fn log) {
     FRESULT r = f_open(&file, KUI_GAMES_VIEW_FILE, FA_WRITE | FA_CREATE_ALWAYS);
     if(r == FR_OK) {
         r = f_write(&file, text, (UINT)n, &wrote);
+        if(r==FR_OK && wrote==(UINT)n)r=f_sync(&file);
         FRESULT closed = f_close(&file);
         if(r == FR_OK) r = closed;
     }
-    if((r != FR_OK || wrote != (UINT)n) && log) log("Games view not saved: FatFs=%u", (unsigned)r);
+    bool ok=r==FR_OK && wrote==(UINT)n;
+    if(ok) {
+        char verified[16]={0};UINT got=0;
+        r=f_open(&file,KUI_GAMES_VIEW_FILE,FA_READ);
+        if(r==FR_OK) {
+            ok=f_size(&file)==(FSIZE_t)n && f_read(&file,verified,(UINT)n,&got)==FR_OK &&
+                got==(UINT)n && !memcmp(verified,text,(size_t)n);
+            if(f_close(&file)!=FR_OK)ok=false;
+        } else ok=false;
+    }
+    if(!ok && log) log("Games view save could not be verified: FatFs=%u", (unsigned)r);
+    return ok;
 }
 
 /* ---- Reading records ---- */
@@ -166,7 +178,19 @@ static void page_view(void *ctx,kui_log_fn log,kui_cancel_fn cancel) {
     struct view_job *job=ctx;
     unsigned saved=view_known?saved_view:view_load();
     job->view=job->requested<KUI_GAMES_VIEW_COUNT?job->requested:saved;
-    if(!stopped(cancel) && job->view!=saved) view_save(job->view,log);
+    if(!stopped(cancel) && job->view!=saved) (void)view_save(job->view,log);
+}
+bool kui_games_library_save_view(unsigned view,kui_log_fn log,kui_cancel_fn cancel) {
+    if(view>=KUI_GAMES_VIEW_COUNT || stopped(cancel))return false;
+    bool ok=kui_games_storage_open(log)==KUI_GAMES_STORAGE_OK;
+    if(ok) {
+        ok=!stopped(cancel) && view_save(view,log);
+        if(!kui_games_storage_done(ok))ok=false;
+    }
+    /* This is the active in-memory selection, not a persistence receipt.
+     * Failed writes must not make later row requests retry every idle pass. */
+    saved_view=view;view_known=true;
+    return ok && !stopped(cancel);
 }
 unsigned kui_games_library_view(unsigned view,kui_log_fn log,kui_cancel_fn cancel) {
     if(stopped(cancel))return KUI_GAMES_VIEW_SAVED;

@@ -728,11 +728,12 @@ bool kui_shell_games_flow_tick(struct kui_shell *s,uint64_t now) {
     if(elapsed>=duration) {
         s->games_flow_scroll=s->games_flow_target;s->games_flow_highlight=s->games_flow_highlight_target;s->games_flow_motion=false;
     } else {
-        /* Ease out, with fixed-point positions and no frame-rate dependency. */
+        /* Only the camera eases. Selection changes on the input frame, so a
+         * new repeat never has to catch up with an old highlight animation. */
         int64_t fraction=(int64_t)(elapsed*(2u*duration-elapsed));
         int64_t divisor=(int64_t)(duration*duration);
         s->games_flow_scroll=s->games_flow_from+(s->games_flow_target-s->games_flow_from)*fraction/divisor;
-        s->games_flow_highlight=s->games_flow_highlight_from+(s->games_flow_highlight_target-s->games_flow_highlight_from)*fraction/divisor;
+        s->games_flow_highlight=s->games_flow_highlight_target;
     }
     return scroll!=s->games_flow_scroll || highlight!=s->games_flow_highlight;
 }
@@ -765,9 +766,10 @@ static void flow_target(struct kui_shell *s,bool snap) {
     int64_t target=(int64_t)first*KUI_SHELL_GAMES_FLOW_ROW_HEIGHT*256u;
     int64_t highlight=(int64_t)selected*KUI_SHELL_GAMES_FLOW_ROW_HEIGHT*256u;
     s->games_flow_selected=(unsigned)selected;
-    s->games_flow_from=s->games_flow_scroll;s->games_flow_highlight_from=s->games_flow_highlight;
+    s->games_flow_from=s->games_flow_scroll;
+    s->games_flow_highlight=s->games_flow_highlight_from=highlight;
     s->games_flow_target=target;s->games_flow_highlight_target=highlight;s->games_flow_started=s->games_flow_now;
-    s->games_flow_motion=!snap && (s->games_flow_scroll!=target || s->games_flow_highlight!=highlight);
+    s->games_flow_motion=!snap && s->games_flow_scroll!=target;
     if(snap) {s->games_flow_scroll=target;s->games_flow_highlight=highlight;}
 }
 static bool flow_outgoing_visible(const struct kui_shell *s) {
@@ -883,6 +885,31 @@ void kui_shell_set_games_listing(struct kui_shell *s,const struct kui_games_page
 }
 unsigned kui_shell_games_view(const struct kui_shell *s) {
     return s && s->games_view<KUI_GAMES_VIEW_COUNT?s->games_view:KUI_GAMES_VIEW_LIST;
+}
+bool kui_shell_set_games_layout_saved(struct kui_shell *s,unsigned generation,unsigned view,
+        bool ok,const char *notice) {
+    if(!s || !generation || generation!=s->games_layout_generation ||
+       !s->games_layout_saving || view>=KUI_GAMES_VIEW_COUNT || view!=s->games_view)return false;
+    s->games_layout_saving=false;
+    snprintf(s->games_layout_notice,sizeof(s->games_layout_notice),"%s",
+        notice && notice[0]?notice:ok?"Layout saved.":"Layout not saved; it remains active for this session.");
+    return true;
+}
+static void games_layout_change(struct kui_shell *s,unsigned view,bool local) {
+    if(!++s->games_layout_generation)++s->games_layout_generation;
+    s->games_layout_saving=local;
+    snprintf(s->games_layout_notice,sizeof(s->games_layout_notice),"%s",local?"Saving layout...":"");
+    s->games_view=view;
+    if(!local)return;
+    /* Layouts share the same eight title rows. Retire only their differently
+     * sized artwork and neighbors, without a directory read or menu change. */
+    ++s->games_generation;s->games_art_loading=false;
+    for(unsigned i=0;i<s->games_listing.count && i<KUI_GAMES_ROWS;i++)s->games_listing.entries[i].cover=false;
+    if(!++s->games_flow_epoch)++s->games_flow_epoch;
+    flow_clear_pages(s);s->games_flow_motion=s->games_flow_edge_pending=false;
+    s->games_listing.view=view;
+    s->games_flow_ready=view==KUI_GAMES_VIEW_FLOW && !s->games_rows_stale;
+    if(s->games_flow_ready) {s->games_flow_primary_page=s->games_page;flow_target(s,true);}
 }
 bool kui_shell_set_games_rows(struct kui_shell *s,const struct kui_games_page *page,
     unsigned generation,unsigned offset,unsigned requested_view) {
@@ -2874,6 +2901,12 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     case KUI_SHELL_GAMES_ADVANCED:
         if(s->games_identity_pending && s->games_edit_loading)break;
         s->games_advanced_selected=move_count(s->games_advanced_selected,buttons,10);
+        if(s->games_advanced_selected==6u && !s->games_loading &&
+           (buttons==KUI_SHELL_LEFT || buttons==KUI_SHELL_RIGHT)) {
+            unsigned step=buttons==KUI_SHELL_LEFT?KUI_GAMES_VIEW_COUNT-1u:1u;
+            games_layout_change(s,(kui_shell_games_view(s)+step)%KUI_GAMES_VIEW_COUNT,true);
+            return KUI_SHELL_GAMES_LAYOUT_SAVE;
+        }
         if(buttons&KUI_SHELL_A) {
             if(s->games_advanced_selected==7u) {s->games_query_draft=s->games_query;s->page=KUI_SHELL_GAMES_QUERY;s->games_query_selected=0;return KUI_SHELL_NONE;}
             if(s->games_advanced_selected>=8u) {
@@ -2884,7 +2917,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             }
             if(s->games_advanced_selected==6) {
                 unsigned keep=s->games_selected;
-                s->games_view=(kui_shell_games_view(s)+1u)%KUI_GAMES_VIEW_COUNT;
+                games_layout_change(s,(kui_shell_games_view(s)+1u)%KUI_GAMES_VIEW_COUNT,false);
                 s->page=KUI_SHELL_GAMES;
                 enum kui_shell_action action=list_games(s,false);s->games_selected=keep;
                 return action;

@@ -86,6 +86,31 @@ static unsigned disc_number(const uint8_t ip[2048]) {
        ip[46]!=' ' || ip[47]!=' ')return 0;
     return (unsigned)(ip[43]-'0');
 }
+enum kui_games_group_read_result kui_games_identity_group(const char *path,
+    struct kui_games_group_evidence *out,kui_cancel_fn cancel) {
+    if(!out || !kui_games_storage_active())return KUI_GAMES_GROUP_READ_IO;
+    struct workspace *work=calloc(1,sizeof(*work));if(!work)return KUI_GAMES_GROUP_READ_IO;
+    work->files.cancel=cancel;char name[KUI_GAME_NAME_CAP];
+    struct kui_games_group_evidence evidence;
+    enum kui_games_group_read_result answer=KUI_GAMES_GROUP_READ_UNSUPPORTED;
+    if(!split(path,&work->files,name))goto done;
+    const char *extension=strrchr(name,'.');
+    if(extension && strlen(extension)==4u && (extension[1]=='z' || extension[1]=='Z') &&
+       (extension[2]=='s' || extension[2]=='S') && (extension[3]=='o' || extension[3]=='O'))goto done;
+    struct kui_game_file_ops files={&work->files,stat_file,read_file};
+    enum kui_game_result result=kui_game_image_open_named_codec(name,&files,KUI_ZSO_LZ4,&work->image);
+    if(result==KUI_GAME_OK && !work->image.compressed)
+        result=kui_game_image_read(&work->image,work->image.data_lba,1,KUI_GAME_SECTOR_MODE1,work->buffer,2048);
+    else if(result==KUI_GAME_OK)goto done;
+    if(result==KUI_GAME_IO || result==KUI_GAME_NOT_FOUND)answer=KUI_GAMES_GROUP_READ_IO;
+    else if(result==KUI_GAME_CANCELLED)answer=KUI_GAMES_GROUP_READ_CANCELLED;
+    else if(result==KUI_GAME_OK && kui_games_group_evidence_read(work->buffer,&evidence))answer=KUI_GAMES_GROUP_READ_OK;
+done:
+    if(!close_file(&work->files))answer=KUI_GAMES_GROUP_READ_IO;
+    if(stopped(&work->files))answer=KUI_GAMES_GROUP_READ_CANCELLED;
+    if(answer==KUI_GAMES_GROUP_READ_OK)*out=evidence;
+    free(work);return answer;
+}
 bool kui_games_identity_verify(const char *path,enum kui_zso_codec codec,
     struct kui_games_identity *out,kui_log_fn log,kui_cancel_fn cancel) {
     if(!out)return false;

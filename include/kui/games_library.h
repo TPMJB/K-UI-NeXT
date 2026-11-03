@@ -42,7 +42,8 @@ bool kui_games_library_settings_path(const char *path,char out[KUI_GAMES_FILE_CA
 bool kui_games_library_favorite_toggle(const char *root,const char *group,const char *path,kui_log_fn log);
 /* Resolve before launch preparation releases catalogue memory, then record
  * only after preparation succeeds. A recent entry means a prepared launch,
- * never an inspection, read test or proof of gameplay success. */
+ * never an inspection, read test or proof of gameplay success. The returned
+ * favorite flag snapshots inherited metadata-group activity for that handoff. */
 bool kui_games_library_activity_key(const char *root,const char *path,
     struct kui_games_activity_entry *out,kui_log_fn log);
 bool kui_games_library_record_played(const struct kui_games_activity_entry *,kui_log_fn log);

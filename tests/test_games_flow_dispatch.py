@@ -39,10 +39,10 @@ def function(text, name):
 start = source.index('static struct kui_games_page games_flow_rows;')
 globals_source = source[start:source.index('static struct kui_games_entry games_art_entry', start)]
 publication = block(source, source.index('if(games_flow_ready) {'))
-scheduler = block(source, source.index('if(idle && !games_flow_idle_work() && !games_art_idle_work()'))
+scheduler = block(source, source.index('if(idle && !games_layout_idle_work() && !games_flow_idle_work() && !games_art_idle_work()'))
 assert 'kui_shell_set_games_flow_rows' not in function(source, 'games_flow_idle_work')
-assert source.index('(void)kui_shell_games_flow_tick(&shell,input_at);') < source.index(
-    'requested=kui_shell_input(&shell', source.index('(void)kui_shell_games_flow_tick(&shell,input_at);'))
+assert source.index('kui_shell_games_flow_tick(&shell,input_at)') < source.index(
+    'requested=kui_shell_input(&shell', source.index('kui_shell_games_flow_tick(&shell,input_at)'))
 
 prefix = r'''
 #include "kui/shell.h"
@@ -130,6 +130,7 @@ bool kui_shell_set_games_flow_rows(struct kui_shell *s,const struct kui_games_pa
     if(s->games_flow_epoch!=epoch)return false;
     consumed=*rows;needed=false;return true;
 }
+static bool games_layout_idle_work(void){return false;}
 static bool games_art_idle_work(void){++art_reads;return false;}
 static bool games_selection_store(bool force){assert(!force);++other_idle;return false;}
 static void music_idle_work(void){++other_idle;}

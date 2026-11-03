@@ -40,7 +40,7 @@ struct kui_shell_games_art_key {
 };
 #define KUI_SHELL_GAMES_FLOW_NEIGHBORS 2u
 #define KUI_SHELL_GAMES_FLOW_ROW_HEIGHT 28u
-#define KUI_SHELL_GAMES_FLOW_DURATION_MS 110u
+#define KUI_SHELL_GAMES_FLOW_DURATION_MS 60u
 struct kui_shell_games_flow_page {
     struct kui_games_page rows;
     unsigned page;
@@ -170,7 +170,8 @@ enum kui_shell_action {
     KUI_SHELL_GD_CHECK, KUI_SHELL_GD_DIRECT_BOOT, KUI_SHELL_GD_VMU_INFO,
     KUI_SHELL_GD_OPTIONS_LOAD, KUI_SHELL_GD_REGION_SAVE, KUI_SHELL_GAMES_FAVORITE, KUI_SHELL_BROWSER_START,
     KUI_SHELL_VMU_HISTORY_RUN, KUI_SHELL_GAMES_EDIT_LOAD, KUI_SHELL_GAMES_EDIT_SAVE,
-    KUI_SHELL_GAMES_JUMP, KUI_SHELL_GAMES_IDENTITY_VERIFY, KUI_SHELL_PROBLEM_REPORT
+    KUI_SHELL_GAMES_JUMP, KUI_SHELL_GAMES_IDENTITY_VERIFY, KUI_SHELL_PROBLEM_REPORT,
+    KUI_SHELL_GAMES_LAYOUT_SAVE
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
@@ -261,6 +262,11 @@ struct kui_shell {
     unsigned games_page, games_selected, games_advanced_selected;
     /* KUI_GAMES_VIEW_SAVED until a listing reports the card's saved view. */
     unsigned games_view,games_filter;
+    /* Left/right layout changes use the current rows. Only the worker saves
+     * the latest preference; its acknowledgement cannot change selection. */
+    unsigned games_layout_generation;
+    bool games_layout_saving;
+    char games_layout_notice[128];
     char games_favorite_path[KUI_GAMES_FILE_CAP],games_favorite_group[33],games_activity_notice[128];
     struct kui_games_query games_query,games_query_draft;
     unsigned games_query_selected,games_keyboard;
@@ -486,6 +492,8 @@ bool kui_shell_games_zso_selected(const struct kui_shell *);
 bool kui_shell_games_image_ready(const struct kui_shell *shell);
 /* The view to draw: the saved view once known, else the list. */
 unsigned kui_shell_games_view(const struct kui_shell *shell);
+bool kui_shell_set_games_layout_saved(struct kui_shell *,unsigned generation,unsigned view,
+    bool ok,const char *notice);
 /* Main-loop publications only. The worker snapshots context while locked and
  * queues its rows; it never writes shell state while a frame is being drawn. */
 bool kui_shell_games_flow_needed(const struct kui_shell *,unsigned *page,unsigned *epoch);
