@@ -4374,8 +4374,9 @@ static void games_remembered_selection(void) {
 }
 
 static void small_tools_controls(void) {
-    /* Full image backup includes an empty readable card; existing selected
-     * and all-save actions retain their independent dispatch. */
+    /* Save-image and exact raw backups have separate dispatch. A readable
+     * empty source still exposes both actions; the worker checks its saves.
+     * Selected/all-save bundle actions stay independent. */
     reset(KUI_SHELL_VMU);s.vmu.present=true;
     assert(press(KUI_SHELL_L,true)==KUI_SHELL_MSTATS && s.page==KUI_SHELL_VMU);
     assert(press(KUI_SHELL_L,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_VMU_ACTIONS);
@@ -4384,6 +4385,10 @@ static void small_tools_controls(void) {
     press(KUI_SHELL_DOWN,false);assert(s.vmu_action_selected==2);
     assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE);
     assert(press(KUI_SHELL_A|KUI_SHELL_B,true)==KUI_SHELL_STOP && s.page==KUI_SHELL_VMU_ACTIONS);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_BACKUP_SAVES);
+    s.vmu.present=false;assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    s.vmu.present=true;s.vmu_action_selected=6;
+    assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_VMU_BACKUP_CARD);
     s.vmu.present=false;assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
     press(KUI_SHELL_B,false);assert(s.page==KUI_SHELL_VMU);
@@ -4471,7 +4476,11 @@ static void small_tools_controls(void) {
 static void small_tools_rendering(void) {
     struct kui_shell_view view={0};
     reset(KUI_SHELL_VMU_ACTIONS);s.vmu_action_selected=2;render(&view);
-    assert(strstr(drawn,"Back up card image") && strstr(drawn,"all 128 KiB") && strstr(drawn,"No selected save"));
+    assert(strstr(drawn,"Back up saves to one file") && strstr(drawn,"Back up exact raw image") &&
+        strstr(drawn,"Rebuilds the card layout") && strstr(drawn,"No selected save"));
+    s.vmu_action_selected=6;render(&view);
+    assert(strstr(drawn,"all 256 blocks") && strstr(drawn,"Two full reads must agree") &&
+        strstr(drawn,"unstable free blocks refuse") && !strstr(drawn,"Rebuilds the card layout"));
     reset(KUI_SHELL_VMU_IMAGE);strcpy(s.vmu_image_path,"/KUI/backups/vmu/A1-0001/card.vmd");
     s.vmu_image.present=true;s.vmu_image.count=8;s.vmu_image.total=13;
     for(unsigned i=0;i<8;i++) {
@@ -4510,9 +4519,9 @@ static void vmu_copy_all_controls(void) {
     assert(press(KUI_SHELL_L,true)==KUI_SHELL_MSTATS && s.page==KUI_SHELL_VMU);
     assert(press(KUI_SHELL_L,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_VMU_ACTIONS);
     assert(s.vmu_copy_slot==0);
-    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.vmu_action_selected==5);
+    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.vmu_action_selected==6);
     assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && s.vmu_action_selected==0);
-    press(KUI_SHELL_UP,false);press(KUI_SHELL_UP,false);press(KUI_SHELL_UP,false);
+    press(KUI_SHELL_UP,false);press(KUI_SHELL_UP,false);press(KUI_SHELL_UP,false);press(KUI_SHELL_UP,false);
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE); /* No readable source. */
     s.vmu.present=true;
     assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE); /* Empty source. */
@@ -4804,6 +4813,7 @@ static void vmu_collection_controls(void) {
     reset(KUI_SHELL_VMU);s.vmu_slot=5;s.backups.count=1;
     strcpy(s.backups.entries[0].path,"/KUI/backups/vmu/A1-0001/ORIGINAL.vms");
     assert(press(KUI_SHELL_L,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.vmu_action_selected==6);
     assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.vmu_action_selected==5);
     assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.vmu_action_selected==4);
     assert(press(KUI_SHELL_A,true)==KUI_SHELL_NONE);

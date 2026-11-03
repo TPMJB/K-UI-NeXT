@@ -1115,43 +1115,52 @@ static void vmu_actions(struct paint *p,const struct kui_shell *s,const struct k
         s->vmu_slot%2+1,entry?entry->name:"No selected save");
     label(p,40,138,CYAN,line);
     bool virtual_target=s->vmu_copy_slot==8;
-    for(unsigned i=0;i<6;i++) {
-        unsigned y=168+i*25;panel(p,32,y,576,23,i==s->vmu_action_selected?SELECTED:PANEL);
+    for(unsigned i=0;i<7;i++) {
+        unsigned y=162+i*23;panel(p,32,y,576,21,i==s->vmu_action_selected?SELECTED:PANEL);
         if(i==1 || i==3) {
             if(virtual_target) snprintf(line,sizeof(line),"%s: Virtual VMU (new card)",i==3?"Copy all saves":"Copy selected");
             else snprintf(line,sizeof(line),i==3?"Copy all saves to VMU %c%u":"Copy to VMU %c%u",
                 'A'+s->vmu_copy_slot/2,s->vmu_copy_slot%2+1);
-        } else snprintf(line,sizeof(line),"%s",i==5?"Back up selected save":i==4?"Virtual VMUs":i==2?"Back up card image":"Delete selected save");
+        } else snprintf(line,sizeof(line),"%s",i==6?"Back up exact raw image":i==5?"Back up selected save":
+            i==4?"Virtual VMUs":i==2?"Back up saves to one file":"Delete selected save");
         label(p,48,y+4,i==s->vmu_action_selected?WHITE:MUTED,line);
     }
     if(s->vmu_action_selected==3) {
         const struct kui_vmu_view *bulk=virtual_target?&s->vmu_collection_copy:&s->vmu_copy_all;
         snprintf(line,sizeof(line),"Total %u   Verified %u   Remaining %u",bulk->bulk_total,
             bulk->bulk_completed,bulk->bulk_remaining);
-        label(p,40,320,CYAN,line);
-        label(p,40,344,bulk->bulk_unverified?AMBER:MUTED,virtual_target?
+        label(p,40,334,CYAN,line);
+        label(p,40,356,bulk->bulk_unverified?AMBER:MUTED,virtual_target?
             "All saves keep companion files together on a new card.":bulk->bulk_unverified?
             "Destination save unverified; inspect it before retry.":
             "Completed copies stay. A starts a fresh check before retry.");
-        label(p,40,366,MUTED,virtual_target?"New backup card; assign games from Virtual VMUs.":
+        label(p,40,378,MUTED,virtual_target?"New backup card; assign games from Virtual VMUs.":
             "All names and space are checked; existing saves are refused.");
     } else if((s->vmu_action_selected==1 && virtual_target) || s->vmu_action_selected==4) {
-        label(p,40,320,MUTED,"Virtual cards are stored on SD; browse and extract saves.");
-        label(p,40,344,MUTED,s->vmu_action_selected==1?
+        label(p,40,334,MUTED,"Virtual cards are stored on SD; browse and extract saves.");
+        label(p,40,356,MUTED,s->vmu_action_selected==1?
             "Selected copy keeps this file only; companions are not inferred.":
             "A opens the managed virtual card collection.");
-        label(p,40,366,MUTED,"Use Virtual VMUs > Assign games when ready.");
+        label(p,40,378,MUTED,"Use Virtual VMUs > Assign games when ready.");
+    } else if(s->vmu_action_selected==2) {
+        label(p,40,334,MUTED,"All saves in one VMD; uses the import wizard's recovery.");
+        label(p,40,356,MUTED,"Rebuilds the card layout and skips unused flash.");
+        label(p,40,378,MUTED,"Save bytes are checked; the physical VMU is read only.");
+    } else if(s->vmu_action_selected==6) {
+        label(p,40,334,MUTED,"Exact 128 KiB copy of all 256 blocks, including free flash.");
+        label(p,40,356,MUTED,"Two full reads must agree; unstable free blocks refuse.");
+        label(p,40,378,MUTED,"Use saves to one file when only your saves are needed.");
     } else {
-        label(p,40,320,MUTED,"Card image saves all 128 KiB as a verified VMD on SD.");
-        label(p,40,344,MUTED,"Delete / copy checks the save and asks before writing.");
-        label(p,40,366,MUTED,"Copy refuses existing names on the destination VMU.");
+        label(p,40,334,MUTED,"Back up saves to one file keeps every save together.");
+        label(p,40,356,MUTED,"Delete / copy checks the save and asks before writing.");
+        label(p,40,378,MUTED,"Copy refuses existing names on the destination VMU.");
     }
     const struct kui_app_status *status=v->app_status?v->app_status:&s->vmu.status;
     if(virtual_target && (s->vmu_action_selected==1 || s->vmu_action_selected==3)) {
         if(!v->app_status) status=&s->vmu_collection_copy.status;
-        label(p,40,386,status->complete&&!status->passed?AMBER:CYAN,s->vmu_collection_copy_stored?
+        label(p,40,400,status->complete&&!status->passed?AMBER:CYAN,s->vmu_collection_copy_stored?
             "Backup card saved; assign games from Virtual VMUs.":status->message);
-    } else label(p,40,386,status->complete&&!status->passed?AMBER:CYAN,status->message);
+    } else label(p,40,400,status->complete&&!status->passed?AMBER:CYAN,status->message);
 }
 /* Keep complete operation messages visible without crowding the dashboard.
  * Three short lines fit above the footer, including a full 127-byte error. */

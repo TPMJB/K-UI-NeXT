@@ -52,14 +52,16 @@ struct kui_vmu_backup_view {
 };
 void kui_memory_app_run(struct kui_app_status *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
 void kui_network_app_run(struct kui_app_status *out,kui_log_fn log,kui_cancel_fn cancel);
-/* action 0=list, 1=backup selected row, 2=backup all saves, 3=full-card VMD.
+/* action 0=list, 1=backup selected row, 2=backup all saves,
+ * 3=exact raw full-card VMD, 4=all-saves rebuilt 200-block VMD.
  * These actions are read-only
  * on the VMU. New backups include .crc records required for restore. */
 void kui_vmu_app_run(unsigned action,unsigned slot,unsigned page,unsigned selected,
     struct kui_vmu_view *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
 void kui_vmu_backups_run(unsigned page,struct kui_vmu_backup_view *out,
     kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
-/* Exact 128 KiB raw VMD only. action 0=browse, 1=extract selected row,
+/* 128 KiB VMD only, including raw backups and rebuilt saves images.
+ * action 0=browse, 1=extract selected row,
  * 2=extract all into new .vms/.dir/.crc bundles. Source is always read-only;
  * these tools do not access any physical VMU or implement image restoration. */
 void kui_vmu_image_run(const char *path,unsigned page,unsigned selected,unsigned action,
@@ -106,7 +108,8 @@ void kui_vmu_collection_copy_run(unsigned source_slot,unsigned page,unsigned sel
 bool kui_vmu_capture_run(unsigned source_slot,void *image,size_t bytes,
     struct kui_vmu_image_summary *summary,struct kui_vmu_view *out,
     kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress);
-/* Wizard-only recovery of logical saves. Later payload disagreements may
+/* Recovery of logical saves, shared by the wizard and physical save backups.
+ * Later payload disagreements may
  * reacquire a complete file, requiring three consecutive complete matches
  * within six fresh acquisitions. Device, metadata, transport and retained-RAM
  * failures remain terminal. The strict capture API above is unchanged. */

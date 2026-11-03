@@ -827,6 +827,14 @@ build/test-vmu-app: tests/test_vmu_app.c $(CORE) $(DESTINATION) src/core/storage
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie -DKUI_VMU_CAPTURE_TEST_WRAP_CRC=1 $(INCLUDES) -Itests/vmu_stubs -Isrc/dreamcast $(CORE) $(DESTINATION) src/core/storage_probe.c $(FATFS) $(VMU_MANAGEMENT) src/core/hash.c src/apps/vmu.c tests/test_vmu_app.c -Wl,--wrap=kui_crc32,--wrap=kui_vmu_image_pack -o $@
 
+build/test-vmu-menu-backup: tests/test_vmu_menu_backup.c tests/test_vmu_app.c $(CORE) $(DESTINATION) src/core/storage_probe.c $(FATFS) $(VMU_MANAGEMENT) src/core/hash.c src/apps/vmu.c src/apps/vmu_collection.inc include/kui/apps.h include/kui/vmu_read_bounded.h $(wildcard tests/vmu_stubs/dc/*.h tests/vmu_stubs/dc/maple/*.h)
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie -DKUI_VMU_CAPTURE_TEST_WRAP_CRC=1 $(INCLUDES) -Itests/vmu_stubs -Isrc/dreamcast $(CORE) $(DESTINATION) src/core/storage_probe.c $(FATFS) $(VMU_MANAGEMENT) src/core/hash.c src/apps/vmu.c tests/test_vmu_menu_backup.c -Wl,--wrap=kui_crc32,--wrap=kui_vmu_image_pack -o $@
+
+.PHONY: test-vmu-menu-backup
+test-vmu-menu-backup: build/test-vmu-menu-backup
+	python3 tests/test_vmu_menu_backup.py
+
 .PHONY: test-vmu-read-recovery
 test-vmu-read-recovery: build/test-vmu-app
 	python3 tests/test_vmu_read_recovery.py

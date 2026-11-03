@@ -2505,7 +2505,7 @@ static bool games_action_invalidates(unsigned action) {
         action==25 || action==30 || action==33 || action==38 || action==40 ||
         (action>=42 && action<=48) || (action>=56 && action<=58) || action==62 ||
         action==64 || action==65 || action==67 || action==79 || action==81 || action==96 || action==97 || action==82 ||
-        action==83 || action==85 || action==86 || action==90 || action==92 || action==95 || action==98 || action==100 || action==104 || action==105 || action==106 || action==107 || (action>=68 && action<=71);
+        action==83 || action==118 || action==85 || action==86 || action==90 || action==92 || action==95 || action==98 || action==100 || action==104 || action==105 || action==106 || action==107 || (action>=68 && action<=71);
 }
 static bool games_action_changes_content(unsigned action) {
     /* Directory-changing writers can add/remove launch selectors. Saved
@@ -3236,9 +3236,9 @@ static void *worker(void *unused) {
                 maintenance_status=(struct kui_app_status){.complete=true,.stopped=true};
                 snprintf(maintenance_status.message,sizeof(maintenance_status.message),"System operation stopped before starting.");
             }
-            if(action==83) {
+            if(action==83 || action==118) {
                 vmu_snapshot.status=(struct kui_app_status){.complete=true,.stopped=true};
-                snprintf(vmu_snapshot.status.message,sizeof(vmu_snapshot.status.message),"Card-image backup stopped before starting.");
+                snprintf(vmu_snapshot.status.message,sizeof(vmu_snapshot.status.message),"VMU image backup stopped before starting.");
                 ++vmu_generation;
             }
             if(action>=84 && action<=86) {
@@ -3849,10 +3849,10 @@ static void *worker(void *unused) {
                     kui_log,kui_cancelled,app_progress);
                 mutex_lock(&lock);maintenance_status=result;mutex_unlock(&lock);
             }
-            if(action==83) {
+            if(action==83 || action==118) {
                 struct kui_vmu_view result;
                 active_app=action;kui_sd_set_params(KUI_STORAGE_AUTO,true);
-                kui_vmu_app_run(3,vmu_slot_pending,vmu_page_pending,vmu_selected_pending,
+                kui_vmu_app_run(action==118?4u:3u,vmu_slot_pending,vmu_page_pending,vmu_selected_pending,
                     &result,kui_log,kui_cancelled,app_progress);
                 mutex_lock(&lock);vmu_snapshot=result;++vmu_generation;mutex_unlock(&lock);
             }
@@ -4349,6 +4349,7 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_GAMES_JUMP:return 114;
         case KUI_SHELL_GAMES_IDENTITY_VERIFY:return 115;
         case KUI_SHELL_PROBLEM_REPORT:return 116;
+        case KUI_SHELL_VMU_BACKUP_SAVES:return 118;
         default: return 0;
     }
 }
@@ -4900,7 +4901,7 @@ int main(void) {
             if(action==14) system_pending=shell.system_draft;
             if(action==13 || action==14) snprintf(system_note,sizeof(system_note),"%s",
                 action==14?"Saving system settings...":"Loading system settings...");
-            if((action>=16 && action<=18) || action==83) {
+            if((action>=16 && action<=18) || action==83 || action==118) {
                 vmu_slot_pending=shell.vmu_slot;vmu_page_pending=shell.vmu_page;
                 vmu_selected_pending=shell.vmu_selected;
                 vmu_snapshot.status=(struct kui_app_status){0};

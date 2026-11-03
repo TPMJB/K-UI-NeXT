@@ -3891,7 +3891,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         }
         break;
     case KUI_SHELL_VMU_ACTIONS: {
-        s->vmu_action_selected=move_count(s->vmu_action_selected,buttons,6);
+        s->vmu_action_selected=move_count(s->vmu_action_selected,buttons,7);
         unsigned horizontal=buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT);
         if((s->vmu_action_selected==1 || s->vmu_action_selected==3) &&
            (horizontal==KUI_SHELL_LEFT || horizontal==KUI_SHELL_RIGHT)) {
@@ -3905,7 +3905,8 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         }
         if((buttons&KUI_SHELL_A) && s->vmu.present) {
             if(s->vmu_action_selected==5 && s->vmu_selected<s->vmu.count) return KUI_SHELL_VMU_BACKUP;
-            if(s->vmu_action_selected==2) return KUI_SHELL_VMU_BACKUP_CARD;
+            if(s->vmu_action_selected==2) return KUI_SHELL_VMU_BACKUP_SAVES;
+            if(s->vmu_action_selected==6) return KUI_SHELL_VMU_BACKUP_CARD;
             if(s->vmu_action_selected==3) {
                 if(!s->vmu.total) return KUI_SHELL_NONE;
                 if(s->vmu_copy_slot==8) return preview_vmu_collection_copy(s,true);
