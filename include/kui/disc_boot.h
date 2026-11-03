@@ -10,6 +10,11 @@
 #define KUI_DISC_BOOT_IP_BYTES UINT32_C(32768)
 #define KUI_DISC_BOOT_MAX_EXEC_BYTES (12u * 1024u * 1024u)
 #define KUI_DISC_BOOT_RUN_SECTORS 8u
+#define KUI_DISC_BOOT_MAX_DATA_RANGES 99u
+
+struct kui_disc_boot_data_range {
+    uint32_t first_fad, end_fad; /* exclusive end, cooked DATA sectors only */
+};
 
 enum kui_disc_boot_io_result {
     KUI_DISC_BOOT_IO_OK, KUI_DISC_BOOT_IO_ERROR, KUI_DISC_BOOT_IO_CANCELLED
@@ -21,10 +26,11 @@ struct kui_disc_boot_source {
     enum kui_disc_boot_io_result (*read_sector)(void *context, uint32_t fad,
                                                uint8_t data[2048]);
     bool (*cancelled)(void *context);
-    /* Positively observed physical media type and one contiguous DATA extent
-     * of its high-density session. first_fad is the IP.BIN sector; end_fad is
-     * exclusive and must stop before audio, a gap or the leadout. The caller
-     * owns the optical device and must keep this media/geometry unchanged. */
+    /* Positively observed physical media type and high-density session bounds.
+     * first_fad is the IP.BIN sector; end_fad is exclusive. Without a range
+     * map, these bounds describe one contiguous DATA extent. With a map,
+     * only its DATA ranges authorize reads; intervening audio/gaps never do.
+     * The caller keeps the device, media, map and geometry unchanged. */
     uint32_t disc_type, first_fad, end_fad;
     /* Optional bounded cooked-sector reader for hashing known extents. count
      * is 1..KUI_DISC_BOOT_RUN_SECTORS; data has count * 2048 bytes. Metadata
@@ -34,6 +40,16 @@ struct kui_disc_boot_source {
     /* Zero selects the 12 MiB format limit. A smaller nonzero limit refuses
      * after checked metadata, before any IP/executable hashing. */
     uint32_t max_exec_bytes;
+    /* Optional sorted, nonoverlapping DATA ranges spanning first_fad through
+     * end_fad. Each requested ISO extent must fit wholly inside one range.
+     * Adjacent DATA tracks may be coalesced by the caller. */
+    const struct kui_disc_boot_data_range *data_ranges;
+    uint32_t data_range_count;
+    /* Optional diagnostic only. Called with the original absolute ISO LBA
+     * and rounded sector count when an ISO extent lies outside DATA ranges. */
+    void (*extent_refused)(void *context, uint32_t lba, uint32_t count);
+    /* Optional diagnostics only; stable phase labels have static lifetime. */
+    void (*read_phase)(void *context, const char *phase);
 };
 enum kui_disc_boot_status {
     KUI_DISC_BOOT_OK, KUI_DISC_BOOT_ARGUMENT, KUI_DISC_BOOT_MEDIA,

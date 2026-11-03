@@ -16,9 +16,14 @@ struct optical_source {
     struct kui_app_status *status;
     uint32_t reads;
     bool io_failed;
+    bool single_reads,cooked_reads;
+    uint32_t raw_retries,cooked_sectors;
+    const char *read_problem;
     uint8_t *raw;
     uint32_t last_fad,last_count;
+    uint32_t leadout_tail,leadout_end;
     const char *phase;
+    struct kui_disc_boot_data_range data_ranges[KUI_DISC_BOOT_MAX_DATA_RANGES];
 };
 static void publish(struct optical_source *s) {
     if(s->progress) s->progress(s->status);
@@ -26,6 +31,77 @@ static void publish(struct optical_source *s) {
 static bool stopped(void *context) {
     struct optical_source *s=context;
     return s->cancel && s->cancel();
+}
+enum raw_sector_issue { RAW_SECTOR_OK,RAW_SECTOR_FORMAT,RAW_SECTOR_ADDRESS,RAW_SECTOR_EDC };
+static enum raw_sector_issue raw_sector_issue(const uint8_t *raw,uint32_t fad) {
+    if(kui_data_offset(raw)!=16 || raw[15]!=1u)return RAW_SECTOR_FORMAT;
+    const unsigned fields[3]={fad/4500u,(fad/75u)%60u,fad%75u};
+    if(fad<150u || fad>719999u)return RAW_SECTOR_ADDRESS;
+    for(unsigned i=0u;i<3u;i++)
+        if(raw[12u+i]!=(uint8_t)((fields[i]/10u)*16u+fields[i]%10u))return RAW_SECTOR_ADDRESS;
+    return kui_sector_edc_valid(raw)?RAW_SECTOR_OK:RAW_SECTOR_EDC;
+}
+static const char *issue_text(enum raw_sector_issue issue) {
+    switch(issue) {
+    case RAW_SECTOR_FORMAT:return "raw sector format";
+    case RAW_SECTOR_ADDRESS:return "raw sector address mismatch";
+    case RAW_SECTOR_EDC:return "raw sector EDC mismatch";
+    default:return "raw transfer incomplete or unstable";
+    }
+}
+static enum kui_disc_boot_io_result terminal_read(struct optical_source *s,
+    uint32_t fad,const char *problem) {
+    s->last_fad=fad;s->last_count=1u;s->read_problem=problem;s->io_failed=true;
+    s->log("Physical disc: %s failed at FAD %" PRIu32 ": %s",s->phase,fad,problem);
+    return KUI_DISC_BOOT_IO_ERROR;
+}
+static enum kui_disc_boot_io_result read_cooked_one(struct optical_source *s,
+    uint32_t fad,uint8_t raw[KUI_RAW_BYTES]) {
+    for(unsigned attempt=0u;attempt<2u;attempt++) {
+        if(stopped(s))return KUI_DISC_BOOT_IO_CANCELLED;
+        enum kui_disc_boot_read_result result=kui_disc_read_boot_cooked(NULL,fad,raw+16u);
+        if(result==KUI_BOOT_READ_CANCELLED)return KUI_DISC_BOOT_IO_CANCELLED;
+        if(result==KUI_BOOT_READ_OK) {
+            if(stopped(s))return KUI_DISC_BOOT_IO_CANCELLED;
+            ++s->cooked_sectors;return KUI_DISC_BOOT_IO_OK;
+        }
+        if(result!=KUI_BOOT_READ_RETRY)
+            return terminal_read(s,fad,"cooked read fatal; see drive log / reboot if required");
+        s->log("Physical disc: cooked repeat attempt %u failed at FAD %" PRIu32,attempt+1u,fad);
+    }
+    return terminal_read(s,fad,"2048-byte repeated read retries exhausted");
+}
+static enum kui_disc_boot_io_result recover_one(struct optical_source *s,uint32_t fad,
+    uint8_t raw[KUI_RAW_BYTES],bool already_tried,enum raw_sector_issue previous_issue) {
+    bool address_refused=previous_issue==RAW_SECTOR_ADDRESS;
+    enum raw_sector_issue issue=previous_issue;
+    for(unsigned attempt=already_tried?1u:0u;attempt<3u;attempt++) {
+        if(stopped(s))return KUI_DISC_BOOT_IO_CANCELLED;
+        ++s->raw_retries;
+        enum kui_disc_boot_read_result result=kui_disc_read_boot_raw(NULL,fad,1u,raw);
+        if(result==KUI_BOOT_READ_CANCELLED)return KUI_DISC_BOOT_IO_CANCELLED;
+        if(result!=KUI_BOOT_READ_OK && result!=KUI_BOOT_READ_RETRY)
+            return terminal_read(s,fad,"raw read fatal; see drive log / reboot if required");
+        if(result==KUI_BOOT_READ_OK) {
+            if(stopped(s))return KUI_DISC_BOOT_IO_CANCELLED;
+            issue=raw_sector_issue(raw,fad);
+            if(issue==RAW_SECTOR_OK)return KUI_DISC_BOOT_IO_OK;
+            if(issue==RAW_SECTOR_ADDRESS)address_refused=true;
+        } else issue=RAW_SECTOR_OK;
+        s->log("Physical disc: raw single attempt %u at FAD %" PRIu32 ": %s",
+            attempt+1u,fad,issue_text(issue));
+    }
+    /* An explicit wrong sector address cannot become trustworthy by dropping
+     * its header. Only another correctly addressed raw sector can recover it. */
+    if(address_refused)return terminal_read(s,fad,"raw sector address mismatch after retries");
+    s->log("Physical disc: trying firmware Mode1 2048-byte repeated reads at FAD %" PRIu32
+        "; raw acquisition did not verify; external raw EDC unavailable on this path",fad);
+    enum kui_disc_boot_io_result result=read_cooked_one(s,fad,raw);
+    if(result==KUI_DISC_BOOT_IO_OK) {
+        s->cooked_reads=true;
+        s->log("Physical disc: using repeated cooked sectors for this preparation; metadata and staged hashes remain checked");
+    }
+    return result;
 }
 static enum kui_disc_boot_io_result read_run(void *context,uint32_t fad,uint32_t count,uint8_t *data) {
     struct optical_source *s=context;
@@ -37,49 +113,122 @@ static enum kui_disc_boot_io_result read_run(void *context,uint32_t fad,uint32_t
         s->io_failed=true;s->log("Physical disc: no RAM for bounded optical buffer");
         return KUI_DISC_BOOT_IO_ERROR;
     }
-    enum kui_read_result result=kui_disc_read_raw(NULL,fad,count,s->raw);
-    if(result!=KUI_READ_OK) {
-        s->io_failed=true;
-        s->log("Physical disc: %s read refused at FAD %" PRIu32 " count %" PRIu32 ", result %u",
-            s->phase,fad,count,(unsigned)result);
-        return KUI_DISC_BOOT_IO_ERROR;
-    }
-    /* Check every sector before publishing any cooked bytes from this run.
-     * Runs cover only the caller's known IP/executable extent, never lookahead. */
-    for(uint32_t i=0;i<count;i++) {
-        const uint8_t *raw=s->raw+(size_t)i*KUI_RAW_BYTES;
-        if(kui_data_offset(raw)!=16 || raw[15]!=1u || !kui_sector_edc_valid_at(raw,fad+i)) {
-            s->io_failed=true;s->last_fad=fad+i;s->last_count=1u;
-            s->log("Physical disc: %s sector address/EDC refused at FAD %" PRIu32,s->phase,fad+i);
-            return KUI_DISC_BOOT_IO_ERROR;
+    s->read_problem=NULL;
+    bool tail=s->leadout_tail && fad<s->leadout_end && (uint64_t)fad+count>s->leadout_tail;
+    if(!s->single_reads && !s->cooked_reads && !tail) {
+        enum kui_disc_boot_read_result result=kui_disc_read_boot_raw(NULL,fad,count,s->raw);
+        if(result==KUI_BOOT_READ_CANCELLED)return KUI_DISC_BOOT_IO_CANCELLED;
+        if(result!=KUI_BOOT_READ_OK && result!=KUI_BOOT_READ_RETRY)
+            return terminal_read(s,fad,"raw read fatal; see drive log / reboot if required");
+        if(stopped(s))return KUI_DISC_BOOT_IO_CANCELLED;
+        uint32_t valid=0u;
+        enum raw_sector_issue issues[KUI_DISC_BOOT_RUN_SECTORS]={RAW_SECTOR_OK};
+        if(result==KUI_BOOT_READ_OK)for(uint32_t i=0u;i<count;i++) {
+            issues[i]=raw_sector_issue(s->raw+(size_t)i*KUI_RAW_BYTES,fad+i);
+            if(issues[i]==RAW_SECTOR_OK)valid|=1u<<i;
         }
+        if(valid!=(1u<<count)-1u) {
+            s->single_reads=true;
+            s->log("Physical disc: %s raw run FAD %" PRIu32 " count %" PRIu32
+                " did not verify; reducing to single-sector PIO",s->phase,fad,count);
+            for(uint32_t i=0u;i<count;i++)if(!(valid&(1u<<i))) {
+                enum kui_disc_boot_io_result recovered=s->cooked_reads && issues[i]!=RAW_SECTOR_ADDRESS?
+                    read_cooked_one(s,fad+i,s->raw+(size_t)i*KUI_RAW_BYTES):
+                    recover_one(s,fad+i,s->raw+(size_t)i*KUI_RAW_BYTES,count==1u,issues[i]);
+                if(recovered!=KUI_DISC_BOOT_IO_OK)return recovered;
+            }
+        }
+    } else for(uint32_t i=0u;i<count;i++) {
+        enum kui_disc_boot_io_result result=s->cooked_reads?
+            read_cooked_one(s,fad+i,s->raw+(size_t)i*KUI_RAW_BYTES):
+            recover_one(s,fad+i,s->raw+(size_t)i*KUI_RAW_BYTES,false,RAW_SECTOR_OK);
+        if(result!=KUI_DISC_BOOT_IO_OK)return result;
     }
-    if(stopped(s)) return KUI_DISC_BOOT_IO_CANCELLED;
-    for(uint32_t i=0;i<count;i++) memcpy(data+(size_t)i*2048u,s->raw+(size_t)i*KUI_RAW_BYTES+16u,2048u);
+    /* No caller bytes are published until every sector in this exact bounded
+     * run passes its selected acquisition policy. A recovered cooked sector
+     * occupies the same payload offset but is not claimed to have raw EDC. */
+    if(stopped(s))return KUI_DISC_BOOT_IO_CANCELLED;
+    for(uint32_t i=0;i<count;i++)memcpy(data+(size_t)i*2048u,s->raw+(size_t)i*KUI_RAW_BYTES+16u,2048u);
     uint32_t before=s->reads;s->reads+=count;s->status->done=(uint64_t)s->reads*2048u;
-    if((before/128u)!=(s->reads/128u)) publish(s);
+    if((before/128u)!=(s->reads/128u))publish(s);
     return KUI_DISC_BOOT_IO_OK;
+}
+static void read_phase(void *context,const char *phase) {
+    struct optical_source *s=context;
+    if(s->phase && !strcmp(s->phase,phase))return;
+    s->phase=phase;
+    s->log("Physical disc: reading %s (%s)",phase,s->cooked_reads?"paired cooked PIO":
+        s->single_reads?"paired raw single-sector PIO":"paired raw PIO");
+    snprintf(s->status->message,sizeof(s->status->message),"Reading physical disc: %s...",phase);
+    publish(s);
 }
 static enum kui_disc_boot_io_result read_sector(void *context,uint32_t fad,uint8_t data[2048]) {
     return read_run(context,fad,1u,data);
 }
-static bool source_open(struct optical_source *s,struct kui_disc_boot_source *source,uint32_t limit) {
+static void extent_refused(void *context,uint32_t lba,uint32_t count) {
+    struct optical_source *s=context;
+    s->log("Physical disc: ISO extent refused LBA %" PRIu32 " (FAD %" PRIu64 ") count %" PRIu32
+        "; outside checked DATA tracks",lba,(uint64_t)lba+150u,count);
+}
+static const char *source_open(struct optical_source *s,struct kui_disc_boot_source *source,uint32_t limit) {
     struct kui_toc toc[2];
     bool is_cd=true;
-    if(stopped(s) || !kui_disc_prepare_capture(toc,&is_cd)) return false;
-    if(is_cd || !toc[1].count || toc[1].count>99u) return false;
-    /* Only a positively identified GD high-density data track supplies bounds.
-     * No audio/gap or later extent is folded into this first boot prototype. */
+    if(stopped(s)) return "Physical-disc preparation stopped.";
+    enum kui_disc_launch_prepare_result ready=kui_disc_prepare_launch(toc,&is_cd,s->cancel);
+    if(ready!=KUI_DISC_LAUNCH_PREPARED) {
+        if(ready==KUI_DISC_LAUNCH_CANCELLED) return "Physical-disc preparation stopped.";
+        /* A real readiness error must not become an apparent user Stop if
+         * cancellation arrives after its terminal result. */
+        s->io_failed=true;
+        switch(ready) {
+        case KUI_DISC_LAUNCH_OPEN:return "Drive lid is open; close it before launching.";
+        case KUI_DISC_LAUNCH_NO_DISC:return "No disc is inserted.";
+        case KUI_DISC_LAUNCH_WAIT_TIMEOUT:return "Disc did not become ready in time; retry when it has settled.";
+        case KUI_DISC_LAUNCH_UNAVAILABLE:return "Drive unavailable; check the drive log before retrying.";
+        default:return "Disc initialization failed; check the disc and drive log.";
+        }
+    }
+    if(is_cd) return "Inserted media is not a native GD-ROM.";
+    if(!toc[1].count || toc[1].count>99u) return "Native GD data track unavailable; check the disc and drive log.";
+    /* Keep every high-density DATA span. ISO extents use absolute LBAs and
+     * may legitimately reside after intervening audio tracks (Shenmue II).
+     * Use the same declared 150-sector type-transition gap as GDI capture;
+     * it is a conservative format boundary, not measured INDEX 00 metadata. */
+    uint32_t count=0u;
     for(unsigned i=0;i<toc[1].count;i++) {
         const struct kui_track *t=&toc[1].tracks[i];
+        if((t->control!=0u && t->control!=4u) || t->start<45150u ||
+           t->end<=t->start || t->end>UINT32_C(0x01000000) ||
+           (i && (toc[1].tracks[i-1u].end!=t->start ||
+                  toc[1].tracks[i-1u].number+1u!=t->number)))
+            return "Native GD track bounds are invalid.";
         if(!(t->control&4u)) continue;
-        if(t->start<45150u || t->end<=t->start) return false;
+        uint32_t gap=i+1u<toc[1].count && toc[1].tracks[i+1u].control!=4u?150u:0u;
+        if(t->end-t->start<=gap)return "Native GD data track bounds are invalid.";
+        uint32_t end=t->end-gap;
+        if(count && s->data_ranges[count-1u].end_fad==t->start)
+            s->data_ranges[count-1u].end_fad=end;
+        else s->data_ranges[count++]=(struct kui_disc_boot_data_range){t->start,end};
+        s->log("Physical disc: DATA track %u FAD %" PRIu32 "..%" PRIu32 "; excluded gap %" PRIu32,
+            t->number,t->start,end,gap);
+    }
+    if(count && toc[1].tracks[0].control==4u) {
+        const struct kui_track *last=&toc[1].tracks[toc[1].count-1u];
+        if(last->control==4u) {
+            uint32_t sectors=last->end-last->start;
+            s->leadout_end=last->end;
+            s->leadout_tail=last->end-(sectors<150u?sectors:150u);
+            s->log("Physical disc: leadout approach FAD %" PRIu32 "..%" PRIu32
+                " uses single-sector PIO; full extents retained",s->leadout_tail,s->leadout_end);
+        }
         *source=(struct kui_disc_boot_source){.context=s,.read_sector=read_sector,
             .cancelled=stopped,.disc_type=KUI_DISC_BOOT_GD_TYPE,
-            .first_fad=t->start,.end_fad=t->end,.read_run=read_run,.max_exec_bytes=limit};
-        return true;
+            .first_fad=s->data_ranges[0].first_fad,.end_fad=s->data_ranges[count-1u].end_fad,
+            .read_run=read_run,.max_exec_bytes=limit,.data_ranges=s->data_ranges,
+            .data_range_count=count,.extent_refused=extent_refused,.read_phase=read_phase};
+        return NULL;
     }
-    return false;
+    return "Native GD data track unavailable; check the disc and drive log.";
 }
 static bool fail(struct optical_source *s,const char *message) {
     s->status->passed=false;s->status->complete=true;
@@ -88,6 +237,10 @@ static bool fail(struct optical_source *s,const char *message) {
     s->status->line_count=s->last_count?2u:1u;
     snprintf(s->status->lines[0],KUI_APP_LINE_CAP,"Stage: %s",s->phase);
     if(s->last_count) snprintf(s->status->lines[1],KUI_APP_LINE_CAP,"Last read: FAD %" PRIu32 ", %" PRIu32 " sector(s)",s->last_fad,s->last_count);
+    if(s->read_problem) {
+        snprintf(s->status->lines[s->status->line_count++],KUI_APP_LINE_CAP,"%s",s->read_problem);
+        snprintf(s->status->message,sizeof(s->status->message),"Read failed at FAD %" PRIu32 ": %.86s",s->last_fad,s->read_problem);
+    }
     s->log("Physical disc: %s: %s",s->phase,message);
     free(s->raw);s->raw=NULL;publish(s);return false;
 }
@@ -100,17 +253,23 @@ static void describe(struct optical_source *s,const struct kui_disc_boot_plan *p
     snprintf(out->lines[3],KUI_APP_LINE_CAP,"IP %08" PRIX32 " / executable %08" PRIX32,plan->ip_crc32,plan->boot_crc32);
     s->log("Physical disc: %s; product %s; region %s; %s",plan->metadata.title,
         plan->metadata.product,plan->metadata.region,plan->metadata.bootfile);
-    s->log("Physical disc: data FAD %" PRIu32 "..%" PRIu32 "; boot FAD %" PRIu32 "; %" PRIu32 " bytes",
+    s->log("Physical disc: session DATA bounds FAD %" PRIu32 "..%" PRIu32 "; boot FAD %" PRIu32 "; %" PRIu32 " bytes",
         plan->first_fad,plan->end_fad,plan->boot_fad,plan->metadata.boot_bytes);
     s->log("Physical disc: full IP CRC32 %08" PRIx32 "; exact executable CRC32 %08" PRIx32,
         plan->ip_crc32,plan->boot_crc32);
+    s->log("Physical disc acquisition: raw single requests=%" PRIu32 "; paired cooked sectors=%" PRIu32,
+        s->raw_retries,s->cooked_sectors);
 }
 static bool inspect(struct optical_source *s,struct kui_disc_boot_source *source,
     struct kui_disc_boot_plan *plan,uint32_t limit) {
-    snprintf(s->status->message,sizeof(s->status->message),"Checking the physical disc's native executable...");
+    snprintf(s->status->message,sizeof(s->status->message),"Waiting for the inserted disc to become ready...");
+    s->phase="disc spin-up and identification";
     publish(s);
+    const char *problem=source_open(s,source,limit);
+    if(problem) return fail(s,problem);
+    snprintf(s->status->message,sizeof(s->status->message),"Checking the physical disc's native executable...");
     s->phase="disc metadata and hashes";
-    if(!source_open(s,source,limit)) return fail(s,"Native GD data track unavailable; check the disc and drive log.");
+    publish(s);
     enum kui_disc_boot_status result=kui_disc_boot_prepare(source,plan);
     if(result!=KUI_DISC_BOOT_OK) return fail(s,result==KUI_DISC_BOOT_LIMIT && limit==KUI_DISC_LAUNCH_EXEC_MAX_BYTES?
         "Direct boot currently supports native executables up to 4 MiB.":kui_disc_boot_status_text(result));
@@ -184,6 +343,7 @@ bool kui_disc_launcher_prepare_module(const char *package,kui_disc_launcher_card
     s.phase="staging disc bytes";
     uint8_t sectors[KUI_DISC_BOOT_RUN_SECTORS*2048u];
     for(unsigned which=0;which<2u;which++) {
+        read_phase(&s,which?"boot executable staging":"IP.BIN staging");
         uint32_t bytes=which?layout.exec_bytes:KUI_DISC_BOOT_IP_BYTES;
         uint32_t fad=which?plan.boot_fad:plan.first_fad;
         uint8_t *destination=(uint8_t *)grown+(which?layout.exec_offset:layout.ip_offset);

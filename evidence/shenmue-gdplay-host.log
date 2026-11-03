@@ -1,0 +1,15 @@
+$ make build/test-disc-boot build/test-disc-launcher -j2
+make: 'build/test-disc-boot' is up to date.
+make: 'build/test-disc-launcher' is up to date.
+exit=0
+$ ./build/test-disc-boot
+Physical GD boot preflight: 49755 checks; bounded runs and singleton fallback, exact hashes/limits, regions, malformed ISO, read faults and cancellation
+exit=0
+$ ./build/test-disc-launcher
+Physical GD launcher app: 34064 checks; actual optical planner/packet hashes, read cuts, changed bytes, bounded SD lifecycle and no VMU file access
+exit=0
+$ python3 tests/test_disc_handoff_gui.py
+PASS direct-disc GUI handoff: actual staging bounds, validation ordering, retained failure/Stop routes, explicit memory diagnostics, drained menu cache and idle music recovery
+exit=0
+$ git diff --check
+exit=0

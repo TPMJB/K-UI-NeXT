@@ -10,6 +10,10 @@
 /* All firmware-visible objects survive a failed abort. Once poisoned, this
  * adapter will not touch them again, and requires a console reset. */
 static bool initialized, poisoned, media_changed;
+/* Consumed by the final handoff gate. Only a successful explicit boot read
+ * sets this receipt; every subsequent command/format or boot attempt retires
+ * it, so an unexplained mechanical PLAYING state is never enough by itself. */
+static bool boot_read_verified;
 static bool command_running, dma_in_flight;
 static bool g1_probe_active;
 static struct kui_drive_mode g1_probe_original;
@@ -138,6 +142,7 @@ static bool cancelled(void *ctx) { (void)ctx; return kui_cancelled(); }
 static bool never_cancelled(void *ctx) { (void)ctx; return false; }
 static int submit(void *ctx, int command, void *params) {
     (void)ctx;
+    boot_read_verified=false;
     uint64_t start=(active_command||probe_stats)?timer_us_gettime64():0;
     int handle = syscall_gdrom_send_command((cd_cmd_code_t)command, params);
     syscall_gdrom_exec_server();
@@ -392,6 +397,7 @@ bool kui_disc_controls_end(void) {
 }
 
 static bool set_mode(int size, int track_type) {
+    boot_read_verified=false;
     if(poisoned || g1_probe_active || command_running || dma_in_flight || kui_cancelled() || controls_format_refused) return false;
     cd_sec_mode_params_t mode = {0,
         size == 2352 ? CDROM_READ_WHOLE_SECTOR : CDROM_READ_DATA_AREA,
@@ -404,17 +410,20 @@ static bool set_mode(int size, int track_type) {
     if(r != 0) kui_log("Set sector mode failed: %d", r);
     return r == 0 && (size!=2352 || controls_after_format());
 }
-static bool read_sector(void *data, uint32_t fad) {
+static bool read_sector_deadlines(void *data,uint32_t fad,uint32_t read_ms,uint32_t abort_ms) {
     read_params = (cd_read_params_t){.start_sec = fad, .num_sec = 1,
                                    .buffer = data, .is_test = 0};
-    return command(CD_CMD_PIOREAD, &read_params, 5000);
+    return command_run_deadlines(CD_CMD_PIOREAD,&read_params,read_ms,abort_ms,true,NULL);
+}
+static bool read_sector(void *data,uint32_t fad) {
+    return read_sector_deadlines(data,fad,5000u,1000u);
 }
 
 static bool native_handoff_ready(void) {
     return controls_safe(NULL) && !controls.active && !controls_format_pending &&
         !controls_format_refused && !kui_cancelled();
 }
-static bool native_handoff_media(const char *phase,bool cooked_verified) {
+static bool native_handoff_media(const char *phase,bool verified_read) {
     cd_check_drive_status_t drive={0};
     if(!native_handoff_ready()) {
         kui_log("Disc handoff %s: optical ownership refused (poison=%u media=%u command=%u DMA=%u controls=%u)",
@@ -426,15 +435,16 @@ static bool native_handoff_media(const char *phase,bool cooked_verified) {
     return result==0 &&
         drive.disc_type==CD_GDROM &&
         (drive.status==CD_STATUS_PAUSED || drive.status==CD_STATUS_STANDBY ||
-         (cooked_verified && drive.status==CD_STATUS_PLAYING));
+         (verified_read && drive.status==CD_STATUS_PLAYING));
 }
 bool kui_disc_native_handoff(uint32_t ip_fad,const uint8_t expected_ip_sector[2048]) {
-    /* The new direct-disc launcher has read raw 2352-byte sectors. Leave the
-     * real firmware in ordinary Mode1 data-area format before entering the
+    /* The direct-disc launcher may have read raw 2352-byte or cooked sectors.
+     * Leave the real firmware in ordinary Mode1 data-area format before entering the
      * game's own GD code. This gate neither resets the drive nor installs an
      * emulated GD vector. The source has already admitted a native GD image. */
+    bool acquired=boot_read_verified;boot_read_verified=false;
     if(!expected_ip_sector || ip_fad<45150u || ip_fad>0xffffffu) return false;
-    if(!native_handoff_media("before format",false)) return false;
+    if(!native_handoff_media("before format",acquired)) return false;
     if(!set_mode(2048,1024) || !native_handoff_ready()) {
         kui_log("Disc handoff: restoring Mode1 2048-byte reads refused");return false;
     }
@@ -443,7 +453,7 @@ bool kui_disc_native_handoff(uint32_t ip_fad,const uint8_t expected_ip_sector[20
         memset(&cooked[i],fill,sizeof(cooked[i]));
         /* Firmware receives only the adapter's static parameter/buffer. A
          * failed abort may retain them; never inspect or refill after poison. */
-        bool read_ok=read_sector(cooked[i].data,ip_fad);
+        bool read_ok=read_sector_deadlines(cooked[i].data,ip_fad,30000u,5000u);
         if(poisoned) {kui_log("Disc handoff: boot-sector read %u left drive poisoned",i+1u);return false;}
         if(!kui_guard_is(cooked[i].before,32u,fill) ||
            !kui_guard_is(cooked[i].after,32u,fill)) {
@@ -517,19 +527,11 @@ static bool sample(const struct kui_track *track, uint32_t fad) {
     return true;
 }
 
-static bool disc_prepare(struct kui_toc sessions[2],bool allow_cd,bool *is_cd) {
-    if(is_cd)*is_cd=false;
-    if(poisoned) { kui_log("Drive unavailable after failed recovery; reset console"); return false; }
-    if(!sessions || g1_probe_active || command_running || dma_in_flight || kui_cancelled())return false;
-    if(!initialized) { kui_drive_init_bus(); initialized = true; }
-    bool ready = false;
-    /* Two additional INIT attempts for disc-change sense only. */
-    for(unsigned attempt = 0; attempt < 3 && !kui_cancelled(); ++attempt) {
-        if(command(CD_CMD_INIT, NULL, 10000)) { ready = true; break; }
-        if(poisoned || detail.err1 != 6) break;
-    }
-    if(!ready) { kui_log("Disc initialization did not complete"); return false; }
-    media_changed = false;
+static bool disc_read_tocs(struct kui_toc sessions[2],bool allow_cd,bool *is_cd,
+    enum kui_command_result *failed_command) {
+    /* A malformed/unsupported TOC or status is a real failure even if Stop
+     * arrives later. Replace this only with an actual failed command result. */
+    if(failed_command)*failed_command=KUI_CMD_FAILED;
     if(!controls_reapply())return false;
     unsigned areas=2;
     if(allow_cd) {
@@ -549,7 +551,11 @@ static bool disc_prepare(struct kui_toc sessions[2],bool allow_cd,bool *is_cd) {
     for(unsigned area = 0; area < areas; ++area) {
         memset(&toc, 0xa5, sizeof(toc));
         toc_params = (cd_cmd_toc_params_t){(cd_area_t)area, &toc.data};
-        if(!command(CD_CMD_GETTOC2, &toc_params, 5000)) return false;
+        enum kui_command_result outcome;
+        if(!command_run_deadlines(CD_CMD_GETTOC2,&toc_params,5000u,1000u,true,&outcome)) {
+            if(failed_command)*failed_command=outcome;
+            return false;
+        }
         if(!kui_guard_is(toc.before, 32, 0xa5) || !kui_guard_is(toc.after, 32, 0xa5)) {
             kui_log("TOC GUARD CORRUPTION: RESET REQUIRED"); poisoned = true; return false;
         }
@@ -567,11 +573,157 @@ static bool disc_prepare(struct kui_toc sessions[2],bool allow_cd,bool *is_cd) {
     }
     return true;
 }
+static bool disc_prepare(struct kui_toc sessions[2],bool allow_cd,bool *is_cd) {
+    if(is_cd)*is_cd=false;
+    if(poisoned) { kui_log("Drive unavailable after failed recovery; reset console"); return false; }
+    if(!sessions || g1_probe_active || command_running || dma_in_flight || kui_cancelled())return false;
+    if(!initialized) { kui_drive_init_bus(); initialized = true; }
+    bool ready = false;
+    /* Two additional INIT attempts for disc-change sense only. */
+    for(unsigned attempt = 0; attempt < 3 && !kui_cancelled(); ++attempt) {
+        if(command(CD_CMD_INIT, NULL, 10000)) { ready = true; break; }
+        if(poisoned || detail.err1 != 6) break;
+    }
+    if(!ready) { kui_log("Disc initialization did not complete"); return false; }
+    media_changed = false;
+    return disc_read_tocs(sessions,allow_cd,is_cd,NULL);
+}
+
 bool kui_disc_prepare(struct kui_toc sessions[2]) {
     return disc_prepare(sessions,false,NULL);
 }
 bool kui_disc_prepare_capture(struct kui_toc sessions[2],bool *is_cd) {
     return disc_prepare(sessions,true,is_cd);
+}
+
+/* Explicit GD Play only: INIT may legitimately report NOT READY while a new
+ * disc spins up. Retry that terminal response and media-change sense within
+ * one shared deadline; do not retry actual TOC/read failures or reset the bus.
+ * KOS/BIOS calls themselves cannot be preempted by the software deadline. */
+static bool launch_prepare_cancelled(kui_cancel_fn cancel) {
+    return kui_cancelled() || (cancel && cancel());
+}
+static bool launch_prepare_pause(kui_cancel_fn cancel,uint64_t started,unsigned interval) {
+    uint64_t begin=timer_ms_gettime64();
+    while(timer_ms_gettime64()-begin<interval) {
+        if(launch_prepare_cancelled(cancel) || timer_ms_gettime64()-started>=10000u) return false;
+        thd_sleep(1);
+    }
+    return true;
+}
+enum kui_disc_launch_prepare_result kui_disc_prepare_launch(
+    struct kui_toc sessions[2],bool *is_cd,kui_cancel_fn cancel) {
+    if(is_cd)*is_cd=false;
+    if(!sessions) return KUI_DISC_LAUNCH_UNAVAILABLE;
+    memset(sessions,0,2u*sizeof(*sessions));
+    if(poisoned) {
+        kui_log("Disc launch readiness: drive poisoned after failed recovery; reset console");
+        return KUI_DISC_LAUNCH_UNAVAILABLE;
+    }
+    if(launch_prepare_cancelled(cancel)) return KUI_DISC_LAUNCH_CANCELLED;
+    if(poisoned || g1_probe_active || command_running || dma_in_flight || controls.active) {
+        kui_log("Disc launch readiness: exclusive optical ownership unavailable (poison=%u)",poisoned);
+        return KUI_DISC_LAUNCH_UNAVAILABLE;
+    }
+    if(!initialized) {kui_drive_init_bus();initialized=true;}
+    const uint64_t started=timer_ms_gettime64();
+    bool first=true,need_init=true;
+    unsigned attempts=0u;
+    for(;;) {
+        if(launch_prepare_cancelled(cancel)) return KUI_DISC_LAUNCH_CANCELLED;
+        uint64_t elapsed=timer_ms_gettime64()-started;
+        if(elapsed>=10000u) {
+            kui_log("Disc launch readiness: timed out after %u INIT attempt(s)",attempts);
+            return KUI_DISC_LAUNCH_WAIT_TIMEOUT;
+        }
+        cd_check_drive_status_t drive;memset(&drive,0,sizeof(drive));
+        syscall_gdrom_exec_server();
+        int status=syscall_gdrom_check_drive(&drive);
+        if(!status && drive.status==CD_STATUS_OPEN) return KUI_DISC_LAUNCH_OPEN;
+        if(!status && drive.status==CD_STATUS_NO_DISC) return KUI_DISC_LAUNCH_NO_DISC;
+        bool settling=!status && (drive.status==CD_STATUS_BUSY || drive.status==CD_STATUS_SEEKING ||
+            drive.status==CD_STATUS_SCANNING || drive.status==CD_STATUS_RETRY);
+        bool stable=!status && (drive.status==CD_STATUS_PAUSED || drive.status==CD_STATUS_STANDBY ||
+            drive.status==CD_STATUS_PLAYING);
+        /* An explicit first INIT refreshes stale/uninitialized BIOS status and
+         * disc type. Once attempted, an error/fatal/unknown result is a real
+         * refusal; only known mechanical transition states may keep waiting. */
+        if(!first && !settling && !stable) {
+            kui_log("Disc launch readiness: drive status refused (BIOS=%d status=%d type=%d)",
+                status,drive.status,drive.disc_type);
+            return KUI_DISC_LAUNCH_IO_FAILED;
+        }
+        /* RETRY is a request for another INIT, rather than mechanical
+         * progress that can settle through status polling alone. */
+        bool retry_init=!status && drive.status==CD_STATUS_RETRY;
+        if(!need_init && retry_init) {
+            /* Media may change after a successful INIT but before its TOC.
+             * Retire that attempt and obtain the new disc's own INIT/TOC. */
+            media_changed=true;need_init=true;
+            if(!launch_prepare_pause(cancel,started,250u)) continue;
+            continue;
+        }
+        if(need_init && (first || stable || retry_init)) {
+            enum kui_command_result outcome=KUI_CMD_INVALID;
+            elapsed=timer_ms_gettime64()-started;
+            if(elapsed>=10000u) return KUI_DISC_LAUNCH_WAIT_TIMEOUT;
+            uint32_t remaining=(uint32_t)(10000u-elapsed);
+            ++attempts;
+            bool ready=command_run_deadlines(CD_CMD_INIT,NULL,remaining,1000u,true,&outcome);
+            first=false;
+            if(poisoned || outcome==KUI_CMD_RECOVERY_FAILED) return KUI_DISC_LAUNCH_UNAVAILABLE;
+            /* A Stop observed after a terminal firmware result must not
+             * turn a real failure/timeout into an ordinary user cancellation.
+             * Only a command that actually cancelled, a success or a known
+             * retryable NOT READY/media-change response can honor late Stop. */
+            if(outcome==KUI_CMD_TIMEOUT) return KUI_DISC_LAUNCH_WAIT_TIMEOUT;
+            if(outcome==KUI_CMD_CANCELLED) return KUI_DISC_LAUNCH_CANCELLED;
+            bool retryable=outcome==KUI_CMD_FAILED && last_poll_status==-1 &&
+                (detail.err1==2 || detail.err1==6);
+            if(!ready && !retryable && outcome!=KUI_CMD_INVALID) return KUI_DISC_LAUNCH_IO_FAILED;
+            if(launch_prepare_cancelled(cancel)) return KUI_DISC_LAUNCH_CANCELLED;
+            if(ready) {
+                media_changed=false;need_init=false;
+                continue; /* Recheck media and its fresh type before any TOC. */
+            }
+            if(!retryable) return KUI_DISC_LAUNCH_IO_FAILED;
+            kui_log("Disc launch readiness: waiting after INIT sense %" PRId32 "/%" PRId32,
+                detail.err1,detail.err2);
+            if(!launch_prepare_pause(cancel,started,250u)) continue;
+        } else if(!need_init && stable) {
+            /* Always acquire new TOCs after this operation's successful INIT.
+             * A failure here is not a spin-up retry and never reuses old data. */
+            bool prepared_cd=false;
+            enum kui_command_result failed_command;
+            if(disc_read_tocs(sessions,true,&prepared_cd,&failed_command)) {
+                /* A lid event can race a terminal TOC result. Do not publish
+                 * the old geometry after a new media/status observation. */
+                cd_check_drive_status_t final;memset(&final,0,sizeof(final));
+                int checked=syscall_gdrom_check_drive(&final);
+                bool settled=!checked && (final.status==CD_STATUS_PAUSED ||
+                    final.status==CD_STATUS_STANDBY || final.status==CD_STATUS_PLAYING);
+                bool cd=final.disc_type==CD_CDDA || final.disc_type==CD_CDROM || final.disc_type==CD_CDROM_XA;
+                bool valid=!media_changed && settled && (prepared_cd?cd:final.disc_type==CD_GDROM);
+                if(valid && !launch_prepare_cancelled(cancel)) {
+                    if(is_cd)*is_cd=prepared_cd;
+                    return KUI_DISC_LAUNCH_PREPARED;
+                }
+                memset(sessions,0,2u*sizeof(*sessions));if(is_cd)*is_cd=false;
+                if(!checked && final.status==CD_STATUS_OPEN) return KUI_DISC_LAUNCH_OPEN;
+                if(!checked && final.status==CD_STATUS_NO_DISC) return KUI_DISC_LAUNCH_NO_DISC;
+                if(valid && launch_prepare_cancelled(cancel)) return KUI_DISC_LAUNCH_CANCELLED;
+                return KUI_DISC_LAUNCH_IO_FAILED;
+            }
+            memset(sessions,0,2u*sizeof(*sessions));if(is_cd)*is_cd=false;
+            if(poisoned || failed_command==KUI_CMD_RECOVERY_FAILED) return KUI_DISC_LAUNCH_UNAVAILABLE;
+            if(failed_command==KUI_CMD_FAILED || failed_command==KUI_CMD_TIMEOUT)
+                return KUI_DISC_LAUNCH_IO_FAILED;
+            return launch_prepare_cancelled(cancel)?KUI_DISC_LAUNCH_CANCELLED:KUI_DISC_LAUNCH_IO_FAILED;
+        } else {
+            first=false;
+            if(!launch_prepare_pause(cancel,started,100u)) continue;
+        }
+    }
 }
 
 bool kui_disc_recover(void *ctx,const struct kui_capture_plan *expected) {
@@ -601,14 +753,26 @@ bool kui_disc_recover(void *ctx,const struct kui_capture_plan *expected) {
     return true;
 }
 
+static bool boot_read_owner_clear(void) {
+    return !poisoned && !media_changed && !g1_probe_active && !command_running &&
+        !dma_in_flight && !controls.active && !controls_format_pending && !controls_format_refused;
+}
 static enum kui_read_result read_raw(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out,
-    uint32_t read_ms,uint32_t abort_ms,bool allow_partial) {
+    uint32_t read_ms,uint32_t abort_ms,bool allow_partial,unsigned repeated_reads,bool *boot_cancelled) {
     (void)ctx;
     struct optical_timing *t=&optical[optical_phase];
     uint64_t request_start=timer_us_gettime64(),start;
     enum kui_read_result result=KUI_READ_FATAL;
     bool read_called=false;
+    if(boot_cancelled)*boot_cancelled=false;
     ++t->requests;
+    if(boot_cancelled) {
+        if(!boot_read_owner_clear()) {++t->refused;goto done;}
+        if(out && sectors && sectors<=KUI_CAPTURE_CHUNK && fad>=150u && fad<=0xffffffu &&
+           sectors<=0x1000000u-fad && kui_cancelled()) {
+            *boot_cancelled=true;++t->refused;goto done;
+        }
+    }
     if(!out || !sectors || sectors>KUI_CAPTURE_CHUNK || fad<150 || fad>0xffffff ||
        sectors>0x1000000u-fad || poisoned || media_changed || kui_cancelled()) {++t->refused;goto done;}
     start=timer_us_gettime64();bool mode_ok=set_mode(2352,0);
@@ -618,8 +782,12 @@ static enum kui_read_result read_raw(void *ctx,uint32_t fad,unsigned sectors,uin
     /* Identification keeps its established paired samples and disc identity.
      * Capture issues one sequential request; failures still use the core's
      * bounded retry policy. Saved-file CRC/SHA verification is unchanged. */
-    unsigned reads=optical_phase?1:2;
+    unsigned reads=repeated_reads?repeated_reads:optical_phase?1u:2u;
     for(unsigned i=0;i<reads;i++) {
+        if(boot_cancelled) {
+            if(!boot_read_owner_clear())goto done;
+            if(kui_cancelled()) {*boot_cancelled=true;goto done;}
+        }
         uint8_t fill=i?0x5a:0xa5;
         start=timer_us_gettime64();
         memset(&capture_raw[i],fill,sizeof(capture_raw[i]));
@@ -645,6 +813,10 @@ static enum kui_read_result read_raw(void *ctx,uint32_t fad,unsigned sectors,uin
         }
         if(!read_ok) {
             result=media_changed || kui_cancelled()?KUI_READ_FATAL:KUI_READ_RETRY;
+            if(boot_cancelled && boot_read_owner_clear() &&
+               (command_result==KUI_CMD_CANCELLED ||
+                (command_result==KUI_CMD_INVALID && kui_cancelled())))
+                *boot_cancelled=true;
             /* An ordinary terminal medium error has released this freshly
              * filled guarded buffer. Preserve its tentative bytes for the
              * salvage core's exact per-sector FAD/EDC/PQ checks. The firmware's
@@ -671,6 +843,12 @@ static enum kui_read_result read_raw(void *ctx,uint32_t fad,unsigned sectors,uin
     }
     start=timer_us_gettime64();
     bool mismatch=reads==2 && memcmp(capture_raw[0].data,capture_raw[1].data,bytes)!=0;
+    /* A mismatching pair is an I/O error even when Stop arrives with the
+     * second terminal reply. Only a completely verified pair can be a late
+     * clean cancellation rather than mask that primary device failure. */
+    if(!mismatch && boot_cancelled && kui_cancelled()) {
+        *boot_cancelled=true;result=KUI_READ_FATAL;goto done;
+    }
     if(!mismatch) memcpy(out,capture_raw[0].data,bytes);
     t->buffers_us+=timer_us_gettime64()-start;
     if(mismatch) {
@@ -681,7 +859,8 @@ static enum kui_read_result read_raw(void *ctx,uint32_t fad,unsigned sectors,uin
 done:
     if(result!=KUI_READ_OK) {
         kui_log("RAW %s FAD=%" PRIu32 " sectors=%u elapsed_ms=%" PRIu64,
-            result==KUI_READ_FATAL?"fatal":result==KUI_READ_PARTIAL?"partial":"retry",fad,sectors,
+            boot_cancelled && *boot_cancelled?"cancelled":result==KUI_READ_FATAL?"fatal":
+            result==KUI_READ_PARTIAL?"partial":"retry",fad,sectors,
             (timer_us_gettime64()-request_start)/1000u);
         if(read_called) {
             kui_log("  read_ms=%" PRIu32 " abort_ms=%" PRIu32 " poll=%d",read_ms,abort_ms,last_poll_status);
@@ -692,14 +871,81 @@ done:
     ++t->result[result];t->us+=timer_us_gettime64()-request_start;return result;
 }
 enum kui_read_result kui_disc_read_raw(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out) {
-    return read_raw(ctx,fad,sectors,out,5000,1000,false);
+    return read_raw(ctx,fad,sectors,out,5000,1000,false,0u,NULL);
+}
+enum kui_disc_boot_read_result kui_disc_read_boot_raw(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out) {
+    /* A long seek or firmware correction is allowed to finish before an abort
+     * is attempted. Unlike the capture policy, boot admission always confirms
+     * repeat equality even if a preceding rip left optical_phase at capture. */
+    boot_read_verified=false;
+    bool was_cancelled=false;
+    enum kui_read_result result=read_raw(ctx,fad,sectors,out,30000u,5000u,false,2u,&was_cancelled);
+    if(was_cancelled)return KUI_BOOT_READ_CANCELLED;
+    if(result==KUI_READ_OK) {boot_read_verified=true;return KUI_BOOT_READ_OK;}
+    return result==KUI_READ_RETRY && !kui_cancelled()?KUI_BOOT_READ_RETRY:KUI_BOOT_READ_FATAL;
+}
+enum kui_disc_boot_read_result kui_disc_read_boot_cooked(void *ctx,uint32_t fad,uint8_t out[KUI_DATA_BYTES]) {
+    (void)ctx;
+    uint64_t started=timer_us_gettime64();
+    enum kui_disc_boot_read_result result=KUI_BOOT_READ_FATAL;
+    bool read_called=false;
+    boot_read_verified=false;
+    if(!out || fad<150u || fad>UINT32_C(0x00ffffff) || !boot_read_owner_clear())goto done;
+    if(kui_cancelled()) {result=KUI_BOOT_READ_CANCELLED;goto done;}
+    if(!set_mode(KUI_DATA_BYTES,1024))goto done;
+    for(unsigned i=0u;i<2u;i++) {
+        if(!boot_read_owner_clear())goto done;
+        if(kui_cancelled()) {result=KUI_BOOT_READ_CANCELLED;goto done;}
+        uint8_t fill=i?0x5a:0xa5;
+        memset(&cooked[i],fill,sizeof(cooked[i]));
+        read_params=(cd_read_params_t){.start_sec=fad,.num_sec=1u,.buffer=cooked[i].data,.is_test=0};
+        enum kui_command_result outcome;
+        read_called=true;
+        bool ok=command_run_deadlines(CD_CMD_PIOREAD,&read_params,30000u,5000u,true,&outcome);
+        /* Firmware may retain every static object after an unconfirmed abort.
+         * Do not inspect guards or retry through another format in that case. */
+        if(poisoned)goto done;
+        if(!kui_guard_is(cooked[i].before,32u,fill) ||
+           !kui_guard_is(cooked[i].after,32u,fill)) {
+            poisoned=true;kui_log("BOOT COOKED GUARD CORRUPTION: RESET REQUIRED");goto done;
+        }
+        if(!ok) {
+            result=media_changed || kui_cancelled()?KUI_BOOT_READ_FATAL:KUI_BOOT_READ_RETRY;
+            if(boot_read_owner_clear() && (outcome==KUI_CMD_CANCELLED ||
+               (outcome==KUI_CMD_INVALID && kui_cancelled())))result=KUI_BOOT_READ_CANCELLED;
+            goto done;
+        }
+        if(detail.size!=KUI_DATA_BYTES) {
+            kui_log("Boot cooked transfer size mismatch FAD=%" PRIu32 " got=%lu want=%u",
+                fad,(unsigned long)detail.size,KUI_DATA_BYTES);
+            result=KUI_BOOT_READ_RETRY;goto done;
+        }
+    }
+    if(memcmp(cooked[0].data,cooked[1].data,KUI_DATA_BYTES)) {
+        kui_log("Boot cooked repeat mismatch at FAD=%" PRIu32,fad);
+        result=KUI_BOOT_READ_RETRY;goto done;
+    }
+    if(kui_cancelled()) {result=KUI_BOOT_READ_CANCELLED;goto done;}
+    memcpy(out,cooked[0].data,KUI_DATA_BYTES);boot_read_verified=true;result=KUI_BOOT_READ_OK;
+done:
+    /* A late button cannot relabel a short/mismatched/failed reply as Stop in
+     * a caller which otherwise offers retry or cancellation at this boundary. */
+    if(result==KUI_BOOT_READ_RETRY && kui_cancelled())result=KUI_BOOT_READ_FATAL;
+    if(result!=KUI_BOOT_READ_OK) {
+        kui_log("BOOT COOKED %s FAD=%" PRIu32 " elapsed_ms=%" PRIu64,
+            result==KUI_BOOT_READ_FATAL?"fatal":result==KUI_BOOT_READ_CANCELLED?"cancelled":"retry",
+            fad,(timer_us_gettime64()-started)/1000u);
+        if(read_called)kui_log("  read_ms=30000 abort_ms=5000 poll=%d sense=%" PRId32 "/%" PRId32
+            " size=%lu ATA=%d",last_poll_status,detail.err1,detail.err2,(unsigned long)detail.size,detail.ata);
+    }
+    return result;
 }
 enum kui_read_result kui_disc_read_salvage(void *ctx,uint32_t fad,unsigned sectors,uint8_t *out) {
     /* Damaged media can keep firmware internally retrying beyond the normal
      * capture deadline. Give it a longer bounded window to return an ordinary
      * error, plus time to confirm an abort. Never reuse a buffer after an
      * unconfirmed abort or downgrade the poisoned/guard/media fatal paths. */
-    return read_raw(ctx,fad,sectors,out,30000,5000,true);
+    return read_raw(ctx,fad,sectors,out,30000,5000,true,0u,NULL);
 }
 
 /* --- bench-only optical probe ------------------------------------------------

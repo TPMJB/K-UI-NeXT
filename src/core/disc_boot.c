@@ -19,8 +19,16 @@ static bool stopped(const struct preparation *p) {
     return p->source->cancelled(p->source->context);
 }
 static bool fad_range(const struct preparation *p,uint32_t fad,uint32_t count) {
-    return count && fad>=p->source->first_fad && fad<p->source->end_fad &&
-        count<=p->source->end_fad-fad;
+    const struct kui_disc_boot_source *s=p->source;
+    if(!count || fad<s->first_fad || fad>=s->end_fad || count>s->end_fad-fad)
+        return false;
+    if(!s->data_range_count)return true;
+    for(uint32_t i=0u;i<s->data_range_count;i++) {
+        const struct kui_disc_boot_data_range *r=&s->data_ranges[i];
+        if(fad<r->first_fad)return false;
+        if(fad<r->end_fad)return count<=r->end_fad-fad;
+    }
+    return false;
 }
 static enum kui_disc_boot_status read_fad(struct preparation *p,uint32_t fad,
                                         uint8_t data[2048]) {
@@ -56,6 +64,10 @@ static enum kui_game_metadata_io_result metadata_sector(void *context,uint32_t l
     struct preparation *p=context;
     if(lba>UINT32_MAX-150u)return KUI_GAME_METADATA_IO_ERROR;
     uint32_t fad=lba+150u;
+    if(p->source->read_phase)p->source->read_phase(p->source->context,
+        fad==p->source->first_fad?"IP header":
+        fad>=p->source->first_fad+16u && fad<p->source->first_fad+32u?
+            "ISO descriptors":"ISO directory");
     enum kui_disc_boot_status r=read_fad(p,fad,data);
     if(r==KUI_DISC_BOOT_CANCELLED)return KUI_GAME_METADATA_IO_CANCELLED;
     if(r!=KUI_DISC_BOOT_OK)return KUI_GAME_METADATA_IO_ERROR;
@@ -69,7 +81,10 @@ static enum kui_game_metadata_io_result metadata_sector(void *context,uint32_t l
 }
 static bool metadata_range(void *context,uint32_t lba,uint32_t count) {
     struct preparation *p=context;
-    return lba<=UINT32_MAX-150u && fad_range(p,lba+150u,count);
+    bool valid=lba<=UINT32_MAX-150u && fad_range(p,lba+150u,count);
+    if(!valid && p->source->extent_refused)
+        p->source->extent_refused(p->source->context,lba,count);
+    return valid;
 }
 static enum kui_disc_boot_status metadata_result(enum kui_game_metadata_status r) {
     switch(r) {
@@ -113,6 +128,10 @@ enum kui_disc_boot_status kui_disc_boot_prepare(const struct kui_disc_boot_sourc
                                                struct kui_disc_boot_plan *out) {
     if(!source || !out || !disjoint(source,sizeof(*source),out,sizeof(*out)))
         return KUI_DISC_BOOT_ARGUMENT;
+    if(source->data_range_count && source->data_range_count<=KUI_DISC_BOOT_MAX_DATA_RANGES &&
+       source->data_ranges && !disjoint(source->data_ranges,
+        (size_t)source->data_range_count*sizeof(*source->data_ranges),out,sizeof(*out)))
+        return KUI_DISC_BOOT_ARGUMENT;
     memset(out,0,sizeof(*out));
     /* Firmware TOC FADs are 24-bit. Require the observed high-density session
      * and enough room for its IP and first ISO descriptor before any read. */
@@ -122,6 +141,18 @@ enum kui_disc_boot_status kui_disc_boot_prepare(const struct kui_disc_boot_sourc
     if(source->first_fad<45150u ||
        source->end_fad>UINT32_C(0x01000000) || source->first_fad>=source->end_fad ||
        source->end_fad-source->first_fad<18u)return KUI_DISC_BOOT_ARGUMENT;
+    if(source->data_range_count>KUI_DISC_BOOT_MAX_DATA_RANGES ||
+       !!source->data_ranges!=!!source->data_range_count)return KUI_DISC_BOOT_ARGUMENT;
+    for(uint32_t i=0u;i<source->data_range_count;i++) {
+        const struct kui_disc_boot_data_range *range=&source->data_ranges[i];
+        if(range->first_fad<source->first_fad || range->first_fad>=range->end_fad ||
+           range->end_fad>source->end_fad ||
+           (i && source->data_ranges[i-1u].end_fad>range->first_fad) ||
+           (!i && (range->first_fad!=source->first_fad ||
+                    range->end_fad-range->first_fad<18u)) ||
+           (i+1u==source->data_range_count && range->end_fad!=source->end_fad))
+            return KUI_DISC_BOOT_ARGUMENT;
+    }
     struct preparation p={.source=source};
     struct kui_disc_boot_plan plan={0};
     const struct kui_game_metadata_ops ops={&p,metadata_sector,metadata_range};
@@ -140,9 +171,11 @@ enum kui_disc_boot_status kui_disc_boot_prepare(const struct kui_disc_boot_sourc
     uint32_t max_exec_bytes=source->max_exec_bytes?source->max_exec_bytes:
         KUI_DISC_BOOT_MAX_EXEC_BYTES;
     if(plan.metadata.boot_bytes>max_exec_bytes)return KUI_DISC_BOOT_LIMIT;
+    if(source->read_phase)source->read_phase(source->context,"IP.BIN verification");
     r=hash_extent(&p,source->first_fad,KUI_DISC_BOOT_IP_BYTES,true,
         &plan.ip_crc32,plan.ip_sha256);
     if(r!=KUI_DISC_BOOT_OK)return r;
+    if(source->read_phase)source->read_phase(source->context,"boot executable verification");
     r=hash_extent(&p,boot_fad,plan.metadata.boot_bytes,false,
         &plan.boot_crc32,plan.boot_sha256);
     if(r!=KUI_DISC_BOOT_OK)return r;

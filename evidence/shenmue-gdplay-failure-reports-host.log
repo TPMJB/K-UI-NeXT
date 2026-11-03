@@ -1,0 +1,2 @@
+PASS GD Play failure reports: actual gate/writer, retained status and FAD, stopped/success suppression, exclusive SD ownership, prior/new Stop, failed saves and post-refusal dispatch ordering
+PASS direct-disc GUI handoff: actual staging bounds, validation ordering, retained failure/Stop routes, explicit memory diagnostics, drained menu cache and idle music recovery

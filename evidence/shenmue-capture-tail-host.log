@@ -1,0 +1,2 @@
+PASS fat32: PIO/DMA/CRC tail bytes, clipped prefetch, all150 sectors, stop/fatal preserve and resume final142
+PASS exfat: PIO/DMA/CRC tail bytes, clipped prefetch, all150 sectors, stop/fatal preserve and resume final142

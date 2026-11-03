@@ -18,7 +18,7 @@ static struct {
     const char *fault;bool stop,injected;enum kui_capture_phase phase;
     /* Split DMA. `pend` is a read in flight; the harness asserts it is always ended. */
     bool pend;uint32_t pend_fad;unsigned pend_n;uint8_t *pend_out;
-    unsigned begins,ends,end_fails;
+    unsigned begins,ends,end_fails,tail_reads;
     uint8_t *live_buffer;size_t live_bytes;
     struct kui_capture_plan plan;
 } test;
@@ -75,6 +75,9 @@ static bool cancelled(void *p) {(void)p;return test.stop || fault("cancel-before
 static uint64_t now(void *p) {(void)p;return test.ticks*100;}
 /* Deterministic observation clock, independent of fault/cancellation ticks. */
 static uint64_t now_us(void *p) {(void)p;return test.profile_ticks+=13;}
+static void read_phase(void *p,bool capturing) {
+    (void)p;if(capturing) test.phase=KUI_CAPTURING;
+}
 static void exhaust_space(void) {
     FIL f;assert(f_open(&f,"0:/fill.bin",FA_CREATE_NEW|FA_WRITE)==FR_OK);
     static uint8_t zeros[65536];UINT done;
@@ -86,6 +89,8 @@ static void progress(void *p,const struct kui_capture_progress *status) {
     if(fault("stop-identify") && status->phase==KUI_IDENTIFY && status->done) test.stop=true;
     if(fault("stop-prefix") && status->phase==KUI_PREFIX_CHECK && status->done>=KUI_RAW_BYTES) test.stop=true;
     if(status->phase==KUI_CAPTURING) {
+        if(fault("tail-stop") && status->track==test.plan.count &&
+           status->fad>=test.plan.tracks[test.plan.count-1u].end-142u) test.stop=true;
         if((fault("stop-small") && status->done>=16*2352) || (fault("stop-early") && status->done>=128*2352) ||
            (fault("stop-middle") && status->done>=5000*2352) ||
            (fault("stop-late") && status->done==status->total)) test.stop=true;
@@ -132,6 +137,17 @@ static enum kui_read_result read_disc(void *p,uint32_t fad,unsigned count,uint8_
     for(unsigned i=0;i<test.plan.count;i++)
         if(fad>=test.plan.tracks[i].start && fad<test.plan.tracks[i].end) track=&test.plan.tracks[i];
     assert(track && count<=track->end-fad);
+    if(test.fault && !strncmp(test.fault,"tail-",5u) && test.phase==KUI_CAPTURING &&
+       track==&test.plan.tracks[test.plan.count-1u]) {
+        uint32_t tail=track->end-150u;
+        /* A request must end before the conservative region, or be exactly
+         * one sector inside it. This catches a prefetched DMA crossing too. */
+        assert(fad>=tail?count==1u:count<=tail-fad);
+        if(fad>=tail) {
+            ++test.tail_reads;
+            if(fault("tail-fatal") && fad==track->end-142u) return KUI_READ_FATAL;
+        }
+    }
     bool hits=fad<=test.bad_fad && fad+count>test.bad_fad;
     if(hits) {
         if(fad==test.bad_fad) ++test.bad_attempts;
@@ -153,6 +169,10 @@ static bool read_begin_fake(void *p,uint32_t fad,unsigned sectors,uint8_t *out) 
     assert(!test.pend);                       /* one in flight at a time, ever */
     assert(out && sectors && !(sectors&1u));  /* DMA needs an even sector count */
     assert(((uintptr_t)out&31u)==0);          /* and a 32-byte aligned buffer */
+    if(test.fault && !strncmp(test.fault,"tail-",5u)) {
+        const struct kui_capture_track *last=&test.plan.tracks[test.plan.count-1u];
+        if(fad>=last->start) assert(fad<last->end-150u && sectors<=last->end-150u-fad);
+    }
     if(fault("dma-nobegin")) return false;
     ++test.begins;test.pend=true;test.pend_fad=fad;test.pend_n=sectors;test.pend_out=out;
     return true;
@@ -383,7 +403,7 @@ int main(int argc,char **argv) {
     if(!strcmp(argv[2],"bench")) {   /* bench new|resume <sectors>: the benchmark entry point, real engine */
         assert(argc==5);
         struct kui_capture_options opts=test_options();struct kui_capture_stats stats;
-        struct kui_capture_ops ops={NULL,read_disc,cancelled,now,progress,log_line,"0123456789ab",now_us,NULL,read_begin_fake,read_end_fake,&opts,&stats,NULL};
+        struct kui_capture_ops ops={NULL,read_disc,cancelled,now,progress,log_line,"0123456789ab",now_us,read_phase,read_begin_fake,read_end_fake,&opts,&stats,NULL};
         enum kui_capture_result r=kui_capture_bench(&ops,45150,(unsigned)atoi(argv[4]),false,
             !strcmp(argv[3],"resume")?KUI_CAPTURE_RESUME:KUI_CAPTURE_NEW);
         printf("RESULT %u\n",r);print_stats(&stats);
@@ -419,12 +439,13 @@ int main(int argc,char **argv) {
         enum kui_capture_mode mode=!strcmp(argv[2],"new")?KUI_CAPTURE_NEW:
             !strcmp(argv[2],"resume")?KUI_CAPTURE_RESUME:KUI_CAPTURE_VERIFY;
         struct kui_capture_options opts=test_options();struct kui_capture_stats stats;
-        struct kui_capture_ops ops={NULL,read_disc,cancelled,now,progress,log_line,"0123456789ab",now_us,NULL,read_begin_fake,read_end_fake,&opts,&stats,NULL};
+        struct kui_capture_ops ops={NULL,read_disc,cancelled,now,progress,log_line,"0123456789ab",now_us,read_phase,read_begin_fake,read_end_fake,&opts,&stats,NULL};
         enum kui_capture_result r=kui_capture(&test.plan,&ops,mode);
         printf("RESULT %u WRITES %u BAD_ATTEMPTS %u FATAL %u OPTICAL_READS %llu\n",r,test.writes,test.bad_attempts,test.failures,(unsigned long long)test.ticks);
         printf("FAULT_INJECTED %u\n",test.injected?1u:0u);
         /* Every begun read must have been ended: an unfinished one still owns its buffer. */
         printf("DMA BEGINS %u ENDS %u PENDING %u\n",test.begins,test.ends,test.pend?1u:0u);
+        printf("TAIL_READS %u\n",test.tail_reads);
         print_stats(&stats);
         result=r==KUI_CAPTURE_COMPLETE?0:r==KUI_CAPTURE_STOPPED?3:1;
     }

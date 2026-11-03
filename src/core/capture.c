@@ -647,6 +647,28 @@ static bool sample_readback(FIL *file,FSIZE_t offset,UINT bytes,const uint8_t *d
     else job.ops->log("Sampled read-back mismatch at byte %" PRIu64 "; saved job preserved",(uint64_t)offset);
     return ok;
 }
+/* The owner's Shenmue II dump stalled inside the final 150 sectors, first
+ * with overlapped DMA and then with a 32-sector PIO fallback. Those sectors
+ * are inside the TOC extent and must not be omitted. Approach the physical
+ * GD leadout with single-sector PIO instead. This is a bounded acquisition
+ * policy, not a declaration that the last 150 sectors are unreadable/gap.
+ * Bench spans are arbitrary windows, so they do not identify a leadout. */
+static uint32_t capture_tail_start(unsigned i) {
+    const struct kui_capture_track *t=&job.plan->tracks[i];
+    if(job.plan->profile!=KUI_CAPTURE_PROFILE_GD || i+1u!=job.plan->count ||
+       t->session!=1u || t->control!=4u || t->end!=t->toc_end || job.opt->bench)
+        return t->end;
+    uint32_t sectors=t->end-t->start;
+    return t->end-(sectors<150u?sectors:150u);
+}
+static unsigned capture_read_count(unsigned i,uint32_t position) {
+    const struct kui_capture_track *t=&job.plan->tracks[i];
+    uint32_t fad=t->start+position,left=t->end-fad,tail=capture_tail_start(i);
+    if(!left) return 0;
+    if(fad>=tail) return 1;
+    if(left>tail-fad) left=tail-fad;
+    return left>KUI_CAPTURE_CHUNK?KUI_CAPTURE_CHUNK:(unsigned)left;
+}
 static bool capture_tracks(void) {
     job.dma_chunks=job.pio_chunks=0;
     kui_timing_phase(&job.timing,KUI_TIME_CAPTURE);
@@ -667,6 +689,9 @@ static bool capture_tracks(void) {
         bool ok=f_lseek(&file,offset)==FR_OK && f_tell(&file)==offset && f_truncate(&file)==FR_OK;
         uint32_t checkpoint_at=position,recovery_until=position;
         job.ops->log("Capturing T%02u at FAD=%" PRIu32 "; B stops safely",i+1,t->start+position);
+        uint32_t tail=capture_tail_start(i);
+        if(tail<t->end) job.ops->log("GD leadout approach FAD=[%" PRIu32 ",%" PRIu32
+            "): single-sector PIO; every TOC sector retained",tail,t->end);
         bool storage_failed=!ok;
         /* Two buffers, so the drive can fill the next chunk while this one is written and
          * hashed (opt->read_dma). `pending` means a DMA read is in flight into buf[cur^1];
@@ -681,7 +706,7 @@ static bool capture_tracks(void) {
         uint32_t pending_fad=0;unsigned pending_n=0;
         const bool overlap=job.opt&&job.opt->read_dma&&job.ops->read_begin&&job.ops->read_end;
         while(ok && position<total && !cancelled()) {
-            unsigned n=total-position>KUI_CAPTURE_CHUNK?KUI_CAPTURE_CHUNK:total-position;
+            unsigned n=capture_read_count(i,position);
             if(position<recovery_until) n=1;
             unsigned requested=n;
             uint8_t *data=buf[cur];
@@ -709,7 +734,7 @@ static bool capture_tracks(void) {
             /* Start the next chunk's read NOW: it runs while this one is written and hashed. */
             if(overlap&&!pending) {
                 uint32_t done=position+n,left=total-done;
-                unsigned next=left>KUI_CAPTURE_CHUNK?KUI_CAPTURE_CHUNK:(unsigned)left;
+                unsigned next=capture_read_count(i,done);
                 if(left&&!(next&1u)&&done>=recovery_until&&
                    job.ops->read_begin(job.ops->ctx,t->start+done,next,buf[cur^1])) {
                     pending=true;pending_fad=t->start+done;pending_n=next;

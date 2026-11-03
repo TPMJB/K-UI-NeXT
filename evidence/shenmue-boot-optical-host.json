@@ -1,0 +1,82 @@
+{
+  "result": "PASS",
+  "commands": [
+    "make build/test-disc",
+    "ASAN_OPTIONS=detect_leaks=0 ./build/test-disc"
+  ],
+  "source_sha256": {
+    "src/dreamcast/disc.c": "0256b097dd7d26c2ee5bb61c767b352d21cab54f89f3c0a238b70accdf331ca1",
+    "src/dreamcast/platform.h": "9110d11b92c2aea81a89f179175ad6f3f27e523378d104d48ef9cccad1646f1d",
+    "tests/test_disc.c": "3b4fb32f48155d839dbf327a46dfcd90c721fae612a6605b611c4d70a518218d"
+  },
+  "new_boot_scenarios": 68,
+  "sanitizers": [
+    "AddressSanitizer",
+    "UndefinedBehaviorSanitizer"
+  ],
+  "actual_adapter": "src/dreamcast/disc.c; real command.c ownership and abort loop; authored BIOS/scheduler doubles in tests/test_disc.c",
+  "new_raw_contract": {
+    "repeat_reads": 2,
+    "format_bytes": 2352,
+    "deadline_ms_per_command": 30000,
+    "abort_confirmation_ms": 5000,
+    "partial_publication": false,
+    "phase_independent": true
+  },
+  "new_cooked_contract": {
+    "repeat_reads": 2,
+    "format_bytes": 2048,
+    "count": 1,
+    "track_type": 1024,
+    "deadline_ms_per_command": 30000,
+    "abort_confirmation_ms": 5000,
+    "partial_publication": false,
+    "phase_independent": true
+  },
+  "checks": [
+    "Raw/cooked pair policy remains two requests before and after capture phase; caller output receives exact requested bytes with surrounding canaries untouched.",
+    "Both requests complete after six seconds each, exceeding the old five-second raw bound, without aborting.",
+    "Underfill, changed second repeat, short/long transfer, first/second command error never publish caller bytes.",
+    "Recoverable timeout confirms abort; unconfirmed abort and corrupted static guards leave both formats permanently refused.",
+    "Entry/in-flight/terminal cancellation never publishes caller bytes; current media-change and sense2 behavior remains fatal.",
+    "Active ordinary command, DMA read or raw G1 owner prevents sector-mode change, command submission and caller-buffer mutation.",
+    "Complete existing adapter suite also passes, retaining normal capture single-read, identification repeated-read and salvage partial-byte semantics.",
+    "Typed clean cancellation is distinct from FATAL. Actual adapter rejects terminal error, wrong transfer length, repeat mismatch, guard corruption, invalid argument, mode failure, live ownership and timeout plus late B as errors, not Stop.",
+    "Fresh raw/cooked acquisition admits the observed PLAYING mechanical state at handoff only once. Unrelated INIT/format/read, failed/cancelled/invalid next boot acquisition retire the receipt.",
+    "Both final cooked IP handoff reads can take six seconds each; each must exactly match the original expected IP. Wrong IP and foreign media remain refused."
+  ],
+  "stdout_log": "evidence/shenmue-boot-optical-host.log",
+  "limitations": [
+    "No real Shenmue II disc bytes, Dreamcast BIOS, drive correction behavior, physical seeks or firmware timing execute in this fixture.",
+    "Cooked sectors lack raw headers/EDC; assurance is exact firmware request/status, guarded full coverage and two matching replies. This is a distinct fallback mode, not raw-EDC validation.",
+    "Software bounds cannot preempt a single blocking BIOS call.",
+    "The observed generic user I/O message alone does not establish whether timeout, raw EDC, repeat mismatch, transfer size or another device result caused the real failure."
+  ],
+  "new_handoff_receipt_scenarios": 22,
+  "new_result_contract": {
+    "type": "enum kui_disc_boot_read_result",
+    "values": [
+      "KUI_BOOT_READ_OK",
+      "KUI_BOOT_READ_RETRY",
+      "KUI_BOOT_READ_CANCELLED",
+      "KUI_BOOT_READ_FATAL"
+    ],
+    "clean_cancel": "Valid entry Stop, successfully confirmed abort with intact guards, between good paired reads, or late Stop after complete verified equality; never publishes caller bytes.",
+    "late_stop_after_primary_error": "Terminal failure, short transfer, mismatch, guard, invalid argument, mode failure, owner refusal and timeout remain errors; late B never converts them into Stop.",
+    "global_capture_result_enum_changed": false
+  },
+  "handoff_contract": {
+    "read_deadline_ms": 30000,
+    "abort_confirmation_ms": 5000,
+    "expected_ip_reads": 2,
+    "entry_playing": "One-use receipt from immediately preceding successful explicit boot acquisition; consumed by handoff and retired by any subsequent queued command, format operation or boot-read attempt. Bare PLAYING remains refused.",
+    "retained_checks": [
+      "exclusive owner and media gate",
+      "Mode1 cooked format",
+      "exact transfer lengths",
+      "buffer guards",
+      "two complete expected-IP comparisons",
+      "final drive/media gate"
+    ]
+  }
+}

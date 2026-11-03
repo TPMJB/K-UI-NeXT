@@ -1,0 +1,27 @@
+{
+  "purpose": "Automatically preserve genuine GD Play check/preparation/handoff failure diagnostics without changing the displayed app result.",
+  "result": "PASS",
+  "commands": [
+    "python3 tests/test_gd_play_failure_reports.py",
+    "python3 tests/test_disc_handoff_gui.py",
+    "git diff --check"
+  ],
+  "source_sha256": {
+    "src/dreamcast/main.c": "b95c695f4e78ad3bbfe49f46e37bbb4e25f00a0b6e6d24931d480e79a6f465bf",
+    "tests/test_gd_play_failure_reports.py": "80b71cb2d5aca0e074535e67e7ead5cd286448dd63abaa8b8c65ae16858b8990"
+  },
+  "checks": [
+    "Executed the actual disc_launch_failure_report and save_report functions extracted from main.c under ASan/UBSan.",
+    "All16 complete/passed/stopped/error flag combinations gate saving correctly; success, Stop and incomplete results acquire no SD storage.",
+    "Original app status bytes, error text, stage and last-read FAD remain unchanged, including failed/cancelled/unavailable report saves.",
+    "Storage double requires the worker busy, optical ownership released, no open files, no held mutex and balanced SD connect/disconnect.",
+    "Existing automatic-report policy clears an earlier operation Stop; a new B can cancel only report saving.",
+    "Worker routing asserts reports occur only after app return or after main frees the rejected handoff image and clears probe_launch_ready.",
+    "Prepared successful boot publishes and waits for main handoff before any possible report; no report runs on that success path."
+  ],
+  "limits": [
+    "The new fixture executes report gating and formatting/cancellation/lifecycle with an authored SD/report-save double; it does not perform a real SD filesystem write.",
+    "Durable write/sync/close remains owned by existing kui_report_save; console scheduling, hardware I/O and physical fault recovery remain unverified.",
+    "A report-save failure is logged and allows manual retry; it does not replace the original GD Play result."
+  ]
+}

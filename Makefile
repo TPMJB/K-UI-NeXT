@@ -691,6 +691,10 @@ build/test-disc: $(DRIVE_CONTROLS) tests/test_disc.c src/dreamcast/disc.c src/dr
 	@mkdir -p build
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -DKUI_EXPERIMENTAL_DMA=1 -Itests/stubs -Isrc/dreamcast src/dreamcast/disc.c src/core/command.c src/core/data.c src/core/capture_plan.c src/core/drive_controls.c tests/test_disc.c -o $@
 
+.PHONY: test-capture-tail
+test-capture-tail:
+	python3 tests/test_capture_tail_images.py
+
 build/capture-image: src/core/repair_baseline.inc tests/capture_image.c src/core/repair_resume.inc src/core/repair_identity.inc src/core/repair_saved_identity.inc src/core/repair_catalogue.inc src/core/repair_catalogue_report.inc src/core/repair_inplace.inc src/core/repair_holes.inc include/kui/saved_identity.h include/kui/raw_cue.h include/kui/legacy_import.h $(CORE) $(CAPTURE) $(filter-out $(CAPTURE) src/core/storage_probe.c,$(REPAIR_COPY)) src/core/storage_probe.c $(FATFS) include/kui/capture.h include/kui/timing.h
 	@mkdir -p build
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(EXPORT_CODEC_FLAGS) $(CORE) $(CAPTURE) $(filter-out $(CAPTURE) src/core/storage_probe.c,$(REPAIR_COPY)) src/core/storage_probe.c $(FATFS) tests/capture_image.c -o $@
@@ -1470,6 +1474,8 @@ test-disc-native: build/test-disc-boot build/test-disc-launch build/test-disc-la
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-disc-launcher
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-shell
 	python3 tests/test_disc_handoff_gui.py
+	python3 tests/test_disc_read_recovery.py
+	python3 tests/test_gd_play_failure_reports.py
 build/test-disc-boot: tests/test_disc_boot.c $(DISC_BOOT_CORE) include/kui/disc_boot.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) tests/test_disc_boot.c $(DISC_BOOT_CORE) -o $@
