@@ -3,6 +3,7 @@
 #include "kui/disc_boot.h"
 #include "kui/disc_launch.h"
 #include "kui/hash.h"
+#include "../loader/stage_fast_crc32.h"
 #include "platform.h"
 #include <inttypes.h>
 #include <stdio.h>
@@ -410,6 +411,28 @@ bool kui_disc_launcher_prepare(struct kui_runtime_image *image,
     struct kui_app_status *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
     return kui_disc_launcher_prepare_module(KUI_DISC_LAUNCH_PACKAGE,NULL,NULL,NULL,image,out,log,cancel,progress);
 }
+/* Staging and preflight each need a bounded sector buffer, but never at the
+ * same time. Keep this frame separate so the I/O worker does not reserve both
+ * buffers while hashing the physical disc during inspect(). */
+static bool __attribute__((noinline)) stage_boot_bytes(struct optical_source *s,
+    const struct kui_disc_boot_plan *plan,const struct kui_disc_launch_plan *layout,
+    uint8_t *payload) {
+    uint8_t sectors[KUI_DISC_BOOT_RUN_SECTORS*2048u];
+    for(unsigned which=0;which<2u;which++) {
+        read_phase(s,which?"boot executable staging":"IP.BIN staging");
+        uint32_t bytes=which?layout->exec_bytes:KUI_DISC_BOOT_IP_BYTES;
+        uint32_t fad=which?plan->boot_fad:plan->first_fad;
+        uint8_t *destination=payload+(which?layout->exec_offset:layout->ip_offset);
+        for(uint32_t done=0;done<bytes;) {
+            uint32_t count=(bytes-done+2047u)/2048u;
+            if(count>KUI_DISC_BOOT_RUN_SECTORS) count=KUI_DISC_BOOT_RUN_SECTORS;
+            if(read_run(s,fad,count,sectors)!=KUI_DISC_BOOT_IO_OK) return false;
+            uint32_t n=bytes-done;if(n>count*2048u) n=count*2048u;
+            memcpy(destination+done,sectors,n);done+=n;fad+=count;
+        }
+    }
+    return true;
+}
 bool kui_disc_launcher_prepare_module(const char *package,kui_disc_launcher_card_fn card,
     void *card_context,const struct kui_disc_launcher_region *region,struct kui_runtime_image *image,
     struct kui_app_status *out,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
@@ -452,21 +475,8 @@ bool kui_disc_launcher_prepare_module(const char *package,kui_disc_launcher_card
     memset((uint8_t *)grown+layout.module_bytes,0,layout.payload_bytes-layout.module_bytes);
     snprintf(out->message,sizeof(out->message),"Staging checked physical-disc boot bytes...");publish(&s);
     s.phase="staging disc bytes";
-    uint8_t sectors[KUI_DISC_BOOT_RUN_SECTORS*2048u];
-    for(unsigned which=0;which<2u;which++) {
-        read_phase(&s,which?"boot executable staging":"IP.BIN staging");
-        uint32_t bytes=which?layout.exec_bytes:KUI_DISC_BOOT_IP_BYTES;
-        uint32_t fad=which?plan.boot_fad:plan.first_fad;
-        uint8_t *destination=(uint8_t *)grown+(which?layout.exec_offset:layout.ip_offset);
-        for(uint32_t done=0;done<bytes;) {
-            uint32_t count=(bytes-done+2047u)/2048u;
-            if(count>KUI_DISC_BOOT_RUN_SECTORS) count=KUI_DISC_BOOT_RUN_SECTORS;
-            if(read_run(&s,fad,count,sectors)!=KUI_DISC_BOOT_IO_OK) {
-                kui_runtime_free(image);return fail(&s,"Physical-disc read stopped or failed while staging boot bytes.");
-            }
-            uint32_t n=bytes-done;if(n>count*2048u) n=count*2048u;
-            memcpy(destination+done,sectors,n);done+=n;fad+=count;
-        }
+    if(!stage_boot_bytes(&s,&plan,&layout,grown)) {
+        kui_runtime_free(image);return fail(&s,"Physical-disc read stopped or failed while staging boot bytes.");
     }
     layout.ip_crc32=plan.ip_crc32;layout.exec_crc32=plan.boot_crc32;
     memcpy(layout.ip_sha256,plan.ip_sha256,32u);memcpy(layout.exec_sha256,plan.boot_sha256,32u);
@@ -499,7 +509,7 @@ bool kui_disc_launcher_prepare_module(const char *package,kui_disc_launcher_card
         kui_runtime_free(image);return fail(&s,"Could not restore checked 2048-byte drive reads for the game.");
     }
     image->info.payload_bytes=image->info.memory_bytes=layout.payload_bytes;
-    image->info.crc32=kui_crc32(0,grown,layout.payload_bytes);
+    image->info.crc32=kui_stage_crc32(0,grown,layout.payload_bytes);
     out->complete=out->passed=true;
     snprintf(out->message,sizeof(out->message),"%s",card?
         "Direct-disc boot prepared with the selected virtual VMU.":

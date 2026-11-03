@@ -1586,6 +1586,12 @@ build/test-disc-launcher: tests/test_disc_launcher.c src/apps/disc_launcher.c $(
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) -Isrc/dreamcast tests/test_disc_launcher.c src/apps/disc_launcher.c $(DISC_BOOT_CORE) src/core/disc_launch.c -Wl,--wrap=realloc -o $@
 
 build/test-disc-launch build/test-disc-launch-adversarial build/test-disc-launch-vmu build/test-disc-launcher: include/kui/disc_launch_limits.h
+build/test-disc-boot build/test-disc-launcher: src/loader/stage_fast_crc32.h
+
+.PHONY: test-disc-preflight
+test-disc-preflight: test-disc-large
+	python3 tests/test_disc_vmu_cache_stage.py
+	python3 tests/test_disc_fast_crc.py
 
 .PHONY: test-disc-large
 test-disc-large: build/test-disc-launch build/test-disc-launch-adversarial build/test-disc-launch-vmu build/test-disc-launcher

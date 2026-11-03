@@ -16,6 +16,7 @@ with tempfile.TemporaryDirectory(prefix="kui-disc-vmu-launcher-") as work:
                     "-ffunction-sections","-fdata-sections","-Wl,--gc-sections",
                     "-Iinclude","-I.deps/fatfs/source","-Isrc/dreamcast","-Isrc/loader",
                     "tests/test_disc_vmu_launcher.c","src/apps/disc_vmu_launcher.c",
-                    "src/core/vmu_game_card.c","-o",str(output)],
+                    "src/core/vmu_game_card.c","src/core/vmu_native_cache_seed.c",
+                    "src/core/disc_launch.c","src/core/hash.c","src/core/data.c","-o",str(output)],
                    cwd=ROOT,check=True)
     subprocess.run([str(output)],check=True,env=dict(os.environ,ASAN_OPTIONS="detect_leaks=0"))

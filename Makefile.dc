@@ -97,6 +97,10 @@ build/dc/src/apps/vmu_game_info.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
 build/dc/src/apps/vmu_history.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
 build/dc/src/apps/disc_vmu_card.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
 build/dc/src/apps/disc_cards.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
+# Reuse the image launcher's checked aligned decoders for immutable native
+# preflight; keep unaligned reads and every recognition bound unchanged.
+build/dc/src/core/vmu_native_program.o build/dc/src/core/vmu_native_heap.o build/dc/src/core/vmu_native_exit.o: CPPFLAGS += -DKUI_NATIVE_STAGE_FAST_SCAN=1
+build/dc/src/core/disc_launch.o: CPPFLAGS += -DKUI_DISC_STAGE_FAST_CRC32=1
 # These separately linked, opt-in music modules retain their tested CE layout
 # even when the ordinary native loader uses its lower firmware reservation.
 # Explicit arguments also isolate them from a requested native diagnostic.

@@ -19,6 +19,7 @@ from package_physical_disc_test import collect_vmu_build, ordinary, provenance
 from runtime_package import ELF_HEADER, PROGRAM_HEADER, envelope, flatten_elf, verify
 
 GUIDE = "docs/gd-play-large-executables.md"
+PURPOSE = "Native GD Play larger-executable console test"
 TARGETS = ("KUI/runtime.kui", "KUI/apps/disc/native-disc.kui",
            "KUI/apps/disc/native-disc-vmu.kui", "KUI/apps/disc/native-disc-vmu-a1.kui")
 
@@ -148,7 +149,7 @@ def package(args):
         name = f"evidence/{index:02d}-" + re.sub(r"[^A-Za-z0-9._-]", "_", path.name)
         files[name] = ordinary(path)
         evidence.append(name)
-    manifest = {"format": 1, "purpose": "Native GD Play larger-executable console test",
+    manifest = {"format": 1, "purpose": PURPOSE,
                 "source": source, "base": baseline, "runtime": gui, "modules": modules,
                 "install": list(TARGETS), "native_executable_limit_bytes": limit,
                 "staging_ram_required": "available contiguous main RAM with checked handoff margins",

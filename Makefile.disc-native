@@ -6,7 +6,7 @@ HOST_CC ?= cc
 CPU := -m4-single -ml -mdiv=call-div1 -mfixed-range=fr0-fr15,fpul-fpul
 FLAGS := -std=c11 -Os -g -Wall -Wextra -Werror $(CPU) -ffreestanding -fno-builtin \
  -ffunction-sections -fdata-sections -fstack-usage -fcallgraph-info=su \
- -Iinclude -Isrc/loader -DKUI_RETAIL_FAST_IO=1 -DKUI_BUILD_ID='"$(BUILD_ID)"'
+ -Iinclude -Isrc/loader -DKUI_RETAIL_FAST_IO=1 -DKUI_DISC_STAGE_FAST_CRC32=1 -DKUI_BUILD_ID='"$(BUILD_ID)"'
 LINK := $(CPU) -nostdlib -Wl,--gc-sections -Wl,--build-id=none
 SOURCES := src/loader/disc_stage.c src/core/disc_launch.c src/core/hash.c src/core/data.c \
  src/loader/retail_display.c src/loader/minic.c

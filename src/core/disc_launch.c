@@ -3,6 +3,15 @@
 #include "kui/hash.h"
 #include <string.h>
 
+#if defined(KUI_DISC_STAGE_FAST_CRC32) && KUI_DISC_STAGE_FAST_CRC32
+/* Disc preparation and bootstraps opt into the existing full-equivalent
+ * table CRC. Other callers retain the compact implementation by default. */
+#include "stage_fast_crc32.h"
+#define launch_crc32 kui_stage_crc32
+#else
+#define launch_crc32 kui_crc32
+#endif
+
 static uint32_t word(const uint8_t *p) {
     return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24;
 }
@@ -98,7 +107,7 @@ bool kui_disc_launch_encode(uint8_t packet[KUI_DISC_LAUNCH_CONFIG_BYTES],
     memcpy(packet+48u,p->ip_sha256,32u);memcpy(packet+80u,p->exec_sha256,32u);
     put(packet+116u,p->vmu_profile_offset);put(packet+120u,p->vmu_profile_bytes);put(packet+124u,p->vmu_transport);
     memcpy(packet+128u,p->vmu_profile_sha256,32u);
-    put(packet+112u,kui_crc32(0u,packet,KUI_DISC_LAUNCH_CONFIG_BYTES));return true;
+    put(packet+112u,launch_crc32(0u,packet,KUI_DISC_LAUNCH_CONFIG_BYTES));return true;
 }
 bool kui_disc_launch_decode(const uint8_t packet[KUI_DISC_LAUNCH_CONFIG_BYTES],
     struct kui_disc_launch_plan *out) {
@@ -109,7 +118,7 @@ bool kui_disc_launch_decode(const uint8_t packet[KUI_DISC_LAUNCH_CONFIG_BYTES],
         return false;
     uint8_t copy[KUI_DISC_LAUNCH_CONFIG_BYTES];memcpy(copy,packet,sizeof(copy));
     uint32_t crc=word(copy+112u);put(copy+112u,0u);
-    if(kui_crc32(0u,copy,sizeof(copy))!=crc) return false;
+    if(launch_crc32(0u,copy,sizeof(copy))!=crc) return false;
     for(unsigned i=160u;i<sizeof(copy);i++) if(copy[i]) return false;
     struct kui_disc_launch_plan p={0};
     p.module_bytes=word(packet+16u);p.payload_bytes=word(packet+20u);
@@ -123,7 +132,7 @@ bool kui_disc_launch_decode(const uint8_t packet[KUI_DISC_LAUNCH_CONFIG_BYTES],
     *out=p;return true;
 }
 static bool fingerprint(const uint8_t *p,size_t bytes,uint32_t crc,const uint8_t digest[32]) {
-    if(kui_crc32(0u,p,bytes)!=crc) return false;
+    if(launch_crc32(0u,p,bytes)!=crc) return false;
     struct kui_sha256 s;uint8_t actual[32];
     kui_sha256_init(&s);kui_sha256_update(&s,p,bytes);kui_sha256_digest(&s,actual);
     return !memcmp(actual,digest,sizeof(actual));

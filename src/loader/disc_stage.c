@@ -2,6 +2,7 @@
 #include "kui/disc_launch.h"
 #include "kui/hash.h"
 #include "retail_display.h"
+#include "stage_fast_crc32.h"
 #include <string.h>
 
 extern uint8_t __disc_stage_binary_end[] __asm__("__disc_stage_binary_end");
@@ -39,7 +40,7 @@ void kui_disc_stage_main(void) {
      * or command map is installed. An unexpected target needs investigation. */
     uint32_t gd=*(volatile const uint32_t *)(uintptr_t)UINT32_C(0xac0000bc);
     if(!firmware_target(gd)) stopped("ORIGINAL GD FIRMWARE VECTOR REFUSED",gd);
-    uint32_t low_crc=kui_crc32(0u,(const void *)(uintptr_t)UINT32_C(0x8c000000),0x8000u);
+    uint32_t low_crc=kui_stage_crc32(0u,(const void *)(uintptr_t)UINT32_C(0x8c000000),0x8000u);
     /* IP ends exactly where the executable begins. Both sources are above
      * those destinations, and all stage code/state/stack live above the whole
      * appended payload. Capture every plan field before moving game bytes. */
@@ -48,7 +49,7 @@ void kui_disc_stage_main(void) {
     memmove((void *)(uintptr_t)KUI_DISC_LAUNCH_IP_ADDRESS,source_ip,KUI_DISC_LAUNCH_IP_BYTES);
     memmove((void *)(uintptr_t)KUI_DISC_LAUNCH_EXEC_ADDRESS,source_exec,executable_bytes);
     if(*(volatile const uint32_t *)(uintptr_t)UINT32_C(0xac0000bc)!=gd ||
-       kui_crc32(0u,(const void *)(uintptr_t)UINT32_C(0x8c000000),0x8000u)!=low_crc)
+       kui_stage_crc32(0u,(const void *)(uintptr_t)UINT32_C(0x8c000000),0x8000u)!=low_crc)
         stopped("LOW FIRMWARE RAM CHANGED",3u);
     /* Existing K-UI native bootstrap handoff clears this one RAM boot flag.
      * Disc bytes and the checked source fingerprints remain unchanged. */

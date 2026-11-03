@@ -6,6 +6,7 @@
 #include "kui/disc_vmu_probe.h"
 #include "kui/disc_vmu_support.h"
 #include "kui/hash.h"
+#include "stage_fast_crc32.h"
 #include "kui/storage.h"
 #include "kui/vmu_native_discovery.h"
 #include "kui/vmu_native_background.h"
@@ -293,11 +294,11 @@ void kui_disc_vmu_stage_main(void) {
     original_gd=native_word(UINT32_C(0xac0000bc));
     if(!firmware_target(original_gd)) stopped("ORIGINAL GD VECTOR REFUSED",original_gd);
     native_persist_prepare(payload+plan.vmu_profile_offset);
-    uint32_t low_crc=kui_crc32(0u,(const void *)(uintptr_t)UINT32_C(0x8c000000),0x8000u);
+    uint32_t low_crc=kui_stage_crc32(0u,(const void *)(uintptr_t)UINT32_C(0x8c000000),0x8000u);
     memmove((void *)(uintptr_t)KUI_DISC_LAUNCH_IP_ADDRESS,payload+plan.ip_offset,KUI_DISC_LAUNCH_IP_BYTES);
     memmove((void *)(uintptr_t)KUI_DISC_LAUNCH_EXEC_ADDRESS,payload+plan.exec_offset,plan.exec_bytes);
     if(native_word(UINT32_C(0xac0000bc))!=original_gd ||
-       kui_crc32(0u,(const void *)(uintptr_t)UINT32_C(0x8c000000),0x8000u)!=low_crc)
+       kui_stage_crc32(0u,(const void *)(uintptr_t)UINT32_C(0x8c000000),0x8000u)!=low_crc)
         stopped("LOW FIRMWARE RAM CHANGED",3u);
     exec_bytes=plan.exec_bytes;
     memcpy(original_entry,(const void *)(uintptr_t)KUI_DISC_LAUNCH_EXEC_ADDRESS,sizeof(original_entry));
@@ -309,6 +310,30 @@ void kui_disc_vmu_stage_main(void) {
     retail_display_line("ENTERING DISC BOOTSTRAP 2");
     kui_disc_vmu_stage_enter();
 }
+/* Resolve immutable metadata separately from the owner-frame relay. A valid
+ * freshly seeded proof avoids the full executable scans; misses rebuild every
+ * field and window before returning to the unchanged live handoff checks. */
+static void __attribute__((noipa)) native_disc_mapping_prepare(void) {
+    retail_display_restore(&display);retail_display_line("VERIFYING DISC VMU MAPPING AND IMAGE SHA");
+    if(native_resolution_replay()) {
+        retail_display_line("USING VERIFIED DISC VMU PREFLIGHT");
+    } else {
+        retail_display_line("RESOLVING DISC MAPLE DRIVER AND ALLOCATOR");
+        if(!kui_vmu_native_discover_layout((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
+           exec_bytes,KUI_RETAIL_EXEC_ADDRESS,&native_driver,&passive_layout)) {
+            (void)kui_disc_vmu_probe_run((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
+                plan.exec_bytes,KUI_RETAIL_EXEC_ADDRESS,&native_probe);
+            native_report(2u,10u);
+        }
+        if(kui_vmu_native_heap_discover((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
+           exec_bytes,KUI_RETAIL_EXEC_ADDRESS,&native_heap)!=KUI_VMU_NATIVE_HEAP_FOUND ||
+           !native_heap.initializer_slot ||
+           !kui_vmu_native_heap_call_discover((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
+            exec_bytes,&native_heap,&native_call) || !allocation_safe(native_call.entry_begin,native_call.entry_bytes))
+            native_report(2u,native_heap.initializer_slot);
+        native_passive_prepare();
+    }
+}
 void kui_disc_vmu_stage_relay(const uint32_t *frame,uint32_t ccr) {
     (void)ccr;uint32_t sr;__asm__ volatile("stc sr,%0":"=r"(sr));
     uint32_t f=(uint32_t)(uintptr_t)frame,fp=f&UINT32_C(0x1fffffff);
@@ -318,7 +343,7 @@ void kui_disc_vmu_stage_relay(const uint32_t *frame,uint32_t ccr) {
        memcmp((const void *)(uintptr_t)KUI_DISC_LAUNCH_EXEC_ADDRESS,__disc_vmu_trampoline_start,sizeof(original_entry)))
         stopped("DISC BOOTSTRAP RELAY REFUSED",5u);
     memcpy((void *)(uintptr_t)KUI_DISC_LAUNCH_EXEC_ADDRESS,original_entry,sizeof(original_entry));
-    if(kui_crc32(0u,(const void *)(uintptr_t)KUI_DISC_LAUNCH_EXEC_ADDRESS,exec_bytes)!=plan.exec_crc32)
+    if(kui_stage_crc32(0u,(const void *)(uintptr_t)KUI_DISC_LAUNCH_EXEC_ADDRESS,exec_bytes)!=plan.exec_crc32)
         stopped("BOOTSTRAP CHANGED EXECUTABLE CRC",6u);
     uint8_t digest[32];struct kui_sha256 hash;kui_sha256_init(&hash);
     kui_sha256_update(&hash,(const void *)(uintptr_t)KUI_DISC_LAUNCH_EXEC_ADDRESS,exec_bytes);
@@ -328,22 +353,9 @@ void kui_disc_vmu_stage_relay(const uint32_t *frame,uint32_t ccr) {
     if(!kui_vmu_native_program_extent((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
        exec_bytes,KUI_RETAIL_EXEC_ADDRESS,&program_bytes)) native_report(2u,13u);
     exec_bytes=(uint32_t)program_bytes;
-    retail_display_restore(&display);retail_display_line("RESOLVING DISC MAPLE DRIVER AND ALLOCATOR");
-    if(!kui_vmu_native_discover_layout((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
-       exec_bytes,KUI_RETAIL_EXEC_ADDRESS,&native_driver,&passive_layout)) {
-        (void)kui_disc_vmu_probe_run((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
-            plan.exec_bytes,KUI_RETAIL_EXEC_ADDRESS,&native_probe);
-        native_report(2u,10u);
-    }
-    if(kui_vmu_native_heap_discover((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
-       exec_bytes,KUI_RETAIL_EXEC_ADDRESS,&native_heap)!=KUI_VMU_NATIVE_HEAP_FOUND ||
-       !native_heap.initializer_slot ||
-       !kui_vmu_native_heap_call_discover((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
-        exec_bytes,&native_heap,&native_call) || !allocation_safe(native_call.entry_begin,native_call.entry_bytes))
-        native_report(2u,native_heap.initializer_slot);
+    native_disc_mapping_prepare();
     native_heap_hook=(uint32_t)(uintptr_t)kui_vmu_observe_heap_hook;
     native_terminal=(uint32_t)(uintptr_t)kui_vmu_observe_return_hook;
-    native_passive_prepare();
     if(!native_crt_bootstrap_prearm()) native_report(2u,0x67u);
     if(!native_disc_entry_return_bind((uint32_t *)(uintptr_t)f)) {
         native_report(2u,native_disc_entry_return_error);
