@@ -45,7 +45,10 @@ static bool capability(const uint8_t *p,size_t bytes) {
         KUI_DISC_LAUNCH_VMU_STAGE_MAX_BYTES:KUI_DISC_LAUNCH_STAGE_MAX_BYTES;
     if((flags!=KUI_DISC_LAUNCH_FLAGS && flags!=KUI_DISC_LAUNCH_VMU_FLAGS) ||
        bytes>KUI_DISC_LAUNCH_STAGE_OFFSET+limit) return false;
-    return !memcmp(h,"KUIDISC1",8u) && word(h+8u)==1u &&
+    uint32_t executable_limit=word(h+40u);
+    return (executable_limit==KUI_DISC_LAUNCH_EXEC_MAX_BYTES ||
+            executable_limit==KUI_DISC_LAUNCH_LEGACY_EXEC_MAX_BYTES) &&
+        !memcmp(h,"KUIDISC1",8u) && word(h+8u)==1u &&
         word(h+12u)==KUI_DISC_LAUNCH_HEADER_BYTES &&
         word(h+16u)==KUI_DISC_LAUNCH_CONFIG_OFFSET &&
         word(h+20u)==KUI_DISC_LAUNCH_CONFIG_BYTES &&
@@ -53,7 +56,6 @@ static bool capability(const uint8_t *p,size_t bytes) {
         word(h+28u)==bytes-KUI_DISC_LAUNCH_STAGE_OFFSET &&
         word(h+32u)==KUI_DISC_LAUNCH_STAGE_ADDRESS &&
         word(h+36u)==KUI_DISC_LAUNCH_EXEC_ADDRESS &&
-        word(h+40u)==KUI_DISC_LAUNCH_EXEC_MAX_BYTES &&
         word(h+44u)==KUI_DISC_LAUNCH_STACK &&
         word(h+48u)==KUI_DISC_LAUNCH_STAGE_OFFSET &&
         !word(h+56u) && !word(h+60u);
@@ -73,7 +75,7 @@ bool kui_disc_launch_layout(const void *module,size_t bytes,uint32_t executable_
     plan.exec_offset=plan.ip_offset+KUI_DISC_LAUNCH_IP_BYTES;
     plan.exec_bytes=executable_bytes;
     /* Reject the size before rounding so no input can wrap the addition. */
-    if(executable_bytes>KUI_DISC_LAUNCH_EXEC_MAX_BYTES) return false;
+    if(executable_bytes>word(p+KUI_DISC_LAUNCH_HEADER_OFFSET+40u)) return false;
     plan.payload_bytes=(plan.exec_offset+executable_bytes+3u)&~3u;
     if(plan.flags==KUI_DISC_LAUNCH_VMU_FLAGS) {
         plan.vmu_profile_offset=(plan.payload_bytes+31u)&~31u;
@@ -148,6 +150,7 @@ bool kui_disc_launch_validate(const void *payload,size_t bytes,struct kui_disc_l
     const uint8_t *p=payload;struct kui_disc_launch_plan plan;
     if(!kui_disc_launch_decode(p+KUI_DISC_LAUNCH_CONFIG_OFFSET,&plan) ||
        bytes!=plan.payload_bytes || !capability(p,plan.module_bytes) ||
+       plan.exec_bytes>word(p+KUI_DISC_LAUNCH_HEADER_OFFSET+40u) ||
        word(p+KUI_DISC_LAUNCH_HEADER_OFFSET+52u)!=plan.flags ||
        !native_ip(p+plan.ip_offset)) return false;
     for(unsigned i=plan.module_bytes;i<plan.ip_offset;i++) if(p[i]) return false;

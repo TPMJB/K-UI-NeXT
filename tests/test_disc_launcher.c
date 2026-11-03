@@ -20,6 +20,10 @@ static unsigned checks;
 #define CHECK(x) do {++checks;if(!(x)){fprintf(stderr,"%s:%u: %s\n",__FILE__,__LINE__,#x);abort();}} while(0)
 static struct fixture {
     uint8_t data[SECTORS][2048];
+    /* Large optical payloads live on the heap; metadata and old small-sector
+     * fault traces retain their original bounded fixture. */
+    uint8_t *large_boot;
+    uint32_t boot_bytes,boot_sectors,callback_mutate_offset,staged_change_offset;
     struct kui_toc toc[2];
     unsigned connections,disconnects,mounts,unmounts,runtime_reads,runtime_frees;
     unsigned preparations,raw_reads,raw_calls,max_run,progress,logs,reallocations,callbacks,handoffs;
@@ -31,9 +35,9 @@ static struct fixture {
     uint32_t last_cooked_fad;
     bool cooked_retry_always,bulk_retry,bulk_refused,staging_exec;
     bool saw_single_reduction,saw_cooked_fallback,saw_boot_phase;
-    struct {uint32_t fad,count;bool cooked;} io_trace[512];unsigned io_count;
+    struct {uint32_t fad,count;bool cooked;} io_trace[4096];unsigned io_count;
     bool connected,mounted,stop,connect_fail,mount_fail,unmount_fail,prepare_fail,is_cd,handoff_fail;
-    bool runtime_fail,template_invalid,realloc_fail,ce,vmu,callback_fail,callback_cancel,callback_mutate;
+    bool runtime_fail,template_invalid,legacy_template,realloc_fail,ce,vmu,callback_fail,callback_cancel,callback_mutate;
     bool callback_fill_refusal;
     bool saw_wait,saw_check,cancel_on_wait,cancel_after_ready_error;
     bool multitrack,saw_extent_refusal;
@@ -57,7 +61,10 @@ static unsigned record(uint8_t *p,uint32_t lba,uint32_t bytes,uint8_t flags,
     dual16(p+28u,1u);p[32]=(uint8_t)length;memcpy(p+33u,name,length);return size;
 }
 static void setup(void) {
+    free(fixture.large_boot);
     memset(&fixture,0,sizeof(fixture));
+    fixture.boot_bytes=BOOT_BYTES;fixture.boot_sectors=(BOOT_BYTES+2047u)/2048u;
+    fixture.callback_mutate_offset=100u;
     fixture.toc[0].count=1u;fixture.toc[0].tracks[0]=(struct kui_track){1u,4u,150u,1000u};
     fixture.toc[1].count=1u;fixture.toc[1].tracks[0]=(struct kui_track){3u,4u,FIRST,FIRST+512u};
     for(unsigned sector=0;sector<16u;sector++)
@@ -75,6 +82,24 @@ static void setup(void) {
     at+=record(fixture.data[ROOT]+at,FIRST-150u+ROOT,2048u,2u,&parent,1u);
     record(fixture.data[ROOT]+at,FIRST-150u+BOOT,BOOT_BYTES,0u,(const uint8_t *)"1ST_READ.BIN;1",14u);
     for(unsigned i=0;i<4096u;i++)fixture.data[BOOT+i/2048u][i%2048u]=(uint8_t)(i*29u+11u);
+}
+static void large_setup(uint32_t bytes) {
+    setup();CHECK(bytes>4u*1024u*1024u && bytes<=KUI_DISC_LAUNCH_EXEC_MAX_BYTES);
+    fixture.boot_bytes=bytes;fixture.boot_sectors=(bytes+2047u)/2048u;
+    size_t rounded=(size_t)fixture.boot_sectors*2048u;
+    fixture.large_boot=malloc(rounded);CHECK(fixture.large_boot);
+    for(uint32_t i=0;i<bytes;i++)fixture.large_boot[i]=(uint8_t)((i*29u+11u)^(i>>9u)^(i>>20u));
+    /* Distinct non-file bytes in the final optical sector must never be
+     * included in the declared executable hash or copied into RAM padding. */
+    memset(fixture.large_boot+bytes,0xe7,rounded-bytes);
+    uint32_t sectors=BOOT+fixture.boot_sectors+512u;
+    fixture.toc[1].tracks[0].end=FIRST+sectors;dual32(fixture.data[16]+80u,sectors);
+    dual32(fixture.data[ROOT]+68u+10u,bytes);
+}
+static const uint8_t *sector_data(uint32_t index) {
+    if(fixture.large_boot && index>=BOOT && index-BOOT<fixture.boot_sectors)
+        return fixture.large_boot+(size_t)(index-BOOT)*2048u;
+    CHECK(index<SECTORS);return fixture.data[index];
 }
 static bool cancelled(void) {return fixture.stop;}
 static void log_line(const char *format,...) {
@@ -123,7 +148,8 @@ enum kui_runtime_result kui_runtime_read(const char *path,struct kui_runtime_ima
     put(h+16u,KUI_DISC_LAUNCH_CONFIG_OFFSET);put(h+20u,KUI_DISC_LAUNCH_CONFIG_BYTES);
     put(h+24u,KUI_DISC_LAUNCH_STAGE_ADDRESS);put(h+28u,4u);
     put(h+32u,KUI_DISC_LAUNCH_STAGE_ADDRESS);put(h+36u,KUI_DISC_LAUNCH_EXEC_ADDRESS);
-    put(h+40u,KUI_DISC_LAUNCH_EXEC_MAX_BYTES);put(h+44u,KUI_DISC_LAUNCH_STACK);
+    put(h+40u,fixture.legacy_template?KUI_DISC_LAUNCH_LEGACY_EXEC_MAX_BYTES:KUI_DISC_LAUNCH_EXEC_MAX_BYTES);
+    put(h+44u,KUI_DISC_LAUNCH_STACK);
     put(h+48u,KUI_DISC_LAUNCH_STAGE_OFFSET);
     put(h+52u,fixture.vmu?KUI_DISC_LAUNCH_VMU_FLAGS:KUI_DISC_LAUNCH_FLAGS);
     if(fixture.template_invalid)h[16u]^=1u;
@@ -178,17 +204,25 @@ bool kui_disc_native_handoff(uint32_t fad,const uint8_t expected[2048]) {
 static bool staged_card(const char *product,const void *executable,uint32_t bytes,
     uint8_t profile[4096],char refusal[KUI_DISC_LAUNCHER_REFUSAL_BYTES],void *context,
     kui_log_fn log,kui_cancel_fn cancel) {
-    CHECK(!fixture.connected && !fixture.mounted && fixture.raw_reads==39u && fixture.reallocations==1u);
-    CHECK(!strcmp(product,"T-12345") && bytes==BOOT_BYTES && context==&fixture &&
+    CHECK(!fixture.connected && !fixture.mounted && fixture.raw_reads==35u+2u*fixture.boot_sectors && fixture.reallocations==1u);
+    CHECK(!strcmp(product,"T-12345") && bytes==fixture.boot_bytes && context==&fixture &&
         log==log_line && cancel==cancelled && !fixture.handoffs);
-    CHECK(executable && !memcmp(executable,fixture.data[BOOT],BOOT_BYTES));
+    CHECK(executable);const uint8_t *expected=sector_data(BOOT),*actual=executable;
+    if(fixture.staged_change_offset) {
+        uint32_t at=fixture.staged_change_offset;CHECK(at<bytes);
+        CHECK(actual[at]==(uint8_t)(expected[at]^1u));
+        CHECK(!memcmp(actual,expected,at) && !memcmp(actual+at+1u,expected+at+1u,bytes-at-1u));
+    } else CHECK(!memcmp(actual,expected,bytes));
     for(unsigned i=0;i<4096u;i++)CHECK(!profile[i]);
     for(unsigned i=0;i<KUI_DISC_LAUNCHER_REFUSAL_BYTES;i++)CHECK(!refusal[i]);
     ++fixture.callbacks;
     if(fixture.callback_fill_refusal)memset(refusal,'R',KUI_DISC_LAUNCHER_REFUSAL_BYTES);
     else if(fixture.callback_fail)strcpy(refusal,"Virtual VMU unsupported: Maple driver. R: Save Log.");
     if(fixture.callback_cancel)fixture.stop=true;
-    if(fixture.callback_mutate)((uint8_t *)(uintptr_t)executable)[100u]^=1u;
+    if(fixture.callback_mutate) {
+        CHECK(fixture.callback_mutate_offset<bytes);
+        ((uint8_t *)(uintptr_t)executable)[fixture.callback_mutate_offset]^=1u;
+    }
     memset(profile,0x5a,4096u);return !fixture.callback_fail;
 }
 static uint8_t bcd(unsigned n) {return (uint8_t)((n/10u)*16u+n%10u);}
@@ -200,6 +234,9 @@ static uint32_t sector_index(uint32_t fad,unsigned count) {
         if(fixture.late_boot_fad && fad>=fixture.late_boot_fad && fad<fixture.late_boot_fad+2u)index=BOOT+fad-fixture.late_boot_fad;
         else if(fad>=payload && fad<549300u)index=ROOT+fad-payload;
         else CHECK(fad>=FIRST && fad<101871u && count<=101871u-fad);
+    }
+    if(fixture.large_boot && index>=BOOT && index-BOOT<fixture.boot_sectors) {
+        CHECK(count<=fixture.boot_sectors-(index-BOOT));return index;
     }
     CHECK(index<SECTORS && count<=SECTORS-index);return index;
 }
@@ -224,7 +261,7 @@ enum kui_read_result kui_disc_read_raw(void *context,uint32_t fad,unsigned count
         if(fixture.read_fail==fixture.raw_reads || fixture.persistent_retry_fad==fad)return KUI_READ_RETRY;
         memset(out,0,2352u);memset(out+1u,255,10u);
         out[12]=bcd(fad/4500u);out[13]=bcd((fad/75u)%60u);out[14]=bcd(fad%75u);out[15]=1u;
-        memcpy(out+16u,fixture.data[index+i],2048u);
+        memcpy(out+16u,sector_data(index+i),2048u);
         if(fixture.change_at==fixture.raw_reads)out[16u+100u]^=1u;
         if(fixture.address_fail==fixture.raw_reads || fixture.persistent_address_fad==fad)
             out[14]=bcd((fad+1u)%75u);
@@ -247,7 +284,7 @@ enum kui_disc_boot_read_result kui_disc_read_boot_cooked(void *context,uint32_t 
     if(fixture.cooked_cancel_at==fixture.cooked_reads) {fixture.stop=true;return KUI_BOOT_READ_CANCELLED;}
     if(fixture.cooked_fatal_at==fixture.cooked_reads) {if(fixture.fatal_sets_stop)fixture.stop=true;return KUI_BOOT_READ_FATAL;}
     if(fixture.cooked_retry_always || fixture.cooked_retry_at==fixture.cooked_reads)return KUI_BOOT_READ_RETRY;
-    memcpy(out,fixture.data[index],2048u);
+    memcpy(out,sector_data(index),2048u);
     if(fixture.cooked_change_at==fixture.cooked_reads || (fixture.staging_exec && fixture.cooked_change_at==UINT32_MAX))out[100u]^=1u;
     return KUI_BOOT_READ_OK;
 }
@@ -372,6 +409,129 @@ static void staged_callback_paths(void) {
     CHECK(!kui_disc_launcher_prepare_module(KUI_DISC_LAUNCH_VMU_PACKAGE,staged_card,&fixture,NULL,
         &image,&status,log_line,cancelled,progress));released();
     CHECK(!fixture.callbacks && !fixture.handoffs && !image.data);
+}
+static void executable_fingerprint(uint32_t bytes,uint32_t *crc,uint8_t digest[32]) {
+    CHECK(fixture.large_boot && bytes==fixture.boot_bytes);
+    *crc=kui_crc32(0u,fixture.large_boot,bytes);struct kui_sha256 hash;
+    kui_sha256_init(&hash);kui_sha256_update(&hash,fixture.large_boot,bytes);kui_sha256_digest(&hash,digest);
+}
+static bool prepare_selected_module(struct kui_runtime_image *image,struct kui_app_status *status) {
+    return kui_disc_launcher_prepare_module(fixture.vmu?KUI_DISC_LAUNCH_VMU_PACKAGE:KUI_DISC_LAUNCH_PACKAGE,
+        fixture.vmu?staged_card:NULL,fixture.vmu?&fixture:NULL,NULL,image,status,log_line,cancelled,progress);
+}
+static void large_image(const struct kui_runtime_image *image,uint32_t bytes,bool vmu) {
+    struct kui_disc_launch_plan plan;CHECK(kui_disc_launch_validate(image->data,image->info.payload_bytes,&plan));
+    CHECK(plan.exec_bytes==bytes && plan.flags==(vmu?KUI_DISC_LAUNCH_VMU_FLAGS:KUI_DISC_LAUNCH_FLAGS));
+    CHECK(!memcmp((const uint8_t *)image->data+plan.exec_offset,fixture.large_boot,bytes));
+    CHECK(!memcmp((const uint8_t *)image->data+plan.ip_offset,fixture.data,KUI_DISC_LAUNCH_IP_BYTES));
+    uint32_t crc;uint8_t digest[32];executable_fingerprint(bytes,&crc,digest);
+    CHECK(plan.exec_crc32==crc && !memcmp(plan.exec_sha256,digest,sizeof(digest)));
+    CHECK(image->info.payload_bytes==image->info.memory_bytes && plan.payload_bytes==image->info.payload_bytes);
+    CHECK(image->info.crc32==kui_crc32(0u,image->data,image->info.payload_bytes));
+    for(uint32_t i=plan.module_bytes;i<plan.ip_offset;i++)CHECK(!((const uint8_t *)image->data)[i]);
+    uint32_t end=vmu?plan.vmu_profile_offset:plan.payload_bytes;
+    for(uint32_t i=plan.exec_offset+bytes;i<end;i++)CHECK(!((const uint8_t *)image->data)[i]);
+    if(vmu) for(unsigned i=0;i<KUI_DISC_LAUNCH_VMU_PROFILE_BYTES;i++)
+        CHECK(((const uint8_t *)image->data)[plan.vmu_profile_offset+i]==0x5au);
+    CHECK(fixture.callbacks==(vmu?1u:0u) && fixture.handoffs==1u && fixture.reallocations==1u);
+    CHECK(fixture.raw_reads==35u+2u*fixture.boot_sectors && !fixture.cooked_reads);
+    CHECK(fixture.io_count && fixture.io_trace[fixture.io_count-1u].fad+
+        fixture.io_trace[fixture.io_count-1u].count==FIRST+BOOT+fixture.boot_sectors);
+    CHECK(fixture.io_trace[fixture.io_count-1u].count==
+        (fixture.boot_sectors%8u?fixture.boot_sectors%8u:8u));
+    if(bytes%2048u) {
+        CHECK(fixture.large_boot[bytes]==0xe7u);
+        uint32_t rounded=(bytes+2047u)&~2047u;uint8_t padded[32];struct kui_sha256 hash;
+        kui_sha256_init(&hash);kui_sha256_update(&hash,fixture.large_boot,rounded);kui_sha256_digest(&hash,padded);
+        CHECK(memcmp(digest,padded,sizeof(digest)));
+    }
+}
+static void large_executable_paths(void) {
+    /* Skies reported this exact declared byte count. All bytes here are
+     * synthetic, with non-file data after its 112-byte final sector tail. */
+    static const uint32_t sizes[]={5460080u,6u*1024u*1024u};
+    struct kui_runtime_image image={0};struct kui_app_status status;
+    for(unsigned size=0u;size<sizeof(sizes)/sizeof(sizes[0]);size++) {
+        uint32_t bytes=sizes[size];large_setup(bytes);struct kui_disc_boot_plan identity;
+        CHECK(kui_disc_launcher_identity(&identity,&status,log_line,cancelled,progress));
+        CHECK(status.complete && status.passed && identity.metadata.boot_bytes==bytes);
+        CHECK(identity.boot_fad==FIRST+BOOT && identity.boot_sectors==fixture.boot_sectors);
+        uint32_t crc;uint8_t digest[32];executable_fingerprint(bytes,&crc,digest);
+        CHECK(identity.boot_crc32==crc && !memcmp(identity.boot_sha256,digest,sizeof(digest)));
+        CHECK(fixture.raw_reads==19u+fixture.boot_sectors && !fixture.connections &&
+            !fixture.reallocations && !fixture.callbacks && !fixture.handoffs);
+        for(unsigned vmu=0u;vmu<2u;vmu++) {
+            large_setup(bytes);fixture.vmu=vmu!=0u;
+            CHECK(prepare_selected_module(&image,&status));released();
+            CHECK(status.complete && status.passed && !status.stopped && !status.errors);
+            large_image(&image,bytes,vmu!=0u);kui_runtime_free(&image);
+            CHECK(fixture.runtime_frees==1u && !image.data);
+        }
+        /* The larger ceiling does not admit Windows CE or touch its bytes. */
+        large_setup(bytes);fixture.data[0][62u]='1';refusal(false);released();
+        CHECK(fixture.raw_reads==3u && !fixture.reallocations && !fixture.callbacks && !fixture.handoffs);
+        CHECK(fixture.runtime_frees==1u);
+    }
+    /* Also exercise 4-byte allocation padding in physical-only mode; Skies
+     * itself is word-aligned and VMU mode separately adds 32-byte padding. */
+    large_setup(4u*1024u*1024u+129u);
+    CHECK(prepare_selected_module(&image,&status));released();large_image(&image,fixture.boot_bytes,false);
+    kui_runtime_free(&image);
+    puts("PASS physical large native executables: exact 5460080-byte and 6 MiB identity, full fingerprints, VMU Off/On staging, final-sector exclusion, zero alignment padding and unchanged CE refusal");
+}
+static void large_executable_refusals(void) {
+    const uint32_t bytes=5460080u,late_sector=4u*1024u*1024u/2048u+1u;
+    struct kui_runtime_image image={0};struct kui_app_status status;
+    for(unsigned vmu=0u;vmu<2u;vmu++) for(unsigned fault=0u;fault<3u;fault++) {
+        large_setup(bytes);fixture.vmu=vmu!=0u;
+        uint32_t cut=35u+fixture.boot_sectors+late_sector;
+        if(fault==0u) {fixture.change_at=cut;fixture.staged_change_offset=4u*1024u*1024u+100u;}
+        if(fault==1u)fixture.cancel_at=cut;
+        if(fault==2u)fixture.realloc_fail=true;
+        CHECK(!prepare_selected_module(&image,&status));released();
+        CHECK(status.complete && !status.passed && status.stopped==(fault==1u) && status.errors==(fault==1u?0u:1u));
+        CHECK(!image.data && !image.info.payload_bytes && !image.info.memory_bytes);
+        CHECK(fixture.runtime_frees==1u && fixture.reallocations==1u && !fixture.handoffs);
+        CHECK(fixture.callbacks==(fault==0u && vmu?1u:0u));
+        if(fault==0u) {
+            CHECK(fixture.raw_reads==35u+2u*fixture.boot_sectors);
+            CHECK(strstr(status.message,"boot bytes changed"));
+        } else if(fault==1u) {
+            CHECK(fixture.stop && fixture.raw_reads>=cut && fixture.raw_reads<cut+8u);
+            CHECK(strstr(status.message,"stopped or failed while staging"));
+        } else {
+            CHECK(fixture.raw_reads==19u+fixture.boot_sectors);
+            CHECK(strstr(status.message,"Not enough contiguous RAM"));
+        }
+    }
+    for(unsigned cancel=0u;cancel<2u;cancel++) {
+        large_setup(bytes);fixture.vmu=true;fixture.callback_cancel=cancel!=0u;
+        fixture.callback_mutate=cancel==0u;fixture.callback_mutate_offset=4u*1024u*1024u+129u;
+        CHECK(!prepare_selected_module(&image,&status));released();
+        CHECK(status.complete && !status.passed && status.stopped==(cancel!=0u));
+        CHECK(status.errors==(cancel?0u:1u) && !image.data && !fixture.handoffs);
+        CHECK(fixture.callbacks==1u && fixture.runtime_frees==1u && strstr(status.message,"boot bytes changed or handoff was stopped"));
+    }
+    /* A legacy module remains useful for small games; its own advertised
+     * capacity still blocks large files before allocation or card work. */
+    for(unsigned vmu=0u;vmu<2u;vmu++) {
+        setup();fixture.vmu=vmu!=0u;fixture.toc[1].tracks[0].end=FIRST+10000u;
+        dual32(fixture.data[16]+80u,10000u);
+        dual32(fixture.data[ROOT]+68u+10u,KUI_DISC_LAUNCH_EXEC_MAX_BYTES+1u);
+        CHECK(!prepare_selected_module(&image,&status));released();
+        CHECK(status.complete && !status.passed && !status.stopped && status.errors==1u);
+        CHECK(fixture.raw_reads==3u && !fixture.reallocations && !fixture.callbacks && !fixture.handoffs);
+        CHECK(!image.data && fixture.runtime_frees==1u && strstr(status.message,"12 MiB GD Play limit"));
+        setup();fixture.vmu=vmu!=0u;fixture.legacy_template=true;
+        CHECK(prepare_selected_module(&image,&status));released();
+        CHECK(status.passed && fixture.handoffs==1u && fixture.callbacks==vmu);kui_runtime_free(&image);
+        large_setup(bytes);fixture.vmu=vmu!=0u;fixture.legacy_template=true;
+        CHECK(!prepare_selected_module(&image,&status));released();
+        CHECK(status.complete && !status.passed && !status.stopped && status.errors==1u);
+        CHECK(!image.data && fixture.runtime_frees==1u && !fixture.reallocations && !fixture.callbacks && !fixture.handoffs);
+        CHECK(fixture.raw_reads==19u+fixture.boot_sectors && strstr(status.message,"smaller executable limit"));
+    }
+    puts("PASS large GD refusal: beyond-4-MiB staging/callback changes, staged Stop, allocation failure, 12 MiB/legacy module bounds and complete resource cleanup");
 }
 static void preparation_failures(void) {
     setup();fixture.is_cd=true;refusal(false);released();CHECK(!fixture.raw_reads);
@@ -597,8 +757,8 @@ static void metadata_paths(void) {
     }
     for(unsigned ce=0u;ce<2u;ce++) {
         setup();if(ce)fixture.data[0][62u]='1';
-        /* Large native and CE extents are admitted without launch's 4 MiB
-         * cap. Their declared sector range is checked but never read. */
+        /* Metadata identification is independent of launch capacity and CE
+         * admission. Declared sector ranges are checked but never read. */
         fixture.toc[1].tracks[0].end=FIRST+10000u;dual32(fixture.data[16]+80u,10000u);
         dual32(fixture.data[ROOT]+68u+10u,6u*1024u*1024u);
         CHECK(kui_disc_launcher_metadata(&metadata,signature,&status,log_line,cancelled,progress));
@@ -636,7 +796,8 @@ static void metadata_paths(void) {
     puts("PASS physical metadata: two checked passes, release/TOC witness, native/CE GD, no executable or SD reads, PAL split data and refusal paths");
 }
 int main(void) {
-    successful_paths();region_paths();separated_disc_paths();staged_callback_paths();preparation_failures();check_only_failures();readiness_failures();every_optical_cut();read_recovery_paths();outer_rim_paths();metadata_paths();
+    successful_paths();region_paths();separated_disc_paths();staged_callback_paths();large_executable_paths();large_executable_refusals();preparation_failures();check_only_failures();readiness_failures();every_optical_cut();read_recovery_paths();outer_rim_paths();metadata_paths();
+    free(fixture.large_boot);fixture.large_boot=NULL;
     printf("Physical GD launcher app: %u checks; actual planner/packet hashes, bounded raw/cooked recovery, high-FAD reads, read cuts, changed bytes and released storage\n",checks);
     return 0;
 }

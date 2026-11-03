@@ -293,7 +293,7 @@ static bool inspect(struct optical_source *s,struct kui_disc_boot_source *source
     publish(s);
     enum kui_disc_boot_status result=kui_disc_boot_prepare(source,plan);
     if(result!=KUI_DISC_BOOT_OK) return fail(s,result==KUI_DISC_BOOT_LIMIT && limit==KUI_DISC_LAUNCH_EXEC_MAX_BYTES?
-        "Direct boot currently supports native executables up to 4 MiB.":kui_disc_boot_status_text(result));
+        "Native executable exceeds the 12 MiB GD Play limit.":kui_disc_boot_status_text(result));
     describe(s,plan);return true;
 }
 void kui_disc_launcher_check(struct kui_app_status *out,kui_log_fn log,
@@ -442,7 +442,7 @@ bool kui_disc_launcher_prepare_module(const char *package,kui_disc_launcher_card
         kui_runtime_free(image);return fail(&s,"Disc region differs from console; enable Region-free in GD Play Options.");
     }
     if(!kui_disc_launch_layout(image->data,image->info.payload_bytes,plan.metadata.boot_bytes,&layout)) {
-        kui_runtime_free(image);return fail(&s,"This first direct-boot test supports native executables up to 4 MiB.");
+        kui_runtime_free(image);return fail(&s,"Installed GD Play module has a smaller executable limit; copy the matching update.");
     }
     s.phase="staging allocation";
     log("Physical disc: allocating %" PRIu32 " byte payload for %" PRIu32 " byte executable",layout.payload_bytes,layout.exec_bytes);

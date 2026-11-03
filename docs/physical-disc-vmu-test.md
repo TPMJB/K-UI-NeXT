@@ -101,7 +101,9 @@ recovery are rechecked before the worker is attached. The prepared card is
 the same identity-pinned per-game card used by its matching SD release.
 
 This first VMU route supports **SCI only**, native original Mode 1 GD-ROMs,
-and executables up to **4 MiB**. SCIF save support, Windows CE, CD/MIL-CD,
+and executables up to **12 MiB**, subject to available contiguous staging RAM
+and the existing VMU admission checks. Matching updated modules are required
+above the older 4 MiB module limit. SCIF save support, Windows CE, CD/MIL-CD,
 foreign-region hardware validation and cheats remain follow-up work. Host
 tests and linked-code checks do not establish console save persistence.
 

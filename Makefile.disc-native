@@ -27,7 +27,7 @@ $(BUILD)/stage.elf: $(OBJECTS) src/loader/disc_stage.ld
 	python3 tools/record_build.py $@
 $(BUILD)/stage.bin: $(BUILD)/stage.elf
 	sh-elf-objcopy -O binary $< $@
-$(BUILD)/disc_entry_asm.o: src/loader/disc_entry.S $(BUILD)/stage.bin
+$(BUILD)/disc_entry_asm.o: src/loader/disc_entry.S include/kui/disc_launch_limits.h $(BUILD)/stage.bin
 	sh-elf-gcc $(FLAGS) -DKUI_DISC_STAGE_BIN='"$(BUILD)/stage.bin"' -c $< -o $@
 $(BUILD)/entry.elf: $(BUILD)/disc_entry_asm.o src/loader/disc_entry.ld
 	sh-elf-gcc $(LINK) -Tsrc/loader/disc_entry.ld -Wl,-Map,$(BUILD)/entry.map -o $@ $<

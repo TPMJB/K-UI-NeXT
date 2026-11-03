@@ -69,7 +69,7 @@ $(BUILD)/disc-stage.elf: $(DISC_OBJECTS) src/loader/disc_vmu_stage.ld
 	python3 tools/record_build.py $@
 $(BUILD)/disc-stage.bin: $(BUILD)/disc-stage.elf
 	$(OBJCOPY) -O binary $< $@
-$(BUILD)/disc/entry.o: src/loader/disc_entry.S $(BUILD)/disc-stage.bin
+$(BUILD)/disc/entry.o: src/loader/disc_entry.S include/kui/disc_launch_limits.h $(BUILD)/disc-stage.bin
 	$(CC) $(DISC_FLAGS) -DKUI_DISC_VMU=1 -DKUI_DISC_STAGE_BIN='"$(BUILD)/disc-stage.bin"' -c $< -o $@
 $(BUILD)/disc-entry.elf: $(BUILD)/disc/entry.o src/loader/disc_vmu_entry.ld
 	$(CC) $(LINK) -Tsrc/loader/disc_vmu_entry.ld -Wl,-Map,$(BUILD)/disc-entry.map -o $@ $<

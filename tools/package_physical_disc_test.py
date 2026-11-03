@@ -237,7 +237,8 @@ def package(args):
         permanent_resident=with_vmu, bios_gd_replacement=False, console_execution_verified=False,
         image_reader_installed=False, image_prefetch_cache_bytes=0,
         native_gd_only=True, mode1_data_only=True, windows_ce_supported=False, cd_supported=False,
-        check_executable_limit_bytes=12 * 1024 * 1024, direct_executable_limit_bytes=4 * 1024 * 1024,
+        check_executable_limit_bytes=12 * 1024 * 1024,
+        direct_executable_limit_bytes=int.from_bytes(entry_payload[0x128:0x12c], 'little'),
         foreign_region_boot_verified=False, independent_sd_owner_wired=with_vmu,
         source_full_bundle=dict(path='source/native-source-full.bundle', bytes=len(source),
                                 sha256=sha(source), full_history=True, prerequisites=[]))
