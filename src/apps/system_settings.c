@@ -24,7 +24,19 @@ void kui_system_settings_default(struct kui_system_settings *out) {
 bool kui_system_settings_valid(const struct kui_system_settings *settings) {
     return settings && settings->video_mode<KUI_VIDEO_MODE_COUNT &&
         settings->music_volume<=100 && settings->startup_app<KUI_STARTUP_APP_COUNT &&
-        settings->screen_inset<=2;
+        settings->screen_inset<=2 && settings->menu_repeat<=2 && settings->stick_deadzone<=2;
+}
+unsigned kui_system_repeat_delay_ms(const struct kui_system_settings *s) {
+    static const unsigned values[]={250u,400u,180u};
+    return values[s && s->menu_repeat<3u?s->menu_repeat:0u];
+}
+unsigned kui_system_repeat_interval_ms(const struct kui_system_settings *s) {
+    static const unsigned values[]={80u,120u,50u};
+    return values[s && s->menu_repeat<3u?s->menu_repeat:0u];
+}
+unsigned kui_system_stick_deadzone_value(const struct kui_system_settings *s) {
+    static const unsigned values[]={48u,32u,64u};
+    return values[s && s->stick_deadzone<3u?s->stick_deadzone:0u];
 }
 const char *kui_system_video_name(unsigned mode) {
     static const char *const names[]={"Auto","NTSC 60 Hz","PAL 50 Hz"};
@@ -38,13 +50,14 @@ bool kui_system_settings_encode(uint8_t out[KUI_SYSTEM_SETTINGS_RECORD_SIZE],
                                 const struct kui_system_settings *settings,uint64_t sequence) {
     if(!out || !sequence || !kui_system_settings_valid(settings)) return false;
     memset(out,0,KUI_SYSTEM_SETTINGS_RECORD_SIZE);
-    memcpy(out,magic,sizeof(magic));put32(out+8,3);put32(out+12,KUI_SYSTEM_SETTINGS_RECORD_SIZE);
+    memcpy(out,magic,sizeof(magic));put32(out+8,4);put32(out+12,KUI_SYSTEM_SETTINGS_RECORD_SIZE);
     put64(out+16,sequence);out[24]=(uint8_t)settings->video_mode;
     out[25]=(uint8_t)((settings->show_memory?1u:0u)|(settings->music_enabled?2u:0u)|
                       (settings->startup_chime?4u:0u)|(settings->menu_sounds?8u:0u));
     out[26]=(uint8_t)settings->music_volume;
     out[27]=(uint8_t)settings->startup_app;
     out[28]=(uint8_t)settings->screen_inset;
+    out[29]=(uint8_t)settings->menu_repeat;out[30]=(uint8_t)settings->stick_deadzone;
     put32(out+36,kui_crc32(0,out,36));return true;
 }
 bool kui_system_settings_decode(struct kui_system_settings *settings,uint64_t *sequence,
@@ -52,16 +65,17 @@ bool kui_system_settings_decode(struct kui_system_settings *settings,uint64_t *s
     if(!settings || !sequence || !record || size!=KUI_SYSTEM_SETTINGS_RECORD_SIZE) return false;
     const uint8_t *p=record;
     uint32_t version=get32(p+8);
-    if(memcmp(p,magic,sizeof(magic)) || (version<1 || version>3) ||
+    if(memcmp(p,magic,sizeof(magic)) || (version<1 || version>4) ||
        get32(p+12)!=KUI_SYSTEM_SETTINGS_RECORD_SIZE || !get64(p+16) ||
        (p[25]&~(version==1?3u:version==2?7u:15u)) || get32(p+36)!=kui_crc32(0,p,36)) return false;
-    for(unsigned i=version==1?27:version==2?28:29;i<36;i++) if(p[i]) return false;
+    for(unsigned i=version==1?27:version==2?28:version==3?29:31;i<36;i++) if(p[i]) return false;
     struct kui_system_settings decoded;
     kui_system_settings_default(&decoded);
     decoded.video_mode=p[24];decoded.show_memory=(p[25]&1u)!=0;
     decoded.music_enabled=(p[25]&2u)!=0;decoded.music_volume=p[26];
     if(version>=2) {decoded.startup_chime=(p[25]&4u)!=0;decoded.startup_app=p[27];}
     if(version>=3) {decoded.screen_inset=p[28];decoded.menu_sounds=(p[25]&8u)!=0;}
+    if(version>=4) {decoded.menu_repeat=p[29];decoded.stick_deadzone=p[30];}
     if(!kui_system_settings_valid(&decoded)) return false;
     *settings=decoded;*sequence=get64(p+16);return true;
 }

@@ -22,7 +22,7 @@
 /* Copies are written as KUI-copy-<n>.kui-part (n = 1..99) beside their
  * destination and take their real name only after being read back. */
 #define KUI_FILES_PART_SUFFIX ".kui-part"
-/* Picture view: PNG, JPEG or 16-bit .PVR fitted into a square. */
+/* Picture view: PNG, JPEG, BMP or 16-bit .PVR fitted into a square. */
 #define KUI_FILES_PICTURE_EDGE 272u
 #define KUI_FILES_PICTURE_MAX_BYTES (3u * 1024u * 1024u)
 
@@ -128,7 +128,7 @@ bool kui_files_preview(const struct kui_files_job *job, struct kui_files_preview
 bool kui_files_commit(const struct kui_files_job *job, const struct kui_files_preview *totals,
                       struct kui_app_status *out, kui_log_fn log, kui_cancel_fn cancel,
                       kui_app_progress_fn progress);
-/* Decodes a PNG, JPEG or .PVR picture into KUI_FILES_PICTURE_EDGE squared
+/* Decodes a PNG, JPEG, BMP or .PVR picture into KUI_FILES_PICTURE_EDGE squared
  * RGB565 pixels, fitted and centred on the menu's navy. */
 bool kui_files_picture(const char *path, uint16_t *pixels, struct kui_files_picture *out,
                        kui_log_fn log, kui_cancel_fn cancel);

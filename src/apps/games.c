@@ -858,10 +858,19 @@ static bool metadata_range(void *ctx,uint32_t lba,uint32_t count) {
  * repeats its own detached executable/runtime checks. */
 static enum kui_game_result tested_audio_status(const struct kui_game_image *image,
         struct image_files *files,const struct kui_game_metadata *metadata,
-        enum kui_game_cdda_compatibility *out) {
+        enum kui_game_cdda_compatibility *out,struct kui_game_profile_match *profile,kui_log_fn log) {
     *out=KUI_GAME_CDDA_UNTESTED;
+    memset(profile,0,sizeof(*profile));
     unsigned candidate=kui_games_cdda_test_candidate(image,metadata);
-    if(!candidate) return KUI_GAME_OK;
+    struct kui_game_profile_identity identity={.transport=kui_storage_active(),.format=image->format,
+        .audio_candidate=candidate,.boot_bytes=metadata->boot_bytes,.windows_ce=metadata->windows_ce,
+        .native_gd=metadata->native_gd};
+    snprintf(identity.product,sizeof(identity.product),"%s",metadata->product);
+    snprintf(identity.version,sizeof(identity.version),"%s",metadata->version);
+    snprintf(identity.region,sizeof(identity.region),"%s",metadata->region);
+    struct kui_game_profile_pack *pack=malloc(sizeof(*pack));
+    if(pack)(void)kui_game_profile_pack_load(pack,log);
+    if(!candidate && !kui_game_profile_candidate(&identity,pack)) {free(pack);return KUI_GAME_OK;}
     FIL cached;files->identity_reader=&cached;files->identity_open=false;
     struct kui_sha256 hash;kui_sha256_init(&hash);
     uint8_t sector[2048],digest[32];uint32_t ip_crc=0;
@@ -883,7 +892,12 @@ static enum kui_game_result tested_audio_status(const struct kui_game_image *ima
     if(result==KUI_GAME_OK) {
         kui_sha256_digest(&hash,digest);
         *out=kui_games_cdda_test_status(candidate,ip_crc,digest);
+        identity.ip_crc32=ip_crc;memcpy(identity.boot_sha256,digest,sizeof(digest));
+        (void)kui_game_profile_query(&identity,pack,profile);
+        if(profile->matched && log)log("Game profile: %s; %s. %s",profile->name,
+            kui_game_profile_status_name(profile->status),profile->note);
     }
+    free(pack);
     return result;
 }
 bool kui_games_inspect(const char *path,struct kui_games_detail *out,kui_log_fn log,kui_cancel_fn cancel) {
@@ -971,7 +985,7 @@ bool kui_games_inspect_with_codec(const char *path,enum kui_zso_codec codec,stru
         problem="Boot executable and full IP must be in boot-session data tracks";goto done;
     }
     out->valid=true;
-    result=tested_audio_status(image,&files,&metadata,&out->cdda_compatibility);
+    result=tested_audio_status(image,&files,&metadata,&out->cdda_compatibility,&out->profile,log);
     if(result!=KUI_GAME_OK) {out->valid=false;problem=kui_game_result_name(result);goto done;}
     out->zso_launch=image->compressed && !out->windows_ce && (out->native_gd || out->native_cd) &&
         kui_storage_active()==KUI_STORAGE_SCI && out->boot_bytes>=KUI_RETAIL_TRAMPOLINE_BYTES &&

@@ -5,9 +5,10 @@
 #include <string.h>
 
 /* stb_image (MIT alternative A; see third_party/stb/README.md) is built with
- * only its PNG and JPEG readers, from memory, with no stdio or HDR support. */
+ * only its PNG, JPEG and BMP readers, from memory, with no stdio or HDR support. */
 #define STBI_ONLY_PNG
 #define STBI_ONLY_JPEG
+#define STBI_ONLY_BMP
 #define STBI_NO_STDIO
 #define STBI_NO_LINEAR
 #define STBI_NO_HDR
@@ -30,7 +31,8 @@ enum kui_cover_image_status kui_cover_image_decode(const uint8_t *data, size_t s
         return failed(pixels, width, height, channels, KUI_COVER_IMAGE_CORRUPT);
     failed(pixels, width, height, channels, KUI_COVER_IMAGE_OK);
     static const uint8_t png[8] = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'};
-    if(!data || size < 8u || (memcmp(data, png, 8) && (data[0] != 0xffu || data[1] != 0xd8u || data[2] != 0xffu)))
+    if(!data || size < 8u || (memcmp(data, png, 8) && (data[0] != 0xffu || data[1] != 0xd8u || data[2] != 0xffu) &&
+       (data[0] != 'B' || data[1] != 'M')))
         return KUI_COVER_IMAGE_UNSUPPORTED;
     if(size > KUI_COVER_IMAGE_MAX_BYTES || size > (size_t)INT_MAX) return KUI_COVER_IMAGE_TOO_LARGE;
     int w = 0, h = 0, components = 0;
@@ -53,7 +55,7 @@ void kui_cover_image_free(uint8_t *pixels) { stbi_image_free(pixels); }
 const char *kui_cover_image_status_text(enum kui_cover_image_status status) {
     switch(status) {
     case KUI_COVER_IMAGE_OK: return "Image decoded";
-    case KUI_COVER_IMAGE_UNSUPPORTED: return "Not a PNG or JPEG image";
+    case KUI_COVER_IMAGE_UNSUPPORTED: return "Not a PNG, JPEG or BMP image";
     case KUI_COVER_IMAGE_TOO_LARGE: return "Image larger than 1.2 megapixels or 3 MB";
     case KUI_COVER_IMAGE_CORRUPT: return "Image data is damaged or unsupported";
     case KUI_COVER_IMAGE_MEMORY: return "Not enough memory to decode the image";

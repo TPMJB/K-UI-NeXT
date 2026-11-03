@@ -54,17 +54,18 @@ bool kui_files_picture(const char *path, uint16_t *pixels, struct kui_files_pict
     unsigned width = 0, height = 0, channels = 0;
     bool from_stb = false;
     const char *problem = kui_files_kind(kui_files_leaf(path), false) != KUI_FILES_KIND_PICTURE ?
-        "Only PNG, JPEG and PVR pictures can be shown" : NULL;
+        "Only PNG, JPEG, BMP and PVR pictures can be shown" : NULL;
     if(!problem) problem = load(path, &data, &size, log, cancel);
     if(!problem) {
         out->bytes = size;
         static const uint8_t png[8] = {0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a};
         bool is_png = size >= 8 && !memcmp(data, png, 8);
         bool is_jpeg = size >= 3 && data[0] == 0xff && data[1] == 0xd8 && data[2] == 0xff;
+        bool is_bmp = size >= 8 && data[0] == 'B' && data[1] == 'M';
         struct kui_pvr_info info;
-        enum kui_pvr_status parsed = is_png || is_jpeg ? KUI_PVR_NOT_PVR : kui_pvr_parse(data, size, &info);
-        if(is_png || is_jpeg) {
-            out->format = is_png ? "PNG" : "JPEG";
+        enum kui_pvr_status parsed = is_png || is_jpeg || is_bmp ? KUI_PVR_NOT_PVR : kui_pvr_parse(data, size, &info);
+        if(is_png || is_jpeg || is_bmp) {
+            out->format = is_png ? "PNG" : is_jpeg ? "JPEG" : "BMP";
             enum kui_cover_image_status s = kui_cover_image_decode(data, size, &rgba, &width, &height, &channels);
             if(s != KUI_COVER_IMAGE_OK) problem = kui_cover_image_status_text(s);
             from_stb = true;

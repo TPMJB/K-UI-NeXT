@@ -6,6 +6,7 @@ import hashlib
 import shutil
 import tempfile
 from test_images import run
+from test_games_library_images import private_formatter
 
 ROOT = Path(__file__).resolve().parents[1]
 BINARY = str(ROOT / "build/system-settings-image")
@@ -19,18 +20,23 @@ def digest(path):
 def main():
     with tempfile.TemporaryDirectory(prefix="kui-system-settings-") as temp:
         base = Path(temp)
+        formatter = None if shutil.which("mkfs.fat") and shutil.which("mkfs.exfat") else private_formatter(base)
         for kind in ("fat32", "exfat"):
             seed = base / f"{kind}-seed.img"
-            with seed.open("wb") as stream:
-                stream.truncate(96 * 1024 * 1024)
-            run("mkfs.fat", "-F", "32", str(seed)) if kind == "fat32" else run("mkfs.exfat", str(seed))
+            if formatter:
+                run(str(formatter), kind, str(seed))
+            else:
+                with seed.open("wb") as stream:
+                    stream.truncate(96 * 1024 * 1024)
+                run("mkfs.fat", "-F", "32", str(seed)) if kind == "fat32" else run("mkfs.exfat", str(seed))
             before = digest(seed)
             run(BINARY, str(seed), "missing")
             assert digest(seed) == before, "loading missing settings wrote to the card"
             run(BINARY, str(seed), "seed")
-            checker = "fsck.fat" if kind == "fat32" else "fsck.exfat"
-            run(checker, "-n", str(seed))
-            for case in ("alternate", "v1-migrate", "v1-fallback", "v2-migrate", "corrupt", "truncated", "oversize", "version", "flags", "startup-app", "safe-area", "reserved",
+            checker = shutil.which("fsck.fat" if kind == "fat32" else "fsck.exfat")
+            if checker:
+                run(checker, "-n", str(seed))
+            for case in ("alternate", "v1-migrate", "v1-fallback", "v2-migrate", "v3-migrate", "corrupt", "truncated", "oversize", "version", "flags", "startup-app", "safe-area", "repeat", "deadzone", "reserved",
                          "both-invalid", "invalid-save", "parent-is-file", "overflow", "read-fail", "save-read-fail", "write-fail", "sync-fail",
                          "readback-fail", "readback-corrupt", "readback-substitute"):
                 image = base / f"{kind}-{case}.img"
@@ -40,9 +46,12 @@ def main():
                 assert f"PASS system settings {case}" in output
                 if before is not None:
                     assert digest(image) == before, "loading failed settings wrote to the card"
-                if case not in ("write-fail", "sync-fail", "readback-fail"):
+                if checker and case not in ("write-fail", "sync-fail", "readback-fail"):
                     run(checker, "-n", str(image))
                 print(f"PASS {kind} system settings: {case}, ripper settings preserved", flush=True)
+
+        if not shutil.which("fsck.fat") or not shutil.which("fsck.exfat"):
+            print("Filesystem behavior passed on real FatFs images; external fsck unavailable and not claimed.", flush=True)
 
 
 if __name__ == "__main__":

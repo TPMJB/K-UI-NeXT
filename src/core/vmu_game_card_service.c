@@ -377,7 +377,7 @@ static int card_select(const char *product,const struct kui_vmu_game_candidate_t
     const struct kui_vmu_fs_range *forbidden,size_t forbidden_count,
     const struct kui_vmu_game_card_platform *platform,struct kui_vmu_game_card_work *w,
     uint8_t wire[KUI_VMU_PERSIST_PROFILE_WIRE_BYTES],struct kui_vmu_game_card_choice *choice,
-    kui_log_fn log,kui_cancel_fn cancel) {
+    kui_vmu_game_card_boundary boundary,void *boundary_context,kui_log_fn log,kui_cancel_fn cancel) {
     if(wire) memset(wire,0,KUI_VMU_PERSIST_PROFILE_WIRE_BYTES);
     if(!choice) return KUI_VMU_GAME_CARD_FAILED;
     memset(choice,0,sizeof(*choice));
@@ -455,19 +455,30 @@ static int card_select(const char *product,const struct kui_vmu_game_candidate_t
         if((expected_identity && memcmp(identity,expected_identity,16u)) ||
            (exact && memcmp(identity,exact->identity,16u)))
             return card_refuse(choice,"p%04u identity changed since selection",pair);
-        if(card_profile_current(w,pair,partition_first,partition_end,identity)) {
-            if(!card_storage_current(platform,&storage)) return card_refuse(choice,"SD card changed during card preparation");
-            memcpy(wire,w->check,KUI_VMU_PERSIST_PROFILE_WIRE_BYTES);
-            log("Virtual card: p%04u for %s",pair,choice->key);
-            return KUI_VMU_GAME_CARD_READY;
-        }
     } else {
+        if(boundary) {
+            result=boundary(boundary_context,KUI_VMU_GAME_CARD_BEFORE_CREATE,choice->key,0u,NULL,&storage,log,cancel);
+            if(result!=KUI_VMU_GAME_CARD_READY)return result==KUI_VMU_GAME_CARD_CANCELLED?
+                result:card_refuse(choice,"VMU history allocation is not safe; inspect history before launching");
+            if(!card_storage_current(platform,&storage))return card_refuse(choice,"SD card changed before card creation");
+        }
         result=card_existing_allocated(w,choice);
         if(result) return result;
         if(card_stopped(cancel)) return KUI_VMU_GAME_CARD_CANCELLED;
         result=card_create(w,platform,choice,identity,log,cancel);
         if(result) return result;
         pair=choice->pair;
+    }
+    if(boundary) {
+        result=boundary(boundary_context,KUI_VMU_GAME_CARD_RESOLVED,choice->key,pair,identity,&storage,log,cancel);
+        if(result!=KUI_VMU_GAME_CARD_READY)return result==KUI_VMU_GAME_CARD_CANCELLED?
+            result:card_refuse(choice,"VMU history is not ready; inspect history before launching");
+        if(!card_storage_current(platform,&storage))return card_refuse(choice,"SD card changed during the history checkpoint");
+    }
+    if(!choice->created && card_profile_current(w,pair,partition_first,partition_end,identity)) {
+        if(!card_storage_current(platform,&storage))return card_refuse(choice,"SD card changed during card preparation");
+        memcpy(wire,w->check,KUI_VMU_PERSIST_PROFILE_WIRE_BYTES);
+        log("Virtual card: p%04u for %s",pair,choice->key);return KUI_VMU_GAME_CARD_READY;
     }
     result=card_collect(w,pair,partition_first,partition_end,identity,forbidden,forbidden_count,platform,choice,log);
     if(result) return result;
@@ -484,7 +495,7 @@ int kui_vmu_game_card_select(const char *product,uint64_t first,uint64_t end,
     const struct kui_vmu_game_card_platform *platform,struct kui_vmu_game_card_work *work,
     uint8_t wire[KUI_VMU_PERSIST_PROFILE_WIRE_BYTES],struct kui_vmu_game_card_choice *choice,
     kui_log_fn log,kui_cancel_fn cancel) {
-    return card_select(product,NULL,NULL,first,end,forbidden,forbidden_count,platform,work,wire,choice,log,cancel);
+    return card_select(product,NULL,NULL,first,end,forbidden,forbidden_count,platform,work,wire,choice,NULL,NULL,log,cancel);
 }
 int kui_vmu_game_card_select_exact(const char *product,const struct kui_vmu_game_candidate_target *target,
     const struct kui_vmu_game_candidates_storage *storage,uint64_t first,uint64_t end,
@@ -497,7 +508,20 @@ int kui_vmu_game_card_select_exact(const char *product,const struct kui_vmu_game
         if(choice) {memset(choice,0,sizeof(*choice));return card_refuse(choice,"exact virtual VMU selection is missing");}
         return KUI_VMU_GAME_CARD_FAILED;
     }
-    return card_select(product,target,storage,first,end,forbidden,forbidden_count,platform,work,wire,choice,log,cancel);
+    return card_select(product,target,storage,first,end,forbidden,forbidden_count,platform,work,wire,choice,NULL,NULL,log,cancel);
+}
+int kui_vmu_game_card_select_boundary(const char *product,const struct kui_vmu_game_candidate_target *target,
+    const struct kui_vmu_game_candidates_storage *storage,uint64_t first,uint64_t end,
+    const struct kui_vmu_fs_range *forbidden,size_t forbidden_count,
+    const struct kui_vmu_game_card_platform *platform,struct kui_vmu_game_card_work *work,
+    uint8_t wire[KUI_VMU_PERSIST_PROFILE_WIRE_BYTES],struct kui_vmu_game_card_choice *choice,
+    kui_vmu_game_card_boundary boundary,void *context,kui_log_fn log,kui_cancel_fn cancel) {
+    if((target && !storage) || !boundary) {
+        if(wire)memset(wire,0,KUI_VMU_PERSIST_PROFILE_WIRE_BYTES);
+        if(choice){memset(choice,0,sizeof(*choice));return card_refuse(choice,"history card boundary is missing");}
+        return KUI_VMU_GAME_CARD_FAILED;
+    }
+    return card_select(product,target,storage,first,end,forbidden,forbidden_count,platform,work,wire,choice,boundary,context,log,cancel);
 }
 
 static int card_memory_read(void *context,uint16_t block,void *out) {

@@ -18,6 +18,7 @@
  * is written (or read), each at its own speed, instead of the two taking
  * turns. */
 #include "kui/ftp.h"
+#include "kui/browser_service.h"
 #include "kui/clock.h"
 #include "platform.h"
 #include <stdarg.h>
@@ -29,6 +30,7 @@
 #define DATA_SOCKETS 3u
 #define CONTROL_FIRST 3u
 #define CONTROL_SOCKETS 4u
+#define BROWSER_SOCKETS 2u
 #define CARD_CAP (KUI_FILES_PATH_CAP + 2u)
 /* The card is read and written 32 KB at a time: each card command has a
  * fixed cost, so larger pieces move more for it. */
@@ -158,7 +160,15 @@ struct server {
     uint64_t poll_ms;
     uint32_t wifi_bursts, wifi_frames;
     unsigned wifi_max_burst;
+    /* Optional read-only browser mode. It borrows this gateway's only
+     * storage-worker/SCI ownership; FTP listeners stay closed in this mode. */
+    struct kui_browser_service *browser[BROWSER_SOCKETS];
+    struct kui_browser_status *browser_status;
+    kui_browser_publish_fn browser_publish;
 };
+/* Both entry points run on the sole worker. Also reject accidental nested
+ * starts before either can probe/reset the other service's adapter. */
+static bool gateway_running;
 
 /* The clock and pauses come from whichever adapter port was given. */
 static uint64_t now_ms(struct server *sv) {
@@ -1492,6 +1502,26 @@ static void publish(struct server *sv, uint64_t now, bool force) {
         }
     }
     st->lease_left = sv->wifi ? UINT32_MAX : kui_w5500_session_expires_in(&sv->w5500, now);
+    if(sv->browser_status) {
+        struct kui_browser_status *browser = sv->browser_status;
+        switch(st->state) {
+        case KUI_FTP_STARTING: browser->state = KUI_BROWSER_STARTING; break;
+        case KUI_FTP_READY: browser->state = KUI_BROWSER_READY; break;
+        case KUI_FTP_STOPPED: browser->state = KUI_BROWSER_STOPPED; break;
+        default: browser->state = KUI_BROWSER_FAILED; break;
+        }
+        snprintf(browser->message, sizeof(browser->message), "%s", st->message);
+        snprintf(browser->adapter, sizeof(browser->adapter), "%s", st->adapter);
+        memcpy(browser->ip, st->ip, 4);
+        browser->port = st->port;
+        browser->wifi = st->wifi;
+        browser->link = st->link;
+        if(browser->state == KUI_BROWSER_READY)
+            snprintf(browser->url, sizeof(browser->url), "http://%u.%u.%u.%u:%u/",
+                st->ip[0], st->ip[1], st->ip[2], st->ip[3], st->port);
+        else browser->url[0] = 0;
+        if(sv->browser_publish) sv->browser_publish(browser);
+    }
     if(sv->publish) sv->publish(st);
     sv->published_ms = now;
     sv->changed = false;
@@ -1632,7 +1662,7 @@ static bool wifi_listeners_ready(struct server *sv) {
     /* kwh_listen queues a command and sets LISTEN optimistically. Drain its
      * checked acknowledgements and state replies before publishing READY,
      * so a client can connect as soon as the UI says the server is ready. */
-    stage(sv, "Opening FTP listeners on the Wi-Fi board");
+    stage(sv, sv->browser_status ? "Opening the browser connection on the Wi-Fi board" : "Opening FTP listeners on the Wi-Fi board");
     uint64_t start = now_ms(sv);
     while(kui_wifi_session_busy(sv->wifi)) {
         if(sv->cancel && sv->cancel()) { fail(sv, "Stopped"); return false; }
@@ -1643,7 +1673,7 @@ static bool wifi_listeners_ready(struct server *sv) {
         if(!kui_wifi_session_step(sv->wifi)) { fail(sv, sv->wifi->problem); return false; }
         if(kui_wifi_session_busy(sv->wifi)) pause_ms(sv, 0);
     }
-    for(unsigned c = 0; c < CONTROL_SOCKETS; ++c) {
+    for(unsigned c = 0; c < (sv->browser_status ? BROWSER_SOCKETS : CONTROL_SOCKETS); ++c) {
         unsigned socket = CONTROL_FIRST + c;
         uint8_t state = KUI_NET_CLOSED;
         /* A client may already have connected before READY is published. */
@@ -1677,7 +1707,12 @@ static bool start_network(struct server *sv) {
     }
     sv->status->link = true;
     memcpy(sv->status->ip, sv->ip, 4);
-    for(unsigned c = 0; c < CONTROL_SOCKETS; ++c)
+    if(sv->browser_status) {
+        for(unsigned c = 0; c < BROWSER_SOCKETS; ++c) {
+            sv->browser[c] = kui_browser_service_create(&sv->net, CONTROL_FIRST + c, sv->control_port, sv->browser_status);
+            if(!sv->browser[c]) { fail(sv, "Cannot open the browser service"); return false; }
+        }
+    } else for(unsigned c = 0; c < CONTROL_SOCKETS; ++c)
         if(!listen_control(sv, c)) {
             fail(sv, sv->wifi ? "The Wi-Fi board could not listen for connections" : "The W5500 could not listen for connections");
             return false;
@@ -1685,6 +1720,11 @@ static bool start_network(struct server *sv) {
     return !sv->wifi || wifi_listeners_ready(sv);
 }
 static void ready_message(struct server *sv) {
+    if(sv->browser_status) {
+        snprintf(sv->status->message, sizeof(sv->status->message), "Ready: http://%u.%u.%u.%u:%u/",
+            sv->ip[0], sv->ip[1], sv->ip[2], sv->ip[3], sv->control_port);
+        return;
+    }
     char where[8] = "";
     if(sv->control_port != KUI_FTP_PORT) snprintf(where, sizeof(where), ":%u", sv->control_port);
     snprintf(sv->status->message, sizeof(sv->status->message), "Ready: ftp://%u.%u.%u.%u%s", sv->ip[0], sv->ip[1],
@@ -1784,6 +1824,13 @@ void kui_ftp_run(const struct kui_net_ports *ports, const struct kui_ftp_options
     if(!out) return;
     memset(out, 0, sizeof(*out));
     out->state = KUI_FTP_STARTING;
+    if(gateway_running) {
+        out->state = KUI_FTP_FAILED;
+        snprintf(out->message, sizeof(out->message), "Stop the current network sharing service first");
+        if(publish_fn) publish_fn(out);
+        return;
+    }
+    gateway_running = true;
     struct server *sv = calloc(1, sizeof(*sv));
     /* The clock comes from the first port given, so it must have a bus. */
     bool usable = ports && (ports->w5500 ? ports->w5500->bus != NULL : ports->wifi && ports->wifi->bus);
@@ -1793,6 +1840,7 @@ void kui_ftp_run(const struct kui_net_ports *ports, const struct kui_ftp_options
         out->state = KUI_FTP_FAILED;
         if(publish_fn) publish_fn(out);
         free(sv);
+        gateway_running = false;
         return;
     }
     sv->ports = ports;
@@ -1877,4 +1925,91 @@ void kui_ftp_run(const struct kui_net_ports *ports, const struct kui_ftp_options
     if(sv->connected) kui_sd_disconnect();
     if(publish_fn) publish_fn(out);
     free(sv);
+    gateway_running = false;
+}
+
+void kui_browser_run(const struct kui_net_ports *ports, const struct kui_browser_options *options,
+    struct kui_browser_status *out, kui_log_fn log, kui_cancel_fn cancel, kui_browser_publish_fn publish_fn) {
+    if(!out) return;
+    memset(out, 0, sizeof(*out));
+    out->state = KUI_BROWSER_STARTING;
+    out->port = options && options->port ? options->port : KUI_BROWSER_PORT;
+    if(gateway_running) {
+        out->state = KUI_BROWSER_FAILED;
+        snprintf(out->message, sizeof(out->message), "Stop the current network sharing service first");
+        if(publish_fn) publish_fn(out);
+        return;
+    }
+    gateway_running = true;
+    struct server *sv = calloc(1, sizeof(*sv));
+    struct kui_ftp_status gateway_status;
+    memset(&gateway_status, 0, sizeof(gateway_status));
+    bool usable = ports && (ports->w5500 ? ports->w5500->bus != NULL : ports->wifi && ports->wifi->bus);
+    if(!sv || !usable) {
+        out->state = KUI_BROWSER_FAILED;
+        snprintf(out->message, sizeof(out->message), "%s", sv ? "No SCI port for a network adapter" : "Insufficient memory for sharing");
+        free(sv);
+        gateway_running = false;
+        if(publish_fn) publish_fn(out);
+        return;
+    }
+    gateway_status.state = KUI_FTP_STARTING;
+    gateway_status.port = out->port;
+    sv->status = &gateway_status;
+    sv->ports = ports;
+    sv->log = log;
+    sv->cancel = cancel;
+    sv->control_port = out->port;
+    sv->browser_status = out;
+    sv->browser_publish = publish_fn;
+    for(unsigned i = 0; i < DATA_SOCKETS; ++i) sv->data_owner[i] = FREE;
+    for(unsigned i = 0; i < CONTROL_SOCKETS; ++i) sv->control_owner[i] = FREE;
+    const char *problem = NULL;
+    if(!find_adapter(sv)) problem = sv->status->message;
+    else {
+        stage(sv, "Opening the SD card exports");
+        if(!(sv->connected = kui_sd_connect())) problem = "SD card unavailable";
+        else if(!(sv->mounted = kui_mount(&sv->fs, log))) problem = "Cannot mount SD card";
+        if(problem) fail(sv, problem);
+    }
+    if(!problem && start_network(sv)) {
+        gateway_status.state = KUI_FTP_READY;
+        ready_message(sv);
+        publish(sv, now_ms(sv), true);
+        while(!sv->stop_reason) {
+            if(cancel && cancel()) { sv->stop_reason = "Sharing stopped on the Dreamcast"; break; }
+            if(!sv->wifi && sv->w5500.chip.failed) { sv->stop_reason = "The W5500 stopped answering"; break; }
+            uint64_t now = now_ms(sv);
+            bool work = false;
+            for(unsigned c = 0; c < BROWSER_SOCKETS; ++c) {
+                work |= kui_browser_service_step(sv->browser[c], now);
+                const char *error = kui_browser_service_error(sv->browser[c]);
+                if(error) { sv->stop_reason = error; break; }
+            }
+            if(sv->stop_reason) break;
+            work |= adapter_poll(sv);
+            if(sv->wifi) wifi_news(sv);
+            if(now - sv->link_ms > 1000u) { sv->link_ms = now; adapter_tick(sv, now); }
+            publish(sv, now, false);
+            pause_ms(sv, work ? 0 : 1);
+        }
+        bool asked = cancel && cancel();
+        gateway_status.state = asked ? KUI_FTP_STOPPED : KUI_FTP_FAILED;
+        snprintf(gateway_status.message, sizeof(gateway_status.message), "%s", sv->stop_reason);
+    }
+    /* The service releases every open export before gateway unmount/disconnect. */
+    for(unsigned c = 0; c < BROWSER_SOCKETS; ++c) kui_browser_service_destroy(sv->browser[c]);
+    if(cancel && cancel()) {
+        gateway_status.state = KUI_FTP_STOPPED;
+        snprintf(gateway_status.message, sizeof(gateway_status.message), "Sharing stopped on the Dreamcast");
+    }
+    kui_w5500_session_end(&sv->w5500);
+    if(sv->wifi) kui_wifi_session_end(sv->wifi);
+    free(sv->wifi);
+    gateway_status.link = false;
+    if(sv->mounted && f_mount(NULL, "0:", 0) != FR_OK) fail(sv, "Cannot release SD filesystem");
+    if(sv->connected) kui_sd_disconnect();
+    publish(sv, now_ms(sv), true);
+    free(sv);
+    gateway_running = false;
 }

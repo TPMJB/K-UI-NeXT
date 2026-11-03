@@ -22,6 +22,7 @@ bool kui_sd_vmu_profile_identity(struct kui_vmu_sd_identity *out);
 static struct {
     int result,mounts,unmounts,raw_reads,assignment_result,assignment_reads,candidate_reads,identity_reads,exact_reads;
     int candidate_result;bool mounted,identity_fails,volume_moves,salts_differ;
+    unsigned history_calls,history_pair;uint8_t history_identity;int history_result;
     char problem[96];uint8_t fill;
     const struct kui_retail_manifest *map;
 } mock={.candidate_result=KUI_VMU_GAME_CANDIDATES_ABSENT};
@@ -107,6 +108,39 @@ int kui_vmu_game_card_select_exact(const char *product,const struct kui_vmu_game
     CHECK(target && target->pair==23 && target->identity[0]==0x23 && storage && storage->cid[0]==0x42);
     ++mock.exact_reads;
     return kui_vmu_game_card_select(product,first,end,forbidden,count,platform,work,wire,choice,log,cancel);
+}
+int kui_vmu_history_launch_mounted(const struct kui_vmu_game_selection *card,
+    struct kui_vmu_history_view *out,kui_log_fn log,kui_cancel_fn cancel) {
+    CHECK(card && card->selected && !strcmp(card->product,mock.map->product) &&
+        card->pair==mock.history_pair && card->identity[0]==mock.history_identity &&
+        card->storage.card_sectors==4000000u && card->storage.partition_first==mock.map->partition_start &&
+        card->storage.partition_end==mock.map->partition_end && mock.mounted && !mock.unmounts &&
+        !mock.raw_reads && log==log_line && cancel==never);
+    ++mock.history_calls;memset(out,0,sizeof(*out));
+    if(mock.history_result<0)snprintf(out->notice,sizeof(out->notice),"History write did not verify; launch refused");
+    return mock.history_result;
+}
+int kui_vmu_history_allocation_mounted(kui_cancel_fn cancel) {CHECK(cancel==never);return 0;}
+int kui_vmu_game_card_select_boundary(const char *product,const struct kui_vmu_game_candidate_target *target,
+    const struct kui_vmu_game_candidates_storage *storage,uint64_t first,uint64_t end,
+    const struct kui_vmu_fs_range *forbidden,size_t count,const struct kui_vmu_game_card_platform *platform,
+    struct kui_vmu_game_card_work *work,uint8_t wire[KUI_VMU_PERSIST_PROFILE_WIRE_BYTES],
+    struct kui_vmu_game_card_choice *choice,kui_vmu_game_card_boundary boundary,void *context,
+    kui_log_fn log,kui_cancel_fn cancel) {
+    CHECK(boundary && context);
+    if(mock.result==KUI_VMU_GAME_CARD_READY) {
+        struct kui_vmu_game_candidates_storage actual={.card_sectors=4000000u,
+            .partition_first=first,.partition_end=end,.high_capacity=1u};
+        memset(actual.cid,0x42,16u);
+        unsigned pair=target?target->pair:37u;uint8_t id[16];
+        if(target)memcpy(id,target->identity,sizeof(id));else memset(id,(int)pair,sizeof(id));
+        mock.history_pair=pair;mock.history_identity=id[0];
+        int r=boundary(context,KUI_VMU_GAME_CARD_RESOLVED,product,pair,id,&actual,log,cancel);
+        if(r){memset(choice,0,sizeof(*choice));return r;}
+    }
+    return target?kui_vmu_game_card_select_exact(product,target,storage,first,end,forbidden,count,
+        platform,work,wire,choice,log,cancel):kui_vmu_game_card_select(product,first,end,forbidden,count,
+        platform,work,wire,choice,log,cancel);
 }
 
 static uint8_t template_wire[4096];
@@ -197,12 +231,14 @@ int main(int argc,char **argv) {
     CHECK(!games_card_route(&map,true,false,true,&problem,never) && strstr(problem,"standalone New"));
     CHECK(!games_card_route(&map,true,false,false,&problem,never) && strstr(problem,"combined New reader"));
     int lookups=mock.assignment_reads,catalogues=mock.candidate_reads,identities=mock.identity_reads;
+    unsigned history_calls=mock.history_calls;
     mock.candidate_result=KUI_VMU_GAME_CANDIDATES_INVALID;mock.identity_fails=true;
     CHECK(games_card_route(&map,false,false,false,&problem,never) && mock.assignment_reads==lookups);
     CHECK(games_card_route(&map,false,false,true,&problem,never) && mock.assignment_reads==lookups);
     CHECK(games_card_route(&map,false,true,false,&problem,never) && mock.assignment_reads==lookups);
     CHECK(games_card_route(&map,true,true,false,&problem,never) && mock.assignment_reads==lookups);
     CHECK(mock.candidate_reads==catalogues && mock.identity_reads==identities);
+    CHECK(mock.history_calls==history_calls);
     mock.candidate_result=KUI_VMU_GAME_CANDIDATES_ABSENT;mock.identity_fails=false;
     snprintf(mock.problem,sizeof(mock.problem),"VMU game assignments are damaged");
     mock.assignment_result=KUI_VMU_GAME_CARD_FAILED;
@@ -220,6 +256,7 @@ int main(int argc,char **argv) {
     static uint8_t before[65536];memcpy(before,payload,sizeof(payload));
     mock.result=KUI_VMU_GAME_CARD_READY;mock.fill=0x5c;
     CHECK(prepare(&problem) && !problem && mock.salts_differ);
+    CHECK(mock.history_calls==history_calls+1u && mock.history_pair==37u);
     for(size_t i=0;i<sizeof(payload);i++)
         CHECK(payload[i]==(i>=8192u && i<12288u?0x5c:before[i]));
     /* The launch snapshot carries product/pair/identity/storage by value;
@@ -233,10 +270,15 @@ int main(int argc,char **argv) {
     mock.unmounts=mock.mounts=mock.raw_reads=0;mock.mounted=true;
     CHECK(games_card_prepare_selected(&map,&selected_package,&mounted_fs,&selected,&problem,log_line,never));
     CHECK(mock.exact_reads==1);
+    CHECK(mock.history_pair==23u && mock.history_calls==history_calls+2u);
     memcpy(payload,before,sizeof(payload));strcpy(selected.product,"ANOTHER");
     int exact=mock.exact_reads,raw=mock.raw_reads;
     CHECK(!games_card_prepare_selected(&map,&selected_package,&mounted_fs,&selected,&problem,log_line,never));
     CHECK(mock.exact_reads==exact && mock.raw_reads==raw && !memcmp(payload,before,sizeof(payload)));
+    memcpy(payload,before,sizeof(payload));mock.history_result=KUI_VMU_HISTORY_IO;
+    CHECK(!prepare(&problem) && strstr(problem,"History write did not verify"));
+    CHECK(!mock.unmounts && !mock.raw_reads && !memcmp(payload,before,sizeof(payload)));
+    mock.history_result=KUI_VMU_HISTORY_OK;
 
     /* No product key: an installed card stays; the build template refuses. */
     memcpy(payload,before,sizeof(payload));

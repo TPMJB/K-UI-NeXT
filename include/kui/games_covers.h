@@ -4,11 +4,11 @@
 #include "kui/games.h"
 #include "kui/apps.h"
 
-/* Games views: a list beside the selected game's large cover, a two-column
- * list with small covers, and a four-by-two gallery. All show eight rows of
- * the same listing, so a page is the same in every view. */
+/* The first three views show aligned eight-row pages. Flow scrolls across
+ * the same listing with a bounded cache of neighboring pages. */
 enum kui_games_view {
-    KUI_GAMES_VIEW_LIST, KUI_GAMES_VIEW_COMPACT, KUI_GAMES_VIEW_GALLERY, KUI_GAMES_VIEW_COUNT
+    KUI_GAMES_VIEW_LIST, KUI_GAMES_VIEW_COMPACT, KUI_GAMES_VIEW_GALLERY,
+    KUI_GAMES_VIEW_FLOW, KUI_GAMES_VIEW_COUNT
 };
 /* A page request that should use the view saved on the card. */
 #define KUI_GAMES_VIEW_SAVED KUI_GAMES_VIEW_COUNT
@@ -46,7 +46,12 @@ bool kui_games_selected_cover(const struct kui_games_entry *entry, enum kui_cove
  * pixels), for rows with no cached title or artwork; a later listing of
  * those rows shows them without I/O. True if it read any. Worker only. */
 bool kui_games_prefetch_titles(const struct kui_games_page *page, kui_log_fn log, kui_cancel_fn cancel);
+/* RAM-only region from a validated, exact-path cover metadata header. */
+bool kui_games_cached_region(const struct kui_games_entry *,char out[9]);
 void kui_games_covers_cache_clear(void);
+/* Owner alias/art changes invalidate pixels/titles while retaining the known
+ * view preference, so the next cached query does not reopen view.txt. */
+void kui_games_covers_content_clear(void);
 /* Compatibility wrapper: the page contains rows only; pixels is untouched.
  * All views load artwork separately for their selected entry. */
 bool kui_games_list_covers(const char *root, unsigned offset, unsigned view,

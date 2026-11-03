@@ -36,9 +36,14 @@ static uint16_t blend(uint16_t background,uint16_t color,unsigned alpha) {
     return (uint16_t)((r<<11)|(g<<5)|b);
 }
 static void font_draw(uint16_t *frame,int x,int y,uint16_t color,
-                      const char *text,bool large,bool crisp) {
+                      const char *text,bool large,bool crisp,int clip_top,int clip_bottom) {
+    if(clip_top<0) clip_top=0;
+    if(clip_top>480) clip_top=480;
+    if(clip_bottom<0) clip_bottom=0;
+    if(clip_bottom>480) clip_bottom=480;
     unsigned height=large?KUI_SHELL_FONT_LARGE_HEIGHT:KUI_SHELL_FONT_SMALL_HEIGHT;
-    if(!frame || !text || x>=640 || y>=480 || (int64_t)y+height<=0) return;
+    if(clip_top>=clip_bottom || !frame || !text || x>=640 ||
+       y>=clip_bottom || (int64_t)y+height<=clip_top) return;
     const uint8_t *pixels=large?large_pixels:small_pixels;
     int64_t pen=x;
     for(const unsigned char *p=(const unsigned char *)text;*p && pen<640;p++) {
@@ -48,7 +53,7 @@ static void font_draw(uint16_t *frame,int x,int y,uint16_t color,
             unsigned last=pen+g->width>640?(unsigned)(640-pen):g->width;
             for(unsigned row=0;row<g->height;row++) {
                 int64_t dy=(int64_t)y+g->y+row;
-                if(dy<0 || dy>=480) continue;
+                if(dy<clip_top || dy>=clip_bottom) continue;
                 const uint8_t *mask=pixels+g->offset+row*g->stride;
                 for(unsigned col=first;col<last;col++) {
                     unsigned alpha=(mask[col/2]>>((col&1)?0:4))&15u;
@@ -63,9 +68,13 @@ static void font_draw(uint16_t *frame,int x,int y,uint16_t color,
 }
 void kui_shell_font_draw(uint16_t *frame,int x,int y,uint16_t color,
                          const char *text,bool large) {
-    font_draw(frame,x,y,color,text,large,false);
+    font_draw(frame,x,y,color,text,large,false,0,480);
+}
+void kui_shell_font_draw_clipped(uint16_t *frame,int x,int y,uint16_t color,
+                                 const char *text,bool large,int clip_top,int clip_bottom) {
+    font_draw(frame,x,y,color,text,large,false,clip_top,clip_bottom);
 }
 void kui_shell_font_draw_crisp(uint16_t *frame,int x,int y,uint16_t color,
                                const char *text,bool large) {
-    font_draw(frame,x,y,color,text,large,true);
+    font_draw(frame,x,y,color,text,large,true,0,480);
 }

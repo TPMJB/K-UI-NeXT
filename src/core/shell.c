@@ -37,6 +37,8 @@ void kui_shell_init(struct kui_shell *s, const struct kui_settings *p) {
     s->vmu_emulation_enabled=s->vmu_emulation_requested=true;
     s->vmu_emulation_slot=s->vmu_emulation_slot_requested=KUI_GAME_VMU_SLOT_A2;
     s->gd_region_enabled=s->gd_region_requested=true;
+    s->problem_report_options.include_latest_screenshot=true;s->games_jump='A';
+    s->browser_options.port=KUI_BROWSER_PORT;s->browser.state=KUI_BROWSER_STOPPED;
     s->vmu_collection_return=s->vmu_backups_return=s->vmu_wizard_return=KUI_SHELL_VMU_TOOLS;
     s->salvage_passes=0; /* Keep retrying unresolved sectors until complete or stopped. */
     s->salvage_result_return=KUI_SHELL_SALVAGE_DRIVE;s->scan_return=KUI_SHELL_ADVANCED;
@@ -65,7 +67,9 @@ bool kui_shell_system_dirty(const struct kui_shell *s) {
         s->system_saved.startup_chime!=s->system_draft.startup_chime ||
         s->system_saved.startup_app!=s->system_draft.startup_app ||
         s->system_saved.screen_inset!=s->system_draft.screen_inset ||
-        s->system_saved.menu_sounds!=s->system_draft.menu_sounds);
+        s->system_saved.menu_sounds!=s->system_draft.menu_sounds ||
+        s->system_saved.menu_repeat!=s->system_draft.menu_repeat ||
+        s->system_saved.stick_deadzone!=s->system_draft.stick_deadzone);
 }
 static enum kui_shell_action emulation_request(struct kui_shell *s,bool save) {
     ++s->vmu_emulation_generation;
@@ -627,7 +631,7 @@ static void clear_game_detail(struct kui_shell *s) {
     s->games_launch_selected=0;s->games_launch_cdda=false;
     s->games_retail_scrambled=false;s->games_probe_from_options=false;
     s->games_launch_encoding=KUI_GAME_ENCODING_AUTO;
-    s->games_launch_codec=KUI_ZSO_LZ4;s->games_codec_override=false;s->games_baseline=false;
+    s->games_launch_codec=KUI_ZSO_LZ4;s->games_codec_override=false;s->games_baseline=false;s->games_settings_saved=false;
     s->games_launch_vmu_slot=KUI_GAME_VMU_SLOT_A2;
     s->game_tools_selected=s->game_tests_selected=0;s->games_tests_from_options=false;
     s->games_launch_notice[0]=0;
@@ -673,12 +677,171 @@ const char *kui_shell_games_variant_label(const struct kui_shell *s) {
         strcmp(s->games_selected_path,games_variant_path(s))))) return NULL;
     return s->games_variant_selected?"2048-byte copy":"Original";
 }
+static bool flow_query_same(const struct kui_games_query *a,const struct kui_games_query *b) {
+    return kui_games_query_valid(a) && kui_games_query_valid(b) && a->activity==b->activity &&
+        a->region==b->region && a->disc==b->disc && !strcmp(a->text,b->text);
+}
+static void flow_clear_pages(struct kui_shell *s) {
+    for(unsigned i=0;i<KUI_SHELL_GAMES_FLOW_NEIGHBORS;i++)s->games_flow_pages[i].valid=false;
+}
+static void flow_store(struct kui_shell *s,unsigned page,const struct kui_games_page *rows) {
+    unsigned slot=0;
+    for(unsigned i=0;i<KUI_SHELL_GAMES_FLOW_NEIGHBORS;i++) {
+        if(s->games_flow_pages[i].valid && s->games_flow_pages[i].page==page) {slot=i;goto found;}
+        if(!s->games_flow_pages[i].valid)slot=i;
+    }
+    if(s->games_flow_pages[slot].valid) {
+        unsigned distance=0;
+        for(unsigned i=0;i<KUI_SHELL_GAMES_FLOW_NEIGHBORS;i++) {
+            unsigned other=s->games_flow_pages[i].page;
+            unsigned d=other>s->games_page?other-s->games_page:s->games_page-other;
+            if(d>=distance) {distance=d;slot=i;}
+        }
+    }
+found:
+    s->games_flow_pages[slot].rows=*rows;s->games_flow_pages[slot].page=page;s->games_flow_pages[slot].valid=true;
+    for(unsigned i=0;i<s->games_flow_pages[slot].rows.count && i<KUI_GAMES_ROWS;i++)
+        s->games_flow_pages[slot].rows.entries[i].cover=false;
+}
+const struct kui_games_entry *kui_shell_games_flow_entry(const struct kui_shell *s,unsigned absolute) {
+    if(!s)return NULL;
+    unsigned page=absolute/KUI_GAMES_ROWS,row=absolute%KUI_GAMES_ROWS;
+    const struct kui_games_page *rows=page==s->games_flow_primary_page?&s->games_listing:NULL;
+    for(unsigned i=0;!rows && i<KUI_SHELL_GAMES_FLOW_NEIGHBORS;i++)
+        if(s->games_flow_pages[i].valid && s->games_flow_pages[i].page==page)rows=&s->games_flow_pages[i].rows;
+    return rows && row<rows->count && row<KUI_GAMES_ROWS?&rows->entries[row]:NULL;
+}
+bool kui_shell_games_flow_animating(const struct kui_shell *s) {
+    return s && s->page==KUI_SHELL_GAMES && kui_shell_games_view(s)==KUI_GAMES_VIEW_FLOW && s->games_flow_motion;
+}
+bool kui_shell_games_flow_tick(struct kui_shell *s,uint64_t now) {
+    if(!s)return false;
+    s->games_flow_now=now;
+    if(!s->games_flow_motion)return false;
+    if(s->page!=KUI_SHELL_GAMES || kui_shell_games_view(s)!=KUI_GAMES_VIEW_FLOW) {
+        s->games_flow_scroll=s->games_flow_target;s->games_flow_highlight=s->games_flow_highlight_target;
+        s->games_flow_motion=false;return false;
+    }
+    if(now<s->games_flow_started)s->games_flow_started=now;
+    uint64_t elapsed=now-s->games_flow_started,duration=KUI_SHELL_GAMES_FLOW_DURATION_MS;
+    int64_t scroll=s->games_flow_scroll,highlight=s->games_flow_highlight;
+    if(elapsed>=duration) {
+        s->games_flow_scroll=s->games_flow_target;s->games_flow_highlight=s->games_flow_highlight_target;s->games_flow_motion=false;
+    } else {
+        /* Ease out, with fixed-point positions and no frame-rate dependency. */
+        int64_t fraction=(int64_t)(elapsed*(2u*duration-elapsed));
+        int64_t divisor=(int64_t)(duration*duration);
+        s->games_flow_scroll=s->games_flow_from+(s->games_flow_target-s->games_flow_from)*fraction/divisor;
+        s->games_flow_highlight=s->games_flow_highlight_from+(s->games_flow_highlight_target-s->games_flow_highlight_from)*fraction/divisor;
+    }
+    return scroll!=s->games_flow_scroll || highlight!=s->games_flow_highlight;
+}
+static void flow_target(struct kui_shell *s,bool snap) {
+    uint64_t selected=(uint64_t)s->games_page*KUI_GAMES_ROWS+s->games_selected;
+    uint64_t first=selected>3u?selected-3u:0u;
+    if(s->games_listing.total) {
+        unsigned maximum=s->games_listing.total>KUI_GAMES_ROWS?s->games_listing.total-KUI_GAMES_ROWS:0u;
+        if(first>maximum)first=maximum;
+    }
+    uint64_t previous=(uint64_t)s->games_flow_target/(KUI_SHELL_GAMES_FLOW_ROW_HEIGHT*256u);
+    uint64_t distance=selected>s->games_flow_selected?selected-s->games_flow_selected:s->games_flow_selected-selected;
+    if(!snap) {
+        if(first>previous+distance)first=previous+distance;
+        if(first+distance<previous)first=previous-distance;
+    }
+    /* Never move the camera into missing neighbor rows. Late I/O can hold
+     * the selected row near an edge; each later press still moves one row. */
+    uint64_t known_first=(uint64_t)s->games_flow_primary_page*KUI_GAMES_ROWS;
+    uint64_t known_end=known_first+s->games_listing.count;
+    for(unsigned pass=0;pass<2u;pass++)for(unsigned i=0;i<KUI_SHELL_GAMES_FLOW_NEIGHBORS;i++)if(s->games_flow_pages[i].valid && s->games_flow_pages[i].rows.count) {
+        uint64_t begin=(uint64_t)s->games_flow_pages[i].page*KUI_GAMES_ROWS;
+        uint64_t end=begin+s->games_flow_pages[i].rows.count;
+        if(end==known_first)known_first=begin;
+        if(begin==known_end)known_end=end;
+    }
+    uint64_t maximum=known_end-known_first>KUI_GAMES_ROWS?known_end-KUI_GAMES_ROWS:known_first;
+    if(first<known_first)first=known_first;
+    if(first>maximum)first=maximum;
+    int64_t target=(int64_t)first*KUI_SHELL_GAMES_FLOW_ROW_HEIGHT*256u;
+    int64_t highlight=(int64_t)selected*KUI_SHELL_GAMES_FLOW_ROW_HEIGHT*256u;
+    s->games_flow_selected=(unsigned)selected;
+    s->games_flow_from=s->games_flow_scroll;s->games_flow_highlight_from=s->games_flow_highlight;
+    s->games_flow_target=target;s->games_flow_highlight_target=highlight;s->games_flow_started=s->games_flow_now;
+    s->games_flow_motion=!snap && (s->games_flow_scroll!=target || s->games_flow_highlight!=highlight);
+    if(snap) {s->games_flow_scroll=target;s->games_flow_highlight=highlight;}
+}
+static bool flow_outgoing_visible(const struct kui_shell *s) {
+    uint64_t row_bytes=(uint64_t)KUI_SHELL_GAMES_FLOW_ROW_HEIGHT*256u;
+    uint64_t first=(uint64_t)s->games_flow_scroll/row_bytes;
+    uint64_t last=((uint64_t)s->games_flow_scroll+KUI_GAMES_ROWS*row_bytes-1u)/row_bytes;
+    for(unsigned i=0;i<KUI_SHELL_GAMES_FLOW_NEIGHBORS;i++)if(s->games_flow_pages[i].valid) {
+        unsigned page=s->games_flow_pages[i].page,primary=s->games_flow_primary_page;
+        unsigned distance=page>primary?page-primary:primary-page;
+        uint64_t begin=(uint64_t)page*KUI_GAMES_ROWS;
+        if(distance>1u && begin<=last && begin+KUI_GAMES_ROWS>first)return true;
+    }
+    return false;
+}
+bool kui_shell_games_flow_needed(const struct kui_shell *s,unsigned *page,unsigned *epoch) {
+    if(!s || !page || !epoch || s->page!=KUI_SHELL_GAMES || s->games_loading || !s->games_flow_ready ||
+       kui_shell_games_view(s)!=KUI_GAMES_VIEW_FLOW || s->games_page!=s->games_flow_primary_page || flow_outgoing_visible(s))return false;
+    for(unsigned direction=0;direction<2u;direction++) {
+        unsigned candidate;
+        if(!direction) {
+            if(!s->games_listing.has_more || s->games_page>=UINT_MAX/KUI_GAMES_ROWS)continue;
+            candidate=s->games_page+1u;
+        } else {if(!s->games_page)continue;candidate=s->games_page-1u;}
+        bool present=false;
+        for(unsigned i=0;i<KUI_SHELL_GAMES_FLOW_NEIGHBORS;i++)
+            present|=s->games_flow_pages[i].valid && s->games_flow_pages[i].page==candidate;
+        if(!present) {*page=candidate;*epoch=s->games_flow_epoch;return true;}
+    }
+    return false;
+}
+bool kui_shell_set_games_flow_rows(struct kui_shell *s,const struct kui_games_page *page,unsigned epoch,unsigned index) {
+    if(!s || !page || s->page!=KUI_SHELL_GAMES || s->games_loading || !s->games_flow_ready ||
+       kui_shell_games_view(s)!=KUI_GAMES_VIEW_FLOW || epoch!=s->games_flow_epoch || index==s->games_flow_primary_page ||
+       (index>s->games_flow_primary_page?index-s->games_flow_primary_page:s->games_flow_primary_page-index)!=1u ||
+       page->view!=KUI_GAMES_VIEW_FLOW || page->filter!=s->games_filter || page->count>KUI_GAMES_ROWS ||
+       !memchr(page->root,0,sizeof(page->root)) || strcmp(page->root,s->games_path) ||
+       !memchr(page->group,0,sizeof(page->group)) || strcmp(page->group,s->games_group) ||
+       !flow_query_same(&page->query,&s->games_query))return false;
+    bool replacing=false;
+    for(unsigned i=0;i<KUI_SHELL_GAMES_FLOW_NEIGHBORS;i++)replacing|=s->games_flow_pages[i].valid && s->games_flow_pages[i].page==index;
+    if(!replacing && flow_outgoing_visible(s))return false;
+    flow_store(s,index,page);
+    for(unsigned slot=0;slot<KUI_SHELL_GAMES_FLOW_NEIGHBORS;slot++)if(s->games_flow_pages[slot].page==index) {
+        struct kui_games_page *rows=&s->games_flow_pages[slot].rows;
+        rows->message[sizeof(rows->message)-1]=0;rows->group_name[sizeof(rows->group_name)-1]=0;
+        for(unsigned i=0;i<rows->count;i++) {
+            struct kui_games_entry *e=&rows->entries[i];
+            e->title[sizeof(e->title)-1]=0;
+            if(!memchr(e->name,0,sizeof(e->name))) {e->name[sizeof(e->name)-1]=0;e->disabled=true;}
+            if(!memchr(e->group,0,sizeof(e->group))) {e->group[0]=0;e->disabled=true;}
+            if(!games_path_in_root(s,e->path,sizeof(e->path))) {e->path[0]=0;e->disabled=true;}
+            if(!games_path_in_root(s,e->variant_2048_path,sizeof(e->variant_2048_path)))e->variant_2048_path[0]=0;
+        }
+    }
+    return true;
+}
+
 void kui_shell_set_games_listing(struct kui_shell *s,const struct kui_games_page *page) {
     if(!s || !page || s->page!=KUI_SHELL_GAMES ||
        !memchr(page->root,0,sizeof(page->root)) || strcmp(page->root,s->games_path) ||
        !memchr(page->group,0,sizeof(page->group)) || strcmp(page->group,s->games_group) || page->filter!=s->games_filter) return;
+    bool flow=page->view==KUI_GAMES_VIEW_FLOW;
+    bool continued=flow && s->games_flow_ready;
+    if(continued && s->games_flow_edge_pending && !page->count && s->games_listing.count) {
+        flow_store(s,s->games_page,page);
+        s->games_page=s->games_flow_primary_page;s->games_selected=s->games_flow_selected%KUI_GAMES_ROWS;
+        s->games_loading=s->games_turning=s->games_flow_edge_pending=false;
+        snprintf(s->games_listing.message,sizeof(s->games_listing.message),"%.127s",page->message[0]?page->message:"No more games could be loaded.");
+        s->games_listing.activity_notice=true;return;
+    }
+    if(continued && s->games_page!=s->games_flow_primary_page)flow_store(s,s->games_flow_primary_page,&s->games_listing);
+    if(flow && !continued)flow_clear_pages(s);
     clear_game_choice(s);
-    s->games_listing=*page;
+    s->games_listing=*page;s->games_rows_stale=false;
     s->games_loading=false;s->games_art_loading=false;s->games_turning=false;
     s->games_scanning=false;
     if(page->view<KUI_GAMES_VIEW_COUNT) s->games_view=page->view;
@@ -711,6 +874,11 @@ void kui_shell_set_games_listing(struct kui_shell *s,const struct kui_games_page
     for(unsigned i=0;i<s->games_listing.count;i++)
         if(s->games_listing.entries[i].disabled) s->games_listing.entries[i].cover=false;
     if(s->games_selected>=s->games_listing.count) s->games_selected=0;
+    if(flow) {
+        if(!s->games_flow_epoch)++s->games_flow_epoch;
+        s->games_flow_ready=true;s->games_flow_primary_page=s->games_page;s->games_flow_edge_pending=false;
+        flow_target(s,!continued);
+    }
     games_remember(s);
 }
 unsigned kui_shell_games_view(const struct kui_shell *s) {
@@ -752,6 +920,11 @@ bool kui_shell_set_games_found_rows(struct kui_shell *s,const struct kui_games_p
        !memchr(page->root,0,sizeof(page->root)) || !kui_destination_normalize(root,page->root) || strcmp(root,page->root) ||
        (strcmp(root,s->games_path) && strcmp(root,"/Games")) ||
        !memchr(page->group,0,sizeof(page->group)))return false;
+    if(strcmp(root,s->games_path) || strcmp(page->group,s->games_group)) {
+        if(!++s->games_flow_epoch)++s->games_flow_epoch;
+        s->games_flow_ready=s->games_flow_motion=s->games_flow_edge_pending=false;
+        flow_clear_pages(s);
+    }
     snprintf(s->games_path,sizeof(s->games_path),"%s",root);
     snprintf(s->games_group,sizeof(s->games_group),"%s",page->group);
     s->games_page=offset/KUI_GAMES_ROWS;s->games_selected=selected;s->games_seek=false;s->games_seek_name[0]=0;
@@ -780,7 +953,7 @@ bool kui_shell_set_games_art(struct kui_shell *s,const struct kui_shell_games_ar
     const struct kui_games_cover_result *result) {
     struct kui_shell_games_art_key current;
     if(!result || result->stopped || !kui_shell_games_art_key(s,&current) ||
-       !kui_shell_games_art_same(key,&current) || result->size!=(current.view==KUI_GAMES_VIEW_LIST?
+       !kui_shell_games_art_same(key,&current) || result->size!=((current.view==KUI_GAMES_VIEW_LIST || current.view==KUI_GAMES_VIEW_FLOW)?
            KUI_COVER_SIZE_LARGE:current.view==KUI_GAMES_VIEW_COMPACT?KUI_COVER_SIZE_SMALL:KUI_COVER_SIZE_MEDIUM) ||
        !memchr(result->path,0,sizeof(result->path)) || strcmp(result->path,current.path) ||
        !memchr(result->name,0,sizeof(result->name)) ||
@@ -822,6 +995,10 @@ void kui_shell_set_games_detail(struct kui_shell *s,const struct kui_games_detai
     s->games_detail.region[sizeof(s->games_detail.region)-1]=0;
     s->games_detail.boot_file[sizeof(s->games_detail.boot_file)-1]=0;
     s->games_detail.message[sizeof(s->games_detail.message)-1]=0;
+    s->games_detail.profile.name[sizeof(s->games_detail.profile.name)-1]=0;
+    s->games_detail.profile.note[sizeof(s->games_detail.profile.note)-1]=0;
+    s->games_detail.profile.evidence[sizeof(s->games_detail.profile.evidence)-1]=0;
+    s->games_detail.profile.tested_build[sizeof(s->games_detail.profile.tested_build)-1]=0;
 }
 bool kui_shell_games_image_ready(const struct kui_shell *s) {
     return s && s->games_detail.valid &&
@@ -922,6 +1099,14 @@ void kui_shell_set_game_launch_settings(struct kui_shell *s,const char *path,
     if(kui_shell_games_zso_selected(s) && loaded && kui_game_launch_settings_valid(value))
         s->games_launch_codec=value->codec;
     if(!kui_shell_games_image_ready(s))return;
+    bool explicit_saved=loaded && value && kui_game_launch_settings_valid(value);
+    struct kui_game_launch_settings resolved;
+    if(loaded && !value) {
+        struct kui_game_launch_settings baseline;
+        if(kui_shell_game_launch_settings(s,&baseline) &&
+           kui_game_profile_resolve(&s->games_detail.profile,&baseline,NULL,false,&resolved))value=&resolved;
+    }
+    s->games_settings_saved=explicit_saved;
     if(loaded && kui_game_launch_settings_valid(value)) {
         s->games_launch_reader=s->games_detail.format==KUI_GAME_IMAGE_ZSO?KUI_RETAIL_READER_STANDARD:
             kui_shell_games_ce_probe_ready(s)?KUI_RETAIL_READER_ASYNC:value->reader;
@@ -944,6 +1129,7 @@ void kui_shell_set_game_launch_settings(struct kui_shell *s,const char *path,
 }
 void kui_shell_game_launch_saved(struct kui_shell *s,const char *path,bool ok) {
     if(!s || !path || (!kui_shell_games_image_ready(s) && !kui_shell_games_zso_selected(s)) || strcmp(path,s->games_selected_path)) return;
+    if(ok)s->games_settings_saved=true;
     snprintf(s->games_launch_notice,sizeof(s->games_launch_notice),"%s",ok?
         "Saved for this image.":"Not saved. These choices apply until you leave this image.");
 }
@@ -1047,6 +1233,11 @@ static enum kui_shell_action games_check_choice(struct kui_shell *s) {
 }
 static enum kui_shell_action list_games(struct kui_shell *s,bool first) {
     clear_game_choice(s);
+    s->games_query.activity=s->games_filter;
+    if(!s->games_flow_edge_pending) {
+        if(!++s->games_flow_epoch)++s->games_flow_epoch;
+        s->games_flow_ready=false;s->games_flow_motion=false;
+    }
     s->games_refresh=false;s->games_rebuild=false;
     ++s->games_generation;s->games_loading=true;s->games_art_loading=false;
     if(first) s->games_page=0;
@@ -1128,6 +1319,58 @@ static enum kui_shell_action turn_games_page(struct kui_shell *s,bool forward,un
     s->games_selected=select;
     return action;
 }
+static void flow_selection_changed(struct kui_shell *s) {
+    ++s->games_generation;s->games_art_loading=false;
+    for(unsigned i=0;i<s->games_listing.count && i<KUI_GAMES_ROWS;i++)s->games_listing.entries[i].cover=false;
+    flow_target(s,false);games_remember(s);
+}
+static enum kui_shell_action games_flow_input(struct kui_shell *s,unsigned buttons) {
+    if(!s->games_flow_ready || s->games_loading || !s->games_listing.count)return KUI_SHELL_NONE;
+    unsigned horizontal=buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT),vertical=buttons&(KUI_SHELL_UP|KUI_SHELL_DOWN);
+    int step=0;
+    if(!horizontal && vertical==KUI_SHELL_UP)step=-1;
+    if(!horizontal && vertical==KUI_SHELL_DOWN)step=1;
+    if(!vertical && horizontal==KUI_SHELL_LEFT)step=-(int)KUI_GAMES_ROWS;
+    if(!vertical && horizontal==KUI_SHELL_RIGHT)step=(int)KUI_GAMES_ROWS;
+    if(!step)return KUI_SHELL_NONE;
+    uint64_t current=(uint64_t)s->games_flow_primary_page*KUI_GAMES_ROWS+s->games_selected;
+    uint64_t target=step<0 && current<(unsigned)-step?0u:(uint64_t)((int64_t)current+step);
+    uint64_t end=(uint64_t)s->games_flow_primary_page*KUI_GAMES_ROWS+s->games_listing.count;
+    if(s->games_listing.total)end=s->games_listing.total;
+    else if(s->games_listing.has_more)end=UINT_MAX;
+    if(target>=end)target=end-1u;
+    if(target==current || target>UINT_MAX)return KUI_SHELL_NONE;
+    unsigned page=(unsigned)target/KUI_GAMES_ROWS,row=(unsigned)target%KUI_GAMES_ROWS;
+    if(page==s->games_flow_primary_page) {
+        if(row>=s->games_listing.count)return KUI_SHELL_NONE;
+        s->games_selected=row;flow_selection_changed(s);return KUI_SHELL_NONE;
+    }
+    for(unsigned i=0;i<KUI_SHELL_GAMES_FLOW_NEIGHBORS;i++)if(s->games_flow_pages[i].valid && s->games_flow_pages[i].page==page) {
+        if(!s->games_flow_pages[i].rows.count) {
+            snprintf(s->games_listing.message,sizeof(s->games_listing.message),"%.127s",s->games_flow_pages[i].rows.message[0]?
+                s->games_flow_pages[i].rows.message:"No more games could be loaded. Refresh to retry.");
+            s->games_listing.activity_notice=true;return KUI_SHELL_NONE;
+        }
+        struct kui_games_page next=s->games_flow_pages[i].rows;
+        /* Exchange the incoming slot with the outgoing primary. A distant
+         * outgoing window can remain on screen during an eight-row move. */
+        s->games_flow_pages[i].rows=s->games_listing;
+        s->games_flow_pages[i].page=s->games_flow_primary_page;
+        s->games_page=page;s->games_selected=row<next.count?row:next.count-1u;
+        kui_shell_set_games_listing(s,&next);
+        for(unsigned slot=0;slot<KUI_SHELL_GAMES_FLOW_NEIGHBORS;slot++) {
+            unsigned other=s->games_flow_pages[slot].page;
+            if(other==page)s->games_flow_pages[slot].valid=false;
+        }
+        flow_selection_changed(s);return KUI_SHELL_NONE;
+    }
+    if(flow_outgoing_visible(s))return KUI_SHELL_NONE;
+    /* Retain the entire visible window while the worker fetches a cold edge.
+     * Only its successful publication advances selection and the camera. */
+    games_turn_from(s);s->games_page=page;s->games_flow_edge_pending=true;
+    enum kui_shell_action action=list_games(s,false);s->games_selected=row;return action;
+}
+
 /* Compact: two columns of four, filled down the first column. Gallery: two
  * rows of four, filled across. Moving past a side edge turns the page. */
 static bool games_grid(struct kui_shell *s,unsigned buttons,enum kui_shell_action *action) {
@@ -1252,7 +1495,7 @@ static void capture_label_keyboard(struct kui_shell *s) {
     s->capture_label_keyboard=true;s->destination_notice[0]=0;s->page=KUI_SHELL_KEYBOARD;
 }
 /* ---- File Manager ---- */
-#define FILES_ACTION_COUNT 7u
+#define FILES_ACTION_COUNT 8u
 static const struct kui_files_entry *files_entry(const struct kui_shell *s) {
     return s->files_selected<s->files_listing.count?&s->files_listing.entries[s->files_selected]:NULL;
 }
@@ -1395,6 +1638,12 @@ static enum kui_shell_action files_open(struct kui_shell *s) {
 static enum kui_shell_action files_action(struct kui_shell *s) {
     unsigned item=s->files_action_selected;
     if(item==6) return files_keyboard(s,KUI_FILES_OP_MKDIR);
+    if(item==7) {
+        if(!s->files_screenshots) snprintf(s->files_gallery_return,sizeof(s->files_gallery_return),"%s",s->files_path);
+        s->files_screenshots=true;snprintf(s->files_path,sizeof(s->files_path),"/KUI/screenshots");
+        s->page=KUI_SHELL_FILES;files_quiet(s);
+        return list_files(s,false,KUI_FILES_SEEK_FIRST,NULL,false);
+    }
     char path[KUI_FILES_PATH_CAP];
     if(!files_entry_path(s,path)) {
         files_say(s,true,"K-UI cannot use this name; rename it on a computer.");
@@ -1421,7 +1670,7 @@ static enum kui_shell_action files_action(struct kui_shell *s) {
 static enum kui_shell_action files_input(struct kui_shell *s,unsigned buttons) {
     const struct kui_files_page *l=&s->files_listing;
     unsigned horizontal=buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT);
-    if(buttons&KUI_SHELL_START) {s->page=KUI_SHELL_HOME;return KUI_SHELL_NONE;}
+    if(buttons&KUI_SHELL_START) {s->files_screenshots=false;s->page=KUI_SHELL_HOME;return KUI_SHELL_NONE;}
     if(buttons&KUI_SHELL_R) {files_quiet(s);return files_refresh(s);}
     if(buttons&KUI_SHELL_Y) return files_keyboard(s,KUI_FILES_OP_MKDIR);
     if(horizontal==KUI_SHELL_LEFT || horizontal==KUI_SHELL_RIGHT)
@@ -1429,7 +1678,7 @@ static enum kui_shell_action files_input(struct kui_shell *s,unsigned buttons) {
     unsigned before=s->files_selected;
     s->files_selected=move_count(s->files_selected,buttons,l->count);
     if(s->files_selected!=before) s->files_notice_detail[0]=0;
-    if((buttons&KUI_SHELL_X) && s->files_selected<l->count) {
+    if(buttons&KUI_SHELL_X) {
         s->files_action_selected=0;files_quiet(s);s->page=KUI_SHELL_FILES_ACTIONS;
         return KUI_SHELL_NONE;
     }
@@ -1645,6 +1894,11 @@ static unsigned keyboard_move(unsigned key,unsigned buttons) {
 unsigned kui_shell_wifi_rows(const struct kui_shell *s) {
     return s ? 2u+(s->wifi.count<KUI_WIFI_NETWORKS?s->wifi.count:KUI_WIFI_NETWORKS) : 0;
 }
+void kui_shell_browser_status(struct kui_shell *s,const struct kui_browser_status *status) {
+    if(!s || !status || s->page!=KUI_SHELL_BROWSER)return;
+    s->browser=*status;s->browser.message[sizeof(s->browser.message)-1]=0;
+    s->browser.adapter[sizeof(s->browser.adapter)-1]=0;s->browser.url[sizeof(s->browser.url)-1]=0;
+}
 void kui_shell_set_wifi(struct kui_shell *s,const struct kui_wifi_view *view) {
     if(!s || !view) return;
     struct kui_wifi_view next=*view;
@@ -1741,7 +1995,88 @@ static enum kui_shell_action wifi_input(struct kui_shell *s,unsigned buttons) {
     wifi_keyboard(s,false);
     return KUI_SHELL_NONE;
 }
+static enum kui_shell_action history_request(struct kui_shell *s,unsigned action) {
+    s->vmu_history_request.action=(enum kui_vmu_history_action)action;
+    ++s->vmu_history_generation;s->vmu_history_loading=true;
+    s->confirm_vmu_history_restore=false;
+    snprintf(s->vmu_history.notice,sizeof(s->vmu_history.notice),"%s",action==KUI_VMU_HISTORY_LIST?"Reading save history...":
+        action==KUI_VMU_HISTORY_CHECKPOINT?"Creating checkpoint...":action==KUI_VMU_HISTORY_RESTORE?"Restoring to a new card...":"Exporting save card...");
+    return KUI_SHELL_VMU_HISTORY_RUN;
+}
+void kui_shell_set_vmu_history(struct kui_shell *s,unsigned generation,const struct kui_vmu_history_request *request,
+        const struct kui_vmu_history_view *view) {
+    if(!s || !request || !view || s->page!=KUI_SHELL_VMU_HISTORY || !s->vmu_history_loading ||
+       generation!=s->vmu_history_generation || memcmp(request,&s->vmu_history_request,sizeof(*request)))return;
+    s->vmu_history=*view;s->vmu_history.notice[sizeof(s->vmu_history.notice)-1]=0;
+    s->vmu_history.export_path[sizeof(s->vmu_history.export_path)-1]=0;
+    if(s->vmu_history.count>KUI_VMU_HISTORY_KEEP)s->vmu_history.count=KUI_VMU_HISTORY_KEEP;
+    for(unsigned i=0;i<s->vmu_history.count;i++)s->vmu_history.entries[i].label[sizeof(s->vmu_history.entries[i].label)-1]=0;
+    if(s->vmu_history_selected>=s->vmu_history.count)s->vmu_history_selected=0;
+    s->vmu_history_loading=false;
+    if(view->restored)s->games_vmu_selection=view->card;
+}
+static bool history_choose(struct kui_shell *s,unsigned action) {
+    if(!s->vmu_history.known || s->vmu_history_selected>=s->vmu_history.count)return false;
+    const struct kui_vmu_history_entry *e=&s->vmu_history.entries[s->vmu_history_selected];
+    memset(&s->vmu_history_request,0,sizeof(s->vmu_history_request));
+    s->vmu_history_request.action=(enum kui_vmu_history_action)action;
+    s->vmu_history_request.card=s->vmu_history.card;s->vmu_history_request.sequence=e->sequence;
+    memcpy(s->vmu_history_request.sha256,e->sha256,sizeof(e->sha256));return true;
+}
+static void games_keyboard(struct kui_shell *s,unsigned mode) {
+    s->games_keyboard=mode;s->keyboard_selected=0;s->keyboard_layer=KUI_SHELL_KEYS_LOWER;
+    s->vmu_name_keyboard=s->files_keyboard=s->wifi_keyboard=s->storage_test_keyboard=s->capture_label_keyboard=false;
+    snprintf(s->keyboard,sizeof(s->keyboard),"%s",mode==1u?s->games_query_draft.text:mode==2u?s->games_edit.alias:s->games_edit.cover_path);
+    s->destination_notice[0]=0;s->page=KUI_SHELL_KEYBOARD;
+}
+static enum kui_shell_action games_edit_request(struct kui_shell *s,bool save) {
+    ++s->games_edit_generation;s->games_edit_loading=true;s->games_edit_mutation=save;
+    snprintf(s->games_edit_notice,sizeof(s->games_edit_notice),"%s",save?"Saving display choices...":"Reading display choices...");
+    return save?KUI_SHELL_GAMES_EDIT_SAVE:KUI_SHELL_GAMES_EDIT_LOAD;
+}
+void kui_shell_set_games_edit(struct kui_shell *s,unsigned generation,const char *path,
+        const struct kui_games_library_edit *edit,bool ok,const char *notice) {
+    if(!s || !path || !edit || (s->page!=KUI_SHELL_GAMES_EDIT &&
+       !(s->page==KUI_SHELL_GAMES_ADVANCED && s->games_identity_pending)) || !s->games_edit_loading ||
+       generation!=s->games_edit_generation || strcmp(path,s->games_edit_path))return;
+    bool identity=s->games_identity_pending;s->games_edit_loading=false;s->games_identity_pending=false;
+    if(ok && s->games_edit_mutation) {
+        s->games_rows_stale=true;
+        if(!++s->games_flow_epoch)++s->games_flow_epoch;
+        s->games_flow_ready=s->games_flow_motion=s->games_flow_edge_pending=false;
+        for(unsigned i=0;i<KUI_SHELL_GAMES_FLOW_NEIGHBORS;i++)s->games_flow_pages[i].valid=false;
+    }
+    if(ok) {s->games_edit_known=true;s->games_edit=*edit;s->games_edit.alias[sizeof(s->games_edit.alias)-1]=0;
+        s->games_edit.cover_path[sizeof(s->games_edit.cover_path)-1]=0;}
+    snprintf(s->games_edit_notice,sizeof(s->games_edit_notice),"%s",notice?notice:ok?"Display choices saved":"Display choices could not be read or saved");
+    if(identity)snprintf(s->games_activity_notice,sizeof(s->games_activity_notice),"%s",s->games_edit_notice);
+}
+static bool games_edit_target(struct kui_shell *s) {
+    if(s->games_loading || s->games_selected>=s->games_listing.count)return false;
+    const struct kui_games_entry *e=&s->games_listing.entries[s->games_selected];
+    if(e->disabled || e->directory)return false;
+    snprintf(s->games_edit_root,sizeof(s->games_edit_root),"%s",s->games_path);
+    snprintf(s->games_edit_group,sizeof(s->games_edit_group),"%s",s->games_group[0]?s->games_group:e->group);
+    snprintf(s->games_edit_path,sizeof(s->games_edit_path),"%s",e->path);return true;
+}
+void kui_shell_problem_report_status(struct kui_shell *s,const struct kui_problem_report_view *view) {
+    if(!s || !view)return;
+    s->problem_report=*view;s->problem_report.path[sizeof(s->problem_report.path)-1]=0;
+    s->problem_report.status.message[sizeof(s->problem_report.status.message)-1]=0;s->problem_report_visible=true;
+}
+
 static enum kui_shell_action keyboard_done(struct kui_shell *s) {
+    if(s->games_keyboard) {
+        unsigned mode=s->games_keyboard;
+        if(mode==1u && strlen(s->keyboard)>=sizeof(s->games_query_draft.text)) {kui_shell_destination_error(s,"Search allows 64 bytes.");return KUI_SHELL_NONE;}
+        if(mode==1u)snprintf(s->games_query_draft.text,sizeof(s->games_query_draft.text),"%.64s",s->keyboard);
+        else if(mode==2u)snprintf(s->games_edit.alias,sizeof(s->games_edit.alias),"%.128s",s->keyboard);
+        else {
+            if(s->keyboard[0] && !kui_files_path_valid(s->keyboard)) {kui_shell_destination_error(s,"Use a card path such as /Pictures/cover.png.");return KUI_SHELL_NONE;}
+            snprintf(s->games_edit.cover_path,sizeof(s->games_edit.cover_path),"%s",s->keyboard);
+        }
+        s->games_keyboard=0;s->page=mode==1u?KUI_SHELL_GAMES_QUERY:KUI_SHELL_GAMES_EDIT;return KUI_SHELL_NONE;
+    }
     if(s->vmu_name_keyboard) {
         size_t first=0,n=strlen(s->keyboard);
         while(first<n && s->keyboard[first]==' ') ++first;
@@ -1795,7 +2130,7 @@ static enum kui_shell_action keyboard_input(struct kui_shell *s,unsigned buttons
         if(s->keyboard_selected==41) keyboard_backspace(s);
         else {
             size_t n=strlen(s->keyboard);
-            size_t cap=s->vmu_name_keyboard?48u:s->capture_label_keyboard?sizeof(s->capture_folder_label)-1:s->storage_test_keyboard?sizeof(s->storage_test_request.card_label)-1:!s->wifi_keyboard?sizeof(s->keyboard)-1:s->wifi_typing_name?KWM_SSID_MAX:KWM_PASSWORD_MAX;
+            size_t cap=s->games_keyboard==1u?64u:s->games_keyboard==2u?128u:s->games_keyboard==3u?sizeof(s->games_edit.cover_path)-1u:s->vmu_name_keyboard?48u:s->capture_label_keyboard?sizeof(s->capture_folder_label)-1:s->storage_test_keyboard?sizeof(s->storage_test_request.card_label)-1:!s->wifi_keyboard?KUI_DEST_ROOT_CAP-1u:s->wifi_typing_name?KWM_SSID_MAX:KWM_PASSWORD_MAX;
             if(n<cap) {
                 s->keyboard[n]=s->keyboard_selected==40?' ':
                     *kui_shell_key_label(s->keyboard_selected,s->keyboard_layer);
@@ -1950,11 +2285,26 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
                 destination==KUI_SHELL_SALVAGE?destination:KUI_SHELL_DISC_TOOLS;
             return KUI_SHELL_NONE;
         }
+        if(s->page==KUI_SHELL_GAME_PROFILE) {s->page=KUI_SHELL_GAMES_EXTRA_OPTIONS;return KUI_SHELL_NONE;}
+        if(s->page==KUI_SHELL_REPORT) {s->page=KUI_SHELL_DIAGNOSTICS;return KUI_SHELL_NONE;}
+        if(s->confirm_vmu_history_restore) {s->confirm_vmu_history_restore=false;return KUI_SHELL_NONE;}
+        if(s->confirm_games_identity) {s->confirm_games_identity=false;return KUI_SHELL_NONE;}
+        if(s->games_keyboard && s->page==KUI_SHELL_KEYBOARD) {
+            s->page=s->games_keyboard==1u?KUI_SHELL_GAMES_QUERY:KUI_SHELL_GAMES_EDIT;s->games_keyboard=0;return KUI_SHELL_NONE;
+        }
+        if(s->page==KUI_SHELL_GAMES_QUERY || s->page==KUI_SHELL_GAMES_EDIT) {
+            if(s->page==KUI_SHELL_GAMES_EDIT && s->games_edit_loading)return KUI_SHELL_STOP;
+            s->page=KUI_SHELL_GAMES_ADVANCED;return KUI_SHELL_NONE;
+        }
+        if(s->page==KUI_SHELL_VMU_HISTORY) {
+            if(s->vmu_history_loading)return KUI_SHELL_STOP;
+            s->page=KUI_SHELL_GAMES_VMU_CARD;return game_vmu_request(s);
+        }
         if(s->confirm_restart) {s->confirm_restart=false;return KUI_SHELL_NONE;}
         if(s->page==KUI_SHELL_SYSTEM_TOOLS) {
             s->page=KUI_SHELL_SETTINGS;return KUI_SHELL_NONE;
         }
-        if(s->page==KUI_SHELL_FTP) {s->page=KUI_SHELL_NETWORK;return KUI_SHELL_NONE;}
+        if(s->page==KUI_SHELL_FTP || s->page==KUI_SHELL_BROWSER) {s->page=KUI_SHELL_NETWORK;return KUI_SHELL_NONE;}
         if(s->confirm_wifi_forget) {s->confirm_wifi_forget=false;return KUI_SHELL_NONE;}
         if(s->confirm_wifi_update) {s->confirm_wifi_update=false;return KUI_SHELL_NONE;}
         if(s->page==KUI_SHELL_WIFI) {s->page=KUI_SHELL_NETWORK;return KUI_SHELL_NONE;}
@@ -2008,7 +2358,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(s->confirm_defaults) {s->confirm_defaults=false;return KUI_SHELL_NONE;}
         if(s->confirm_vmu_restore) {s->confirm_vmu_restore=false;return KUI_SHELL_NONE;}
         if(s->page==KUI_SHELL_CD_AUDIO) {s->page=KUI_SHELL_MUSIC;return KUI_SHELL_NONE;}
-        if(s->page==KUI_SHELL_CLOCK) {s->page=KUI_SHELL_SETTINGS;return KUI_SHELL_NONE;}
+        if(s->page==KUI_SHELL_CLOCK || s->page==KUI_SHELL_CONTROLS) {s->page=KUI_SHELL_SETTINGS;return KUI_SHELL_NONE;}
         if(s->page==KUI_SHELL_CRC_SCAN) {s->page=s->scan_return;return KUI_SHELL_NONE;}
         if(s->page==KUI_SHELL_VMU_IMAGE) {
             s->page=s->vmu_image_collection?KUI_SHELL_VMU_CARD:KUI_SHELL_VMU_RESTORE;
@@ -2024,6 +2374,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(s->page==KUI_SHELL_RIPPER || s->page==KUI_SHELL_GD_PLAY) {
             s->page=KUI_SHELL_DISC_TOOLS;return KUI_SHELL_NONE;
         }
+        if(s->page==KUI_SHELL_NETWORK && s->network_selected>=5u) {s->network_selected-=5u;return KUI_SHELL_NONE;}
         if(s->page==KUI_SHELL_MEMORY) {s->page=KUI_SHELL_DIAGNOSTICS;return KUI_SHELL_NONE;}
         if(s->page==KUI_SHELL_GAMES_CHECK) {s->page=KUI_SHELL_GAMES_EXTRA_OPTIONS;return KUI_SHELL_NONE;}
         if(s->page==KUI_SHELL_GAMES_CODEC) {s->page=KUI_SHELL_GAMES_DETAIL;return KUI_SHELL_NONE;}
@@ -2075,8 +2426,14 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             clear_game_choice(s);s->page=KUI_SHELL_GAMES;return KUI_SHELL_NONE;
         }
         if(s->page==KUI_SHELL_GAMES_DETAIL || s->page==KUI_SHELL_GAMES_ADVANCED) {
-            clear_game_choice(s);
-            s->page=KUI_SHELL_GAMES;return KUI_SHELL_NONE;
+            if(s->games_identity_pending && s->games_edit_loading)return KUI_SHELL_STOP;
+            clear_game_choice(s);s->page=KUI_SHELL_GAMES;
+            if(s->games_rows_stale) {
+                s->games_seek=true;s->games_seek_name[0]=0;
+                if(s->games_selected<s->games_listing.count)snprintf(s->games_seek_name,sizeof(s->games_seek_name),"%s",s->games_listing.entries[s->games_selected].name);
+                return list_games(s,false);
+            }
+            return KUI_SHELL_NONE;
         }
         if(s->page==KUI_SHELL_FILES_VIEW || s->page==KUI_SHELL_FILES_INFO || s->page==KUI_SHELL_FILES_ACTIONS) {
             s->page=KUI_SHELL_FILES;return KUI_SHELL_NONE;
@@ -2097,6 +2454,11 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             s->files_pick_compare=s->files_pick_import=false;return KUI_SHELL_NONE;
         }
         if(s->page==KUI_SHELL_FILES) {
+            if(s->files_screenshots && !strcmp(s->files_path,"/KUI/screenshots")) {
+                s->files_screenshots=false;
+                snprintf(s->files_path,sizeof(s->files_path),"%s",s->files_gallery_return[0]?s->files_gallery_return:"/");
+                files_quiet(s);return list_files(s,false,KUI_FILES_SEEK_FIRST,NULL,false);
+            }
             char parent[KUI_FILES_PATH_CAP],left[KUI_FILES_NAME_CAP];
             if(kui_files_parent(parent,s->files_path) && strcmp(parent,s->files_path)) {
                 /* The parent is listed from the folder just left. */
@@ -2184,7 +2546,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     bool confirming=s->confirm_new || s->confirm_quick_resume || s->confirm_gd_boot || s->confirm_gd_direct ||
         s->confirm_storage_test || s->confirm_clock || s->confirm_defaults || s->confirm_vmu_restore ||
         s->confirm_vmu_delete || s->confirm_vmu_copy || s->confirm_vmu_copy_all || s->confirm_vmu_import || s->confirm_music_clear || s->confirm_restart || s->confirm_salvage || s->confirm_salvage_check ||
-        s->confirm_repair_in_place || s->confirm_wifi_forget || s->confirm_wifi_update || s->confirm_vmu_wizard_reset || s->page==KUI_SHELL_GAMES_PROBE_CONFIRM || s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ||
+        s->confirm_repair_in_place || s->confirm_vmu_history_restore || s->confirm_games_identity || s->confirm_wifi_forget || s->confirm_wifi_update || s->confirm_vmu_wizard_reset || s->page==KUI_SHELL_GAMES_PROBE_CONFIRM || s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ||
         s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM || s->page==KUI_SHELL_GAMES_LAUNCH_OPTIONS ||
         s->page==KUI_SHELL_GAMES_VARIANTS || s->page==KUI_SHELL_FILES_CONFIRM;
     if(song_page && !confirming && !(buttons & ~(KUI_SHELL_L|KUI_SHELL_R))) {
@@ -2285,6 +2647,18 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     }
     if(s->confirm_music_clear) {
         if(buttons&KUI_SHELL_A) {s->confirm_music_clear=false;return KUI_SHELL_MUSIC_CLEAR_CACHE;}
+        return KUI_SHELL_NONE;
+    }
+    if(s->confirm_vmu_history_restore) {
+        if(buttons==KUI_SHELL_A)return history_request(s,KUI_VMU_HISTORY_RESTORE);
+        return KUI_SHELL_NONE;
+    }
+    if(s->confirm_games_identity) {
+        if(buttons==KUI_SHELL_A) {
+            s->confirm_games_identity=false;s->games_identity_pending=s->games_edit_loading=s->games_edit_mutation=true;
+            ++s->games_edit_generation;snprintf(s->games_activity_notice,sizeof(s->games_activity_notice),"Verifying content identity...");
+            return KUI_SHELL_GAMES_IDENTITY_VERIFY;
+        }
         return KUI_SHELL_NONE;
     }
     if(s->confirm_clock) {
@@ -2398,7 +2772,10 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             snprintf(s->games_path,sizeof(s->games_path),"/Games");
             return list_games(s,true);
         }
-        {
+        if(kui_shell_games_view(s)==KUI_GAMES_VIEW_FLOW) {
+            enum kui_shell_action action=games_flow_input(s,buttons);
+            if(action!=KUI_SHELL_NONE)return action;
+        } else {
             unsigned previous=s->games_selected;
             enum kui_shell_action action;
             if(games_grid(s,buttons,&action)) {
@@ -2495,8 +2872,16 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         }
         break;
     case KUI_SHELL_GAMES_ADVANCED:
-        s->games_advanced_selected=move_count(s->games_advanced_selected,buttons,7);
+        if(s->games_identity_pending && s->games_edit_loading)break;
+        s->games_advanced_selected=move_count(s->games_advanced_selected,buttons,10);
         if(buttons&KUI_SHELL_A) {
+            if(s->games_advanced_selected==7u) {s->games_query_draft=s->games_query;s->page=KUI_SHELL_GAMES_QUERY;s->games_query_selected=0;return KUI_SHELL_NONE;}
+            if(s->games_advanced_selected>=8u) {
+                if(!games_edit_target(s)) {snprintf(s->games_activity_notice,sizeof(s->games_activity_notice),"Select a game first.");break;}
+                if(s->games_advanced_selected==9u) {s->confirm_games_identity=true;return KUI_SHELL_NONE;}
+                s->page=KUI_SHELL_GAMES_EDIT;s->games_edit_selected=0;s->games_edit_known=false;memset(&s->games_edit,0,sizeof(s->games_edit));
+                return games_edit_request(s,false);
+            }
             if(s->games_advanced_selected==6) {
                 unsigned keep=s->games_selected;
                 s->games_view=(kui_shell_games_view(s)+1u)%KUI_GAMES_VIEW_COUNT;
@@ -2532,9 +2917,57 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
                 return KUI_SHELL_GAMES_SCAN;
             }
             s->games_filter=KUI_GAMES_FILTER_ALL;
+            if(!s->games_advanced_selected)memset(&s->games_query,0,sizeof(s->games_query));
             snprintf(s->games_path,sizeof(s->games_path),"%s",s->games_advanced_selected?"/":"/Games");
             s->games_group[0]=0;s->games_seek=false;s->games_seek_name[0]=0;
             s->page=KUI_SHELL_GAMES;return list_games(s,true);
+        }
+        break;
+    case KUI_SHELL_GAMES_QUERY:
+        s->games_query_selected=move_count(s->games_query_selected,buttons,5u);
+        if(buttons==KUI_SHELL_X) {memset(&s->games_query_draft,0,sizeof(s->games_query_draft));s->games_query_draft.activity=s->games_filter;break;}
+        if(buttons==KUI_SHELL_LEFT || buttons==KUI_SHELL_RIGHT) {
+            bool left=buttons==KUI_SHELL_LEFT;
+            if(s->games_query_selected==1u)s->games_query_draft.region=(s->games_query_draft.region+(left?KUI_GAMES_REGION_COUNT-1u:1u))%KUI_GAMES_REGION_COUNT;
+            if(s->games_query_selected==2u)s->games_query_draft.disc=(s->games_query_draft.disc+(left?99u:1u))%100u;
+            if(s->games_query_selected==4u) {unsigned at=s->games_jump=='#'?0u:(unsigned)(s->games_jump-'A')+1u;at=(at+(left?26u:1u))%27u;s->games_jump=at?(char)('A'+at-1u):'#';}
+        }
+        if(buttons==KUI_SHELL_A) {
+            if(s->games_query_selected==0u) {games_keyboard(s,1u);break;}
+            if(s->games_query_selected==3u || s->games_query_selected==4u) {
+                s->games_query=s->games_query_draft;
+                s->page=KUI_SHELL_GAMES;s->games_group[0]=0;s->games_seek=false;
+                enum kui_shell_action action=list_games(s,true);
+                if(s->games_query_selected==4u) {
+                    s->games_seek=true;s->games_seek_name[0]=0;
+                    return KUI_SHELL_GAMES_JUMP;
+                }
+                return action;
+            }
+        }
+        break;
+    case KUI_SHELL_GAMES_EDIT:
+        if(s->games_edit_loading)break;
+        if(buttons==KUI_SHELL_X)return games_edit_request(s,false);
+        s->games_edit_selected=move_count(s->games_edit_selected,buttons,4u);
+        if(buttons==KUI_SHELL_A) {
+            if(s->games_edit_selected<2u) {games_keyboard(s,s->games_edit_selected+2u);break;}
+            if(s->games_edit_selected==2u) {s->games_edit.alias[0]=s->games_edit.cover_path[0]=0;break;}
+            if(!s->games_edit_known) {snprintf(s->games_edit_notice,sizeof(s->games_edit_notice),"Reload display choices before saving.");return KUI_SHELL_NONE;}
+            return games_edit_request(s,true);
+        }
+        break;
+    case KUI_SHELL_VMU_HISTORY:
+        if(s->vmu_history_loading)break;
+        s->vmu_history_selected=move_count(s->vmu_history_selected,buttons,s->vmu_history.count);
+        if(buttons==KUI_SHELL_A && history_choose(s,KUI_VMU_HISTORY_RESTORE))s->confirm_vmu_history_restore=true;
+        if(buttons==KUI_SHELL_X) {
+            if(!history_choose(s,KUI_VMU_HISTORY_EXPORT)) {memset(&s->vmu_history_request,0,sizeof(s->vmu_history_request));s->vmu_history_request.card=s->vmu_history.card;}
+            return history_request(s,KUI_VMU_HISTORY_EXPORT);
+        }
+        if(buttons==KUI_SHELL_Y || buttons==KUI_SHELL_START) {
+            memset(&s->vmu_history_request,0,sizeof(s->vmu_history_request));s->vmu_history_request.card=s->vmu_history.card;
+            return history_request(s,buttons==KUI_SHELL_Y?KUI_VMU_HISTORY_LIST:KUI_VMU_HISTORY_CHECKPOINT);
         }
         break;
     case KUI_SHELL_GAMES_PROBE_CONFIRM:
@@ -2553,6 +2986,11 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         break;
     case KUI_SHELL_GAMES_VMU_CARD:
         if(s->games_vmu_loading) break;
+        if(buttons==KUI_SHELL_START && !s->games_vmu_disc && kui_vmu_game_info_choose(&s->games_vmu_info,s->games_vmu_card_selected,&s->games_vmu_selection)) {
+            memset(&s->vmu_history,0,sizeof(s->vmu_history));memset(&s->vmu_history_request,0,sizeof(s->vmu_history_request));
+            s->vmu_history_request.card=s->games_vmu_selection;s->vmu_history.card=s->games_vmu_selection;
+            s->page=KUI_SHELL_VMU_HISTORY;s->vmu_history_selected=0;return history_request(s,KUI_VMU_HISTORY_LIST);
+        }
         if(s->games_vmu_disc && buttons==KUI_SHELL_A && s->games_vmu_info.known &&
            (!s->games_vmu_info.enabled || !s->games_vmu_info.count)) {
             return disc_vmu_launch(s);
@@ -2666,6 +3104,9 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         case KUI_SHELL_GAME_TOOL_CHECK:
             if(buttons==KUI_SHELL_A) return games_check_choice(s);
             break;
+        case KUI_SHELL_GAME_TOOL_PROFILE:
+            if(buttons==KUI_SHELL_A) {s->page=KUI_SHELL_GAME_PROFILE;return KUI_SHELL_NONE;}
+            break;
         case KUI_SHELL_GAME_TOOL_VMU_SLOT:
             if(kui_shell_games_vmu_slot_ready(s)) {
                 s->games_launch_vmu_slot=s->games_launch_vmu_slot==KUI_GAME_VMU_SLOT_A1?
@@ -2674,6 +3115,21 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             }
             break;
         }
+        break;
+    case KUI_SHELL_GAME_PROFILE:
+        if(buttons==KUI_SHELL_A && s->games_detail.profile.matched) {
+            struct kui_game_launch_settings recommended;
+            if(kui_game_profile_apply(&s->games_detail.profile,&recommended)) {
+                s->games_baseline=false;
+                kui_shell_set_game_launch_settings(s,s->games_selected_path,&recommended,true);
+                return save_game_launch(s);
+            }
+        }
+        break;
+    case KUI_SHELL_REPORT:
+        if(buttons==KUI_SHELL_X)s->problem_report_options.include_latest_screenshot=!s->problem_report_options.include_latest_screenshot;
+        if(buttons==KUI_SHELL_A) {memset(&s->problem_report,0,sizeof(s->problem_report));s->problem_report_visible=true;return KUI_SHELL_PROBLEM_REPORT;}
+        if(buttons==KUI_SHELL_Y)s->page=KUI_SHELL_BROWSER;
         break;
     case KUI_SHELL_GAMES_PATCHES:
         return game_patch_input(s,buttons);
@@ -2854,7 +3310,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(buttons & KUI_SHELL_A) return KUI_SHELL_SAVE_SETTINGS;
         break;
     case KUI_SHELL_SETTINGS: {
-        s->system_selected=move_count(s->system_selected,buttons,11);
+        s->system_selected=move_count(s->system_selected,buttons,12);
         unsigned horizontal=buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT);
         if(horizontal==KUI_SHELL_LEFT || horizontal==KUI_SHELL_RIGHT) {
             if(s->system_selected==10) s->system_draft.menu_sounds=!s->system_draft.menu_sounds;
@@ -2875,6 +3331,9 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             if(s->system_selected==5) s->system_draft.startup_app=(s->system_draft.startup_app+
                 (horizontal==KUI_SHELL_LEFT?KUI_STARTUP_APP_COUNT-1:1))%KUI_STARTUP_APP_COUNT;
         }
+        if((buttons&KUI_SHELL_A) && s->system_selected==11) {
+            s->page=KUI_SHELL_CONTROLS;s->controls_selected=0;return KUI_SHELL_NONE;
+        }
         if((buttons&KUI_SHELL_A) && s->system_selected==9) {
             s->page=KUI_SHELL_SYSTEM_TOOLS;s->tools_selected=0;return KUI_SHELL_SYSTEM_INSPECT;
         }
@@ -2889,6 +3348,17 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(buttons&KUI_SHELL_A) return s->system_draft.video_mode!=s->system_saved.video_mode?
             KUI_SHELL_PREVIEW_VIDEO:KUI_SHELL_SAVE_SYSTEM;
         if((buttons&KUI_SHELL_X) && s->system_selected>=2 && s->system_selected<=3) return KUI_SHELL_MUSIC_NEXT;
+        break;
+    }
+    case KUI_SHELL_CONTROLS: {
+        s->controls_selected=move_count(s->controls_selected,buttons,2u);
+        unsigned horizontal=buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT);
+        if(horizontal==KUI_SHELL_LEFT || horizontal==KUI_SHELL_RIGHT) {
+            unsigned *value=s->controls_selected?&s->system_draft.stick_deadzone:&s->system_draft.menu_repeat;
+            *value=(*value+(horizontal==KUI_SHELL_LEFT?2u:1u))%3u;
+        }
+        if(buttons&KUI_SHELL_X) {s->system_draft.menu_repeat=s->system_draft.stick_deadzone=0u;}
+        if(buttons&KUI_SHELL_A) return s->system_draft.video_mode!=s->system_saved.video_mode?KUI_SHELL_PREVIEW_VIDEO:KUI_SHELL_SAVE_SYSTEM;
         break;
     }
     case KUI_SHELL_CLOCK:
@@ -3274,14 +3744,33 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(buttons&KUI_SHELL_A) return KUI_SHELL_MEMORY_TEST;
         break;
     case KUI_SHELL_NETWORK:
-        if(buttons&KUI_SHELL_A) return KUI_SHELL_NETWORK_TEST;
-        if(buttons&KUI_SHELL_X) return KUI_SHELL_NETWORK_CONNECT;
+        if(s->network_selected>=5u) {
+            if(buttons==KUI_SHELL_A)return s->network_selected==5u?KUI_SHELL_NETWORK_TEST:KUI_SHELL_NETWORK_CONNECT;
+            if(buttons==KUI_SHELL_X) {s->network_selected=6u;return KUI_SHELL_NETWORK_CONNECT;}
+            break;
+        }
+        s->network_selected=move_count(s->network_selected,buttons,5u);
+        if(buttons==KUI_SHELL_A) {
+            if(s->network_selected==0) {s->network_selected=5u;return KUI_SHELL_NETWORK_TEST;}
+            if(s->network_selected==1) {s->network_selected=6u;return KUI_SHELL_NETWORK_CONNECT;}
+            if(s->network_selected==2) {s->page=KUI_SHELL_FTP;return KUI_SHELL_FTP_START;}
+            if(s->network_selected==3) {s->page=KUI_SHELL_WIFI;s->wifi_selected=0;return KUI_SHELL_WIFI_REFRESH;}
+            s->page=KUI_SHELL_BROWSER;return KUI_SHELL_NONE;
+        }
+        if(buttons&KUI_SHELL_X) {s->network_selected=6u;return KUI_SHELL_NETWORK_CONNECT;}
         /* The FTP server starts as its page opens; B stops it there. */
         if(buttons&KUI_SHELL_Y) {s->page=KUI_SHELL_FTP;return KUI_SHELL_FTP_START;}
         /* The Wi-Fi page looks for the board and networks as it opens. */
         if(buttons&KUI_SHELL_START) {
             s->page=KUI_SHELL_WIFI;s->wifi_selected=0;s->confirm_wifi_forget=false;
             return KUI_SHELL_WIFI_REFRESH;
+        }
+        break;
+    case KUI_SHELL_BROWSER:
+        if(buttons==KUI_SHELL_A) {
+            memset(&s->browser,0,sizeof(s->browser));s->browser.state=KUI_BROWSER_STARTING;
+            snprintf(s->browser.message,sizeof(s->browser.message),"Starting SD browser...");
+            return KUI_SHELL_BROWSER_START;
         }
         break;
     case KUI_SHELL_FTP:
@@ -3435,6 +3924,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         break;
     }
     case KUI_SHELL_DIAGNOSTICS:
+        if(buttons==KUI_SHELL_START) {s->page=KUI_SHELL_REPORT;return KUI_SHELL_NONE;}
         scroll(s, buttons);
         if(buttons & KUI_SHELL_A) return KUI_SHELL_DISC_PROBE;
         if(buttons & KUI_SHELL_X) return KUI_SHELL_STORAGE_PROBE;

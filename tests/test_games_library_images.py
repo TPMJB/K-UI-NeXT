@@ -6,8 +6,10 @@ import argparse
 import os
 import shlex
 import shutil
+import struct
 import sys
 import tempfile
+import zlib
 from games_fixture import make_fixture
 from test_images import run
 
@@ -17,6 +19,10 @@ CASES = ("cold", "groups", "stale", "cancel", "cancel-before", "cancel-readback"
          "first-write-fail", "load-read-fail", "corrupt-newer", "pending-newer", "epoch", "corrupt-epoch",
          "volume-identity", "generation-read-fail", "source-read-fail", "failed-invalidation-readonly",
          "activity", "activity-write-fail", "activity-corrupt")
+EDITOR_CASES = ("query", "editor", "editor-write-fail", "editor-corrupt",
+                "identity-move", "identity-duplicate", "identity-changed", "identity-conflict",
+                "identity-representation", "identity-legacy", "identity-pair")
+CASES += EDITOR_CASES + ("catalogue-v2",)
 
 
 def private_formatter(base):
@@ -38,7 +44,7 @@ def private_formatter(base):
     return binary
 
 
-def fixture(base):
+def fixture(base, enhanced=False):
     games = base / "Games"
     make_fixture(games / "Skies of Arcadia Disc 1", b"SYNTHETIC DISC ONE")
     make_fixture(games / "Skies of Arcadia Disc 2", b"SYNTHETIC DISC TWO")
@@ -53,6 +59,22 @@ def fixture(base):
         folder.mkdir(parents=True)
         (folder / "selected.iso").write_bytes(b"SYNTHETIC IMAGE; LISTING ONLY")
     (base / "KUI").mkdir()
+    if enhanced:
+        make_fixture(games / "Verified", b"SYNTHETIC VERIFIED")
+        shutil.copytree(games / "Verified", games / "Copy")
+        staging = base / "Staging"
+        staging.mkdir()
+        run(sys.executable, str(ROOT / "tools/gdi_optimize.py"),
+            str(games / "Verified/disc.gdi"), str(staging / "Cooked"))
+        covers = base / "KUI/covers"
+        covers.mkdir()
+        def chunk(kind, payload):
+            return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", zlib.crc32(kind + payload))
+        red = bytes((255, 0, 0, 255)) * 2
+        png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 2, 2, 8, 6, 0, 0, 0))
+        png += chunk(b"IDAT", zlib.compress(b"\0" + red + b"\0" + red)) + chunk(b"IEND", b"")
+        (covers / "assigned.png").write_bytes(png)
+        (covers / "bad.png").write_bytes(b"NOT AN IMAGE")
     entries = []
 
     def walk(folder, relative):
@@ -61,7 +83,7 @@ def fixture(base):
             entries.append(f"{'D' if path.is_dir() else 'F'} {name.as_posix()}")
             if path.is_dir():
                 walk(path, name)
-    for top in ("KUI", "Games"):
+    for top in ("KUI", "Games") + (("Staging",) if enhanced else ()):
         entries.append(f"D {top}")
         walk(base / top, Path(top))
     (base / "manifest.txt").write_text("\n".join(entries) + "\n")
@@ -75,6 +97,9 @@ def main():
         base = Path(temp)
         source = base / "fixture"
         fixture(source)
+        enhanced = base / "enhanced-fixture"
+        if any(case in EDITOR_CASES for case in args.case or CASES):
+            fixture(enhanced, enhanced=True)
         formatter = None
         for kind in ("fat32", "exfat"):
             clean = base / f"{kind}-clean.img"
@@ -93,8 +118,9 @@ def main():
             for case in args.case or CASES:
                 card = base / f"{kind}-{case}.img"
                 shutil.copyfile(clean, card)
-                run(BINARY, str(card), str(source), "seed", case)
-                output = run(BINARY, str(card), str(source), "check", case)
+                selected_source = enhanced if case in EDITOR_CASES else source
+                run(BINARY, str(card), str(selected_source), "seed", case)
+                output = run(BINARY, str(card), str(selected_source), "check", case)
                 assert f"PASS Games catalogue {case}; production writes stayed under KUI" in output
                 for line in output.splitlines():
                     if line.startswith("EVIDENCE "):

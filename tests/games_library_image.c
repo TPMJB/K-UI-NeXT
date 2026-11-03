@@ -6,6 +6,7 @@
 #include "kui/hash.h"
 #include "kui/media.h"
 #include "kui/storage.h"
+#include "kui/game_launch_settings.h"
 #include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -308,6 +309,225 @@ static void activity_check(const char *name) {
     assert(result.count==1 && !strcmp(result.entries[0].group,skies.group));
     puts("EVIDENCE favorites and recent launches survived cold reload/rebuild; disc 1/disc 2/2048 share one recent group; removed images did not become ghost rows");
 }
+static void query_page(const char *group,const struct kui_games_query *query,struct kui_games_page *out) {
+    assert(kui_games_library_rows_query("/Games",group,0,KUI_GAMES_VIEW_LIST,query,out,log_line,cancel));
+}
+static void query_check(void) {
+    struct kui_games_entry verified,group;assert(find("Verified",&verified) && find("Skies of Arcadia",&group));
+    char anchor[KUI_GAMES_FILE_CAP];assert(kui_games_library_verify_identity("/Games",verified.path,KUI_ZSO_LZ4,anchor,log_line,cancel));
+    struct kui_games_query query;struct kui_games_page result;kui_games_query_default(&query);
+    query_page("",&query,&result); /* An edit invalidates the saved-view cache once. */
+    unsigned reads=test.block_reads,opens=test.opens,dirs=test.readdirs,stats=test.stats,writes=test.writes;
+    strcpy(query.text,"fIlLeR 0");query_page("",&query,&result);assert(result.total==10 && result.count==8 && result.has_more);
+    query.region=KUI_GAMES_REGION_USA;query_page("",&query,&result);assert(!result.total);
+    query.text[0]=0;query_page("",&query,&result);assert(result.total==1 && !strcmp(result.entries[0].path,verified.path));
+    query.region=KUI_GAMES_REGION_JAPAN;query_page("",&query,&result);assert(result.total==1);
+    query.region=KUI_GAMES_REGION_EUROPE;query_page("",&query,&result);assert(result.total==1);
+    query.region=KUI_GAMES_REGION_UNKNOWN;query_page("",&query,&result);assert(result.total==17);
+    query.region=KUI_GAMES_REGION_ANY;strcpy(query.text,"skies");query.disc=2;query_page("",&query,&result);assert(result.total==2 && result.entries[0].group[0]);
+    query_page(group.group,&query,&result);assert(result.count==1 && result.entries[0].disc==2 && strstr(result.entries[0].path,"Disc 2/"));
+    unsigned offset=777;assert(kui_games_library_find_query("/Games",group.group,result.entries[0].name,&query,&offset,log_line,cancel) && !offset);
+    kui_games_query_default(&query);assert(kui_games_library_jump_query("/Games","",'V',&query,&offset,log_line,cancel));
+    assert(kui_games_library_rows_query("/Games","",offset,KUI_GAMES_VIEW_LIST,&query,&result,log_line,cancel));assert(!strcmp(result.entries[0].path,verified.path));
+    assert(!kui_games_library_jump_query("/Games","",'Z',&query,&offset,log_line,cancel));
+    assert(test.block_reads==reads && test.opens==opens && test.readdirs==dirs && test.stats==stats && test.writes==writes);
+    clear();query.region=KUI_GAMES_REGION_USA;query_page("",&query,&result);assert(result.total==1 && !strcmp(result.entries[0].region,"JUE"));
+    puts("EVIDENCE cached text/region/disc queries and alphabet jumps performed zero block/file/discovery I/O; verified multi-region metadata survived cold reload");
+}
+static void editor_check(const char *name) {
+    struct kui_games_entry selected,group;assert(find("Standalone",&selected) && find("Skies of Arcadia",&group));
+    char real_path[KUI_GAMES_FILE_CAP];strcpy(real_path,selected.path);
+    struct kui_games_library_edit edit={0},readback;
+    if(!strcmp(name,"editor-corrupt")) {
+        strcpy(edit.alias,"First complete alias");assert(kui_games_library_set_edit("/Games","",real_path,&edit,log_line,cancel));
+        strcpy(edit.alias,"Second complete alias");assert(kui_games_library_set_edit("/Games","",real_path,&edit,log_line,cancel));
+        corrupt("0:/KUI/games-library/metadata-b.bin","BROKEN!!");clear();
+        assert(kui_games_library_get_edit("/Games","",real_path,&readback,log_line) && !strcmp(readback.alias,"First complete alias"));
+        corrupt("0:/KUI/games-library/metadata-a.bin","BROKEN!!");clear();assert(find("Standalone",&selected));
+        unsigned writes=test.writes;assert(!kui_games_library_set_edit("/Games","",real_path,&edit,log_line,cancel));assert(test.writes==writes);
+        puts("EVIDENCE corrupt newer metadata recovered the older alias; two corrupt slots did not overwrite metadata or hide All games");return;
+    }
+    strcpy(edit.alias,"AAA Custom Release");strcpy(edit.cover_path,"/KUI/covers/assigned.png");
+    assert(kui_games_library_set_edit("/Games","",real_path,&edit,log_line,cancel));
+    assert(kui_games_library_get_edit("/Games","",real_path,&readback,log_line));
+    assert(!strcmp(readback.alias,edit.alias) && !strcmp(readback.cover_path,"/kui/covers/assigned.png"));
+    assert(find("Standalone",&selected) && !strcmp(selected.path,real_path) && !strcmp(selected.name,"Standalone") &&
+        selected.custom_title && !strcmp(selected.title,edit.alias) && !strcmp(selected.cover_path,readback.cover_path));
+    if(!strcmp(name,"editor-write-fail")) {
+        test.fail_write=true;strcpy(edit.alias,"Rejected replacement");
+        assert(!kui_games_library_set_edit("/Games","",real_path,&edit,log_line,cancel));
+        assert(kui_games_library_get_edit("/Games","",real_path,&readback,log_line) && !strcmp(readback.alias,"AAA Custom Release"));
+        test.fail_write=false;clear();assert(kui_games_library_get_edit("/Games","",real_path,&readback,log_line));
+        assert(!strcmp(readback.alias,"AAA Custom Release"));puts("EVIDENCE failed metadata write kept the old alias and cover in RAM and after cold reload");return;
+    }
+    struct kui_games_query query;kui_games_query_default(&query);strcpy(query.text,"CUSTOM");struct kui_games_page result;
+    unsigned opens=test.opens,reads=test.block_reads;query_page("",&query,&result);
+    assert(result.count==1 && !strcmp(result.entries[0].path,real_path));unsigned offset=99;query.text[0]=0;
+    assert(kui_games_library_jump_query("/Games","",'A',&query,&offset,log_line,cancel) && !offset);
+    assert(test.opens==opens && test.block_reads==reads);
+    uint16_t *pixels=malloc(KUI_COVER_PIXELS*sizeof(*pixels));assert(pixels);struct kui_games_cover_result cover;
+    assert(kui_games_selected_cover(&selected,KUI_COVER_SIZE_SMALL,pixels,&cover,log_line,cancel) && cover.cover && !strcmp(cover.title,edit.alias));
+    for(unsigned i=0;i<KUI_COVER_SMALL*KUI_COVER_SMALL;i++)assert(pixels[i]==0xf800u);
+    opens=test.opens;reads=test.block_reads;memset(pixels,0,KUI_COVER_PIXELS*sizeof(*pixels));
+    assert(kui_games_selected_cover(&selected,KUI_COVER_SIZE_SMALL,pixels,&cover,log_line,cancel) && cover.cover);
+    assert(test.opens==opens && test.block_reads==reads && pixels[0]==0xf800u);free(pixels);
+    strcpy(edit.alias,"Do not publish invalid art");strcpy(edit.cover_path,"/kui/covers/bad.png");
+    assert(!kui_games_library_set_edit("/Games","",real_path,&edit,log_line,cancel));
+    assert(kui_games_library_get_edit("/Games","",real_path,&readback,log_line) && !strcmp(readback.alias,"AAA Custom Release"));
+    test.cancelled=true;assert(!kui_games_library_set_edit("/Games","",real_path,&edit,log_line,cancel));test.cancelled=false;
+    edit=(struct kui_games_library_edit){0};strcpy(edit.alias,"Air Pirates");
+    assert(kui_games_library_set_edit("/Games",group.group,group.path,&edit,log_line,cancel));
+    strcpy(query.text,"air pirates");query_page("",&query,&result);
+    assert(result.total==1 && !strcmp(result.entries[0].group,group.group) && !strcmp(result.entries[0].path,group.path));
+    query_page(group.group,&query,&result);assert(result.count==2 && !strcmp(result.group_name,"Air Pirates") &&
+        result.entries[0].disc==1 && result.entries[1].disc==2 && !strcmp(result.entries[0].title,"Disc 1"));
+    clear();assert(find("Standalone",&selected) && !strcmp(selected.path,real_path) && !strcmp(selected.title,"AAA Custom Release"));
+    assert(kui_games_library_get_edit("/Games",group.group,group.path,&readback,log_line) && !strcmp(readback.alias,"Air Pirates"));
+    puts("EVIDENCE aliases and valid assigned PNG pixels round-tripped without changing real paths; cached queries/art stayed in RAM; invalid art/cancel stayed unpublished; group aliases kept the disc chooser");
+}
+static void move_verified(bool change_content) {
+    assert(kui_games_library_invalidate("/Games",log_line));
+    assert(kui_games_storage_release());test.active=false;mounted(true);
+    if(change_content) {
+        FIL file;UINT got=0,put=0;uint8_t byte;
+        assert(f_open(&file,"0:/Games/Verified/track03.bin",FA_READ|FA_WRITE)==FR_OK);
+        assert(f_lseek(&file,48u*2352u+16u+77u)==FR_OK && f_read(&file,&byte,1,&got)==FR_OK && got==1);
+        byte^=0x5a;assert(f_lseek(&file,48u*2352u+16u+77u)==FR_OK && f_write(&file,&byte,1,&put)==FR_OK && put==1);
+        assert(f_close(&file)==FR_OK);
+    }
+    assert(f_rename("0:/Games/Verified","0:/Games/Moved")==FR_OK);
+    mounted(false);test.active=true;assert(kui_games_library_scan("/Games",false,log_line,cancel));
+}
+static void replace_with_cooked(void) {
+    assert(kui_games_library_invalidate("/Games",log_line));
+    assert(kui_games_storage_release());test.active=false;mounted(true);
+    assert(f_rename("0:/Games/Verified","0:/Staging/RawKept")==FR_OK);
+    assert(f_rename("0:/Staging/Cooked","0:/Games/Moved")==FR_OK);
+    mounted(false);test.active=true;assert(kui_games_library_scan("/Games",false,log_line,cancel));
+}
+static void identity_pair_check(void) {
+    struct kui_games_entry group;assert(find("Skies of Arcadia",&group));struct kui_games_page discs;
+    assert(kui_games_library_rows("/Games",group.group,0,KUI_GAMES_VIEW_LIST,&discs,log_line,cancel));
+    assert(discs.count==2 && discs.entries[1].variant_2048_path[0]);
+    char raw[KUI_GAMES_FILE_CAP],cooked[KUI_GAMES_FILE_CAP],anchor[KUI_GAMES_FILE_CAP];
+    strcpy(raw,discs.entries[1].path);strcpy(cooked,discs.entries[1].variant_2048_path);
+    struct kui_games_activity_entry raw_key,cooked_key;
+    assert(kui_games_activity_key(&raw_key,raw,"") && kui_games_activity_key(&cooked_key,cooked,""));
+    assert(kui_games_library_verify_identity("/Games",raw,KUI_ZSO_LZ4,anchor,log_line,cancel) && !strcmp(anchor,raw_key.path));
+    assert(kui_games_library_verify_identity("/Games",cooked,KUI_ZSO_LZ4,anchor,log_line,cancel) && !strcmp(anchor,cooked_key.path));
+    assert(strcmp(raw_key.path,cooked_key.path));
+    struct kui_game_launch_settings a,b,loaded;kui_game_launch_settings_default(&a);kui_game_launch_settings_default(&b);
+    a.reader=KUI_GAME_READER_BACKGROUND;a.vmu_slot=KUI_GAME_VMU_SLOT_A1;
+    assert(kui_games_storage_open(log_line)==KUI_GAMES_STORAGE_OK && kui_game_launch_settings_save(raw_key.path,&a,log_line) &&
+        kui_game_launch_settings_save(cooked_key.path,&b,log_line));assert(kui_games_storage_done(true));
+    assert(kui_games_library_settings_path(raw,anchor,log_line) && !strcmp(anchor,raw_key.path));
+    assert(kui_games_storage_open(log_line)==KUI_GAMES_STORAGE_OK && kui_game_launch_settings_load(anchor,&loaded,log_line));
+    assert(kui_games_storage_done(true) && loaded.reader==a.reader && loaded.vmu_slot==a.vmu_slot);
+    assert(kui_games_library_settings_path(cooked,anchor,log_line) && !strcmp(anchor,cooked_key.path));
+    assert(kui_games_storage_open(log_line)==KUI_GAMES_STORAGE_OK && kui_game_launch_settings_load(anchor,&loaded,log_line));
+    assert(kui_games_storage_done(true) && loaded.reader==b.reader && loaded.vmu_slot==b.vmu_slot);
+    clear();assert(kui_games_library_settings_path(raw,anchor,log_line) && !strcmp(anchor,raw_key.path));
+    assert(kui_games_library_settings_path(cooked,anchor,log_line) && !strcmp(anchor,cooked_key.path));
+    puts("EVIDENCE paired Original/2048 images verified independently and kept distinct reader/VMU settings anchors across cold reload");
+}
+static void identity_check(const char *name) {
+    if(!strcmp(name,"identity-pair")) {identity_pair_check();return;}
+    struct kui_games_entry selected,copy;assert(find("Verified",&selected) && find("Copy",&copy));
+    char anchor[KUI_GAMES_FILE_CAP],original_path[KUI_GAMES_FILE_CAP];strcpy(original_path,selected.path);
+    assert(kui_games_library_verify_identity("/Games",original_path,KUI_ZSO_LZ4,anchor,log_line,cancel));
+    assert(!strcmp(anchor,"/games/verified/disc.gdi"));
+    struct kui_games_library_edit edit={0};strcpy(edit.alias,"Remembered verified game");strcpy(edit.cover_path,"/kui/covers/assigned.png");
+    assert(kui_games_library_set_edit("/Games","",original_path,&edit,log_line,cancel));
+    assert(kui_games_library_favorite_toggle("/Games","",original_path,log_line));
+    struct kui_games_activity_entry activity_key;assert(kui_games_library_activity_key("/Games",original_path,&activity_key,log_line));
+    assert(kui_games_library_record_played(&activity_key,log_line));
+    struct kui_game_launch_settings settings,loaded;kui_game_launch_settings_default(&settings);settings.reader=KUI_GAME_READER_BACKGROUND;
+    settings.encoding=KUI_GAME_ENCODING_PLAIN;settings.vmu_slot=KUI_GAME_VMU_SLOT_A1;
+    assert(kui_games_storage_open(log_line)==KUI_GAMES_STORAGE_OK && kui_game_launch_settings_save(anchor,&settings,log_line));assert(kui_games_storage_done(true));
+    bool duplicate=!strcmp(name,"identity-duplicate"),changed=!strcmp(name,"identity-changed");
+    bool representation=!strcmp(name,"identity-representation"),legacy=!strcmp(name,"identity-legacy");
+    if(duplicate) {
+        char copy_anchor[KUI_GAMES_FILE_CAP];assert(kui_games_library_verify_identity("/Games",copy.path,KUI_ZSO_LZ4,copy_anchor,log_line,cancel));
+        assert(!strcmp(copy_anchor,"/games/copy/disc.gdi") && find("Copy",&copy) && !copy.favorite && !copy.custom_title);
+    }
+    if(legacy) {
+        struct kui_games_metadata *old=malloc(sizeof(*old));assert(old && kui_games_storage_open(log_line)==KUI_GAMES_STORAGE_OK);
+        assert(kui_games_metadata_load(old,log_line));const struct kui_games_metadata_entry *record=kui_games_metadata_find(old,original_path,"");
+        assert(record && record->verified);old->entries[record-old->entries].representation=0;
+        assert(kui_games_metadata_save(old,log_line) && kui_games_storage_done(true));free(old);clear();
+    }
+    if(representation)replace_with_cooked();else move_verified(changed);
+    assert(find("Moved",&selected));
+    if(!strcmp(name,"identity-conflict")) {
+        assert(kui_games_library_favorite_toggle("/Games","",selected.path,log_line));
+        assert(kui_games_library_activity_key("/Games",selected.path,&activity_key,log_line) &&
+            kui_games_library_record_played(&activity_key,log_line));
+        unsigned writes=test.writes;strcpy(anchor,"unchanged");
+        assert(!kui_games_library_verify_identity("/Games",selected.path,KUI_ZSO_LZ4,anchor,log_line,cancel));
+        assert(!strcmp(anchor,"unchanged") && test.writes==writes);
+        assert(kui_games_library_get_edit("/Games","",selected.path,&edit,log_line) && !edit.alias[0] && !edit.cover_path[0]);
+        assert(kui_games_library_settings_path(selected.path,anchor,log_line) && !strcmp(anchor,"/games/moved/disc.gdi"));
+        struct kui_games_activity *kept=malloc(sizeof(*kept));assert(kept && kui_games_storage_open(log_line)==KUI_GAMES_STORAGE_OK);
+        assert(kui_games_activity_load(kept,log_line));
+        const struct kui_games_activity_entry *old_activity=kui_games_activity_find(kept,original_path,"");
+        const struct kui_games_activity_entry *new_activity=kui_games_activity_find(kept,selected.path,"");
+        assert(old_activity && old_activity->favorite && old_activity->played &&
+            new_activity && new_activity->favorite && new_activity->played && kept->count==2);
+        assert(kui_games_storage_done(true));free(kept);
+        clear();assert(find("Moved",&selected) && selected.favorite && !selected.custom_title);
+        puts("EVIDENCE independent destination activity blocked automatic identity rebind without writes, hiding preferences or losing the destination favorite");return;
+    }
+    assert(kui_games_library_verify_identity("/Games",selected.path,KUI_ZSO_LZ4,anchor,log_line,cancel));
+    struct kui_games_page result;
+    assert(kui_games_library_rows_filter("/Games","",0,KUI_GAMES_VIEW_LIST,KUI_GAMES_FILTER_FAVORITES,&result,log_line,cancel));
+    if(duplicate || changed || representation || legacy) {
+        assert(!strcmp(anchor,"/games/moved/disc.gdi") && !result.count && find("Moved",&selected) && !selected.favorite && !selected.custom_title);
+        assert(kui_games_library_get_edit("/Games","",selected.path,&edit,log_line) && !edit.alias[0] && !edit.cover_path[0]);
+        puts(duplicate?"EVIDENCE two registered equal identities prevented ambiguous move inheritance; duplicate/new paths kept separate preferences":
+            representation?"EVIDENCE cooked replacement with equal canonical payload kept a new settings anchor instead of inheriting raw-image reader/favorite choices":
+            legacy?"EVIDENCE legacy verified metadata with unknown representation remained readable but did not automatically rebind moved preferences":
+            "EVIDENCE changed whole-image content did not inherit another path's favorite, recent history, alias, cover or settings anchor");return;
+    }
+    assert(!strcmp(anchor,"/games/verified/disc.gdi") && result.count==1 && !strcmp(result.entries[0].path,selected.path));
+    assert(result.entries[0].favorite && !strcmp(result.entries[0].title,"Remembered verified game"));
+    assert(kui_games_library_rows_filter("/Games","",0,KUI_GAMES_VIEW_LIST,KUI_GAMES_FILTER_RECENT,&result,log_line,cancel));
+    assert(result.count==1 && !strcmp(result.entries[0].path,selected.path));
+    char resolved[KUI_GAMES_FILE_CAP];assert(kui_games_library_settings_path(selected.path,resolved,log_line) && !strcmp(resolved,anchor));
+    assert(kui_games_storage_open(log_line)==KUI_GAMES_STORAGE_OK && kui_game_launch_settings_load(resolved,&loaded,log_line));assert(kui_games_storage_done(true));
+    assert(loaded.reader==settings.reader && loaded.encoding==settings.encoding && loaded.vmu_slot==settings.vmu_slot);
+    assert(!kui_games_library_settings_path(original_path,resolved,log_line));
+    clear();assert(find("Moved",&selected) && selected.favorite && !strcmp(selected.title,"Remembered verified game"));
+    assert(kui_games_library_settings_path(selected.path,resolved,log_line) && !strcmp(resolved,anchor));
+    puts("EVIDENCE explicit whole-image verified move preserved favorite, recent launch, alias, assigned cover and existing launch settings through the stable anchor; real paths stayed current");
+}
+static unsigned read16(const uint8_t *p) {return p[0]|(unsigned)p[1]<<8;}
+static void write16(uint8_t *p,unsigned n) {p[0]=(uint8_t)n;p[1]=(uint8_t)(n>>8);}
+static void write32(uint8_t *p,uint32_t n) {for(unsigned i=0;i<4;i++)p[i]=(uint8_t)(n>>(8*i));}
+static void catalogue_v2_check(void) {
+    assert(kui_games_storage_release());test.active=false;mounted(true);char path[128];index_path(path,0);
+    FIL file;UINT got=0;assert(f_open(&file,path,FA_READ)==FR_OK);size_t bytes=(size_t)f_size(&file);
+    uint8_t *newer=malloc(bytes),*older=calloc(1,bytes);assert(newer && older);
+    assert(f_read(&file,newer,(UINT)bytes,&got)==FR_OK && got==bytes && f_close(&file)==FR_OK);
+    assert(!memcmp(newer,"KUIGLIB3",8));memcpy(older,newer,96);memcpy(older,"KUIGLIB2",8);write32(older+8,2);
+    unsigned root=read16(newer+64),count=read16(newer+66);memcpy(older+96,newer+96,root);size_t source=96u+root,target=source;
+    for(unsigned i=0;i<count;i++) {
+        unsigned sizes[5];for(unsigned j=0;j<5;j++)sizes[j]=read16(newer+source+2*j);
+        for(unsigned j=0;j<4;j++)write16(older+target+2*j,sizes[j]);
+        older[target+8]=newer[source+10];
+        source+=16;target+=12;
+        for(unsigned j=0;j<5;j++) {if(j<4) {memcpy(older+target,newer+source,sizes[j]);target+=sizes[j];}source+=sizes[j];}
+    }
+    assert(source==bytes);write32(older+12,(uint32_t)target);write32(older+68,kui_crc32(0,older+96,target-96));write32(older+72,kui_crc32(0,older,72));
+    write_file(path,older,target);free(newer);free(older);mounted(false);test.active=true;clear();cold_check();
+    struct kui_games_query query;kui_games_query_default(&query);query.region=KUI_GAMES_REGION_UNKNOWN;struct kui_games_page page;
+    query_page("",&query,&page);assert(page.total==16);
+    test.fail_write=true;assert(!kui_games_library_scan("/Games",false,log_line,cancel));test.fail_write=false;clear();cold_check();
+    assert(kui_games_library_scan("/Games",false,log_line,cancel));clear();cold_check();
+    assert(kui_games_storage_release());test.active=false;mounted(true);index_path(path,1);uint8_t magic[8];
+    assert(f_open(&file,path,FA_READ)==FR_OK && f_read(&file,magic,sizeof(magic),&got)==FR_OK && got==sizeof(magic));
+    assert(f_close(&file)==FR_OK && !memcmp(magic,"KUIGLIB3",8));mounted(false);test.active=true;
+    puts("EVIDENCE v2 saved catalogue cold-loaded without discovery I/O, survived failed upgrade and upgraded atomically to v3 on explicit scan");
+}
 static void check(const char *name) {
     test.active=true;
     if(!strcmp(name,"first-write-fail")) {
@@ -317,6 +537,10 @@ static void check(const char *name) {
     } else {
         assert(kui_games_library_scan("/Games",false,log_line,cancel));assert(kui_games_library_ready("/Games"));
         if(!strncmp(name,"activity",8))activity_check(name);
+        else if(!strcmp(name,"query"))query_check();
+        else if(!strncmp(name,"editor",6))editor_check(name);
+        else if(!strncmp(name,"identity-",9))identity_check(name);
+        else if(!strcmp(name,"catalogue-v2"))catalogue_v2_check();
         else if(!strcmp(name,"cold") || !strcmp(name,"groups"))cold_check();
         else if(!strcmp(name,"stale")) {
             add_game(true);assert(find("Standalone",NULL) && !find("New Arrival",NULL));clear();

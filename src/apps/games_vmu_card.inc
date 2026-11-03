@@ -8,8 +8,36 @@
 #include "kui/clock.h"
 #include "kui/vmu_native_toggle.h"
 #include "kui/vmu_native_mode.h"
+#include "kui/vmu_history.h"
 
-struct games_card_platform {FATFS *fs;struct kui_volume volume;struct kui_media_ops raw;};
+struct games_card_platform {FATFS *fs;struct kui_volume volume;struct kui_media_ops raw;char history_problem[128];};
+static int games_card_history(void *context,enum kui_vmu_game_card_boundary_phase phase,
+    const char *product,unsigned pair,const uint8_t identity[16],
+    const struct kui_vmu_game_candidates_storage *storage,kui_log_fn log,kui_cancel_fn cancel) {
+    struct games_card_platform *p=context;
+    if(phase==KUI_VMU_GAME_CARD_BEFORE_CREATE) {
+        int checked=kui_vmu_history_allocation_mounted(cancel);
+        if(checked<0) {
+            snprintf(p->history_problem,sizeof(p->history_problem),"VMU history allocation is not safe; card creation refused");
+            log("Virtual card history: %s",p->history_problem);
+        }
+        return checked>=0?KUI_VMU_GAME_CARD_READY:
+            checked==KUI_VMU_HISTORY_CANCELLED?KUI_VMU_GAME_CARD_CANCELLED:KUI_VMU_GAME_CARD_FAILED;
+    }
+    if(phase!=KUI_VMU_GAME_CARD_RESOLVED || !pair || !identity)return KUI_VMU_GAME_CARD_FAILED;
+    struct kui_vmu_game_selection card={.pair=pair,.storage=*storage,.selected=true};
+    memcpy(card.product,product,sizeof(card.product));memcpy(card.identity,identity,16u);
+    struct kui_vmu_history_view *view=calloc(1,sizeof(*view));
+    if(!view){snprintf(p->history_problem,sizeof(p->history_problem),"not enough memory for VMU history");return KUI_VMU_GAME_CARD_FAILED;}
+    int result=kui_vmu_history_launch_mounted(&card,view,log,cancel);
+    if(result<0) {
+        snprintf(p->history_problem,sizeof(p->history_problem),"%s",view->notice[0]?view->notice:
+            "VMU history could not be verified; inspect history before launching");
+        log("Virtual card history: %s",p->history_problem);
+    }
+    free(view);return result>=0?KUI_VMU_GAME_CARD_READY:
+        result==KUI_VMU_HISTORY_CANCELLED?KUI_VMU_GAME_CARD_CANCELLED:KUI_VMU_GAME_CARD_FAILED;
+}
 static int games_card_read(void *context,uint32_t lba,uint8_t out[512]) {
     struct games_card_platform *p=context;
     return p->raw.read && !p->raw.read(p->raw.ctx,lba,1u,out)?0:-1;
@@ -141,7 +169,7 @@ static bool games_card_prepare_selected(const struct kui_retail_manifest *map,st
         const struct kui_retail_extent *e=&map->slots[map->track_count+i].extent;
         forbidden[i]=(struct kui_vmu_fs_range){e->card_lba,e->blocks};
     }
-    struct games_card_platform context={fs,*kui_media_volume(),{0}};
+    struct games_card_platform context={.fs=fs,.volume=*kui_media_volume()};
     const struct kui_vmu_game_card_platform platform={&context,games_card_identity,games_card_raw_begin,
         games_card_raw_end,games_card_salt};
     struct kui_vmu_game_card_choice choice;
@@ -153,11 +181,11 @@ static bool games_card_prepare_selected(const struct kui_retail_manifest *map,st
         }
         struct kui_vmu_game_candidate_target target={.pair=selection->pair};
         memcpy(target.identity,selection->identity,16u);
-        result=kui_vmu_game_card_select_exact(map->product,&target,&selection->storage,
+        result=kui_vmu_game_card_select_boundary(map->product,&target,&selection->storage,
             map->partition_start,map->partition_end,forbidden,map->extent_count,
-            &platform,work,wire,&choice,log,cancel);
-    } else result=kui_vmu_game_card_select(map->product,map->partition_start,map->partition_end,
-        forbidden,map->extent_count,&platform,work,wire,&choice,log,cancel);
+            &platform,work,wire,&choice,games_card_history,&context,log,cancel);
+    } else result=kui_vmu_game_card_select_boundary(map->product,NULL,NULL,map->partition_start,map->partition_end,
+        forbidden,map->extent_count,&platform,work,wire,&choice,games_card_history,&context,log,cancel);
     bool ok=false;
     if(result==KUI_VMU_GAME_CARD_READY) {
         memcpy((uint8_t *)package->data+slot,wire,KUI_VMU_PERSIST_PROFILE_WIRE_BYTES);ok=true;
@@ -169,7 +197,8 @@ static bool games_card_prepare_selected(const struct kui_retail_manifest *map,st
     } else if(result==KUI_VMU_GAME_CARD_CHOICE_REQUIRED) *problem="choose a virtual VMU in game options before launching";
     else if(result==KUI_VMU_GAME_CARD_CANCELLED) *problem="cancelled while preparing the virtual card";
     else {
-        snprintf(refusal,sizeof(refusal),"virtual card: %s",choice.problem);
+        if(context.history_problem[0])snprintf(refusal,sizeof(refusal),"%s",context.history_problem);
+        else snprintf(refusal,sizeof(refusal),"virtual card: %s",choice.problem);
         *problem=refusal;
     }
     free(work);free(forbidden);free(wire);

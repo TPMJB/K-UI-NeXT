@@ -661,7 +661,7 @@ build/test-settings: tests/test_settings.c src/core/settings.c src/core/data.c i
 
 build/test-shell: $(DRIVE_CONTROLS) $(SALVAGE_DISPLAY) include/kui/games_selection.h include/kui/zso.h include/kui/game_launch_settings.h src/core/wifi_text.c include/kui/network_wifi.h $(STORAGE_TEST_MODEL) include/kui/storage_test.h include/kui/storage_error.h src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c include/kui/destination.h tests/test_shell.c src/core/games_selection.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc src/dreamcast/shell_art.inc include/kui/shell_font.h src/core/settings.c src/core/data.c include/kui/shell.h include/kui/settings.h .deps/fatfs/source/ff.h include/kui/game_ram_patches.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(STORAGE_TEST_MODEL) src/core/wifi_text.c src/core/destination.c src/core/files_path.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/games_selection.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c src/core/settings.c src/core/data.c src/core/salvage_display.c src/core/drive_controls.c tests/test_shell.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $(STORAGE_TEST_MODEL) src/core/wifi_text.c src/core/destination.c src/core/files_path.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/games_selection.c src/core/game_profile.c src/core/hash.c src/core/games_query.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c src/core/settings.c src/core/data.c src/core/salvage_display.c src/core/drive_controls.c tests/test_shell.c -o $@
 
 build/test-shell-font: tests/test_shell_font.c src/dreamcast/shell_font.c src/dreamcast/shell_font_data.inc include/kui/shell_font.h
 	@mkdir -p $(@D)
@@ -669,7 +669,7 @@ build/test-shell-font: tests/test_shell_font.c src/dreamcast/shell_font.c src/dr
 
 build/render-shell: $(DRIVE_CONTROLS) $(SALVAGE_DISPLAY) include/kui/games_selection.h include/kui/zso.h include/kui/game_launch_settings.h src/core/wifi_text.c include/kui/network_wifi.h $(STORAGE_TEST_MODEL) include/kui/storage_test.h include/kui/storage_error.h src/core/files_path.c include/kui/files.h include/kui/version.h src/core/clock.c src/apps/system_settings.c include/kui/system_settings.h src/core/destination.c src/core/data.c include/kui/destination.h tests/render_shell.c src/core/games_selection.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/shell.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/dreamcast/shell_art.inc src/dreamcast/shell_font_data.inc include/kui/shell.h include/kui/shell_font.h include/kui/game_ram_patches.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(INCLUDES) $(STORAGE_TEST_MODEL) src/core/wifi_text.c src/core/destination.c src/core/files_path.c src/core/data.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/games_selection.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c src/core/salvage_display.c src/core/drive_controls.c tests/render_shell.c -o $@
+	$(CC) $(HOST_FLAGS) $(INCLUDES) $(STORAGE_TEST_MODEL) src/core/wifi_text.c src/core/destination.c src/core/files_path.c src/core/data.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/games_selection.c src/core/game_profile.c src/core/hash.c src/core/games_query.c src/core/shell.c src/core/clock.c src/dreamcast/shell_draw.c src/dreamcast/shell_font.c src/apps/system_settings.c src/core/salvage_display.c src/core/drive_controls.c tests/render_shell.c -o $@
 
 build/test-capture-adapter: src/core/destination.c src/core/data.c include/kui/destination.h tests/test_capture_adapter.c src/dreamcast/capture.c src/dreamcast/platform.h include/kui/capture.h .deps/fatfs/source/ff.h
 	@mkdir -p $(@D)
@@ -1008,9 +1008,12 @@ build/test-cover-image: tests/test_cover_image.c src/apps/cover_image.c include/
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests src/apps/cover_image.c tests/test_cover_image.c -o $@
 
-GAMES = src/apps/games.c src/apps/games_storage.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c src/core/game_metadata.c src/core/destination.c src/core/storage_probe.c src/core/hash.c
-GAMES_COVERS = $(GAMES) src/core/game_launch_settings.c src/core/game_ram_patches.c src/apps/game_launch_settings_file.c src/apps/games_covers.c src/apps/cover_image.c src/core/game_cover.c src/core/pvr_texture.c src/core/retail_image.c
+GAMES = src/apps/games.c src/apps/games_storage.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c src/core/game_metadata.c src/core/destination.c src/core/storage_probe.c src/core/hash.c src/core/game_profile.c src/apps/game_profile_file.c src/core/game_launch_settings.c src/core/game_ram_patches.c
+GAMES_COVERS = $(sort $(GAMES) src/apps/game_launch_settings_file.c src/apps/games_covers.c src/apps/cover_image.c src/core/game_cover.c src/core/pvr_texture.c src/core/retail_image.c)
 GAMES_ACTIVITY = src/core/games_activity.c src/apps/games_activity_file.c
+GAMES_LIBRARY_EXTRA = src/core/games_query.c src/core/games_metadata.c src/apps/games_metadata_file.c src/apps/games_identity.c
+
+build/test-shell build/render-shell: src/core/game_profile.c src/core/hash.c src/core/games_query.c include/kui/game_profile.h include/kui/games_query.h
 
 .PHONY: test-screenshots
 test-screenshots: build/test-screenshot build/test-screenshot-file
@@ -1037,9 +1040,9 @@ build/test-games-group: tests/test_games_group.c src/core/games_group.c include/
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/games_group.c src/core/destination.c src/core/data.c tests/test_games_group.c -o $@
 
 GAMES_LIBRARY_WRAP = -Wl,--wrap=f_open,--wrap=f_close,--wrap=f_read,--wrap=f_write,--wrap=f_opendir,--wrap=f_closedir,--wrap=f_readdir,--wrap=f_stat,--wrap=f_mkdir,--wrap=f_unlink,--wrap=f_rename
-build/games-library-image: tests/games_library_image.c $(GAMES_COVERS) $(GAMES_ACTIVITY) src/apps/games_library.c src/core/games_group.c include/kui/games_library.h include/kui/games_group.h $(CORE) $(FATFS)
+build/games-library-image: tests/games_library_image.c $(GAMES_COVERS) $(GAMES_ACTIVITY) $(GAMES_LIBRARY_EXTRA) src/apps/games_library.c src/core/games_group.c include/kui/games_library.h include/kui/games_group.h $(CORE) $(FATFS)
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast $(GAMES_COVERS) $(GAMES_ACTIVITY) src/apps/games_library.c src/core/games_group.c $(CORE) $(FATFS) tests/games_library_image.c $(GAMES_LIBRARY_WRAP) -lm -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast $(GAMES_COVERS) $(GAMES_ACTIVITY) $(GAMES_LIBRARY_EXTRA) src/apps/games_library.c src/core/games_group.c $(CORE) $(FATFS) tests/games_library_image.c $(GAMES_LIBRARY_WRAP) -lm -o $@
 
 .PHONY: test-games-library
 test-games-library: build/test-games-group build/games-library-image build/test-shell build/test-games-activity
@@ -1080,7 +1083,7 @@ build/test-wifi-update: tests/test_wifi_update.c src/apps/wifi_update.c include/
 # The FTP server: protocol pieces alone, then end to end on the W5500 model
 # and the Wi-Fi board model with real FatFs, driven by Python's ftplib
 # (tests/test_ftp_images.py).
-FTP = src/apps/ftp_server.c src/core/ftp_protocol.c src/core/files_path.c src/core/destination.c src/core/storage_probe.c \
+FTP = src/apps/ftp_server.c src/apps/browser_companion.c src/core/http_protocol.c src/core/ftp_protocol.c src/core/files_path.c src/core/destination.c src/core/storage_probe.c \
       src/core/w5500.c src/apps/network_w5500.c src/apps/network_probe.c src/apps/network_wifi.c src/core/wifi_text.c $(WIFI_LINK)
 FTP_WRAP = -Wl,--wrap=f_open,--wrap=f_close,--wrap=f_opendir,--wrap=f_closedir,--wrap=f_rename,--wrap=f_write
 build/test-ftp: tests/test_ftp.c src/core/ftp_protocol.c src/core/files_path.c src/core/destination.c src/core/data.c include/kui/ftp.h include/kui/files.h .deps/fatfs/source/ff.h
@@ -1092,6 +1095,56 @@ build/test-ftp-cleanup: tests/test_ftp_cleanup.c src/apps/ftp_server.c include/k
 build/ftp-image: tests/ftp_image.c $(FTP) $(CORE) $(FATFS) $(W5500_MODEL) $(WIFI_MODEL) $(WIFI_HEADERS) include/kui/ftp.h include/kui/w5500.h include/kui/network_w5500.h include/kui/files.h config/ffconf.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast -Ifirmware/kui-wifi/main -Itests $(FTP) $(CORE) $(FATFS) tests/w5500_model.c $(WIFI_MODEL) tests/ftp_image.c $(FTP_WRAP) -o $@
+
+build/browser-image: tests/browser_image.c tests/ftp_image.c $(FTP) $(CORE) $(FATFS) $(W5500_MODEL) $(WIFI_MODEL) $(WIFI_HEADERS) include/kui/browser.h include/kui/browser_service.h config/ffconf.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast -Ifirmware/kui-wifi/main -Itests $(FTP) $(CORE) $(FATFS) tests/w5500_model.c $(WIFI_MODEL) tests/browser_image.c $(FTP_WRAP) -o $@
+
+build/test-browser: tests/test_browser.c src/apps/browser_companion.c src/core/http_protocol.c src/core/files_path.c src/core/destination.c src/core/data.c include/kui/browser.h include/kui/browser_service.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) tests/test_browser.c src/apps/browser_companion.c src/core/http_protocol.c src/core/files_path.c src/core/destination.c src/core/data.c -o $@
+
+build/test-game-profile: tests/test_game_profile.c src/core/game_profile.c src/apps/game_profile_file.c src/core/hash.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/data.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $^ -o $@
+
+build/test-games-query: tests/test_games_query.c src/core/games_query.c include/kui/games_query.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) tests/test_games_query.c src/core/games_query.c -o $@
+
+build/test-games-metadata: tests/test_games_metadata.c src/core/games_metadata.c src/core/data.c include/kui/games_metadata.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) tests/test_games_metadata.c src/core/games_metadata.c src/core/data.c -o $@
+
+.PHONY: test-v3-medium
+test-v3-medium: export ASAN_OPTIONS=detect_leaks=0
+test-v3-medium: build/test-shell build/test-shell-font build/test-system-settings build/test-browser \
+    build/test-game-profile build/test-games-query build/test-games-metadata build/test-cover-image \
+    build/test-games-vmu-card build/test-vmu-game-candidates build/vmu-template-profile.bin \
+    build/browser-image build/games-library-image build/games-covers-image build/system-settings-image build/files-image
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-shell
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-shell-font
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-system-settings
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-browser
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-game-profile
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-games-query
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-games-metadata
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-cover-image
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-games-vmu-card build/vmu-template-profile.bin
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-game-candidates
+	python3 tests/test_companion_dispatch.py
+	python3 tests/test_frontend_job_fences.py
+	python3 tests/test_games_flow_dispatch.py
+	python3 tests/test_menu_lookup_dispatch.py
+	python3 tests/test_menu_frame_cache.py
+	python3 tests/test_browser_images.py
+	python3 tests/test_games_library_images.py
+	python3 tests/test_games_identity_images.py
+	python3 tests/test_games_covers_images.py
+	python3 tests/test_system_settings_images.py
+	python3 tests/test_files_images.py
+	python3 tests/test_vmu_history.py
+	python3 tests/test_problem_report_images.py
 build/games-covers-image: tests/games_covers_image.c $(GAMES_COVERS) $(CORE) $(FATFS) include/kui/games_covers.h include/kui/games.h include/kui/game_cover.h include/kui/pvr_texture.h include/kui/cover_image.h third_party/stb/stb_image.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast $(GAMES_COVERS) $(CORE) $(FATFS) tests/games_covers_image.c $(GAMES_COVERS_WRAP) -lm -o $@

@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* Owner-supplied box art: PNG or baseline/progressive JPEG, decoded in RAM
+/* Owner-supplied box art: PNG, BMP or baseline/progressive JPEG, decoded in RAM
  * by the pinned stb_image. The limits keep one decode well inside console
  * memory; box art larger than this should be resized on a PC first. */
 #define KUI_COVER_IMAGE_MAX_BYTES (3u * 1024u * 1024u)

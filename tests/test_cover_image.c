@@ -48,6 +48,19 @@ int main(void) {
         for(unsigned c = 0; c < 3; ++c) assert(abs(p[c] - want[c]) <= 12);
     }
     kui_cover_image_free(px);
+    /* The screenshot writer's uncompressed bottom-up 24-bit BMP form.
+     * Two padded rows establish BGR conversion and vertical orientation. */
+    const uint8_t bmp[70]={'B','M',70,0,0,0,0,0,0,0,54,0,0,0,40,0,0,0,
+        2,0,0,0,2,0,0,0,1,0,24,0,0,0,0,0,16,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        255,0,0,255,255,255,0,0,0,0,255,0,255,0,0,0};
+    assert(decode(bmp,sizeof(bmp),&w,&h,&ch,&px)==KUI_COVER_IMAGE_OK);
+    assert(w==2 && h==2 && ch==3 && px[0]==255 && !px[1] && !px[2]);
+    assert(!px[6] && !px[7] && px[8]==255);kui_cover_image_free(px);
+    for(size_t n=8;n<sizeof(bmp);n++) {
+        enum kui_cover_image_status status=decode(bmp,n,&w,&h,&ch,&px);
+        if(status==KUI_COVER_IMAGE_OK)kui_cover_image_free(px);
+        else assert(status==KUI_COVER_IMAGE_CORRUPT);
+    }
     /* Every truncation fails cleanly (sanitizers watch the reads). */
     for(size_t n = 0; n < sizeof(cover_png_rgb); n += n < 64 ? 1u : 37u) {
         uint8_t *copy = malloc(n ? n : 1);

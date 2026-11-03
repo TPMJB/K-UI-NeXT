@@ -42,14 +42,18 @@ static inline unsigned kui_ui_menu_wait_ms(bool busy,bool drew) {
 /* held contains only navigation bits; action buttons are never repeated.
  * An initial edge is already in pressed. Direction changes reset the hold
  * timer, while a late loop emits one step rather than a burst of catch-up. */
-static inline unsigned kui_ui_navigation_repeat(unsigned held,unsigned pressed,
-        unsigned *previous_held,uint64_t *repeat_at,uint64_t now_ms) {
+static inline unsigned kui_ui_navigation_repeat_configured(unsigned held,unsigned pressed,
+        unsigned *previous_held,uint64_t *repeat_at,uint64_t now_ms,unsigned delay_ms,unsigned interval_ms) {
     if(held!=*previous_held) {
-        *previous_held=held;*repeat_at=now_ms+250u;
+        *previous_held=held;*repeat_at=now_ms+delay_ms;
     } else if(held && now_ms>=*repeat_at) {
-        pressed|=held;*repeat_at=now_ms+80u;
+        pressed|=held;*repeat_at=now_ms+interval_ms;
     }
     return pressed;
+}
+static inline unsigned kui_ui_navigation_repeat(unsigned held,unsigned pressed,
+        unsigned *previous_held,uint64_t *repeat_at,uint64_t now_ms) {
+    return kui_ui_navigation_repeat_configured(held,pressed,previous_held,repeat_at,now_ms,250u,80u);
 }
 /* Games polls controls faster while idle without repainting the whole screen
  * on every poll. Input and completed listings/details appear immediately;

@@ -94,7 +94,7 @@ enum kui_files_kind kui_files_kind(const char *name, bool directory) {
     if(ends_with(name, ".gdi")) return KUI_FILES_KIND_GDI;
     if(ends_with(name, ".wav") || ends_with(name, ".ogg")) return KUI_FILES_KIND_AUDIO;
     if(ends_with(name, ".png") || ends_with(name, ".jpg") || ends_with(name, ".jpeg") ||
-       ends_with(name, ".pvr")) return KUI_FILES_KIND_PICTURE;
+       ends_with(name, ".pvr") || ends_with(name, ".bmp")) return KUI_FILES_KIND_PICTURE;
     return KUI_FILES_KIND_OTHER;
 }
 int kui_files_compare(bool a_directory, const char *a, bool b_directory, const char *b) {

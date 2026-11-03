@@ -5,6 +5,8 @@
 #include "kui/destination.h"
 #include "kui/game_cover.h"
 #include "kui/game_image.h"
+#include "kui/game_profile.h"
+#include "kui/games_query.h"
 #define KUI_GAMES_ROWS 8u
 #define KUI_GAMES_FILE_CAP KUI_DEST_PATH_CAP
 struct kui_games_entry {
@@ -18,6 +20,10 @@ struct kui_games_entry {
     /* What lists show: a cached disc title, else the folder/file name.
      * Empty from kui_games_list itself. cover is selected artwork only. */
     char title[KUI_COVER_TITLE_CAP];
+    /* Presentation only: assigned artwork and cached IP region. Real image
+     * paths and on-card directory names never change when edited. */
+    char cover_path[KUI_GAMES_FILE_CAP],region[9];
+    bool custom_title;
     /* A virtual disc set keeps its real root and representative image path.
      * Empty for ordinary rows. Disc members retain their own exact paths. */
     char group[33];
@@ -32,6 +38,7 @@ struct kui_games_page {
     /* Set by the cover loader: the view its pixels suit, and whether a box
      * art folder exists at all. */
     unsigned view,filter;
+    struct kui_games_query query;
     bool has_more, artwork,activity_notice;
     char root[KUI_DEST_ROOT_CAP], message[128];
     char group[33],group_name[KUI_DEST_NAME_CAP];
@@ -52,6 +59,9 @@ struct kui_games_detail {
     /* Known tested disc release, never inferred from a title string. Final
      * executable and native-runtime guards still run before handoff. */
     enum kui_game_cdda_compatibility cdda_compatibility;
+    /* Exact executable recommendations; evidence is historical and does not
+     * replace the stage's current runtime admission or user-saved choices. */
+    struct kui_game_profile_match profile;
     bool valid, stopped;
     /* Inspection is useful even when this loader cannot boot the image.
      * CD music is optional and uses checked runtime adapters; unfamiliar

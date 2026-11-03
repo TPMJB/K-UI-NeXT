@@ -284,6 +284,19 @@ static void check_scan(const char *host) {
     test.writes = 0;
     list(KUI_GAMES_VIEW_SAVED, &page);
     assert(!test.writes && page.view == KUI_GAMES_VIEW_GALLERY);
+    list(KUI_GAMES_VIEW_FLOW, &page);
+    assert(page.view == KUI_GAMES_VIEW_FLOW && !strcmp(kui_games_view_name(page.view),"flow") &&
+        kui_games_view_size(page.view)==KUI_COVER_SIZE_LARGE);
+    kui_games_covers_cache_clear();
+    test.writes=0;
+    list(KUI_GAMES_VIEW_SAVED,&page);
+    assert(!test.writes && page.view==KUI_GAMES_VIEW_FLOW);
+    entry(&page,"Twiddled Game",&row);
+    selected(&page,"Twiddled Game",KUI_COVER_SIZE_LARGE);
+    check_split(pixels[row],KUI_COVER_LARGE);
+    kui_games_covers_content_clear();
+    list(KUI_GAMES_VIEW_SAVED,&page);
+    assert(page.view==KUI_GAMES_VIEW_FLOW);
     list(KUI_GAMES_VIEW_COMPACT, &page);
     entry(&page, "Twiddled Game", &row);
     selected(&page,"Twiddled Game",KUI_COVER_SIZE_SMALL);
