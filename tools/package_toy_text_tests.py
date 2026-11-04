@@ -12,7 +12,7 @@ import zipfile
 
 from build_native_cdda_compat import TOY
 from check_decision_baselines import compare_bytes, entry_shape
-from check_native_cdda_compat import check_directory, config
+from check_native_cdda_compat import check_directory, config, image as checked_image
 from check_toy_report_export import check as check_export
 from check_loader_layout import inspect_elf
 from package_fmv_tests import checked_module
@@ -144,9 +144,16 @@ def main():
                 raise ValueError('Default-off entry load shape changed')
             parity = {}
             for name in ('worker', 'resident-sci', 'stage', 'entry'):
-                a, _ = flatten_elf((old/(name+'.elf')).read_bytes())
-                b, _ = flatten_elf((control/(name+'.elf')).read_bytes())
-                parity[name] = compare_bytes('Default-off '+name, a, b, old_id, build_id)
+                base, limit = {'worker': (0x8cfd0000, 0x8cfe0000),
+                    'resident-sci': (0x8c004000, 0x8c007800),
+                    'stage': (0x8ce00000, 0x8cfcffe0),
+                    'entry': (0x8c010000, 0x8c112000)}[name]
+                options = dict(private=name in ('worker', 'resident-sci'), worker=name=='worker')
+                a = checked_image(old, name, base, limit, **options)
+                b = checked_image(control, name, base, limit, **options)
+                if a['memory_end'] != b['memory_end']:
+                    raise ValueError('Default-off '+name+' memory extent changed')
+                parity[name] = compare_bytes('Default-off '+name, a['payload'], b['payload'], old_id, build_id)
             files['evidence/'+title+'-default-off-parity.json'] = wire(parity)
             print('Built/audited '+title, flush=True)
         runtime = args.gui_root/('build/toy-report-gui-'+label+'/runtime.kui')
