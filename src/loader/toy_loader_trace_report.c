@@ -3,6 +3,7 @@
 #if KUI_TOY_DECISION_PROFILE
 #include "kui/toy_pilot.h"
 #include "kui/toy_loader_trace_report.h"
+#include "kui/toy_report_export.h"
 #include "toy_pilot_sci.h"
 #include "retail_display.h"
 #include <string.h>
@@ -10,6 +11,9 @@ extern uint32_t kui_toy_pilot_request(uint32_t,uint32_t,uint32_t,uint32_t);
 extern const struct kui_toy_pilot_snapshot *kui_toy_pilot_snapshot(void);
 static struct retail_display_state stopped_display;
 static uint32_t stopped_words[16];
+#if KUI_TOY_TEXT_REPORT
+static int stopped_text_result;
+#endif
 void kui_toy_loader_trace_report_capture(const struct retail_display_state *display,
     const uint32_t *timing,const struct kui_retail_gd_diagnostics *diag) {
     (void)timing;(void)diag;stopped_display=*display;
@@ -22,8 +26,15 @@ void kui_toy_loader_trace_report_capture(const struct retail_display_state *disp
     const struct kui_toy_pilot_snapshot *p=kui_toy_pilot_snapshot();
     stopped_words[8]=p?p->state:UINT32_MAX;stopped_words[9]=p?p->fault:UINT32_MAX;
     stopped_words[10]=p?p->raw_bytes:0u;stopped_words[11]=p?p->updater_entries:0u;
+#if KUI_TOY_TEXT_REPORT
+    bool quiesced=kui_toy_pilot_sci_quiesce();
+    uint32_t reset=kui_toy_pilot_request(KUI_TOY_PILOT_RESET,0u,0u,0u);
+    stopped_text_result=kui_toy_report_export_save(kui_toy_decision_snapshot(),
+        stopped_words,quiesced && reset!=0u);
+#else
     (void)kui_toy_pilot_sci_quiesce();
     (void)kui_toy_pilot_request(KUI_TOY_PILOT_RESET,0u,0u,0u);
+#endif
 }
 const uint32_t *kui_toy_loader_trace_report_page(unsigned kind,unsigned page) {
     (void)kind;(void)page;return NULL;
@@ -32,6 +43,18 @@ void kui_toy_loader_trace_terminal(const struct retail_display_state *display,
     const uint32_t *timing,const struct kui_retail_gd_diagnostics *diag,uint32_t reserved) {
     (void)reserved;kui_toy_loader_trace_report_capture(display,timing,diag);
     const struct kui_toy_decision_report *r=kui_toy_decision_snapshot();
+#if KUI_TOY_TEXT_REPORT
+    for(;;) {
+        retail_display_restore(&stopped_display);
+        retail_display_line(stopped_text_result==KUI_REPORT_FILE_OK?
+            "REPORT TXT SAVED - POWER OFF":"REPORT TXT FAILED - RETAIN THIS SCREEN");
+        retail_display_line(r->enabled?"KUI/REPORTS/TOYOBS.TXT":"KUI/REPORTS/TOYCLEAN.TXT");
+        retail_display_hex("REPORT RESULT",(uint32_t)stopped_text_result);
+        uint32_t identity[4]={1u+r->enabled,r->enabled,r->frozen,r->count};
+        retail_display_values("PROFILE OBS FROZEN BINS",identity,4);
+        retail_display_pause(240u);
+    }
+#else
     for(;;) {
         retail_display_restore(&stopped_display);
         uint32_t identity[4]={1u+r->enabled,r->enabled,r->frozen,r->count};
@@ -62,6 +85,7 @@ void kui_toy_loader_trace_terminal(const struct retail_display_state *display,
             retail_display_pause(240u);
         }
     }
+#endif
 }
 #else
 /* SPDX-License-Identifier: GPL-3.0-only */

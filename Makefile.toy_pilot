@@ -30,6 +30,15 @@ FMV_TEST ?= 0
 FMV_IDLE_REARM ?= 0
 TOY_DEMAND_TEST_PROFILE ?= 0
 TOY_DECISION_PROFILE ?= 0
+TOY_TEXT_REPORT ?= 0
+ifneq ($(filter $(TOY_TEXT_REPORT),0 1),$(TOY_TEXT_REPORT))
+$(error TOY_TEXT_REPORT must be 0 or 1)
+endif
+ifeq ($(TOY_TEXT_REPORT),1)
+ifeq ($(filter $(TOY_DECISION_PROFILE),1 2),)
+$(error Toy text export requires decision profile 1 or 2)
+endif
+endif
 ifneq ($(filter $(TOY_DECISION_PROFILE),0 1 2),$(TOY_DECISION_PROFILE))
 $(error TOY_DECISION_PROFILE must be 0, 1 or 2)
 endif
@@ -258,6 +267,7 @@ FLAGS = -std=c11 -Os -g -Wall -Wextra -Werror $(CPU) \
  -DKUI_FMV_TEST=$(FMV_TEST) -DKUI_TOY_FMV_IDLE_REARM=$(FMV_IDLE_REARM) \
  -DKUI_TOY_DEMAND_TEST_PROFILE=$(TOY_DEMAND_TEST_PROFILE) \
  -DKUI_TOY_DECISION_PROFILE=$(TOY_DECISION_PROFILE) \
+ -DKUI_TOY_TEXT_REPORT=$(TOY_TEXT_REPORT) \
  $(if $(BUDGET_CONFIG),-DKUI_TOY_PILOT_DATA_BUDGET_PROFILE=$(DATA_BUDGET_PROFILE)) \
  $(if $(FOLLOWUP_CONFIG),-DKUI_TOY_PILOT_AD_FOLLOWUP_PROFILE=$(AD_FOLLOWUP_PROFILE)) \
  $(if $(TUNING_CONFIG),-DKUI_TOY_PILOT_DATA_TUNING_PROFILE=$(DATA_TUNING_PROFILE)) \
@@ -266,6 +276,10 @@ FLAGS = -std=c11 -Os -g -Wall -Wextra -Werror $(CPU) \
  -ffreestanding -fno-builtin -fno-stack-protector -fno-pic \
  -ffunction-sections -fdata-sections -fno-jump-tables -fstack-usage \
  -Iinclude -Isrc/loader -I$(BUILD) -DKUI_BUILD_ID='"$(BUILD_ID)"'
+ifeq ($(TOY_TEXT_REPORT),1)
+FLAGS += -DKUI_TOY_REPORT_STORAGE_BYTES=$(if $(filter 1,$(COOKED_DATA_PROFILE)),2048,2352)
+TOY_TEXT_CONFIG = TOY_REPORT_STORAGE_BYTES=$(if $(filter 1,$(COOKED_DATA_PROFILE)),2048,2352)
+endif
 BUS_ADMISSION = -include src/loader/toy_pilot_bus_admission.h
 LINK = $(CPU) -nostdlib -Wl,--gc-sections -Wl,--build-id=none
 RESIDENT_FLAGS = $(filter-out -Os,$(FLAGS)) $(RESIDENT_OPT) -flto -mrelax \
@@ -279,11 +293,20 @@ STAGE_SRC = src/loader/toy_pilot_stage.c src/loader/sd_reader.c src/loader/retai
  src/loader/retail_storage.c src/loader/sci_sd_bus.c src/core/ata.c src/dreamcast/ata_bus.c \
  src/loader/minic.c src/core/retail_image.c src/loader/retail_display.c \
  src/core/retail_observe.c src/core/hash.c
+ifeq ($(TOY_TEXT_REPORT),1)
+STAGE_SRC += src/loader/toy_report_binding.c src/core/report_file_admission.c \
+ src/core/report_file.c src/core/data.c src/loader/vmu_backing.c src/loader/report_stage_cache.c
+endif
 STAGE_OBJ = $(patsubst %.c,$(BUILD)/stage/%.o,$(STAGE_SRC)) $(BUILD)/stage_asm.o
 WORKER_SRC = src/loader/toy_pilot_worker.c src/loader/toy_pilot_bus.c src/loader/toy_pilot_lease.c \
  src/loader/toy_pilot_gd.c src/loader/toy_pilot_pause.c src/core/toy_pilot.c src/core/hash.c src/loader/minic.c
 ifneq ($(TOY_DECISION_PROFILE),0)
 WORKER_SRC += src/loader/toy_decision_observer.c
+endif
+ifeq ($(TOY_TEXT_REPORT),1)
+WORKER_SRC += src/loader/toy_report_export.c src/loader/toy_report_text.c \
+ src/core/report_file.c src/loader/report_sci_pio.c src/loader/sd_reader.c \
+ src/loader/report_sd_storage.c
 endif
 ifeq ($(LOADER_TRACE),1)
 WORKER_SRC += src/loader/toy_loader_trace.c src/loader/toy_loader_trace_report.c src/loader/retail_display.c
@@ -301,6 +324,16 @@ SCHEDULE_RESIDENT_EXPORTS += -Wl,-u,_kui_toy_pilot_card_pointer -Wl,-u,_kui_toy_
 FLAGS += -DKUI_RETAIL_GD_REJECTION_DETAILS=1
 endif
 WORKER_OBJ = $(patsubst %.c,$(BUILD)/worker/%.o,$(WORKER_SRC)) $(BUILD)/worker_asm.o $(BUILD)/pause_asm.o
+ifeq ($(TOY_TEXT_REPORT),1)
+# Optimize only the newly linked, permanently stopped report path together.
+# Every accepted AP runtime object retains its original compilation flags.
+TOY_TEXT_SRC = src/loader/toy_report_export.c src/loader/toy_report_text.c \
+ src/core/report_file.c src/loader/report_sci_pio.c src/loader/sd_reader.c \
+ src/loader/report_sd_storage.c
+TOY_TEXT_OBJ = $(patsubst %.c,$(BUILD)/worker/%.o,$(TOY_TEXT_SRC))
+$(TOY_TEXT_OBJ): FLAGS += -flto
+TOY_TEXT_LINK = -flto -fstack-usage -save-temps=obj
+endif
 ifeq ($(DATA_SCHEDULE_MODE),2)
 WORKER_OBJ += $(BUILD)/worker/async_gd.o $(BUILD)/sci_irq_asm.o
 endif
@@ -321,7 +354,7 @@ resident: $(BUILD)/resident-sci.bin
 force-config:
 $(BUILD)/build-config: force-config
 	@mkdir -p $(@D)
-	@printf '%s\n' 'BUILD=$(BUILD_ID)' 'PROFILE=15' 'PILOT=1' 'LOW=1' 'SLOTS=64' 'SCI=1' 'SCI_PACED=1' 'SCI_FAULT=1' 'SCI_REUSE_TDRE=$(SCI_REUSE_TDRE)' 'GD_FIXED_STEP=$(GD_FIXED_STEP)' 'SHARED_SCI=$(SHARED_SCI)' 'ASYNC_CDDA=$(ASYNC_CDDA)' 'PRIVATE_P2=$(PRIVATE_P2)' 'NATIVE_CACHE=$(NATIVE_CACHE)' 'SYNTHETIC_SOURCE=$(SYNTHETIC_SOURCE)' 'OPT=$(RESIDENT_OPT)' $(if $(TRACE_CONFIG),'$(TRACE_CONFIG)') $(if $(filter $(DATA_PROBE),1),'DATA_PROBE=1' 'DATA_PAYLOAD_MODE=$(DATA_PAYLOAD_MODE)') $(if $(SCHEDULE_CONFIG),'$(SCHEDULE_CONFIG)') $(if $(BUDGET_CONFIG),'$(BUDGET_CONFIG)') $(if $(FOLLOWUP_CONFIG),'$(FOLLOWUP_CONFIG)') $(if $(TUNING_CONFIG),'$(TUNING_CONFIG)') $(if $(IRQ_CONFIG),'$(IRQ_CONFIG)') $(if $(PIPELINE_CONFIG),'$(PIPELINE_CONFIG)') $(if $(COOKED_CONFIG),'$(COOKED_CONFIG)') $(if $(REVERSE_CONFIG),'$(REVERSE_CONFIG)') $(if $(filter 1,$(NATIVE_COMPAT)),'NATIVE_COMPAT=1') $(FMV_CONFIG) 'TOY_DECISION_PROFILE=$(TOY_DECISION_PROFILE)' 'TOY_DEMAND_TEST_PROFILE=$(TOY_DEMAND_TEST_PROFILE)' > $@.new
+	@printf '%s\n' 'BUILD=$(BUILD_ID)' 'PROFILE=15' 'PILOT=1' 'LOW=1' 'SLOTS=64' 'SCI=1' 'SCI_PACED=1' 'SCI_FAULT=1' 'SCI_REUSE_TDRE=$(SCI_REUSE_TDRE)' 'GD_FIXED_STEP=$(GD_FIXED_STEP)' 'SHARED_SCI=$(SHARED_SCI)' 'ASYNC_CDDA=$(ASYNC_CDDA)' 'PRIVATE_P2=$(PRIVATE_P2)' 'NATIVE_CACHE=$(NATIVE_CACHE)' 'SYNTHETIC_SOURCE=$(SYNTHETIC_SOURCE)' 'OPT=$(RESIDENT_OPT)' $(if $(TRACE_CONFIG),'$(TRACE_CONFIG)') $(if $(filter $(DATA_PROBE),1),'DATA_PROBE=1' 'DATA_PAYLOAD_MODE=$(DATA_PAYLOAD_MODE)') $(if $(SCHEDULE_CONFIG),'$(SCHEDULE_CONFIG)') $(if $(BUDGET_CONFIG),'$(BUDGET_CONFIG)') $(if $(FOLLOWUP_CONFIG),'$(FOLLOWUP_CONFIG)') $(if $(TUNING_CONFIG),'$(TUNING_CONFIG)') $(if $(IRQ_CONFIG),'$(IRQ_CONFIG)') $(if $(PIPELINE_CONFIG),'$(PIPELINE_CONFIG)') $(if $(COOKED_CONFIG),'$(COOKED_CONFIG)') $(if $(REVERSE_CONFIG),'$(REVERSE_CONFIG)') $(if $(filter 1,$(NATIVE_COMPAT)),'NATIVE_COMPAT=1') $(FMV_CONFIG) 'TOY_DECISION_PROFILE=$(TOY_DECISION_PROFILE)' 'TOY_TEXT_REPORT=$(TOY_TEXT_REPORT)' 'TOY_TEXT_COLD_LTO=$(TOY_TEXT_REPORT)' $(if $(TOY_TEXT_CONFIG),'$(TOY_TEXT_CONFIG)') 'TOY_DEMAND_TEST_PROFILE=$(TOY_DEMAND_TEST_PROFILE)' > $@.new
 	@if ! cmp -s $@.new $@; then mv $@.new $@; else rm $@.new; fi
 $(RESIDENT_OBJ) $(STAGE_OBJ) $(WORKER_OBJ) $(BUILD)/entry_asm.o: $(BUILD)/build-config
 $(BUILD)/sci/%.o: %.c
@@ -355,6 +388,7 @@ endif
 ifneq ($(DATA_SCHEDULE_MODE),0)
 $(BUILD)/worker/src/loader/toy_pilot_gd.o: $(BUILD)/toy_pilot_resident_symbols.h
 $(BUILD)/worker/src/loader/toy_decision_observer.o: $(BUILD)/toy_pilot_resident_symbols.h
+$(BUILD)/worker/src/loader/toy_report_export.o: $(BUILD)/toy_pilot_resident_symbols.h
 endif
 ifeq ($(DATA_SCHEDULE_MODE),2)
 $(BUILD)/worker/src/loader/toy_pilot_worker.o: $(BUILD)/toy_pilot_resident_symbols.h
@@ -382,7 +416,7 @@ $(BUILD)/sci_irq_asm.o: src/loader/toy_pilot_sci_irq.S
 $(BUILD)/pause_asm.o: src/loader/toy_pilot_pause.S
 	$(CC) $(FLAGS) -MMD -MP -c $< -o $@
 $(BUILD)/worker.elf: $(WORKER_OBJ) src/loader/toy_pilot_worker.ld
-	$(CC) $(LINK) -Wl,--defsym,KUI_TOY_PRIVATE_P2=$(PRIVATE_P2) -Wl,--defsym,KUI_TOY_TRACE=$(LOADER_TRACE) -Tsrc/loader/toy_pilot_worker.ld -Wl,-Map,$(BUILD)/worker.map -o $@ $(WORKER_OBJ) -lgcc
+	$(CC) $(LINK) $(TOY_TEXT_LINK) -Wl,--defsym,KUI_TOY_PRIVATE_P2=$(PRIVATE_P2) -Wl,--defsym,KUI_TOY_TRACE=$(LOADER_TRACE) -Tsrc/loader/toy_pilot_worker.ld -Wl,-Map,$(BUILD)/worker.map -o $@ $(WORKER_OBJ) -lgcc
 $(BUILD)/worker.bin: $(BUILD)/worker.elf
 	$(OBJCOPY) -O binary $< $@
 $(BUILD)/stage/%.o: %.c $(BUILD)/toy_pilot_resident_symbols.h $(BUILD)/worker.bin

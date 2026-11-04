@@ -33,6 +33,14 @@ def check(disabled, observed):
         if struct.unpack_from('<I', payload, control)[0] != profile:
             raise ValueError('Missing initialized runtime decision selector')
         payload[control:control+4] = bytes(4)
+        text=settings.get('TOY_TEXT_REPORT','0')=='1'
+        if text:
+            from check_toy_report_export import check as check_export
+            export=check_export(directory)
+            binding=symbols['_kui_toy_report_binding']-0x20000000-0x8cfd0000
+            if struct.unpack_from('<I',payload,binding+12)[0]!=profile:
+                raise ValueError('Wrong initialized report binding profile')
+            payload[binding+12:binding+16]=bytes(4)
         build = settings['BUILD'].encode()
         if len(build) != 12 or not payload.count(build+b'\0'):
             raise ValueError('Missing fixed-width displayed build identifier')
@@ -43,6 +51,7 @@ def check(disabled, observed):
                 raise ValueError('Legacy hot observer still linked: ' + name)
         frames = stack_records(directory.glob('resident-sci.elf.ltrans*.su'))
         frames += stack_records((directory / 'worker').rglob('*.su'))
+        frames += stack_records(directory.glob('worker.elf.ltrans*.su'))
         bound = 256 + sum(frame for _, frame in frames)
         if bound > 8192-32:
             raise ValueError('Conservative worker stack bound exceeded')
@@ -52,12 +61,13 @@ def check(disabled, observed):
             'worker_end': hex(symbols['__toy_pilot_worker_end']),
             'spare_bytes': 0x8cfe0000-symbols['__toy_pilot_worker_end'],
             'stack_upper_bound': bound, 'stack_capacity': 8192,
-            'legacy_hot_observers_absent': True})
+            'legacy_hot_observers_absent': True,
+            'text_report':export if text else False})
         images.append(image);normalized.append(payload)
     if images[0]['symbols'] != images[1]['symbols']:
         raise ValueError('B/C linked symbols or memory geometry differ')
     if normalized[0] != normalized[1]:
-        raise ValueError('B/C worker bytes differ beyond selector and build ID')
+        raise ValueError('B/C worker bytes differ beyond initialized selectors and build ID')
     low = []
     for directory in (Path(disabled), Path(observed)):
         data=(directory/'resident-sci.bin').read_bytes()
@@ -66,6 +76,7 @@ def check(disabled, observed):
         raise ValueError('B/C low reader differs beyond build ID')
     return {'profiles': records, 'same_geometry': True,
             'worker_differences_limited_to_initialized_selector_and_build_id': True,
+            'report_binding_profile_is_only_additional_allowed_word': bool(records[0]['text_report']),
             'low_reader_unchanged_except_build_id': True, 'console_tested': False}
 
 

@@ -18,6 +18,75 @@ static void toy_launch_options_check(void);
 #include "toy_pilot_admission.h"
 #include "toy_pilot_cooked_admission.h"
 #include "toy_pilot_resident_symbols.h"
+#include "kui/toy_report_export.h"
+#if KUI_TOY_TEXT_REPORT
+#include "kui/core.h"
+#include "kui/vmu_backing.h"
+#include "kui/report_stage_cache.h"
+static struct kui_report_file_descriptor toy_report_file;
+static struct kui_vmu_fs_workspace toy_report_work;
+static struct kui_vmu_fs_range toy_report_forbidden[KUI_RETAIL_MANIFEST_SLOTS];
+static struct kui_report_stage_cache toy_report_cache __attribute__((aligned(32)));
+static int toy_report_read_batch(void *context,uint32_t lba,uint32_t count,uint8_t *out) {
+    struct kui_retail_storage *storage=context;
+    return kui_loader_sd_read_multi(&storage->device.sd,lba,count,out)==KUI_LOADER_SD_OK &&
+        kui_sci_sd_healthy()?0:-1;
+}
+/* Read-only ownership proof while the temporary stage still owns its card.
+ * Nothing from the walker, its callbacks or filesystem scratch survives. */
+static void toy_report_prepare(void) {
+    if(card.transport!=KUI_STORAGE_SCI || card.stream.active ||
+       !card.device.sd.ready || card.device.sd.slow)
+        stopped("TOY TXT CARD NOT IDLE",0u);
+    retail_display_line("VERIFYING TXT REPORT SLOT - KEEP POWER ON");
+    enum kui_loader_sd_result acquired=kui_retail_storage_acquire(&card);
+    if(acquired!=KUI_LOADER_SD_OK)stopped("TOY TXT CARD CLAIM REFUSED",acquired);
+    struct kui_vmu_sd_identity identity;
+    uint8_t sector0[512];struct kui_volume volume;
+    int result=kui_vmu_sd_identity_read(&card.device.sd,&identity);
+    size_t ranges=manifest.extent_count;
+    if(manifest.track_count>KUI_RETAIL_MANIFEST_SLOTS ||
+       ranges>KUI_RETAIL_MANIFEST_SLOTS-manifest.track_count)result=KUI_VMU_FS_ARGUMENT;
+    for(size_t e=0u;!result && e<ranges;++e) {
+        const struct kui_retail_extent *extent=&manifest.slots[manifest.track_count+e].extent;
+        toy_report_forbidden[e]=(struct kui_vmu_fs_range){extent->card_lba,extent->blocks};
+    }
+    if(!result && kui_report_stage_cache_init(&toy_report_cache,identity.sectors,
+       manifest.partition_start,manifest.partition_end,toy_report_forbidden,ranges,
+       toy_report_read_batch,&card))result=KUI_VMU_FS_ARGUMENT;
+    if(!result && (kui_report_stage_cache_read(&toy_report_cache,0u,sector0) ||
+       !kui_select_volume(sector0,identity.sectors,&volume) ||
+       volume.start!=manifest.partition_start ||
+       (uint64_t)volume.start+volume.count!=manifest.partition_end))result=KUI_VMU_FS_VOLUME;
+    if(!result) {
+        const struct kui_report_file_input input={.read_sector=kui_report_stage_cache_read,.context=&toy_report_cache,
+            .card_sectors=identity.sectors,.partition_first=volume.start,
+            .partition_end=(uint64_t)volume.start+volume.count,.high_capacity=identity.high_capacity,
+#if KUI_TOY_DECISION_PROFILE == 1
+            .file_name="TOYCLEAN.TXT",
+#else
+            .file_name="TOYOBS.TXT",
+#endif
+            .profile=KUI_TOY_DECISION_PROFILE,.forbidden=toy_report_forbidden,.forbidden_count=ranges};
+        struct kui_report_file_input actual=input;memcpy(actual.cid,identity.cid,16u);
+        result=kui_report_file_admit(&actual,&toy_report_file,&toy_report_work);
+    }
+    bool healthy=kui_sci_sd_healthy() && card.device.sd.ready;
+    kui_retail_storage_release(&card);
+    /* The stage's plain SCI release may newly fail its bounded TEND wait.
+     * Its existing first-fault record survives release (healthy no longer
+     * applies once unacquired). Never publish a descriptor after that fault. */
+    struct kui_sci_sd_fault released_fault;kui_sci_sd_fault_get(&released_fault);
+    uint32_t counts[4]={toy_report_cache.requests,toy_report_cache.wire_calls,
+        toy_report_cache.physical_sectors,toy_report_cache.hits};
+    retail_display_values("TXT READS BATCHES SECTORS HITS",counts,4u);
+    if(result || !healthy || !card.device.sd.ready || released_fault.valid) {
+        retail_display_hex("TXT ADMISSION DETAIL",toy_report_work.stats.detail);
+        stopped("TOY TXT FILE OWNERSHIP REFUSED",result?(uint32_t)result:UINT32_MAX);
+    }
+    retail_display_line("TOY TXT FILE OWNERSHIP VERIFIED");
+}
+#endif
 #if KUI_NATIVE_CDDA_COMPAT
 const volatile struct kui_native_cdda_descriptor kui_native_cdda_adapter_descriptor=
     KUI_NATIVE_CDDA_TOY_DESCRIPTOR(KUI_TOY_PILOT_COOKED_DATA_PROFILE);
@@ -301,6 +370,17 @@ void kui_toy_pilot_stage_install(void) {
     if(memcmp((const void *)(uintptr_t)(c->lease+KUI_TOY_PILOT_DATA_ALIAS),
               toy_worker_blob,bytes))
         toy_failure(12,c->lease);
+#if KUI_TOY_TEXT_REPORT
+    size_t report_offset;
+    if(!kui_report_file_descriptor_valid(&toy_report_file) ||
+       !kui_toy_report_binding_offset(toy_worker_blob,bytes,KUI_TOY_DECISION_PROFILE,&report_offset))
+        toy_failure(13,bytes);
+    volatile struct kui_toy_report_binding *binding=(volatile struct kui_toy_report_binding *)(uintptr_t)
+        (c->lease+KUI_TOY_PILOT_DATA_ALIAS+(uint32_t)report_offset);
+    memcpy((void *)&binding->file,&toy_report_file,sizeof(toy_report_file));
+    if(memcmp((const void *)&binding->file,&toy_report_file,sizeof(toy_report_file)))
+        toy_failure(13,(uint32_t)report_offset);
+#endif
     const struct kui_toy_pilot_config config={
         KUI_TOY_PILOT_MAGIC,KUI_TOY_PILOT_API,sizeof(config),
         KUI_TOY_PILOT_LOW_MANIFEST,KUI_TOY_PILOT_LOW_READ_RAW,
@@ -377,6 +457,9 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     kui_sha256_update(&hash,(const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,exec_bytes);
     kui_sha256_digest(&hash,digest);
     if(memcmp(digest,toy_boot_sha,sizeof(digest))) toy_failure(9,boot_crc);
+#if KUI_TOY_TEXT_REPORT
+    toy_report_prepare();
+#endif
     struct kui_toy_pilot_exports e;
     toy_exports_check(&e,(uint32_t)(toy_worker_blob_end-toy_worker_blob));
     toy_original_patches_check(0);
