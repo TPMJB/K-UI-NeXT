@@ -153,7 +153,7 @@ volatile uint32_t kui_retail_native_caller[2];
  * the last four calls' R7, R4, R5 and R6, shown if a call fails. */
 volatile uint32_t kui_retail_hook_caller[2];
 #if !KUI_ARMADA_CE_VMU_WRITE_RUNTIME || !defined(KUI_RETAIL_ASYNC)
-#if !KUI_RETAIL_DEMAND_DIAGNOSTIC
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC != 1 && KUI_RETAIL_DEMAND_DIAGNOSTIC != 2
 static uint32_t ce_calls[4][4], ce_count;
 #endif
 #endif
@@ -176,7 +176,7 @@ volatile uint32_t kui_retail_hook_active, kui_retail_hook_fault;
 #include "armada_ce_audio_observe.inc"
 #endif
 #if KUI_RETAIL_DEMAND_DIAGNOSTIC
-#if KUI_RETAIL_DEMAND_DIAGNOSTIC == 2
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC >= 2
 static void demand_event(uint32_t event,uint32_t value) {
     (void)kui_armada_ce_demand_event(event,value,(uintptr_t)&kui_retail_async_region);
 }
@@ -787,6 +787,11 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack
                            ,uint32_t entry_sr
 #endif
                            ) {
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC == 3
+    /* First terminal action: freeze already-observed DATA before video,
+     * snapshots or any terminal cleanup can change the interesting phase. */
+    demand_event(KUI_RETAIL_DEMAND_FREEZE,0u);
+#endif
 #if !KUI_RETAIL_RETURN_TRACE
     (void)command; /* Assembly reaches this only for menu return command 1. */
     (void)caller; (void)stack;
@@ -1301,7 +1306,7 @@ void kui_retail_ce_stream_wake(void) {
  * as E0). Returns whether that is all the call asks: the image is in the
  * virtual drive, unchanged. */
 static int ce_record(uint32_t source, uint32_t r4, uint32_t r5, uint32_t r6, uint32_t r7) {
-#if (KUI_ARMADA_CE_VMU_WRITE_RUNTIME && defined(KUI_RETAIL_ASYNC)) || KUI_RETAIL_DEMAND_DIAGNOSTIC
+#if (KUI_ARMADA_CE_VMU_WRITE_RUNTIME && defined(KUI_RETAIL_ASYNC)) || KUI_RETAIL_DEMAND_DIAGNOSTIC == 1 || KUI_RETAIL_DEMAND_DIAGNOSTIC == 2
     /* Writable runtime retains fault and terminal reports. Its private VMU
      * diagnostics replace this unused async call-history ring and periodic
      * framebuffer meter; no GD command or interrupt behavior changes. */
@@ -1321,10 +1326,29 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
     uint32_t source=kui_retail_hook_source;
 #ifdef KUI_RETAIL_CE
     uint32_t started=*(volatile const uint32_t *)(uintptr_t)TCNT0;
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC == 3
+    uint32_t demand_function=source==4u?255u:r7;
+    demand_event(KUI_RETAIL_DEMAND_GD_BEGIN|(demand_function<<8)|(source<<16),kui_retail_hook_sr);
+#endif
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC == 3
+    if(ce_record(source,r4,r5,r6,r7)) {
+        demand_event(KUI_RETAIL_DEMAND_GD_END|(demand_function<<8)|(source<<16),0u);return 0;
+    }
+#else
     if(ce_record(source,r4,r5,r6,r7)) return 0;
 #endif
+#endif
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC == 3
+    if(source>3) {
+        demand_event(KUI_RETAIL_DEMAND_GD_END|(r7<<8)|(source<<16),UINT32_MAX);return -1;
+    }
+    if(source!=1 && r6==UINT32_MAX) {
+        demand_event(KUI_RETAIL_DEMAND_GD_END|(r7<<8)|(source<<16),0u);return 0;
+    }
+#else
     if(source>3) return -1;
     if(source!=1 && r6==UINT32_MAX) return 0;
+#endif
 #if KUI_RETAIL_DEMAND_DIAGNOSTIC == 2
     demand_event(KUI_RETAIL_DEMAND_GD_BEGIN|(r7<<8),kui_retail_hook_sr);
 #endif
@@ -1366,6 +1390,9 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
         report_fault("GD FUNCTION UNSUPPORTED", r7, r5);
 #endif
 #ifdef KUI_RETAIL_CE
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC == 3
+    uint32_t demand_notifications=service.interrupts;
+#endif
     ce_events(r7);
 #if KUI_ARMADA_CE_STREAM
     armada_ce_audio_kick(r7);
@@ -1374,6 +1401,8 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
 #endif
 #if KUI_RETAIL_DEMAND_DIAGNOSTIC == 2
     demand_event(KUI_RETAIL_DEMAND_GD_END|(r7<<8),(uint32_t)result);
+#elif KUI_RETAIL_DEMAND_DIAGNOSTIC == 3
+    demand_event(KUI_RETAIL_DEMAND_GD_END|(r7<<8)|(source<<16)|((demand_notifications&3u)<<24),(uint32_t)result);
 #endif
     return result;
 }
@@ -1386,11 +1415,17 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
  * one, when both, raised here as CE would; 0 for none. */
 uint32_t kui_retail_ce_irq(void) {
     uint32_t started=*(volatile const uint32_t *)(uintptr_t)TCNT0, sysintr=0;
-#if KUI_RETAIL_DEMAND_DIAGNOSTIC == 2
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC == 3
+    uint32_t demand_notifications=0u;
+#endif
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC >= 2
     demand_event(KUI_RETAIL_DEMAND_IRQ_BEGIN,0u);
 #endif
     if(!kui_retail_async_irq()) {
         uint32_t raised=service.interrupts;
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC == 3
+        demand_notifications=raised;
+#endif
         service.interrupts=0;
         if(raised & KUI_RETAIL_GD_IRQ_DMA_END) sysintr=21u;
         if(raised & KUI_RETAIL_GD_IRQ_DRIVE) {
@@ -1401,6 +1436,8 @@ uint32_t kui_retail_ce_irq(void) {
     meter_busy(started);
 #if KUI_RETAIL_DEMAND_DIAGNOSTIC == 2
     demand_event(KUI_RETAIL_DEMAND_IRQ_END,sysintr);
+#elif KUI_RETAIL_DEMAND_DIAGNOSTIC == 3
+    demand_event(KUI_RETAIL_DEMAND_IRQ_END|((demand_notifications&3u)<<24),sysintr);
 #endif
     return sysintr;
 }

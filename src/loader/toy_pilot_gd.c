@@ -4,6 +4,7 @@
  * request validation and guest maps; the opt-in high reader owns data work. */
 #include "kui/toy_pilot_gd.h"
 #include "kui/toy_pilot_gd_status.h"
+#include "kui/toy_decision_observer.h"
 #include "kui/toy_loader_trace.h"
 #if KUI_TOY_PILOT_DATA_SCHEDULE_MODE && !defined(KUI_TOY_LOADER_SCHEDULE_HOST_TEST)
 #include "kui/toy_loader_schedule_report.h"
@@ -224,6 +225,12 @@ int32_t kui_toy_pilot_gd_dispatch(struct kui_retail_gd *s,
 #elif KUI_TOY_PILOT_LOADER_TRACE
 int32_t kui_toy_pilot_gd_dispatch(struct kui_retail_gd *s,
     uint32_t r4,uint32_t r5,uint32_t r7,uintptr_t base_address) {
+#if KUI_TOY_DECISION_PROFILE
+    kui_toy_decision_gd_begin(s,r7,r4);
+    int32_t result=dispatch_body(s,r4,r5,r7,base_address);
+    kui_toy_decision_gd_end(s,r7,r4,result);
+    return result;
+#else
 #if KUI_TOY_PILOT_DATA_SCHEDULE_MODE && !defined(KUI_TOY_LOADER_SCHEDULE_HOST_TEST)
     kui_toy_loader_schedule_report_begin(s);
 #endif
@@ -240,5 +247,6 @@ int32_t kui_toy_pilot_gd_dispatch(struct kui_retail_gd *s,
 #endif
     kui_toy_loader_trace_end(s,r7,r4,r5,result);
     return result;
+#endif
 }
 #endif

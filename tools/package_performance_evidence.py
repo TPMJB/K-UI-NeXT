@@ -46,6 +46,7 @@ def run(command, log):
 
 
 def main():
+    raise SystemExit('Withdrawn suite: use tools/package_decision_tests.py; see docs/decision-tests.md')
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--output', type=Path)
     p.add_argument('--jobs', type=int, default=4)

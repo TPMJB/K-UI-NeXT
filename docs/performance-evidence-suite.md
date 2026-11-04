@@ -1,5 +1,10 @@
 # Console performance evidence suite
 
+**Withdrawn on 4 November 2026. Do not run or rebuild this 35-case suite.**
+Its General112 native profiles do not represent the owner-accepted compact72
+Background baseline. The replacement is [decision-tests.md](decision-tests.md),
+with five scene-focused runs and compiled baseline/geometry checks.
+
 The target is a global demand reader and emulated VMU that preserve normal
 gameplay, movies, sound and saves, with performance close to the same game on
 disc. These tests separate reader work, reserved memory, hook overhead and VMU

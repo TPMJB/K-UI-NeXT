@@ -4,6 +4,9 @@
 #include "kui/armada_ce_stream_transport.h"
 #include "retail_async.h"
 #include <stddef.h>
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC == 3
+#include "kui/retail_demand_window.h"
+#endif
 #if !KUI_ARMADA_CE_STREAM || !defined(KUI_RETAIL_CE) || !KUI_RETAIL_DEMAND_DIAGNOSTIC
 #error "Demand collector belongs only to its isolated CE stream controller"
 #endif
@@ -16,7 +19,7 @@ const uint32_t kui_armada_ce_demand_contract[4]={
 struct demand_frame {
     struct kui_retail_demand_clock clock;
     uint32_t active,function,sr,command,lba,count,output,blocks,polled;
-    uint32_t token_bytes,overruns,spill,flags,pio_bytes;
+    uint32_t token_bytes,overruns,spill,flags,pio_bytes,token,irq_blocks,call_blocks,source;
 };
 static struct {
     struct demand_frame frame[2];
@@ -32,6 +35,12 @@ static struct {
     struct kui_retail_demand_clock last_clock;
     struct kui_retail_demand_page page;
     uint32_t terminal_guard;
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC == 3
+    struct kui_retail_demand_window window;
+    uint32_t sources[5],commands[5],notifications[2][2],irq_returns[3];
+    struct kui_retail_async frozen_engine;
+    struct kui_sci_stream_stats frozen_stream;
+#endif
 } demand;
 
 static void demand_clock_sample(struct kui_retail_demand_clock *out) {
@@ -91,9 +100,11 @@ static void demand_begin(unsigned kind,uint32_t function,uint32_t sr,
     f->token_bytes=r->shared.stream.stats.token_bytes;
     f->overruns=r->shared.stream.stats.overruns;f->spill=r->engine.spill_bytes;
     f->pio_bytes=r->engine.pio_bytes;
+    f->token=r->shared.service.token;
+    f->irq_blocks=r->engine.stats.irq_blocks;f->call_blocks=r->engine.stats.call_blocks;
     f->flags=demand_flags(r);demand_clock_sample(&f->clock);
 }
-static void demand_finish(unsigned kind,uint32_t function,uint32_t result,
+static void demand_finish(unsigned kind,uint32_t function,uint32_t result,uint32_t notifications,
     const struct kui_retail_async_region *r) {
     struct demand_frame *f=&demand.frame[kind];
     struct kui_retail_demand_clock now;demand_clock_sample(&now);demand.last_clock=now;
@@ -119,6 +130,23 @@ static void demand_finish(unsigned kind,uint32_t function,uint32_t result,
     uint32_t checked=demand_blocks(r)-f->blocks;
     uint32_t output=r->shared.service.completed_bytes>=f->output?
         r->shared.service.completed_bytes-f->output:0u;
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC == 3
+    if(r->shared.service.token!=f->token) output=r->shared.service.completed_bytes;
+    if(notifications&KUI_RETAIL_GD_IRQ_DRIVE) ++demand.notifications[kind][0];
+    if(notifications&KUI_RETAIL_GD_IRQ_DMA_END) ++demand.notifications[kind][1];
+    if(kind) {
+        if(result==0u) ++demand.irq_returns[0];
+        else if(result==20u) ++demand.irq_returns[1];
+        else if(result==21u) ++demand.irq_returns[2];
+    } else if(f->source<5u) ++demand.sources[f->source];
+    struct kui_retail_demand_window_visit visit={kind,
+        r->shared.service.command?r->shared.service.command:f->command,
+        r->engine.stats.irq_blocks-f->irq_blocks,r->engine.stats.call_blocks-f->call_blocks,
+        output,f->sr,(f->flags&16u) && !checked,!checked && !output};
+    kui_retail_demand_window_record(&demand.window,&f->clock,&now,&visit);
+#else
+    (void)notifications;
+#endif
     uint32_t after=demand_flags(r);
     if(kind) {++demand.irq;if(!checked && !output) ++demand.irq_zero;}
     else {
@@ -142,6 +170,11 @@ static void demand_finish(unsigned kind,uint32_t function,uint32_t result,
         if(function==KUI_GD_REQUEST && (int32_t)result>0 && demand_reads(r->shared.service.command)) {
             if(demand.request_token) ++demand.revoked;
             ++demand.accepted;demand.request_token=r->shared.service.token;
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC == 3
+            uint32_t command=r->shared.service.command;
+            unsigned index=command==16u?0u:command==17u?1u:command==38u?2u:command==39u?3u:4u;
+            ++demand.commands[index];
+#endif
             demand.request_bytes=r->shared.service.request_bytes;
             demand.request_clock=f->clock;
         }
@@ -194,7 +227,43 @@ static void demand_finish(unsigned kind,uint32_t function,uint32_t result,
 static void demand_row(unsigned n,uint32_t a,uint32_t b,uint32_t c,uint32_t d,uint32_t e) {
     uint32_t *r=demand.page.rows[n];r[0]=a;r[1]=b;r[2]=c;r[3]=d;r[4]=e;
 }
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC == 3
+static const struct kui_retail_demand_page *demand_window_report(unsigned page) {
+    static const char titles[4][48]={"LAST16S 1/4 - OLDEST EXIT BINS",
+        "LAST16S 2/4 - EXIT BINS","LAST16S 3/4 - EXIT BINS","LAST16S 4/4 - NEWEST EXIT BINS"};
+    static const char labels[7][48]={"FLAGS-A FLAGS-B EPOCH BINS STATE",
+        "BIN MODE GD IRQ COVERED-CYC","IRQBLK CALLBLK OUTBYTES GD-CYC IRQ-CYC",
+        "MAXBODY ENTRY-GAP MASKED ZERO DMA-ZERO",
+        "BIN MODE GD IRQ COVERED-CYC","IRQBLK CALLBLK OUTBYTES GD-CYC IRQ-CYC",
+        "MAXBODY ENTRY-GAP MASKED ZERO DMA-ZERO"};
+    demand.page.title=(uint32_t)(uintptr_t)titles[page];
+    for(unsigned row=0;row<7u;row++) demand.page.labels[row]=(uint32_t)(uintptr_t)labels[row];
+    uint32_t flags[2];
+    for(unsigned slot=0;slot<2u;slot++) {
+        const struct kui_retail_demand_window_bin *b=kui_retail_demand_window_oldest(&demand.window,page*2u+slot);
+        unsigned row=slot*3u+1u;
+        flags[slot]=b?b->flags:UINT32_MAX;
+        if(b) {
+            if(b->gd_hi || b->irq_hi) flags[slot]|=KUI_RETAIL_DEMAND_WINDOW_BODY_CLIPPED;
+            demand_row(row,b->ordinal,b->modes,b->gd,b->irq,b->span_cycles);
+            demand_row(row+1u,b->irq_blocks,b->call_blocks,b->bytes,b->gd_hi?UINT32_MAX:b->gd_lo,
+                b->irq_hi?UINT32_MAX:b->irq_lo);
+            demand_row(row+2u,b->max_body,b->gap_max,b->masked,b->zero,b->dma_zero);
+        } else {
+            demand_row(row,UINT32_MAX,0u,0u,0u,UINT32_MAX);
+            demand_row(row+1u,0u,0u,0u,UINT32_MAX,UINT32_MAX);
+            demand_row(row+2u,UINT32_MAX,UINT32_MAX,0u,0u,0u);
+        }
+    }
+    demand_row(0,flags[0],flags[1],demand.window.epoch,demand.window.count,
+        demand.window.flags|(demand.window.frozen?0x80000000u:0u));
+    return &demand.page;
+}
+#endif
 static const struct kui_retail_demand_page *demand_report_page(unsigned page,const struct kui_retail_async_region *r) {
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC == 3
+    if(page>=5u && page<9u) return demand_window_report(page-5u);
+#endif
     static const char titles[5][48]={"CE DATA 1/5 - PROFILE AND ENGAGEMENT",
         "CE DATA 2/5 - EXISTING TRANSPORT COUNTERS",
         "CE DATA 3/5 - MAX OBSERVED BODY CONTEXT",
@@ -226,6 +295,9 @@ static const struct kui_retail_demand_page *demand_report_page(unsigned page,con
     for(unsigned n=0;n<7u;n++) demand.page.labels[n]=(uint32_t)(uintptr_t)labels[page][n];
     const struct kui_retail_async *e=&r->engine;
     const struct kui_sci_stream_stats *s=&r->shared.stream.stats;
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC == 3
+    if(demand.window.frozen) {e=&demand.frozen_engine;s=&demand.frozen_stream;}
+#endif
     const volatile uint32_t *contract=kui_armada_ce_demand_contract;
     if(page==0u) {
         demand_row(0,contract[1],contract[2],contract[3],demand.gd,demand.irq);
@@ -243,6 +315,27 @@ static const struct kui_retail_demand_page *demand_report_page(unsigned page,con
         demand_row(5,s->deferred,s->incomplete[0],s->incomplete[1],s->incomplete[2],s->incomplete[3]);
         demand_row(6,s->token_bytes,s->token_max,s->stops,s->token_yields,e->isr);
     } else if(page==2u) {
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC == 3
+        static const char title[]="CE OBSERVER - MODES AND CLOCK STATUS";
+        static const char labels[7][48]={"GD-SOURCE0 1 2 3 4","REQUEST16 17 38 39 OTHER",
+            "GD-NOTIFY20 21 SCI-NOTIFY20 21 UNPAIRED","SCI-RET0 20 21 EPOCH FLAGS",
+            "FRQCR TCOR0 TCR0 TSTR PMCR1","UNTIMED GD IRQ MASKED ZERO BADCLK",
+            "UNTIMED IRQBLK CALLBLK BYTES SOUND23 WHY"};
+        demand.page.title=(uint32_t)(uintptr_t)title;
+        for(unsigned i=0;i<7u;i++) demand.page.labels[i]=(uint32_t)(uintptr_t)labels[i];
+        demand_row(0,demand.sources[0],demand.sources[1],demand.sources[2],demand.sources[3],demand.sources[4]);
+        demand_row(1,demand.commands[0],demand.commands[1],demand.commands[2],demand.commands[3],demand.commands[4]);
+        demand_row(2,demand.notifications[0][0],demand.notifications[0][1],demand.notifications[1][0],demand.notifications[1][1],demand.unpaired);
+        demand_row(3,demand.irq_returns[0],demand.irq_returns[1],demand.irq_returns[2],demand.window.epoch,demand.window.flags);
+        demand_row(4,demand.last_clock.frqcr,demand.last_clock.tcor,demand.last_clock.tcr,
+            demand.last_clock.tstr,demand.last_clock.pmcr);
+        demand_row(5,demand.window.untimed.gd,demand.window.untimed.irq,demand.window.untimed.masked,
+            demand.window.untimed.zero,demand.window.bad_clock);
+        /* Existing SCI adapter never receives native sound SYSINTR23.
+         * FFFFFFFF + WHY1 means unavailable because no sound hook exists. */
+        demand_row(6,demand.window.untimed.irq_blocks,demand.window.untimed.call_blocks,
+            demand.window.untimed.bytes,UINT32_MAX,1u);
+#else
         demand_row(0,demand.accepted,demand.completed,demand.revoked,demand.request_max,demand.request_invalid);
         for(unsigned n=0;n<3u;n++) for(unsigned i=0;i<5u;i++)
             demand.page.rows[n+1u][i]=demand.max_context[n][i];
@@ -251,6 +344,7 @@ static const struct kui_retail_demand_page *demand_report_page(unsigned page,con
             demand.last_clock.tstr,demand.last_clock.pmcr);
         demand_row(6,demand.request_lba,demand.request_count,r->shared.service.pending,
             r->shared.service.token,demand.unpaired);
+#endif
     } else if(page==3u) {
         demand_row(0,demand.history_count,demand.timed[0],demand.timed[1],demand.cycle_min[0],demand.cycle_min[1]);
         unsigned count=demand.history_count<6u?demand.history_count:6u;
@@ -266,7 +360,8 @@ static const struct kui_retail_demand_page *demand_report_page(unsigned page,con
         demand_row(2,audio.first,audio.last,audio.repeat,audio.play_cursor,audio.write_cursor);
         demand_row(3,audio.current_process,audio.owner_process,audio.device,audio.buffer,audio.free_voices);
         for(unsigned i=0;i<5u;i++) demand.page.rows[4][i]=fault[i];
-        demand_row(5,s->incomplete_ch2_active,s->incomplete_dmaor_bad,demand.terminal_guard,0u,0u);
+        demand_row(5,s->incomplete_ch2_active,s->incomplete_dmaor_bad,demand.terminal_guard,
+            KUI_RETAIL_DEMAND_DIAGNOSTIC==3?UINT32_MAX:0u,KUI_RETAIL_DEMAND_DIAGNOSTIC==3?1u:0u);
         demand_row(6,demand.cycle_sum[0][0],demand.cycle_sum[0][1],
             demand.cycle_sum[1][0],demand.cycle_sum[1][1],demand.timed[0]+demand.timed[1]);
     }
@@ -281,12 +376,26 @@ const struct kui_retail_demand_page *kui_armada_ce_demand_event(
     if(!demand_region_valid(address)) return NULL;
     const struct kui_retail_async_region *r=(const void *)address;
     unsigned kind=event&255u,function=(event>>8)&255u;
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC == 3
+    if(kind==KUI_RETAIL_DEMAND_FREEZE) {
+        if(!demand.window.frozen) {
+            struct kui_retail_demand_clock now;demand_clock_sample(&now);
+            demand.last_clock=now;kui_retail_demand_window_freeze(&demand.window,&now);
+            demand.frozen_engine=r->engine;demand.frozen_stream=r->shared.stream.stats;
+            if(demand.frame[0].active || demand.frame[1].active) ++demand.unpaired;
+        }
+        return NULL;
+    }
+    if(demand.window.frozen && kind!=KUI_RETAIL_DEMAND_REPORT) return NULL;
+#endif
     if(kind==KUI_RETAIL_DEMAND_REPORT) {demand.terminal_guard=value;return demand_report_page(function,r);}
-#if KUI_RETAIL_DEMAND_DIAGNOSTIC == 2
-    if(kind==KUI_RETAIL_DEMAND_GD_BEGIN) demand_begin(0u,function,value,r);
-    else if(kind==KUI_RETAIL_DEMAND_GD_END) demand_finish(0u,function,value,r);
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC >= 2
+    if(kind==KUI_RETAIL_DEMAND_GD_BEGIN) {
+        demand_begin(0u,function,value,r);demand.frame[0].source=(event>>16)&255u;
+    }
+    else if(kind==KUI_RETAIL_DEMAND_GD_END) demand_finish(0u,function,value,event>>24,r);
     else if(kind==KUI_RETAIL_DEMAND_IRQ_BEGIN) demand_begin(1u,0u,value,r);
-    else if(kind==KUI_RETAIL_DEMAND_IRQ_END) demand_finish(1u,0u,value,r);
+    else if(kind==KUI_RETAIL_DEMAND_IRQ_END) demand_finish(1u,0u,value,event>>24,r);
 #else
     (void)value;
     /* Kept referenced for strict host/profile1 builds; no clock or observer

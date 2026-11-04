@@ -5,27 +5,29 @@
 #include <stdint.h>
 
 /* Separate console experiments only. 1 takes a terminal copy of existing
- * counters, 2 additionally observes GD and SCI-handler bodies. Neither
- * profile changes a read budget, interrupt level, timer or completion. */
+ * counters, 2 additionally observes GD and SCI-handler bodies. Profile3
+ * retains the accepted call-history work and adds frozen rolling windows.
+ * No profile changes a read budget, interrupt level, timer or completion. */
 #ifndef KUI_RETAIL_DEMAND_DIAGNOSTIC
 #define KUI_RETAIL_DEMAND_DIAGNOSTIC 0
 #endif
-#if KUI_RETAIL_DEMAND_DIAGNOSTIC < 0 || KUI_RETAIL_DEMAND_DIAGNOSTIC > 2
-#error "Demand diagnostic profile must be 0, 1 or 2"
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC < 0 || KUI_RETAIL_DEMAND_DIAGNOSTIC > 3
+#error "Demand diagnostic profile must be 0, 1, 2 or 3"
 #endif
 #define KUI_RETAIL_DEMAND_EVENT UINT32_C(0xfffffffd)
 #ifndef KUI_RETAIL_DEMAND_PROFILE_ID
 #define KUI_RETAIL_DEMAND_PROFILE_ID KUI_RETAIL_DEMAND_DIAGNOSTIC
 #endif
-#define KUI_RETAIL_DEMAND_VERSION 1u
-#define KUI_RETAIL_DEMAND_PAGES 5u
+#define KUI_RETAIL_DEMAND_VERSION (KUI_RETAIL_DEMAND_DIAGNOSTIC==3?3u:1u)
+#define KUI_RETAIL_DEMAND_PAGES (KUI_RETAIL_DEMAND_DIAGNOSTIC==3?9u:5u)
 #define KUI_RETAIL_DEMAND_ROWS 7u
 enum kui_retail_demand_event {
     KUI_RETAIL_DEMAND_GD_BEGIN=1u,
     KUI_RETAIL_DEMAND_GD_END,
     KUI_RETAIL_DEMAND_IRQ_BEGIN,
     KUI_RETAIL_DEMAND_IRQ_END,
-    KUI_RETAIL_DEMAND_REPORT
+    KUI_RETAIL_DEMAND_REPORT,
+    KUI_RETAIL_DEMAND_FREEZE
 };
 /* High-controller-owned page. Addresses name immutable P1 text; all numeric
  * fields are local authored observations. Terminal reporting performs no
@@ -77,9 +79,14 @@ static inline struct kui_retail_demand_elapsed kui_retail_demand_elapsed(
     return out;
 }
 /* event's low byte is the enum; GD events carry function in bits8..15.
+ * Profile3 carries original gateway source in bits16..23 and the generated
+ * drive/DMA notification flags in bits24..25. These are notification requests,
+ * not proof that CE's coalescing event queue dispatched a sound interrupt.
  * BEGIN value is the original caller SR, END value is returned R0.
  * REPORT carries page in bits8..15. region is only the admitted low resident
- * region, never a guest destination; rejected pointers are not followed. */
+ * region, never a guest destination; rejected pointers are not followed.
+ * FREEZE is the first terminal action, samples the read-only clock once and
+ * freezes counters before cleanup. REPORT itself never samples a clock. */
 const struct kui_retail_demand_page *kui_armada_ce_demand_event(
     uint32_t event,uint32_t value,uintptr_t region);
 #endif

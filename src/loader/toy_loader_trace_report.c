@@ -1,4 +1,70 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
+#include "kui/toy_decision_observer.h"
+#if KUI_TOY_DECISION_PROFILE
+#include "kui/toy_pilot.h"
+#include "kui/toy_loader_trace_report.h"
+#include "toy_pilot_sci.h"
+#include "retail_display.h"
+#include <string.h>
+extern uint32_t kui_toy_pilot_request(uint32_t,uint32_t,uint32_t,uint32_t);
+extern const struct kui_toy_pilot_snapshot *kui_toy_pilot_snapshot(void);
+static struct retail_display_state stopped_display;
+static uint32_t stopped_words[16];
+void kui_toy_loader_trace_report_capture(const struct retail_display_state *display,
+    const uint32_t *timing,const struct kui_retail_gd_diagnostics *diag) {
+    (void)timing;(void)diag;stopped_display=*display;
+    kui_toy_decision_freeze(); /* History is immutable before receiver cleanup. */
+    const struct kui_toy_pilot_sci_stats *s=kui_toy_pilot_sci_snapshot();
+    memcpy(stopped_words,s,16u);
+    stopped_words[4]=s->errors;stopped_words[5]=s->retries;
+    stopped_words[6]=s->active_token;stopped_words[7]=s->card_owned;
+    memcpy(stopped_words+12u,kui_toy_pilot_sci_startup_snapshot(),16u);
+    const struct kui_toy_pilot_snapshot *p=kui_toy_pilot_snapshot();
+    stopped_words[8]=p?p->state:UINT32_MAX;stopped_words[9]=p?p->fault:UINT32_MAX;
+    stopped_words[10]=p?p->raw_bytes:0u;stopped_words[11]=p?p->updater_entries:0u;
+    (void)kui_toy_pilot_sci_quiesce();
+    (void)kui_toy_pilot_request(KUI_TOY_PILOT_RESET,0u,0u,0u);
+}
+const uint32_t *kui_toy_loader_trace_report_page(unsigned kind,unsigned page) {
+    (void)kind;(void)page;return NULL;
+}
+void kui_toy_loader_trace_terminal(const struct retail_display_state *display,
+    const uint32_t *timing,const struct kui_retail_gd_diagnostics *diag,uint32_t reserved) {
+    (void)reserved;kui_toy_loader_trace_report_capture(display,timing,diag);
+    const struct kui_toy_decision_report *r=kui_toy_decision_snapshot();
+    for(;;) {
+        retail_display_restore(&stopped_display);
+        uint32_t identity[4]={1u+r->enabled,r->enabled,r->frozen,r->count};
+        retail_display_values("TOY TICKS781250 PROFILE OBS FROZEN BINS",identity,4);
+        retail_display_values("FIRST VBR LAST EXPECTED NESTED",&r->first_vbr,4);
+        retail_display_values("AP CALLS IRQ CALLBLK IRQBLK",stopped_words,4);
+        retail_display_values("AP ERROR RETRY ACTIVE OWNED",stopped_words+4u,4);
+        retail_display_values("AUDIO STATE FAULT RAWBYTES UPDATER",stopped_words+8u,4);
+        retail_display_values("LAST CMD LBA COUNT SECTORBYTES",&r->last_command,4);
+        uint32_t status[5]={r->freeze_tick,r->freeze_valid,r->last_sample_age,r->expired_bins,r->invalid_clocks};
+        retail_display_values("STOP VALID AGE EXPIRED BADCLK",status,5);
+        retail_display_values("AP ENABLED RETIRED QUIESCE FAIL",stopped_words+12u,4);
+        retail_display_pause(240u);
+        if(!r->enabled)continue;
+        for(unsigned i=0;i<8u;++i) {
+            const struct kui_toy_decision_bin *b=&r->bins[(r->head+1u+i)&7u];
+            if(!b->sequence)continue;
+            retail_display_restore(&stopped_display);
+            const uint32_t *w=(const uint32_t *)(const void *)b;
+            retail_display_values("SEQ EPOCH FIRST LAST FLAGS",w,5);
+            retail_display_values("GD VALID DATA BYTES GDTICKS",w+5u,5);
+            retail_display_values("GDMAX GAPN GAPTICKS GAPMAX SERVN",w+10u,5);
+            retail_display_values("SVALID STICKS SMAX WAITN CREDITN",w+15u,5);
+            retail_display_values("WAITT CREDITT OTHERT ZERO APCALLBLK",w+20u,5);
+            retail_display_values("APIRQ ERR RETRY MASK0-6 MASK7-14",w+25u,5);
+            retail_display_values("MASK15 BL OWN OTHER PRIORITY",w+30u,5);
+            retail_display_values("UPDATER REQ DONE MODE MAXSECT",w+35u,5);
+            retail_display_pause(240u);
+        }
+    }
+}
+#else
+/* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/toy_pilot.h"
 #include "kui/retail_gd.h"
 #include "kui/toy_loader_trace.h"
@@ -279,3 +345,5 @@ void kui_toy_loader_trace_terminal(const struct retail_display_state *display,
     }
 #endif
 }
+
+#endif /* KUI_TOY_DECISION_PROFILE */

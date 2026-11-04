@@ -5,6 +5,7 @@
 #include "sd_reader.h"
 #include "kui/fmv_test.h"
 #include "kui/toy_demand_test.h"
+#include "kui/toy_decision_observer.h"
 #if KUI_FMV_TEST
 bool kui_toy_pilot_fmv_data_idle(void);
 bool kui_toy_pilot_sci_fmv_rearm(void);

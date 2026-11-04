@@ -77,7 +77,7 @@ static void terminal_contract(void) {
     assert(clock_calls==0u && !memcmp(&before,&fixture,sizeof(fixture)));
     assert(kui_armada_ce_demand_event(KUI_RETAIL_DEMAND_GD_BEGIN,0u,0u)==NULL);
     assert(clock_calls==0u);
-    p=page(0u);assert(p->rows[0][0]==1u && p->rows[0][1]==KUI_RETAIL_DEMAND_DIAGNOSTIC);
+    p=page(0u);assert(p->rows[0][0]==KUI_RETAIL_DEMAND_VERSION && p->rows[0][1]==KUI_RETAIL_DEMAND_DIAGNOSTIC);
     assert(p->rows[0][2]==0xce000002u);
     attached=false;
     struct {unsigned char bytes[sizeof(demand)];} saved;
@@ -105,16 +105,21 @@ static void hot_contract(void) {
     event(KUI_RETAIL_DEMAND_IRQ_BEGIN,0u,0u);advance(500u);
     event(KUI_RETAIL_DEMAND_IRQ_END,0u,0u);
     const struct kui_retail_demand_page *p=page(0u);
-#if KUI_RETAIL_DEMAND_DIAGNOSTIC == 2
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC >= 2
     assert(clock_calls==8u && p->rows[0][3]==3u && p->rows[0][4]==1u);
     assert(p->rows[1][0]==1u && p->rows[1][2]==1u && p->rows[3][2]==1u);
     assert(p->rows[4][1]==1u && p->rows[4][4]==1u);
     assert(p->rows[6][0]==4000u && p->rows[6][1]==500u && p->rows[6][2]==0u);
     p=page(1u);assert(p->rows[1][0]==4096u && p->rows[1][1]==4096u);
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC == 2
     p=page(2u);assert(p->rows[0][0]==1u && p->rows[0][1]==1u && p->rows[0][2]==0u);
     assert(p->rows[0][3]==7000u);
     assert(p->rows[1][0]==KUI_GD_EXEC && p->rows[1][4]==0x40000060u);
     assert(p->rows[2][0]==2048u && p->rows[2][1]==4u && p->rows[2][2]==2u);
+#else
+    p=page(2u);assert(p->rows[0][0]==3u && p->rows[1][0]==1u);
+    assert(p->rows[6][3]==UINT32_MAX && p->rows[6][4]==1u);
+#endif
     unsigned before=clock_calls;p=page(3u);assert(p->rows[0][0]==2u && clock_calls==before);
     assert(p->rows[0][1]==3u && p->rows[0][2]==1u && p->rows[0][3]==1000u && p->rows[0][4]==500u);
     assert(p->rows[1][0]==(KUI_GD_EXEC|(KUI_GD_PIOREAD<<8)) && p->rows[1][2]==2048u);
@@ -123,15 +128,44 @@ static void hot_contract(void) {
     event(KUI_RETAIL_DEMAND_GD_BEGIN,KUI_GD_CHECK,0x40000000u);
     clock_now.pmcr=0u;advance(100u);event(KUI_RETAIL_DEMAND_GD_END,KUI_GD_CHECK,1u);
     p=page(0u);assert(p->rows[0][3]==4u && p->rows[6][2]==1u);
-    event(KUI_RETAIL_DEMAND_GD_END,KUI_GD_CHECK,1u);p=page(2u);assert(p->rows[6][4]==1u);
+    event(KUI_RETAIL_DEMAND_GD_END,KUI_GD_CHECK,1u);p=page(2u);
+    assert(p->rows[KUI_RETAIL_DEMAND_DIAGNOSTIC==3?2:6][4]==1u);
 #else
     assert(clock_calls==0u && p->rows[0][3]==0u && p->rows[0][4]==0u);
     p=page(1u);assert(p->rows[0][1]==4u && p->rows[0][3]==1u && p->rows[0][4]==4096u);
     p=page(2u);assert(p->rows[0][0]==0u && p->rows[0][1]==0u);
 #endif
 }
+static void decision_freeze_contract(void) {
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC == 3
+    reset();
+    kui_armada_ce_demand_event(KUI_RETAIL_DEMAND_GD_BEGIN|(KUI_GD_REQUEST<<8)|(2u<<16),0x40000060u,(uintptr_t)&fixture);
+    fixture.shared.service.command=39u;fixture.shared.service.lba=123456u;
+    fixture.shared.service.request_bytes=8192u;fixture.shared.service.token=1u;fixture.shared.service.pending=1u;
+    fixture.engine.stats.call_blocks=2u;fixture.shared.service.completed_bytes=1024u;
+    advance(2000u);
+    event(KUI_RETAIL_DEMAND_GD_END|(3u<<24),KUI_GD_REQUEST,1u);
+    const struct kui_retail_demand_page *p=page(2u);
+    assert(p->rows[0][2]==1u && p->rows[1][3]==1u && p->rows[2][0]==1u && p->rows[2][1]==1u);
+    event(KUI_RETAIL_DEMAND_IRQ_BEGIN,0u,0u);advance(500u);
+    event(KUI_RETAIL_DEMAND_IRQ_END|(KUI_RETAIL_GD_IRQ_DRIVE<<24),0u,20u);
+    p=page(2u);assert(p->rows[2][2]==1u && p->rows[3][1]==1u);
+    event(KUI_RETAIL_DEMAND_FREEZE,0u,0u);
+    struct kui_retail_demand_window before=demand.window;
+    unsigned clocks=clock_calls;
+    fixture.engine.stats.call_blocks=999u;
+    event(KUI_RETAIL_DEMAND_GD_BEGIN,2u,0u);advance(100u);event(KUI_RETAIL_DEMAND_GD_END,2u,0u);
+    event(KUI_RETAIL_DEMAND_FREEZE,0u,0u);
+    assert(clock_calls==clocks && !memcmp(&before,&demand.window,sizeof(before)));
+    p=page(1u);assert(p->rows[0][1]==2u); /* frozen before terminal cleanup */
+    p=page(5u);assert(p->rows[0][3]==1u && (p->rows[0][4]&0x80000000u));
+    assert(p->rows[1][1]==8u && p->rows[1][2]==1u && p->rows[1][3]==1u);
+    assert(p->rows[2][1]==2u && p->rows[2][2]==1024u);
+    assert(p->rows[3][2]==1u);
+#endif
+}
 int main(void) {
-    clock_contract();terminal_contract();hot_contract();
+    clock_contract();terminal_contract();hot_contract();decision_freeze_contract();
     puts("CE demand diagnostic: clock, terminal-only, engagement, bytes and completion contracts OK");
     return 0;
 }

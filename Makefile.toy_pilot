@@ -29,6 +29,15 @@ WORD_REVERSE_PROFILE ?= 0
 FMV_TEST ?= 0
 FMV_IDLE_REARM ?= 0
 TOY_DEMAND_TEST_PROFILE ?= 0
+TOY_DECISION_PROFILE ?= 0
+ifneq ($(filter $(TOY_DECISION_PROFILE),0 1 2),$(TOY_DECISION_PROFILE))
+$(error TOY_DECISION_PROFILE must be 0, 1 or 2)
+endif
+ifneq ($(TOY_DECISION_PROFILE),0)
+ifneq ($(FMV_TEST):$(FMV_IDLE_REARM):$(TOY_DEMAND_TEST_PROFILE):$(WORD_REVERSE_PROFILE):$(DATA_PIPELINE_PROFILE),1:0:0:0:2)
+$(error Toy decision profiles require AP, FMV_TEST=1 and no older test alternatives)
+endif
+endif
 ifneq ($(filter $(TOY_DEMAND_TEST_PROFILE),0 1 2 3),$(TOY_DEMAND_TEST_PROFILE))
 $(error TOY_DEMAND_TEST_PROFILE must be 0, 1, 2 or 3)
 endif
@@ -248,6 +257,7 @@ FLAGS = -std=c11 -Os -g -Wall -Wextra -Werror $(CPU) \
  -DKUI_TOY_PILOT_DATA_SCHEDULE_MODE=$(DATA_SCHEDULE_MODE) \
  -DKUI_FMV_TEST=$(FMV_TEST) -DKUI_TOY_FMV_IDLE_REARM=$(FMV_IDLE_REARM) \
  -DKUI_TOY_DEMAND_TEST_PROFILE=$(TOY_DEMAND_TEST_PROFILE) \
+ -DKUI_TOY_DECISION_PROFILE=$(TOY_DECISION_PROFILE) \
  $(if $(BUDGET_CONFIG),-DKUI_TOY_PILOT_DATA_BUDGET_PROFILE=$(DATA_BUDGET_PROFILE)) \
  $(if $(FOLLOWUP_CONFIG),-DKUI_TOY_PILOT_AD_FOLLOWUP_PROFILE=$(AD_FOLLOWUP_PROFILE)) \
  $(if $(TUNING_CONFIG),-DKUI_TOY_PILOT_DATA_TUNING_PROFILE=$(DATA_TUNING_PROFILE)) \
@@ -272,6 +282,9 @@ STAGE_SRC = src/loader/toy_pilot_stage.c src/loader/sd_reader.c src/loader/retai
 STAGE_OBJ = $(patsubst %.c,$(BUILD)/stage/%.o,$(STAGE_SRC)) $(BUILD)/stage_asm.o
 WORKER_SRC = src/loader/toy_pilot_worker.c src/loader/toy_pilot_bus.c src/loader/toy_pilot_lease.c \
  src/loader/toy_pilot_gd.c src/loader/toy_pilot_pause.c src/core/toy_pilot.c src/core/hash.c src/loader/minic.c
+ifneq ($(TOY_DECISION_PROFILE),0)
+WORKER_SRC += src/loader/toy_decision_observer.c
+endif
 ifeq ($(LOADER_TRACE),1)
 WORKER_SRC += src/loader/toy_loader_trace.c src/loader/toy_loader_trace_report.c src/loader/retail_display.c
 endif
@@ -308,7 +321,7 @@ resident: $(BUILD)/resident-sci.bin
 force-config:
 $(BUILD)/build-config: force-config
 	@mkdir -p $(@D)
-	@printf '%s\n' 'BUILD=$(BUILD_ID)' 'PROFILE=15' 'PILOT=1' 'LOW=1' 'SLOTS=64' 'SCI=1' 'SCI_PACED=1' 'SCI_FAULT=1' 'SCI_REUSE_TDRE=$(SCI_REUSE_TDRE)' 'GD_FIXED_STEP=$(GD_FIXED_STEP)' 'SHARED_SCI=$(SHARED_SCI)' 'ASYNC_CDDA=$(ASYNC_CDDA)' 'PRIVATE_P2=$(PRIVATE_P2)' 'NATIVE_CACHE=$(NATIVE_CACHE)' 'SYNTHETIC_SOURCE=$(SYNTHETIC_SOURCE)' 'OPT=$(RESIDENT_OPT)' $(if $(TRACE_CONFIG),'$(TRACE_CONFIG)') $(if $(filter $(DATA_PROBE),1),'DATA_PROBE=1' 'DATA_PAYLOAD_MODE=$(DATA_PAYLOAD_MODE)') $(if $(SCHEDULE_CONFIG),'$(SCHEDULE_CONFIG)') $(if $(BUDGET_CONFIG),'$(BUDGET_CONFIG)') $(if $(FOLLOWUP_CONFIG),'$(FOLLOWUP_CONFIG)') $(if $(TUNING_CONFIG),'$(TUNING_CONFIG)') $(if $(IRQ_CONFIG),'$(IRQ_CONFIG)') $(if $(PIPELINE_CONFIG),'$(PIPELINE_CONFIG)') $(if $(COOKED_CONFIG),'$(COOKED_CONFIG)') $(if $(REVERSE_CONFIG),'$(REVERSE_CONFIG)') $(if $(filter 1,$(NATIVE_COMPAT)),'NATIVE_COMPAT=1') $(FMV_CONFIG) 'TOY_DEMAND_TEST_PROFILE=$(TOY_DEMAND_TEST_PROFILE)' > $@.new
+	@printf '%s\n' 'BUILD=$(BUILD_ID)' 'PROFILE=15' 'PILOT=1' 'LOW=1' 'SLOTS=64' 'SCI=1' 'SCI_PACED=1' 'SCI_FAULT=1' 'SCI_REUSE_TDRE=$(SCI_REUSE_TDRE)' 'GD_FIXED_STEP=$(GD_FIXED_STEP)' 'SHARED_SCI=$(SHARED_SCI)' 'ASYNC_CDDA=$(ASYNC_CDDA)' 'PRIVATE_P2=$(PRIVATE_P2)' 'NATIVE_CACHE=$(NATIVE_CACHE)' 'SYNTHETIC_SOURCE=$(SYNTHETIC_SOURCE)' 'OPT=$(RESIDENT_OPT)' $(if $(TRACE_CONFIG),'$(TRACE_CONFIG)') $(if $(filter $(DATA_PROBE),1),'DATA_PROBE=1' 'DATA_PAYLOAD_MODE=$(DATA_PAYLOAD_MODE)') $(if $(SCHEDULE_CONFIG),'$(SCHEDULE_CONFIG)') $(if $(BUDGET_CONFIG),'$(BUDGET_CONFIG)') $(if $(FOLLOWUP_CONFIG),'$(FOLLOWUP_CONFIG)') $(if $(TUNING_CONFIG),'$(TUNING_CONFIG)') $(if $(IRQ_CONFIG),'$(IRQ_CONFIG)') $(if $(PIPELINE_CONFIG),'$(PIPELINE_CONFIG)') $(if $(COOKED_CONFIG),'$(COOKED_CONFIG)') $(if $(REVERSE_CONFIG),'$(REVERSE_CONFIG)') $(if $(filter 1,$(NATIVE_COMPAT)),'NATIVE_COMPAT=1') $(FMV_CONFIG) 'TOY_DECISION_PROFILE=$(TOY_DECISION_PROFILE)' 'TOY_DEMAND_TEST_PROFILE=$(TOY_DEMAND_TEST_PROFILE)' > $@.new
 	@if ! cmp -s $@.new $@; then mv $@.new $@; else rm $@.new; fi
 $(RESIDENT_OBJ) $(STAGE_OBJ) $(WORKER_OBJ) $(BUILD)/entry_asm.o: $(BUILD)/build-config
 $(BUILD)/sci/%.o: %.c
@@ -341,6 +354,7 @@ $(BUILD)/worker/src/loader/toy_loader_data_probe.o $(BUILD)/worker/src/loader/to
 endif
 ifneq ($(DATA_SCHEDULE_MODE),0)
 $(BUILD)/worker/src/loader/toy_pilot_gd.o: $(BUILD)/toy_pilot_resident_symbols.h
+$(BUILD)/worker/src/loader/toy_decision_observer.o: $(BUILD)/toy_pilot_resident_symbols.h
 endif
 ifeq ($(DATA_SCHEDULE_MODE),2)
 $(BUILD)/worker/src/loader/toy_pilot_worker.o: $(BUILD)/toy_pilot_resident_symbols.h

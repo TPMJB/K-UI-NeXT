@@ -145,6 +145,11 @@ static void publish_vectors(void) {
 }
 #endif
 static uint32_t our_vbr(void) {return (uint32_t)(uintptr_t)&kui_toy_pilot_sci_vectors-0x100u;}
+#if KUI_TOY_DECISION_PROFILE
+uint32_t kui_toy_pilot_sci_decision_vbr(void) {return our_vbr();}
+/* Private internal result; outer service normalizes it before publication. */
+#define DECISION_WAIT 2
+#endif
 static void maximum(uint32_t *out,uint32_t value) {if(value>*out)*out=value;}
 #if KUI_TOY_PILOT_DATA_BUDGET_PROFILE
 static void __attribute__((noinline)) sci_budget_add(uint32_t *out,uint32_t value) {
@@ -401,6 +406,9 @@ static int data_work(bool foreground) {
 #endif
                 hook();
             } else unhook();
+#if KUI_TOY_DECISION_PROFILE
+            if(foreground && kui_sci_stream_busy())return DECISION_WAIT;
+#endif
             return KUI_TOY_SCI_PENDING;
         }
         if(result!=KUI_SCI_STREAM_OK) {
@@ -534,6 +542,11 @@ int kui_toy_pilot_sci_service(struct kui_retail_gd *s) {
     if(!e.startup.enabled)return KUI_TOY_SCI_OK;
 #endif
     uint32_t before=ticks();++e.stats.calls;
+#if KUI_TOY_DECISION_PROFILE
+    int observe=kui_toy_decision_service_active();
+    struct kui_toy_decision_service observation={0};
+    uint32_t decision_last=before,decision_kind=0u,decision_have=0u;
+#endif
 #if KUI_TOY_DEMAND_TEST_PROFILE
     sci_budget_add(&demand_test.service_calls,1u);
     uint32_t demand_steps=0u;
@@ -571,8 +584,32 @@ int kui_toy_pilot_sci_service(struct kui_retail_gd *s) {
     for(unsigned step=stepped;e.active && !e.audio_waiting && !e.audio_held;++step) {
         if(e.verified_since>=KUI_TOY_SCI_SERVICE_BLOCKS){budget_exit=&e.budget.block_exits;break;}
         if(step>=KUI_TOY_SCI_SERVICE_STEPS){budget_exit=&e.budget.step_exits;break;}
+#if KUI_TOY_DECISION_PROFILE
+        if(step) {
+            uint32_t stamp=ticks();
+            if(observe && decision_have) {
+                uint32_t span=stamp-decision_last;
+                if(decision_kind==1u)observation.wait_ticks+=span;
+                else if(decision_kind==2u)observation.credit_ticks+=span;
+                else observation.other_ticks+=span;
+            }
+            decision_last=stamp;decision_have=0u;
+            if(stamp-before>=KUI_TOY_SCI_SERVICE_TICKS){budget_exit=&e.budget.time_exits;break;}
+        }
+        uint32_t decision_blocks=e.stats.call_blocks;
+#else
         if(step && ticks()-before>=KUI_TOY_SCI_SERVICE_TICKS){budget_exit=&e.budget.time_exits;break;}
+#endif
         result=pump_work(true);
+#if KUI_TOY_DECISION_PROFILE
+        decision_kind=result==DECISION_WAIT?1u:e.stats.call_blocks!=decision_blocks?2u:0u;
+        if(result==DECISION_WAIT)result=KUI_TOY_SCI_PENDING;
+        if(observe) {
+            decision_have=1u;
+            if(decision_kind==1u)++observation.wait_steps;
+            if(decision_kind==2u)++observation.credit_steps;
+        }
+#endif
 #if KUI_TOY_DEMAND_TEST_PROFILE
         ++demand_steps;sci_budget_add(&demand_test.pump_steps,1u);
 #if KUI_TOY_DEMAND_READY_RETURN
@@ -621,7 +658,22 @@ int kui_toy_pilot_sci_service(struct kui_retail_gd *s) {
      * admission allowance prevented reaching all four blocks. A newly
      * admitted request and cancellation reset it separately above. */
     e.verified_since=0u;
-    maximum(&e.stats.work_ticks_max,ticks()-before);return result;
+#if KUI_TOY_DECISION_PROFILE
+    uint32_t decision_end=ticks(),elapsed=decision_end-before;
+    maximum(&e.stats.work_ticks_max,elapsed);
+    if(observe) {
+        uint32_t span=decision_end-decision_last;
+        if(decision_have && decision_kind==1u)observation.wait_ticks+=span;
+        else if(decision_have && decision_kind==2u)observation.credit_ticks+=span;
+        else observation.other_ticks+=span;
+        observation.calls=1u;observation.elapsed_ticks=observation.max=elapsed;
+        observation.zero_calls=!credit;
+        kui_toy_decision_service_commit(&observation);
+    }
+#else
+    maximum(&e.stats.work_ticks_max,ticks()-before);
+#endif
+    return result;
 }
 #if KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
 bool kui_toy_pilot_sci_startup_active(void) {return e.startup.enabled!=0u;}

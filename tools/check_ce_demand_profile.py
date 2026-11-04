@@ -55,7 +55,21 @@ class ObserverCPU(ScalarOps,SH):
         if mutation is not None:self.store_block(mutation[0],struct.pack('<H',mutation[1]))
 
     def plain(self,opcode,pc):
-        if opcode&0xf0ff in (0x4011,0x4015):  # CMP/PZ and CMP/PL
+        if opcode>>8==0x85:  # MOV.W @(disp,Rm),R0, signed16
+            self.executing=pc;self.instructions+=1
+            self.r[0]=signed(self.read(self.r[(opcode>>4)&15]+(opcode&15)*2,2),16)&0xffffffff
+        elif opcode&0xf00f==0x6007:  # NOT Rm,Rn, T unchanged
+            self.executing=pc;self.instructions+=1
+            self.r[(opcode>>8)&15]=(~self.r[(opcode>>4)&15])&0xffffffff
+        elif opcode&0xf00f in (0x000c,0x000d,0x000e):  # MOV.B/W/L @(R0,Rm),Rn
+            self.executing=pc;self.instructions+=1;n,m=(opcode>>8)&15,(opcode>>4)&15
+            size={12:1,13:2,14:4}[opcode&15]
+            value=self.read((self.r[0]+self.r[m])&0xffffffff,size)
+            self.r[n]=(signed(value,size*8) if size<4 else value)&0xffffffff
+        elif opcode&0xf00f in (0x0004,0x0005,0x0006):  # MOV.B/W/L Rm,@(R0,Rn)
+            self.executing=pc;self.instructions+=1;n,m=(opcode>>8)&15,(opcode>>4)&15
+            self.write((self.r[0]+self.r[n])&0xffffffff,self.r[m],{4:1,5:2,6:4}[opcode&15])
+        elif opcode&0xf0ff in (0x4011,0x4015):  # CMP/PZ and CMP/PL
             self.executing=pc;self.instructions+=1;value=signed(self.r[(opcode>>8)&15],32)
             self.flag(value>=0 if opcode&0xf0ff==0x4011 else value>0)
         elif opcode&0xf00f==0x300a:  # SUBC Rm,Rn
@@ -164,7 +178,8 @@ def check(directory,profile,*,self_test=False):
     contract_address,contract,contract_section=symbol_bytes(high,'_kui_armada_ce_demand_contract',1)
     require(contract_section[2]&7==2 and len(contract)==16,'Missing immutable observer contract')
     magic,version,mode,identity=struct.unpack('<4I',contract)
-    require((magic,version,mode)==(0x444d4544,1,profile) and identity,
+    expected_version=3 if profile==3 else 1
+    require((magic,version,mode)==(0x444d4544,expected_version,profile) and identity,
             'Observer mode/identity differs from selected test')
     require(high[4]['__armada_bind_bss_end'][0]<=0x8cfbf000,
             'Observer state escaped the admitted high reservation')
@@ -173,12 +188,12 @@ def check(directory,profile,*,self_test=False):
     _,calls=load(sorted((directory/'scia/lto').glob('*.ci')),qualified=True)
     require(reachable(calls,'kui_retail_menu_return',ENTRY[1:]),'Terminal observer is not reachable')
     for root in ('kui_retail_resident_dispatch','kui_retail_ce_irq'):
-        require(reachable(calls,root,ENTRY[1:])==(profile==2),
+        require(reachable(calls,root,ENTRY[1:])==(profile>=2),
                 'Hot observer engagement differs from selected profile: '+root)
     stack=stack_check(directory/'scia',2000,ce=True)
     region=low[4]['_kui_retail_async_region'][0]
     gate_runs=0;first_condition=None
-    for event in (1,2,3,4,5,5|(4<<8)):
+    for event in ((1,2,3,4,5,5|(4<<8),6) if profile==3 else (1,2,3,4,5,5|(4<<8))):
         cpu=ObserverCPU(high)
         result,writes,instructions=cpu.run(address,(event,0,region),TOP)
         require(result==0 and instructions<256,'Unattached observer did not refuse boundedly')
@@ -197,7 +212,7 @@ def check(directory,profile,*,self_test=False):
             except (AssertionError,ValueError):mutants+=1
             else:raise ValueError('Removed/inverted compiled attachment gate admitted')
     sampler_runs=0
-    if profile==2:
+    if profile>=2:
         sampler,_,_=symbol_bytes(high,'_demand_clock_sample',2)
         for rollover in (False,True):
             cpu=ObserverCPU(high,sampler=True,rollover=rollover)
@@ -211,18 +226,26 @@ def check(directory,profile,*,self_test=False):
                         or TOP-1024<=a<=TOP-n for _,a,_,n in writes),
                     'Clock sampler wrote outside its result/private stack')
             sampler_runs+=1
-    positive=ObserverCPU(high,sampler=profile==2,admitted_region=low[4]['_kui_retail_async_region'][:2])
+    positive=ObserverCPU(high,sampler=profile>=2,admitted_region=low[4]['_kui_retail_async_region'][:2])
     positive.run(address,(1,0x40000000,region),TOP)
     positive.run(address,(2,0,region),TOP)
     pointer,_,_=positive.run(address,(5,0,region),TOP)
     got=struct.unpack('<5I',positive.block(pointer+32,20))
-    require(got==(1,profile,identity,int(profile==2),0),
+    require(got==(expected_version,profile,identity,int(profile>=2),0),
             'Actual SH observer did not engage its admitted low region/profile')
+    if profile==3:
+        positive.run(address,(6,0,region),TOP)
+        at,size=positive.demand;frozen=positive.block(at,size)
+        clocks=len(positive.device_reads)
+        for event in (1,2,3,4,6):positive.run(address,(event,0,region),TOP)
+        require(positive.block(at,size)==frozen and len(positive.device_reads)==clocks,
+                'Frozen linked observer resumed sampling or changed counters')
     return {'schema':'kui.ce-demand-observer.audit.v1','profile':profile,'profile_id':hex(identity),
             'direct_high_entry':hex(address),'contract_address':hex(contract_address),
             'original_bootstrap_guard_proof':original_boot,'unattached_linked_runs':gate_runs,
             'gate_mutants_rejected':mutants,'readonly_sampler_linked_runs':sampler_runs,
             'admitted_linked_profile_engagement':True,
+            'frozen_linked_metrics_immutable':profile==3,
             'private_stack':stack,'artifact_sha256':{'controller':hashlib.sha256(high[0]).hexdigest(),
                 'resident':hashlib.sha256(low[0]).hexdigest()},
             'timing_limit':'GD/SCI C bodies only; TMU values are modulo lower bounds; unavailable cycles stay untimed'}
@@ -231,7 +254,7 @@ def check(directory,profile,*,self_test=False):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('directory',type=Path)
-    parser.add_argument('--profile',type=int,choices=(1,2),required=True)
+    parser.add_argument('--profile',type=int,choices=(1,2,3),required=True)
     parser.add_argument('--self-test',action='store_true')
     args=parser.parse_args()
     print(json.dumps(check(args.directory,args.profile,self_test=args.self_test),indent=2))

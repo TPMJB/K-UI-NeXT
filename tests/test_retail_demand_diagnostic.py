@@ -22,6 +22,18 @@ class DemandDiagnosticTests(unittest.TestCase):
         def signed(value,bits):
             return int.from_bytes((value&((1<<bits)-1)).to_bytes(bits//8,'little'),'little',signed=True)
         values=(0,1,0xffffffff,0x80000000,0x7fffffff,0x12345678)
+        c=cpu(t=1);c.r[4]=0x3000;seen=[]
+        c.read=lambda address,count:seen.append((address,count)) or 0x8001
+        c.plain(0x854f,0)
+        self.assertEqual((c.r[0],seen,c.sr),(0xffff8001,[(0x301e,2)],0x400000f1))
+        for size,load,store in ((1,0x032c,0x0234),(2,0x032d,0x0235),(4,0x032e,0x0236)):
+            c=cpu(t=1);c.r[0]=0x1000;c.r[2]=0x2040;seen=[]
+            c.read=lambda address,count:seen.append((address,count)) or ((1<<(8*size))-1)
+            c.plain(load,0)
+            self.assertEqual((c.r[3],seen,c.sr),(0xffffffff,[(0x3040,size)],0x400000f1))
+            c.write=lambda address,value,count:seen.append((address,value,count))
+            c.plain(store,2)
+            self.assertEqual(seen[-1],(0x3040,0xffffffff,size))
         for immediate in range(256):
             for value in values:
                 c=cpu();c.r[0]=value;c.plain(0x8800|immediate,0)
@@ -36,6 +48,8 @@ class DemandDiagnosticTests(unittest.TestCase):
                     c=cpu(a,b,t);c.plain(0x312a,0)
                     self.assertEqual((c.r[1],c.sr&1),((a-b-t)&0xffffffff,int(a<b+t)))
         for a in values:
+            c=cpu(a,t=1);c.plain(0x6217,0)
+            self.assertEqual((c.r[2],c.sr),((~a)&0xffffffff,0x400000f1))
             c=cpu(a);c.plain(0x4110,0)
             self.assertEqual((c.r[1],c.sr&1),((a-1)&0xffffffff,int(a==1)))
             for opcode,bits in ((0x4119,8),(0x4129,16)):
@@ -62,7 +76,7 @@ class DemandDiagnosticTests(unittest.TestCase):
 
     def test_actual_collector_profiles(self):
         with tempfile.TemporaryDirectory(prefix="kui-demand-") as temp:
-            for profile in (1, 2):
+            for profile in (1, 2, 3):
                 output = Path(temp) / f"profile{profile}"
                 command = [os.environ.get("CC", "cc"), "-std=c11", "-Wall", "-Wextra", "-Werror",
                            "-fsanitize=undefined", "-fno-sanitize-recover=all", "-Iinclude", "-Isrc/loader",

@@ -21,8 +21,8 @@ WINCE_CDDA_CONTROLLER_BEGIN ?= 0x8cfa7000
 FMV_TEST ?= 0
 FMV_MUTE ?= 0
 DEMAND_PROFILE ?= 0
-ifneq ($(filter $(DEMAND_PROFILE),0 1 2),$(DEMAND_PROFILE))
-$(error DEMAND_PROFILE must be 0, 1 or 2)
+ifneq ($(filter $(DEMAND_PROFILE),0 1 2 3),$(DEMAND_PROFILE))
+$(error DEMAND_PROFILE must be 0, 1, 2 or 3)
 endif
 ifneq ($(DEMAND_PROFILE),0)
 ifneq ($(KUI_WINCE_CDDA_PROFILE):$(FMV_TEST):$(FMV_MUTE),:0:0)
