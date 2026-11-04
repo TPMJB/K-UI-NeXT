@@ -26,7 +26,7 @@ class UpdatePackageTests(unittest.TestCase):
         self.root = self.base / "KUI"
         self.paths = update.catalog()
         for index, name in enumerate(self.paths):
-            data = (update.CAPABILITY if index == 0 else bytes(16)) + struct.pack("<I", index)
+            data = (update.CAPABILITY + update.HANDOFF_HEADER + bytes(176) if index == 0 else bytes(16)) + struct.pack("<I", index)
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(envelope(data, len(data), BUILD))
@@ -73,6 +73,31 @@ class UpdatePackageTests(unittest.TestCase):
         for build, channel in (("not-a-build", "stable"), (BUILD, "nightly"), (BUILD.upper(), "stable")):
             with self.subTest(build=build, channel=channel), self.assertRaises(ValueError):
                 update.build_package(self.root, self.output, build, channel)
+
+    def test_only_explicit_exact_legacy_pins_accept_an_older_build(self):
+        path = "apps/games/cdda-toy-raw.kui"
+        data = envelope(bytes(20), 20, "abcdef123456")
+        pin = {"path": path, "build": "abcdef123456", "bytes": len(data),
+               "sha256": hashlib.sha256(data).hexdigest()}
+        with mock.patch.object(update, "legacy_catalog", return_value={path: pin}):
+            self.assertEqual(update.member_info(path, data, BUILD)["policy"], 1)
+            with self.assertRaises(ValueError):
+                update.member_info("apps/games/probe.kui", data, BUILD)
+            for key, value in (("build", BUILD), ("bytes", len(data) + 4), ("sha256", "00" * 32)):
+                changed = {**pin, key: value}
+                with self.subTest(key=key), mock.patch.object(update, "legacy_catalog", return_value={path: changed}):
+                    with self.assertRaises(ValueError):
+                        update.member_info(path, data, BUILD)
+        self.assertEqual(len(update.legacy_catalog()), 3)
+
+    def test_ram_handoff_must_be_unique_and_empty_on_disk(self):
+        for handoff in (b"", update.HANDOFF_HEADER + b"\1" + bytes(175),
+                        (update.HANDOFF_HEADER + bytes(176)) * 2,
+                        update.HANDOFF_HEADER + bytes(172)):
+            payload = update.CAPABILITY + handoff
+            (self.root / "runtime.kui").write_bytes(envelope(payload, len(payload), BUILD))
+            with self.subTest(bytes=len(handoff)), self.assertRaises(ValueError):
+                self.package()
 
     def test_missing_mixed_legacy_and_duplicate_capability(self):
         member = self.root / self.paths[1]

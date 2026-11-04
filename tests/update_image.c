@@ -110,12 +110,12 @@ static void faults_clear(void) {
     fail_write=fail_sync=cancel_after=-1;writes=syncs=0;activation_file=NULL;
 }
 static void runtime_fix(struct uf_package *p,unsigned i) {
-    uint8_t *f=uf_file(p,i);uf_put32(f+32u,kui_crc32(0,f+64u,256u));uf_put32(f+60u,kui_crc32(0,f,60u));uf_file_hash(p,i);
+    uint8_t *f=uf_file(p,i);uf_put32(f+32u,kui_crc32(0,f+64u,UF_PAYLOAD_BYTES));uf_put32(f+60u,kui_crc32(0,f,60u));uf_file_hash(p,i);
 }
 static void inspect_refusals(struct uf_package *good,const struct kui_update_pin *good_pin) {
     uint8_t *saved=malloc(good->bytes);CHECK(saved);memcpy(saved,good->data,good->bytes);
     struct kui_update_package p;unsigned gui=0;while(gui<good->count && strcmp(kui_update_catalog_path(gui),"runtime.kui"))++gui;CHECK(gui<good->count);
-    for(unsigned fault=0;fault<7u;fault++) {
+    for(unsigned fault=0;fault<10u;fault++) {
         memcpy(good->data,saved,good->bytes);uint8_t *f=uf_file(good,gui);
         if(fault==0u)f[200u]^=1u;
         if(fault==1u) {f[64u+32u]^=1u;runtime_fix(good,gui);}
@@ -127,9 +127,12 @@ static void inspect_refusals(struct uf_package *good,const struct kui_update_pin
             CHECK(good->count>1u);uint8_t *module=uf_file(good,1u);memcpy(module+40u,"ffffffffffff",12u);
             uf_put32(module+60u,kui_crc32(0,module,60u));uf_file_hash(good,1u);
         }
+        if(fault==7u) {f[64u+128u]^=1u;runtime_fix(good,gui);}
+        if(fault==8u) {memcpy(f+64u+320u,f+64u+128u,KUI_UPDATE_HANDOFF_BYTES);runtime_fix(good,gui);}
+        if(fault==9u) {f[64u+128u+16u]=1u;runtime_fix(good,gui);}
         file_write(PACKAGE_B,good->data,good->bytes);faults_clear();CHECK(inspect(PACKAGE_B,&p)!=KUI_UPDATE_OK);CHECK(!writes);
     }
-    memcpy(good->data,saved,good->bytes);uf_file(good,gui)[200u]^=1u;runtime_fix(good,gui);
+    memcpy(good->data,saved,good->bytes);uf_file(good,gui)[400u]^=1u;runtime_fix(good,gui);
     file_write(PACKAGE_B,good->data,good->bytes);faults_clear();CHECK(install(PACKAGE_B,good_pin)==KUI_UPDATE_STALE);CHECK(!writes);
     memcpy(good->data,saved,good->bytes);file_write(PACKAGE_B,good->data,good->bytes);free(saved);
     faults_clear();cancel_before=true;CHECK(inspect(PACKAGE_B,&p)==KUI_UPDATE_CANCELLED);cancel_before=false;CHECK(!writes);
@@ -276,7 +279,9 @@ int main(int argc,char **argv) {
     uint8_t *wide=malloc(64u+8192u);CHECK(wide);memcpy(wide,uf_file(&baseline,0u),64u);
     for(unsigned i=0;i<8192u;i++)wide[64u+i]=(uint8_t)(i*47u+29u);
     static const uint8_t capability[16]=KUI_UPDATE_CAPABILITY_INITIALIZER;
+    static const uint8_t handoff[KUI_UPDATE_HANDOFF_BYTES]=KUI_UPDATE_HANDOFF_INITIALIZER;
     memcpy(wide+64u+4090u,capability,sizeof(capability));
+    memcpy(wide+64u+128u,handoff,sizeof(handoff));
     uf_put32(wide+16u,8192u);uf_put32(wide+28u,8192u);uf_put32(wide+32u,kui_crc32(0,wide+64u,8192u));
     uf_put32(wide+60u,kui_crc32(0,wide,60u));file_write("0:/KUI/runtime.kui",wide,64u+8192u);
     CHECK(kui_update_select("",NULL,&status,logger,cancel,NULL)==KUI_UPDATE_OK && status.passed && status.done==status.total);

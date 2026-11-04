@@ -25,6 +25,7 @@ struct kui_update_entry {
     char path[KUI_UPDATE_PATH_BYTES];
     uint64_t bytes;
     uint8_t sha256[32];
+    uint8_t policy; /* 0 release build; 1 exact approved historical adapter */
     uint64_t payload_offset; /* absolute byte offset in .kup */
 };
 struct kui_update_package {
@@ -48,11 +49,19 @@ struct kui_update_activation {
  * manifest_bytes@20=count*128; LE64 payload_bytes@24; build12@32;
  * channel@44; zero45..63; manifest SHA256@64; zero96..123; CRC32@124
  * over the preceding124 bytes. Entries128: zero-padded path80,size64@80,
- * full-file SHA256@88,zero120..127. All payload files follow in order.
+ * full-file SHA256@88,policy@120,zero121..127. All payload files follow in order.
  * Pure codec. Every required path occurs exactly once, in catalog order.
  * No optional members, user data, arbitrary paths or root updates in v1. */
 size_t kui_update_catalog_count(void);
 const char *kui_update_catalog_path(size_t index);
+struct kui_update_legacy {
+    const char *path,*build,*sha256;
+    uint64_t bytes;
+};
+const struct kui_update_legacy *kui_update_legacy_for_path(const char *path);
+/* Policy1 admits only exact pinned adapter metadata, never a general mixed
+ * cohort. The returned ID is the only allowed .kui envelope build for entry. */
+const char *kui_update_entry_build(const char *release_build,const struct kui_update_entry *entry);
 bool kui_update_build_valid(const char *build);
 bool kui_update_bank_path(const char *build,const char *relative,char *out,size_t bytes);
 enum kui_update_result kui_update_header_decode(const uint8_t header[128],

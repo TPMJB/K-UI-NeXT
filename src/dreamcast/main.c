@@ -10,10 +10,15 @@
 #include "kui/boot_ui.h"
 #endif
 #ifdef KUI_SD_RUNTIME
+#include "kui/update_handoff.h"
 /* One retained marker admits this runtime to immutable update banks. A
  * volatile read in main keeps the capability in the linked payload. */
 static volatile const uint8_t kui_update_bank_capability[16] __attribute__((used))={
     'K','U','I','B','A','N','K','1',1,0,0,0,0xfe,0xff,0xff,0xff};
+/* This initialized slot is EMPTY on disk. Only a fully checked RAM chain
+ * image receives a filled context, consumed before any startup storage I/O. */
+static volatile uint8_t kui_update_ram_handoff[KUI_UPDATE_HANDOFF_BYTES]
+    __attribute__((used,aligned(4)))=KUI_UPDATE_HANDOFF_INITIALIZER;
 #include "kui/shell.h"
 #include "kui/recovery_dashboard.h"
 #include "kui/salvage_session_policy.h"
@@ -4665,6 +4670,12 @@ static bool boot_cancelled(void) {
 static bool update_boot_no_cancel(void) {return false;}
 static void update_boot_start(void) {
     struct kui_runtime_image image={0};FATFS fs;
+    struct kui_update_handoff_context handoff={.payload_offset=UINT32_MAX};
+    uintptr_t slot=(uintptr_t)kui_update_ram_handoff;
+    if(slot>=KUI_RUNTIME_ADDRESS && slot-KUI_RUNTIME_ADDRESS<=KUI_RUNTIME_MAX_BYTES-KUI_UPDATE_HANDOFF_BYTES)
+        handoff.payload_offset=(uint32_t)(slot-KUI_RUNTIME_ADDRESS);
+    for(unsigned i=0;i<KUI_UPDATE_HANDOFF_BYTES;i++)handoff.wire[i]=kui_update_ram_handoff[i];
+    for(unsigned i=16u;i<KUI_UPDATE_HANDOFF_BYTES;i++)kui_update_ram_handoff[i]=0;
     bool baseline=(controller_buttons()&CONT_B)!=0;
     /* Draw a bounded RAM-only status before a slow selected-card read. No
      * music, browser preload, app worker or storage callback exists yet. */
@@ -4680,7 +4691,7 @@ static void update_boot_start(void) {
     enum kui_update_boot_result result=KUI_UPDATE_BOOT_ERROR;
     if(mounted)result=baseline?
         kui_update_boot_baseline(KUI_BUILD_ID,kui_storage_selected(),&image,&update_boot_view,kui_log,update_boot_no_cancel):
-        kui_update_boot_read(KUI_BUILD_ID,kui_storage_selected(),&image,&update_boot_view,kui_log,update_boot_no_cancel);
+        kui_update_boot_read_handoff(KUI_BUILD_ID,kui_storage_selected(),&handoff,&image,&update_boot_view,kui_log,update_boot_no_cancel);
     else snprintf(update_boot_view.notice,sizeof(update_boot_view.notice),"Update storage unavailable; module loading blocked. Restart after checking SD.");
     bool released=!mounted || f_mount(NULL,"0:",0)==FR_OK;
     kui_sd_disconnect();

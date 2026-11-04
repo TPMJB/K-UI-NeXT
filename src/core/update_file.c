@@ -2,6 +2,7 @@
 #include "kui/update.h"
 #include "kui/runtime.h"
 #include "kui/hash.h"
+#include "kui/update_handoff.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -87,24 +88,27 @@ static enum kui_update_result admit(FIL *source,uint64_t offset,const struct kui
     uint8_t header[64];enum kui_update_result r=read_exact(source,header,sizeof(header),cancel);
     if(r)return r;
     struct kui_runtime_info runtime;
-    if(kui_runtime_header(header,entry->bytes,&runtime)!=KUI_RUNTIME_OK || memcmp(runtime.build,build,12u))
+    const char *expected_build=kui_update_entry_build(build,entry);
+    if(!expected_build || kui_runtime_header(header,entry->bytes,&runtime)!=KUI_RUNTIME_OK ||
+       memcmp(runtime.build,expected_build,13u))
         return KUI_UPDATE_RUNTIME;
     struct kui_sha256 sha;kui_sha256_init(&sha);kui_sha256_update(&sha,header,sizeof(header));
     if(sink && (r=write_exact(sink,header,sizeof(header)))!=KUI_UPDATE_OK)return r;
     if(s)s->done+=sizeof(header);
-    struct capability capability={0};uint32_t crc=0u;uint64_t done=64u;
+    struct capability capability={0};struct kui_update_handoff_scan handoff={0};
+    uint32_t crc=0u;uint64_t done=64u;
     while(done<entry->bytes) {
         UINT n=(UINT)(entry->bytes-done>CHUNK?CHUNK:entry->bytes-done);
         r=read_exact(source,buffer,n,cancel);if(r)return r;
         kui_sha256_update(&sha,buffer,n);crc=kui_crc32(crc,buffer,n);
-        if(gui)capability_update(&capability,buffer,n);
+        if(gui) {capability_update(&capability,buffer,n);kui_update_handoff_scan_update(&handoff,buffer,n);}
         if(sink && (r=write_exact(sink,buffer,n))!=KUI_UPDATE_OK)return r;
         done+=n;
         if(s) {s->done+=n;if(progress)progress(s);}
     }
     uint8_t digest[32];kui_sha256_digest(&sha,digest);
     if(crc!=runtime.crc32 || memcmp(digest,entry->sha256,32u))return KUI_UPDATE_CHECKSUM;
-    if(gui && capability.count!=1u)return KUI_UPDATE_RUNTIME;
+    if(gui && (capability.count!=1u || !kui_update_handoff_scan_valid(&handoff)))return KUI_UPDATE_RUNTIME;
     return stopped(cancel)?KUI_UPDATE_CANCELLED:KUI_UPDATE_OK;
 }
 enum kui_update_result kui_update_inspect(const char *path,struct kui_update_package *out,
@@ -332,17 +336,19 @@ static enum kui_update_result baseline_verify(struct kui_app_status *s,kui_cance
     uint8_t header[64],buffer[4096];struct kui_runtime_info info;
     enum kui_update_result r=read_exact(&file,header,sizeof(header),cancel);
     if(!r && kui_runtime_header(header,f_size(&file),&info)!=KUI_RUNTIME_OK)r=KUI_UPDATE_RUNTIME;
-    struct capability capability={0};uint32_t crc=0u,done=0u;
+    struct capability capability={0};struct kui_update_handoff_scan handoff={0};
+    uint32_t crc=0u,done=0u;
     if(!r && s)s->total=info.payload_bytes;
     while(!r && done<info.payload_bytes) {
         UINT n=info.payload_bytes-done;if(n>sizeof(buffer))n=sizeof(buffer);
         r=read_exact(&file,buffer,n,cancel);
         if(!r) {
-            crc=kui_crc32(crc,buffer,n);capability_update(&capability,buffer,n);done+=n;
+            crc=kui_crc32(crc,buffer,n);capability_update(&capability,buffer,n);
+            kui_update_handoff_scan_update(&handoff,buffer,n);done+=n;
             if(s) {s->done=done;if(progress)progress(s);}
         }
     }
-    if(!r && (crc!=info.crc32 || capability.count!=1u))r=KUI_UPDATE_CHECKSUM;
+    if(!r && (crc!=info.crc32 || capability.count!=1u || !kui_update_handoff_scan_valid(&handoff)))r=KUI_UPDATE_CHECKSUM;
     if(f_close(&file)!=FR_OK && !r)r=KUI_UPDATE_IO;
     if(!r && stopped(cancel))r=KUI_UPDATE_CANCELLED;
     return r;

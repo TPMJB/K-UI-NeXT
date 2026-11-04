@@ -39,10 +39,11 @@ bool kui_update_runtime_resolve(const char *logical,char *resolved,size_t capaci
     if(!running || strncmp(logical,prefix,sizeof(prefix)-1u))return false;
     const char *relative=logical+sizeof(prefix)-1u;
     const struct kui_update_entry *entry=kui_update_package_find(running,relative);
-    if(!entry || !kui_update_bank_path(running->build,entry->path,resolved,capacity))return false;
+    const char *build=entry?kui_update_entry_build(running->build,entry):NULL;
+    if(!build || !kui_update_bank_path(running->build,entry->path,resolved,capacity))return false;
     if(stream) {
         stream->pinned=true;stream->bytes=entry->bytes;
-        memcpy(stream->build,running->build,sizeof(stream->build));
+        memcpy(stream->build,build,sizeof(stream->build));
         memcpy(stream->expected,entry->sha256,sizeof(stream->expected));
         kui_sha256_init(&stream->hash);stream->update=stream_update;stream->finish=stream_finish;
     }
@@ -110,20 +111,72 @@ static bool same_activation(const struct kui_update_activation *a,const struct k
         !memcmp(a->previous,b->previous,sizeof(a->previous)) &&
         !memcmp(a->manifest_sha256,b->manifest_sha256,sizeof(a->manifest_sha256));
 }
-static bool load_bank(const struct kui_update_activation *selected,struct kui_runtime_image *out,
-    kui_log_fn log,kui_cancel_fn cancel) {
+static bool load_receipt(const struct kui_update_activation *selected,kui_cancel_fn cancel) {
     block_modules();running=calloc(1,sizeof(*running));
     if(!running)return false;
     enum kui_update_result r=kui_update_bank_receipt_read(selected->selected,running,cancel);
     if(r!=KUI_UPDATE_OK || strcmp(running->build,selected->selected) ||
        memcmp(running->manifest_sha256,selected->manifest_sha256,32u))return false;
-    resolver=BANK_MODULES;
+    resolver=BANK_MODULES;return true;
+}
+/* The first GUI checked the full immutable source. Rebind that RAM transfer to
+ * the freshly selected receipt and the source's still-EMPTY slot. No filled
+ * on-disk marker is accepted as proof; a direct boot has no RAM context and
+ * always takes the full SHA/CRC path. */
+static bool adopt(const char *compiled,unsigned transport,const struct kui_update_activation *selected,
+    const struct kui_update_handoff_context *context,kui_cancel_fn cancel) {
+    struct kui_update_handoff h;
+    if(!context || !kui_update_handoff_decode(context->wire,&h) ||
+       strcmp(compiled,h.build) || h.transport!=transport || h.payload_offset!=context->payload_offset ||
+       h.sequence!=selected->sequence || strcmp(h.build,selected->selected) ||
+       memcmp(h.manifest_sha256,selected->manifest_sha256,32u) || cancel())return false;
+    const struct kui_update_entry *entry=kui_update_package_find(running,"runtime.kui");
+    if(!entry || h.file_bytes!=entry->bytes || memcmp(h.runtime_sha256,entry->sha256,32u))return false;
+    char path[KUI_UPDATE_BOOT_PATH_BYTES];
+    if(!kui_update_bank_path(running->build,entry->path,path,sizeof(path)))return false;
+    FIL file;if(f_open(&file,path,FA_READ)!=FR_OK)return false;
+    uint8_t header[64],slot[KUI_UPDATE_HANDOFF_BYTES];UINT got=0;struct kui_runtime_info info;
+    bool ok=f_size(&file)==h.file_bytes && f_read(&file,header,sizeof(header),&got)==FR_OK && got==sizeof(header) &&
+        kui_runtime_header(header,f_size(&file),&info)==KUI_RUNTIME_OK && !strcmp(info.build,h.build) &&
+        info.crc32==h.payload_crc32 && info.memory_bytes==h.memory_bytes &&
+        h.payload_offset<=info.payload_bytes-KUI_UPDATE_HANDOFF_BYTES && !cancel();
+    if(ok)ok=f_lseek(&file,64u+h.payload_offset)==FR_OK &&
+        f_read(&file,slot,sizeof(slot),&got)==FR_OK && got==sizeof(slot) &&
+        kui_update_handoff_empty(slot,sizeof(slot),NULL);
+    if(f_close(&file)!=FR_OK)ok=false;
+    return ok && !cancel();
+}
+static bool load_runtime(struct kui_runtime_image *out,kui_log_fn log,kui_cancel_fn cancel) {
     enum kui_runtime_result loaded=kui_runtime_read(KUI_RUNTIME_PATH,out,log,cancel);
-    if(loaded!=KUI_RUNTIME_OK || !kui_update_capability_valid(out->data,out->info.payload_bytes))return false;
-    return true;
+    return loaded==KUI_RUNTIME_OK && kui_update_capability_valid(out->data,out->info.payload_bytes) &&
+        kui_update_handoff_empty(out->data,out->info.payload_bytes,NULL);
+}
+static bool stamp(struct kui_runtime_image *image,const struct kui_update_activation *selected,unsigned transport) {
+    const struct kui_update_entry *entry=kui_update_package_find(running,"runtime.kui");
+    struct kui_update_handoff h={.transport=transport,.sequence=selected->sequence,
+        .file_bytes=entry?entry->bytes:0u,.payload_crc32=image->info.crc32,.memory_bytes=image->info.memory_bytes};
+    if(!entry || !kui_update_handoff_empty(image->data,image->info.payload_bytes,&h.payload_offset))return false;
+    memcpy(h.build,selected->selected,sizeof(h.build));
+    memcpy(h.manifest_sha256,selected->manifest_sha256,32u);memcpy(h.runtime_sha256,entry->sha256,32u);
+    /* Coherence token, never a secret or an authentication nonce. It varies
+     * between attempted transfers and cannot replace any source validation. */
+    static uint64_t serial;uintptr_t address=(uintptr_t)image->data;uint8_t digest[32];
+    struct kui_sha256 hash;kui_sha256_init(&hash);++serial;
+    kui_sha256_update(&hash,&serial,sizeof(serial));kui_sha256_update(&hash,&address,sizeof(address));
+    kui_sha256_update(&hash,&h.sequence,sizeof(h.sequence));kui_sha256_update(&hash,h.runtime_sha256,32u);
+    kui_sha256_update(&hash,h.manifest_sha256,32u);kui_sha256_digest(&hash,digest);
+    memcpy(h.nonce,digest,sizeof(h.nonce));h.nonce[0]|=1u;
+    if(!kui_storage_patch_boot(image->data,image->info.payload_bytes,transport) ||
+       !kui_update_handoff_encode((uint8_t *)image->data+h.payload_offset,&h))return false;
+    image->info.crc32=kui_crc32(0,image->data,image->info.payload_bytes);return true;
 }
 enum kui_update_boot_result kui_update_boot_read(const char *compiled,unsigned transport,
     struct kui_runtime_image *out,struct kui_update_boot_view *view,kui_log_fn log,kui_cancel_fn cancel) {
+    return kui_update_boot_read_handoff(compiled,transport,NULL,out,view,log,cancel);
+}
+enum kui_update_boot_result kui_update_boot_read_handoff(const char *compiled,unsigned transport,
+    const struct kui_update_handoff_context *context,struct kui_runtime_image *out,
+    struct kui_update_boot_view *view,kui_log_fn log,kui_cancel_fn cancel) {
     if(!start(compiled,transport,out,view,log,cancel))return KUI_UPDATE_BOOT_ERROR;
     struct kui_update_activation slots[2]={{0}};
     enum kui_update_result result[2];
@@ -148,14 +201,22 @@ enum kui_update_boot_result kui_update_boot_read(const char *compiled,unsigned t
              * root file is unavailable, do not reactivate an older bank. */
             return baseline(compiled,transport,out,view,log,cancel);
         }
-        if(load_bank(selected,out,log,cancel)) {
+        if(load_receipt(selected,cancel)) {
+            if(adopt(compiled,transport,selected,context,cancel)) {
+                memcpy(view->bank,selected->selected,sizeof(view->bank));
+                memcpy(view->build,compiled,sizeof(view->build));
+                if(view->fallback)snprintf(view->notice,sizeof(view->notice),"Newer update unavailable; using an older checked selection");
+                log("Updates: using the checked RAM bank handoff");return KUI_UPDATE_BOOT_PINNED;
+            }
+        }
+        if(running && resolver==BANK_MODULES && !cancel() && load_runtime(out,log,cancel)) {
             memcpy(view->bank,selected->selected,sizeof(view->bank));
             memcpy(view->build,out->info.build,sizeof(view->build));
             if(view->fallback)snprintf(view->notice,sizeof(view->notice),"Newer update unavailable; using an older checked selection");
             if(!strcmp(compiled,out->info.build)) {
                 kui_runtime_free(out);return KUI_UPDATE_BOOT_PINNED;
             }
-            if(patch(out,transport,false)) {
+            if(stamp(out,selected,transport)) {
                 block_modules();return KUI_UPDATE_BOOT_CHAIN;
             }
             log("Updates: bank runtime lacks a unique storage handoff");

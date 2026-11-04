@@ -84,4 +84,49 @@ static void capability_and_selection(void) {
     value.selected[0]=0;memset(value.manifest_sha256,0,32u);CHECK(kui_update_activation_encode(&value,wire) && kui_update_activation_decode(wire,&got));
     CHECK(!got.selected[0] && !strcmp(got.previous,value.previous));
 }
-int main(void) {package_codecs();capability_and_selection();printf("PASS offline updater codec: %u checks; canonical cohort, byte integrity, malformed paths, overflow, capability and selection CRC\n",checks);return 0;}
+static void hex_digest(const char *hex,uint8_t bytes[32]) {
+    for(unsigned i=0;i<32u;i++) {
+        unsigned value=0u;CHECK(sscanf(hex+2u*i,"%2x",&value)==1);bytes[i]=(uint8_t)value;
+    }
+}
+static void legacy_policy(void) {
+    struct uf_package original=uf_build("012345abcdef",1u);struct kui_update_package package;
+    CHECK(uf_decode(&original,&package)==KUI_UPDATE_OK);
+    CHECK(!kui_update_legacy_for_path("runtime.kui") && !kui_update_legacy_for_path("../cdda-toy-raw.kui"));
+    unsigned historical=0u;
+    for(unsigned i=0;i<package.count;i++) {
+        const struct kui_update_legacy *pin=kui_update_legacy_for_path(package.entries[i].path);
+        CHECK(!strcmp(kui_update_entry_build(package.build,package.entries+i),package.build));
+        if(!pin)continue;
+        ++historical;struct kui_update_entry entry=package.entries[i];
+        entry.policy=1u;entry.bytes=pin->bytes;hex_digest(pin->sha256,entry.sha256);
+        CHECK(!strcmp(kui_update_entry_build(package.build,&entry),pin->build));
+        entry.sha256[31]^=1u;CHECK(!kui_update_entry_build(package.build,&entry));entry.sha256[31]^=1u;
+        ++entry.bytes;CHECK(!kui_update_entry_build(package.build,&entry));--entry.bytes;
+        strcpy(entry.path,"runtime.kui");CHECK(!kui_update_entry_build(package.build,&entry));strcpy(entry.path,pin->path);
+        entry.policy=2u;CHECK(!kui_update_entry_build(package.build,&entry));entry.policy=1u;
+        /* Exercise real manifest decoding/receipt encoding, including policy
+         * persistence; no historical executable bytes are fabricated here. */
+        struct uf_package wire=uf_build(package.build,1u);
+        uint8_t *member=uf_entry(&wire,i);uf_put64(member+80u,entry.bytes);
+        memcpy(member+88u,entry.sha256,32u);member[120u]=1u;
+        uint64_t payload=(uint64_t)wire.count*UF_FILE_BYTES-UF_FILE_BYTES+entry.bytes;
+        uf_put64(wire.data+24u,payload);uf_manifest_hash(&wire);
+        struct kui_update_package decoded;
+        CHECK(kui_update_header_decode(wire.data,128u+128u*wire.count+payload,&decoded)==KUI_UPDATE_OK);
+        CHECK(kui_update_manifest_decode(&decoded,wire.data+128u,128u*wire.count)==KUI_UPDATE_OK);
+        CHECK(decoded.entries[i].policy==1u && !strcmp(kui_update_entry_build(decoded.build,decoded.entries+i),pin->build));
+        uint8_t receipt[KUI_UPDATE_RECEIPT_MAX];size_t bytes=0u;
+        CHECK(kui_update_receipt_encode(&decoded,receipt,sizeof(receipt),&bytes)==KUI_UPDATE_OK);
+        CHECK(bytes==128u+128u*wire.count && !memcmp(receipt,wire.data,bytes));
+        member[120u]=2u;uf_manifest_hash(&wire);
+        CHECK(kui_update_header_decode(wire.data,128u+128u*wire.count+payload,&decoded)==KUI_UPDATE_OK);
+        CHECK(kui_update_manifest_decode(&decoded,wire.data+128u,128u*wire.count)!=KUI_UPDATE_OK);
+        member[120u]=1u;member[121u]=1u;uf_manifest_hash(&wire);
+        CHECK(kui_update_header_decode(wire.data,128u+128u*wire.count+payload,&decoded)==KUI_UPDATE_OK);
+        CHECK(kui_update_manifest_decode(&decoded,wire.data+128u,128u*wire.count)!=KUI_UPDATE_OK);
+        uf_free(&wire);
+    }
+    CHECK(historical==3u);uf_free(&original);
+}
+int main(void) {package_codecs();capability_and_selection();legacy_policy();printf("PASS offline updater codec: %u checks; canonical cohort, byte integrity, malformed paths, overflow, exact legacy policy, capability and selection CRC\n",checks);return 0;}

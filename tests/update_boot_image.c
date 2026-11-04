@@ -12,7 +12,7 @@
 #define BUILD_A "222222222222"
 #define BUILD_B "333333333333"
 #define MODULE "0:/KUI/apps/games/retail-boot.kui"
-static unsigned checks,writes,root_opens,root_bytes,member_opens;
+static unsigned checks,writes,root_opens,root_bytes,member_opens,bank_gui_bytes,bank_gui_opens;
 static uint8_t *disk;static size_t disk_bytes;static FATFS fs;
 static bool observe,cancel_now,media_fault_fired;
 static const char *reading_path;
@@ -46,7 +46,11 @@ FRESULT __wrap_f_open(FIL *file,const TCHAR *path,BYTE flags) {
     FRESULT r=__real_f_open(file,path,flags);if(r!=FR_OK)return r;
     unsigned i=0;while(i<8u && opened[i].file)++i;CHECK(i<8u);
     opened[i].file=file;CHECK(strlen(path)<sizeof(opened[i].path));strcpy(opened[i].path,path);
-    if(observe) {if(!strcmp(path,KUI_RUNTIME_PATH))++root_opens;if(!strcmp(path,member))++member_opens;}
+    if(observe) {
+        if(!strcmp(path,KUI_RUNTIME_PATH))++root_opens;
+        if(!strcmp(path,member))++member_opens;
+        if(strstr(path,KUI_UPDATE_SYSTEM "/")==path && strstr(path,"/runtime.kui"))++bank_gui_opens;
+    }
     return r;
 }
 FRESULT __real_f_read(FIL *,void *,UINT,UINT *);
@@ -55,6 +59,7 @@ FRESULT __wrap_f_read(FIL *file,void *data,UINT bytes,UINT *got) {
     if(observe && read_fault[0] && !strcmp(path,read_fault) && f_tell(file)>=64u) {*got=0;return FR_DISK_ERR;}
     reading_path=path;FRESULT r=__real_f_read(file,data,bytes,got);reading_path=NULL;
     if(observe && !strcmp(path,KUI_RUNTIME_PATH))root_bytes+=*got;
+    if(observe && strstr(path,KUI_UPDATE_SYSTEM "/")==path && strstr(path,"/runtime.kui"))bank_gui_bytes+=*got;
     if(observe && cancel_read[0] && !strcmp(path,cancel_read) && f_tell(file)>64u)cancel_now=true;
     return r;
 }
@@ -67,7 +72,7 @@ FRESULT __wrap_f_close(FIL *file) {
 static void idle(void) {
     observe=false;cancel_now=false;read_fault[0]=close_fault[0]=cancel_read[0]=media_fault[0]=0;
     media_fault_fired=false;reading_path=NULL;
-    root_opens=root_bytes=member_opens=0;
+    root_opens=root_bytes=member_opens=bank_gui_bytes=bank_gui_opens=0;
     for(unsigned i=0;i<8u;i++)CHECK(!opened[i].file);
 }
 static void parents(const char *path) {
@@ -85,7 +90,7 @@ static void remove_file(const char *path) {
     CHECK(!observe);FRESULT r=f_unlink(path);CHECK(r==FR_OK || r==FR_NO_FILE || r==FR_NO_PATH);
 }
 static void runtime_fix(struct uf_package *p,unsigned i) {
-    uint8_t *f=uf_file(p,i);uf_put32(f+32u,kui_crc32(0,f+64u,256u));
+    uint8_t *f=uf_file(p,i);uf_put32(f+32u,kui_crc32(0,f+64u,UF_PAYLOAD_BYTES));
     uf_put32(f+60u,kui_crc32(0,f,60u));uf_file_hash(p,i);
 }
 static void transport_marker(struct uf_package *p) {
@@ -121,6 +126,14 @@ static enum kui_update_boot_result boot(const char *compiled,unsigned transport,
     for(unsigned i=0;i<8u;i++)CHECK(!opened[i].file);
     CHECK((r==KUI_UPDATE_BOOT_CHAIN)==(out->data!=NULL));return r;
 }
+static enum kui_update_boot_result boot_handoff(const char *compiled,unsigned transport,
+    const struct kui_update_handoff_context *context,struct kui_runtime_image *out,struct kui_update_boot_view *view) {
+    unsigned before=writes;observe=true;
+    enum kui_update_boot_result r=kui_update_boot_read_handoff(compiled,transport,context,out,view,logger,cancel);
+    observe=false;CHECK(writes==before);
+    for(unsigned i=0;i<8u;i++)CHECK(!opened[i].file);
+    CHECK((r==KUI_UPDATE_BOOT_CHAIN)==(out->data!=NULL));return r;
+}
 static void baseline_tests(struct uf_package *root) {
     struct kui_runtime_image image;struct kui_update_boot_view view;char path[192];
     idle();CHECK(boot(ROOT_BUILD,KUI_STORAGE_SCIF,&image,&view,false)==KUI_UPDATE_BOOT_BASELINE);
@@ -137,6 +150,98 @@ static void baseline_tests(struct uf_package *root) {
     CHECK(!kui_runtime_resolve_path(MODULE,path,sizeof(path)));idle();
     CHECK(boot(ROOT_BUILD,KUI_STORAGE_AUTO,&image,&view,false)==KUI_UPDATE_BOOT_ERROR);
     (void)root;
+}
+static void handoff_tests(struct uf_package *a,struct uf_package *b) {
+    struct kui_runtime_image image;struct kui_update_boot_view view;
+    struct kui_update_handoff_context context={.payload_offset=128u};
+    struct kui_update_handoff h;char runtime[192],path[192];
+    CHECK(kui_update_bank_path(BUILD_A,"runtime.kui",runtime,sizeof(runtime)));
+    selection(0,10u,a,"");remove_file(KUI_UPDATE_ACTIVE1);idle();
+    CHECK(boot(ROOT_BUILD,KUI_STORAGE_SCI,&image,&view,false)==KUI_UPDATE_BOOT_CHAIN);
+    CHECK(bank_gui_bytes==UF_FILE_BYTES && bank_gui_opens==1u && !root_bytes);
+    memcpy(context.wire,(uint8_t *)image.data+context.payload_offset,sizeof(context.wire));
+    CHECK(kui_update_handoff_decode(context.wire,&h));
+    CHECK(!strcmp(h.build,BUILD_A) && h.sequence==10u && h.transport==KUI_STORAGE_SCI &&
+        h.payload_offset==context.payload_offset && h.file_bytes==UF_FILE_BYTES);
+    CHECK(h.payload_crc32!=image.info.crc32 && h.memory_bytes==image.info.memory_bytes);
+    CHECK(!kui_update_handoff_empty(image.data,image.info.payload_bytes,NULL));
+    CHECK(kui_crc32(0,image.data,image.info.payload_bytes)==image.info.crc32);
+    kui_runtime_free(&image);idle();
+    CHECK(boot_handoff(BUILD_A,KUI_STORAGE_SCI,&context,&image,&view)==KUI_UPDATE_BOOT_PINNED);
+    CHECK(bank_gui_bytes==64u+KUI_UPDATE_HANDOFF_BYTES && bank_gui_opens==1u && !root_bytes && !view.fallback);
+    CHECK(kui_runtime_resolve_path(MODULE,path,sizeof(path)) && strstr(path,"/222222222222/"));
+    /* Direct root/same-build entry has no checked transfer context. */
+    idle();CHECK(boot(BUILD_A,KUI_STORAGE_SCI,&image,&view,false)==KUI_UPDATE_BOOT_PINNED);
+    CHECK(bank_gui_bytes==UF_FILE_BYTES);
+    for(unsigned kind=0;kind<12u;kind++) {
+        struct kui_update_handoff_context bad=context;struct kui_update_handoff changed=h;
+        switch(kind) {
+        case 0:bad.wire[188]^=1u;break;
+        case 1:bad.wire[148]^=1u;break;
+        case 2:bad.payload_offset+=4u;break;
+        case 3:changed.transport=KUI_STORAGE_IDE;break;
+        case 4:++changed.sequence;break;
+        case 5:changed.manifest_sha256[0]^=1u;break;
+        case 6:changed.runtime_sha256[0]^=1u;break;
+        case 7:strcpy(changed.build,BUILD_B);break;
+        case 8:changed.file_bytes+=4u;changed.memory_bytes+=4u;break;
+        case 9:++changed.payload_crc32;break;
+        case 10:changed.memory_bytes+=4u;break;
+        default:changed.payload_offset+=4u;bad.payload_offset+=4u;break;
+        }
+        if(kind>=3u)CHECK(kui_update_handoff_encode(bad.wire,&changed));
+        idle();CHECK(boot_handoff(BUILD_A,KUI_STORAGE_SCI,&bad,&image,&view)==KUI_UPDATE_BOOT_PINNED);
+        CHECK(bank_gui_bytes>=UF_FILE_BYTES && !root_opens && !view.fallback);
+    }
+    /* A saved filled RAM slot on disk cannot confer adoption. Neither does a
+     * resealed changed header, or a receipt with a different manifest. */
+    for(unsigned kind=0;kind<3u;kind++) {
+        uint8_t altered[UF_FILE_BYTES];memcpy(altered,uf_file(a,0),sizeof(altered));
+        if(kind==0u)memcpy(altered+64u+128u,context.wire,sizeof(context.wire));
+        if(kind==1u) {uf_put32(altered+28u,768u);uf_put32(altered+60u,kui_crc32(0,altered,60u));}
+        if(kind<2u)write_file(runtime,altered,sizeof(altered));
+        else {
+            struct uf_package other=uf_build(BUILD_A,1u);transport_marker(&other);
+            uf_file(&other,1u)[64u+8u]^=1u;runtime_fix(&other,1u);
+            snprintf(path,sizeof(path),KUI_UPDATE_SYSTEM "/%s/package.bin",BUILD_A);
+            write_file(path,other.data,128u+128u*other.count);uf_free(&other);
+        }
+        idle();CHECK(boot_handoff(BUILD_A,KUI_STORAGE_SCI,&context,&image,&view)==KUI_UPDATE_BOOT_CHAIN);
+        CHECK(view.fallback && !view.bank[0] && !strcmp(image.info.build,ROOT_BUILD));
+        CHECK(!kui_runtime_resolve_path(MODULE,path,sizeof(path)));kui_runtime_free(&image);
+        idle();seed(a,false);
+    }
+    /* The active selection is reread. An older RAM context cannot choose its
+     * old bank over a valid newer bank, a conflict, or explicit baseline. */
+    selection(1,20u,b,BUILD_A);idle();
+    CHECK(boot_handoff(BUILD_A,KUI_STORAGE_SCI,&context,&image,&view)==KUI_UPDATE_BOOT_CHAIN);
+    CHECK(!strcmp(view.bank,BUILD_B) && bank_gui_bytes==UF_FILE_BYTES);
+    struct kui_update_handoff next;
+    CHECK(kui_update_handoff_decode((uint8_t *)image.data+128u,&next));
+    CHECK(memcmp(h.nonce,next.nonce,sizeof(h.nonce)));kui_runtime_free(&image);
+    selection(1,10u,b,BUILD_A);idle();
+    CHECK(boot_handoff(BUILD_A,KUI_STORAGE_SCI,&context,&image,&view)==KUI_UPDATE_BOOT_CHAIN);
+    CHECK(view.fallback && !view.bank[0] && !bank_gui_bytes);kui_runtime_free(&image);
+    selection(1,30u,NULL,BUILD_A);idle();
+    CHECK(boot_handoff(BUILD_A,KUI_STORAGE_SCI,&context,&image,&view)==KUI_UPDATE_BOOT_CHAIN);
+    CHECK(!view.bank[0] && !bank_gui_bytes);kui_runtime_free(&image);
+    /* Held B remains header-only in the baseline GUI even with an active
+     * bank, and bank GUI recovery still chains to the retained baseline. */
+    remove_file(KUI_UPDATE_ACTIVE1);idle();
+    CHECK(boot(ROOT_BUILD,KUI_STORAGE_SCI,&image,&view,true)==KUI_UPDATE_BOOT_BASELINE);
+    CHECK(root_bytes==64u && !bank_gui_bytes);
+    idle();CHECK(boot(BUILD_A,KUI_STORAGE_SCI,&image,&view,true)==KUI_UPDATE_BOOT_CHAIN);
+    CHECK(!bank_gui_bytes);kui_runtime_free(&image);
+    for(unsigned kind=0;kind<2u;kind++) {
+        idle();
+        if(kind)strcpy(cancel_read,runtime);
+        else snprintf(cancel_read,sizeof(cancel_read),KUI_UPDATE_SYSTEM "/%s/package.bin",BUILD_A);
+        CHECK(boot_handoff(BUILD_A,KUI_STORAGE_SCI,&context,&image,&view)==KUI_UPDATE_BOOT_ERROR);
+        CHECK(!image.data && !kui_runtime_resolve_path(MODULE,path,sizeof(path)));
+    }
+    idle();
+    printf("PASS bank GUI reads: dispatcher=%u bytes, adopted GUI=%u bytes (64-byte header + 192-byte EMPTY slot); direct entry fully checked\n",
+        (unsigned)UF_FILE_BYTES,64u+KUI_UPDATE_HANDOFF_BYTES);
 }
 static void bank_tests(struct uf_package *a,struct uf_package *b) {
     struct kui_runtime_image image;struct kui_update_boot_view view;char path[192],runtime[192];
@@ -163,7 +268,7 @@ static void bank_tests(struct uf_package *a,struct uf_package *b) {
     CHECK(module<a->count);uint8_t altered[UF_FILE_BYTES];
     for(unsigned kind=0;kind<2u;kind++) {
         memcpy(altered,uf_file(a,module),sizeof(altered));
-        if(kind==0u) {altered[200]^=1u;uf_put32(altered+32,kui_crc32(0,altered+64,256u));}
+        if(kind==0u) {altered[200]^=1u;uf_put32(altered+32,kui_crc32(0,altered+64,UF_PAYLOAD_BYTES));}
         else uf_put32(altered+28,768u);
         uf_put32(altered+60,kui_crc32(0,altered,60u));write_file(member,altered,sizeof(altered));
         member_opens=0;observe=true;CHECK(kui_runtime_read(MODULE,&image,logger,cancel)==KUI_RUNTIME_CHECKSUM);
@@ -242,7 +347,7 @@ int main(int argc,char **argv) {
     CHECK(f_mount(&fs,"0:",1)==FR_OK);
     struct uf_package root=uf_build(ROOT_BUILD,0u),a=uf_build(BUILD_A,0u),b=uf_build(BUILD_B,1u);
     transport_marker(&root);transport_marker(&a);transport_marker(&b);seed(&root,true);seed(&a,false);seed(&b,false);
-    baseline_tests(&root);bank_tests(&a,&b);idle();kui_update_boot_reset();
+    baseline_tests(&root);handoff_tests(&a,&b);bank_tests(&a,&b);idle();kui_update_boot_reset();
     CHECK(f_mount(NULL,"0:",0)==FR_OK);kui_media_set(NULL);uf_free(&root);uf_free(&a);uf_free(&b);free(disk);
     printf("PASS update boot/resolver: %u checks; header-only baseline, checked chain/transport, older-slot fallback, pinned same-stream module SHA, no root mixing or boot writes\n",checks);
     return 0;

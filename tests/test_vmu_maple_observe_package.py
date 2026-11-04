@@ -41,7 +41,7 @@ def worker(readonly_mode=0, abi=6):
     EH.pack_into(data, 0, b"\x7fELF\x01\x01\x01" + bytes(9), 2, 42, 1,
                  base + 64, 52, 0x300, 0, 52, 32, 2, 40, 6, 0)
     PH.pack_into(data, 52, 1, 0x100, base, base, 128, 128, 5, 32)
-    bss_end = 0x2c00 if readonly_mode == 4 else 0x1800 if readonly_mode == 3 else 0x400
+    bss_end = 0x2c00 if readonly_mode == 4 else 0x1880 if readonly_mode == 3 else 0x400
     PH.pack_into(data, 84, 1, 0x200, private + 0x100, base + 0x100,
                  0, bss_end + 4096 - 0x100, 6, 32)
     SH.pack_into(data, 0x328, 0, 1, 6, base, 0x100, 128, 0, 0, 32, 0)
@@ -57,15 +57,15 @@ def worker(readonly_mode=0, abi=6):
         symbols += (("_kui_vmu_maple_observer_sd_transaction", base + 80, 2, 0x12, 1),)
     if readonly_mode in (3, 4):
         symbols += (("_issued_chain", private + 0x400, 512, 0x11, 2),
-                    ("_captured_chain", private + 0x600, 512, 0x11, 2),
-                    ("_write_payloads", private + 0x800, 4096, 0x11, 2))
+                    ("_captured_chain", private + 0x600, 640, 0x11, 2),
+                    ("_write_payloads", private + 0x880, 4096, 0x11, 2))
     if readonly_mode == 4:
         symbols += tuple((name, base + 84 + index * 4, 2, 0x12, 1)
                          for index, name in enumerate(("_kui_vmu_durable_handoff_validate",
                              "_kui_vmu_durable_init", "_kui_vmu_durable_transaction",
                              "_kui_vmu_durable_admit", "_kui_vmu_durable_handle",
                              "_kui_sci_sd_write", "_kui_sci_sd_sync", "_durable_card_pio_write")))
-        symbols += (("_durable_card", private + 0x1800, 4608, 0x11, 2),)
+        symbols += (("_durable_card", private + 0x1880, 4608, 0x11, 2),)
     symbols_at, names_at = (0x800, 0xa00) if readonly_mode == 4 else (0x500, 0x600)
     SH.pack_into(data, 0x3A0, 0, 2, 0, 0, symbols_at, (len(symbols) + 1) * 16, 5, 1, 4, 16)
     for index, (name, address, size, kind, section) in enumerate(symbols, 1):
@@ -173,6 +173,8 @@ class ObserverPackageTests(unittest.TestCase):
         self.assertEqual(report["private_dma"]["issued_chain"],
                          dict(address="0xacfd0400", bytes=512, alignment=32,
                               physical_address="0x0cfd0400"))
+        self.assertEqual(report["private_dma"]["captured_chain"],
+                         dict(address="0xacfd0600", bytes=640, alignment=4))
         for at, fmt, value in ((0x100 + 15 * 4, "I", 0),
                                (0x500 + 6 * 16 + 12, "B", 0x11),
                                (0x500 + 6 * 16 + 8, "I", 0)):
@@ -224,6 +226,26 @@ class ObserverPackageTests(unittest.TestCase):
             struct.pack_into("<I", data, 0x100 + 15 * 4, 0x8CFD0050)
             with self.subTest(mode=mode), self.assertRaises(ValueError):
                 self.inspect(data)
+
+    def test_captured_frames_require_payload_pointer_space_without_dma_overlap(self):
+        for mode in (3, 4):
+            data = worker(mode)
+            report = self.inspect(data)
+            self.assertEqual(report["private_dma"]["captured_chain"]["bytes"], 32 * 20)
+            symbols_at = 0x800 if mode == 4 else 0x500
+            # The old 32 *16-byte object omits every captured payload pointer.
+            changed = bytearray(data)
+            struct.pack_into("<I", changed, symbols_at + 8 * 16 + 8, 512)
+            with self.subTest(mode=mode, fault="old frame size"), self.assertRaisesRegex(
+                    ValueError, "exact private P2 DMA object: _captured_chain"):
+                self.inspect(changed)
+            # The extra128 bytes remain exclusively owned by the captured
+            # frames; a payload allocation at their former end must refuse.
+            changed = bytearray(data)
+            struct.pack_into("<I", changed, symbols_at + 9 * 16 + 4, 0xACFD0800)
+            with self.subTest(mode=mode, fault="captured pointer overlap"), self.assertRaisesRegex(
+                    ValueError, "exact private P2 DMA object: _write_payloads"):
+                self.inspect(changed)
 
     def test_make_defaults_remain_passive_and_proof_sources_require_explicit_mode(self):
         root = Path(__file__).resolve().parents[1]

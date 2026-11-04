@@ -9,6 +9,11 @@ static const char *const catalog[]={
 #include "kui/update_catalog.inc"
 #undef KUI_UPDATE_MEMBER
 };
+static const struct kui_update_legacy legacy[]={
+#define KUI_UPDATE_LEGACY(path,build,bytes,sha) {path,build,sha,bytes},
+#include "kui/update_legacy.inc"
+#undef KUI_UPDATE_LEGACY
+};
 _Static_assert(sizeof(catalog)/sizeof(catalog[0])<=KUI_UPDATE_MAX_ENTRIES,"Update catalog bound");
 static uint32_t get32(const uint8_t *p) {
     return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24;
@@ -43,6 +48,22 @@ static void digest(const void *p,size_t bytes,uint8_t out[32]) {
 }
 size_t kui_update_catalog_count(void) {return sizeof(catalog)/sizeof(catalog[0]);}
 const char *kui_update_catalog_path(size_t index) {return index<kui_update_catalog_count()?catalog[index]:NULL;}
+const struct kui_update_legacy *kui_update_legacy_for_path(const char *path) {
+    if(!path)return NULL;
+    for(size_t i=0;i<sizeof(legacy)/sizeof(legacy[0]);i++)if(!strcmp(path,legacy[i].path))return legacy+i;
+    return NULL;
+}
+const char *kui_update_entry_build(const char *build,const struct kui_update_entry *entry) {
+    if(!entry || !kui_update_build_valid(build))return NULL;
+    if(!entry->policy)return build;
+    if(entry->policy!=1u)return NULL;
+    const struct kui_update_legacy *pin=kui_update_legacy_for_path(entry->path);
+    if(!pin || entry->bytes!=pin->bytes)return NULL;
+    static const char hex[]="0123456789abcdef";
+    for(unsigned i=0;i<32u;i++)if(pin->sha256[2u*i]!=hex[entry->sha256[i]>>4u] ||
+        pin->sha256[2u*i+1u]!=hex[entry->sha256[i]&15u])return NULL;
+    return pin->build;
+}
 bool kui_update_build_valid(const char *build) {
     if(!span(build,KUI_UPDATE_BUILD_BYTES))return false;
     for(unsigned i=0;i<12u;i++)if(!((build[i]>='0' && build[i]<='9') || (build[i]>='a' && build[i]<='f')))return false;
@@ -110,10 +131,12 @@ enum kui_update_result kui_update_manifest_decode(struct kui_update_package *pac
         const uint8_t *wire=(const uint8_t *)manifest+(size_t)i*128u;
         if(!canonical_path(wire,catalog[i])) {result=KUI_UPDATE_COHORT;goto done;}
         uint64_t size=get64(wire+80u);
-        if(!zero(wire+120u,8u) || !size || size>KUI_UPDATE_MAX_PAYLOAD-total)goto done;
+        if(wire[120u]>1u || !zero(wire+121u,7u) || !size || size>KUI_UPDATE_MAX_PAYLOAD-total)goto done;
         struct kui_update_entry *entry=decoded->entries+i;
         memcpy(entry->path,catalog[i],strlen(catalog[i])+1u);entry->bytes=size;
         memcpy(entry->sha256,wire+88u,32u);entry->payload_offset=offset;offset+=size;total+=size;
+        entry->policy=wire[120u];
+        if(!kui_update_entry_build(decoded->build,entry)) {result=KUI_UPDATE_COHORT;goto done;}
     }
     if(total!=decoded->payload_bytes || offset!=decoded->file_bytes)goto done;
     memcpy(package,decoded,sizeof(*package));result=KUI_UPDATE_OK;
@@ -127,6 +150,7 @@ static enum kui_update_result full_valid(const struct kui_update_package *p) {
     for(uint32_t i=0;i<p->count;i++) {
         if(!canonical_path(p->entries[i].path,catalog[i]))return KUI_UPDATE_COHORT;
         if(!p->entries[i].bytes || p->entries[i].bytes>KUI_UPDATE_MAX_PAYLOAD-total)return KUI_UPDATE_FORMAT;
+        if(!kui_update_entry_build(p->build,p->entries+i))return KUI_UPDATE_COHORT;
         total+=p->entries[i].bytes;
     }
     return total==p->payload_bytes?KUI_UPDATE_OK:KUI_UPDATE_FORMAT;
@@ -143,6 +167,7 @@ enum kui_update_result kui_update_receipt_encode(const struct kui_update_package
         uint8_t *entry=encoded+128u+(size_t)i*128u;
         memcpy(entry,package->entries[i].path,strlen(catalog[i]));put64(entry+80u,package->entries[i].bytes);
         memcpy(entry+88u,package->entries[i].sha256,32u);
+        entry[120u]=package->entries[i].policy;
     }
     uint8_t sha[32];digest(encoded+128u,bytes-128u,sha);
     if(memcmp(sha,package->manifest_sha256,32u)) {free(encoded);return KUI_UPDATE_CHECKSUM;}

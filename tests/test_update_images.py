@@ -39,7 +39,7 @@ def main():
         "-Wall", "-Wextra", "-Werror", "-Wpedantic", "-fsanitize=address,undefined",
         "-fno-sanitize-recover=all", "-fno-omit-frame-pointer", "-fno-pie", "-no-pie",
         "-Iinclude", "-I" + str(source), "-Isrc/dreamcast"]
-    pure = ["src/core/update.c", "src/core/hash.c", "src/core/data.c"]
+    pure = ["src/core/update.c", "src/core/update_handoff.c", "src/core/hash.c", "src/core/data.c"]
     file_source = next((str(path.relative_to(ROOT)) for path in
         (ROOT / "src/apps/update_file.c", ROOT / "src/core/update_file.c") if path.is_file()), None)
     if not file_source:

@@ -222,6 +222,35 @@ def capability(stage,module):
     return dict(address=hex(address),bytes=32,sha256=sha(body),exactly_one_in_stage_and_module=True)
 
 
+def controller_slot_binding(stage,module,worker):
+    """Tie the reviewed worker address to this exact stage's normal/Off mode.
+
+    Compact A1 predates a slot scalar, so its paired whole-function pins and
+    executed response semantics establish the slot. The stage must carry the
+    matching immutable captions and its unique typed canonical mode0 record;
+    a filename or caller-selected slot cannot authorize another worker.
+    """
+    from check_native_controller_failure_witness import slot_instructions
+    slot=slot_instructions(worker)
+    if not slot.get('compact'):return slot
+    require(layout_for(stage[4]) is BACKGROUND_COMPACT,'Compact virtual-slot worker needs its matching stage')
+    address,body,section=symbol_bytes(stage,'__native_runtime_mode_start',1)
+    expected=struct.pack('<8s6I',b'KUINVM01',1,32,0,0,0,0)
+    payload=b''.join(stage[0][p[1]:p[1]+p[4]] for p in stage[2] if p[0]==1 and p[4])
+    require(section[2]&7==2 and not address&3 and body==expected and
+            payload.count(body)==module.count(body)==1,
+            'Compact slot mode must be its unique immutable typed32B normal-mode descriptor')
+    selected=slot['virtual_slot'];other=3-selected
+    for mode in ('ON','OFF'):
+        caption=('NEW READER / VIRTUAL A%d %s\0'%(selected,mode)).encode()
+        foreign=('VIRTUAL A%d %s'%(other,mode)).encode()
+        require(payload.count(caption)==module.count(caption)==1 and foreign not in payload and foreign not in module,
+                'Compact controller slot differs from its immutable stage/module caption')
+    return {**slot,'descriptor_address':hex(address),'normal_mode':0,'off_mode':7,
+            'descriptor_sha256':sha(body),'exactly_one_mode_descriptor':True,
+            'paired_on_off_captions':True}
+
+
 def embedded_blobs(stage,resident,legacy,directory):
     result={}
     for role,image,filename,prefix in (
@@ -826,7 +855,8 @@ def check(directory,*,self_test=False,cold_binder_proof=None,witness_proof=None)
         witness_proof=check_witness(directory,self_test=self_test) if witness_profile(worker) else {'enabled':False}
     witness_companion(worker,{'controller_failure_witness':witness_proof})
     module=(directory/'retail-maple-observe.kui').read_bytes()
-    cap=capability(stage,module);blobs=embedded_blobs(stage,resident,legacy,directory)
+    cap=capability(stage,module);slot_binding=controller_slot_binding(stage,module,worker)
+    blobs=embedded_blobs(stage,resident,legacy,directory)
     geometry=layout_for(stage[4])
     layouts=console_layouts(general=geometry.WORKER_BYTES in (0x1c000,0x12000),
                             compact=geometry is BACKGROUND_COMPACT);layout=layouts['layouts']['x']
@@ -899,7 +929,7 @@ def check(directory,*,self_test=False,cold_binder_proof=None,witness_proof=None)
         compact_background=compact,
         artifact_sha256={name:sha(image[0]) for name,image in
                          (('resident',resident),('legacy',legacy),('stage',stage),('worker',worker))},
-        capability=cap,embedded_engines=blobs,immutable_stage_pins=stage_pins,immutable_worker_pins=worker_pins,
+        capability=cap,virtual_card_slot=slot_binding,embedded_engines=blobs,immutable_stage_pins=stage_pins,immutable_worker_pins=worker_pins,
         controller_failure_witness=witness_proof,
         selected_low_callbacks=low_callbacks,
         selected_low_callback_companion_mutation_rejections=callback_refusals,

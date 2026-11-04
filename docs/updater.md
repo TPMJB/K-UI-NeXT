@@ -57,7 +57,11 @@ older slot; the current valid slot is retained. The selected GUI pins all
 module reads and module presence checks to its own version bank. Missing,
 corrupt or unexpected modules fail closed; they do not fall back to the root
 module tree. Module SHA-256 verification consumes the same file stream used
-to load it, before any launch-specific patching.
+to load it, before any launch-specific patching. Most components must match
+the release build ID. Three historical CDDA adapters are explicit exceptions:
+their path, original build ID, exact length and full-file SHA-256 must match
+the approved pins in `update_legacy.inc`. They are included in the bank rather
+than read from the root installation. Arbitrary old modules are refused.
 
 Missing or corrupt update files can fall back to an older checked selection
 or the baseline. A physical device read failure invalidates the mounted
@@ -70,12 +74,15 @@ transport before handing over. A selected GUI with the same compiled build
 continues with its module bank pinned. Restoring the baseline hands control
 back to the retained root runtime and its root module cohort.
 
-This first implementation uses the retained GUI as its dispatcher, rather
-than introducing another boot executable. A bank boot therefore performs
-additional runtime reads, including the selected GUI's startup verification.
-The normal baseline path only rereads its 64-byte header. Boot-time cost on
-SCIF/SCI/IDE still needs measurement before a public updater release; a compact
-dispatcher or checked in-memory handoff can reduce those extra reads later.
+This first implementation uses the retained GUI as its dispatcher. It reads
+and fully verifies the selected runtime once, then stamps its staged RAM-only
+handoff slot. The launched GUI checks the fresh selection/receipt, its on-disk
+header and the still-empty source slot before adopting that handoff. It reads
+256 bytes of the GUI file in this path rather than the whole runtime again.
+Missing/stale context uses full verification. The normal baseline path only
+rereads its 64-byte header. No filled on-disk handoff is accepted in a package.
+Boot time on SCIF/SCI/IDE still needs hardware measurement; the initial root
+GUI remains an extra load compared with a future compact dispatcher.
 
 The records and readback checks protect against partial updater writes. They
 do **not** make FAT/exFAT directory or allocation metadata power-loss atomic,
@@ -87,7 +94,7 @@ an independent backup and the recovery route.
 
 ## Building a package
 
-Only a complete same-build cohort is accepted. The authoritative ordered file
+Only a complete explicitly admitted cohort is accepted. The authoritative ordered file
 catalog is [update_catalog.inc](../include/kui/update_catalog.inc). The first
 format contains 26 `.kui` members, including all referenced module names and
 their compatibility aliases. Existing partial development ZIPs and older
@@ -108,12 +115,33 @@ python3 tools/update_package.py build path/to/complete/KUI update.kup \
 python3 tools/update_package.py verify update.kup
 ```
 
-The builder checks envelopes, payload CRCs, the common build ID and the GUI's
-bank-capability marker. It rejects symlinks and incomplete/mixed cohorts,
+The builder checks envelopes, payload CRCs, the release build ID (or exact
+approved historical pin) and the GUI's bank-capability and empty handoff
+markers. It rejects symlinks and incomplete/unapproved mixed cohorts,
 rechecks source bytes while writing, and verifies the resulting package before
 publishing the output file. Files outside the catalog are never included.
 Testing packages are explicitly identified in the review screen. No signing
 key or network credentials are embedded in the package.
+
+The full native build orchestrator also runs each component's existing
+layout/profile/slot/instruction admission before packaging:
+
+```sh
+source .deps/kos/environ.sh
+python3 tools/update_release.py --output build/update-release/BUILD \
+    --legacy-dir path/to/previous-complete/KUI --channel testing
+```
+
+It requires a clean source commit, builds all 23 fresh components, checks the
+three preserved adapters, and writes build receipts, checksums and a complete
+`.kup`. It never reads a game image or personal card profile. Silver/Toy VMU
+components use a generated public blank profile that the launcher personalizes
+in RAM before use.
+
+`tools/package_update_test.py` combines two admitted builds and corresponding
+sources into a hardware-test ZIP. It runs the real-release FatFs harness first;
+the two different build IDs exercise actual chaining, checked RAM adoption and
+rollback. Relabelling a single binary is not a substitute for these builds.
 
 ## Wire format, version 1
 
@@ -140,11 +168,19 @@ runtime envelope's stricter size/address/memory limits.
 | 0 | Exact catalog-relative ASCII path, NUL padded to 80 bytes |
 | 80 | File length, 64-bit |
 | 88 | SHA-256 of the entire `.kui` file, 32 bytes |
-| 120–127 | Zero |
+| 120 | Policy: 0 current release, 1 exact approved historical adapter |
+| 121–127 | Zero |
 
 The GUI payload must contain exactly one initialized 16-byte capability marker:
 ASCII `KUIBANK1`, 32-bit protocol 1 and its 32-bit inverse. Legacy GUIs cannot
 be installed into a bank because they could load unrelated root modules.
+
+It also contains exactly one 192-byte empty handoff slot: `KUIHOF1\0`, 32-bit
+version 1 and size 192, with all remaining bytes zero on disk. Only the checked
+RAM copy receives transport, selection, manifest/runtime digests, original
+header fields, an integrity token and CRC. These establish transfer coherence,
+not cryptographic authenticity. The running GUI consumes its slot once before
+storage I/O; a source package with a populated/duplicate slot is refused.
 
 Selection records are 128 bytes: magic `KUIACT1\0`, version and record length,
 64-bit nonzero sequence at offset 16, selected and previous build IDs at 24 and

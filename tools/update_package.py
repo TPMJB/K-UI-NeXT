@@ -25,6 +25,7 @@ MAX_ENTRIES = 64
 MAX_PAYLOAD = 128 * 1024 * 1024
 MAX_MEMBER = 4 * 1024 * 1024 + 64
 CAPABILITY = b"KUIBANK1" + struct.pack("<II", 1, 0xFFFFFFFE)
+HANDOFF_HEADER = b"KUIHOF1\0" + struct.pack("<II", 1, 192)
 CHANNELS = {"stable": 0, "testing": 1}
 
 
@@ -43,15 +44,44 @@ def catalog():
     return tuple(paths)
 
 
+def legacy_catalog():
+    result = {}
+    for line in (ROOT / "include/kui/update_legacy.inc").read_text(encoding="ascii").splitlines():
+        if not line.strip() or line.lstrip().startswith("/*"):
+            continue
+        match = re.fullmatch(r'KUI_UPDATE_LEGACY\("([a-z0-9/.-]+)","([0-9a-f]{12})",([0-9]+),"([0-9a-f]{64})"\)', line.strip())
+        if not match:
+            raise ValueError("Invalid approved legacy component catalog")
+        path, build, size, sha = match.groups()
+        if path in result or path not in catalog():
+            raise ValueError("Duplicate or unexpected legacy component")
+        result[path] = {"path": path, "build": build, "bytes": int(size), "sha256": sha}
+    return result
+
+
+def handoff_empty(payload):
+    if payload.count(HANDOFF_HEADER) != 1:
+        return False
+    offset = payload.index(HANDOFF_HEADER)
+    return payload[offset:offset + 192] == HANDOFF_HEADER + bytes(176)
+
+
 def member_info(path, data, build):
     if not 68 <= len(data) <= MAX_MEMBER:
         raise ValueError("Invalid member size: " + path)
     info = verify_runtime(data)
+    sha = hashlib.sha256(data).hexdigest()
+    policy = 0
     if info["build"] != build:
-        raise ValueError("Mixed build cohort: " + path)
+        pin = legacy_catalog().get(path)
+        if not pin or pin["build"] != info["build"] or pin["bytes"] != len(data) or pin["sha256"] != sha:
+            raise ValueError("Mixed build cohort or unapproved historical component: " + path)
+        policy = 1
     if path == "runtime.kui" and data[64:].count(CAPABILITY) != 1:
         raise ValueError("GUI does not support immutable update banks")
-    return {"path": path, "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+    if path == "runtime.kui" and not handoff_empty(data[64:]):
+        raise ValueError("GUI must contain exactly one empty update handoff slot")
+    return {"path": path, "bytes": len(data), "sha256": sha, "policy": policy}
 
 
 def read_exact(stream, size):
@@ -84,10 +114,10 @@ def verify(path):
             entry = manifest[index * ENTRY_BYTES:(index + 1) * ENTRY_BYTES]
             encoded = name.encode("ascii")
             size, = struct.unpack_from("<Q", entry, 80)
-            if (entry[:80] != encoded + bytes(80 - len(encoded)) or any(entry[120:]) or
+            if (entry[:80] != encoded + bytes(80 - len(encoded)) or entry[120] > 1 or any(entry[121:]) or
                     not 68 <= size <= MAX_MEMBER):
                 raise ValueError("Invalid or incomplete update member: " + name)
-            entries.append({"path": name, "bytes": size, "sha256": entry[88:120].hex()})
+            entries.append({"path": name, "bytes": size, "sha256": entry[88:120].hex(), "policy": entry[120]})
         if sum(entry["bytes"] for entry in entries) != total:
             raise ValueError("Update payload size mismatch")
         for entry in entries:
@@ -140,6 +170,7 @@ def build_package(root, output, build, channel="stable"):
         manifest[start:start + len(path)] = path
         struct.pack_into("<Q", manifest, start + 80, entry["bytes"])
         manifest[start + 88:start + 120] = bytes.fromhex(entry["sha256"])
+        manifest[start + 120] = entry["policy"]
     header = bytearray(HEADER_BYTES)
     header[:8] = MAGIC
     struct.pack_into("<IIIIQ", header, 8, 1, HEADER_BYTES, len(entries), len(manifest), total)

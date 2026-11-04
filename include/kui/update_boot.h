@@ -3,6 +3,7 @@
 #define KUI_UPDATE_BOOT_H
 #include "kui/runtime.h"
 #include "kui/hash.h"
+#include "kui/update_handoff.h"
 
 #define KUI_UPDATE_BOOT_PATH_BYTES 192u
 enum kui_update_boot_result {
@@ -21,6 +22,13 @@ struct kui_update_boot_view {
  * A bank is never silently combined with root modules. */
 enum kui_update_boot_result kui_update_boot_read(const char *compiled_build,
     unsigned transport,struct kui_runtime_image *out,struct kui_update_boot_view *view,
+    kui_log_fn log,kui_cancel_fn cancel);
+/* Optional RAM-only transfer context. A matching checked chain can adopt its
+ * mounted receipt after a header + EMPTY-slot read; every mismatch requires
+ * the full runtime SHA/CRC path. The context is never written to storage. */
+enum kui_update_boot_result kui_update_boot_read_handoff(const char *compiled_build,
+    unsigned transport,const struct kui_update_handoff_context *,
+    struct kui_runtime_image *out,struct kui_update_boot_view *view,
     kui_log_fn log,kui_cancel_fn cancel);
 /* Safe manual bypass: a bank GUI chains to the root GUI rather than merely
  * clearing its bank pin and continuing with root modules. */

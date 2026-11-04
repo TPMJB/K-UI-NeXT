@@ -2,12 +2,14 @@
 #ifndef KUI_TEST_UPDATE_FIXTURE_H
 #define KUI_TEST_UPDATE_FIXTURE_H
 #include "kui/update.h"
+#include "kui/update_handoff.h"
 #include "kui/runtime.h"
 #include "kui/hash.h"
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
-#define UF_FILE_BYTES 320u
+#define UF_PAYLOAD_BYTES 512u
+#define UF_FILE_BYTES (64u+UF_PAYLOAD_BYTES)
 struct uf_package {uint8_t *data;size_t bytes;unsigned count;};
 static inline void uf_put32(uint8_t *p,uint32_t n) {for(unsigned i=0;i<4u;i++)p[i]=(uint8_t)(n>>(8u*i));}
 static inline void uf_put64(uint8_t *p,uint64_t n) {for(unsigned i=0;i<8u;i++)p[i]=(uint8_t)(n>>(8u*i));}
@@ -33,14 +35,16 @@ static inline struct uf_package uf_build(const char build[13],unsigned channel) 
         const char *path=kui_update_catalog_path(i);assert(path && strlen(path)<80u);
         uint8_t *entry=uf_entry(&p,i),*file=uf_file(&p,i),*body=file+64u;
         memcpy(entry,path,strlen(path));uf_put64(entry+80u,UF_FILE_BYTES);
-        for(unsigned j=0;j<256u;j++)body[j]=(uint8_t)(j*37u+i*19u+11u);
+        for(unsigned j=0;j<UF_PAYLOAD_BYTES;j++)body[j]=(uint8_t)(j*37u+i*19u+11u);
         if(!strcmp(path,"runtime.kui")) {
             static const uint8_t marker[16]=KUI_UPDATE_CAPABILITY_INITIALIZER;
+            static const uint8_t handoff[KUI_UPDATE_HANDOFF_BYTES]=KUI_UPDATE_HANDOFF_INITIALIZER;
             memcpy(body+32u,marker,sizeof(marker));
+            memcpy(body+128u,handoff,sizeof(handoff));
         }
-        memcpy(file,"KUIRUN1\0",8u);uf_put32(file+8u,1u);uf_put32(file+12u,64u);uf_put32(file+16u,256u);
+        memcpy(file,"KUIRUN1\0",8u);uf_put32(file+8u,1u);uf_put32(file+12u,64u);uf_put32(file+16u,UF_PAYLOAD_BYTES);
         uf_put32(file+20u,KUI_RUNTIME_ADDRESS);uf_put32(file+24u,KUI_RUNTIME_ADDRESS);uf_put32(file+28u,512u);
-        uf_put32(file+32u,kui_crc32(0,body,256u));memcpy(file+40u,build,12u);
+        uf_put32(file+32u,kui_crc32(0,body,UF_PAYLOAD_BYTES));memcpy(file+40u,build,12u);
         uf_put32(file+60u,kui_crc32(0,file,60u));uf_hash(file,UF_FILE_BYTES,entry+88u);
     }
     uf_manifest_hash(&p);return p;
