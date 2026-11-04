@@ -15,6 +15,7 @@ import sys
 import zipfile
 
 from update_package import ROOT, catalog, member_info, verify
+from update_release_safety import require_verified_updater_recipe
 
 
 def digest(path):
@@ -89,12 +90,16 @@ The initial copy replaces root software once. Later updater installs preserve
 that root baseline and use separate version folders. Updates do not guarantee
 FAT metadata survives power loss and do not automatically detect a runtime
 that hangs. Do not change cards/devices during an operation.
+Restore previous and held B return to this test's retained baseline; they do
+not recover the pre-test accepted software replaced by the initial manual
+copy. That requires your independent pre-test KUI backup.
 
-The two test builds deliberately have the same game-loading behaviour. Their
-different clean source/build IDs exercise install, real chain loading, fast
-handoff and rollback without adding another game compatibility experiment.
-Three historical CDDA adapters are retained byte-for-byte at their existing
-approved hashes. Other components are built from the stated clean commit.
+Different clean source/build IDs exercise install, chain loading, fast handoff
+and rollback. Agreement between these two builds does not establish equivalence
+to your previously accepted installation: adding a formerly absent loader can
+change the selected route. The module recipes and presence-sensitive inventory
+must first match a verified accepted baseline. Release packaging is currently
+disabled, and the 28cadccf0e71 -> 33b04057db86 test ZIP is withdrawn.
 
 Source, dependency archives, matching historical sources and build evidence
 are under source/ and evidence/. These folders stay on your computer; only
@@ -107,6 +112,7 @@ than authenticate packages from an untrusted source.
 
 
 def package_test(baseline_dir, candidate_dir, output, *, legacy_sources=None):
+    require_verified_updater_recipe()
     baseline_dir, baseline, _ = admitted_release(baseline_dir)
     candidate_dir, candidate, payload = admitted_release(candidate_dir)
     if baseline["source_commit"] == candidate["source_commit"]:

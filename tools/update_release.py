@@ -17,6 +17,7 @@ from update_package import ROOT, build_package, catalog, member_info, verify
 from update_build_base import build_base
 from update_build_modules import build_modules
 from update_build_legacy import build_legacy
+from update_release_safety import require_verified_updater_recipe
 
 
 def source_state():
@@ -45,6 +46,7 @@ def owned_output(output, head):
 
 
 def build_release(output, *, legacy_dir=None, legacy_archives=(), jobs=2, channel="testing"):
+    require_verified_updater_recipe()
     head = source_state()
     if not 1 <= jobs <= 16:
         raise ValueError("Use between 1 and 16 compiler jobs")

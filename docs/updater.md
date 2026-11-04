@@ -1,5 +1,40 @@
 # Offline updates
 
+**Withdrawn: the `28cadccf0e71` → `33b04057db86` updater hardware-test ZIP.
+Do not use it to replace a working installation.** The release builder
+(`tools/update_release.py`) and test-ZIP packager
+(`tools/package_update_test.py`) now refuse immediately, before source
+admission, builds or output writes. There is no override. Packaging remains
+disabled pending a corrected recipe and comparison with a verified accepted
+baseline, including its installed and absent loader files.
+
+If the ZIP has already replaced the root software, restore the pre-test
+software backup while preserving current VMU/save data. Restoring the supplied
+A/B test's previous version does not undo that initial replacement: both test
+versions contain the wrong Standard recipe.
+
+The audit confirmed these problems:
+
+- The accepted Standard `retail-boot.kui` is 213,352 bytes including its
+  213,288-byte payload. The delivered files are only 74,936 and 74,940 bytes
+  (74,872/74,876-byte payloads), built from the ordinary native recipe. The
+  current GUI's **Standard + Virtual VMU On** route requires the separately
+  accepted paced SCI72 module. The delivered files fail that admission check.
+- Installing previously absent historical Toy/MDK2 CDDA files changes the
+  exact-disc route from the newer compatibility fallback to those historical
+  loaders. Adding `vmu-toy.kui` also makes exact raw Toy Commander with
+  **Virtual VMU On + CD music On** refuse during optional-module selection.
+  That optional presence lookup still consults the root module directory,
+  including when a version bank is running.
+
+The Background recipe retains the 72 KiB worker, 284 KiB reservation and
+192 KiB cache; file size alone does not identify a different memory layout.
+Passing A → B installation, handoff and rollback tests establishes updater
+mechanism checks. Agreement between A and B does **not** establish equivalence
+to the user's previously accepted installation: both can contain the same
+wrong recipe or introduce the same presence-sensitive route. The workflow
+below documents the intended updater; it is not approval to install this ZIP.
+
 The first updater uses an SD card and a complete `.kup` update file. Internet
 access on the Dreamcast is not required. An eventual online downloader will
 obtain release packages from
@@ -53,8 +88,10 @@ A directory without a valid receipt is not a completed version.
 
 Two separate CRC-protected selection records, `active0.bin` and `active1.bin`,
 retain the selected and previous build IDs. A new record is written to the
-older slot; the current valid slot is retained. The selected GUI pins all
-module reads and module presence checks to its own version bank. Missing,
+older slot; the current valid slot is retained. The selected GUI pins module
+reads and resolver-aware presence checks to its own version bank. The legacy
+Silver/Toy optional-module presence lookup still consults root paths; this is
+an unresolved release-inventory issue. Missing,
 corrupt or unexpected modules fail closed; they do not fall back to the root
 module tree. Module SHA-256 verification consumes the same file stream used
 to load it, before any launch-specific patching. Most components must match
@@ -123,25 +160,32 @@ publishing the output file. Files outside the catalog are never included.
 Testing packages are explicitly identified in the review screen. No signing
 key or network credentials are embedded in the package.
 
-The full native build orchestrator also runs each component's existing
-layout/profile/slot/instruction admission before packaging:
+The full native build orchestrator is **disabled**. Its existing recipe runs
+component layout/profile/slot/instruction checks, but those checks did not
+establish that its Standard module and loader inventory match the accepted
+installation. The former invocation is shown only to identify the blocked
+entrypoint:
 
 ```sh
-source .deps/kos/environ.sh
-python3 tools/update_release.py --output build/update-release/BUILD \
-    --legacy-dir path/to/previous-complete/KUI --channel testing
+# Disabled pending a verified accepted baseline:
+# python3 tools/update_release.py --output build/update-release/BUILD \
+#     --legacy-dir path/to/previous-complete/KUI --channel testing
 ```
 
-It requires a clean source commit, builds all 23 fresh components, checks the
-three preserved adapters, and writes build receipts, checksums and a complete
-`.kup`. It never reads a game image or personal card profile. Silver/Toy VMU
-components use a generated public blank profile that the launcher personalizes
-in RAM before use.
+The blocked recipe describes 23 fresh components and three preserved adapters,
+with clean-source checks, build receipts, checksums and a complete `.kup`.
+It does not currently produce a valid accepted-baseline replacement. It never
+reads a game image or personal card profile. Silver/Toy VMU components use a
+generated public blank profile that the launcher personalizes in RAM before
+use. The lower-level format codec commands above remain development tools;
+passing them does not admit a hardware-test release.
 
-`tools/package_update_test.py` combines two admitted builds and corresponding
-sources into a hardware-test ZIP. It runs the real-release FatFs harness first;
-the two different build IDs exercise actual chaining, checked RAM adoption and
-rollback. Relabelling a single binary is not a substitute for these builds.
+`tools/package_update_test.py` is also **disabled**, before it admits inputs,
+runs tests or creates output. Its intended workflow combines two admitted
+builds and corresponding sources after the real-release FatFs harness. Two
+different build IDs exercise chaining, checked RAM adoption and rollback;
+neither those checks nor relabelling a binary verifies game-loader equivalence
+to the accepted installation.
 
 ## Wire format, version 1
 
@@ -191,9 +235,11 @@ overflow is refused rather than wrapping.
 ## Console acceptance
 
 A hardware-test ZIP contains a complete initial `KUI` baseline and another
-clean build's testing `.kup` in `KUI/updates`. The two builds can differ only
-in documentation while their compiled build IDs and checked envelopes differ;
-this exercises real chaining without adding a game compatibility change.
+clean build's testing `.kup` in `KUI/updates`. Two builds can differ only in
+documentation while their compiled build IDs and checked envelopes differ.
+That exercises chaining, but both still need their recipes and loader inventory
+verified against the previously accepted installation. The withdrawn ZIP did
+not meet that requirement.
 
 Back up the current `KUI` folder before the initial manual copy. Use a separate
 card when testing alongside unmerged loader experiments: the initial copy is
