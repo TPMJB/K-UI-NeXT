@@ -188,6 +188,24 @@ Selection records are 128 bytes: magic `KUIACT1\0`, version and record length,
 selected ID and zero manifest hash select the retained baseline. Sequence
 overflow is refused rather than wrapping.
 
+## Console acceptance
+
+A hardware-test ZIP contains a complete initial `KUI` baseline and another
+clean build's testing `.kup` in `KUI/updates`. The two builds can differ only
+in documentation while their compiled build IDs and checked envelopes differ;
+this exercises real chaining without adding a game compatibility change.
+
+Back up the current `KUI` folder before the initial manual copy. Use a separate
+card when testing alongside unmerged loader experiments: the initial copy is
+a complete matching software cohort, not a patch to those experiments.
+
+Check the initial build ID, review/install the package in Settings → Updates,
+restart through the existing boot CD, and check the target build ID. Confirm
+that cards/settings remain present and familiar game launches still work.
+Then restore the previous version, restart and check that the baseline ID
+returns. Test the held-B baseline escape and a second installation of the same
+package. Keep the build IDs and a saved log with any failure report.
+
 ## Validation boundary
 
 Host validation covers package admission, real FatFs installation/rollback,
