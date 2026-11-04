@@ -39,6 +39,9 @@ bool kui_update_runtime_resolve(const char *logical,char *resolved,size_t capaci
     if(!running || strncmp(logical,prefix,sizeof(prefix)-1u))return false;
     const char *relative=logical+sizeof(prefix)-1u;
     const struct kui_update_entry *entry=kui_update_package_find(running,relative);
+    /* Deliberate inheritance preserves the retained module inventory,
+     * including absence. Replacement failures never take this branch. */
+    if(entry && entry->policy==KUI_UPDATE_INHERIT_ROOT)return copy_path(logical,resolved,capacity);
     const char *build=entry?kui_update_entry_build(running->build,entry):NULL;
     if(!build || !kui_update_bank_path(running->build,entry->path,resolved,capacity))return false;
     if(stream) {
@@ -85,6 +88,8 @@ static enum kui_update_boot_result baseline(const char *compiled,unsigned transp
     kui_update_boot_reset();
     struct kui_runtime_info info;
     enum kui_runtime_result r=root_header(&info,cancel);
+    if(r==KUI_RUNTIME_OK && kui_update_build_withdrawn(info.build))
+        return problem(out,view,log,"Retained GUI was withdrawn; copy the updater add-on runtime before restoring");
     if(r==KUI_RUNTIME_OK && !strcmp(compiled,info.build)) {
         /* The bootstrap already validated the running root GUI. Do not read
          * its multi-MiB payload a second time on every ordinary startup. */
@@ -94,6 +99,8 @@ static enum kui_update_boot_result baseline(const char *compiled,unsigned transp
     if(r==KUI_RUNTIME_OK)r=kui_runtime_read(KUI_RUNTIME_PATH,out,log,cancel);
     if(r!=KUI_RUNTIME_OK)return problem(out,view,log,
         r==KUI_RUNTIME_CANCELLED?"Update boot selection stopped":"Root baseline runtime is unavailable; use Recovery");
+    if(kui_update_build_withdrawn(out->info.build))
+        return problem(out,view,log,"Retained GUI was withdrawn; copy the updater add-on runtime before restoring");
     memcpy(view->build,out->info.build,sizeof(view->build));view->bank[0]=0;
     if(!strcmp(compiled,out->info.build)) {
         kui_runtime_free(out);resolver=ROOT_MODULES;return KUI_UPDATE_BOOT_BASELINE;
@@ -195,6 +202,9 @@ enum kui_update_boot_result kui_update_boot_read_handoff(const char *compiled,un
         unsigned at=first^attempt;
         if(!valid[at])continue;
         const struct kui_update_activation *selected=slots+at;
+        if(kui_update_build_withdrawn(selected->selected)) {
+            view->fallback=true;log("Updates: skipping withdrawn GUI %s",selected->selected);continue;
+        }
         if(!selected->selected[0]) {
             if(view->fallback)snprintf(view->notice,sizeof(view->notice),"Invalid update selection; using the retained baseline");
             /* An explicit rollback to baseline is authoritative. If its

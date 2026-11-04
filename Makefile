@@ -50,9 +50,10 @@ build/update-boot: tests/update_boot_image.c tests/update_fixture.h $(UPDATE_FIL
 	@mkdir -p $(@D)
 	$(CC) $(UPDATE_TEST_FLAGS) tests/update_boot_image.c $(UPDATE_FILES) src/core/update_boot.c src/core/runtime_file.c src/core/storage_policy.c src/core/diskio.c $(FATFS) -Wl,--wrap=f_open -Wl,--wrap=f_read -Wl,--wrap=f_close -o $@
 
-build/update-release-image: tests/update_release_image.c $(UPDATE_FILES) src/core/update_boot.c src/core/runtime_file.c src/core/storage_policy.c src/core/diskio.c $(FATFS) include/kui/update_boot.h include/kui/update_legacy.inc include/kui/update_handoff.h
+UPDATE_ROLE_FILES = src/core/native_vmu_standard.c src/core/vmu_game_card.c src/core/vmu_persist_profile.c src/core/retail_image.c
+build/update-release-image: tests/update_release_image.c $(UPDATE_FILES) $(UPDATE_ROLE_FILES) src/core/update_boot.c src/core/runtime_file.c src/core/storage_policy.c src/core/diskio.c $(FATFS) include/kui/update_boot.h include/kui/update_legacy.inc include/kui/update_handoff.h
 	@mkdir -p $(@D)
-	$(CC) $(UPDATE_TEST_FLAGS) tests/update_release_image.c $(UPDATE_FILES) src/core/update_boot.c src/core/runtime_file.c src/core/storage_policy.c src/core/diskio.c $(FATFS) -o $@
+	$(CC) $(UPDATE_TEST_FLAGS) tests/update_release_image.c $(UPDATE_FILES) $(UPDATE_ROLE_FILES) src/core/update_boot.c src/core/runtime_file.c src/core/storage_policy.c src/core/diskio.c $(FATFS) -o $@
 
 
 

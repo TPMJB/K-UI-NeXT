@@ -1619,6 +1619,10 @@ static void update_controls(void) {
     kui_shell_set_update(&s,&preview);assert(s.update.ready && !s.update_loading);
     render(&view);assert(strstr(drawn,"Install this package?") && strstr(drawn,"testing") && strstr(drawn,"10.0 MiB needed / 100.0 MiB free"));
     assert(strstr(drawn,"A Install") && strstr(drawn,"Cards, saves and preferences"));
+    s.update.replacement_count=1u;s.update.inherited_count=25u;
+    render(&view);assert(strstr(drawn,"GUI update; keeps your installed game readers."));
+    s.update.replacement_count=3u;s.update.inherited_count=23u;
+    render(&view);assert(strstr(drawn,"Updates 3 files; retains 23 installed modules."));
     /* Confirmation owns a deep copy; later display/caller edits cannot change
      * the package, target, activation or storage that the A action dispatches. */
     strcpy(s.update.reviewed.target,"111111111111");s.update.reviewed.package.manifest_sha256[0]=0xffu;

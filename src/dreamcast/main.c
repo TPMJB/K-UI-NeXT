@@ -2690,6 +2690,10 @@ static void update_work(const struct kui_shell_update_request *request,struct ku
                 out->reviewed.op=out->restore?KUI_SHELL_UPDATE_RESTORE:KUI_SHELL_UPDATE_INSTALL;
                 memcpy(out->reviewed.path,request->path,sizeof(out->reviewed.path));
                 kui_update_package_pin(package,&out->reviewed.package);
+                for(uint32_t i=0;i<package->count;i++) {
+                    if(package->entries[i].policy==KUI_UPDATE_INHERIT_ROOT)++out->inherited_count;
+                    else ++out->replacement_count;
+                }
                 if(!out->restore)memcpy(out->reviewed.target,package->build,sizeof(out->reviewed.target));
                 out->reviewed.activation=activation;out->reviewed.storage=storage;
                 bool space=out->restore || update_space(out,package);
@@ -2701,7 +2705,7 @@ static void update_work(const struct kui_shell_update_request *request,struct ku
                     snprintf(out->status.message,sizeof(out->status.message),"%s",out->ready?
                         out->restore?"Restore target checked. A confirms the selection.":"Package checked. A confirms installation.":
                         kui_cancelled()?"Update check stopped.":out->space_known?
-                        "Not enough free space for the complete bank and safety margin.":"Cannot confirm available SD space; installation is unavailable.");
+                        "Not enough free space for the update and safety margin.":"Cannot confirm available SD space; installation is unavailable.");
                 if(out->ready)update_reviewed=*out;
             }
         }

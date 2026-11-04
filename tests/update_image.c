@@ -8,6 +8,7 @@
 static unsigned checks,writes,syncs;
 static uint8_t *disk;static size_t disk_bytes;static FATFS fs;
 static bool active,cancel_before,low_space,tear_activation,torn_activation,activation_read_fail;
+static bool inherit_observe;static unsigned inherited_opens;
 static int fail_write=-1,fail_sync=-1,cancel_after=-1;
 static FIL *activation_file;
 #define CHECK(x) do {++checks;if(!(x)){fprintf(stderr,"Updater FS failed %u: %s\n",__LINE__,#x);exit(1);}}while(0)
@@ -38,6 +39,7 @@ static bool system_path(const char *path) {return !strncmp(path,KUI_UPDATE_SYSTE
 FRESULT __real_f_open(FIL *,const TCHAR *,BYTE);
 FRESULT __wrap_f_open(FIL *f,const TCHAR *path,BYTE flags) {
     if(active && (flags&FA_WRITE)) CHECK(system_path(path));
+    if(active && inherit_observe && strstr(path,"/apps/"))++inherited_opens;
     if(active && activation_read_fail && !(flags&FA_WRITE) && strstr(path,"/active"))return FR_DISK_ERR;
     FRESULT r=__real_f_open(f,path,flags);
     if(active && r==FR_OK && (flags&FA_WRITE) && strstr(path,"/active"))activation_file=f;
@@ -208,6 +210,61 @@ static void retry_space_cases(struct uf_package *a,struct uf_package *b,const st
     CHECK(install(PACKAGE_A,&pa)==KUI_UPDATE_PROTECTED && !writes);
     CHECK(!strcmp(latest().selected,BUILD_A));file_equal(old_path,old_wire,128u);protected_equal();unmount_volume();
 }
+static void additive_cases(void) {
+    struct uf_package p=uf_build("444444444444",1u);uf_inherit_modules(&p);
+    struct kui_update_package decoded;CHECK(uf_decode(&p,&decoded)==KUI_UPDATE_OK);
+    char path[192],leftover[192];FILINFO info;
+    static const char *const withdrawn[]={"28cadccf0e71","33b04057db86"};
+    for(unsigned i=0u;i<2u;i++) {
+        struct uf_package old=uf_build(withdrawn[i],1u);
+        file_write("0:/KUI/updates/withdrawn.kup",old.data,old.bytes);faults_clear();
+        struct kui_update_package rejected;CHECK(inspect("0:/KUI/updates/withdrawn.kup",&rejected)!=KUI_UPDATE_OK && !writes);
+        uf_free(&old);
+    }
+    /* Initial GUI copy must recover while old activation records remain on
+     * disk. Preserve their sequence and do not offer the withdrawn GUI as
+     * the new candidate's previous version. */
+    struct kui_update_activation old_selection={.sequence=900u};
+    strcpy(old_selection.selected,withdrawn[1]);strcpy(old_selection.previous,withdrawn[0]);
+    old_selection.manifest_sha256[0]=0x42u;uint8_t old_wire[128];
+    CHECK(kui_update_activation_encode(&old_selection,old_wire));file_write(KUI_UPDATE_ACTIVE0,old_wire,sizeof(old_wire));
+    /* The absent optional loader must stay absent. A leftover bank-side file
+     * covered by INHERIT_ROOT is not a replacement or cleanup destination. */
+    const char *absent="0:/KUI/apps/games/cdda-toy-raw.kui";
+    CHECK(f_unlink(absent)==FR_OK);
+    CHECK(kui_update_bank_path(decoded.build,"apps/games/cdda-toy-raw.kui",leftover,sizeof(leftover)));
+    file_write(leftover,sentinel,sizeof(sentinel));
+    file_write("0:/KUI/updates/additive.kup",p.data,p.bytes);
+    faults_clear();inherit_observe=true;inherited_opens=0u;
+    CHECK(inspect("0:/KUI/updates/additive.kup",&decoded)==KUI_UPDATE_OK && !writes && !inherited_opens);
+    uint64_t needed=0u,available=0u;CHECK(space(&decoded,&needed,&available)==KUI_UPDATE_OK && needed && !writes);
+    struct kui_update_pin pin;kui_update_package_pin(&decoded,&pin);
+    CHECK(install("0:/KUI/updates/additive.kup",&pin)==KUI_UPDATE_OK && writes && !inherited_opens);
+    CHECK(!strcmp(latest().selected,"444444444444") && !latest().previous[0] && latest().sequence==901u);
+    file_equal(KUI_UPDATE_ACTIVE0,old_wire,sizeof(old_wire));
+    faults_clear();struct kui_app_status status;active=true;
+    CHECK(kui_update_bank_verify("444444444444",&decoded,&status,logger,cancel,NULL)==KUI_UPDATE_OK);
+    active=false;CHECK(!writes && !inherited_opens);
+    CHECK(f_stat(absent,&info)==FR_NO_FILE);file_equal(leftover,sentinel,sizeof(sentinel));
+    for(unsigned i=1u;i<p.count;i++) {
+        if(!strcmp(kui_update_catalog_path(i),"apps/games/cdda-toy-raw.kui"))continue;
+        snprintf(path,sizeof(path),"0:/KUI/%s",kui_update_catalog_path(i));file_equal(path,uf_file(&baseline,i),UF_FILE_BYTES);
+        CHECK(kui_update_bank_path(decoded.build,kui_update_catalog_path(i),path,sizeof(path)));
+        CHECK(f_stat(path,&info)==FR_NO_FILE);
+    }
+    faults_clear();CHECK(install("0:/KUI/updates/additive.kup",&pin)==KUI_UPDATE_OK && !writes && !inherited_opens);
+    /* An existing previous-version field naming a withdrawn GUI restores the
+     * checked root baseline instead, without deleting activation records. */
+    old_selection=latest();old_selection.sequence=902u;strcpy(old_selection.previous,withdrawn[1]);
+    CHECK(kui_update_activation_encode(&old_selection,old_wire));file_write(KUI_UPDATE_ACTIVE0,old_wire,sizeof(old_wire));
+    faults_clear();active=true;CHECK(kui_update_rollback(&status,logger,cancel,NULL)==KUI_UPDATE_OK);active=false;
+    CHECK(!latest().selected[0] && !strcmp(latest().previous,"444444444444") && latest().sequence==903u && !inherited_opens);
+    inherit_observe=false;
+    /* Root/user bytes remain protected; restoring the deliberately absent
+     * generated fixture is test setup, never updater work. */
+    unsigned index=0u;while(index<baseline.count && strcmp(kui_update_catalog_path(index),"apps/games/cdda-toy-raw.kui"))++index;
+    CHECK(index<baseline.count);file_write(absent,uf_file(&baseline,index),UF_FILE_BYTES);protected_equal();uf_free(&p);
+}
 int main(int argc,char **argv) {
     CHECK(argc==2);FILE *input=fopen(argv[1],"rb");CHECK(input && !fseek(input,0,SEEK_END));long n=ftell(input);
     CHECK(n>0 && !fseek(input,0,SEEK_SET));disk_bytes=(size_t)n;disk=malloc(disk_bytes);
@@ -293,7 +350,7 @@ int main(int argc,char **argv) {
     active=true;enum kui_update_result duplicate=kui_update_select("",NULL,&status,logger,cancel,NULL);active=false;
     CHECK(duplicate!=KUI_UPDATE_OK && !writes);file_equal(marker_path,edge_wire,sizeof(edge_wire));
     CHECK(!strcmp(latest().selected,BUILD_A));file_write("0:/KUI/runtime.kui",uf_file(&baseline,0u),UF_FILE_BYTES);
-    free(wide);protected_equal();unmount_volume();
+    free(wide);protected_equal();additive_cases();unmount_volume();
     printf("PASS offline updater real filesystem: %u checks, %u write cuts, %u sync cuts, low-space partial retry, zero-free complete reuse, torn activation, cancellation, selector/baseline/cross-chunk-marker guards, protected user data and verified old-or-new selection\n",checks,full_writes+1u,full_syncs+1u);
     free(snapshot);uf_free(&a);uf_free(&b);uf_free(&baseline);free(disk);return 0;
 }

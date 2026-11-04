@@ -795,8 +795,16 @@ static void updates_page(struct paint *p,const struct kui_shell *s,const struct 
         } else label(p,48,244,MUTED,u->baseline?
             "Original root baseline; checked again before selection.":
             "The complete target version was checked before this review.");
-        label(p,48,294,MUTED,"Cards, saves and preferences stay outside the software bank.");
-        label(p,48,320,MUTED,"Restart is required after selecting a version.");
+        if(!u->restore && u->inherited_count) {
+            if(u->replacement_count==1u)
+                label(p,48,294,CYAN,"GUI update; keeps your installed game readers.");
+            else {
+                snprintf(line,sizeof(line),"Updates %u files; retains %u installed modules.",
+                    u->replacement_count,u->inherited_count);
+                label(p,48,294,CYAN,line);
+            }
+        } else label(p,48,294,MUTED,"Cards, saves and preferences stay outside the software bank.");
+        label(p,48,320,MUTED,"Saves are kept. Restart to use the selected version.");
         label(p,48,346,u->ready?WHITE:AMBER,u->ready?"A confirms this exact target. B returns without selecting it.":
             "This target cannot be installed or selected.");
         words(p,40,394,608,u->ready?CYAN:AMBER,status->message,false);return;

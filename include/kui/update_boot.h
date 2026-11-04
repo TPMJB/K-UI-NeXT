@@ -18,8 +18,9 @@ struct kui_update_boot_view {
  * device discovery, writes or execution occur here. CHAIN owns out->data and
  * has the already selected transport patched into the checked RAM image;
  * caller must release storage and apply its normal staging/stack guards.
- * PINNED binds later module loads to this bank. ERROR blocks module loads.
- * A bank is never silently combined with root modules. */
+ * PINNED binds replacement module loads to this bank. ERROR blocks loads.
+ * Explicit policy2 entries retain shared root modules and normal root checks;
+ * missing/corrupt replacement entries never fall back to root modules. */
 enum kui_update_boot_result kui_update_boot_read(const char *compiled_build,
     unsigned transport,struct kui_runtime_image *out,struct kui_update_boot_view *view,
     kui_log_fn log,kui_cancel_fn cancel);

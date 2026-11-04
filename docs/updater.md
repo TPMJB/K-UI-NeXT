@@ -1,198 +1,162 @@
 # Offline updates
 
-**Withdrawn: the `28cadccf0e71` → `33b04057db86` updater hardware-test ZIP.
-Do not use it to replace a working installation.** The release builder
-(`tools/update_release.py`) and test-ZIP packager
-(`tools/package_update_test.py`) now refuse immediately, before source
-admission, builds or output writes. There is no override. Packaging remains
-disabled pending a corrected recipe and comparison with a verified accepted
-baseline, including its installed and absent loader files.
+The updater installs checked `.kup` packages from the SD card without a
+Dreamcast internet connection. The initial updater is a **GUI-only addition**:
+its ZIP supplies `KUI/runtime.kui` and a second GUI's package in `KUI/updates`.
+It installs no `KUI/apps` files. Existing readers, their exact bytes and their
+absence remain part of the retained installation.
 
-If the ZIP has already replaced the root software, restore the pre-test
-software backup while preserving current VMU/save data. Restoring the supplied
-A/B test's previous version does not undo that initial replacement: both test
-versions contain the wrong Standard recipe.
+**The earlier `28cadccf0e71` → `33b04057db86` full-cohort test ZIP is withdrawn.**
+Its ordinary `retail-boot.kui` incorrectly replaced the accepted paced Standard
+VMU module, and added optional historical files whose presence changes routing.
+Do not install it. If it already replaced root software, restore the pre-test
+software backup while preserving current VMU images, journals, imports, saves
+and preferences. The supplied A/B rollback cannot undo that initial copy:
+both withdrawn versions contain the wrong Standard recipe.
 
-The audit confirmed these problems:
+`tools/update_release.py` and `tools/package_update_test.py` still refuse before
+building or writing output. The GUI-only workflow below does not enable them
+or rebuild a worker. See [accepted progress](accepted-progress.md) for the
+feature and loader contracts retained by this work.
 
-- The accepted Standard `retail-boot.kui` is 213,352 bytes including its
-  213,288-byte payload. The delivered files are only 74,936 and 74,940 bytes
-  (74,872/74,876-byte payloads), built from the ordinary native recipe. The
-  current GUI's **Standard + Virtual VMU On** route requires the separately
-  accepted paced SCI72 module. The delivered files fail that admission check.
-- Installing previously absent historical Toy/MDK2 CDDA files changes the
-  exact-disc route from the newer compatibility fallback to those historical
-  loaders. Adding `vmu-toy.kui` also makes exact raw Toy Commander with
-  **Virtual VMU On + CD music On** refuse during optional-module selection.
-  That optional presence lookup still consults the root module directory,
-  including when a version bank is running.
+## Install the initial GUI
 
-The Background recipe retains the 72 KiB worker, 284 KiB reservation and
-192 KiB cache; file size alone does not identify a different memory layout.
-Passing A → B installation, handoff and rollback tests establishes updater
-mechanism checks. Agreement between A and B does **not** establish equivalence
-to the user's previously accepted installation: both can contain the same
-wrong recipe or introduce the same presence-sensitive route. The workflow
-below documents the intended updater; it is not approval to install this ZIP.
+With the console off, keep the working `KUI/runtime.kui` on the computer, then
+copy only the supplied `KUI/runtime.kui` to that path. Copy the supplied `.kup`
+into `KUI/updates`. Keep the existing `KUI/apps` directory and other card files.
+Do not replace the entire KUI directory. Existing boot CDs continue to load
+the root runtime, which becomes the retained updater baseline and dispatcher.
 
-The first updater uses an SD card and a complete `.kup` update file. Internet
-access on the Dreamcast is not required. An eventual online downloader will
-obtain release packages from
-[TacitusVoxt/K-UI-NeXT Releases](https://github.com/TacitusVoxt/K-UI-NeXT/releases)
-and feed this same installer. It must not install arbitrary `main` builds.
-Automatic compatibility, compressed images, themes and additional storage
-hardware are separate work.
+This new initial GUI is required. Policy 2 extends package version 1;
+the withdrawn updater GUIs reject it and cannot install these packages.
+An older GUI cannot become an updater merely by copying a `.kup` onto its card.
 
-## First installation and ordinary updates
+## Install or switch a package
 
-Install the initial updater-enabled release using its normal complete SD-card
-installation instructions. Keep a boot/recovery CD available. This one-time
-manual installation establishes the retained baseline: `KUI/runtime.kui` and
-its matching root `KUI/apps` modules. Existing bootstrap CDs can continue to
-load that runtime. The console updater never replaces those root files.
+1. Put a trusted `.kup` in `KUI/updates` using a computer.
+2. Open **Settings → Updates**, refresh and select the package.
+3. Review the target build, channel and replacement/inheritance counts.
+4. Confirm, wait for the result, then restart through the usual boot route.
 
-For subsequent updates:
+The menu lists `.kup` files, not delivery ZIPs. It shows eight rows per page,
+so a dozen test packages fit across two pages. Re-selecting an already
+installed identical package verifies and selects its retained bank; it need
+not copy its runtime again. Completed banks are retained without automatic
+pruning.
 
-1. Download a trusted `.kup` release package on a computer.
-2. Copy it into `KUI/updates` on the card, then insert the card in the Dreamcast.
-3. Open **Settings → Updates**, refresh the list and select the package.
-4. Check the displayed installed/target build and stable/testing channel.
-5. Confirm installation. Wait for the final result before restarting.
+Each experiment needs a distinct admitted build ID. Renaming a package does
+not create a new identity: banks use the 12-character build ID. The current
+builder derives that ID from the clean source commit. Different bytes under
+an existing ID are refused rather than replacing that bank.
 
-The package checker verifies every member before installation; installation
-checks the reviewed package again. A changed package requires another review.
-The install writes a separate complete version, synchronizes and reads it back,
-then publishes its selection record. Cancelling during staging leaves the
-selected version available. A storage error while committing selection can
-make the outcome uncertain: restart and check the selected version.
+The format can name deliberate reader replacements for future WinCE/CDDA
+experiments. Such a package must identify exactly which paths it changes and
+verify their intended selection. The GUI-only builder inherits every reader;
+it does not manufacture reader experiments or imply that different filenames
+change a game's route. Optional-file absence is part of that route.
 
-**Restore previous** verifies the retained previous version before selecting
-it. The retained root baseline is also a restore target. Holding **B** when the
-updater-enabled runtime starts requests the root baseline instead of the
-selected version. This is a manual escape route, not an automatic watchdog.
-A runtime with valid checksums can still hang or have a hardware-specific bug.
+## Restore and recovery
 
-Games, VMU images/imports/backups, preferences, network credentials, covers,
-music and custom assets are never update destinations. Recovery and boot-CD
-images are not replaced. Updates require a supported writable FatFs volume
-(FAT32/exFAT); this is not an ext4 installer. Do not switch cards/devices while
-an operation is running. Old version folders are retained, so sufficient free
-space for the complete new version is required.
+**Restore previous** verifies the previous bank or retained baseline before
+selecting it. Holding **B** when the updater-enabled GUI starts requests the
+root baseline for that boot. This is a manual escape, without an automatic
+hang watchdog. Restart is required after changing the persistent selection.
 
-## Version banks and selection
+The original pre-updater GUI can be restored manually with the console off.
+Preserve card data when doing so. Software rollback does not reverse saves,
+preferences, card assignments, exports or other user changes made meanwhile.
 
-Each generation resides in `KUI/system/<12-character-build-id>/`. It contains
-the runtime and the complete explicitly allowed executable module cohort.
-The installer saves the checked `package.bin` header/manifest receipt last.
-A directory without a valid receipt is not a completed version.
+Games, VMU data, preferences, credentials, covers and custom assets are never
+update destinations. They are shared across versions. Reader paths inherited
+from root are also shared: a later manual reader change affects all banks that
+inherit that path. Inheritance preserves the current installation; it is not
+an immutable or hashed snapshot of those readers.
 
-Two separate CRC-protected selection records, `active0.bin` and `active1.bin`,
-retain the selected and previous build IDs. A new record is written to the
-older slot; the current valid slot is retained. The selected GUI pins module
-reads and resolver-aware presence checks to its own version bank. The legacy
-Silver/Toy optional-module presence lookup still consults root paths; this is
-an unresolved release-inventory issue. Missing,
-corrupt or unexpected modules fail closed; they do not fall back to the root
-module tree. Module SHA-256 verification consumes the same file stream used
-to load it, before any launch-specific patching. Most components must match
-the release build ID. Three historical CDDA adapters are explicit exceptions:
-their path, original build ID, exact length and full-file SHA-256 must match
-the approved pins in `update_legacy.inc`. They are included in the bank rather
-than read from the root installation. Arbitrary old modules are refused.
+Use a supported writable FAT32/exFAT volume and keep the same device connected
+through the operation. Cancellation before activation leaves the selection
+unchanged. A failed selection sync/readback can leave its outcome uncertain;
+restart and check. Two records and readback do not make filesystem allocation
+metadata power-loss atomic or certify a new GUI's behavior.
 
-Missing or corrupt update files can fall back to an older checked selection
-or the baseline. A physical device read failure invalidates the mounted
-session; the selector then blocks module loading and requires a restart or
-Recovery. It does not switch to another device to complete a failed read.
+## Version banks and verification
 
-The retained updater-enabled root GUI acts as the initial dispatcher. It
-validates the selected runtime and propagates the bootstrap's storage
-transport before handing over. A selected GUI with the same compiled build
-continues with its module bank pinned. Restoring the baseline hands control
-back to the retained root runtime and its root module cohort.
+Each bank lives at `KUI/system/<build-id>/`. The installer writes and rereads
+replacement members, then writes the checked `package.bin` receipt last.
+Explicitly inherited members have no bank file and are not opened, copied or
+hashed during installation. Missing root readers remain missing.
 
-This first implementation uses the retained GUI as its dispatcher. It reads
-and fully verifies the selected runtime once, then stamps its staged RAM-only
-handoff slot. The launched GUI checks the fresh selection/receipt, its on-disk
-header and the still-empty source slot before adopting that handoff. It reads
-256 bytes of the GUI file in this path rather than the whole runtime again.
-Missing/stale context uses full verification. The normal baseline path only
-rereads its 64-byte header. No filled on-disk handoff is accepted in a package.
-Boot time on SCIF/SCI/IDE still needs hardware measurement; the initial root
-GUI remains an extra load compared with a future compact dispatcher.
+The fixed ordered [catalog](../include/kui/update_catalog.inc) has 26 entries.
+Each must declare one policy:
 
-The records and readback checks protect against partial updater writes. They
-do **not** make FAT/exFAT directory or allocation metadata power-loss atomic,
-authenticate an untrusted package, or prove the new release boots. A failed
-sync/readback after a complete selection record was written may leave either
-the old or the new complete version selected. The updater reports an
-unconfirmed activation instead of promising an unchanged selection. Preserve
-an independent backup and the recovery route.
+| Policy | Meaning | Resolution |
+| --- | --- | --- |
+| 0 — Replace | Current-build `.kui`, checked length and SHA-256 | Its bank file; missing or corrupt never falls back to root |
+| 1 — Approved legacy | Exact historical path/build/length/SHA pin | Its bank file; no arbitrary mixed build |
+| 2 — Inherit root | Non-GUI path, size zero, SHA all zero, no payload | Original root path, including an ordinary missing-file result |
 
-## Building a package
+The GUI always uses policy 0. The additive builder uses policy 2 for all other
+entries. It includes no legacy adapter payload. Root inheritance is explicit;
+a missing replacement is never reinterpreted as inheritance. Replacement
+SHA verification consumes the same stream used to load the module, before
+launch-specific patching. The legacy Silver/Toy presence checks consult root;
+GUI-only inheritance deliberately preserves that inventory too.
 
-Only a complete explicitly admitted cohort is accepted. The authoritative ordered file
-catalog is [update_catalog.inc](../include/kui/update_catalog.inc). The first
-format contains 26 `.kui` members, including all referenced module names and
-their compatibility aliases. Existing partial development ZIPs and older
-release ZIPs are not automatically suitable updater payloads. Static fixture
-`probe.dat` and databases remain part of the retained base installation; v1
-does not update shared data files.
+CRC-protected `active0.bin` and `active1.bin` records retain selected and
+previous IDs. A new record uses the older slot. A bank without a valid receipt
+is incomplete. The selector may use an older checked selection or baseline
+when update files are missing or corrupt. A physical read failure invalidates
+the mounted session and blocks module loading until restart or Recovery.
 
-The v1 cohort is fixed in the retained selector as well as the running GUI.
-Updates can replace those components, but adding/removing module paths or
-changing this package protocol requires a deliberate baseline upgrade. A
-future protocol migration must retain the same recovery guarantees; an older
-selector must not guess how to load an unfamiliar component set.
+The root GUI verifies a selected runtime, propagates the boot storage transport
+and hands it control. Its staged RAM copy receives a one-use handoff record.
+The launched GUI rechecks selection, receipt, disk header and the source's
+still-empty slot before adopting it. This path reads 256 GUI bytes instead of
+loading the full runtime twice. Missing or stale context takes the full
+verification path; baseline startup rereads its 64-byte header. These are
+bounded-I/O checks, not measured console startup timings.
+
+## Build the GUI-only test
+
+With the pinned Dreamcast toolchain configured and a clean source commit:
 
 ```sh
-python3 tools/update_package.py catalog
-python3 tools/update_package.py build path/to/complete/KUI update.kup \
-    --build-id 0123456789ab --channel testing
-python3 tools/update_package.py verify update.kup
+python3 tools/update_addon.py build --output build/update-addon/A
 ```
 
-The builder checks envelopes, payload CRCs, the release build ID (or exact
-approved historical pin) and the GUI's bank-capability and empty handoff
-markers. It rejects symlinks and incomplete/unapproved mixed cohorts,
-rechecks source bytes while writing, and verifies the resulting package before
-publishing the output file. Files outside the catalog are never included.
-Testing packages are explicitly identified in the review screen. No signing
-key or network credentials are embedded in the package.
-
-The full native build orchestrator is **disabled**. Its existing recipe runs
-component layout/profile/slot/instruction checks, but those checks did not
-establish that its Standard module and loader inventory match the accepted
-installation. The former invocation is shown only to identify the blocked
-entrypoint:
+Build the second GUI from a different clean admitted commit, then package the
+two build outputs:
 
 ```sh
-# Disabled pending a verified accepted baseline:
-# python3 tools/update_release.py --output build/update-release/BUILD \
-#     --legacy-dir path/to/previous-complete/KUI --channel testing
+python3 tools/update_addon.py build --output build/update-addon/B
+python3 tools/update_addon.py package \
+    --baseline build/update-addon/A --candidate build/update-addon/B \
+    --output build/K-UI-Updater-GUI-TEST.zip
 ```
 
-The blocked recipe describes 23 fresh components and three preserved adapters,
-with clean-source checks, build receipts, checksums and a complete `.kup`.
-It does not currently produce a valid accepted-baseline replacement. It never
-reads a game image or personal card profile. Silver/Toy VMU components use a
-generated public blank profile that the launcher personalizes in RAM before
-use. The lower-level format codec commands above remain development tools;
-passing them does not admit a hardware-test release.
+The helper checks clean-source provenance, actual runtime bytes, capability
+and empty handoff markers, and the GUI-only destination allowlist. It creates
+a sparse `.kup` whose only payload is the GUI. Package inspection can also
+be run with `python3 tools/update_package.py verify path/to/update.kup`.
+Passing codec checks alone does not approve an arbitrary loader cohort.
 
-`tools/package_update_test.py` is also **disabled**, before it admits inputs,
-runs tests or creates output. Its intended workflow combines two admitted
-builds and corresponding sources after the real-release FatFs harness. Two
-different build IDs exercise chaining, checked RAM adoption and rollback;
-neither those checks nor relabelling a binary verifies game-loader equivalence
-to the accepted installation.
+The actual-release host test installs A → B on FAT32 and exFAT, exercises
+handoff/adoption, baseline bypass and rollback, and checks retained reader
+hashes **and absent paths**. Its separate test fixture can contain accepted
+reader bytes to exercise the production Standard recognizer; those fixture
+readers are not files installed by the delivered GUI-only ZIP.
 
-## Wire format, version 1
+Console acceptance is limited to checking the displayed A build, package
+review/install, restart to B, restore/restart to A and the held-B escape.
+Keep a saved log for a failure. Existing game compatibility results remain
+their existing results; this updater does not request another compatibility
+matrix or establish new reader compatibility. Host tests and native linking
+do not establish physical-console acceptance of the updater.
 
-All integers are unsigned little endian. The package is a 128-byte header,
-`count × 128` manifest bytes, then member contents in catalog order. Limits
-are 64 entries and 128 MiB of payload. Each `.kui` member retains the existing
-runtime envelope's stricter size/address/memory limits.
+## Wire format, version 1 with inheritance
+
+All integers are unsigned little endian. A package contains a 128-byte header,
+`count × 128` manifest bytes, then replacement contents in catalog order.
+Limits are 64 entries and 128 MiB payload; `.kui` envelope limits also apply.
 
 | Header offset | Field |
 | --- | --- |
@@ -205,58 +169,31 @@ runtime envelope's stricter size/address/memory limits.
 | 45–63 | Zero |
 | 64 | Manifest SHA-256, 32 bytes |
 | 96–123 | Zero |
-| 124 | CRC32 of preceding 124 header bytes |
+| 124 | CRC32 of preceding 124 bytes |
 
 | Manifest-entry offset | Field |
 | --- | --- |
 | 0 | Exact catalog-relative ASCII path, NUL padded to 80 bytes |
-| 80 | File length, 64-bit |
-| 88 | SHA-256 of the entire `.kui` file, 32 bytes |
-| 120 | Policy: 0 current release, 1 exact approved historical adapter |
+| 80 | File length, 64-bit; zero for policy 2 |
+| 88 | Full-file SHA-256, 32 bytes; all zero for policy 2 |
+| 120 | Policy 0, 1 or 2, as defined above |
 | 121–127 | Zero |
 
-The GUI payload must contain exactly one initialized 16-byte capability marker:
-ASCII `KUIBANK1`, 32-bit protocol 1 and its 32-bit inverse. Legacy GUIs cannot
-be installed into a bank because they could load unrelated root modules.
+The GUI contains exactly one initialized 16-byte capability marker: ASCII
+`KUIBANK1`, protocol 1 and its 32-bit inverse. It also contains exactly one
+192-byte empty handoff slot: `KUIHOF1\0`, version 1 and size 192, remaining
+bytes zero on disk. The RAM record carries transport, selection, runtime and
+manifest digests, original header fields, a token and CRC. It establishes
+transfer coherence, not authenticity. A filled or duplicate source slot is
+refused; the running GUI consumes its RAM slot once before storage I/O.
 
-It also contains exactly one 192-byte empty handoff slot: `KUIHOF1\0`, 32-bit
-version 1 and size 192, with all remaining bytes zero on disk. Only the checked
-RAM copy receives transport, selection, manifest/runtime digests, original
-header fields, an integrity token and CRC. These establish transfer coherence,
-not cryptographic authenticity. The running GUI consumes its slot once before
-storage I/O; a source package with a populated/duplicate slot is refused.
+Selection records are 128 bytes: `KUIACT1\0`, version/length, nonzero 64-bit
+sequence at 16, selected/previous IDs at 24/36, selected manifest SHA at 48,
+zero 80–123 and CRC32 at 124. Empty selected ID plus zero manifest SHA means
+baseline. Sequence overflow is refused. Future catalog/protocol migration
+requires a deliberate compatible baseline upgrade.
 
-Selection records are 128 bytes: magic `KUIACT1\0`, version and record length,
-64-bit nonzero sequence at offset 16, selected and previous build IDs at 24 and
-36, selected manifest SHA-256 at 48, zero bytes 80–123 and CRC32 at 124. An empty
-selected ID and zero manifest hash select the retained baseline. Sequence
-overflow is refused rather than wrapping.
-
-## Console acceptance
-
-A hardware-test ZIP contains a complete initial `KUI` baseline and another
-clean build's testing `.kup` in `KUI/updates`. Two builds can differ only in
-documentation while their compiled build IDs and checked envelopes differ.
-That exercises chaining, but both still need their recipes and loader inventory
-verified against the previously accepted installation. The withdrawn ZIP did
-not meet that requirement.
-
-Back up the current `KUI` folder before the initial manual copy. Use a separate
-card when testing alongside unmerged loader experiments: the initial copy is
-a complete matching software cohort, not a patch to those experiments.
-
-Check the initial build ID, review/install the package in Settings → Updates,
-restart through the existing boot CD, and check the target build ID. Confirm
-that cards/settings remain present and familiar game launches still work.
-Then restore the previous version, restart and check that the baseline ID
-returns. Test the held-B baseline escape and a second installation of the same
-package. Keep the build IDs and a saved log with any failure report.
-
-## Validation boundary
-
-Host validation covers package admission, real FatFs installation/rollback,
-write/sync fault injection, protection of root/user files, selection records,
-bank module resolution and UI states. Native linking is a separate check.
-Neither replaces Dreamcast testing of storage transports, held-B baseline
-recovery, restart and launching games from the selected bank. Do not label a
-build as hardware tested based only on host tests or successful compilation.
+There is no package signature or online downloader in this first updater.
+An eventual downloader can obtain trusted published packages from
+[TacitusVoxt/K-UI-NeXT Releases](https://github.com/TacitusVoxt/K-UI-NeXT/releases)
+and use the same checker; it must not install arbitrary `main` builds.

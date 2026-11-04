@@ -53,5 +53,12 @@ static inline enum kui_update_result uf_decode(struct uf_package *p,struct kui_u
     enum kui_update_result r=kui_update_header_decode(p->data,p->bytes,out);
     return r==KUI_UPDATE_OK?kui_update_manifest_decode(out,p->data+128u,p->count*128u):r;
 }
+static inline void uf_inherit_modules(struct uf_package *p) {
+    for(unsigned i=1u;i<p->count;i++) {
+        uint8_t *entry=uf_entry(p,i);uf_put64(entry+80u,0u);memset(entry+88u,0,32u);
+        entry[120u]=KUI_UPDATE_INHERIT_ROOT;
+    }
+    p->bytes=128u+128u*p->count+UF_FILE_BYTES;uf_put64(p->data+24u,UF_FILE_BYTES);uf_manifest_hash(p);
+}
 static inline void uf_free(struct uf_package *p) {free(p->data);*p=(struct uf_package){0};}
 #endif

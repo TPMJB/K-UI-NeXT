@@ -12,9 +12,10 @@
 #define BUILD_A "222222222222"
 #define BUILD_B "333333333333"
 #define MODULE "0:/KUI/apps/games/retail-boot.kui"
+#define ROOT_SWAP "0:/KUI/root-reread-test.kui"
 static unsigned checks,writes,root_opens,root_bytes,member_opens,bank_gui_bytes,bank_gui_opens;
 static uint8_t *disk;static size_t disk_bytes;static FATFS fs;
-static bool observe,cancel_now,media_fault_fired;
+static bool observe,cancel_now,media_fault_fired,root_reread_swap;
 static const char *reading_path;
 static char member[192],read_fault[192],close_fault[192],cancel_read[192],media_fault[192];
 static struct {FIL *file;char path[192];} opened[8];
@@ -43,7 +44,8 @@ static const char *open_path(FIL *file) {
 FRESULT __real_f_open(FIL *,const TCHAR *,BYTE);
 FRESULT __wrap_f_open(FIL *file,const TCHAR *path,BYTE flags) {
     if(observe)CHECK(flags==FA_READ);
-    FRESULT r=__real_f_open(file,path,flags);if(r!=FR_OK)return r;
+    const char *actual=observe && root_reread_swap && root_opens && !strcmp(path,KUI_RUNTIME_PATH)?ROOT_SWAP:path;
+    FRESULT r=__real_f_open(file,actual,flags);if(r!=FR_OK)return r;
     unsigned i=0;while(i<8u && opened[i].file)++i;CHECK(i<8u);
     opened[i].file=file;CHECK(strlen(path)<sizeof(opened[i].path));strcpy(opened[i].path,path);
     if(observe) {
@@ -70,7 +72,7 @@ FRESULT __wrap_f_close(FIL *file) {
     FRESULT r=__real_f_close(file);return fail?FR_DISK_ERR:r;
 }
 static void idle(void) {
-    observe=false;cancel_now=false;read_fault[0]=close_fault[0]=cancel_read[0]=media_fault[0]=0;
+    observe=false;cancel_now=root_reread_swap=false;read_fault[0]=close_fault[0]=cancel_read[0]=media_fault[0]=0;
     media_fault_fired=false;reading_path=NULL;
     root_opens=root_bytes=member_opens=bank_gui_bytes=bank_gui_opens=0;
     for(unsigned i=0;i<8u;i++)CHECK(!opened[i].file);
@@ -101,6 +103,7 @@ static void transport_marker(struct uf_package *p) {
 static void seed(struct uf_package *p,bool root) {
     struct kui_update_package decoded;CHECK(uf_decode(p,&decoded)==KUI_UPDATE_OK);
     char path[192];for(unsigned i=0;i<p->count;i++) {
+        if(!root && decoded.entries[i].policy==KUI_UPDATE_INHERIT_ROOT)continue;
         if(root)snprintf(path,sizeof(path),"0:/KUI/%s",kui_update_catalog_path(i));
         else CHECK(kui_update_bank_path(decoded.build,kui_update_catalog_path(i),path,sizeof(path)));
         write_file(path,uf_file(p,i),UF_FILE_BYTES);
@@ -339,6 +342,80 @@ static void bank_tests(struct uf_package *a,struct uf_package *b) {
     kui_update_boot_block();CHECK(!kui_runtime_resolve_path(MODULE,path,sizeof(path)));
     kui_update_boot_reset();CHECK(kui_runtime_resolve_path(MODULE,path,sizeof(path)) && !strcmp(path,MODULE));
 }
+static void additive_tests(struct uf_package *root) {
+    struct uf_package inherited=uf_build("444444444444",1u);transport_marker(&inherited);uf_inherit_modules(&inherited);
+    idle();seed(&inherited,false);selection(0,100u,&inherited,BUILD_B);
+    struct kui_runtime_image image;struct kui_update_boot_view view;char path[192];
+    CHECK(boot(ROOT_BUILD,KUI_STORAGE_SCI,&image,&view,false)==KUI_UPDATE_BOOT_CHAIN);
+    struct kui_update_handoff_context context={.payload_offset=128u};
+    memcpy(context.wire,(uint8_t *)image.data+128u,sizeof(context.wire));kui_runtime_free(&image);idle();
+    CHECK(boot_handoff("444444444444",KUI_STORAGE_SCI,&context,&image,&view)==KUI_UPDATE_BOOT_PINNED);
+    CHECK(bank_gui_bytes==256u);
+    struct kui_update_runtime_stream stream;
+    CHECK(kui_update_runtime_resolve(MODULE,path,sizeof(path),&stream) && !strcmp(path,MODULE) && !stream.pinned);
+    strcpy(path,MODULE);CHECK(kui_runtime_resolve_path(path,path,sizeof(path)) && !strcmp(path,MODULE));
+    observe=true;CHECK(kui_runtime_read(MODULE,&image,logger,cancel)==KUI_RUNTIME_OK);observe=false;
+    CHECK(!strcmp(image.info.build,ROOT_BUILD));kui_runtime_free(&image);
+    /* Root inheritance is intentional sharing, including the root's absent
+     * optional files. A leftover bank file must not turn absence into opt-in. */
+    const char *optional="0:/KUI/apps/games/vmu-toy.kui";
+    remove_file(optional);char bank_optional[192];
+    CHECK(kui_update_bank_path("444444444444","apps/games/vmu-toy.kui",bank_optional,sizeof(bank_optional)));
+    write_file(bank_optional,uf_file(root,0u),UF_FILE_BYTES);
+    CHECK(kui_runtime_resolve_path(optional,path,sizeof(path)) && !strcmp(path,optional));
+    FILINFO info;CHECK(f_stat(path,&info)==FR_NO_FILE);
+    observe=true;CHECK(kui_runtime_read(optional,&image,logger,cancel)==KUI_RUNTIME_IO);observe=false;
+    CHECK(!image.data);
+    unsigned optional_index=0u;while(optional_index<root->count && strcmp(kui_update_catalog_path(optional_index),"apps/games/vmu-toy.kui"))++optional_index;
+    CHECK(optional_index<root->count);write_file(optional,uf_file(root,optional_index),UF_FILE_BYTES);
+    CHECK(kui_runtime_resolve_path(optional,path,sizeof(path)) && f_stat(path,&info)==FR_OK);
+    /* The shared root still receives normal envelope/CRC validation. */
+    unsigned module=0u;while(module<root->count && strcmp(kui_update_catalog_path(module),"apps/games/retail-boot.kui"))++module;
+    CHECK(module<root->count);uint8_t altered[UF_FILE_BYTES];memcpy(altered,uf_file(root,module),sizeof(altered));altered[300u]^=1u;
+    write_file(MODULE,altered,sizeof(altered));observe=true;
+    CHECK(kui_runtime_read(MODULE,&image,logger,cancel)==KUI_RUNTIME_CHECKSUM);observe=false;
+    write_file(MODULE,uf_file(root,module),UF_FILE_BYTES);
+    /* A bank replacement beside inherited members remains bank-only. Its
+     * absence must not quietly select the available retained root module. */
+    struct uf_package mixed=uf_build("555555555555",1u);transport_marker(&mixed);uf_inherit_modules(&mixed);
+    uint8_t *entry=uf_entry(&mixed,1u);entry[120u]=KUI_UPDATE_REPLACE;uf_put64(entry+80u,UF_FILE_BYTES);
+    uf_hash(uf_file(&mixed,1u),UF_FILE_BYTES,entry+88u);mixed.bytes+=UF_FILE_BYTES;
+    uf_put64(mixed.data+24u,2u*UF_FILE_BYTES);uf_manifest_hash(&mixed);
+    seed(&mixed,false);selection(1,110u,&mixed,"444444444444");idle();
+    CHECK(boot("555555555555",KUI_STORAGE_SCI,&image,&view,false)==KUI_UPDATE_BOOT_PINNED);
+    const char *probe="0:/KUI/apps/games/probe.kui";
+    CHECK(kui_update_runtime_resolve(probe,path,sizeof(path),&stream) && stream.pinned && strstr(path,"/555555555555/"));
+    char replacement[192];strcpy(replacement,path);remove_file(replacement);
+    CHECK(kui_runtime_resolve_path(probe,path,sizeof(path)) && !strcmp(path,replacement));
+    observe=true;CHECK(kui_runtime_read(probe,&image,logger,cancel)==KUI_RUNTIME_IO);observe=false;
+    CHECK(!image.data);
+    idle();uf_free(&mixed);uf_free(&inherited);
+}
+static void withdrawn_tests(void) {
+    static const char *const builds[]={"28cadccf0e71","33b04057db86"};
+    for(unsigned i=0u;i<2u;i++) {
+        struct uf_package p=uf_build(builds[i],1u);transport_marker(&p);
+        char path[192];CHECK(kui_update_bank_path(builds[i],"runtime.kui",path,sizeof(path)));
+        write_file(path,uf_file(&p,0u),UF_FILE_BYTES);
+        if(i==1u)write_file(ROOT_SWAP,uf_file(&p,0u),UF_FILE_BYTES);
+        snprintf(path,sizeof(path),KUI_UPDATE_SYSTEM "/%s/package.bin",builds[i]);
+        write_file(path,p.data,128u+128u*p.count);selection(i,1000u+i,&p,builds[i^1u]);uf_free(&p);
+    }
+    struct kui_runtime_image image;struct kui_update_boot_view view;char path[192];idle();
+    CHECK(boot(ROOT_BUILD,KUI_STORAGE_SCI,&image,&view,false)==KUI_UPDATE_BOOT_BASELINE);
+    CHECK(view.fallback && !view.bank[0] && root_bytes==64u && !bank_gui_bytes);
+    CHECK(kui_runtime_resolve_path(MODULE,path,sizeof(path)) && !strcmp(path,MODULE));
+    struct kui_update_activation selected;unsigned slot=0u;
+    CHECK(kui_update_activation_latest(&selected,&slot,cancel)==KUI_UPDATE_OK && selected.sequence==1001u &&
+        !strcmp(selected.selected,builds[1]));
+    /* The small header inspection and later full image are separate opens.
+     * A valid-CRC withdrawn GUI substituted on the latter must not chain. */
+    idle();root_reread_swap=true;
+    CHECK(boot(BUILD_A,KUI_STORAGE_SCI,&image,&view,false)==KUI_UPDATE_BOOT_ERROR);
+    CHECK(!image.data && root_opens==2u && !kui_runtime_resolve_path(MODULE,path,sizeof(path)));
+    /* No manual deletion or boot-time rewrite: the installer can still read
+     * this exact old sequence and publish the next safe selection. */
+}
 int main(int argc,char **argv) {
     CHECK(argc==2);FILE *input=fopen(argv[1],"rb");CHECK(input && !fseek(input,0,SEEK_END));long bytes=ftell(input);
     CHECK(bytes>0 && !(bytes%512) && !fseek(input,0,SEEK_SET));disk_bytes=(size_t)bytes;disk=malloc(disk_bytes);
@@ -347,7 +424,7 @@ int main(int argc,char **argv) {
     CHECK(f_mount(&fs,"0:",1)==FR_OK);
     struct uf_package root=uf_build(ROOT_BUILD,0u),a=uf_build(BUILD_A,0u),b=uf_build(BUILD_B,1u);
     transport_marker(&root);transport_marker(&a);transport_marker(&b);seed(&root,true);seed(&a,false);seed(&b,false);
-    baseline_tests(&root);handoff_tests(&a,&b);bank_tests(&a,&b);idle();kui_update_boot_reset();
+    baseline_tests(&root);handoff_tests(&a,&b);bank_tests(&a,&b);additive_tests(&root);withdrawn_tests();idle();kui_update_boot_reset();
     CHECK(f_mount(NULL,"0:",0)==FR_OK);kui_media_set(NULL);uf_free(&root);uf_free(&a);uf_free(&b);free(disk);
     printf("PASS update boot/resolver: %u checks; header-only baseline, checked chain/transport, older-slot fallback, pinned same-stream module SHA, no root mixing or boot writes\n",checks);
     return 0;

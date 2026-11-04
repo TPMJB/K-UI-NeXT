@@ -854,8 +854,9 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     if(optional_virtual && (kui_vmu_launch_silver_candidate(map) || kui_vmu_launch_toy_candidate(map))) {
         bool silver=kui_vmu_launch_silver_candidate(map);
         const char *optional_path=silver?KUI_GAMES_RETAIL_VMU_SILVER_PACKAGE:KUI_GAMES_RETAIL_VMU_TOY_PACKAGE;
-        FILINFO optional;
-        FRESULT present=f_stat(optional_path,&optional);
+        FILINFO optional;char resolved[192];
+        FRESULT present=kui_runtime_resolve_path(optional_path,resolved,sizeof(resolved))?
+            f_stat(resolved,&optional):FR_INVALID_NAME;
         if(present!=FR_OK && present!=FR_NO_FILE && present!=FR_NO_PATH) {
             problem="cannot inspect optional virtual-card module; launch refused";goto done;
         }

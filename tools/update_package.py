@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Build and verify bounded, complete K-UI offline update packages.
+"""Build and verify bounded K-UI offline update packages.
 
 The console's catalog is the authority. This tool never includes user files,
 extracts arbitrary paths, downloads code, or runs package-provided commands.
@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 import re
 import os
+import stat
 import struct
 import tempfile
 import zlib
@@ -27,6 +28,8 @@ MAX_MEMBER = 4 * 1024 * 1024 + 64
 CAPABILITY = b"KUIBANK1" + struct.pack("<II", 1, 0xFFFFFFFE)
 HANDOFF_HEADER = b"KUIHOF1\0" + struct.pack("<II", 1, 192)
 CHANNELS = {"stable": 0, "testing": 1}
+INHERIT_ROOT = 2
+WITHDRAWN_BUILDS = frozenset(("28cadccf0e71", "33b04057db86"))
 
 
 def catalog():
@@ -70,6 +73,8 @@ def member_info(path, data, build):
     if not 68 <= len(data) <= MAX_MEMBER:
         raise ValueError("Invalid member size: " + path)
     info = verify_runtime(data)
+    if path == "runtime.kui" and info["build"] in WITHDRAWN_BUILDS:
+        raise ValueError("GUI build is withdrawn: " + info["build"])
     sha = hashlib.sha256(data).hexdigest()
     policy = 0
     if info["build"] != build:
@@ -99,6 +104,8 @@ def verify(path):
         version, header_bytes, count, manifest_bytes, total = struct.unpack_from("<IIIIQ", header, 8)
         build = header[32:44].decode("ascii", errors="replace")
         channel = header[44]
+        if build in WITHDRAWN_BUILDS:
+            raise ValueError("Update GUI build is withdrawn: " + build)
         if (header[:8] != MAGIC or version != 1 or header_bytes != HEADER_BYTES or
                 count != len(expected) or manifest_bytes != count * ENTRY_BYTES or
                 total > MAX_PAYLOAD or channel not in CHANNELS.values() or
@@ -114,13 +121,20 @@ def verify(path):
             entry = manifest[index * ENTRY_BYTES:(index + 1) * ENTRY_BYTES]
             encoded = name.encode("ascii")
             size, = struct.unpack_from("<Q", entry, 80)
-            if (entry[:80] != encoded + bytes(80 - len(encoded)) or entry[120] > 1 or any(entry[121:]) or
-                    not 68 <= size <= MAX_MEMBER):
+            policy = entry[120]
+            if (entry[:80] != encoded + bytes(80 - len(encoded)) or policy > INHERIT_ROOT or any(entry[121:])):
                 raise ValueError("Invalid or incomplete update member: " + name)
-            entries.append({"path": name, "bytes": size, "sha256": entry[88:120].hex(), "policy": entry[120]})
+            if policy == INHERIT_ROOT:
+                if index == 0 or size or any(entry[88:120]):
+                    raise ValueError("Invalid inherited root member: " + name)
+            elif not 68 <= size <= MAX_MEMBER:
+                raise ValueError("Invalid update member size: " + name)
+            entries.append({"path": name, "bytes": size, "sha256": entry[88:120].hex(), "policy": policy})
         if sum(entry["bytes"] for entry in entries) != total:
             raise ValueError("Update payload size mismatch")
         for entry in entries:
+            if entry["policy"] == INHERIT_ROOT:
+                continue
             actual = member_info(entry["path"], read_exact(stream, entry["bytes"]), build)
             if actual != entry:
                 raise ValueError("Member checksum mismatch: " + entry["path"])
@@ -131,13 +145,22 @@ def verify(path):
             "file_bytes": HEADER_BYTES + manifest_bytes + total, "members": entries}
 
 
-def source_member(root, relative):
+def source_member(root, relative, *, allow_missing=False):
     path = root
-    for part in relative.split("/"):
+    parts = relative.split("/")
+    for index, part in enumerate(parts):
         path = path / part
-        if path.is_symlink():
+        try:
+            info = path.lstat()
+        except FileNotFoundError:
+            if allow_missing:
+                return None
+            raise ValueError("Missing update member: " + relative) from None
+        if stat.S_ISLNK(info.st_mode):
             raise ValueError("Symlink in update source: " + relative)
-    if not path.is_file() or not 68 <= path.stat().st_size <= MAX_MEMBER:
+        if index + 1 < len(parts) and not stat.S_ISDIR(info.st_mode):
+            raise ValueError("Non-directory in update source: " + relative)
+    if not stat.S_ISREG(info.st_mode) or not 68 <= info.st_size <= MAX_MEMBER:
         raise ValueError("Missing or oversized update member: " + relative)
     return path
 
@@ -150,16 +173,30 @@ def read_member(root, relative):
     return data
 
 
-def build_package(root, output, build, channel="stable"):
+def build_package(root, output, build, channel="stable", *, inherit_missing=False):
+    """Build explicit replacements; optionally inherit absent non-GUI paths.
+
+    Inheritance records only the baseline-root path, preserving its presence
+    or absence at runtime. It never reads or snapshots an installed baseline.
+    """
     if not re.fullmatch(r"[0-9a-f]{12}", build) or channel not in CHANNELS:
         raise ValueError("Expected a 12-character lowercase build ID and stable/testing channel")
+    if build in WITHDRAWN_BUILDS:
+        raise ValueError("Update GUI build is withdrawn: " + build)
+    if not isinstance(inherit_missing, bool):
+        raise ValueError("inherit_missing must be an explicit boolean")
     root, output = Path(root).resolve(), Path(output)
     if not root.is_dir():
-        raise ValueError("The source must be the KUI directory of a complete release")
+        raise ValueError("The source must be a KUI release directory")
     paths = catalog()
     if output.resolve() in {root / name for name in paths}:
         raise ValueError("The output cannot replace a source member")
-    entries = [member_info(name, read_member(root, name), build) for name in paths]
+    entries = []
+    for name in paths:
+        if source_member(root, name, allow_missing=inherit_missing and name != "runtime.kui") is None:
+            entries.append({"path": name, "bytes": 0, "sha256": "00" * 32, "policy": INHERIT_ROOT})
+        else:
+            entries.append(member_info(name, read_member(root, name), build))
     total = sum(entry["bytes"] for entry in entries)
     if total > MAX_PAYLOAD:
         raise ValueError("Update payload exceeds 128 MiB")
@@ -186,6 +223,10 @@ def build_package(root, output, build, channel="stable"):
             stream.write(header)
             stream.write(manifest)
             for entry in entries:
+                if entry["policy"] == INHERIT_ROOT:
+                    if source_member(root, entry["path"], allow_missing=True) is not None:
+                        raise ValueError("Source appeared while packaging: " + entry["path"])
+                    continue
                 data = read_member(root, entry["path"])
                 if member_info(entry["path"], data, build) != entry:
                     raise ValueError("Source changed while packaging: " + entry["path"])
@@ -211,11 +252,14 @@ def main():
     make.add_argument("output", type=Path)
     make.add_argument("--build-id", required=True)
     make.add_argument("--channel", choices=tuple(CHANNELS), default="stable")
+    make.add_argument("--inherit-missing", action="store_true",
+                      help="Explicitly inherit absent non-GUI modules from the retained root baseline")
     commands.add_parser("catalog")
     args = parser.parse_args()
     try:
         if args.command == "build":
-            result = build_package(args.kui_directory, args.output, args.build_id, args.channel)
+            result = build_package(args.kui_directory, args.output, args.build_id, args.channel,
+                                   inherit_missing=args.inherit_missing)
         elif args.command == "verify":
             result = verify(args.package)
         else:

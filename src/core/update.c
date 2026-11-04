@@ -69,6 +69,10 @@ bool kui_update_build_valid(const char *build) {
     for(unsigned i=0;i<12u;i++)if(!((build[i]>='0' && build[i]<='9') || (build[i]>='a' && build[i]<='f')))return false;
     return !build[12u];
 }
+bool kui_update_build_withdrawn(const char *build) {
+    return kui_update_build_valid(build) &&
+        (!strcmp(build,"28cadccf0e71") || !strcmp(build,"33b04057db86"));
+}
 static size_t catalog_index(const char *path) {
     if(!span(path,KUI_UPDATE_PATH_BYTES))return SIZE_MAX;
     for(size_t i=0;i<kui_update_catalog_count();i++)if(!strcmp(path,catalog[i]))return i;
@@ -88,7 +92,7 @@ bool kui_update_bank_path(const char *build,const char *relative,char *out,size_
     out[root+13u]='/';memcpy(out+root+14u,catalog[index],path+1u);return true;
 }
 static bool scalar_valid(const struct kui_update_package *p) {
-    return kui_update_build_valid(p->build) && p->channel<=1u && p->count &&
+    return kui_update_build_valid(p->build) && !kui_update_build_withdrawn(p->build) && p->channel<=1u && p->count &&
         p->count<=KUI_UPDATE_MAX_ENTRIES && p->payload_bytes<=KUI_UPDATE_MAX_PAYLOAD &&
         p->file_bytes==KUI_UPDATE_HEADER_BYTES+(uint64_t)p->count*KUI_UPDATE_ENTRY_BYTES+p->payload_bytes;
 }
@@ -106,6 +110,7 @@ enum kui_update_result kui_update_header_decode(const uint8_t header[128],uint64
        get64(header+24u)>KUI_UPDATE_MAX_PAYLOAD || header[44u]>1u)return KUI_UPDATE_FORMAT;
     char build[KUI_UPDATE_BUILD_BYTES]={0};memcpy(build,header+32u,12u);
     if(!kui_update_build_valid(build) || file_bytes!=128u+(uint64_t)count*128u+get64(header+24u))return KUI_UPDATE_FORMAT;
+    if(kui_update_build_withdrawn(build))return KUI_UPDATE_COHORT;
     memcpy(out->build,build,sizeof(build));out->channel=header[44u];out->count=count;
     out->payload_bytes=get64(header+24u);out->file_bytes=file_bytes;memcpy(out->manifest_sha256,header+64u,32u);
     return KUI_UPDATE_OK;
@@ -113,6 +118,11 @@ enum kui_update_result kui_update_header_decode(const uint8_t header[128],uint64
 static bool canonical_path(const void *field,const char *path) {
     size_t n=strlen(path);return n<KUI_UPDATE_PATH_BYTES && !memcmp(field,path,n+1u) &&
         zero((const uint8_t *)field+n+1u,KUI_UPDATE_PATH_BYTES-n-1u);
+}
+static bool entry_valid(const char *build,const struct kui_update_entry *entry) {
+    if(entry->policy==KUI_UPDATE_INHERIT_ROOT)
+        return strcmp(entry->path,"runtime.kui") && !entry->bytes && zero(entry->sha256,32u);
+    return entry->bytes && kui_update_entry_build(build,entry);
 }
 enum kui_update_result kui_update_manifest_decode(struct kui_update_package *package,const void *manifest,size_t bytes) {
     if(!span(package,sizeof(*package)))return KUI_UPDATE_ARGUMENT;
@@ -131,12 +141,12 @@ enum kui_update_result kui_update_manifest_decode(struct kui_update_package *pac
         const uint8_t *wire=(const uint8_t *)manifest+(size_t)i*128u;
         if(!canonical_path(wire,catalog[i])) {result=KUI_UPDATE_COHORT;goto done;}
         uint64_t size=get64(wire+80u);
-        if(wire[120u]>1u || !zero(wire+121u,7u) || !size || size>KUI_UPDATE_MAX_PAYLOAD-total)goto done;
+        if(wire[120u]>KUI_UPDATE_INHERIT_ROOT || !zero(wire+121u,7u) || size>KUI_UPDATE_MAX_PAYLOAD-total)goto done;
         struct kui_update_entry *entry=decoded->entries+i;
         memcpy(entry->path,catalog[i],strlen(catalog[i])+1u);entry->bytes=size;
         memcpy(entry->sha256,wire+88u,32u);entry->payload_offset=offset;offset+=size;total+=size;
         entry->policy=wire[120u];
-        if(!kui_update_entry_build(decoded->build,entry)) {result=KUI_UPDATE_COHORT;goto done;}
+        if(!entry_valid(decoded->build,entry)) {result=KUI_UPDATE_COHORT;goto done;}
     }
     if(total!=decoded->payload_bytes || offset!=decoded->file_bytes)goto done;
     memcpy(package,decoded,sizeof(*package));result=KUI_UPDATE_OK;
@@ -149,8 +159,8 @@ static enum kui_update_result full_valid(const struct kui_update_package *p) {
     uint64_t total=0u;
     for(uint32_t i=0;i<p->count;i++) {
         if(!canonical_path(p->entries[i].path,catalog[i]))return KUI_UPDATE_COHORT;
-        if(!p->entries[i].bytes || p->entries[i].bytes>KUI_UPDATE_MAX_PAYLOAD-total)return KUI_UPDATE_FORMAT;
-        if(!kui_update_entry_build(p->build,p->entries+i))return KUI_UPDATE_COHORT;
+        if(p->entries[i].bytes>KUI_UPDATE_MAX_PAYLOAD-total)return KUI_UPDATE_FORMAT;
+        if(!entry_valid(p->build,p->entries+i))return KUI_UPDATE_COHORT;
         total+=p->entries[i].bytes;
     }
     return total==p->payload_bytes?KUI_UPDATE_OK:KUI_UPDATE_FORMAT;

@@ -4,12 +4,14 @@
 #include "kui/update.h"
 #include "kui/update_boot.h"
 #include "kui/update_handoff.h"
+#include "kui/native_vmu_standard.h"
 #include "kui/storage_policy.h"
 #include "kui/media.h"
 #include "ff.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 
 #define PACKAGE "0:/KUI/updates/release.kup"
 static uint8_t *disk;static size_t disk_bytes;static unsigned checks,writes;static uint64_t read_bytes;
@@ -36,6 +38,16 @@ static void parents(const char *path) {
     }
 }
 struct digest {uint64_t bytes;uint8_t sha256[32];};
+struct root_file {bool present;struct digest digest;};
+static bool host_present(const char *path) {
+    FILE *file=fopen(path,"rb");
+    if(file) {CHECK(!fclose(file));return true;}
+    CHECK(errno==ENOENT);return false;
+}
+static void absent(const char *path) {
+    FILINFO info;FRESULT result=f_stat(path,&info);
+    CHECK(result==FR_NO_FILE || result==FR_NO_PATH);
+}
 static struct digest copy_host(const char *source,const char *destination) {
     FILE *input=fopen(source,"rb");CHECK(input);parents(destination);
     FIL output;CHECK(f_open(&output,destination,FA_WRITE|FA_CREATE_NEW)==FR_OK);
@@ -76,25 +88,41 @@ static struct kui_update_activation latest(void) {
     struct kui_update_activation value;unsigned slot=0;
     CHECK(kui_update_activation_latest(&value,&slot,cancel)==KUI_UPDATE_OK);return value;
 }
-static void preserved(const struct digest *root,unsigned count) {
+static void preserved(const struct root_file *root,unsigned count) {
     char path[192];for(unsigned i=0;i<count;i++) {
-        snprintf(path,sizeof(path),"0:/KUI/%s",kui_update_catalog_path(i));same_digest(path,root+i);
+        snprintf(path,sizeof(path),"0:/KUI/%s",kui_update_catalog_path(i));
+        if(root[i].present)same_digest(path,&root[i].digest);else absent(path);
     }
     for(unsigned i=0;i<sizeof(user_paths)/sizeof(user_paths[0]);i++)same_digest(user_paths[i],user_digest+i);
 }
-static void modules(const struct kui_update_package *package,const struct digest *root) {
+static void modules(const struct kui_update_package *package,const struct root_file *root) {
     for(unsigned i=1u;i<kui_update_catalog_count();i++) {
         char logical[192],resolved[192];snprintf(logical,sizeof(logical),"0:/KUI/%s",kui_update_catalog_path(i));
         struct kui_update_runtime_stream stream;
         CHECK(kui_update_runtime_resolve(logical,resolved,sizeof(resolved),&stream));
-        if(package) {
+        bool inherited=package && package->entries[i].policy==KUI_UPDATE_INHERIT_ROOT;
+        if(package && !inherited) {
             char expected[192];CHECK(kui_update_bank_path(package->build,kui_update_catalog_path(i),expected,sizeof(expected)));
             CHECK(stream.pinned && !strcmp(resolved,expected));
-        } else CHECK(!stream.pinned && !strcmp(resolved,logical));
-        struct kui_runtime_image image={0};CHECK(kui_runtime_read(logical,&image,logger,cancel)==KUI_RUNTIME_OK && image.data);
-        if(package)CHECK(!strcmp(image.info.build,kui_update_entry_build(package->build,package->entries+i)));
+        } else {
+            CHECK(!stream.pinned && !stream.bytes && !stream.build[0] && !strcmp(resolved,logical));
+            if(inherited) {
+                char bank[192];CHECK(!package->entries[i].bytes);
+                CHECK(kui_update_bank_path(package->build,kui_update_catalog_path(i),bank,sizeof(bank)));absent(bank);
+            }
+        }
+        bool present=(package && !inherited) || root[i].present;
+        struct kui_runtime_image image={0};
+        enum kui_runtime_result loaded=kui_runtime_read(logical,&image,logger,cancel);
+        if(!present) {CHECK(loaded==KUI_RUNTIME_IO && !image.data);absent(logical);continue;}
+        CHECK(loaded==KUI_RUNTIME_OK && image.data);
+        if(package && !inherited)CHECK(!strcmp(image.info.build,kui_update_entry_build(package->build,package->entries+i)));
+        if((!package || inherited) && !strcmp(kui_update_catalog_path(i),"apps/games/retail-boot.kui")) {
+            size_t profile_slot=0u;CHECK(kui_native_vmu_standard_recognize(&image,&profile_slot));
+            CHECK(profile_slot==97600u);
+        }
         kui_runtime_free(&image);
-        if(!package)same_digest(logical,root+i);
+        if(!package || inherited)same_digest(logical,&root[i].digest);
     }
 }
 static void context_from_chain(const struct kui_runtime_image *image,struct kui_update_handoff_context *context) {
@@ -107,9 +135,11 @@ static void context_from_chain(const struct kui_runtime_image *image,struct kui_
     }
     CHECK(found==1u);
 }
-static void legacy_build_guards(const struct kui_update_package *package) {
-    unsigned historical=0u;
-    for(unsigned i=1u;i<package->count;i++)if(package->entries[i].policy==1u) {
+static unsigned legacy_build_guards(const struct kui_update_package *package) {
+    unsigned historical=0u,expected=0u;
+    for(unsigned i=1u;i<package->count;i++)
+        if(package->entries[i].policy==KUI_UPDATE_APPROVED_LEGACY)++expected;
+    for(unsigned i=1u;i<package->count;i++)if(package->entries[i].policy==KUI_UPDATE_APPROVED_LEGACY) {
         ++historical;char path[192],logical[192];const struct kui_update_entry *entry=package->entries+i;
         CHECK(kui_update_bank_path(package->build,entry->path,path,sizeof(path)));
         snprintf(logical,sizeof(logical),"0:/KUI/%s",entry->path);
@@ -128,31 +158,37 @@ static void legacy_build_guards(const struct kui_update_package *package) {
         CHECK(kui_runtime_read(logical,&image,logger,cancel)==KUI_RUNTIME_OK);
         CHECK(!strcmp(image.info.build,kui_update_entry_build(package->build,entry)));kui_runtime_free(&image);
     }
-    CHECK(historical==3u);
+    CHECK(historical==expected);return historical;
 }
 int main(int argc,char **argv) {
     CHECK(argc==4);FILE *input=fopen(argv[1],"rb");CHECK(input && !fseek(input,0,SEEK_END));long length=ftell(input);
     CHECK(length>0 && !fseek(input,0,SEEK_SET));disk_bytes=(size_t)length;disk=malloc(disk_bytes);
     CHECK(disk && fread(disk,1,disk_bytes,input)==disk_bytes && !fclose(input));
     kui_media_set(&media);CHECK(f_mount(&fs,"0:",1)==FR_OK);
-    size_t count=kui_update_catalog_count();struct digest *root=calloc(count,sizeof(*root));CHECK(root);
+    size_t count=kui_update_catalog_count();struct root_file *root=calloc(count,sizeof(*root));CHECK(root);
+    unsigned root_present=0u;
     char host[1024],path[192];for(unsigned i=0;i<count;i++) {
         CHECK(snprintf(host,sizeof(host),"%s/%s",argv[2],kui_update_catalog_path(i))<(int)sizeof(host));
-        snprintf(path,sizeof(path),"0:/KUI/%s",kui_update_catalog_path(i));root[i]=copy_host(host,path);
+        snprintf(path,sizeof(path),"0:/KUI/%s",kui_update_catalog_path(i));
+        root[i].present=host_present(host);if(!i)CHECK(root[i].present);
+        if(root[i].present) {root[i].digest=copy_host(host,path);++root_present;}else absent(path);
     }
     seed_users();(void)copy_host(argv[3],PACKAGE);
     kui_update_boot_reset();struct kui_runtime_image image={0};CHECK(kui_runtime_read(KUI_RUNTIME_PATH,&image,logger,cancel)==KUI_RUNTIME_OK);
     char baseline[13];memcpy(baseline,image.info.build,sizeof(baseline));kui_runtime_free(&image);
+    modules(NULL,root);preserved(root,(unsigned)count);
     struct kui_update_package *package=malloc(sizeof(*package));CHECK(package);struct kui_app_status status;
     CHECK(kui_update_inspect(PACKAGE,package,&status,logger,cancel,NULL)==KUI_UPDATE_OK && status.passed);
     CHECK(count==package->count && strcmp(baseline,package->build));
     struct kui_update_pin pin;kui_update_package_pin(package,&pin);
     CHECK(kui_update_install(PACKAGE,&pin,&status,logger,cancel,NULL)==KUI_UPDATE_OK && status.passed);
+    preserved(root,(unsigned)count);
     CHECK(!strcmp(latest().selected,package->build) && !latest().previous[0]);
     struct kui_update_package *verified=malloc(sizeof(*verified));CHECK(verified);
     CHECK(kui_update_bank_verify(package->build,verified,&status,logger,cancel,NULL)==KUI_UPDATE_OK);
     for(unsigned i=0;i<count;i++) {
         CHECK(kui_update_bank_path(package->build,package->entries[i].path,path,sizeof(path)));
+        if(package->entries[i].policy==KUI_UPDATE_INHERIT_ROOT) {absent(path);continue;}
         struct digest expected={.bytes=package->entries[i].bytes};memcpy(expected.sha256,package->entries[i].sha256,32u);same_digest(path,&expected);
     }
     unsigned before=writes;struct kui_update_boot_view view;
@@ -165,11 +201,12 @@ int main(int argc,char **argv) {
      * runtimes must demonstrate bounded receipt/header/slot-only adoption. */
     CHECK(package->entries[0].bytes>262144u && read_bytes-adoption_start<package->entries[0].bytes/2u);
     CHECK(!image.data && !strcmp(view.bank,package->build));modules(package,root);CHECK(writes==before);preserved(root,(unsigned)count);
-    legacy_build_guards(package);
+    unsigned historical=legacy_build_guards(package);
     /* Held B is a one-boot bypass, leaving persistent selection unchanged. */
     before=writes;CHECK(kui_update_boot_baseline(package->build,KUI_STORAGE_SCI,&image,&view,logger,cancel)==KUI_UPDATE_BOOT_CHAIN);
     CHECK(!view.bank[0] && !strcmp(image.info.build,baseline));kui_runtime_free(&image);
     CHECK(writes==before && !strcmp(latest().selected,package->build));
+    preserved(root,(unsigned)count);
     CHECK(kui_update_rollback(&status,logger,cancel,NULL)==KUI_UPDATE_OK && status.passed);
     before=writes;
     CHECK(kui_update_boot_read(package->build,KUI_STORAGE_SCI,&image,&view,logger,cancel)==KUI_UPDATE_BOOT_CHAIN);
@@ -178,7 +215,7 @@ int main(int argc,char **argv) {
     CHECK(!latest().selected[0] && !strcmp(latest().previous,package->build));
     before=writes;CHECK(kui_update_boot_read(baseline,KUI_STORAGE_SCI,&image,&view,logger,cancel)==KUI_UPDATE_BOOT_BASELINE);
     CHECK(!view.bank[0] && !image.data);modules(NULL,root);CHECK(writes==before);preserved(root,(unsigned)count);
-    printf("PASS actual release updater: %u checks; %s -> %s, %zu exact members, chained handoff/adoption, bank module loads, held-B bypass, rollback and protected root/user data\n",checks,baseline,package->build,count);
+    printf("PASS actual release updater: %u checks; %s -> %s, %zu manifest entries, %u present/%zu absent retained root files, %u legacy guards, chained handoff/adoption, inherited module recognition/absence, held-B bypass, rollback and protected root/user data\n",checks,baseline,package->build,count,root_present,count-root_present,historical);
     kui_update_boot_reset();CHECK(f_mount(NULL,"0:",0)==FR_OK);kui_media_set(NULL);
     free(verified);free(package);free(root);free(disk);return 0;
 }

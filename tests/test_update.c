@@ -129,4 +129,116 @@ static void legacy_policy(void) {
     }
     CHECK(historical==3u);uf_free(&original);
 }
-int main(void) {package_codecs();capability_and_selection();legacy_policy();printf("PASS offline updater codec: %u checks; canonical cohort, byte integrity, malformed paths, overflow, exact legacy policy, capability and selection CRC\n",checks);return 0;}
+static struct uf_package inherit_package(void) {
+    struct uf_package p=uf_build("012345abcdef",1u);
+    p.bytes=128u+128u*p.count+UF_FILE_BYTES;
+    uf_put64(p.data+24u,UF_FILE_BYTES);
+    for(unsigned i=1u;i<p.count;i++) {
+        uint8_t *entry=uf_entry(&p,i);uf_put64(entry+80u,0u);memset(entry+88u,0,32u);
+        entry[120u]=KUI_UPDATE_INHERIT_ROOT;
+    }
+    uf_manifest_hash(&p);return p;
+}
+static void inherit_root_policy(void) {
+    struct uf_package wire=inherit_package();struct kui_update_package package;
+    CHECK(uf_decode(&wire,&package)==KUI_UPDATE_OK);
+    CHECK(package.payload_bytes==UF_FILE_BYTES && package.file_bytes==wire.bytes);
+    CHECK(package.entries[0].policy==0u && package.entries[0].bytes==UF_FILE_BYTES);
+    CHECK(!strcmp(kui_update_entry_build(package.build,package.entries),package.build));
+    uint64_t end=128u+128u*wire.count+UF_FILE_BYTES;
+    for(unsigned i=1u;i<package.count;i++) {
+        const struct kui_update_entry *entry=package.entries+i;uint8_t zero[32]={0};
+        CHECK(entry->policy==KUI_UPDATE_INHERIT_ROOT && !entry->bytes && entry->payload_offset==end);
+        CHECK(!memcmp(entry->sha256,zero,sizeof(zero)));
+        CHECK(kui_update_package_find(&package,kui_update_catalog_path(i))==entry);
+        CHECK(!kui_update_entry_build(package.build,entry));
+    }
+    uint8_t receipt[KUI_UPDATE_RECEIPT_MAX];size_t bytes=0u;
+    CHECK(kui_update_receipt_encode(&package,receipt,sizeof(receipt),&bytes)==KUI_UPDATE_OK);
+    CHECK(bytes==128u+128u*wire.count && !memcmp(receipt,wire.data,bytes));
+    struct kui_update_package roundtrip;
+    CHECK(kui_update_header_decode(receipt,wire.bytes,&roundtrip)==KUI_UPDATE_OK);
+    CHECK(kui_update_manifest_decode(&roundtrip,receipt+128u,bytes-128u)==KUI_UPDATE_OK);
+    CHECK(roundtrip.payload_bytes==UF_FILE_BYTES && roundtrip.entries[1].policy==KUI_UPDATE_INHERIT_ROOT);
+    struct kui_update_pin pin;kui_update_package_pin(&package,&pin);CHECK(kui_update_pin_matches(&pin,&roundtrip));
+    uint8_t *saved=malloc(wire.bytes);CHECK(saved);memcpy(saved,wire.data,wire.bytes);
+    /* The GUI is always supplied and checked; even otherwise canonical
+     * zero-length inheritance metadata cannot turn it into a root alias. */
+    uf_put64(uf_entry(&wire,0u)+80u,0u);memset(uf_entry(&wire,0u)+88u,0,32u);
+    uf_entry(&wire,0u)[120u]=KUI_UPDATE_INHERIT_ROOT;uf_put64(wire.data+24u,0u);
+    wire.bytes-=UF_FILE_BYTES;uf_manifest_hash(&wire);CHECK(uf_decode(&wire,&roundtrip)!=KUI_UPDATE_OK);
+    wire.bytes+=UF_FILE_BYTES;memcpy(wire.data,saved,wire.bytes);
+    /* A nonruntime inheritance descriptor has no serialized bytes or hash.
+     * Repair package lengths and manifest hashes to isolate those rules. */
+    uf_put64(uf_entry(&wire,1u)+80u,1u);uf_put64(wire.data+24u,UF_FILE_BYTES+1u);
+    ++wire.bytes;uf_manifest_hash(&wire);CHECK(uf_decode(&wire,&roundtrip)!=KUI_UPDATE_OK);
+    --wire.bytes;memcpy(wire.data,saved,wire.bytes);
+    for(unsigned i=0u;i<32u;i++) {
+        uf_entry(&wire,1u)[88u+i]=1u;uf_manifest_hash(&wire);
+        CHECK(uf_decode(&wire,&roundtrip)!=KUI_UPDATE_OK);memcpy(wire.data,saved,wire.bytes);
+    }
+    for(unsigned i=0u;i<wire.count;i++) {
+        uf_entry(&wire,i)[120u]=3u;uf_manifest_hash(&wire);
+        CHECK(uf_decode(&wire,&roundtrip)!=KUI_UPDATE_OK);memcpy(wire.data,saved,wire.bytes);
+    }
+    /* Receipt encoding validates in-memory descriptors independently of the
+     * decoder, before reproducing their canonical wire representation. */
+    struct kui_update_package invalid=package;
+    invalid.entries[0].policy=KUI_UPDATE_INHERIT_ROOT;invalid.entries[0].bytes=0u;
+    memset(invalid.entries[0].sha256,0,32u);invalid.payload_bytes=0u;invalid.file_bytes-=UF_FILE_BYTES;
+    CHECK(kui_update_receipt_encode(&invalid,receipt,sizeof(receipt),&bytes)!=KUI_UPDATE_OK);
+    invalid=package;invalid.entries[1].bytes=1u;++invalid.payload_bytes;++invalid.file_bytes;
+    CHECK(kui_update_receipt_encode(&invalid,receipt,sizeof(receipt),&bytes)!=KUI_UPDATE_OK);
+    invalid=package;invalid.entries[1].sha256[0]=1u;
+    CHECK(kui_update_receipt_encode(&invalid,receipt,sizeof(receipt),&bytes)!=KUI_UPDATE_OK);
+    invalid=package;invalid.entries[1].policy=3u;
+    CHECK(kui_update_receipt_encode(&invalid,receipt,sizeof(receipt),&bytes)!=KUI_UPDATE_OK);
+    free(saved);uf_free(&wire);
+}
+static void withdrawn_releases(void) {
+    static const char *const withdrawn[]={"28cadccf0e71","33b04057db86"};
+    CHECK(!kui_update_build_withdrawn(NULL));
+    CHECK(!kui_update_build_withdrawn("012345abcdef"));
+    struct uf_package valid=uf_build("012345abcdef",1u);struct kui_update_package package;
+    CHECK(uf_decode(&valid,&package)==KUI_UPDATE_OK);
+    for(unsigned i=0u;i<sizeof(withdrawn)/sizeof(withdrawn[0]);i++) {
+        CHECK(kui_update_build_valid(withdrawn[i]));CHECK(kui_update_build_withdrawn(withdrawn[i]));
+        /* Withdrawal names two exact releases, without changing build syntax
+         * or rejecting adjacent IDs that share their prefixes. */
+        char neighbor[13];memcpy(neighbor,withdrawn[i],sizeof(neighbor));
+        for(unsigned at=0u;at<12u;at++) {
+            char saved=neighbor[at];neighbor[at]=saved=='0'?'1':'0';
+            CHECK(kui_update_build_valid(neighbor) && !kui_update_build_withdrawn(neighbor));neighbor[at]=saved;
+        }
+        struct uf_package rejected=uf_build(withdrawn[i],1u);struct kui_update_package decoded;
+        CHECK(kui_update_header_decode(rejected.data,rejected.bytes,&decoded)!=KUI_UPDATE_OK);
+        CHECK(uf_decode(&rejected,&decoded)!=KUI_UPDATE_OK);
+        /* Low-level runtime envelopes remain readable. The restriction is
+         * applied at updater GUI admission and selection boundaries. */
+        struct kui_runtime_info info;
+        CHECK(kui_runtime_header(uf_file(&rejected,0u),UF_FILE_BYTES,&info)==KUI_RUNTIME_OK);
+        CHECK(!strcmp(info.build,withdrawn[i]));
+        decoded=package;memcpy(decoded.build,withdrawn[i],sizeof(decoded.build));
+        CHECK(kui_update_manifest_decode(&decoded,valid.data+128u,128u*valid.count)!=KUI_UPDATE_OK);
+        uint8_t receipt[KUI_UPDATE_RECEIPT_MAX];size_t bytes=0u;
+        decoded=package;memcpy(decoded.build,withdrawn[i],sizeof(decoded.build));
+        CHECK(kui_update_receipt_encode(&decoded,receipt,sizeof(receipt),&bytes)!=KUI_UPDATE_OK);
+        CHECK(kui_update_receipt_encode(&package,receipt,sizeof(receipt),&bytes)==KUI_UPDATE_OK);
+        memcpy(receipt+32u,withdrawn[i],12u);uf_put32(receipt+124u,kui_crc32(0,receipt,124u));
+        CHECK(kui_update_header_decode(receipt,valid.bytes,&decoded)!=KUI_UPDATE_OK);
+        /* Records preserve withdrawn IDs and their sequence numbers so boot
+         * can skip them and publication can advance the real newest slot. */
+        for(unsigned role=0u;role<3u;role++) {
+            struct kui_update_activation activation={.sequence=UINT64_MAX-1u},got;
+            strcpy(activation.selected,role==1u?"012345abcdef":withdrawn[i]);
+            strcpy(activation.previous,role==0u?"fedcba543210":withdrawn[i^1u]);
+            activation.manifest_sha256[0]=0x42u;uint8_t wire[128];
+            CHECK(kui_update_activation_encode(&activation,wire));CHECK(kui_update_activation_decode(wire,&got));
+            CHECK(got.sequence==activation.sequence && !strcmp(got.selected,activation.selected) &&
+                !strcmp(got.previous,activation.previous) && !memcmp(got.manifest_sha256,activation.manifest_sha256,32u));
+        }
+        uf_free(&rejected);
+    }
+    uf_free(&valid);
+}
+int main(void) {package_codecs();capability_and_selection();legacy_policy();inherit_root_policy();withdrawn_releases();printf("PASS offline updater codec: %u checks; canonical cohort, byte integrity, malformed paths, overflow, exact legacy/root-inheritance policies, withdrawal and selection CRC\n",checks);return 0;}
