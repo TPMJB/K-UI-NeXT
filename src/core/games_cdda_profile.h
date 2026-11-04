@@ -7,6 +7,7 @@
 #include "kui/retail_image.h"
 #include "kui/mdk2_cdda_layout.h"
 #include "kui/native_cdda_compat.h"
+#include "kui/toy_report_test.h"
 #include <string.h>
 
 enum kui_games_cdda_profile {
@@ -160,6 +161,21 @@ static inline const char *kui_games_cdda_package(enum kui_games_cdda_profile pro
         profile==KUI_GAMES_CDDA_TOY_COOKED_COMPAT?"0:/KUI/apps/games/cdda-native-toy-cooked.kui":
         profile==KUI_GAMES_CDDA_MDK2_RAW_COMPAT?"0:/KUI/apps/games/cdda-native-mdk2.kui":NULL;
 }
+/* The private report bank must never inherit a present old exact module.
+ * Admission remains the complete Toy manifest plus the typed adapter's
+ * descriptor/CRC checks; the stage still verifies the loaded executable. */
+static inline enum kui_games_cdda_profile kui_games_cdda_launch_profile(
+    const struct kui_game_image *image,const struct kui_retail_manifest *m) {
+#if KUI_TOY_REPORT_TEST
+    enum kui_games_cdda_profile profile=kui_games_cdda_boot_profile(image,m);
+    if(profile!=KUI_GAMES_CDDA_TOY_RAW_COMPAT && profile!=KUI_GAMES_CDDA_TOY_COOKED_COMPAT)
+        return KUI_GAMES_CDDA_UNSUPPORTED;
+    return kui_native_cdda_manifest_compatible(m,KUI_NATIVE_CDDA_TOY,
+        profile==KUI_GAMES_CDDA_TOY_COOKED_COMPAT)?profile:KUI_GAMES_CDDA_UNSUPPORTED;
+#else
+    return kui_games_cdda_compatible_profile(image,m);
+#endif
+}
 /* Bind the runtime route to the checked MDK2 adapter allocation. The
  * unmodified executable and external driver still undergo their own loaded
  * byte guards before any game/sound patch is installed. */
@@ -218,5 +234,16 @@ static inline bool kui_games_cdda_package_admit(enum kui_games_cdda_profile prof
     kui_sha256_update(&hash,image->data,image->info.payload_bytes);
     kui_sha256_digest(&hash,digest);
     return !memcmp(digest,cooked?cooked_sha:raw_sha,sizeof(digest));
+}
+static inline bool kui_games_cdda_launch_package_admit(enum kui_games_cdda_profile profile,
+    const struct kui_runtime_image *image,const char *build) {
+#if KUI_TOY_REPORT_TEST
+    if(!image || !build ||
+       (profile!=KUI_GAMES_CDDA_TOY_RAW_COMPAT && profile!=KUI_GAMES_CDDA_TOY_COOKED_COMPAT) ||
+       memcmp(image->info.build,build,13u)) return false;
+#else
+    (void)build;
+#endif
+    return kui_games_cdda_package_admit(profile,image);
 }
 #endif

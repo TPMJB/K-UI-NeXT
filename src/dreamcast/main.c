@@ -103,6 +103,7 @@ KOS_INIT_FLAGS(INIT_IRQ | INIT_CONTROLLER | INIT_NO_DCLOAD | INIT_QUIET);
 #ifndef KUI_BUILD_ID
 #define KUI_BUILD_ID "local-unversioned"
 #endif
+#include "kui/toy_report_test.h"
 #define KUI_BUTTON_BENCH (1u<<29)
 #ifndef KUI_SD_RUNTIME
 #define KUI_BUTTON_BOOT_LEFT (1u<<30)
@@ -4726,6 +4727,9 @@ int main(void) {
     ui_thread = thd_get_current();
     vid_set_mode(DM_640x480 | DM_MULTIBUFFER, PM_RGB565);
     kui_log("Running " KUI_RELEASE_SHORT " " KUI_ROLE " build " KUI_BUILD_ID);
+#if KUI_TOY_REPORT_TEST
+    kui_log(KUI_TOY_REPORT_TEST_LABEL ": selected-bank Toy Commander report test; other game launches are disabled");
+#endif
     kui_clock_start(kui_log);
     kui_log("Video: %ux%u %s %s, buffered",
         (unsigned)vid_mode->width, (unsigned)vid_mode->height,

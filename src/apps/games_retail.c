@@ -633,6 +633,13 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     const bool cdda=(reader&KUI_GAMES_RETAIL_CDDA)!=0;
     const bool ce_excerpt=(reader&KUI_GAMES_RETAIL_CE_EXCERPT)!=0;
     const bool virtual_a1=(reader&KUI_GAMES_RETAIL_VIRTUAL_A1)!=0;
+#if KUI_TOY_REPORT_TEST
+    if(!cdda || ce || ce_excerpt || zso || patched || descramble || plain || virtual_a1 ||
+       (reader&~KUI_GAMES_RETAIL_CDDA)!=KUI_RETAIL_READER_STANDARD) {
+        log(KUI_TOY_REPORT_TEST_LABEL ": only Toy Commander / SCI / Background Off / CD music On is enabled");
+        return false;
+    }
+#endif
     if(patched && (ce || cdda || ce_excerpt)) {
         log("RAM patches require a native game with CD music Off");return false;
     }
@@ -678,6 +685,12 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
         }
         log("Native VMU emulation: %s; background reader selection is unchanged",emulation_enabled?"On":"Off");
     }
+#if KUI_TOY_REPORT_TEST
+    if(emulation_enabled) {
+        problem=KUI_TOY_REPORT_TEST_LABEL ": turn Emulated VMU Off before this test";goto done;
+    }
+    log(KUI_TOY_REPORT_TEST_LABEL ": checked Toy adapter must match bank " KUI_BUILD_ID);
+#endif
 #if !KUI_VMU_GAME_CARDS
     if(native_dual && !emulation_enabled) {
         problem="VMU Off needs the matching toggle-capable Games UI and native module";goto done;
@@ -1003,14 +1016,30 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
             reader==KUI_RETAIL_READER_ASYNC_EAGER?"25 blocks per call":"20 blocks per call");
     }
     if(cdda) {
-        enum kui_games_cdda_profile profile=kui_games_cdda_compatible_profile(image,map);
+        enum kui_games_cdda_profile profile=kui_games_cdda_launch_profile(image,map);
         const char *package_path=kui_games_cdda_package(profile);
         if(!package_path) {
+#if KUI_TOY_REPORT_TEST
+            problem=KUI_TOY_REPORT_TEST_LABEL ": only an admitted Toy Commander executable and complete track map are enabled";
+            goto done;
+#else
             log("Native CD music: boot bytes=%u CRC32=%08x; no compatible executable binding",map->boot_bytes,map->boot_crc32);
             problem="Experimental CD music: unrecognized native runtime; turn CD music Off to launch";goto done;
+#endif
         }
         struct kui_runtime_image candidate={0};
         rr=kui_runtime_read(package_path,&candidate,log,cancel);
+#if KUI_TOY_REPORT_TEST
+        if(rr==KUI_RUNTIME_OK) {
+            log(KUI_TOY_REPORT_TEST_LABEL ": typed Toy %s adapter readback build %.12s; required bank " KUI_BUILD_ID,
+                profile==KUI_GAMES_CDDA_TOY_COOKED_COMPAT?"cooked":"raw",candidate.info.build);
+            if(memcmp(candidate.info.build,KUI_BUILD_ID,13u)) {
+                kui_runtime_free(&candidate);
+                problem=KUI_TOY_REPORT_TEST_LABEL ": typed adapter ID mismatch; select the matching test bank";
+                goto done;
+            }
+        }
+#endif
         /* Old exact native modules were delivered separately. An absent old
          * file may use the newly built checked compatibility adapter. Never
          * hide corruption, cancellation or a read error with a fallback. */
@@ -1028,9 +1057,14 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
             }
         }
         if(rr!=KUI_RUNTIME_OK) {problem=kui_runtime_result_name(rr);goto done;}
-        if(!layout(&candidate,false) || !kui_games_cdda_package_admit(profile,&candidate)) {
+        if(!layout(&candidate,false) || !kui_games_cdda_launch_package_admit(profile,&candidate,KUI_BUILD_ID)) {
             kui_runtime_free(&candidate);
-            problem="CDDA package identity or layout mismatch; reinstall the selected package";goto done;
+#if KUI_TOY_REPORT_TEST
+            problem=KUI_TOY_REPORT_TEST_LABEL ": adapter build, descriptor or CRC mismatch; reinstall this test bank";
+#else
+            problem="CDDA package identity or layout mismatch; reinstall the selected package";
+#endif
+            goto done;
         }
         /* Publish only the verified allocation; failures never expose a
          * partial replacement or silently use the ordinary loader. */

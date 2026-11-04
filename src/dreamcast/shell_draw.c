@@ -101,10 +101,14 @@ static const char *state(const struct kui_shell_view *v) {
     if(v->busy) return v->cancel_requested ? "STOP REQUESTED" : "WORKING";
     return "READY";
 }
+#include "kui/toy_report_test.h"
 static void heading(struct paint *p, const struct kui_shell *s,const struct kui_shell_view *v) {
     art(p,32,20,128,64,kui_art_brand);
     words(p,176,26,396,WHITE,KUI_RELEASE_SHORT,true);
     const char *credit=v->busy || v->saving?state(v):"by TacitusVoxt / READY";
+#if KUI_TOY_REPORT_TEST
+    credit=KUI_TOY_REPORT_TEST_LABEL;
+#endif
     words(p,176,52,396,MUTED,credit,false);
     /* Keep the project link beneath the brand, with normal letter spacing.
      * It has the whole left header width rather than a cramped middle column. */

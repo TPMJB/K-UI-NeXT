@@ -85,6 +85,7 @@ RUNTIME_OBJECTS += build/dc/src/core/capture_display.o build/dc/src/core/viewpor
 APP_SOURCES := $(filter-out src/apps/boot_splash.c,$(wildcard src/apps/*.c))
 RUNTIME_OBJECTS += $(patsubst %.c,build/dc/%.o,$(APP_SOURCES))
 BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
+KUI_TOY_REPORT_TEST ?= 0
 
 .PHONY: all force-build-id wince-cdda native-cdda
 all: $(TARGET) $(RUNTIME) build/loader/entry.elf build/loader/image_entry.elf build/retail/entry.elf build/retail-bench/entry.elf build/retail-ce/entry.elf wince-cdda
@@ -121,6 +122,7 @@ include $(KOS_BASE)/Makefile.rules
 
 CPPFLAGS += -Iinclude -Isrc/dreamcast -Isrc/loader -I.deps/fatfs/source -Ifirmware/kui-wifi/components/kwlink/include -DKUI_BUILD_ID='"$(BUILD_ID)"'
 CPPFLAGS += -DKUI_RETAIL_EXTENDED_MAP=1
+CPPFLAGS += -DKUI_TOY_REPORT_TEST=$(KUI_TOY_REPORT_TEST)
 CPPFLAGS += -Ithird_party/miniz -Ithird_party/minilzo -DMINIZ_NO_ARCHIVE_APIS \
     -DMINIZ_NO_STDIO -DMINIZ_NO_TIME -DMINIZ_NO_ZLIB_APIS -DMINIZ_NO_MALLOC -DLZO_CFG_NO_UNALIGNED=1
 # Shared freestanding buses also serve the CD bootstrap/runtime. Keep the
@@ -138,6 +140,14 @@ endif
 build/dc/src/dreamcast/main.o build/dc/main-runtime.o \
     build/dc/src/apps/games_retail.o build/dc/src/apps/games_library.o: force-build-id
 force-build-id:
+
+build/dc/toy-report-config: force-build-id
+	@mkdir -p $(@D)
+	@printf '%s\n' 'KUI_TOY_REPORT_TEST=$(KUI_TOY_REPORT_TEST)' > $@.tmp
+	@cmp -s $@.tmp $@ || cp $@.tmp $@
+	@rm -f $@.tmp
+build/dc/main-runtime.o build/dc/src/dreamcast/main.o \
+    build/dc/src/apps/games_retail.o build/dc/src/dreamcast/shell_draw.o: build/dc/toy-report-config
 
 build/dc/%.o: %.c
 	@mkdir -p $(@D)
