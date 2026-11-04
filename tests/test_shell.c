@@ -1246,7 +1246,7 @@ static void observe(void *ctx,unsigned x,unsigned y,uint16_t color,const char *v
         for(unsigned i=0;i<KUI_SHELL_RIPPER_TOOL_COUNT;i++)
             if(!strcmp(value,ripper_tool_names[i])) ripper_tool_colors[i]=color;
     if(x==32 && y==78) {
-        assert(!large && !strcmp(value,"github.com/TPMJB/K-UI-NeXT"));
+        assert(!large && !strcmp(value,"github.com/TacitusVoxt/K-UI-NeXT"));
         assert(kui_shell_font_width(value,false)<=396u-x);
         header_link_seen=true;header_link_color=color;
     }
@@ -1268,7 +1268,7 @@ static void render(struct kui_shell_view *v) {
     assert(header_link_seen);
     unsigned link_ink=0;
     for(unsigned y=78;y<78+KUI_SHELL_FONT_SMALL_HEIGHT;y++)
-        for(unsigned x=32;x<32+kui_shell_font_width("github.com/TPMJB/K-UI-NeXT",false);x++)
+        for(unsigned x=32;x<32+kui_shell_font_width("github.com/TacitusVoxt/K-UI-NeXT",false);x++)
             link_ink+=pixels[1+y*640+x]==header_link_color;
     assert(link_ink>0); /* The unclipped link stays below the brand on every page. */
     assert(pixels[0]==0x1234 && pixels[640*480+1]==0xabcd);
@@ -1575,13 +1575,155 @@ static void settings_without_screenshot_page(void) {
     reset(KUI_SHELL_SETTINGS);
     s.system_draft.music_volume=65u;
     const struct kui_system_settings draft=s.system_draft,saved=s.system_saved;
-    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.system_selected==11u);
+    assert(press(KUI_SHELL_UP,false)==KUI_SHELL_NONE && s.system_selected==12u);
     struct kui_shell_view view={0};render(&view);
-    assert(strstr(drawn,"Controls") && !strstr(drawn,"Screenshots") && !strstr(drawn,"Save a picture"));
+    assert(strstr(drawn,"Controls") && strstr(drawn,"Updates") && !strstr(drawn,"Screenshots") && !strstr(drawn,"Save a picture"));
     assert(press(KUI_SHELL_DOWN,false)==KUI_SHELL_NONE && s.system_selected==0u);
     assert(!memcmp(&draft,&s.system_draft,sizeof(draft)) && !memcmp(&saved,&s.system_saved,sizeof(saved)));
     assert(kui_shell_system_dirty(&s));
-    puts("PASS Settings: screenshot information page removed, twelve preference rows wrap, draft preserved");
+    puts("PASS Settings: screenshot information page removed, thirteen rows wrap, draft preserved");
+}
+static void update_controls(void) {
+    reset(KUI_SHELL_SETTINGS);s.system_selected=12u;s.system_draft.music_volume=65u;
+    struct kui_system_settings draft=s.system_draft;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_UPDATE_RUN && s.page==KUI_SHELL_UPDATES && s.update_loading);
+    assert(s.update_request.op==KUI_SHELL_UPDATE_LIST && !memcmp(&draft,&s.system_draft,sizeof(draft)));
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    struct kui_shell_update_view list={.generation=s.update_generation,.stage=KUI_SHELL_UPDATE_PACKAGES,
+        .count=8,.total=10,.selection_known=true};
+    strcpy(list.directory,KUI_UPDATE_BROWSER_ROOT);
+    list.status.complete=list.status.passed=true;strcpy(list.running,"0123456789ab");
+    for(unsigned i=0;i<8u;i++) {
+        snprintf(list.rows[i].name,sizeof(list.rows[i].name),"release-%u.kup",i);
+        snprintf(list.rows[i].path,sizeof(list.rows[i].path),"0:/KUI/updates/release-%u.kup",i);
+        list.rows[i].bytes=10u*1048576u;
+    }
+    --list.generation;kui_shell_set_update(&s,&list);assert(s.update_loading);
+    ++list.generation;kui_shell_set_update(&s,&list);assert(!s.update_loading && s.update.count==8u);
+    struct kui_shell_view view={0};render(&view);
+    assert(strstr(drawn,"Offline updates") && strstr(drawn,"TacitusVoxt/K-UI-NeXT Releases") && strstr(drawn,"A Open/check"));
+    assert(strstr(drawn,"release-7.kup") && strstr(drawn,"Restore previous") && strstr(drawn,"Original baseline"));
+    assert(press(KUI_SHELL_RIGHT,false)==KUI_SHELL_UPDATE_RUN && s.update_request.page==1u);
+    list.generation=s.update_generation;list.page=1u;list.count=2u;kui_shell_set_update(&s,&list);
+    assert(!s.update_loading && s.update.count==2u && s.update.page==1u);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_UPDATE_RUN && s.update_request.op==KUI_SHELL_UPDATE_CHECK);
+    assert(!strcmp(s.update_request.path,"0:/KUI/updates/release-0.kup"));
+    struct kui_shell_update_view preview={.generation=s.update_generation,.stage=KUI_SHELL_UPDATE_REVIEW,.page=1u,
+        .ready=true,.space_known=true,.free_bytes=100u*1048576u,.required_bytes=10u*1048576u,.selection_known=true};
+    strcpy(preview.directory,KUI_UPDATE_BROWSER_ROOT);strcpy(preview.reviewed.directory,KUI_UPDATE_BROWSER_ROOT);
+    preview.status.complete=preview.status.passed=true;
+    strcpy(preview.running,"0123456789ab");strcpy(preview.reviewed.target,"fedcba987654");
+    strcpy(preview.reviewed.package.build,"fedcba987654");preview.reviewed.package.channel=1u;
+    preview.reviewed.op=KUI_SHELL_UPDATE_INSTALL;preview.reviewed.token=77u;
+    preview.reviewed.activation.sequence=42u;preview.reviewed.package.manifest_sha256[0]=0x41u;
+    strcpy(preview.reviewed.path,"0:/KUI/updates/release-0.kup");
+    strcpy(preview.status.message,"Package checked. A confirms installation.");
+    kui_shell_set_update(&s,&preview);assert(s.update.ready && !s.update_loading && s.update.page==1u);
+    render(&view);assert(strstr(drawn,"Install this package?") && strstr(drawn,"testing") && strstr(drawn,"10.0 MiB needed / 100.0 MiB free"));
+    assert(strstr(drawn,"A Install") && strstr(drawn,"Cards, saves and preferences"));
+    s.update.replacement_count=1u;s.update.inherited_count=25u;
+    render(&view);assert(strstr(drawn,"GUI update; keeps your installed game readers."));
+    s.update.replacement_count=3u;s.update.inherited_count=23u;
+    render(&view);assert(strstr(drawn,"Updates 3 files; retains 23 installed modules."));
+    /* Confirmation owns a deep copy; later display/caller edits cannot change
+     * the package, target, activation or storage that the A action dispatches. */
+    strcpy(s.update.reviewed.target,"111111111111");s.update.reviewed.package.manifest_sha256[0]=0xffu;
+    strcpy(s.update.reviewed.directory,"0:/KUI/updates/other");
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_UPDATE_RUN && s.update_request.op==KUI_SHELL_UPDATE_INSTALL);
+    assert(!strcmp(s.update_request.target,"fedcba987654") && s.update_request.package.manifest_sha256[0]==0x41u);
+    assert(s.update_request.activation.sequence==42u && s.update_request.token==77u);
+    assert(!strcmp(s.update_request.directory,KUI_UPDATE_BROWSER_ROOT));
+    assert(press(KUI_SHELL_B,true)==KUI_SHELL_STOP && s.page==KUI_SHELL_UPDATES && s.update_stopping);
+    assert(press(KUI_SHELL_B,true)==KUI_SHELL_NONE && press(KUI_SHELL_A,true)==KUI_SHELL_NONE);
+    struct kui_shell_update_view result={.generation=s.update_generation,.stage=KUI_SHELL_UPDATE_RESULT,.restart_required=true};
+    strcpy(result.directory,KUI_UPDATE_BROWSER_ROOT);
+    result.status.complete=true;result.status.errors=1u;
+    strcpy(result.status.message,"Activation not confirmed; restart/check selected version.");
+    kui_shell_set_update(&s,&result);assert(!s.update_loading && !s.update_stopping && !s.update.ready);
+    render(&view);assert(strstr(drawn,"Activation not confirmed") && strstr(drawn,"not detected or rolled back") && strstr(drawn,"Hold B at startup"));
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE && s.confirm_restart);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && !s.confirm_restart && s.page==KUI_SHELL_UPDATES);
+    assert(press(KUI_SHELL_START,false)==KUI_SHELL_NONE);
+    render(&view);assert(strstr(drawn,"RESTART K-UI?") && strstr(drawn,"A Restart K-UI"));
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_RESTART_KUI && s.update_loading);
+    struct kui_shell_update_view progress=result;progress.status=(struct kui_app_status){0};
+    strcpy(progress.status.message,"Reading and validating the selected K-UI runtime...");
+    kui_shell_set_update(&s,&progress);assert(s.update_loading);
+    assert(press(KUI_SHELL_B,true)==KUI_SHELL_STOP && s.update_stopping);
+    kui_shell_set_update(&s,&progress);assert(s.update_loading && s.update_stopping);
+    result.generation=s.update_generation;kui_shell_set_update(&s,&result);assert(!s.update_loading);
+    assert(!s.update_stopping && strstr(s.update.status.message,"Activation not confirmed"));
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_UPDATE_RUN && s.update_request.op==KUI_SHELL_UPDATE_PREVIOUS);
+    preview.generation=s.update_generation;preview.page=0u;preview.restore=true;preview.reviewed.op=KUI_SHELL_UPDATE_RESTORE;
+    strcpy(preview.status.message,"Restore target checked.");kui_shell_set_update(&s,&preview);
+    render(&view);assert(strstr(drawn,"Restore this version?") && strstr(drawn,"A Restore this version"));
+    assert(press(KUI_SHELL_A|KUI_SHELL_B,false)==KUI_SHELL_UPDATE_RUN && s.update_request.op==KUI_SHELL_UPDATE_LIST);
+    list.generation=s.update_generation;list.page=0;list.count=8;kui_shell_set_update(&s,&list);
+    assert(press(KUI_SHELL_R,false)==KUI_SHELL_UPDATE_RUN && s.update_request.op==KUI_SHELL_UPDATE_BASELINE);
+    preview.generation=s.update_generation;preview.baseline=true;preview.reviewed.target[0]=0;
+    kui_shell_set_update(&s,&preview);render(&view);
+    assert(strstr(drawn,"Target: original baseline") && strstr(drawn,"checked again before selection"));
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_UPDATE_RUN && s.update_request.op==KUI_SHELL_UPDATE_RESTORE && !s.update_request.target[0]);
+    result.generation=s.update_generation;result.status=(struct kui_app_status){.complete=true,.stopped=true};
+    strcpy(result.status.message,"Stopped before activation.");kui_shell_set_update(&s,&result);
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_UPDATE_RUN);
+    list.generation=s.update_generation;strcpy(list.rows[0].path,"0:/KUI/updates/../wrong.kup");
+    kui_shell_set_update(&s,&list);assert(!s.update.rows[0].path[0]);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_UPDATE_RUN);
+    preview.generation=s.update_generation;preview.reviewed.token=0;
+    kui_shell_set_update(&s,&preview);assert(!s.update.ready && press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_UPDATE_RUN);
+    result.generation=s.update_generation;kui_shell_set_update(&s,&result);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_SETTINGS);
+    list.generation=s.update_generation;kui_shell_set_update(&s,&list);assert(s.page==KUI_SHELL_SETTINGS);
+    assert(!memcmp(&draft,&s.system_draft,sizeof(draft)));
+    puts("PASS offline update UI: package paging, read-only check, exact confirmation, stale replies, safe Stop, restore/baseline, uncertain activation and restart");
+}
+static void update_folders_controls(void) {
+    struct kui_shell_view view={0};
+    reset(KUI_SHELL_SETTINGS);s.system_selected=12u;
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_UPDATE_RUN);
+    assert(!strcmp(s.update_request.directory,KUI_UPDATE_BROWSER_ROOT));
+    struct kui_shell_update_view list={.generation=s.update_generation,.stage=KUI_SHELL_UPDATE_PACKAGES,.count=2u,.total=2u};
+    list.status.complete=list.status.passed=true;strcpy(list.directory,"0:/KUI/updates/wrong");
+    kui_shell_set_update(&s,&list);assert(s.update_loading);
+    strcpy(list.directory,KUI_UPDATE_BROWSER_ROOT);
+    strcpy(list.rows[0].name,"test");strcpy(list.rows[0].path,"0:/KUI/updates/test");list.rows[0].is_directory=true;
+    strcpy(list.rows[1].name,"release.kup");strcpy(list.rows[1].path,"0:/KUI/updates/release.kup");
+    kui_shell_set_update(&s,&list);render(&view);assert(strstr(drawn,"Folder >"));
+    assert(!s.update.restart_required && press(KUI_SHELL_START,false)==KUI_SHELL_NONE && s.confirm_restart && s.update_restart);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_RESTART_KUI && s.update_loading);
+    kui_shell_set_update(&s,&list);assert(!s.update_loading);
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_UPDATE_RUN && s.update_request.op==KUI_SHELL_UPDATE_LIST);
+    assert(!strcmp(s.update_request.directory,"0:/KUI/updates/test") && !s.update_request.path[0]);
+    struct kui_shell_update_view nested={.generation=s.update_generation,.stage=KUI_SHELL_UPDATE_PACKAGES,.count=1u,.total=1u};
+    strcpy(nested.directory,"0:/KUI/updates/test");nested.status.complete=nested.status.passed=true;
+    strcpy(nested.rows[0].name,"Update test.zip");strcpy(nested.rows[0].path,"0:/KUI/updates/test/Update test.zip");nested.rows[0].is_zip=true;
+    kui_shell_set_update(&s,&nested);
+    assert(press(KUI_SHELL_X,false)==KUI_SHELL_UPDATE_RUN && !strcmp(s.update_request.directory,nested.directory));
+    nested.generation=s.update_generation;kui_shell_set_update(&s,&nested);render(&view);
+    assert(strstr(drawn,"Folder: /KUI/updates/test") && strstr(drawn,"ZIP ") && strstr(drawn,"B Parent"));
+    assert(press(KUI_SHELL_A,false)==KUI_SHELL_UPDATE_RUN && s.update_request.op==KUI_SHELL_UPDATE_CHECK);
+    assert(!strcmp(s.update_request.path,nested.rows[0].path) && !strcmp(s.update_request.directory,nested.directory));
+    struct kui_shell_update_view review={.generation=s.update_generation,.stage=KUI_SHELL_UPDATE_REVIEW,.ready=true};
+    strcpy(review.directory,nested.directory);strcpy(review.reviewed.directory,nested.directory);
+    strcpy(review.reviewed.path,nested.rows[0].path);strcpy(review.reviewed.target,"012345abcdef");
+    strcpy(review.reviewed.package.build,"012345abcdef");review.reviewed.op=KUI_SHELL_UPDATE_INSTALL;review.reviewed.token=1u;
+    review.status.complete=review.status.passed=true;kui_shell_set_update(&s,&review);assert(s.update.ready);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_UPDATE_RUN && !strcmp(s.update_request.directory,nested.directory));
+    nested.generation=s.update_generation;kui_shell_set_update(&s,&nested);
+    assert(press(KUI_SHELL_Y,false)==KUI_SHELL_UPDATE_RUN && !strcmp(s.update_request.directory,nested.directory));
+    review.generation=s.update_generation;review.restore=true;review.reviewed.op=KUI_SHELL_UPDATE_RESTORE;
+    kui_shell_set_update(&s,&review);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_UPDATE_RUN && !strcmp(s.update_request.directory,nested.directory));
+    nested.generation=s.update_generation;strcpy(nested.rows[0].path,"0:/KUI/updates/outside.kup");
+    kui_shell_set_update(&s,&nested);assert(!s.update.rows[0].path[0] && press(KUI_SHELL_A,false)==KUI_SHELL_NONE);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_UPDATE_RUN && !strcmp(s.update_request.directory,KUI_UPDATE_BROWSER_ROOT));
+    nested.generation=s.update_generation;kui_shell_set_update(&s,&nested);assert(s.update_loading);
+    list.generation=s.update_generation;kui_shell_set_update(&s,&list);assert(!s.update_loading);
+    assert(press(KUI_SHELL_B,false)==KUI_SHELL_NONE && s.page==KUI_SHELL_SETTINGS);
+    puts("PASS update folders: enter/back, ZIP dispatch, refresh/review/restore directory preservation, sibling-path rejection and stale-directory replies");
 }
 static void round_four_rendering(void) {
     struct kui_shell_view v={.music_cache_bytes=4674286};
@@ -6039,6 +6181,9 @@ static void games_flow_controls(void) {
 }
 
 int main(int argc,char **argv) {
+    update_controls();
+    update_folders_controls();
+    if(argc==2 && !strcmp(argv[1],"--updates"))return 0;
     games_inline_layout_controls();
     games_flow_controls();
     if(argc==2 && !strcmp(argv[1],"--flow"))return 0;

@@ -27,12 +27,54 @@
 #include "kui/vmu_game_info.h"
 #include "kui/drive_controls.h"
 #include "kui/disc_cards.h"
+#include "kui/update.h"
+#include "kui/update_browser.h"
 #include <stdbool.h>
 #include <stdint.h>
 
 #define KUI_SHELL_WIDTH 640u
 #define KUI_SHELL_HEIGHT 480u
 #define KUI_SHELL_LOG_ROWS 10u
+#define KUI_SHELL_SYSTEM_ROWS 13u
+#define KUI_SHELL_UPDATE_ROWS 8u
+#define KUI_SHELL_UPDATE_PATH_BYTES 192u
+enum kui_shell_update_op { KUI_SHELL_UPDATE_LIST, KUI_SHELL_UPDATE_CHECK,
+    KUI_SHELL_UPDATE_INSTALL, KUI_SHELL_UPDATE_PREVIOUS, KUI_SHELL_UPDATE_BASELINE,
+    KUI_SHELL_UPDATE_RESTORE };
+enum kui_shell_update_stage { KUI_SHELL_UPDATE_PACKAGES, KUI_SHELL_UPDATE_REVIEW,
+    KUI_SHELL_UPDATE_RESULT };
+struct kui_shell_update_storage {
+    unsigned transport;
+    uint32_t partition_first,partition_blocks;
+    uint8_t boot_sha256[32];
+};
+struct kui_shell_update_request {
+    enum kui_shell_update_op op;
+    unsigned generation,page;
+    uint64_t token;
+    char path[KUI_SHELL_UPDATE_PATH_BYTES],target[KUI_UPDATE_BUILD_BYTES];
+    char directory[KUI_SHELL_UPDATE_PATH_BYTES];
+    struct kui_update_pin package;
+    struct kui_update_activation activation;
+    struct kui_shell_update_storage storage;
+};
+struct kui_shell_update_row {
+    char name[96],path[KUI_SHELL_UPDATE_PATH_BYTES];
+    uint64_t bytes;
+    bool is_directory,is_zip;
+};
+struct kui_shell_update_view {
+    struct kui_app_status status;
+    enum kui_shell_update_stage stage;
+    unsigned generation,page,count,total;
+    char directory[KUI_SHELL_UPDATE_PATH_BYTES];
+    struct kui_shell_update_row rows[KUI_SHELL_UPDATE_ROWS];
+    struct kui_shell_update_request reviewed;
+    char running[KUI_UPDATE_BUILD_BYTES],selected[KUI_UPDATE_BUILD_BYTES],previous[KUI_UPDATE_BUILD_BYTES];
+    unsigned replacement_count,inherited_count;
+    uint64_t free_bytes,required_bytes;
+    bool ready,restore,baseline,space_known,restart_required,selection_known;
+};
 /* A cover belongs to one published listing and selection. The worker must
  * echo this key; main publishes pixels only after the same key is accepted. */
 struct kui_shell_games_art_key {
@@ -73,7 +115,7 @@ enum kui_shell_page { KUI_SHELL_HOME, KUI_SHELL_RIPPER,
     KUI_SHELL_VMU_COLLECTION, KUI_SHELL_VMU_TOOLS, KUI_SHELL_VMU_WIZARD,
     KUI_SHELL_DISC_TOOLS, KUI_SHELL_VMU_CARD, KUI_SHELL_SALVAGE_DRIVE,
     KUI_SHELL_SALVAGE_OPTIONS, KUI_SHELL_GAMES_VMU_CARD, KUI_SHELL_GD_OPTIONS, KUI_SHELL_CONTROLS, KUI_SHELL_BROWSER, KUI_SHELL_VMU_HISTORY, KUI_SHELL_GAMES_QUERY, KUI_SHELL_GAMES_EDIT, KUI_SHELL_REPORT, KUI_SHELL_GAME_PROFILE,
-    KUI_SHELL_DISC_CARDS };
+    KUI_SHELL_DISC_CARDS,KUI_SHELL_UPDATES };
 enum kui_shell_recovery_row {
     KUI_SHELL_RECOVERY_CONTINUE, KUI_SHELL_RECOVERY_NEW, KUI_SHELL_RECOVERY_OPTIONS,
     KUI_SHELL_RECOVERY_DIAGNOSTICS, KUI_SHELL_RECOVERY_COUNT
@@ -173,7 +215,8 @@ enum kui_shell_action {
     KUI_SHELL_GD_OPTIONS_LOAD, KUI_SHELL_GD_REGION_SAVE, KUI_SHELL_GAMES_FAVORITE, KUI_SHELL_BROWSER_START,
     KUI_SHELL_VMU_HISTORY_RUN, KUI_SHELL_GAMES_EDIT_LOAD, KUI_SHELL_GAMES_EDIT_SAVE,
     KUI_SHELL_GAMES_JUMP, KUI_SHELL_GAMES_IDENTITY_VERIFY, KUI_SHELL_PROBLEM_REPORT,
-    KUI_SHELL_GAMES_LAYOUT_SAVE, KUI_SHELL_VMU_BACKUP_SAVES, KUI_SHELL_DISC_CARDS_RUN
+    KUI_SHELL_GAMES_LAYOUT_SAVE, KUI_SHELL_VMU_BACKUP_SAVES, KUI_SHELL_DISC_CARDS_RUN,
+    KUI_SHELL_UPDATE_RUN, KUI_SHELL_RESTART_KUI
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
@@ -184,6 +227,10 @@ struct kui_shell {
     struct kui_settings saved, draft;
     struct kui_system_settings system_saved, system_draft;
     unsigned system_selected, controls_selected;
+    unsigned update_generation,update_selected;
+    bool update_loading,update_stopping,update_restart;
+    struct kui_shell_update_request update_request,update_confirm_request;
+    struct kui_shell_update_view update;
     bool video_trial, confirm_defaults, confirm_clock, confirm_vmu_restore;
     bool confirm_vmu_delete, confirm_vmu_copy, confirm_music_clear, confirm_restart;
     bool confirm_vmu_copy_all, confirm_vmu_import, vmu_import_staged;
@@ -444,6 +491,7 @@ void kui_shell_set_vmu_wizard(struct kui_shell *,const struct kui_vmu_wizard_vie
 void kui_shell_set_game_vmu_cards(struct kui_shell *,unsigned generation,const struct kui_vmu_game_info *);
 void kui_shell_set_disc_vmu_cards(struct kui_shell *,unsigned generation,const struct kui_vmu_game_info *);
 void kui_shell_set_disc_cards(struct kui_shell *,const struct kui_disc_cards_view *);
+void kui_shell_set_update(struct kui_shell *,const struct kui_shell_update_view *);
 void kui_shell_set_disc_region(struct kui_shell *,unsigned generation,bool enabled,bool ok,const char *notice);
 /* Global preference results echo the exact outstanding request generation.
  * Failed/uncertain saves preserve the last confirmed value and require reload. */

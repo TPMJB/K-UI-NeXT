@@ -977,6 +977,72 @@ int main(int argc,char **argv) {
         snprintf(shell.vmu_emulation_notice,sizeof(shell.vmu_emulation_notice),
             "Virtual VMU On; disc slot %s. Applies on next launch.",shell.vmu_emulation_slot==KUI_GAME_VMU_SLOT_A1?"A1":"A2");
     }
+    else if(!strncmp(argv[1],"updates-",8)) {
+        shell.page=KUI_SHELL_UPDATES;
+        struct kui_shell_update_view *u=&shell.update;
+        strcpy(u->directory,KUI_UPDATE_BROWSER_ROOT);
+        strcpy(u->reviewed.directory,KUI_UPDATE_BROWSER_ROOT);
+        u->selection_known=true;u->count=8;u->total=11;u->status.complete=u->status.passed=true;
+        strcpy(u->running,"0123456789ab");strcpy(u->selected,"0123456789ab");strcpy(u->previous,"abcdef012345");
+        for(unsigned i=0;i<u->count;i++) {
+            snprintf(u->rows[i].name,sizeof(u->rows[i].name),"K-UI-%s-%012u.kup",i&1u?"testing":"stable",i+123u);
+            snprintf(u->rows[i].path,sizeof(u->rows[i].path),"0:/KUI/updates/%s",u->rows[i].name);
+            u->rows[i].bytes=(uint64_t)(12u+i)*1048576u+i*1011u;
+        }
+        shell.update_selected=3u;
+        strcpy(u->status.message,"11 offline packages. A checks a package before installation.");
+        if(!strcmp(argv[1],"updates-folders") || !strcmp(argv[1],"updates-nested")) {
+            if(!strcmp(argv[1],"updates-nested"))strcpy(u->directory,"0:/KUI/updates/test/Builds with long folder names");
+            for(unsigned i=0;i<u->count;i++) {
+                if(i<2u) {
+                    snprintf(u->rows[i].name,sizeof(u->rows[i].name),"%s",i?"WinCE experiments":"Background tests");
+                    u->rows[i].is_directory=true;
+                } else if(i==2u) {strcpy(u->rows[i].name,"K-UI-updater-addon-test.zip");u->rows[i].is_zip=true;}
+                char path[KUI_SHELL_UPDATE_PATH_BYTES];
+                snprintf(path,sizeof(path),"%.95s/%.94s",u->directory,u->rows[i].name);
+                strcpy(u->rows[i].path,path);
+            }
+            strcpy(u->status.message,"11 entries. A opens folders or checks an update.");
+        }
+        if(!strcmp(argv[1],"updates-empty")) {
+            u->count=u->total=0;strcpy(u->status.message,"Copy a release .kup file to /KUI/updates, then X Refresh.");
+        }
+        if(!strcmp(argv[1],"updates-review") || !strcmp(argv[1],"updates-review-stable") || !strcmp(argv[1],"updates-review-long") || !strcmp(argv[1],"updates-restore") || !strcmp(argv[1],"updates-baseline") ||
+           !strcmp(argv[1],"updates-space")) {
+            u->stage=KUI_SHELL_UPDATE_REVIEW;u->ready=true;u->space_known=true;
+            u->restore=strncmp(argv[1],"updates-review",14) && strcmp(argv[1],"updates-space");
+            u->baseline=!strcmp(argv[1],"updates-baseline");
+            strcpy(u->reviewed.target,u->baseline?"":"fedcba987654");
+            u->reviewed.package.channel=strcmp(argv[1],"updates-review-stable")?1u:0u;
+            strcpy(u->reviewed.path,!strcmp(argv[1],"updates-review-long")?
+                "0:/KUI/updates/K-UI-testing-fedcba987654-long-release-description-and-transport-validation-bundle-2026-11-04.kup":
+                "0:/KUI/updates/K-UI-testing-fedcba987654.kup");
+            u->required_bytes=23u*1048576u+300000u;u->free_bytes=180u*1048576u;
+            strcpy(u->status.message,u->restore?"Restore target checked. A confirms the selection.":"Package checked. A confirms installation.");
+            if(!strcmp(argv[1],"updates-space")) {
+                u->ready=u->status.passed=false;u->free_bytes=6u*1048576u;
+                strcpy(u->status.message,"Not enough free space for the complete bank and safety margin.");
+            }
+        }
+        if(!strcmp(argv[1],"updates-working") || !strcmp(argv[1],"updates-stopping")) {
+            shell.update_loading=true;shell.update_stopping=!strcmp(argv[1],"updates-stopping");
+            view.busy=true;view.app_status=&status;status.complete=false;status.done=12u*1048576u;status.total=23u*1048576u;
+            strcpy(status.message,"Verifying immutable bank files before activation...");
+        }
+        if(!strcmp(argv[1],"updates-complete") || !strcmp(argv[1],"updates-error") || !strcmp(argv[1],"updates-uncertain") ||
+           !strcmp(argv[1],"updates-restart")) {
+            u->stage=KUI_SHELL_UPDATE_RESULT;u->restart_required=true;
+            strcpy(u->status.message,"Update selected. Restart to use it.");strcpy(u->selected,"fedcba987654");
+            if(!strcmp(argv[1],"updates-error") || !strcmp(argv[1],"updates-uncertain")) {
+                u->status.passed=false;u->status.errors=1;u->selection_known=false;
+                strcpy(u->status.message,!strcmp(argv[1],"updates-uncertain")?
+                    "Activation not confirmed; restart/check selected version.":"Update package checksum failed; check the package again.");
+            }
+            shell.confirm_restart=!strcmp(argv[1],"updates-restart");
+            shell.update_restart=shell.confirm_restart;
+        }
+    }
+    else if(!strcmp(argv[1],"settings-updates")) {shell.page=KUI_SHELL_SETTINGS;shell.system_selected=12u;}
     else if(!strncmp(argv[1],"gd-cards-",9)) {
         shell.page=KUI_SHELL_GD_PLAY;shell.vmu_emulation_known=true;shell.vmu_emulation_enabled=false;
         (void)kui_shell_input(&shell,KUI_SHELL_START,false);

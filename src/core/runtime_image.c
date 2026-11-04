@@ -1,6 +1,15 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/runtime.h"
+#include "kui/update_boot.h"
 #include <string.h>
+
+extern bool kui_update_runtime_resolve(const char *,char *,size_t,
+    struct kui_update_runtime_stream *) __attribute__((weak));
+bool kui_runtime_resolve_path(const char *path,char *out,size_t capacity) {
+    if(kui_update_runtime_resolve)return kui_update_runtime_resolve(path,out,capacity,NULL);
+    if(!path || !out || !capacity || strlen(path)>=capacity)return false;
+    memmove(out,path,strlen(path)+1u);return true;
+}
 
 static uint32_t le32(const uint8_t *p) {
     return (uint32_t)p[0] | (uint32_t)p[1] << 8 |

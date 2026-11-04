@@ -32,4 +32,9 @@ const char *kui_runtime_result_name(enum kui_runtime_result result);
 enum kui_runtime_result kui_runtime_read(const char *path,
     struct kui_runtime_image *out, kui_log_fn log, kui_cancel_fn cancelled);
 void kui_runtime_free(struct kui_runtime_image *image);
+/* Resolve an installed code package for metadata checks such as f_stat.
+ * Explicit update-policy2 inheritance retains the root path. A missing managed
+ * replacement never substitutes a root module.
+ * This does not read/check the file; kui_runtime_read performs verification. */
+bool kui_runtime_resolve_path(const char *path,char *out,size_t capacity);
 #endif
