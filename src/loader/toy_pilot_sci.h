@@ -3,6 +3,13 @@
 #define KUI_TOY_PILOT_SCI_H
 #include "kui/retail_gd.h"
 #include "sd_reader.h"
+#include "kui/fmv_test.h"
+#include "kui/toy_demand_test.h"
+#if KUI_FMV_TEST
+bool kui_toy_pilot_fmv_data_idle(void);
+bool kui_toy_pilot_sci_fmv_rearm(void);
+void kui_toy_pilot_sci_fmv_snapshot(uint32_t out[4]);
+#endif
 #ifndef KUI_TOY_PILOT_ASYNC_CDDA
 #define KUI_TOY_PILOT_ASYNC_CDDA 0
 #endif

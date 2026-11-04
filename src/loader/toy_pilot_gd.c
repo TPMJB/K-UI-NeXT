@@ -111,6 +111,15 @@ int32_t kui_toy_pilot_gd_dispatch(struct kui_retail_gd *s,
         audio=kui_toy_pilot_gd_project(s,p);
     int32_t result=base(r4,r5,0,r7);
 #if KUI_TOY_PILOT_SHARED_SCI || KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
+#if KUI_TOY_FMV_IDLE_REARM
+    /* Reuse the existing DATA engine only after accepted DATA submission,
+     * and only after the audio owner's full stop/queue/bank proof. PLAY
+     * still fences DATA and retires this engine before changing its mailbox. */
+    if(r7==KUI_GD_REQUEST && result>0 && kui_toy_pilot_gd_data_pending(s) &&
+       s->sector_bytes==KUI_GAME_DATA_BYTES && !kui_toy_pilot_sci_startup_active() &&
+       kui_toy_pilot_fmv_data_idle())
+        (void)kui_toy_pilot_sci_fmv_rearm();
+#endif
     /* Submission retains the low core's complete source/destination checks.
      * Only its accepted positive handle may start background data work. */
     if(r7==KUI_GD_REQUEST && result>0 && kui_toy_pilot_gd_data_pending(s)
@@ -147,7 +156,11 @@ int32_t kui_toy_pilot_gd_dispatch(struct kui_retail_gd *s,
          * vectors before the original worker can observe a PLAY mailbox.
          * A rejected mailbox leaves the startup scheduler enabled and may
          * safely reopen the closed receiver on a later DATA request. */
-        if((r4==KUI_RETAIL_GD_PLAY || r4==KUI_RETAIL_GD_PLAY2) &&
+        if((r4==KUI_RETAIL_GD_PLAY || r4==KUI_RETAIL_GD_PLAY2
+#if KUI_TOY_FMV_IDLE_REARM
+            || r4==KUI_RETAIL_GD_RELEASE
+#endif
+            ) &&
            kui_toy_pilot_sci_startup_active() && !kui_toy_pilot_sci_quiesce()) {
             s->error=KUI_GD_ERROR_UNAVAILABLE;s->status=KUI_GD_FAILED;s->pending=0;
             return result;
@@ -164,6 +177,9 @@ int32_t kui_toy_pilot_gd_dispatch(struct kui_retail_gd *s,
             kui_toy_pilot_sci_retire();
 #endif
         }
+#if KUI_TOY_FMV_IDLE_REARM
+        else if(r4==KUI_RETAIL_GD_RELEASE) kui_toy_pilot_sci_retire();
+#endif
 #endif
     }
     return result;

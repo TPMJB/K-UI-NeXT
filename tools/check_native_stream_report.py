@@ -31,7 +31,7 @@ HELPER='_native_stream_report'
 REGION,TOP=0x8c420400,0x8c007cc0
 FIELDS=('blocks','polled','starts','kept','overruns','crc_errors','token_errors',
         'foreign','repaired','ahead','deferred')
-ROWS=(('SD DMA PIO CMD KEEP',0,4),('SD OVR CRC TOK FOR',4,4),('SD FIX AHEAD DEFER',8,3))
+ROWS=(('SD0',0,4),('SD4',4,4),('SD8',8,3))
 
 
 def require(ok,message):

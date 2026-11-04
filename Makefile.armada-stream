@@ -18,11 +18,37 @@ else
 override ARMADA_AUDIO_DIR := build/armada-ce-stream
 endif
 WINCE_CDDA_CONTROLLER_BEGIN ?= 0x8cfa7000
-override ARMADA_AUDIO_EXTRA_FLAGS := -DKUI_ARMADA_CE_EXCERPT=1 -DKUI_ARMADA_CE_STREAM=1 $(WINCE_CDDA_PROFILE_FLAGS)
+FMV_TEST ?= 0
+FMV_MUTE ?= 0
+DEMAND_PROFILE ?= 0
+ifneq ($(filter $(DEMAND_PROFILE),0 1 2),$(DEMAND_PROFILE))
+$(error DEMAND_PROFILE must be 0, 1 or 2)
+endif
+ifneq ($(DEMAND_PROFILE),0)
+ifneq ($(KUI_WINCE_CDDA_PROFILE):$(FMV_TEST):$(FMV_MUTE),:0:0)
+$(error Demand diagnostics require the default Armada adapter without FMV mute controls)
+endif
+override ARMADA_AUDIO_DIR := build/performance-armada-$(DEMAND_PROFILE)
+DEMAND_FLAGS := -DKUI_RETAIL_DEMAND_DIAGNOSTIC=$(DEMAND_PROFILE)
+DEMAND_KEEP := -Wl,-u,_kui_armada_ce_demand_event
+endif
+ifneq ($(filter $(FMV_TEST):$(FMV_MUTE),0:0 1:0 1:1),$(FMV_TEST):$(FMV_MUTE))
+$(error FMV selectors must be 0:0, 1:0 or 1:1)
+endif
+ifeq ($(FMV_TEST),1)
+ifneq ($(KUI_WINCE_CDDA_PROFILE),)
+$(error FMV tests are isolated to the default Armada profile)
+endif
+override ARMADA_AUDIO_DIR := build/fmv-armada-$(FMV_MUTE)
+endif
+override ARMADA_AUDIO_EXTRA_FLAGS := -DKUI_ARMADA_CE_EXCERPT=1 -DKUI_ARMADA_CE_STREAM=1 $(WINCE_CDDA_PROFILE_FLAGS) $(DEMAND_FLAGS)
 override ARMADA_AUDIO_EXTRA_STAGE_FLAGS := -DKUI_ARMADA_CE_RAM_BIND_STAGE=1 -DKUI_ARMADA_CE_EXCERPT_STAGE=1 -DKUI_ARMADA_CE_STREAM=1 -DKUI_RETAIL_EXTENDED_MAP=1 $(WINCE_CDDA_PROFILE_FLAGS)
 override ARMADA_AUDIO_EXTRA_STAGE_DEPS := $(ARMADA_AUDIO_DIR)/bind-probe.bin
 override ARMADA_AUDIO_EXTRA_ASM_FLAGS := -DKUI_ARMADA_CE_RAM_BIND_STAGE=1 -DKUI_ARMADA_CE_RAM_BIND_BIN='"$(ARMADA_AUDIO_DIR)/bind-probe.bin"'
 override ARMADA_AUDIO_EXTRA_LINK_FLAGS := -Wl,--defsym,_kui_armada_ce_bind_probe=$(WINCE_CDDA_CONTROLLER_BEGIN)
+ifneq ($(DEMAND_PROFILE),0)
+override ARMADA_AUDIO_EXTRA_LINK_FLAGS += -Wl,-T,$(ARMADA_AUDIO_DIR)/demand-symbols.ld
+endif
 override ARMADA_AUDIO_EXTRA_CHECK := python3 tools/check_armada_ce_excerpt.py --stream $(WINCE_CDDA_PROFILE_CHECK) $(ARMADA_AUDIO_DIR)
 ifeq ($(KUI_WINCE_CDDA_PROFILE),wwp)
 # The controller is linked first. Export only its checked scalar object;
@@ -40,9 +66,14 @@ $(ARMADA_AUDIO_DIR)/entry.elf: tools/check_retail_calls.py
 endif
 
 ARMADA_STREAM_FLAGS := $(RETAIL_FLAGS) -DKUI_RETAIL_CE=1 -DKUI_ARMADA_CE_EXCERPT=1 -DKUI_ARMADA_CE_STREAM=1 -DKUI_RETAIL_EXTENDED_MAP=1 -fcallgraph-info=su $(WINCE_CDDA_PROFILE_FLAGS)
+ARMADA_STREAM_FLAGS += -DKUI_FMV_TEST=$(FMV_TEST) -DKUI_ARMADA_FMV_MUTE=$(FMV_MUTE)
+ARMADA_STREAM_FLAGS += $(DEMAND_FLAGS)
 # Override to empty only for the initial high-placement excerpt preflight.
 # Full stream builds require all three independently implemented source units.
 ARMADA_STREAM_EXTRA_SRC ?= src/loader/armada_ce_stream_model.c src/loader/armada_ce_stream_native.c src/loader/armada_ce_stream_transport.c src/loader/armada_ce_stream_player.c src/loader/armada_ce_stream_trace.c
+ifneq ($(DEMAND_PROFILE),0)
+ARMADA_STREAM_EXTRA_SRC += src/loader/armada_ce_stream_demand_diagnostic.c
+endif
 ARMADA_STREAM_EXTRA_OBJS := $(patsubst src/loader/armada_ce_stream_%.c,$(ARMADA_AUDIO_DIR)/stream-%.o,$(ARMADA_STREAM_EXTRA_SRC))
 ARMADA_STREAM_OBJS := $(ARMADA_AUDIO_DIR)/bind-probe.o $(ARMADA_AUDIO_DIR)/excerpt.o $(ARMADA_AUDIO_DIR)/excerpt-asm.o $(ARMADA_AUDIO_DIR)/excerpt-minic.o $(ARMADA_STREAM_EXTRA_OBJS) $(ARMADA_AUDIO_DIR)/stream-image.o $(ARMADA_AUDIO_DIR)/stream-cursor.o
 
@@ -68,10 +99,15 @@ $(ARMADA_AUDIO_DIR)/stream-cursor.o: src/core/retail_cursor.c
 	@mkdir -p $(@D)
 	sh-elf-gcc $(ARMADA_STREAM_FLAGS) -MMD -MP -c $< -o $@
 $(ARMADA_AUDIO_DIR)/bind-probe.elf: $(ARMADA_STREAM_OBJS) src/loader/armada_ce_stream.ld
-	sh-elf-gcc $(RETAIL_LINK) -Wl,--defsym,_kui_stream_code_base=$(WINCE_CDDA_CONTROLLER_BEGIN) -Tsrc/loader/armada_ce_stream.ld -Wl,-Map,$(@:.elf=.map) -o $@ $(ARMADA_STREAM_OBJS) -lgcc
+	sh-elf-gcc $(RETAIL_LINK) $(DEMAND_KEEP) -Wl,--defsym,_kui_stream_code_base=$(WINCE_CDDA_CONTROLLER_BEGIN) -Tsrc/loader/armada_ce_stream.ld -Wl,-Map,$(@:.elf=.map) -o $@ $(ARMADA_STREAM_OBJS) -lgcc
 $(ARMADA_AUDIO_DIR)/bind-probe.bin: $(ARMADA_AUDIO_DIR)/bind-probe.elf
 	sh-elf-objcopy -O binary $< $@
 $(ARMADA_AUDIO_DIR)/resident-scia.elf: $(ARMADA_AUDIO_DIR)/bind-probe.elf
+ifneq ($(DEMAND_PROFILE),0)
+$(ARMADA_AUDIO_DIR)/demand-symbols.ld: $(ARMADA_AUDIO_DIR)/bind-probe.elf tools/performance_ce_symbols.py
+	python3 tools/performance_ce_symbols.py $< $@
+$(ARMADA_AUDIO_DIR)/resident-scia.elf: $(ARMADA_AUDIO_DIR)/demand-symbols.ld
+endif
 ifeq ($(KUI_WINCE_CDDA_PROFILE),wwp)
 $(ARMADA_AUDIO_DIR)/wwp-drive-status.ld: $(ARMADA_AUDIO_DIR)/bind-probe.elf tools/check_armada_ce_excerpt.py
 	python3 tools/check_armada_ce_excerpt.py --wwp-drive-link $< > $@.new

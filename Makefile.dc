@@ -2,6 +2,11 @@
 ifndef KOS_BASE
 $(error Source .deps/kos/environ.sh before building)
 endif
+KUI_FMV_TEST ?= 0
+KUI_PERF_NATIVE_STANDALONE ?= 0
+ifneq ($(filter $(KUI_PERF_NATIVE_STANDALONE),0 1),$(KUI_PERF_NATIVE_STANDALONE))
+$(error KUI_PERF_NATIVE_STANDALONE must be 0 or 1)
+endif
 
 TARGET := build/kui-diagnostic.elf
 RUNTIME := build/kui-runtime.elf
@@ -119,6 +124,8 @@ include $(KOS_BASE)/Makefile.rules
 
 CPPFLAGS += -Iinclude -Isrc/dreamcast -Isrc/loader -I.deps/fatfs/source -Ifirmware/kui-wifi/components/kwlink/include -DKUI_BUILD_ID='"$(BUILD_ID)"'
 CPPFLAGS += -DKUI_RETAIL_EXTENDED_MAP=1
+CPPFLAGS += -DKUI_FMV_TEST=$(KUI_FMV_TEST)
+CPPFLAGS += -DKUI_PERF_NATIVE_STANDALONE=$(KUI_PERF_NATIVE_STANDALONE)
 CPPFLAGS += -Ithird_party/miniz -Ithird_party/minilzo -DMINIZ_NO_ARCHIVE_APIS \
     -DMINIZ_NO_STDIO -DMINIZ_NO_TIME -DMINIZ_NO_ZLIB_APIS -DMINIZ_NO_MALLOC -DLZO_CFG_NO_UNALIGNED=1
 # Shared freestanding buses also serve the CD bootstrap/runtime. Keep the

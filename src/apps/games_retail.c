@@ -6,6 +6,12 @@
 #ifndef KUI_BUILD_ID
 #define KUI_BUILD_ID "unknown"
 #endif
+#ifndef KUI_PERF_NATIVE_STANDALONE
+#define KUI_PERF_NATIVE_STANDALONE 0
+#endif
+#if KUI_PERF_NATIVE_STANDALONE != 0 && KUI_PERF_NATIVE_STANDALONE != 1
+#error "Performance standalone routing must be off or on"
+#endif
 #include "kui/ce_load_plan.h"
 #include "kui/armada_ce_excerpt_pool.h"
 #include "kui/armada_ce_stream_seed.h"
@@ -1087,12 +1093,29 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
      * the SDK SCI family. An installed reader-only module runs it instead;
      * without one the combined module reports its refusal as before. */
     bool native_standalone=false;
+#if KUI_PERF_NATIVE_STANDALONE
+    /* A test GUI selects the existing independently guarded standalone stage
+     * for New+VMU Off even when the combined module could admit the game.
+     * Stage admission still proves the actual SDK family and loaded bytes.
+     * Legacy, Standard, CE, CDDA and enabled virtual cards never take this
+     * comparison route. Nothing falls back silently if its module is absent. */
+    const bool performance_standalone=native_dual && reader==KUI_RETAIL_READER_ASYNC && !emulation_enabled;
+    if(performance_standalone) {
+        standalone_candidate=true;
+        log("PERFORMANCE N0: worker-free New requested; Virtual VMU Off");
+    }
+#endif
     if(standalone_candidate) {
         FILINFO optional;
         FRESULT present=f_stat(KUI_GAMES_RETAIL_NATIVE_STANDALONE_PACKAGE,&optional);
         if(present!=FR_OK && present!=FR_NO_FILE && present!=FR_NO_PATH) {
             problem="cannot inspect the standalone New module; launch refused";goto done;
         }
+#if KUI_PERF_NATIVE_STANDALONE
+        if(performance_standalone && present!=FR_OK) {
+            problem="Performance N0 needs its standalone New module; reinstall the complete test folder";goto done;
+        }
+#endif
         if(present==FR_OK) {
             struct kui_runtime_image candidate={0};
             rr=(optional.fattrib&AM_DIR)?KUI_RUNTIME_IO:
@@ -1104,7 +1127,11 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
             }
             kui_runtime_free(package);*package=candidate;
             launch_package=KUI_GAMES_RETAIL_NATIVE_STANDALONE_PACKAGE;native_standalone=true;
+#if KUI_PERF_NATIVE_STANDALONE
+            log("Performance route: standalone New; no virtual VMU or worker reservation");
+#else
             log("New reader: virtual-A2 module cannot admit this executable; using standalone New without virtual VMU");
+#endif
         }
     }
 #if KUI_VMU_GAME_CARDS

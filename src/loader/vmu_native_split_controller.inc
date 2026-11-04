@@ -124,13 +124,22 @@ static inline __attribute__((always_inline)) bool split_controller_capture(
 }
 void __attribute__((noipa)) kui_vmu_native_passive_split_submit(
     const struct kui_vmu_native_passive_frame *f) {
-#if KUI_NATIVE_VMU_ONLY_FULL_SUBMIT
+#if KUI_NATIVE_PERF_CAPTURE
+    struct kui_vmu_native_profile_span span;native_perf_begin(&span);
+    perf_capture.wrapped=1u;
+#endif
+#if KUI_NATIVE_VMU_ONLY_FULL_SUBMIT || KUI_NATIVE_PERF_FULL_SUBMIT
     /* Diagnostic control only. The retained full submit still chooses its
      * established physical-controller fast path or full virtual-card path.
      * No pre-DMA capture or deferred first binding runs through this entry. */
     kui_vmu_native_passive_submit(f);
 #else
     if(!split_controller_capture(f)) kui_vmu_native_passive_submit(f);
+#endif
+#if KUI_NATIVE_PERF_CAPTURE
+    perf_capture.wrapped=0u;
+    native_perf_end(controller_pair.pending==NATIVE_CONTROLLER_CAPTURED?
+        NATIVE_PERF_SPLIT_SUBMIT:NATIVE_PERF_FULL_SUBMIT,&span);
 #endif
 }
 static void split_controller_prepare_complete(const struct kui_vmu_native_passive_frame *f) {

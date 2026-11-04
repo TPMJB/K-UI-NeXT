@@ -6,6 +6,13 @@
 #include "kui/armada_ce_stream_native.h"
 #include "kui/armada_ce_stream_transport.h"
 #include "kui/armada_ce_stream_trace.h"
+#include "kui/fmv_test.h"
+#if KUI_ARMADA_FMV_MUTE
+#include "kui/fmv_pcm_silence.h"
+#if KUI_WINCE_CDDA_WORMS || KUI_WINCE_CDDA_BAM4 || KUI_WINCE_CDDA_WWP
+#error The FMV output control is isolated to the Armada adapter
+#endif
+#endif
 #if !KUI_ARMADA_CE_STREAM_PLAYER_TEST
 #define KUI_ARMADA_CE_STREAM_OWNER_WORD_SCOPE static __attribute__((noinline,noclone))
 #endif
@@ -787,7 +794,12 @@ static bool refill(void) {
 #else
             volatile uint8_t *target=(volatile uint8_t *)(uintptr_t)regions[0];
             const volatile uint8_t *stage=(const volatile uint8_t *)(uintptr_t)(STAGE_BEGIN+player.stage_head);
+#if KUI_ARMADA_FMV_MUTE
+            (void)stage;
+            kui_fmv_pcm_silence((void *)target,ticket.audio_bytes);
+#else
             copy_bytes((void *)target,(const void *)stage,ticket.audio_bytes);
+#endif
             for(uint32_t i=ticket.audio_bytes;i<ticket.bytes;i++) target[i]=0;
 #endif
             for(uint32_t i=0;i<pages;i++) {

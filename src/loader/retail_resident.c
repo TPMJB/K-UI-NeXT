@@ -20,6 +20,10 @@
 #endif
 #include "kui/toy_loader_schedule.h"
 #include "kui/armada_ce_audio_observe.h"
+#include "kui/retail_demand_diagnostic.h"
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC && (!defined(KUI_RETAIL_CE) || !defined(KUI_RETAIL_ASYNC) || !KUI_ARMADA_CE_STREAM)
+#error "Demand diagnostic requires its separate CE stream resident"
+#endif
 #if KUI_ARMADA_CE_MAPLE_HOOK
 #include "kui/armada_ce_maple_reservation.h"
 #if KUI_ARMADA_CE_MAPLE_WRITE_LAYOUT
@@ -149,7 +153,9 @@ volatile uint32_t kui_retail_native_caller[2];
  * the last four calls' R7, R4, R5 and R6, shown if a call fails. */
 volatile uint32_t kui_retail_hook_caller[2];
 #if !KUI_ARMADA_CE_VMU_WRITE_RUNTIME || !defined(KUI_RETAIL_ASYNC)
+#if !KUI_RETAIL_DEMAND_DIAGNOSTIC
 static uint32_t ce_calls[4][4], ce_count;
+#endif
 #endif
 extern volatile uint32_t kui_retail_ce_kernel[KUI_RETAIL_CE_KERNEL_WORDS];
 /* A callback the hook's exit makes once the lock is released: function and
@@ -168,6 +174,21 @@ static int ram_alias(uint32_t address) {
 volatile uint32_t kui_retail_hook_active, kui_retail_hook_fault;
 #if KUI_ARMADA_CE_AUDIO_OBSERVE
 #include "armada_ce_audio_observe.inc"
+#endif
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC == 2
+static void demand_event(uint32_t event,uint32_t value) {
+    (void)kui_armada_ce_demand_event(event,value,(uintptr_t)&kui_retail_async_region);
+}
+#endif
+static void demand_report(unsigned page) {
+    const struct kui_retail_demand_page *s=kui_armada_ce_demand_event(
+        KUI_RETAIL_DEMAND_REPORT|(page<<8),kui_retail_hook_fault,(uintptr_t)&kui_retail_async_region);
+    if(!s) return;
+    retail_display_line((const char *)(uintptr_t)s->title);
+    for(unsigned i=0;i<KUI_RETAIL_DEMAND_ROWS;i++)
+        retail_display_values((const char *)(uintptr_t)s->labels[i],s->rows[i],5u);
+}
 #endif
 #if KUI_WINCE_CDDA_WWP && KUI_ARMADA_CE_STREAM && KUI_ARMADA_CE_AUDIO_OBSERVE
 #include "wwp_ce_stream_status.inc"
@@ -522,9 +543,12 @@ _Static_assert(sizeof(struct kui_sci_stream_stats)==11u*sizeof(uint32_t) &&
     "Terminal stream rows require the original eleven native counters");
 static void __attribute__((noinline)) native_stream_report(void) {
     const uint32_t *st=(const uint32_t *)kui_sci_stream_stats();
-    retail_display_values("SD DMA PIO CMD KEEP",st,4u);
-    retail_display_values("SD OVR CRC TOK FOR",st+4u,4u);
-    retail_display_values("SD FIX AHEAD DEFER",st+8u,3u);
+    /* Short terminal labels preserve the guarded standalone low layout.
+     * SD0: DMA, PIO, CMD18 starts, kept. SD4: overruns, CRC, token, foreign.
+     * SD8: repaired, receive-ahead, deferred. No counter or hot path changes. */
+    retail_display_values("SD0",st,4u);
+    retail_display_values("SD4",st+4u,4u);
+    retail_display_values("SD8",st+8u,3u);
 }
 #endif
 #if KUI_NATIVE_RAM_MAP
@@ -828,6 +852,16 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack
     terminal[7] = pace.per; terminal[8] = pace.still;
 #endif
     __asm__ __volatile__("" : : : "memory");
+#endif
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC
+    /* Terminal-only: the five high-owned pages replace the former compact
+     * audio display. Keeping the existing calls below syntactically present
+     * also keeps fault-report source/ABI unchanged. No game or I/O resumes. */
+    (void)kui_armada_ce_bind_probe(UINT32_MAX,0u,0,0u);
+    for(;;) for(unsigned page=0;page<KUI_RETAIL_DEMAND_PAGES;page++) {
+        retail_display_restore(&display);
+        demand_report(page);retail_display_pause(300u);
+    }
 #endif
 #if (KUI_ARMADA_CE_STREAM && KUI_ARMADA_CE_AUDIO_OBSERVE) || \
     (KUI_ARMADA_CE_MAPLE_OBSERVE && KUI_ARMADA_CE_MAPLE_PROOF)
@@ -1267,7 +1301,7 @@ void kui_retail_ce_stream_wake(void) {
  * as E0). Returns whether that is all the call asks: the image is in the
  * virtual drive, unchanged. */
 static int ce_record(uint32_t source, uint32_t r4, uint32_t r5, uint32_t r6, uint32_t r7) {
-#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME && defined(KUI_RETAIL_ASYNC)
+#if (KUI_ARMADA_CE_VMU_WRITE_RUNTIME && defined(KUI_RETAIL_ASYNC)) || KUI_RETAIL_DEMAND_DIAGNOSTIC
     /* Writable runtime retains fault and terminal reports. Its private VMU
      * diagnostics replace this unused async call-history ring and periodic
      * framebuffer meter; no GD command or interrupt behavior changes. */
@@ -1291,6 +1325,9 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
 #endif
     if(source>3) return -1;
     if(source!=1 && r6==UINT32_MAX) return 0;
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC == 2
+    demand_event(KUI_RETAIL_DEMAND_GD_BEGIN|(r7<<8),kui_retail_hook_sr);
+#endif
 #if KUI_NATIVE_LOADER_TIMELINE && !KUI_NATIVE_STANDALONE_READER
     kui_retail_async_trace(0u,r7);
 #endif
@@ -1335,6 +1372,9 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
 #endif
     meter_call(started);
 #endif
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC == 2
+    demand_event(KUI_RETAIL_DEMAND_GD_END|(r7<<8),(uint32_t)result);
+#endif
     return result;
 }
 #ifdef KUI_RETAIL_CE
@@ -1346,6 +1386,9 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
  * one, when both, raised here as CE would; 0 for none. */
 uint32_t kui_retail_ce_irq(void) {
     uint32_t started=*(volatile const uint32_t *)(uintptr_t)TCNT0, sysintr=0;
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC == 2
+    demand_event(KUI_RETAIL_DEMAND_IRQ_BEGIN,0u);
+#endif
     if(!kui_retail_async_irq()) {
         uint32_t raised=service.interrupts;
         service.interrupts=0;
@@ -1356,6 +1399,9 @@ uint32_t kui_retail_ce_irq(void) {
         }
     }
     meter_busy(started);
+#if KUI_RETAIL_DEMAND_DIAGNOSTIC == 2
+    demand_event(KUI_RETAIL_DEMAND_IRQ_END,sysintr);
+#endif
     return sysintr;
 }
 #endif

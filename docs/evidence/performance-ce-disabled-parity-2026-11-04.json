@@ -1,0 +1,47 @@
+{
+  "all_equal": true,
+  "candidate": "current source DEMAND_PROFILE=0 same display ID",
+  "flat_payloads": [
+    {
+      "bytes": 10692,
+      "equal": true,
+      "file": "resident-scif.bin",
+      "sha256": "be4eef4857dccb1dfc5c6cdc0520196d83bd5e52dc74c4a477727de7085af071"
+    },
+    {
+      "bytes": 13208,
+      "equal": true,
+      "file": "resident-sci.bin",
+      "sha256": "feb70893ec28c5be9ad7b690c8e61ddf9fb303252f9a9bbaeb1f57e1794b03d1"
+    },
+    {
+      "bytes": 10452,
+      "equal": true,
+      "file": "resident-ide.bin",
+      "sha256": "8538fb8d73eb8bc50b882ba82efbc4b5ed9b6d6516cba4ef4ab0a8d4f7191815"
+    },
+    {
+      "bytes": 16610,
+      "equal": true,
+      "file": "resident-scia.bin",
+      "sha256": "319b11cf8565cddc4fbaadde5c474c40a9acebf683d74d9cd6c905127c4e3138"
+    },
+    {
+      "bytes": 40832,
+      "equal": true,
+      "file": "bind-probe.bin",
+      "sha256": "903737bdd31c243bf87f1b320e7b658ca4a81bee38cc2d574b832bf37d91cec1"
+    },
+    {
+      "bytes": 125708,
+      "equal": true,
+      "file": "stage.bin",
+      "sha256": "4819189967befb039910a47a44287fd8d471c9674e718c841bc9314122883860"
+    },
+    {
+      "equal": true,
+      "file": "entry.elf PT_LOAD images"
+    }
+  ],
+  "reference": "b7b148e FMV Armada control build b7b148e4a1a0"
+}

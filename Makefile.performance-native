@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Matched 112 KiB split-controller demand builds. Both disable speculative
+# prefetch/TICK; the full-submit control retains the same worker reservation.
+BUILD ?= build/performance-native-split
+PERF_NATIVE_CAPTURE ?= 1
+PERF_NATIVE_FULL_SUBMIT ?= 0
+ifneq ($(filter $(PERF_NATIVE_CAPTURE):$(PERF_NATIVE_FULL_SUBMIT),0:0 1:0 1:1),$(PERF_NATIVE_CAPTURE):$(PERF_NATIVE_FULL_SUBMIT))
+$(error Performance native selectors must be 0:0, 1:0 or 1:1)
+endif
+include Makefile.vmu-native-isolation-split-controller-general
+FLAGS += -DKUI_NATIVE_PERF_CAPTURE=$(PERF_NATIVE_CAPTURE) -DKUI_NATIVE_PERF_FULL_SUBMIT=$(PERF_NATIVE_FULL_SUBMIT)
+NATIVE_FLAGS += -DKUI_NATIVE_PERF_CAPTURE=$(PERF_NATIVE_CAPTURE) -DKUI_NATIVE_PERF_FULL_SUBMIT=$(PERF_NATIVE_FULL_SUBMIT)

@@ -1,0 +1,80 @@
+[
+  {
+    "all_emitted_frames_with_asm": 5068,
+    "build_directory": "build/toy-demand-p1-raw",
+    "console_tested": false,
+    "format": "raw",
+    "profile": 1,
+    "spare_bytes": 384,
+    "worker_bytes": 39922,
+    "worker_end": "8cfdfe80",
+    "worker_sha256": "eaa05a892837571cc86c3910f7638e36653c1c2235d00e4ec2705561a61412fb",
+    "worker_stack_capacity": 8192,
+    "worker_stack_guard": 32
+  },
+  {
+    "all_emitted_frames_with_asm": 5068,
+    "build_directory": "build/toy-demand-p1-cooked",
+    "console_tested": false,
+    "format": "cooked",
+    "profile": 1,
+    "spare_bytes": 384,
+    "worker_bytes": 39922,
+    "worker_end": "8cfdfe80",
+    "worker_sha256": "eaa05a892837571cc86c3910f7638e36653c1c2235d00e4ec2705561a61412fb",
+    "worker_stack_capacity": 8192,
+    "worker_stack_guard": 32
+  },
+  {
+    "all_emitted_frames_with_asm": 4840,
+    "build_directory": "build/toy-demand-p2-raw",
+    "console_tested": false,
+    "format": "raw",
+    "profile": 2,
+    "spare_bytes": 288,
+    "worker_bytes": 40006,
+    "worker_end": "8cfdfee0",
+    "worker_sha256": "3f8cf7625b9df6bd10ee208e459a3a54d03bc4a1600e439c684f3c3559e7eb9c",
+    "worker_stack_capacity": 8192,
+    "worker_stack_guard": 32
+  },
+  {
+    "all_emitted_frames_with_asm": 5076,
+    "build_directory": "build/toy-demand-p2-cooked",
+    "console_tested": false,
+    "format": "cooked",
+    "profile": 2,
+    "spare_bytes": 288,
+    "worker_bytes": 40006,
+    "worker_end": "8cfdfee0",
+    "worker_sha256": "3f8cf7625b9df6bd10ee208e459a3a54d03bc4a1600e439c684f3c3559e7eb9c",
+    "worker_stack_capacity": 8192,
+    "worker_stack_guard": 32
+  },
+  {
+    "all_emitted_frames_with_asm": 4824,
+    "build_directory": "build/toy-demand-p3-raw",
+    "console_tested": false,
+    "format": "raw",
+    "profile": 3,
+    "spare_bytes": 608,
+    "worker_bytes": 39702,
+    "worker_end": "8cfdfda0",
+    "worker_sha256": "ff573c0ffafcebe52ab859827e398d3fec6f0f06c221376dfc9d1eb2e8880251",
+    "worker_stack_capacity": 8192,
+    "worker_stack_guard": 32
+  },
+  {
+    "all_emitted_frames_with_asm": 5060,
+    "build_directory": "build/toy-demand-p3-cooked",
+    "console_tested": false,
+    "format": "cooked",
+    "profile": 3,
+    "spare_bytes": 608,
+    "worker_bytes": 39702,
+    "worker_end": "8cfdfda0",
+    "worker_sha256": "ff573c0ffafcebe52ab859827e398d3fec6f0f06c221376dfc9d1eb2e8880251",
+    "worker_stack_capacity": 8192,
+    "worker_stack_guard": 32
+  }
+]

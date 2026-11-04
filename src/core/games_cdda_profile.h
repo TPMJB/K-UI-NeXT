@@ -7,6 +7,7 @@
 #include "kui/retail_image.h"
 #include "kui/mdk2_cdda_layout.h"
 #include "kui/native_cdda_compat.h"
+#include "kui/fmv_test.h"
 #include <string.h>
 
 enum kui_games_cdda_profile {
@@ -44,7 +45,13 @@ static inline enum kui_games_cdda_profile kui_games_cdda_toy_profile(
            kui_retail_track_file_offset(t) || !t->extent_count)
             return KUI_GAMES_CDDA_UNSUPPORTED;
     }
+#if KUI_FMV_TEST
+    /* Isolated test GUI: route the exact admitted Toy image to its typed
+     * diagnostic adapter, without replacing the hash-pinned retail modules. */
+    return cooked?KUI_GAMES_CDDA_TOY_COOKED_COMPAT:KUI_GAMES_CDDA_TOY_RAW_COMPAT;
+#else
     return cooked?KUI_GAMES_CDDA_TOY_COOKED:KUI_GAMES_CDDA_TOY_RAW;
+#endif
 }
 /* Early capacity selection uses checked image identities without requiring
  * a map that has not yet been built. It grants storage capacity, not launch

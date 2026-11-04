@@ -20,6 +20,11 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#ifndef KUI_PERF_ROUTE_TEST
+#define KUI_PERF_ROUTE_TEST 0
+#endif
+static bool perf_route_case(void);
+
 /* Real FatFs preparation, followed by complete reads through the freestanding
  * reader using physical card blocks only. No open FatFs file survives handoff. */
 static struct {
@@ -32,6 +37,7 @@ static struct {
     unsigned native_source_passes,direct_crc_passes;
     unsigned vmu_package_opens,dual_package_opens,ordinary_package_opens;
     unsigned standalone_package_opens,family_calls,dual_a1_package_opens;
+    unsigned perf_extent_calls,perf_resolution_calls,perf_seed_calls;
     uint64_t hash_begin[2],hash_end[2];
     bool hash_bounded;
     uint32_t first_sector;
@@ -44,14 +50,15 @@ static FATFS fs;
 static const char *const selected = "/Games/Reader Test/disc.gdi";
 static const char *const package = "0:/KUI/apps/games/retail-boot.kui";
 static const char *const dual_package = "0:/KUI/apps/games/retail-native-dual.kui";
-static bool native_dual_case(void) {return !strncmp(test.fault,"native-dual-",12);}
+static bool perf_route_case(void) {return KUI_PERF_ROUTE_TEST && !strncmp(test.fault,"native-perf-",12);}
+static bool native_dual_case(void) {return !strncmp(test.fault,"native-dual-",12) || perf_route_case();}
 static bool native_standard_case(void) {return !strncmp(test.fault,"native-standard-",16);}
-static bool native_dual_report(void) {return native_dual_case() && strstr(test.fault,"-report");}
+static bool native_dual_report(void) {return native_dual_case() && (strstr(test.fault,"-report") || perf_route_case());}
 /* A game whose virtual card answers as A1 asks for the A1 build of the module. */
 static const char *const dual_a1_package = KUI_GAMES_RETAIL_NATIVE_DUAL_A1_PACKAGE;
 static bool native_dual_a1_case(void) {return native_dual_case() && strstr(test.fault,"-a1");}
 static const char *const standalone_package = KUI_GAMES_RETAIL_NATIVE_STANDALONE_PACKAGE;
-static bool native_standalone_case(void) {return native_dual_case() && strstr(test.fault,"-standalone");}
+static bool native_standalone_case(void) {return (native_dual_case() && strstr(test.fault,"-standalone")) || perf_route_case();}
 /* Only this case's New launch is expected to run on the standalone module. */
 static bool native_standalone_selected(void) {return !strcmp(test.fault,"native-dual-standalone-report");}
 static const char *const ce_package = "0:/KUI/apps/games/ce-probe.kui";
@@ -296,7 +303,12 @@ FRESULT __wrap_f_write(FIL *file, const void *data, UINT bytes, UINT *written) {
     return __real_f_write(file, data, bytes, written);
 }
 FRESULT __real_f_mkdir(const TCHAR *);
-FRESULT __wrap_f_mkdir(const TCHAR *path) { assert(!test.active); return __real_f_mkdir(path); }
+FRESULT __wrap_f_mkdir(const TCHAR *path) {
+    /* On-mode may try to persist the modeled complete proof. Keep this
+     * routing fixture read-only; production continues with its RAM proof. */
+    if(test.active && perf_route_case()) return FR_DENIED;
+    assert(!test.active); return __real_f_mkdir(path);
+}
 FRESULT __real_f_unlink(const TCHAR *);
 FRESULT __wrap_f_unlink(const TCHAR *path) { assert(!test.active); return __real_f_unlink(path); }
 FRESULT __real_f_rename(const TCHAR *, const TCHAR *);
@@ -386,6 +398,7 @@ static void seed(const char *directory) {
     assert(f_mkdir("0:/KUI/apps/games") == FR_OK && f_mkdir("0:/Games") == FR_OK);
     assert(f_mkdir("0:/Games/Reader Test") == FR_OK);
     if(native_standard_case())assert(kui_vmu_emulation_settings_save(false,log_line));
+    if(perf_route_case())assert(kui_vmu_emulation_settings_save(strstr(test.fault,"-on")!=NULL,log_line));
     size_t size; uint8_t *data = host_file(directory, "retail-boot.kui", &size);
     if(!strcmp(test.fault, "layout-manifest")) {
         put32(data + KUI_RUNTIME_HEADER_BYTES + 0x100 + 20, 4092);
@@ -424,9 +437,15 @@ static void seed(const char *directory) {
         data=host_file(directory,"retail-native-dual-a1.kui",&size);
         write_file(dual_a1_package,data,size);free(data);
     }
-    if(native_standalone_case() && !strstr(test.fault,"-absent")) {
+    if(perf_route_case() && strstr(test.fault,"-directory")) {
+        assert(f_mkdir(standalone_package)==FR_OK);
+    } else if(native_standalone_case() && !strstr(test.fault,"-absent")) {
         data=host_file(directory,"retail-native-standalone.kui",&size);
         write_file(standalone_package,data,size);free(data);
+    }
+    if(perf_route_case()) {
+        data=host_file(directory,"retail-physical.kui",&size);
+        write_file(KUI_GAMES_RETAIL_PHYSICAL_PACKAGE,data,size);free(data);
     }
     if(zso_case()) {seed_zso(directory);return;}
     if(format_case()) {
@@ -653,7 +672,10 @@ static void check_mapping(const char *directory, const struct kui_runtime_image 
     if(!strcmp(test.fault, "fragmented")) assert(map->slots[2].track.extent_count > 1);
     /* Native X/Y preparation requires SCI and refuses SCIF. The Windows CE
      * boot test continues to use its separately selected package. */
-    assert(map->reader == (native_dual_case()? (strstr(test.fault,"-y")?KUI_RETAIL_READER_ASYNC_EAGER:KUI_RETAIL_READER_ASYNC) : (!strcmp(test.fault, "async-on-sci") || !strcmp(test.fault, "async-cooked-2048") ||
+    assert(map->reader == (perf_route_case()?
+        (strstr(test.fault,"-standard")?KUI_RETAIL_READER_STANDARD:
+         strstr(test.fault,"-legacy")?KUI_RETAIL_READER_ASYNC_EAGER:KUI_RETAIL_READER_ASYNC):
+        native_dual_case()? (strstr(test.fault,"-y")?KUI_RETAIL_READER_ASYNC_EAGER:KUI_RETAIL_READER_ASYNC) : (!strcmp(test.fault, "async-on-sci") || !strcmp(test.fault, "async-cooked-2048") ||
                            !strncmp(test.fault, "async-tracks", 12) ||
                            !strcmp(test.fault, "ce-probe-async") ?
                            KUI_RETAIL_READER_ASYNC : KUI_RETAIL_READER_STANDARD)));
@@ -941,6 +963,9 @@ static void check_launch(const char *directory) {
     export_launch_files(directory);
     puts("Launch preparation PASS: only report writes admitted; original game/package bytes exported for independent comparison");
 }
+#if KUI_PERF_ROUTE_TEST
+#include "games_retail_perf_route.inc"
+#endif
 static void check_native_dual(const char *directory) {
     test.hash_begin[0]=0u;test.hash_end[0]=16u*track_stride(2);
     test.hash_begin[1]=21u*track_stride(2);test.hash_end[1]=23u*track_stride(2);test.hash_bounded=true;
@@ -1060,6 +1085,9 @@ static void check_session_mapping(const char *directory) {
 }
 static void check(const char *directory) {
     struct kui_runtime_image image = {0};
+#if KUI_PERF_ROUTE_TEST
+    if(perf_route_case()) {check_perf_route(directory);return;}
+#endif
     if(native_dual_case()) {check_native_dual(directory);return;}
     if(native_standard_case()) {check_native_standard(directory);return;}
     if(zso_case()) {check_zso(directory);return;}

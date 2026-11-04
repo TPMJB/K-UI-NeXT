@@ -80,6 +80,32 @@ static struct {
     struct kui_toy_pilot_sci_budget_stats budget;
 #endif
 } e;
+#if KUI_TOY_DEMAND_TEST_PROFILE
+static struct kui_toy_demand_test_stats demand_test;
+static uint32_t demand_wait_pending;
+const struct kui_toy_demand_test_stats *kui_toy_demand_test_snapshot(void) {
+    return &demand_test;
+}
+#endif
+#if KUI_FMV_TEST
+static uint32_t fmv_rearms,fmv_rearm_refusals;
+bool kui_toy_pilot_sci_fmv_rearm(void) {
+    if(e.startup.enabled) return true;
+    /* The caller separately proves the audio owner quiescent. Never revive
+     * a failed stream, outstanding reception, IRQ return or live card lease. */
+    if(!e.configured || !e.startup.retired || e.transport_fault ||
+       kui_toy_pilot_sci_irq_fault || e.active || e.opened || e.in_irq || e.hooked ||
+       e.audio_held || e.audio_waiting || kui_toy_pilot_sci_release.depth ||
+       kui_sci_stream_busy()) {
+        ++fmv_rearm_refusals;return false;
+    }
+    e.startup.enabled=1u;++fmv_rearms;return true;
+}
+void kui_toy_pilot_sci_fmv_snapshot(uint32_t out[4]) {
+    out[0]=fmv_rearms;out[1]=fmv_rearm_refusals;
+    out[2]=e.startup.enabled;out[3]=e.startup.retired;
+}
+#endif
 
 #ifdef KUI_TOY_PILOT_SCI_TEST
 #define vbr_get kui_toy_pilot_sci_test_vbr
@@ -184,6 +210,9 @@ static void fail(uint32_t error) {
 #endif
 }
 static void retry(enum kui_sci_stream_result result) {
+#if KUI_TOY_DEMAND_TEST_PROFILE
+    if(demand_test.retry_steps!=UINT32_MAX)++demand_test.retry_steps;
+#endif
     ++e.stats.retries;
     if(result==KUI_SCI_STREAM_RESET || result==KUI_SCI_STREAM_BUSY || ++e.retry>RETRIES)
         fail(KUI_GD_ERROR_IO);
@@ -292,6 +321,9 @@ void kui_toy_pilot_sci_init(const struct kui_retail_manifest *manifest,
     const struct kui_loader_sd *card,enum kui_loader_sd_result (*acquire)(void),
     void (*release)(void)) {
     memset(&e,0,sizeof(e));memset(&kui_toy_pilot_sci_release,0,sizeof(kui_toy_pilot_sci_release));
+#if KUI_TOY_DEMAND_TEST_PROFILE
+    memset(&demand_test,0,sizeof(demand_test));demand_wait_pending=0u;
+#endif
     kui_toy_pilot_sci_irq_fault=0u;
     e.manifest=manifest;e.card=card;e.acquire=acquire;e.release=release;
     e.configured=manifest && card && acquire && release && card->ready && !card->slow;
@@ -360,7 +392,15 @@ static int data_work(bool foreground) {
         if(result==KUI_SCI_STREAM_PENDING) {
             /* An IRQ defers mid-block overrun repair. Start that same block
              * again next time, retaining its exact data cursor. */
-            if(kui_sci_stream_busy())hook();else unhook();
+            if(kui_sci_stream_busy()) {
+#if KUI_TOY_DEMAND_TEST_PROFILE
+                if(foreground) {
+                    demand_wait_pending=1u;
+                    if(demand_test.wait_polls!=UINT32_MAX)++demand_test.wait_polls;
+                }
+#endif
+                hook();
+            } else unhook();
             return KUI_TOY_SCI_PENDING;
         }
         if(result!=KUI_SCI_STREAM_OK) {
@@ -494,6 +534,11 @@ int kui_toy_pilot_sci_service(struct kui_retail_gd *s) {
     if(!e.startup.enabled)return KUI_TOY_SCI_OK;
 #endif
     uint32_t before=ticks();++e.stats.calls;
+#if KUI_TOY_DEMAND_TEST_PROFILE
+    sci_budget_add(&demand_test.service_calls,1u);
+    uint32_t demand_steps=0u;
+    demand_wait_pending=0u;
+#endif
 #if KUI_TOY_PILOT_DATA_BUDGET_PROFILE
     uint32_t blocks_before=e.stats.call_blocks,credit_before=s?s->completed_bytes:0u;
     /* Keep the exact branch which ended admission, rather than reconstruct
@@ -528,14 +573,38 @@ int kui_toy_pilot_sci_service(struct kui_retail_gd *s) {
         if(step>=KUI_TOY_SCI_SERVICE_STEPS){budget_exit=&e.budget.step_exits;break;}
         if(step && ticks()-before>=KUI_TOY_SCI_SERVICE_TICKS){budget_exit=&e.budget.time_exits;break;}
         result=pump_work(true);
+#if KUI_TOY_DEMAND_TEST_PROFILE
+        ++demand_steps;sci_budget_add(&demand_test.pump_steps,1u);
+#if KUI_TOY_DEMAND_READY_RETURN
+        /* This poll has already serviced a completed reception or resumed
+         * its repair where permitted. Only a still-live pending DMA yields
+         * here. A deferred repair with no DMA must reach the next fetch;
+         * a CRC/error remains on the ordinary retry/fault path. Subsequent
+         * CHECK/EXEC can poll again even when the SCI IRQ never runs. */
+        if(result==KUI_TOY_SCI_PENDING && demand_wait_pending) {
+            /* This is a separate diagnostic exit, not a finished request
+             * or a block/time/step/token limit. The existing budget exit
+             * partition plus wait_returns equals service_calls. */
+            sci_budget_add(&demand_test.wait_returns,1u);budget_exit=NULL;break;
+        }
+#endif
+#endif
         if(result!=KUI_TOY_SCI_PENDING)break;
         if(kui_sci_stream_token_pending()){budget_exit=&e.budget.token_exits;break;}
     }
     uint32_t credit=s && s->completed_bytes>=credit_before?s->completed_bytes-credit_before:0u;
+#if KUI_TOY_DEMAND_READY_RETURN
+    if(budget_exit)sci_budget_add(budget_exit,1u);
+#else
     sci_budget_add(budget_exit,1u);
+#endif
     sci_budget_add(&e.budget.service_verified_blocks,e.stats.call_blocks-blocks_before);
     if(!credit)sci_budget_add(&e.budget.zero_credit_calls,1u);
     sci_budget_add(&e.budget.credited_bytes,credit);
+#if KUI_TOY_DEMAND_TEST_PROFILE
+    sci_budget_add(credit?&demand_test.credit_visits:&demand_test.zero_credit_visits,1u);
+    maximum(&demand_test.max_steps,demand_steps);
+#endif
 #else
     for(unsigned step=stepped;(e.active
 #if KUI_TOY_PILOT_ASYNC_CDDA

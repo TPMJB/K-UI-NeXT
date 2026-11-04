@@ -284,10 +284,13 @@ def check(directory, available, ce=False):
             # than treating a cross-unit callback as an assumed leaf.
             extra_reports += sorted(Path(directory).parent.glob("stream-*.ci"))
             # Resident and controller are separately linked ELFs, each with
-            # its own minic helpers. Only this one authored entry crosses
-            # the image boundary; controller globals resolve in its image.
-            calls = {source: [("excerpt:" + target if target ==
-                               "kui_armada_ce_bind_probe" else target, label)
+            # its own minic helpers. The isolated demand observer adds one
+            # direct entry, separately bound/audited against the same high
+            # ELF; it must include its actual frames, never an assumed leaf.
+            high_entries={"kui_armada_ce_bind_probe"}
+            if (Path(directory).parent/"stream-demand_diagnostic.ci").is_file():
+                high_entries.add("kui_armada_ce_demand_event")
+            calls = {source: [("excerpt:" + target if target in high_entries else target, label)
                               for target, label in edges]
                      for source, edges in calls.items()}
         for report in extra_reports:

@@ -1,0 +1,30 @@
+{
+  "schema": "kui.native.capture0-clean-head-parity.v1",
+  "source_commit": "b7b148e4a158d46022f9c58c0d3acec22b0cbdc4",
+  "reference_build_id": "b7b148e4a158",
+  "compiler": "pinned sh-elf GCC 15.2.0",
+  "source_files_sha256": {
+    "src/loader/vmu_native_passive.c": "1cc626fbbc18e3c9bd68557197bcd72ae71700e0fd9d79e14dd894222473bf87",
+    "src/loader/vmu_native_split_controller.inc": "f37a0b81479e5f2fb72cd91f490c78affd08888817e8e8152f21b2140416eaff"
+  },
+  "method": [
+    "Read both original source files from git HEAD, not the modified working tree.",
+    "Compile original passive.c from a temporary directory containing original split.inc using the exact capture-off General native-worker compiler flags.",
+    "Compare complete object disassembly with relocation targets against the modified-source capture-off object, excluding only the objdump file header.",
+    "Replace the capture-off passive object with the independently compiled original object, relink the complete worker and compare every loaded binary byte."
+  ],
+  "object_disassembly_and_relocations_equal": true,
+  "object_normalized_disassembly_sha256": "df1c70549a183865f44af26f44449e2321fbae154d5a0239a4c5b48bba5c43ca",
+  "complete_loaded_worker_equal": true,
+  "worker_binary_bytes": 49664,
+  "clean_and_capture0_worker_binary_sha256": "005f51f73130629f204efd577bab46c4e350d279c539956bca5a8087877bbf76",
+  "worker_sha256_after_zeroing_only_existing_BUILD_12hex_NUL_label": "8fcd1923561305286b4f62b1d2c81d430f392af432fc249791294350a1f057b1",
+  "historical_strict_gate": {
+    "result": "REFUSED for both pristine HEAD and capture0",
+    "reason": "General/toggle pin maps predate later current-source changes. This is not represented as a strict-gate pass.",
+    "example": "Old completion pin expects 3828 bytes; current pristine HEAD emits 4100 bytes."
+  },
+  "scope": "Capture-off worker behavior equivalence. Instrumented workers require separate unchanged-function, source-reproduction, real-C/linked-SH and stack audits.",
+  "console_execution_verified": false,
+  "source_modified_or_committed_during_this_parity_check": false
+}

@@ -3,6 +3,7 @@
 #include "kui/vmu_native_passive.h"
 #include "kui/vmu_native_background.h"
 #include "kui/native_session.h"
+#include "kui/native_perf_capture.h"
 #if KUI_NATIVE_SESSION_CONTROLS
 #include "kui/native_return.h"
 #include "kui/native_disc_set.h"
@@ -697,6 +698,7 @@ static void diagnostic_report(void) {
 static bool diagnostic_gesture(uint32_t controls) {
     return !(controls&2u) && ((controls>>16)&255u)>=200u && (controls>>24)>=200u;
 }
+#include "vmu_native_perf_capture.inc"
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
 /* A deliberate request for this worker's failure page and counters, for a
  * game that stops responding while its controller is still polled: both
@@ -725,7 +727,11 @@ static bool diagnostic_fast_gesture(void) {
         uint32_t header=controller_pair.frames[i].header,controls;
         if(((header>>14)&3u)==0u && (header&255u)==9u &&
            read_value(NULL,(controller_pair.frames[i].rx+8u)|UINT32_C(0xa0000000),4u,&controls))
+#if KUI_NATIVE_PERF_CAPTURE
+            return native_perf_gesture(controls);
+#else
             return diagnostic_gesture(controls);
+#endif
     }
     return false;
 }
@@ -795,9 +801,17 @@ static int persistent_lease(kui_vmu_sd_transaction transaction,void *context) {
     if(reader_only()) return KUI_VMU_SD_LEASE_FAULT;
     if(config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_RAW_CHAIN) return KUI_VMU_SD_LEASE_FAULT;
     struct kui_vmu_native_profile_span span;
+#if KUI_NATIVE_PERF_CAPTURE
+    struct kui_vmu_native_profile_span perf_span;
+    unsigned perf_kind=durable_card.operation==2u?NATIVE_PERF_WRITE_LEASE:NATIVE_PERF_READ_LEASE;
+    native_perf_begin(&perf_span);
+#endif
     if((!KUI_NATIVE_E1_WAIT_CAPTURE && !KUI_NATIVE_METADATA_CACHE_ISOLATION && !KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION && config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE)) diagnostic_begin(&span);
     if(transaction!=kui_vmu_native_persistent_sd_transaction || context!=&durable_card ||
        !persistent_storage_guard()) {
+#if KUI_NATIVE_PERF_CAPTURE
+        native_perf_end(perf_kind,&perf_span);
+#endif
         if((!KUI_NATIVE_E1_WAIT_CAPTURE && !KUI_NATIVE_METADATA_CACHE_ISOLATION && !KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION && config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE)) diagnostic_end(KUI_VMU_NATIVE_PROFILE_STORAGE,&span);
         return KUI_VMU_SD_LEASE_FAULT;
     }
@@ -809,6 +823,9 @@ static int persistent_lease(kui_vmu_sd_transaction transaction,void *context) {
     int result=lease(transaction,context);
 #endif
     if(!persistent_storage_guard()) result=KUI_VMU_SD_LEASE_FAULT;
+#if KUI_NATIVE_PERF_CAPTURE
+    native_perf_end(perf_kind,&perf_span);
+#endif
     if((!KUI_NATIVE_E1_WAIT_CAPTURE && !KUI_NATIVE_METADATA_CACHE_ISOLATION && !KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION && config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE)) diagnostic_end(KUI_VMU_NATIVE_PROFILE_STORAGE,&span);
     return result;
 }
@@ -1123,6 +1140,9 @@ int kui_vmu_native_passive_arm(const struct kui_vmu_native_passive_config *c,voi
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     memset(&live_plan,0,sizeof(live_plan));
     memset(&controller_pair,0,sizeof(controller_pair));
+#if KUI_NATIVE_PERF_CAPTURE
+    memset(&perf_capture,0,sizeof(perf_capture));
+#endif
 #if !KUI_NATIVE_SPLIT_CONTROLLER_GENERAL
     memset(&diagnostic,0,sizeof(diagnostic));
 #endif
@@ -1224,6 +1244,9 @@ int kui_vmu_native_passive_arm(const struct kui_vmu_native_passive_config *c,voi
 }
 #if KUI_VMU_NATIVE_READONLY_PROBE || KUI_VMU_NATIVE_PERSISTENT_PROBE
 void kui_vmu_native_readonly_release_check(const struct kui_vmu_native_passive_frame *f) {
+#if KUI_NATIVE_PERF_CAPTURE
+    struct kui_vmu_native_profile_span perf_span;native_perf_begin(&perf_span);
+#endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     kui_vmu_native_trace_point(0x30u,f,state.submitted,state.completed);
     struct kui_vmu_native_profile_span span;
@@ -1246,6 +1269,9 @@ void kui_vmu_native_readonly_release_check(const struct kui_vmu_native_passive_f
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     if((!KUI_NATIVE_E1_WAIT_CAPTURE && !KUI_NATIVE_METADATA_CACHE_ISOLATION && !KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION && config.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE)) diagnostic_end(KUI_VMU_NATIVE_PROFILE_FREE,&span);
     kui_vmu_native_trace_point(0x31u,f,state.submitted,state.completed);
+#if KUI_NATIVE_PERF_CAPTURE
+    native_perf_end(NATIVE_PERF_FREE,&perf_span);
+#endif
 #endif
 }
 #endif
@@ -1776,6 +1802,10 @@ static void controller_complete(const struct kui_vmu_native_passive_frame *f) {
 #undef controller_reject
 #endif
 void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *f) {
+#if KUI_NATIVE_PERF_CAPTURE
+    struct kui_vmu_native_profile_span perf_span;
+    if(!perf_capture.wrapped)native_perf_begin(&perf_span);
+#endif
 #if KUI_NATIVE_METADATA_CACHE_ISOLATION
     const struct kui_vmu_native_passive_config *const cfg=native_cached_config();
 #endif
@@ -1825,6 +1855,9 @@ void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *f)
             ++diagnostic.fast_submit;diagnostic_end(KUI_VMU_NATIVE_PROFILE_SUBMIT,&span);
         }
         kui_vmu_native_trace_point(0x1fu,f,state.submitted,state.completed);
+#if KUI_NATIVE_PERF_CAPTURE
+        if(!perf_capture.wrapped)native_perf_end(NATIVE_PERF_FULL_SUBMIT,&perf_span);
+#endif
         return;
     }
 #endif
@@ -1890,9 +1923,15 @@ void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *f)
         ++diagnostic.full_submit;diagnostic_end(KUI_VMU_NATIVE_PROFILE_SUBMIT,&span);
     }
     kui_vmu_native_trace_point(0x1fu,f,state.submitted,state.completed);
+#if KUI_NATIVE_PERF_CAPTURE
+    if(!perf_capture.wrapped)native_perf_end(NATIVE_PERF_FULL_SUBMIT,&perf_span);
+#endif
 #endif
 }
 void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *f) {
+#if KUI_NATIVE_PERF_CAPTURE
+    struct kui_vmu_native_profile_span perf_span;native_perf_begin(&perf_span);
+#endif
 #if KUI_NATIVE_METADATA_CACHE_ISOLATION
     const struct kui_vmu_native_passive_config *const cfg=native_cached_config();
 #endif
@@ -1937,6 +1976,10 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
         if((!KUI_NATIVE_E1_WAIT_CAPTURE && !KUI_NATIVE_METADATA_CACHE_ISOLATION && !KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION && NATIVE_HOT_CONFIG.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE))
             diagnostic_complete(&span,diagnostic_fast_gesture(),true);
         kui_vmu_native_trace_point(0x2fu,f,state.submitted,state.completed);
+#if KUI_NATIVE_PERF_CAPTURE
+        native_perf_end(NATIVE_PERF_FAST_COMPLETE,&perf_span);
+        native_perf_poll(diagnostic_fast_gesture());
+#endif
         return;
     }
 #endif
@@ -2018,6 +2061,14 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
              * gesture avoids pausing the game or requesting its reset. */
             capture_gesture=diagnostic_gesture(controls);
         }
+#if KUI_NATIVE_PERF_CAPTURE
+        if(((chain_frames[i].header>>8)&255u)==32u &&
+           (chain_frames[i].header&255u)==9u && (response&255u)==8u) {
+            uint32_t controls;
+            if(!read_value(NULL,(receivers[i]+8u)|UINT32_C(0xa0000000),4u,&controls))fail(12u);
+            capture_gesture=native_perf_gesture(controls);
+        }
+#endif
 #endif
         if(!i) state.first_response=response;
         state.last_response=response;
@@ -2070,6 +2121,10 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
     native_session_controller_complete(session_controls);
 #endif
     kui_vmu_native_trace_point(0x2fu,f,state.submitted,state.completed);
+#if KUI_NATIVE_PERF_CAPTURE
+    native_perf_end(NATIVE_PERF_FULL_COMPLETE,&perf_span);
+    native_perf_poll(capture_gesture);
+#endif
     if((!KUI_NATIVE_E1_WAIT_CAPTURE && !KUI_NATIVE_METADATA_CACHE_ISOLATION && !KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION && NATIVE_HOT_CONFIG.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE))
         diagnostic_complete(&span,capture_gesture,false);
 #else

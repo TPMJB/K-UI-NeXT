@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/toy_pilot.h"
+#include "kui/fmv_test.h"
 #include "kui/toy_loader_ad_followup.h"
 #if KUI_TOY_PILOT_ASYNC_CDDA && !KUI_TOY_PILOT_SHARED_SCI
 #error Asynchronous CDDA requires the shared SCI owner
@@ -1572,6 +1573,18 @@ static bool quiescent(void) {
         owner.transaction_bank==NONE && !owner.ring_queued && owner.model.active_bank==NONE && owner.model.pending_bank==NONE &&
         ring_empty();
 }
+#if KUI_FMV_TEST
+/* GD entry is serialized with the retained worker. This is a private-state
+ * query: no guest reads, native sound calls, IRQ changes or clocks. A newly
+ * queued PLAY/RELEASE must be applied before it can lend the card again. */
+bool kui_toy_pilot_fmv_data_idle(void) {
+    return owner.configured && owner.sdk_ready && !owner.disabled &&
+        owner.stats.driver_verified &&
+        owner.mailbox.generation==owner.handled_generation &&
+        owner.mailbox.generation==owner.model.generation &&
+        owner.mailbox.generation==owner.stats.applied_generation && quiescent();
+}
+#endif
 static bool service_idle(void) {
     uint32_t sr=mask_begin();bool idle=quiescent();
     if(idle && owner.mailbox.generation!=owner.handled_generation) {

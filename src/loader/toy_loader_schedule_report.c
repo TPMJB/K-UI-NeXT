@@ -2,6 +2,7 @@
 #include "kui/toy_loader_schedule_report.h"
 #include "kui/toy_loader_schedule.h"
 #include "kui/toy_pilot_clock.h"
+#include "kui/toy_demand_test.h"
 #include <string.h>
 #if KUI_TOY_PILOT_DATA_SCHEDULE_MODE == 2
 #include "toy_pilot_sci.h"
@@ -65,6 +66,11 @@ static void schedule_counter_delta(uint32_t *r) {
     if(r[16]==UINT32_MAX || r[17]==UINT32_MAX)schedule_report[10]=1u;
 }
 #endif
+#if KUI_TOY_DEMAND_TEST_PROFILE
+static uint32_t fingerprint_skips;
+uint32_t kui_toy_demand_test_fingerprint_skips(void) {return fingerprint_skips;}
+#endif
+#if !KUI_TOY_DEMAND_SKIP_FINGERPRINT
 static uint32_t schedule_crc32(const uint8_t *p,uint32_t n) {
     static const uint32_t nibble[16]={0u,0x1db71064u,0x3b6e20c8u,0x26d930acu,
         0x76dc4190u,0x6b6b51f4u,0x4db26158u,0x5005713cu,0xedb88320u,
@@ -76,6 +82,7 @@ static uint32_t schedule_crc32(const uint8_t *p,uint32_t n) {
     }
     return ~crc;
 }
+#endif
 void kui_toy_loader_schedule_report_begin(const struct kui_retail_gd *s) {
     schedule_initialize();
     if(schedule_report[5] || schedule_visit.call_active)return;
@@ -138,8 +145,15 @@ void kui_toy_loader_schedule_report_end(const struct kui_retail_gd *s,uint32_t f
         if(schedule_data(s->command) || (f==KUI_GD_CHECK && command==r[1] &&
            !s->pending && !s->command && schedule_data(schedule_visit.command))) {
             r[8]=s->completed_bytes;r[9]=(uint32_t)s->status;r[10]=s->error;
-            if(!(r[7]&(1u|64u)) && s->sector_bytes && s->sector_bytes<=2352u &&
+            if(!(r[7]&(1u|64u|(KUI_TOY_DEMAND_SKIP_FINGERPRINT?1024u:0u))) && s->sector_bytes && s->sector_bytes<=2352u &&
                s->completed_bytes>=s->sector_bytes && s->ops.map) {
+#if KUI_TOY_DEMAND_SKIP_FINGERPRINT
+                /* Suppress only the extra diagnostic first-sector CRC32.
+                 * Transport CRC16, source/destination validation and guest
+                 * credit remain unchanged. Bit 10 identifies an intentional
+                 * absent fingerprint; it is not a failed comparison. */
+                r[7]|=1024u;schedule_add(&fingerprint_skips,1u);
+#else
                 uint32_t before,after,v=schedule_clock_sample(&before);
                 uint32_t address=(s->destination&0x00ffffffu)|0x8c000000u;
                 const uint8_t *bytes=s->ops.map(s->ops.context,address,s->sector_bytes,0);
@@ -150,6 +164,7 @@ void kui_toy_loader_schedule_report_end(const struct kui_retail_gd *s,uint32_t f
                     schedule_add(&schedule_report[12],ticks);
                     if(ticks>schedule_report[13])schedule_report[13]=ticks;
                 }
+#endif
             }
             uint32_t age=schedule_visit.request_start-end;
             if(s->completed_bytes && !(r[7]&2u) && schedule_visit.request_valid && valid &&
