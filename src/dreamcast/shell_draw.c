@@ -104,11 +104,11 @@ static const char *state(const struct kui_shell_view *v) {
 static void heading(struct paint *p, const struct kui_shell *s,const struct kui_shell_view *v) {
     art(p,32,20,128,64,kui_art_brand);
     words(p,176,26,396,WHITE,KUI_RELEASE_SHORT,true);
-    const char *credit=v->busy || v->saving?state(v):"by TPMJB / READY";
+    const char *credit=v->busy || v->saving?state(v):"by TacitusVoxt / READY";
     words(p,176,52,396,MUTED,credit,false);
     /* Keep the project link beneath the brand, with normal letter spacing.
      * It has the whole left header width rather than a cramped middle column. */
-    words(p,32,78,396,CYAN,"github.com/TPMJB/K-UI-NeXT",false);
+    words(p,32,78,396,CYAN,"github.com/TacitusVoxt/K-UI-NeXT",false);
     char music[48];
     const char *prefix=s->page==KUI_SHELL_HOME&&!v->busy?"Y Music":"Music";
     if(v->music_change_pending) snprintf(music,sizeof(music),"Music change queued");
@@ -152,6 +152,12 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->confirm_wifi_forget ? "A Forget the network   B Cancel" :
         s->confirm_wifi_update ? "A Update firmware   B Cancel" :
         s->page==KUI_SHELL_GD_PLAY ? "A K-UI   X Stock retail   Y Options   START Cards   B Back" :
+        s->page==KUI_SHELL_UPDATES ? (s->update_loading?"B Request safe stop":
+            s->update.stage==KUI_SHELL_UPDATE_REVIEW?(s->update.ready?
+                s->update.restore?"A Restore this version   B Cancel":"A Install this package   B Cancel":"B Packages"):
+            s->update.stage==KUI_SHELL_UPDATE_RESULT?
+                "START Restart   X Packages   Y Previous   B Settings":
+                "D-pad Select/page   A Check   X Refresh   B Settings") :
         s->page==KUI_SHELL_DISC_CARDS ? (s->disc_cards_loading?"B Stop safely":
             s->disc_cards_confirming?"A Confirm   B Cancel":
             !s->disc_cards.identified || !s->disc_cards.status.passed || !s->disc_cards.count?
@@ -269,7 +275,7 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->page==KUI_SHELL_GAMES_CODEC ? "D-pad Select   A Save and inspect   B Details" :
         s->page==KUI_SHELL_CD_AUDIO ? "B SD music   START Home   R Refresh" :
         s->page==KUI_SHELL_MUSIC ? "B Parent   START Home   L Audio CD   LEFT/RIGHT Page" : "B Home";
-    words(p,40,430,song_page||s->page==KUI_SHELL_GD_PLAY||s->page==KUI_SHELL_DISC_CARDS||s->page==KUI_SHELL_MUSIC||s->page==KUI_SHELL_CD_AUDIO||s->page==KUI_SHELL_VMU_RESTORE||s->page==KUI_SHELL_VMU_COLLECTION||s->page==KUI_SHELL_VMU_CARD||s->page==KUI_SHELL_VMU_IMAGE||s->page==KUI_SHELL_VMU_IMPORT||s->page==KUI_SHELL_VMU_WIZARD||s->page==KUI_SHELL_VMU_ACTIONS||s->page==KUI_SHELL_VMU||s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM||s->page==KUI_SHELL_GAMES_LAUNCH_OPTIONS||s->page==KUI_SHELL_GAMES_EXTRA_OPTIONS||s->page==KUI_SHELL_GAMES_PATCHES||s->page==KUI_SHELL_GAMES_TESTS||s->page==KUI_SHELL_GAMES_INFO?608:500,MUTED,controls,false);
+    words(p,40,430,song_page||s->page==KUI_SHELL_GD_PLAY||s->page==KUI_SHELL_DISC_CARDS||s->page==KUI_SHELL_UPDATES||s->page==KUI_SHELL_MUSIC||s->page==KUI_SHELL_CD_AUDIO||s->page==KUI_SHELL_VMU_RESTORE||s->page==KUI_SHELL_VMU_COLLECTION||s->page==KUI_SHELL_VMU_CARD||s->page==KUI_SHELL_VMU_IMAGE||s->page==KUI_SHELL_VMU_IMPORT||s->page==KUI_SHELL_VMU_WIZARD||s->page==KUI_SHELL_VMU_ACTIONS||s->page==KUI_SHELL_VMU||s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM||s->page==KUI_SHELL_GAMES_LAUNCH_OPTIONS||s->page==KUI_SHELL_GAMES_EXTRA_OPTIONS||s->page==KUI_SHELL_GAMES_PATCHES||s->page==KUI_SHELL_GAMES_TESTS||s->page==KUI_SHELL_GAMES_INFO?608:500,MUTED,controls,false);
 }
 /* Each Home app by page, so its row can move without touching this table.
  * All icons are embedded RGB565 assets with separate list-sized artwork. */
@@ -676,15 +682,15 @@ static void system_settings(struct paint *p,const struct kui_shell *s,const stru
     title(p,40,108,"System settings");
     label(p,40,136,MUTED,"UP/DOWN Choose   LEFT/RIGHT Change");
     const char *names[]={"Video mode","Home memory display","Background music","Music volume",
-        "Startup chime","Start in","Console clock","Restore defaults","Safe area","System tools","Menu sounds","Controls"};
+        "Startup chime","Start in","Console clock","Restore defaults","Safe area","System tools","Menu sounds","Controls","Updates"};
     char volume[16];snprintf(volume,sizeof(volume),"%u%%",s->system_draft.music_volume);
     const char *values[]={kui_system_video_name(s->system_draft.video_mode),
         s->system_draft.show_memory?"ON":"OFF",s->system_draft.music_enabled?"ON":"OFF",volume,
         s->system_draft.startup_chime?"ON":"OFF",kui_system_startup_name(s->system_draft.startup_app),
         "A Edit local time","A Review",s->system_draft.screen_inset==2?"32 px sides":
-        s->system_draft.screen_inset==1?"16 px sides":"Full width","A Open",s->system_draft.menu_sounds?"ON":"OFF","A Open"};
+        s->system_draft.screen_inset==1?"16 px sides":"Full width","A Open",s->system_draft.menu_sounds?"ON":"OFF","A Open","A Open"};
     unsigned first=s->system_selected>=8?s->system_selected-6:0;
-    for(unsigned i=first;i<first+8 && i<12;i++) {
+    for(unsigned i=first;i<first+8 && i<KUI_SHELL_SYSTEM_ROWS;i++) {
         unsigned y=158+(i-first)*25;
         panel(p,32,y,576,23,i==s->system_selected?SELECTED:PANEL);
         if(i==s->system_selected) box(p,32,y+3,3,17,PINK);
@@ -701,7 +707,8 @@ static void system_settings(struct paint *p,const struct kui_shell *s,const stru
         s->system_selected==8?"Inset the display for TVs that crop the picture at its sides.":
         s->system_selected==9?"Inspect hardware, save verified backups, or restart K-UI.":
         s->system_selected==10?"Play a short sound for menu movement and selection.":
-        "Adjust menu repeat speed and the analog stick deadzone.";
+        s->system_selected==11?"Adjust menu repeat speed and the analog stick deadzone.":
+        "Check offline release packages, install or restore a version.";
     label(p,40,366,MUTED,detail);
     label(p,40,390,kui_shell_system_dirty(s)?AMBER:CYAN,kui_shell_system_dirty(s)?
         "Unsaved changes. A saves; B discards.":v->settings_notice&&v->settings_notice[0]?
@@ -748,6 +755,75 @@ static void app_status(struct paint *p,const struct kui_app_status *status,bool 
             (unsigned)((double)status->done/(double)status->total*560);
         if(width) box(p,40,y+24,width,8,busy?CYAN:color);
     }
+}
+static void updates_page(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
+    const struct kui_shell_update_view *u=&s->update;
+    const struct kui_app_status *status=s->update_loading && v->app_status?v->app_status:&u->status;
+    title(p,40,108,s->update_loading?"Updates / working":u->stage==KUI_SHELL_UPDATE_REVIEW?
+        u->restore?"Restore this version?":"Install this package?":"Offline updates");
+    char line[192];snprintf(line,sizeof(line),"Running %.12s / selected %s",u->running[0]?u->running:"current",
+        !u->selection_known?"unchecked":u->selected[0]?u->selected:"original baseline");label(p,40,138,CYAN,line);
+    label(p,40,160,MUTED,"Source: TacitusVoxt/K-UI-NeXT Releases");
+    if(s->update_loading) {
+        panel(p,32,192,576,192,PANEL);
+        label(p,48,208,WHITE,s->update_stopping?"Stop requested; finishing a safe boundary.":"Keep the console powered on while writing.");
+        words(p,48,244,592,CYAN,status->message[0]?status->message:"Opening the selected storage...",false);
+        if(status->total) {
+            box(p,48,276,544,10,EDGE);unsigned width=status->done>=status->total?544u:
+                (unsigned)((double)status->done/(double)status->total*544u);
+            if(width)box(p,48,276,width,10,CYAN);
+            snprintf(line,sizeof(line),"%llu / %llu KiB checked or written",
+                (unsigned long long)(status->done/1024u),(unsigned long long)(status->total/1024u));
+            label(p,48,300,MUTED,line);
+        }
+        label(p,48,340,MUTED,"Activation finishes before Stop can return.");return;
+    }
+    if(u->stage==KUI_SHELL_UPDATE_REVIEW) {
+        panel(p,32,184,576,196,PANEL);
+        snprintf(line,sizeof(line),"Target: %s",u->baseline?"original baseline":u->reviewed.target);
+        label(p,48,196,WHITE,line);
+        snprintf(line,sizeof(line),"Channel: %s",u->baseline?"retained root installation":
+            u->reviewed.package.channel==1u?"testing":"stable");label(p,48,220,CYAN,line);
+        if(!u->restore) {
+            snprintf(line,sizeof(line),"Space estimate: %llu.%llu MiB needed / %llu.%llu MiB free",
+                (unsigned long long)(u->required_bytes/1048576u),(unsigned long long)((u->required_bytes%1048576u)*10u/1048576u),
+                (unsigned long long)(u->free_bytes/1048576u),(unsigned long long)((u->free_bytes%1048576u)*10u/1048576u));
+            label(p,48,244,u->space_known?MUTED:AMBER,u->space_known?line:"Available SD space could not be checked.");
+            const char *name=strrchr(u->reviewed.path,'/');
+            snprintf(line,sizeof(line),"Package: %.160s",name?name+1u:u->reviewed.path);
+            label(p,48,268,MUTED,line);
+        } else label(p,48,244,MUTED,u->baseline?
+            "Original root baseline; checked again before selection.":
+            "The complete target version was checked before this review.");
+        label(p,48,294,MUTED,"Cards, saves and preferences stay outside the software bank.");
+        label(p,48,320,MUTED,"Restart is required after selecting a version.");
+        label(p,48,346,u->ready?WHITE:AMBER,u->ready?"A confirms this exact target. B returns without selecting it.":
+            "This target cannot be installed or selected.");
+        words(p,40,394,608,u->ready?CYAN:AMBER,status->message,false);return;
+    }
+    if(u->stage==KUI_SHELL_UPDATE_RESULT) {
+        panel(p,32,188,576,146,PANEL);
+        words(p,48,206,592,status->passed?CYAN:status->stopped?MUTED:AMBER,status->message,false);
+        for(unsigned i=0;i<status->line_count && i<3u;i++)words(p,48,234+i*24u,592,MUTED,status->lines[i],false);
+        label(p,40,350,MUTED,"A hung application is not detected or rolled back automatically.");
+        label(p,40,376,MUTED,"Hold B at startup to use the original baseline.");
+        label(p,40,398,CYAN,u->restart_required?"START reviews a console restart.":"X returns to packages; Y checks the previous version.");return;
+    }
+    label(p,40,184,MUTED,"Y Restore previous   R Original baseline");
+    unsigned count=u->count>KUI_SHELL_UPDATE_ROWS?KUI_SHELL_UPDATE_ROWS:u->count;
+    for(unsigned i=0;i<count;i++) {
+        unsigned y=208+i*21u;if(i==s->update_selected)panel(p,32,y-2u,576,20,SELECTED);
+        words(p,48,y,468,i==s->update_selected?WHITE:MUTED,u->rows[i].name,false);
+        snprintf(line,sizeof(line),"%llu.%llu MiB",(unsigned long long)(u->rows[i].bytes/1048576u),
+            (unsigned long long)((u->rows[i].bytes%1048576u)*10u/1048576u));
+        label(p,480,y,CYAN,line);
+    }
+    if(!count) {
+        label(p,48,230,WHITE,"Copy a release .kup package into /KUI/updates on SD.");
+        label(p,48,258,MUTED,"Then press X Refresh. Checking a package makes no changes.");
+        label(p,48,306,MUTED,"Stable and testing packages are reviewed before installation.");
+    }
+    words(p,40,394,608,status->errors?AMBER:MUTED,status->message,false);
 }
 static void utility_page(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
     bool memory_test=s->page==KUI_SHELL_MEMORY;
@@ -3370,6 +3446,7 @@ void kui_shell_draw_content(uint16_t *frame, const struct kui_shell *s,
     case KUI_SHELL_CRC_SCAN: crc_scan(&p,s,v); break;
     case KUI_SHELL_GD_PLAY: gd_play(&p,v); break;
     case KUI_SHELL_DISC_CARDS: disc_cards(&p,s,v); break;
+    case KUI_SHELL_UPDATES: updates_page(&p,s,v); break;
     case KUI_SHELL_GD_OPTIONS: gd_options(&p,s); break;
     case KUI_SHELL_CD_AUDIO: cd_audio(&p,s,v); break;
     case KUI_SHELL_MUSIC: music_player(&p,s,v); break;

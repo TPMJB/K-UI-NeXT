@@ -287,6 +287,61 @@ void kui_shell_set_disc_cards(struct kui_shell *s,const struct kui_disc_cards_vi
     else if(s->disc_cards_selected>=v->count) s->disc_cards_selected=0;
     s->disc_cards_select_last=false;s->disc_cards_loading=false;
 }
+static bool update_path(const char *path) {
+    static const char prefix[]="0:/KUI/updates/";
+    if(!path || !memchr(path,0,KUI_SHELL_UPDATE_PATH_BYTES) ||
+       strncmp(path,prefix,sizeof(prefix)-1u)) return false;
+    const char *leaf=path+sizeof(prefix)-1u;size_t bytes=strlen(leaf);
+    return bytes>4u && !strchr(leaf,'/') && !strchr(leaf,'\\') &&
+        leaf[0]!='.' && !strcmp(leaf+bytes-4u,".kup");
+}
+static enum kui_shell_action updates_dispatch(struct kui_shell *s,
+    const struct kui_shell_update_request *request) {
+    ++s->update_generation;if(!s->update_generation)++s->update_generation;
+    s->update_request=*request;s->update_request.generation=s->update_generation;
+    s->update_loading=true;s->update_stopping=false;s->update.ready=false;
+    return KUI_SHELL_UPDATE_RUN;
+}
+static enum kui_shell_action updates_request(struct kui_shell *s,enum kui_shell_update_op op,unsigned page) {
+    struct kui_shell_update_request request={.op=op,.page=page};
+    return updates_dispatch(s,&request);
+}
+void kui_shell_set_update(struct kui_shell *s,const struct kui_shell_update_view *view) {
+    if(!s || !view || s->page!=KUI_SHELL_UPDATES || !s->update_loading ||
+       view->generation!=s->update_generation || view->generation!=s->update_request.generation)return;
+    s->update=*view;struct kui_shell_update_view *v=&s->update;
+    v->status.message[sizeof(v->status.message)-1u]=0;
+    if(v->status.line_count>KUI_APP_LINES)v->status.line_count=KUI_APP_LINES;
+    for(unsigned i=0;i<v->status.line_count;i++)v->status.lines[i][KUI_APP_LINE_CAP-1u]=0;
+    v->running[KUI_UPDATE_BUILD_BYTES-1u]=v->selected[KUI_UPDATE_BUILD_BYTES-1u]=
+        v->previous[KUI_UPDATE_BUILD_BYTES-1u]=0;
+    if(v->stage>KUI_SHELL_UPDATE_RESULT)v->stage=KUI_SHELL_UPDATE_RESULT;
+    if(v->page>UINT_MAX/KUI_SHELL_UPDATE_ROWS || v->page*KUI_SHELL_UPDATE_ROWS>=v->total) {
+        v->page=0;v->count=0;
+    }
+    unsigned remaining=v->total-v->page*KUI_SHELL_UPDATE_ROWS;
+    if(v->count>KUI_SHELL_UPDATE_ROWS)v->count=KUI_SHELL_UPDATE_ROWS;
+    if(v->count>remaining)v->count=remaining;
+    for(unsigned i=0;i<v->count;i++) {
+        v->rows[i].name[sizeof(v->rows[i].name)-1u]=0;
+        if(!update_path(v->rows[i].path))v->rows[i].path[0]=0;
+    }
+    const struct kui_shell_update_request *review=&v->reviewed;
+    bool install=review->op==KUI_SHELL_UPDATE_INSTALL;
+    bool restore=review->op==KUI_SHELL_UPDATE_RESTORE;
+    if(v->stage!=KUI_SHELL_UPDATE_REVIEW || !v->status.complete || !v->status.passed ||
+       v->status.errors || v->status.stopped || !review->token || (!install && !restore) ||
+       (install && !update_path(review->path)) ||
+       !memchr(review->target,0,sizeof(review->target)) ||
+       !memchr(review->package.build,0,sizeof(review->package.build)))v->ready=false;
+    v->reviewed.path[sizeof(v->reviewed.path)-1u]=0;
+    v->reviewed.target[sizeof(v->reviewed.target)-1u]=0;
+    v->reviewed.package.build[sizeof(v->reviewed.package.build)-1u]=0;
+    if(v->ready)s->update_confirm_request=*review;
+    else memset(&s->update_confirm_request,0,sizeof(s->update_confirm_request));
+    if(s->update_selected>=v->count)s->update_selected=0;
+    s->update_loading=s->update_stopping=false;
+}
 void kui_shell_set_game_vmu(struct kui_shell *s,unsigned generation,const char *product,
         const char *label,const char *notice) {
     char current[12];
@@ -2326,6 +2381,17 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     /* Stop/back wins even over a simultaneous confirmation or launch. */
     if(buttons & KUI_SHELL_B) {
         s->gd_auto_launch=false;
+        if(s->page==KUI_SHELL_UPDATES) {
+            if(s->confirm_restart) {s->confirm_restart=false;return KUI_SHELL_NONE;}
+            if(busy || s->update_loading) {
+                if(s->update_stopping)return KUI_SHELL_NONE;
+                s->update_stopping=true;return KUI_SHELL_STOP;
+            }
+            if(s->update.stage==KUI_SHELL_UPDATE_REVIEW)
+                return updates_request(s,KUI_SHELL_UPDATE_LIST,s->update.page);
+            ++s->update_generation;s->update.ready=false;s->page=KUI_SHELL_SETTINGS;
+            return KUI_SHELL_NONE;
+        }
         if(s->page==KUI_SHELL_DISC_CARDS) {
             if(busy || s->disc_cards_loading) {
                 ++s->disc_cards_generation;s->disc_cards_loading=false;s->disc_cards_confirming=false;
@@ -2667,7 +2733,8 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     bool confirming=s->confirm_new || s->confirm_quick_resume || s->confirm_gd_boot || s->confirm_gd_direct ||
         s->confirm_storage_test || s->confirm_clock || s->confirm_defaults || s->confirm_vmu_restore ||
         s->confirm_vmu_delete || s->confirm_vmu_copy || s->confirm_vmu_copy_all || s->confirm_vmu_import || s->confirm_music_clear || s->confirm_restart || s->confirm_salvage || s->confirm_salvage_check ||
-        s->confirm_repair_in_place || s->confirm_vmu_history_restore || s->confirm_games_identity || s->confirm_wifi_forget || s->confirm_wifi_update || s->confirm_vmu_wizard_reset || s->disc_cards_confirming || s->page==KUI_SHELL_GAMES_PROBE_CONFIRM || s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ||
+        s->confirm_repair_in_place || s->confirm_vmu_history_restore || s->confirm_games_identity || s->confirm_wifi_forget || s->confirm_wifi_update || s->confirm_vmu_wizard_reset || s->disc_cards_confirming ||
+        (s->page==KUI_SHELL_UPDATES && s->update.stage==KUI_SHELL_UPDATE_REVIEW) || s->page==KUI_SHELL_GAMES_PROBE_CONFIRM || s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ||
         s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM || s->page==KUI_SHELL_GAMES_LAUNCH_OPTIONS ||
         s->page==KUI_SHELL_GAMES_VARIANTS || s->page==KUI_SHELL_FILES_CONFIRM;
     if(song_page && !confirming && !(buttons & ~(KUI_SHELL_L|KUI_SHELL_R))) {
@@ -2675,7 +2742,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(triggers==KUI_SHELL_L) return KUI_SHELL_MUSIC_PREVIOUS;
         if(triggers==KUI_SHELL_R) return KUI_SHELL_MUSIC_NEXT;
     }
-    if(!song_page && s->page!=KUI_SHELL_VMU_WIZARD && s->page!=KUI_SHELL_DISC_CARDS && (buttons & KUI_SHELL_L) &&
+    if(!song_page && s->page!=KUI_SHELL_VMU_WIZARD && s->page!=KUI_SHELL_DISC_CARDS && s->page!=KUI_SHELL_UPDATES && (buttons & KUI_SHELL_L) &&
        (busy || (s->page!=KUI_SHELL_VMU && s->page!=KUI_SHELL_MUSIC &&
                  s->page!=KUI_SHELL_DIAGNOSTICS)) && !confirming) return KUI_SHELL_MSTATS;
     if(busy) {
@@ -2690,6 +2757,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     if(s->page==KUI_SHELL_VMU_WIZARD && s->vmu_wizard_loading) return KUI_SHELL_NONE;
     if(s->page==KUI_SHELL_VMU_TOOLS && s->vmu_emulation_loading) return KUI_SHELL_NONE;
     if(s->page==KUI_SHELL_DISC_CARDS && s->disc_cards_loading) return KUI_SHELL_NONE;
+    if(s->page==KUI_SHELL_UPDATES && s->update_loading) return KUI_SHELL_NONE;
     if(s->page==KUI_SHELL_DISC_CARDS && s->disc_cards_confirming) {
         if(buttons==KUI_SHELL_A) return disc_cards_dispatch(s,&s->disc_cards_confirm_request);
         return KUI_SHELL_NONE;
@@ -3442,7 +3510,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(buttons & KUI_SHELL_A) return KUI_SHELL_SAVE_SETTINGS;
         break;
     case KUI_SHELL_SETTINGS: {
-        s->system_selected=move_count(s->system_selected,buttons,12);
+        s->system_selected=move_count(s->system_selected,buttons,KUI_SHELL_SYSTEM_ROWS);
         unsigned horizontal=buttons&(KUI_SHELL_LEFT|KUI_SHELL_RIGHT);
         if(horizontal==KUI_SHELL_LEFT || horizontal==KUI_SHELL_RIGHT) {
             if(s->system_selected==10) s->system_draft.menu_sounds=!s->system_draft.menu_sounds;
@@ -3462,6 +3530,11 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             if(s->system_selected==4) s->system_draft.startup_chime=!s->system_draft.startup_chime;
             if(s->system_selected==5) s->system_draft.startup_app=(s->system_draft.startup_app+
                 (horizontal==KUI_SHELL_LEFT?KUI_STARTUP_APP_COUNT-1:1))%KUI_STARTUP_APP_COUNT;
+        }
+        if(buttons==KUI_SHELL_A && s->system_selected==12u) {
+            s->page=KUI_SHELL_UPDATES;s->update_selected=0;
+            memset(&s->update,0,sizeof(s->update));
+            return updates_request(s,KUI_SHELL_UPDATE_LIST,0);
         }
         if((buttons&KUI_SHELL_A) && s->system_selected==11) {
             s->page=KUI_SHELL_CONTROLS;s->controls_selected=0;return KUI_SHELL_NONE;
@@ -3822,6 +3895,38 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             return list_vmu_image(s);
         }
         break;
+    case KUI_SHELL_UPDATES: {
+        const struct kui_shell_update_view *v=&s->update;
+        if(v->stage==KUI_SHELL_UPDATE_REVIEW) {
+            if(buttons==KUI_SHELL_A && v->ready)
+                return updates_dispatch(s,&s->update_confirm_request);
+            break;
+        }
+        if(buttons==KUI_SHELL_X) {s->update_selected=0;return updates_request(s,KUI_SHELL_UPDATE_LIST,0);}
+        if(buttons==KUI_SHELL_Y)return updates_request(s,KUI_SHELL_UPDATE_PREVIOUS,0);
+        if(buttons==KUI_SHELL_R)return updates_request(s,KUI_SHELL_UPDATE_BASELINE,0);
+        if(v->stage==KUI_SHELL_UPDATE_RESULT) {
+            if(buttons==KUI_SHELL_START && v->restart_required)s->confirm_restart=true;
+            break;
+        }
+        if(buttons==KUI_SHELL_A && s->update_selected<v->count) {
+            const struct kui_shell_update_row *row=&v->rows[s->update_selected];
+            if(update_path(row->path)) {
+                struct kui_shell_update_request request={.op=KUI_SHELL_UPDATE_CHECK,.page=v->page};
+                memcpy(request.path,row->path,sizeof(request.path));
+                return updates_dispatch(s,&request);
+            }
+            break;
+        }
+        unsigned page=v->page;bool turn=false;
+        if(buttons==KUI_SHELL_UP && s->update_selected)--s->update_selected;
+        else if(buttons==KUI_SHELL_DOWN && s->update_selected+1u<v->count)++s->update_selected;
+        else if((buttons==KUI_SHELL_UP || buttons==KUI_SHELL_LEFT) && page) {--page;turn=true;}
+        else if((buttons==KUI_SHELL_DOWN || buttons==KUI_SHELL_RIGHT) && page<UINT_MAX/KUI_SHELL_UPDATE_ROWS &&
+                (page+1u)*KUI_SHELL_UPDATE_ROWS<v->total) {++page;turn=true;}
+        if(turn) {s->update_selected=0;return updates_request(s,KUI_SHELL_UPDATE_LIST,page);}
+        break;
+    }
     case KUI_SHELL_DISC_CARDS: {
         const struct kui_disc_cards_view *v=&s->disc_cards;
         bool imports=v->stage==KUI_DISC_CARDS_IMPORTS_STAGE;

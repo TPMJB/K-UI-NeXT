@@ -23,6 +23,27 @@ VMU_MANAGEMENT = src/core/vmu_collection.c src/core/vmu_image.c src/core/vmu_ima
 VMU_MANAGEMENT += src/core/vmu_library.c src/core/vmu_game_assign.c src/core/vmu_game_card.c src/core/vmu_persist_profile.c src/core/retail_image.c src/core/game_cover.c
 VMU_MANAGEMENT += src/core/vmu_game_candidates.c src/core/vmu_import_plan.c
 
+UPDATE_CODEC = src/core/update.c src/core/runtime_image.c src/core/hash.c src/core/data.c
+UPDATE_FILES = $(UPDATE_CODEC) src/core/update_file.c
+UPDATE_TEST_FLAGS = $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES)
+.PHONY: test-updater
+test-updater: build/test-update build/update-image build/update-boot
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-update
+	python3 tests/test_update_package.py
+	python3 tests/test_update_images.py --skip-codec --binary $(CURDIR)/build/update-image --boot-binary $(CURDIR)/build/update-boot
+
+build/test-update: tests/test_update.c tests/update_fixture.h $(UPDATE_CODEC) include/kui/update.h include/kui/update_catalog.inc
+	@mkdir -p $(@D)
+	$(CC) $(UPDATE_TEST_FLAGS) tests/test_update.c $(UPDATE_CODEC) -o $@
+
+build/update-image: tests/update_image.c tests/update_fixture.h $(UPDATE_FILES) src/core/diskio.c $(FATFS) include/kui/update.h include/kui/update_catalog.inc
+	@mkdir -p $(@D)
+	$(CC) $(UPDATE_TEST_FLAGS) tests/update_image.c $(UPDATE_FILES) src/core/diskio.c $(FATFS) -Wl,--wrap=f_open -Wl,--wrap=f_close -Wl,--wrap=f_write -Wl,--wrap=f_getfree -o $@
+
+build/update-boot: tests/update_boot_image.c tests/update_fixture.h $(UPDATE_FILES) src/core/update_boot.c src/core/runtime_file.c src/core/storage_policy.c src/core/diskio.c $(FATFS) include/kui/update_boot.h
+	@mkdir -p $(@D)
+	$(CC) $(UPDATE_TEST_FLAGS) tests/update_boot_image.c $(UPDATE_FILES) src/core/update_boot.c src/core/runtime_file.c src/core/storage_policy.c src/core/diskio.c $(FATFS) -Wl,--wrap=f_open -Wl,--wrap=f_read -Wl,--wrap=f_close -o $@
+
 
 
 include config/lwext4.mk

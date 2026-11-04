@@ -1014,7 +1014,9 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
          * file may use the newly built checked compatibility adapter. Never
          * hide corruption, cancellation or a read error with a fallback. */
         if(rr==KUI_RUNTIME_IO && !kui_games_cdda_is_experimental(profile)) {
-            FILINFO old_info;FRESULT exists=f_stat(package_path,&old_info);
+            FILINFO old_info;char resolved[192];
+            FRESULT exists=kui_runtime_resolve_path(package_path,resolved,sizeof(resolved))?
+                f_stat(resolved,&old_info):FR_INVALID_NAME;
             enum kui_games_cdda_profile fallback=kui_games_cdda_package_fallback(profile,
                 exists==FR_NO_FILE || exists==FR_NO_PATH);
             if(fallback!=profile) {
@@ -1089,7 +1091,9 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     bool native_standalone=false;
     if(standalone_candidate) {
         FILINFO optional;
-        FRESULT present=f_stat(KUI_GAMES_RETAIL_NATIVE_STANDALONE_PACKAGE,&optional);
+        char resolved[192];
+        FRESULT present=kui_runtime_resolve_path(KUI_GAMES_RETAIL_NATIVE_STANDALONE_PACKAGE,
+            resolved,sizeof(resolved))?f_stat(resolved,&optional):FR_INVALID_NAME;
         if(present!=FR_OK && present!=FR_NO_FILE && present!=FR_NO_PATH) {
             problem="cannot inspect the standalone New module; launch refused";goto done;
         }
