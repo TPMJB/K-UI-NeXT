@@ -1,5 +1,11 @@
 # Accepted progress and updater preservation
 
+The owner reported the GUI-only updater working on 4 November 2026. Follow-up
+work adds direct K-UI restart, nested Updates folders and explicit updater-ready
+ZIP selection. It retains the same reader/source-preservation contract below.
+These new UI and restart paths receive their own focused checks; the owner is
+not being asked to repeat settled game or VMU compatibility tests.
+
 Reconciled 4 November 2026 against current main
 `0045dd96937ee7485ecd4fe0432b28babea8646a`, actual retained deliveries and the
 current performance-test audit. This is a component ledger, not a claim that
@@ -47,7 +53,10 @@ presence-sensitive historical adapters. Its A/B agreement proved neither
 preservation of the previous installation nor actual game-route compatibility.
 The full-cohort release helpers remain blocked.
 
-The replacement add-on delivers `KUI/runtime.kui` and one GUI-only `.kup`.
+The first replacement add-on delivered `KUI/runtime.kui` and one GUI-only `.kup`.
+The folder/restart follow-up upgrades an already installed updater through a
+`.kup` in `KUI/updates`, with a selectable example ZIP in `KUI/updates/test`;
+it does not overwrite the retained root runtime.
 Every other catalog entry explicitly retains the existing root module and its
 presence or absence. These are shared root files, not snapshots in each bank;
 manual changes to them affect all versions that inherit them. Included bank

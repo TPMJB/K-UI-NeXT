@@ -78,6 +78,7 @@ RUNTIME_OBJECTS += build/dc/firmware/kui-wifi/components/kwlink/kwlink.o build/d
 RUNTIME_OBJECTS += build/dc/src/core/runtime_image.o build/dc/src/core/runtime_file.o build/dc/src/core/loader_probe.o
 RUNTIME_OBJECTS += build/dc/src/core/update.o build/dc/src/core/update_file.o build/dc/src/core/update_boot.o
 RUNTIME_OBJECTS += build/dc/src/core/update_handoff.o
+RUNTIME_OBJECTS += build/dc/src/core/update_browser.o build/dc/src/core/update_zip.o
 RUNTIME_OBJECTS += build/dc/src/core/resident_image.o
 RUNTIME_OBJECTS += build/dc/src/core/retail_image.o
 RUNTIME_OBJECTS += build/dc/src/core/shell.o build/dc/src/dreamcast/shell_draw.o build/dc/src/dreamcast/shell_font.o

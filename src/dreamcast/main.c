@@ -53,7 +53,10 @@ static volatile uint8_t kui_update_ram_handoff[KUI_UPDATE_HANDOFF_BYTES]
 #include "kui/disc_launcher.h"
 #include "kui/disc_cards.h"
 #include "kui/update.h"
+#include "kui/update_browser.h"
+#include "kui/update_zip.h"
 #include "kui/update_boot.h"
+#include "kui/update_zip.h"
 #include "kui/media.h"
 #include "diskio.h"
 #include "kui/disc_region.h"
@@ -131,7 +134,7 @@ static uint16_t *shell_frame_prepare(bool working) {
     return shell_frame;
 }
 static void shell_frame_release_for_action(unsigned action) {
-    if(action==19u || (action>=56u && action<=58u) || action==62u || action==79u || action==104u) {
+    if(action==19u || (action>=56u && action<=58u) || action==62u || action==79u || action==104u || action==121u) {
         free(shell_frame);shell_frame=NULL;shell_frame_ready=false;
     }
 }
@@ -269,6 +272,9 @@ static unsigned active_app;
 static bool splash_active,boot_ready,startup_skip,startup_finished;
 static bool probe_launch_ready,probe_launch_failed,probe_launch_disc;
 static struct kui_runtime_image probe_image;
+static struct kui_runtime_image update_restart_image;
+static bool update_restart_ready;
+static unsigned update_restart_generation;
 static struct kui_app_status probe_status;
 static uint64_t splash_deadline;
 static int music_requested=-1;
@@ -413,10 +419,24 @@ static void disc_cards_failure(unsigned generation,bool stopped,const char *mess
 static void update_failure(unsigned generation,bool stopped,const char *message) {
     memset(&update_snapshot,0,sizeof(update_snapshot));
     update_snapshot.generation=generation;update_snapshot.stage=KUI_SHELL_UPDATE_RESULT;
+    update_snapshot.page=update_pending.page;
+    snprintf(update_snapshot.directory,sizeof(update_snapshot.directory),"%s",update_pending.directory);
     snprintf(update_snapshot.running,sizeof(update_snapshot.running),"%s",KUI_BUILD_ID);
     update_snapshot.status=(struct kui_app_status){.complete=true,.stopped=stopped,.errors=stopped?0u:1u};
     snprintf(update_snapshot.status.message,sizeof(update_snapshot.status.message),"%s",message);
     ++update_generation;
+}
+/* Same runtime bounds used at initial updater dispatch and menu re-entry.
+ * arch_exec copies forward to KUI_RUNTIME_ADDRESS on main's own stack. */
+static const char *update_runtime_handoff_refusal(uintptr_t source,size_t bytes,uintptr_t stack) {
+    if(source<KUI_RUNTIME_ADDRESS || source>=0x8d000000u || (source&3u))
+        return "GUI buffer is outside aligned main RAM";
+    if(!bytes || (bytes&3u) || bytes>KUI_RUNTIME_MAX_BYTES)
+        return "GUI payload exceeds the runtime staging limit";
+    if(bytes>0x8d000000u-source)return "GUI payload extends beyond main RAM";
+    if(stack<KUI_RUNTIME_ADDRESS+KUI_RUNTIME_MAX_BYTES+65536u || stack>=0x8d000000u ||
+       source+bytes>stack-65536u)return "GUI buffer overlaps the reserved main-stack margin";
+    return NULL;
 }
 /* Keep the actual refusal available to the disc page. This only classifies
  * the existing staging guards; it never enlarges the admitted RAM ranges. */
@@ -2497,7 +2517,7 @@ static void files_song_result(const struct kui_app_status *result) {
 }
 static bool needs_cd_handoff(unsigned action) {
     return action==1 || (action>=4 && action<=7) || action==12 || action==22 ||
-        action==24 || action==25 || action==56 || action==57 || action==58 || action==65 || action==79 || action==81 || action==96 || action==97 || action==103 || action==104 || action==105 || action==119 || action==120 || (action>=68 && action<=71) || (action>=46 && action<=48);
+        action==24 || action==25 || action==56 || action==57 || action==58 || action==65 || action==79 || action==81 || action==96 || action==97 || action==103 || action==104 || action==105 || action==119 || action==120 || action==121 || (action>=68 && action<=71) || (action>=46 && action<=48);
 }
 static bool games_page(enum kui_shell_page page) {
     return page==KUI_SHELL_GAMES || page==KUI_SHELL_GAMES_ADVANCED ||
@@ -2541,12 +2561,7 @@ static void games_storage_observe(void) {
 /* One exclusive SD worker owns update listing, review and publication. The
  * GUI copies only compact review pins; the complete package stays on heap. */
 static bool update_package_path(const char *path) {
-    static const char prefix[]="0:/KUI/updates/";
-    if(!path || !memchr(path,0,KUI_SHELL_UPDATE_PATH_BYTES) ||
-       strncmp(path,prefix,sizeof(prefix)-1u))return false;
-    const char *leaf=path+sizeof(prefix)-1u;size_t bytes=strlen(leaf);
-    return bytes>4u && leaf[0]!='.' && !strchr(leaf,'/') && !strchr(leaf,'\\') &&
-        !strcmp(leaf+bytes-4u,".kup");
+    return kui_update_browser_package(path);
 }
 static bool update_storage_read(struct kui_shell_update_storage *out) {
     const struct kui_volume *volume=kui_media_volume();uint8_t sector[512];
@@ -2576,39 +2591,29 @@ static void update_view_error(struct kui_shell_update_view *out,const char *mess
     out->status.errors=out->status.stopped?0u:1u;
     snprintf(out->status.message,sizeof(out->status.message),"%s",message);
 }
-static bool update_packages_list(unsigned page,struct kui_shell_update_view *out) {
-    if(page>UINT_MAX/KUI_SHELL_UPDATE_ROWS) {update_view_error(out,"Update page is invalid; refresh.");return false;}
-    out->stage=KUI_SHELL_UPDATE_PACKAGES;out->page=page;
-    DIR directory;FILINFO info;FRESULT r=f_opendir(&directory,"0:/KUI/updates");
-    if(r==FR_NO_FILE || r==FR_NO_PATH) {
-        out->status.complete=out->status.passed=true;
-        snprintf(out->status.message,sizeof(out->status.message),"Copy a release .kup file to /KUI/updates, then X Refresh.");return true;
+static bool update_packages_list(const char *directory,unsigned page,struct kui_shell_update_view *out) {
+    struct kui_update_browser_view *listing=malloc(sizeof(*listing));
+    if(!listing) {update_view_error(out,"Not enough RAM to list this update folder.");return false;}
+    enum kui_update_browser_result result=kui_update_browser_list(directory,page,listing,kui_cancelled);
+    if(result!=KUI_UPDATE_BROWSER_OK) {
+        const char *message=result==KUI_UPDATE_BROWSER_STOPPED?"Update folder listing stopped.":
+            result==KUI_UPDATE_BROWSER_LIMIT?"Too many entries in this folder; use smaller folders.":
+            result==KUI_UPDATE_BROWSER_MEMORY?"Not enough RAM to list this update folder.":
+            result==KUI_UPDATE_BROWSER_STALE?"Update folder changed; X Refresh the folder.":
+            result==KUI_UPDATE_BROWSER_NOT_FOUND?"Update folder is no longer present; B returns to its parent.":
+            "Cannot read this update folder; check the selected SD card.";
+        free(listing);update_view_error(out,message);return false;
     }
-    if(r!=FR_OK) {update_view_error(out,"Cannot open /KUI/updates; check the selected SD card.");return false;}
-    unsigned visited=0;bool ok=true;
-    while((r=f_readdir(&directory,&info))==FR_OK && info.fname[0]) {
-        if(kui_cancelled()) {ok=false;break;}
-        if(++visited>4096u) {ok=false;break;}
-        if(info.fattrib&(AM_DIR|AM_HID|AM_SYS))continue;
-        char path[KUI_SHELL_UPDATE_PATH_BYTES];
-        int n=snprintf(path,sizeof(path),"0:/KUI/updates/%s",info.fname);
-        if(n<0 || (size_t)n>=sizeof(path) || !update_package_path(path))continue;
-        if(out->total>=page*KUI_SHELL_UPDATE_ROWS && out->count<KUI_SHELL_UPDATE_ROWS) {
-            struct kui_shell_update_row *row=&out->rows[out->count++];
-            snprintf(row->name,sizeof(row->name),"%.95s",info.fname);
-            memcpy(row->path,path,(size_t)n+1u);row->bytes=info.fsize;
-        }
-        ++out->total;
+    out->stage=KUI_SHELL_UPDATE_PACKAGES;out->page=listing->page;out->count=listing->count;out->total=listing->total;
+    for(unsigned i=0;i<listing->count;i++) {
+        memcpy(out->rows[i].name,listing->rows[i].name,sizeof(out->rows[i].name));
+        memcpy(out->rows[i].path,listing->rows[i].path,sizeof(out->rows[i].path));
+        out->rows[i].bytes=listing->rows[i].bytes;out->rows[i].is_directory=listing->rows[i].is_directory;
+        out->rows[i].is_zip=listing->rows[i].is_zip;
     }
-    if(f_closedir(&directory)!=FR_OK || r!=FR_OK)ok=false;
-    if(!ok) {update_view_error(out,kui_cancelled()?"Update package listing stopped.":
-        visited>4096u?"Too many update folder entries; keep fewer packages.":"Cannot finish reading the update folder.");return false;}
-    if(page && page*KUI_SHELL_UPDATE_ROWS>=out->total) {
-        update_view_error(out,"Update folder changed; X Refresh the package list.");return false;
-    }
-    out->status.complete=out->status.passed=true;
-    snprintf(out->status.message,sizeof(out->status.message),"%u offline package%s. A checks a package before installation.",
-        out->total,out->total==1u?"":"s");return true;
+    free(listing);out->status.complete=out->status.passed=true;
+    snprintf(out->status.message,sizeof(out->status.message),"%u entr%s. A opens folders or checks an update.",
+        out->total,out->total==1u?"y":"ies");return true;
 }
 static bool update_space(struct kui_shell_update_view *out,const struct kui_update_package *package) {
     enum kui_update_result result=kui_update_plan_space(package,&out->required_bytes,
@@ -2622,10 +2627,12 @@ static bool update_space(struct kui_shell_update_view *out,const struct kui_upda
 }
 static void update_work(const struct kui_shell_update_request *request,struct kui_shell_update_view *out) {
     memset(out,0,sizeof(*out));out->generation=request->generation;out->page=request->page;
+    if(kui_update_browser_path(request->directory))strcpy(out->directory,request->directory);
+    else strcpy(out->directory,KUI_UPDATE_BROWSER_ROOT);
     snprintf(out->running,sizeof(out->running),"%s",KUI_BUILD_ID);
     out->stage=KUI_SHELL_UPDATE_RESULT;
     bool mutation=request->op==KUI_SHELL_UPDATE_INSTALL || request->op==KUI_SHELL_UPDATE_RESTORE;
-    if(request->op>KUI_SHELL_UPDATE_RESTORE || kui_cancelled()) {
+    if(request->op>KUI_SHELL_UPDATE_RESTORE || !kui_update_browser_path(request->directory) || kui_cancelled()) {
         update_view_error(out,"Update operation stopped before starting.");return;
     }
     struct kui_music_status music;kui_music_status_copy(&music);kui_music_pause();publish_music();
@@ -2642,18 +2649,24 @@ static void update_work(const struct kui_shell_update_request *request,struct ku
     }
     struct kui_update_package *package=NULL;
     if(ok && request->op==KUI_SHELL_UPDATE_LIST) {
-        update_reviewed.ready=false;ok=update_packages_list(request->page,out);
+        update_reviewed.ready=false;ok=update_packages_list(request->directory,request->page,out);
     } else if(ok && mutation) {
         const struct kui_shell_update_request *review=&update_reviewed.reviewed;
         if(!update_reviewed.ready || !request->token || request->token!=review->token || request->op!=review->op ||
            memcmp(request->path,review->path,sizeof(request->path)) || memcmp(request->target,review->target,sizeof(request->target)) ||
+           memcmp(request->directory,review->directory,sizeof(request->directory)) ||
            !update_storage_same(&request->storage,&review->storage) || !update_storage_same(&storage,&review->storage) ||
            !update_activation_same(&request->activation,&review->activation) || !update_activation_same(&activation,&review->activation)) {
             update_view_error(out,"Update review changed; check the package or restore target again.");ok=false;
         } else {
             update_reviewed.ready=false;
-            enum kui_update_result result=request->op==KUI_SHELL_UPDATE_INSTALL?
-                kui_update_install(review->path,&review->package,&out->status,kui_log,kui_cancelled,app_progress):
+            enum kui_update_result result=KUI_UPDATE_OK;char prepared[KUI_SHELL_UPDATE_PATH_BYTES];
+            const char *source=review->path;
+            if(request->op==KUI_SHELL_UPDATE_INSTALL && kui_update_browser_suffix(source,".zip")) {
+                result=kui_update_zip_prepare(source,prepared,&out->status,kui_log,kui_cancelled,app_progress);source=prepared;
+            }
+            if(result==KUI_UPDATE_OK)result=request->op==KUI_SHELL_UPDATE_INSTALL?
+                kui_update_install(source,&review->package,&out->status,kui_log,kui_cancelled,app_progress):
                 kui_update_select(review->target,review->target[0]?review->package.manifest_sha256:NULL,
                     &out->status,kui_log,kui_cancelled,app_progress);
             out->restart_required=result==KUI_UPDATE_OK || result==KUI_UPDATE_IO;
@@ -2673,8 +2686,14 @@ static void update_work(const struct kui_shell_update_request *request,struct ku
         else {
             out->restore=request->op!=KUI_SHELL_UPDATE_CHECK;
             enum kui_update_result result=KUI_UPDATE_ARGUMENT;
-            if(request->op==KUI_SHELL_UPDATE_CHECK && update_package_path(request->path))
-                result=kui_update_inspect(request->path,package,&out->status,kui_log,kui_cancelled,app_progress);
+            if(request->op==KUI_SHELL_UPDATE_CHECK && update_package_path(request->path) &&
+               kui_update_browser_child(request->directory,request->path)) {
+                char prepared[KUI_SHELL_UPDATE_PATH_BYTES];const char *source=request->path;result=KUI_UPDATE_OK;
+                if(kui_update_browser_suffix(source,".zip")) {
+                    result=kui_update_zip_prepare(source,prepared,&out->status,kui_log,kui_cancelled,app_progress);source=prepared;
+                }
+                if(result==KUI_UPDATE_OK)result=kui_update_inspect(source,package,&out->status,kui_log,kui_cancelled,app_progress);
+            }
             else if(request->op==KUI_SHELL_UPDATE_PREVIOUS || request->op==KUI_SHELL_UPDATE_BASELINE) {
                 const char *target=request->op==KUI_SHELL_UPDATE_BASELINE?"":activation.previous;
                 snprintf(out->reviewed.target,sizeof(out->reviewed.target),"%s",target);
@@ -2689,6 +2708,7 @@ static void update_work(const struct kui_shell_update_request *request,struct ku
                 out->stage=KUI_SHELL_UPDATE_REVIEW;
                 out->reviewed.op=out->restore?KUI_SHELL_UPDATE_RESTORE:KUI_SHELL_UPDATE_INSTALL;
                 memcpy(out->reviewed.path,request->path,sizeof(out->reviewed.path));
+                memcpy(out->reviewed.directory,request->directory,sizeof(out->reviewed.directory));
                 kui_update_package_pin(package,&out->reviewed.package);
                 for(uint32_t i=0;i<package->count;i++) {
                     if(package->entries[i].policy==KUI_UPDATE_INHERIT_ROOT)++out->inherited_count;
@@ -2730,7 +2750,7 @@ static bool games_action_invalidates(unsigned action) {
         action==25 || action==30 || action==33 || action==38 || action==40 ||
         (action>=42 && action<=48) || (action>=56 && action<=58) || action==62 ||
         action==64 || action==65 || action==67 || action==79 || action==81 || action==96 || action==97 || action==82 ||
-        action==83 || action==118 || action==119 || action==120 || action==85 || action==86 || action==90 || action==92 || action==95 || action==98 || action==100 || action==104 || action==105 || action==106 || action==107 || (action>=68 && action<=71);
+        action==83 || action==118 || action==119 || action==120 || action==121 || action==85 || action==86 || action==90 || action==92 || action==95 || action==98 || action==100 || action==104 || action==105 || action==106 || action==107 || (action>=68 && action<=71);
 }
 static bool games_action_changes_content(unsigned action) {
     /* Directory-changing writers can add/remove launch selectors. Saved
@@ -3101,7 +3121,7 @@ static void games_warm_idle_work(void) {
 /* Called by the drawing thread with lock held, before dispatching the chord
  * as ordinary menu input. Capture the last completed picture, before notices. */
 static void screenshot_request(void) {
-    bool handoff=worker_active_action==22u || worker_active_action==25u || worker_active_action==44u ||
+    bool handoff=worker_active_action==22u || worker_active_action==25u || worker_active_action==44u || worker_active_action==121u ||
         (worker_active_action>=56u && worker_active_action<=58u) || worker_active_action==104u;
     if(screenshot_frame_pending || screenshot_writing) {
         snprintf(screenshot_notice,sizeof(screenshot_notice),"Screenshot already queued; please wait.");
@@ -3139,6 +3159,49 @@ static void screenshot_operation(void) {
     screenshot_notice_until=timer_ms_gettime64()+5000u;
     mutex_unlock(&lock);
     kui_log("K-UI screenshot: %s",saved?path:"save not confirmed");
+}
+static void update_restart_failure(bool stopped,const char *message) {
+    mutex_lock(&lock);
+    update_failure(update_restart_generation,stopped,message);update_snapshot.restart_required=true;
+    mutex_unlock(&lock);
+}
+/* Runs only on the exclusive storage worker. Once ready is published, this
+ * worker parks without further storage/audio work until main accepts or
+ * rejects the image. BIOS restart remains the separate action44 path. */
+static void update_restart_operation(void) {
+    mutex_lock(&lock);kui_menu_sound_shutdown();mutex_unlock(&lock);
+    kui_music_shutdown();publish_music();
+    struct kui_update_boot_view view={0};FATFS fs;
+    enum kui_update_boot_result result=KUI_UPDATE_BOOT_ERROR;
+    kui_disc_idle_cancel(&disc_idle);
+    kui_sd_set_params(KUI_STORAGE_AUTO,true);
+    bool connected=kui_sd_connect(),mounted=connected && kui_mount(&fs,kui_log);
+    if(mounted)result=kui_update_boot_reload(KUI_BUILD_ID,kui_storage_selected(),
+        &update_restart_image,&view,kui_log,kui_cancelled);
+    bool released=!mounted || f_mount(NULL,"0:",0)==FR_OK;
+    kui_sd_disconnect();
+    if(result==KUI_UPDATE_BOOT_CHAIN && released && !kui_cancelled()) {
+        mutex_lock(&lock);update_restart_ready=true;mutex_unlock(&lock);
+        for(;;) {
+            thd_sleep(16);
+            mutex_lock(&lock);bool waiting=update_restart_ready;mutex_unlock(&lock);
+            if(!waiting)break;
+        }
+    } else {
+        kui_runtime_free(&update_restart_image);kui_update_boot_reload_abort();
+        update_restart_failure(kui_cancelled(),!connected || !mounted?
+            "Restart K-UI could not open the boot SD card; current GUI retained.":!released?
+            "Restart K-UI could not release storage; current GUI retained.":kui_cancelled()?
+            "Restart K-UI stopped; current GUI retained.":view.notice[0]?view.notice:
+            "Restart K-UI could not validate the selected runtime; current GUI retained.");
+    }
+    /* Main freed/rejected the image and restored the original module pin.
+     * Shutdown joined the audio thread; recreate its RAM services on abort. */
+    kui_music_init(kui_log);
+    kui_music_set_config(system_current.music_enabled,system_current.music_volume);
+    mutex_lock(&lock);music_cache_attempted=0;
+    (void)kui_menu_sound_init();kui_menu_sound_config(system_current.menu_sounds,system_current.music_volume);
+    mutex_unlock(&lock);publish_music();
 }
 #endif
 static void *worker(void *unused) {
@@ -3271,6 +3334,8 @@ static void *worker(void *unused) {
                 "Audio CD stop failed; disc cards were not checked.");
             if(action==120) update_failure(update_pending.generation,false,
                 "Audio CD stop failed; update storage was not opened.");
+            if(action==121) {update_failure(update_restart_generation,false,
+                "Audio CD stop failed; Restart K-UI did not start.");update_snapshot.restart_required=true;}
             if(is_capture_action(action)) {capture_outcome=KUI_SHELL_OUTCOME_FAILED;observing_capture=false;}
             if(action==24) {player_status.errors=1;snprintf(player_status.message,sizeof(player_status.message),"Audio CD stop failed; SD playback refused.");}
             if(action>=46 && action<=48) {salvage_status.complete=true;salvage_status.errors=1;snprintf(salvage_status.message,sizeof(salvage_status.message),"Audio CD stop failed; salvage refused.");}
@@ -3321,6 +3386,8 @@ static void *worker(void *unused) {
                 mutex_unlock(&lock);
             }
             mutex_lock(&lock);
+            if(action==121) {update_failure(update_restart_generation,true,
+                "Restart K-UI stopped before starting.");update_snapshot.restart_required=true;}
             if(action==111u) {
                 memset(&vmu_history_result,0,sizeof(vmu_history_result));
                 snprintf(vmu_history_result.notice,sizeof(vmu_history_result.notice),"Stopped; current save card retained.");
@@ -3959,6 +4026,7 @@ static void *worker(void *unused) {
                     if(action==104) disc_launch_failure_report("auto GD Play boot failure",&disc_result);
                 }
             }
+            if(action==121)update_restart_operation();
             if(action==25 || action==44) {
                 /* Restart must remain usable after an optical recovery failure. */
                 if(action==44) {
@@ -4336,7 +4404,7 @@ static void draw_shell(void) {
     mutex_lock(&lock);
     if(!kui_sci_video_quiet_draw_begin(&sci_video_quiet)) {mutex_unlock(&lock);return;}
     bool startup=splash_active;
-    bool working=busy || boot_ready || probe_launch_ready;
+    bool working=busy || boot_ready || probe_launch_ready || update_restart_ready;
     mutex_unlock(&lock);
     uint16_t *frame=shell_frame_prepare(working);
     if(startup) {
@@ -4526,6 +4594,7 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_FLASH_BACKUP: return 42;
         case KUI_SHELL_BIOS_BACKUP: return 43;
         case KUI_SHELL_RESTART: return 44;
+        case KUI_SHELL_RESTART_KUI: return 121;
         case KUI_SHELL_NETWORK_CONNECT: return 45;
         case KUI_SHELL_SALVAGE_NEW: return 46;
         case KUI_SHELL_SALVAGE_RESUME:
@@ -4706,10 +4775,7 @@ static void update_boot_start(void) {
     if(result==KUI_UPDATE_BOOT_CHAIN) {
         uintptr_t stack;__asm__ __volatile__("mov r15,%0":"=r"(stack));
         uintptr_t source=(uintptr_t)image.data;uint32_t bytes=image.info.payload_bytes;
-        bool safe=!(source&3u) && source>=KUI_RUNTIME_ADDRESS && source<0x8d000000u &&
-            bytes && !(bytes&3u) && bytes<=KUI_RUNTIME_MAX_BYTES && bytes<=0x8d000000u-source &&
-            stack>=KUI_RUNTIME_ADDRESS+KUI_RUNTIME_MAX_BYTES+65536u && source+bytes<=stack-65536u;
-        if(safe)arch_exec(image.data,bytes);
+        if(!update_runtime_handoff_refusal(source,bytes,stack))arch_exec(image.data,bytes);
         kui_update_boot_block();
         snprintf(update_boot_view.notice,sizeof(update_boot_view.notice),"Update runtime handoff refused; module loading blocked. Hold B on restart.");
     }
@@ -5183,6 +5249,13 @@ int main(void) {
             /* Main is the sole frame owner. Free before exposing pending to
              * the worker; drawing cannot reallocate it while this job is busy. */
             shell_frame_release_for_action(action);
+            if(action==121u) {
+                update_restart_generation=shell.update_request.generation;update_restart_ready=false;
+                update_snapshot.generation=update_restart_generation;update_snapshot.stage=KUI_SHELL_UPDATE_RESULT;
+                update_snapshot.status=(struct kui_app_status){0};
+                snprintf(update_snapshot.status.message,sizeof(update_snapshot.status.message),"Reading and validating the selected K-UI runtime...");
+                ++update_generation;
+            }
             if(action>=68 && action<=71) {
                 sci_async_status=(struct kui_app_status){0};
                 snprintf(sci_async_status.message,sizeof(sci_async_status.message),"%s",
@@ -5491,6 +5564,22 @@ int main(void) {
         }
         mutex_lock(&lock);bool exiting=boot_ready && !screenshot_frame_pending && !screenshot_writing;mutex_unlock(&lock);
         if(exiting) kui_gd_play_boot();
+        mutex_lock(&lock);
+        bool restart_kui=update_restart_ready && !screenshot_frame_pending && !screenshot_writing;
+        mutex_unlock(&lock);
+        if(restart_kui) {
+            uintptr_t stack;__asm__ __volatile__("mov r15,%0":"=r"(stack));
+            uintptr_t source=(uintptr_t)update_restart_image.data;size_t bytes=update_restart_image.info.payload_bytes;
+            const char *refusal=update_runtime_handoff_refusal(source,bytes,stack);
+            bool cancelled=kui_cancelled();
+            if(!refusal && !cancelled)arch_exec(update_restart_image.data,(uint32_t)bytes);
+            if(!refusal && !cancelled)refusal="K-UI runtime handoff unexpectedly returned";
+            kui_log("Restart K-UI refused: %s",cancelled?"cancelled":refusal);
+            kui_runtime_free(&update_restart_image);kui_update_boot_reload_abort();
+            update_restart_failure(cancelled,cancelled?"Restart K-UI stopped; current GUI retained.":refusal);
+            mutex_lock(&lock);update_restart_ready=false;mutex_unlock(&lock);
+            shell.page=KUI_SHELL_UPDATES;shell.scroll=0;
+        }
         mutex_lock(&lock);
         bool launch_probe=probe_launch_ready && !screenshot_frame_pending && !screenshot_writing;
         bool probe_failed=probe_launch_failed,launch_disc=probe_launch_disc;

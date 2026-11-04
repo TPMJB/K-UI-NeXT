@@ -137,6 +137,21 @@ static enum kui_update_boot_result boot_handoff(const char *compiled,unsigned tr
     for(unsigned i=0;i<8u;i++)CHECK(!opened[i].file);
     CHECK((r==KUI_UPDATE_BOOT_CHAIN)==(out->data!=NULL));return r;
 }
+static enum kui_update_boot_result reload_gui(const char *compiled,unsigned transport,
+    struct kui_runtime_image *out,struct kui_update_boot_view *view) {
+    unsigned before=writes;observe=true;
+    enum kui_update_boot_result r=kui_update_boot_reload(compiled,transport,out,view,logger,cancel);
+    observe=false;CHECK(writes==before);
+    for(unsigned i=0;i<8u;i++)CHECK(!opened[i].file);
+    CHECK(r==KUI_UPDATE_BOOT_CHAIN || r==KUI_UPDATE_BOOT_ERROR);
+    CHECK((r==KUI_UPDATE_BOOT_CHAIN)==(out->data!=NULL));return r;
+}
+static void pinned_bank(const char *build) {
+    char actual[192],expected[192];struct kui_update_runtime_stream stream;
+    CHECK(kui_update_bank_path(build,"apps/games/retail-boot.kui",expected,sizeof(expected)));
+    CHECK(kui_update_runtime_resolve(MODULE,actual,sizeof(actual),&stream) && !strcmp(actual,expected));
+    CHECK(stream.pinned && !strcmp(stream.build,build) && stream.bytes==UF_FILE_BYTES);
+}
 static void baseline_tests(struct uf_package *root) {
     struct kui_runtime_image image;struct kui_update_boot_view view;char path[192];
     idle();CHECK(boot(ROOT_BUILD,KUI_STORAGE_SCIF,&image,&view,false)==KUI_UPDATE_BOOT_BASELINE);
@@ -391,6 +406,90 @@ static void additive_tests(struct uf_package *root) {
     CHECK(!image.data);
     idle();uf_free(&mixed);uf_free(&inherited);
 }
+static void reload_tests(struct uf_package *root,struct uf_package *a,struct uf_package *b) {
+    struct kui_runtime_image image;struct kui_update_boot_view view;char path[192],newer[192],receipt[192];
+    CHECK(kui_update_bank_path(BUILD_B,"runtime.kui",newer,sizeof(newer)));
+    snprintf(receipt,sizeof(receipt),KUI_UPDATE_SYSTEM "/%s/package.bin",BUILD_B);
+    idle();remove_file(KUI_UPDATE_ACTIVE0);remove_file(KUI_UPDATE_ACTIVE1);
+    CHECK(boot(ROOT_BUILD,KUI_STORAGE_SCIF,&image,&view,false)==KUI_UPDATE_BOOT_BASELINE);
+    idle();CHECK(reload_gui(ROOT_BUILD,KUI_STORAGE_SCI,&image,&view)==KUI_UPDATE_BOOT_CHAIN);
+    CHECK(!view.bank[0] && !strcmp(view.build,ROOT_BUILD) && !strcmp(image.info.build,ROOT_BUILD));
+    CHECK(root_bytes>=UF_FILE_BYTES && !bank_gui_bytes);
+    CHECK(kui_storage_boot_transport((const void *)((const uint8_t *)image.data+80u))==KUI_STORAGE_SCI);
+    CHECK(!kui_runtime_resolve_path(MODULE,path,sizeof(path)));
+    kui_runtime_free(&image);kui_update_boot_reload_abort();
+    CHECK(kui_runtime_resolve_path(MODULE,path,sizeof(path)) && !strcmp(path,MODULE));
+    /* A same-build GUI reload is a fresh complete read and executable chain,
+     * with its normal RAM-only bank stamp, rather than a no-op pin. */
+    selection(0,200u,a,"");idle();
+    CHECK(boot(BUILD_A,KUI_STORAGE_SCIF,&image,&view,false)==KUI_UPDATE_BOOT_PINNED);pinned_bank(BUILD_A);
+    idle();CHECK(reload_gui(BUILD_A,KUI_STORAGE_IDE,&image,&view)==KUI_UPDATE_BOOT_CHAIN);
+    CHECK(!strcmp(view.bank,BUILD_A) && !strcmp(image.info.build,BUILD_A) && bank_gui_bytes==UF_FILE_BYTES && !root_opens);
+    CHECK(kui_storage_boot_transport((const void *)((const uint8_t *)image.data+80u))==KUI_STORAGE_IDE);
+    struct kui_update_handoff h;
+    CHECK(kui_update_handoff_decode((const uint8_t *)image.data+128u,&h));
+    CHECK(!strcmp(h.build,BUILD_A) && h.sequence==200u && h.transport==KUI_STORAGE_IDE);
+    CHECK(!kui_runtime_resolve_path(MODULE,path,sizeof(path)));
+    kui_runtime_free(&image);kui_update_boot_reload_abort();pinned_bank(BUILD_A);
+    /* Selection may change during the running GUI's session. Aborting a
+     * checked new chain must restore its original A receipt, not B's pin. */
+    selection(1,210u,b,BUILD_A);idle();
+    CHECK(reload_gui(BUILD_A,KUI_STORAGE_SCI,&image,&view)==KUI_UPDATE_BOOT_CHAIN);
+    CHECK(!strcmp(view.bank,BUILD_B) && !strcmp(image.info.build,BUILD_B) && bank_gui_bytes==UF_FILE_BYTES);
+    CHECK(kui_update_handoff_decode((const uint8_t *)image.data+128u,&h));
+    CHECK(!strcmp(h.build,BUILD_B) && h.sequence==210u && h.transport==KUI_STORAGE_SCI);
+    kui_runtime_free(&image);kui_update_boot_reload_abort();pinned_bank(BUILD_A);
+    observe=true;unsigned before=writes;
+    CHECK(kui_runtime_read(MODULE,&image,logger,cancel)==KUI_RUNTIME_OK);
+    observe=false;CHECK(writes==before && !strcmp(image.info.build,BUILD_A));kui_runtime_free(&image);
+    /* Logical receipt/runtime failures retain normal older-slot fallback;
+     * each successful fallback is also a chain when its build is unchanged. */
+    for(unsigned fault=0;fault<5u;fault++) {
+        idle();seed(b,false);
+        if(fault==0u)remove_file(newer);
+        if(fault==1u)remove_file(receipt);
+        if(fault==2u) {
+            uint8_t altered[UF_FILE_BYTES];memcpy(altered,uf_file(b,0u),sizeof(altered));altered[450u]^=1u;
+            uf_put32(altered+32u,kui_crc32(0,altered+64u,UF_PAYLOAD_BYTES));
+            uf_put32(altered+60u,kui_crc32(0,altered,60u));write_file(newer,altered,sizeof(altered));
+        }
+        if(fault==3u)strcpy(read_fault,newer);
+        if(fault==4u)strcpy(close_fault,receipt);
+        CHECK(reload_gui(BUILD_A,KUI_STORAGE_SCI,&image,&view)==KUI_UPDATE_BOOT_CHAIN);
+        CHECK(view.fallback && view.notice[0] && !strcmp(view.bank,BUILD_A) && !strcmp(image.info.build,BUILD_A));
+        CHECK(kui_update_handoff_decode((const uint8_t *)image.data+128u,&h) && h.sequence==200u);
+        kui_runtime_free(&image);kui_update_boot_reload_abort();pinned_bank(BUILD_A);
+    }
+    idle();seed(b,false);
+    for(unsigned when=0;when<3u;when++) {
+        idle();
+        if(when==0u)cancel_now=true;
+        if(when==1u)strcpy(cancel_read,receipt);
+        if(when==2u)strcpy(cancel_read,newer);
+        CHECK(reload_gui(BUILD_A,KUI_STORAGE_SCI,&image,&view)==KUI_UPDATE_BOOT_ERROR);
+        CHECK(!image.data);pinned_bank(BUILD_A);
+        /* No pending transfer is left behind after automatic restoration. */
+        kui_update_boot_reload_abort();pinned_bank(BUILD_A);
+    }
+    idle();CHECK(reload_gui(BUILD_A,KUI_STORAGE_AUTO,&image,&view)==KUI_UPDATE_BOOT_ERROR);pinned_bank(BUILD_A);
+    /* An explicit baseline selection and unavailable root never reactivate
+     * the older bank. Failure restores the running A GUI's module resolver. */
+    selection(1,220u,NULL,BUILD_A);remove_file(KUI_RUNTIME_PATH);idle();
+    CHECK(reload_gui(BUILD_A,KUI_STORAGE_SCI,&image,&view)==KUI_UPDATE_BOOT_ERROR);pinned_bank(BUILD_A);
+    idle();seed(root,true);
+    CHECK(reload_gui(BUILD_A,KUI_STORAGE_SCI,&image,&view)==KUI_UPDATE_BOOT_CHAIN);
+    CHECK(!view.bank[0] && !strcmp(image.info.build,ROOT_BUILD));
+    CHECK(kui_storage_boot_transport((const void *)((const uint8_t *)image.data+80u))==KUI_STORAGE_SCI);
+    kui_runtime_free(&image);kui_update_boot_reload_abort();pinned_bank(BUILD_A);
+    /* With both bank targets unavailable, ordinary boot's checked retained
+     * root is the reload fallback, while an abort still restores A. */
+    selection(1,230u,b,BUILD_A);remove_file(newer);
+    CHECK(kui_update_bank_path(BUILD_A,"runtime.kui",path,sizeof(path)));remove_file(path);idle();
+    CHECK(reload_gui(BUILD_A,KUI_STORAGE_SCIF,&image,&view)==KUI_UPDATE_BOOT_CHAIN);
+    CHECK(view.fallback && !view.bank[0] && !strcmp(image.info.build,ROOT_BUILD));
+    kui_runtime_free(&image);kui_update_boot_reload_abort();pinned_bank(BUILD_A);
+    idle();seed(a,false);seed(b,false);
+}
 static void withdrawn_tests(void) {
     static const char *const builds[]={"28cadccf0e71","33b04057db86"};
     for(unsigned i=0u;i<2u;i++) {
@@ -424,7 +523,7 @@ int main(int argc,char **argv) {
     CHECK(f_mount(&fs,"0:",1)==FR_OK);
     struct uf_package root=uf_build(ROOT_BUILD,0u),a=uf_build(BUILD_A,0u),b=uf_build(BUILD_B,1u);
     transport_marker(&root);transport_marker(&a);transport_marker(&b);seed(&root,true);seed(&a,false);seed(&b,false);
-    baseline_tests(&root);handoff_tests(&a,&b);bank_tests(&a,&b);additive_tests(&root);withdrawn_tests();idle();kui_update_boot_reset();
+    baseline_tests(&root);handoff_tests(&a,&b);bank_tests(&a,&b);additive_tests(&root);reload_tests(&root,&a,&b);withdrawn_tests();idle();kui_update_boot_reset();
     CHECK(f_mount(NULL,"0:",0)==FR_OK);kui_media_set(NULL);uf_free(&root);uf_free(&a);uf_free(&b);free(disk);
     printf("PASS update boot/resolver: %u checks; header-only baseline, checked chain/transport, older-slot fallback, pinned same-stream module SHA, no root mixing or boot writes\n",checks);
     return 0;

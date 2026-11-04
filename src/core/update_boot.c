@@ -9,6 +9,7 @@
 enum resolver_mode { ROOT_MODULES, BANK_MODULES, BLOCK_MODULES };
 static enum resolver_mode resolver;
 static struct kui_update_package *running;
+static struct {bool active;enum resolver_mode mode;struct kui_update_package *package;} reload_previous;
 
 void kui_update_boot_reset(void) {
     free(running);running=NULL;resolver=ROOT_MODULES;
@@ -17,6 +18,11 @@ static void block_modules(void) {
     kui_update_boot_reset();resolver=BLOCK_MODULES;
 }
 void kui_update_boot_block(void) {block_modules();}
+void kui_update_boot_reload_abort(void) {
+    if(!reload_previous.active)return;
+    block_modules();running=reload_previous.package;resolver=reload_previous.mode;
+    memset(&reload_previous,0,sizeof(reload_previous));
+}
 static void stream_update(struct kui_update_runtime_stream *s,const void *data,size_t bytes) {
     kui_sha256_update(&s->hash,data,bytes);
 }
@@ -82,7 +88,7 @@ static enum kui_runtime_result root_header(struct kui_runtime_info *info,kui_can
     return cancel()?KUI_RUNTIME_CANCELLED:r;
 }
 static enum kui_update_boot_result baseline(const char *compiled,unsigned transport,
-    struct kui_runtime_image *out,struct kui_update_boot_view *view,kui_log_fn log,kui_cancel_fn cancel) {
+    struct kui_runtime_image *out,struct kui_update_boot_view *view,kui_log_fn log,kui_cancel_fn cancel,bool force) {
     /* Root files are the deliberately retained baseline. A running bank may
      * not continue as baseline merely because a selection record disappeared. */
     kui_update_boot_reset();
@@ -90,7 +96,7 @@ static enum kui_update_boot_result baseline(const char *compiled,unsigned transp
     enum kui_runtime_result r=root_header(&info,cancel);
     if(r==KUI_RUNTIME_OK && kui_update_build_withdrawn(info.build))
         return problem(out,view,log,"Retained GUI was withdrawn; copy the updater add-on runtime before restoring");
-    if(r==KUI_RUNTIME_OK && !strcmp(compiled,info.build)) {
+    if(!force && r==KUI_RUNTIME_OK && !strcmp(compiled,info.build)) {
         /* The bootstrap already validated the running root GUI. Do not read
          * its multi-MiB payload a second time on every ordinary startup. */
         memcpy(view->build,info.build,sizeof(view->build));view->bank[0]=0;
@@ -102,7 +108,7 @@ static enum kui_update_boot_result baseline(const char *compiled,unsigned transp
     if(kui_update_build_withdrawn(out->info.build))
         return problem(out,view,log,"Retained GUI was withdrawn; copy the updater add-on runtime before restoring");
     memcpy(view->build,out->info.build,sizeof(view->build));view->bank[0]=0;
-    if(!strcmp(compiled,out->info.build)) {
+    if(!force && !strcmp(compiled,out->info.build)) {
         kui_runtime_free(out);resolver=ROOT_MODULES;return KUI_UPDATE_BOOT_BASELINE;
     }
     if(!patch(out,transport,true))return problem(out,view,log,"Root baseline lacks the selected storage handoff");
@@ -111,7 +117,7 @@ static enum kui_update_boot_result baseline(const char *compiled,unsigned transp
 enum kui_update_boot_result kui_update_boot_baseline(const char *compiled,unsigned transport,
     struct kui_runtime_image *out,struct kui_update_boot_view *view,kui_log_fn log,kui_cancel_fn cancel) {
     if(!start(compiled,transport,out,view,log,cancel))return KUI_UPDATE_BOOT_ERROR;
-    return baseline(compiled,transport,out,view,log,cancel);
+    return baseline(compiled,transport,out,view,log,cancel,false);
 }
 static bool same_activation(const struct kui_update_activation *a,const struct kui_update_activation *b) {
     return a->sequence==b->sequence && !memcmp(a->selected,b->selected,sizeof(a->selected)) &&
@@ -177,13 +183,9 @@ static bool stamp(struct kui_runtime_image *image,const struct kui_update_activa
        !kui_update_handoff_encode((uint8_t *)image->data+h.payload_offset,&h))return false;
     image->info.crc32=kui_crc32(0,image->data,image->info.payload_bytes);return true;
 }
-enum kui_update_boot_result kui_update_boot_read(const char *compiled,unsigned transport,
-    struct kui_runtime_image *out,struct kui_update_boot_view *view,kui_log_fn log,kui_cancel_fn cancel) {
-    return kui_update_boot_read_handoff(compiled,transport,NULL,out,view,log,cancel);
-}
-enum kui_update_boot_result kui_update_boot_read_handoff(const char *compiled,unsigned transport,
+static enum kui_update_boot_result read_selected(const char *compiled,unsigned transport,
     const struct kui_update_handoff_context *context,struct kui_runtime_image *out,
-    struct kui_update_boot_view *view,kui_log_fn log,kui_cancel_fn cancel) {
+    struct kui_update_boot_view *view,kui_log_fn log,kui_cancel_fn cancel,bool force) {
     if(!start(compiled,transport,out,view,log,cancel))return KUI_UPDATE_BOOT_ERROR;
     struct kui_update_activation slots[2]={{0}};
     enum kui_update_result result[2];
@@ -209,10 +211,10 @@ enum kui_update_boot_result kui_update_boot_read_handoff(const char *compiled,un
             if(view->fallback)snprintf(view->notice,sizeof(view->notice),"Invalid update selection; using the retained baseline");
             /* An explicit rollback to baseline is authoritative. If its
              * root file is unavailable, do not reactivate an older bank. */
-            return baseline(compiled,transport,out,view,log,cancel);
+            return baseline(compiled,transport,out,view,log,cancel,force);
         }
         if(load_receipt(selected,cancel)) {
-            if(adopt(compiled,transport,selected,context,cancel)) {
+            if(!force && adopt(compiled,transport,selected,context,cancel)) {
                 memcpy(view->bank,selected->selected,sizeof(view->bank));
                 memcpy(view->build,compiled,sizeof(view->build));
                 if(view->fallback)snprintf(view->notice,sizeof(view->notice),"Newer update unavailable; using an older checked selection");
@@ -223,7 +225,7 @@ enum kui_update_boot_result kui_update_boot_read_handoff(const char *compiled,un
             memcpy(view->bank,selected->selected,sizeof(view->bank));
             memcpy(view->build,out->info.build,sizeof(view->build));
             if(view->fallback)snprintf(view->notice,sizeof(view->notice),"Newer update unavailable; using an older checked selection");
-            if(!strcmp(compiled,out->info.build)) {
+            if(!force && !strcmp(compiled,out->info.build)) {
                 kui_runtime_free(out);return KUI_UPDATE_BOOT_PINNED;
             }
             if(stamp(out,selected,transport)) {
@@ -236,5 +238,23 @@ enum kui_update_boot_result kui_update_boot_read_handoff(const char *compiled,un
         view->fallback=true;log("Updates: bank %s refused; checking the retained selection",selected->selected);
     }
     if(view->fallback)snprintf(view->notice,sizeof(view->notice),"Update unavailable; using the retained root baseline");
-    return baseline(compiled,transport,out,view,log,cancel);
+    return baseline(compiled,transport,out,view,log,cancel,force);
+}
+enum kui_update_boot_result kui_update_boot_read(const char *compiled,unsigned transport,
+    struct kui_runtime_image *out,struct kui_update_boot_view *view,kui_log_fn log,kui_cancel_fn cancel) {
+    return kui_update_boot_read_handoff(compiled,transport,NULL,out,view,log,cancel);
+}
+enum kui_update_boot_result kui_update_boot_read_handoff(const char *compiled,unsigned transport,
+    const struct kui_update_handoff_context *context,struct kui_runtime_image *out,
+    struct kui_update_boot_view *view,kui_log_fn log,kui_cancel_fn cancel) {
+    return read_selected(compiled,transport,context,out,view,log,cancel,false);
+}
+enum kui_update_boot_result kui_update_boot_reload(const char *compiled,unsigned transport,
+    struct kui_runtime_image *out,struct kui_update_boot_view *view,kui_log_fn log,kui_cancel_fn cancel) {
+    kui_update_boot_reload_abort();
+    reload_previous.active=true;reload_previous.mode=resolver;reload_previous.package=running;
+    running=NULL;resolver=BLOCK_MODULES;
+    enum kui_update_boot_result r=read_selected(compiled,transport,NULL,out,view,log,cancel,true);
+    if(r!=KUI_UPDATE_BOOT_CHAIN)kui_update_boot_reload_abort();
+    return r;
 }

@@ -144,7 +144,7 @@ static void footer(struct paint *p, const struct kui_shell *s,
         s->confirm_games_identity ? "A Verify image identity   B Cancel" :
         s->confirm_vmu_copy_all ? "A Copy all saves   B Cancel" :
         s->confirm_music_clear ? "A Clear music cache   B Cancel" :
-        s->confirm_restart ? "A Restart console   B Cancel" :
+        s->confirm_restart ? (s->update_restart?"A Restart K-UI   B Cancel":"A Restart console   B Cancel") :
         s->confirm_repair_in_place ? "A Repair in place   B Cancel" :
         s->confirm_salvage_check ? "A Start full check   B Cancel" :
         s->confirm_salvage ? (s->confirm_salvage_defer?"A Resume past range   B Cancel":"A Start recovery   B Cancel") :
@@ -156,8 +156,10 @@ static void footer(struct paint *p, const struct kui_shell *s,
             s->update.stage==KUI_SHELL_UPDATE_REVIEW?(s->update.ready?
                 s->update.restore?"A Restore this version   B Cancel":"A Install this package   B Cancel":"B Packages"):
             s->update.stage==KUI_SHELL_UPDATE_RESULT?
-                "START Restart   X Packages   Y Previous   B Settings":
-                "D-pad Select/page   A Check   X Refresh   B Settings") :
+                "START Restart K-UI   X Folder   Y Previous   B Back":
+                strcmp(s->update.directory,KUI_UPDATE_BROWSER_ROOT)?
+                "D-pad Browse   A Open/check   START Restart K-UI   B Parent":
+                "D-pad Browse   A Open/check   START Restart K-UI   B Settings") :
         s->page==KUI_SHELL_DISC_CARDS ? (s->disc_cards_loading?"B Stop safely":
             s->disc_cards_confirming?"A Confirm   B Cancel":
             !s->disc_cards.identified || !s->disc_cards.status.passed || !s->disc_cards.count?
@@ -804,7 +806,7 @@ static void updates_page(struct paint *p,const struct kui_shell *s,const struct 
                 label(p,48,294,CYAN,line);
             }
         } else label(p,48,294,MUTED,"Cards, saves and preferences stay outside the software bank.");
-        label(p,48,320,MUTED,"Saves are kept. Restart to use the selected version.");
+        label(p,48,320,MUTED,"Saves are kept. Restart K-UI to use the selected version.");
         label(p,48,346,u->ready?WHITE:AMBER,u->ready?"A confirms this exact target. B returns without selecting it.":
             "This target cannot be installed or selected.");
         words(p,40,394,608,u->ready?CYAN:AMBER,status->message,false);return;
@@ -815,23 +817,28 @@ static void updates_page(struct paint *p,const struct kui_shell *s,const struct 
         for(unsigned i=0;i<status->line_count && i<3u;i++)words(p,48,234+i*24u,592,MUTED,status->lines[i],false);
         label(p,40,350,MUTED,"A hung application is not detected or rolled back automatically.");
         label(p,40,376,MUTED,"Hold B at startup to use the original baseline.");
-        label(p,40,398,CYAN,u->restart_required?"START reviews a console restart.":"X returns to packages; Y checks the previous version.");return;
+        label(p,40,398,CYAN,"START reviews Restart K-UI. X returns to this folder.");return;
     }
-    label(p,40,184,MUTED,"Y Restore previous   R Original baseline");
+    snprintf(line,sizeof(line),"Folder: %.180s",u->directory[0]?u->directory+2u:"/KUI/updates");
+    words(p,40,184,470,MUTED,line,false);
+    snprintf(line,sizeof(line),"Page %u/%u",u->page+1u,u->total?(u->total+KUI_SHELL_UPDATE_ROWS-1u)/KUI_SHELL_UPDATE_ROWS:1u);
+    label(p,480,184,MUTED,line);
     unsigned count=u->count>KUI_SHELL_UPDATE_ROWS?KUI_SHELL_UPDATE_ROWS:u->count;
     for(unsigned i=0;i<count;i++) {
         unsigned y=208+i*21u;if(i==s->update_selected)panel(p,32,y-2u,576,20,SELECTED);
         words(p,48,y,468,i==s->update_selected?WHITE:MUTED,u->rows[i].name,false);
-        snprintf(line,sizeof(line),"%llu.%llu MiB",(unsigned long long)(u->rows[i].bytes/1048576u),
+        if(u->rows[i].is_directory)snprintf(line,sizeof(line),"Folder >");
+        else snprintf(line,sizeof(line),"%s%llu.%llu MiB",u->rows[i].is_zip?"ZIP ":"",(unsigned long long)(u->rows[i].bytes/1048576u),
             (unsigned long long)((u->rows[i].bytes%1048576u)*10u/1048576u));
         label(p,480,y,CYAN,line);
     }
     if(!count) {
-        label(p,48,230,WHITE,"Copy a release .kup package into /KUI/updates on SD.");
-        label(p,48,258,MUTED,"Then press X Refresh. Checking a package makes no changes.");
+        label(p,48,230,WHITE,"No update packages or folders here.");
+        label(p,48,258,MUTED,"Copy a .kup or update ZIP here, then X Refresh.");
         label(p,48,306,MUTED,"Stable and testing packages are reviewed before installation.");
     }
-    words(p,40,394,608,status->errors?AMBER:MUTED,status->message,false);
+    label(p,40,376,MUTED,"X Refresh   Y Restore previous   R Original baseline");
+    words(p,40,400,608,status->errors?AMBER:MUTED,status->message,false);
 }
 static void utility_page(struct paint *p,const struct kui_shell *s,const struct kui_shell_view *v) {
     bool memory_test=s->page==KUI_SHELL_MEMORY;
@@ -1750,11 +1757,19 @@ static void app_confirmation(struct paint *p,const struct kui_shell *s) {
         label(p,72,278,MUTED,"B stops the read. Game files remain unchanged.");
         label(p,72,334,CYAN,"A Verify image");
     } else if(s->confirm_restart) {
-        label(p,72,188,WHITE,"RESTART THE CONSOLE?");
-        label(p,72,226,MUTED,"Closes K-UI and returns to the console BIOS.");
-        label(p,72,252,MUTED,"Save any preference changes before restarting.");
-        label(p,72,278,MUTED,"The inserted boot disc can start K-UI again.");
-        label(p,72,334,CYAN,"A Restart");
+        if(s->update_restart) {
+            label(p,72,188,WHITE,"RESTART K-UI?");
+            label(p,72,226,MUTED,"Loads the selected K-UI version from this SD card.");
+            label(p,72,252,MUTED,"Your game readers, cards and settings stay installed.");
+            label(p,72,278,MUTED,"Returns to K-UI without rebooting through the BIOS.");
+            label(p,72,334,CYAN,"A Restart K-UI");
+        } else {
+            label(p,72,188,WHITE,"RESTART THE CONSOLE?");
+            label(p,72,226,MUTED,"Closes K-UI and returns to the console BIOS.");
+            label(p,72,252,MUTED,"Save any preference changes before restarting.");
+            label(p,72,278,MUTED,"The inserted boot disc can start K-UI again.");
+            label(p,72,334,CYAN,"A Restart");
+        }
     } else if(s->confirm_vmu_delete || s->confirm_vmu_copy) {
         bool copy=s->confirm_vmu_copy;
         const struct kui_vmu_entry *e=s->vmu_selected<s->vmu.count?&s->vmu.entries[s->vmu_selected]:NULL;

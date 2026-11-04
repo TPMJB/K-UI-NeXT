@@ -4,6 +4,7 @@
 #include "kui/update.h"
 #include "kui/update_boot.h"
 #include "kui/update_handoff.h"
+#include "kui/update_zip.h"
 #include "kui/native_vmu_standard.h"
 #include "kui/storage_policy.h"
 #include "kui/media.h"
@@ -14,6 +15,7 @@
 #include <errno.h>
 
 #define PACKAGE "0:/KUI/updates/release.kup"
+#define ARCHIVE "0:/KUI/updates/test/variant.zip"
 static uint8_t *disk;static size_t disk_bytes;static unsigned checks,writes;static uint64_t read_bytes;
 static FATFS fs;
 #define CHECK(x) do {++checks;if(!(x)){fprintf(stderr,"Release updater failed %u: %s\n",__LINE__,#x);exit(1);}}while(0)
@@ -161,7 +163,8 @@ static unsigned legacy_build_guards(const struct kui_update_package *package) {
     CHECK(historical==expected);return historical;
 }
 int main(int argc,char **argv) {
-    CHECK(argc==4);FILE *input=fopen(argv[1],"rb");CHECK(input && !fseek(input,0,SEEK_END));long length=ftell(input);
+    CHECK(argc>=4 && argc<=6);bool archive=argc>=5,changed_archive=argc==6;
+    FILE *input=fopen(argv[1],"rb");CHECK(input && !fseek(input,0,SEEK_END));long length=ftell(input);
     CHECK(length>0 && !fseek(input,0,SEEK_SET));disk_bytes=(size_t)length;disk=malloc(disk_bytes);
     CHECK(disk && fread(disk,1,disk_bytes,input)==disk_bytes && !fclose(input));
     kui_media_set(&media);CHECK(f_mount(&fs,"0:",1)==FR_OK);
@@ -173,15 +176,37 @@ int main(int argc,char **argv) {
         root[i].present=host_present(host);if(!i)CHECK(root[i].present);
         if(root[i].present) {root[i].digest=copy_host(host,path);++root_present;}else absent(path);
     }
-    seed_users();(void)copy_host(argv[3],PACKAGE);
+    seed_users();struct digest expected_package=copy_host(argv[3],PACKAGE),archive_digest={0};
+    if(archive)archive_digest=copy_host(argv[4],ARCHIVE);
     kui_update_boot_reset();struct kui_runtime_image image={0};CHECK(kui_runtime_read(KUI_RUNTIME_PATH,&image,logger,cancel)==KUI_RUNTIME_OK);
     char baseline[13];memcpy(baseline,image.info.build,sizeof(baseline));kui_runtime_free(&image);
     modules(NULL,root);preserved(root,(unsigned)count);
     struct kui_update_package *package=malloc(sizeof(*package));CHECK(package);struct kui_app_status status;
-    CHECK(kui_update_inspect(PACKAGE,package,&status,logger,cancel,NULL)==KUI_UPDATE_OK && status.passed);
+    char prepared[192];const char *package_path=PACKAGE;
+    if(archive) {
+        CHECK(kui_update_zip_prepare(ARCHIVE,prepared,&status,logger,cancel,NULL)==KUI_UPDATE_OK && status.passed);
+        package_path=prepared;same_digest(package_path,&expected_package);same_digest(ARCHIVE,&archive_digest);
+    }
+    CHECK(kui_update_inspect(package_path,package,&status,logger,cancel,NULL)==KUI_UPDATE_OK && status.passed);
     CHECK(count==package->count && strcmp(baseline,package->build));
     struct kui_update_pin pin;kui_update_package_pin(package,&pin);
-    CHECK(kui_update_install(PACKAGE,&pin,&status,logger,cancel,NULL)==KUI_UPDATE_OK && status.passed);
+    if(changed_archive) {
+        /* Simulate the user replacing the reviewed source ZIP. INSTALL must
+         * re-extract it and reject its different valid package against D's pin. */
+        CHECK(f_unlink(ARCHIVE)==FR_OK);(void)copy_host(argv[5],ARCHIVE);
+        CHECK(kui_update_zip_prepare(ARCHIVE,prepared,&status,logger,cancel,NULL)==KUI_UPDATE_OK && status.passed);
+        CHECK(kui_update_install(prepared,&pin,&status,logger,cancel,NULL)==KUI_UPDATE_STALE && !status.passed);
+        struct kui_update_activation untouched;unsigned slot=0u;
+        CHECK(kui_update_activation_latest(&untouched,&slot,cancel)==KUI_UPDATE_NOT_FOUND);
+        absent(KUI_UPDATE_ACTIVE0);absent(KUI_UPDATE_ACTIVE1);preserved(root,(unsigned)count);
+        CHECK(f_unlink(ARCHIVE)==FR_OK);struct digest restored=copy_host(argv[4],ARCHIVE);
+        CHECK(restored.bytes==archive_digest.bytes && !memcmp(restored.sha256,archive_digest.sha256,32u));
+    }
+    if(archive) {
+        CHECK(kui_update_zip_prepare(ARCHIVE,prepared,&status,logger,cancel,NULL)==KUI_UPDATE_OK && status.passed);
+        same_digest(package_path,&expected_package);same_digest(ARCHIVE,&archive_digest);
+    }
+    CHECK(kui_update_install(package_path,&pin,&status,logger,cancel,NULL)==KUI_UPDATE_OK && status.passed);
     preserved(root,(unsigned)count);
     CHECK(!strcmp(latest().selected,package->build) && !latest().previous[0]);
     struct kui_update_package *verified=malloc(sizeof(*verified));CHECK(verified);
@@ -201,6 +226,15 @@ int main(int argc,char **argv) {
      * runtimes must demonstrate bounded receipt/header/slot-only adoption. */
     CHECK(package->entries[0].bytes>262144u && read_bytes-adoption_start<package->entries[0].bytes/2u);
     CHECK(!image.data && !strcmp(view.bank,package->build));modules(package,root);CHECK(writes==before);preserved(root,(unsigned)count);
+    /* Restart the currently selected GUI must reread its full checked image,
+     * even when its build equals the running GUI. A cancelled handoff restores
+     * the running bank pin before normal use resumes. No SH code is executed. */
+    uint64_t reload_start=read_bytes;
+    CHECK(kui_update_boot_reload(package->build,KUI_STORAGE_SCI,&image,&view,logger,cancel)==KUI_UPDATE_BOOT_CHAIN);
+    CHECK(image.data && !strcmp(view.bank,package->build) && !strcmp(image.info.build,package->build));
+    CHECK(read_bytes-reload_start>=package->entries[0].bytes);
+    kui_runtime_free(&image);kui_update_boot_reload_abort();modules(package,root);
+    CHECK(writes==before);preserved(root,(unsigned)count);
     unsigned historical=legacy_build_guards(package);
     /* Held B is a one-boot bypass, leaving persistent selection unchanged. */
     before=writes;CHECK(kui_update_boot_baseline(package->build,KUI_STORAGE_SCI,&image,&view,logger,cancel)==KUI_UPDATE_BOOT_CHAIN);
@@ -215,7 +249,8 @@ int main(int argc,char **argv) {
     CHECK(!latest().selected[0] && !strcmp(latest().previous,package->build));
     before=writes;CHECK(kui_update_boot_read(baseline,KUI_STORAGE_SCI,&image,&view,logger,cancel)==KUI_UPDATE_BOOT_BASELINE);
     CHECK(!view.bank[0] && !image.data);modules(NULL,root);CHECK(writes==before);preserved(root,(unsigned)count);
-    printf("PASS actual release updater: %u checks; %s -> %s, %zu manifest entries, %u present/%zu absent retained root files, %u legacy guards, chained handoff/adoption, inherited module recognition/absence, held-B bypass, rollback and protected root/user data\n",checks,baseline,package->build,count,root_present,count-root_present,historical);
+    if(archive)same_digest(ARCHIVE,&archive_digest);
+    printf("PASS actual release updater: %u checks; %s -> %s, %zu manifest entries, %u present/%zu absent retained root files, %u legacy guards, %s%sfull same-build reload/abort, chained handoff/adoption, inherited module recognition/absence, held-B bypass, rollback and protected root/user data\n",checks,baseline,package->build,count,root_present,count-root_present,historical,archive?"ZIP check/install restaging, ":"",changed_archive?"changed-ZIP pin refusal, ":"");
     kui_update_boot_reset();CHECK(f_mount(NULL,"0:",0)==FR_OK);kui_media_set(NULL);
     free(verified);free(package);free(root);free(disk);return 0;
 }

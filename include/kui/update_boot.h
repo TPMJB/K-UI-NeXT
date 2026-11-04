@@ -31,6 +31,16 @@ enum kui_update_boot_result kui_update_boot_read_handoff(const char *compiled_bu
     unsigned transport,const struct kui_update_handoff_context *,
     struct kui_runtime_image *out,struct kui_update_boot_view *view,
     kui_log_fn log,kui_cancel_fn cancel);
+/* Restart the GUI selected NOW, fully rereading it even when its build equals
+ * the running GUI. Returns CHAIN or ERROR; never uses a RAM handoff shortcut.
+ * A failed reload restores the running module pin. After CHAIN, caller must
+ * release storage, quiesce services and apply the main-thread RAM/stack guard.
+ * If execution is cancelled/refused/returns, free out and call reload_abort
+ * before resuming the current GUI. No selection record is written. */
+enum kui_update_boot_result kui_update_boot_reload(const char *compiled_build,
+    unsigned transport,struct kui_runtime_image *out,struct kui_update_boot_view *view,
+    kui_log_fn log,kui_cancel_fn cancel);
+void kui_update_boot_reload_abort(void);
 /* Safe manual bypass: a bank GUI chains to the root GUI rather than merely
  * clearing its bank pin and continuing with root modules. */
 enum kui_update_boot_result kui_update_boot_baseline(const char *compiled_build,

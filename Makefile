@@ -31,6 +31,11 @@ test-updater: build/test-update build/test-update-handoff build/update-image bui
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-update
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-update-handoff
 	python3 tests/test_update_package.py
+	python3 tests/test_update_addon.py
+	python3 tests/test_update_test_bundle.py
+	python3 tests/test_update_restart_gui.py
+	python3 tests/test_update_browser_images.py
+	python3 tests/test_update_zip_images.py
 	python3 tests/test_vmu_maple_observe_package.py
 	python3 tests/test_update_images.py --skip-codec --binary $(CURDIR)/build/update-image --boot-binary $(CURDIR)/build/update-boot
 
@@ -1642,6 +1647,7 @@ test-disc-cards: build/test-disc-launcher build/test-shell
 	python3 tests/test_disc_cards_dispatch.py
 	python3 tests/test_disc_idle.py
 build/test-shell build/render-shell: include/kui/disc_cards.h
+build/test-shell build/render-shell: include/kui/update_browser.h
 
 .PHONY: test-disc-vmu
 test-disc-vmu: test-disc-native test-disc-vmu-probe build/test-disc-launch-vmu

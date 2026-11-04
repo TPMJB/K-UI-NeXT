@@ -980,6 +980,8 @@ int main(int argc,char **argv) {
     else if(!strncmp(argv[1],"updates-",8)) {
         shell.page=KUI_SHELL_UPDATES;
         struct kui_shell_update_view *u=&shell.update;
+        strcpy(u->directory,KUI_UPDATE_BROWSER_ROOT);
+        strcpy(u->reviewed.directory,KUI_UPDATE_BROWSER_ROOT);
         u->selection_known=true;u->count=8;u->total=11;u->status.complete=u->status.passed=true;
         strcpy(u->running,"0123456789ab");strcpy(u->selected,"0123456789ab");strcpy(u->previous,"abcdef012345");
         for(unsigned i=0;i<u->count;i++) {
@@ -989,6 +991,19 @@ int main(int argc,char **argv) {
         }
         shell.update_selected=3u;
         strcpy(u->status.message,"11 offline packages. A checks a package before installation.");
+        if(!strcmp(argv[1],"updates-folders") || !strcmp(argv[1],"updates-nested")) {
+            if(!strcmp(argv[1],"updates-nested"))strcpy(u->directory,"0:/KUI/updates/test/Builds with long folder names");
+            for(unsigned i=0;i<u->count;i++) {
+                if(i<2u) {
+                    snprintf(u->rows[i].name,sizeof(u->rows[i].name),"%s",i?"WinCE experiments":"Background tests");
+                    u->rows[i].is_directory=true;
+                } else if(i==2u) {strcpy(u->rows[i].name,"K-UI-updater-addon-test.zip");u->rows[i].is_zip=true;}
+                char path[KUI_SHELL_UPDATE_PATH_BYTES];
+                snprintf(path,sizeof(path),"%.95s/%.94s",u->directory,u->rows[i].name);
+                strcpy(u->rows[i].path,path);
+            }
+            strcpy(u->status.message,"11 entries. A opens folders or checks an update.");
+        }
         if(!strcmp(argv[1],"updates-empty")) {
             u->count=u->total=0;strcpy(u->status.message,"Copy a release .kup file to /KUI/updates, then X Refresh.");
         }
@@ -1024,6 +1039,7 @@ int main(int argc,char **argv) {
                     "Activation not confirmed; restart/check selected version.":"Update package checksum failed; check the package again.");
             }
             shell.confirm_restart=!strcmp(argv[1],"updates-restart");
+            shell.update_restart=shell.confirm_restart;
         }
     }
     else if(!strcmp(argv[1],"settings-updates")) {shell.page=KUI_SHELL_SETTINGS;shell.system_selected=12u;}

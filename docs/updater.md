@@ -33,16 +33,51 @@ An older GUI cannot become an updater merely by copying a `.kup` onto its card.
 
 ## Install or switch a package
 
-1. Put a trusted `.kup` in `KUI/updates` using a computer.
-2. Open **Settings → Updates**, refresh and select the package.
+1. Put trusted `.kup` files or updater-ready test ZIPs in `KUI/updates` or a
+   subfolder such as `KUI/updates/test` using a computer.
+2. Open **Settings → Updates**. Press **A** to enter a folder or check a file;
+   **B** returns to the parent folder, then Settings at the Updates root.
 3. Review the target build, channel and replacement/inheritance counts.
-4. Confirm, wait for the result, then restart through the usual boot route.
+4. Confirm, wait for the result, then choose **Restart K-UI**. K-UI reloads the
+   selected version directly without returning to BIOS.
 
-The menu lists `.kup` files, not delivery ZIPs. It shows eight rows per page,
-so a dozen test packages fit across two pages. Re-selecting an already
+The menu shows folders first, then `.kup` and `.zip` files in name order, with
+eight rows per page. It keeps the current folder through package review,
+installation, refresh and restore. A dozen test packages can stay on the card
+and be selected repeatedly without another trip to the computer. Re-selecting an already
 installed identical package verifies and selects its retained bank; it need
 not copy its runtime again. Completed banks are retained without automatic
 pruning.
+
+An updater-ready ZIP contains exactly one `.kup`. Only that member is streamed
+into the private `KUI/system/update-stage` cache; source/evidence and any
+bundled root runtime are ignored. The contained package then receives the same
+inspection, confirmation and pinned installation as a standalone `.kup`.
+ZIP checking writes this staging cache; it does not select or install software.
+Installation stages the ZIP again and checks the reviewed package pin, so a
+different ZIP cannot substitute another update after confirmation.
+
+Stored and deflated ZIP32 archives are supported, including data descriptors.
+Encrypted, split, ZIP64, malformed or multi-package archives are refused.
+Older manual-install test ZIPs without a `.kup` need an explicit conversion;
+the updater does not infer installer scripts, choose among variants, or copy
+their old GUI and reader files. Future test deliveries should use
+`tools/update_test_bundle.py` to provide the ready-to-select format.
+
+## Restart K-UI and larger updates
+
+Direct restart finishes application I/O, shuts down audio services, fully
+checks and loads the selected GUI, releases storage, and hands the image to
+the UI thread for execution. It also works when restarting the current build.
+An aborted or failed handoff restores the running version's module bindings
+and audio services. The separate console/BIOS restart remains available.
+
+Updating the GUI and every declared game/VMU module can use this same direct
+restart. The installer verifies replacements before selecting them; the fresh
+GUI resolves its new bank. The number of changed files does not require a BIOS
+boot. A change to the startup selector/package protocol must retain bootstrap
+compatibility or supply an explicit migration. Boot media, firmware and work
+requiring a hardware reset remain separate maintenance operations.
 
 Each experiment needs a distinct admitted build ID. Renaming a package does
 not create a new identity: banks use the 12-character build ID. The current
@@ -98,8 +133,8 @@ The GUI always uses policy 0. The additive builder uses policy 2 for all other
 entries. It includes no legacy adapter payload. Root inheritance is explicit;
 a missing replacement is never reinterpreted as inheritance. Replacement
 SHA verification consumes the same stream used to load the module, before
-launch-specific patching. The legacy Silver/Toy presence checks consult root;
-GUI-only inheritance deliberately preserves that inventory too.
+launch-specific patching. Silver/Toy presence checks use the same resolver;
+GUI-only inheritance deliberately preserves their installed root inventory.
 
 CRC-protected `active0.bin` and `active1.bin` records retain selected and
 previous IDs. A new record uses the older slot. A bank without a valid receipt
@@ -138,6 +173,31 @@ and empty handoff markers, and the GUI-only destination allowlist. It creates
 a sparse `.kup` whose only payload is the GUI. Package inspection can also
 be run with `python3 tools/update_package.py verify path/to/update.kup`.
 Passing codec checks alone does not approve an arbitrary loader cohort.
+
+For a test with a reviewed, explicit replacement set, first build its testing
+`.kup` using `update_package.py` with `--inherit-missing` for untouched paths.
+Give each variant a distinct source/build identity and verify its actual game
+route. Then wrap it for direct ZIP selection:
+
+```sh
+python3 tools/update_test_bundle.py variant.kup variant.zip \
+    --source-commit FULL_SOURCE_COMMIT --label "Reader experiment"
+```
+
+The wrapper includes exactly one checked package, its source, a replacement
+list and checksums. It refuses implicit conversion of arbitrary old test ZIPs.
+
+For the focused folder/restart check, build two admitted GUI-only versions,
+then produce an upgrade package and an example test ZIP without changing the
+installed root runtime:
+
+```sh
+python3 tools/package_update_switch.py --upgrade build/update-addon/C \
+    --test build/update-addon/D --output build/K-UI-Updater-Switch-TEST.zip
+```
+
+The existing older GUI uses its old BIOS restart once to enter the upgrade.
+The upgraded GUI's Restart K-UI command then handles subsequent switches.
 
 The actual-release host test installs A → B on FAT32 and exFAT, exercises
 handoff/adoption, baseline bypass and rollback, and checks retained reader

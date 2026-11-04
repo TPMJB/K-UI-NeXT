@@ -28,6 +28,7 @@
 #include "kui/drive_controls.h"
 #include "kui/disc_cards.h"
 #include "kui/update.h"
+#include "kui/update_browser.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -52,6 +53,7 @@ struct kui_shell_update_request {
     unsigned generation,page;
     uint64_t token;
     char path[KUI_SHELL_UPDATE_PATH_BYTES],target[KUI_UPDATE_BUILD_BYTES];
+    char directory[KUI_SHELL_UPDATE_PATH_BYTES];
     struct kui_update_pin package;
     struct kui_update_activation activation;
     struct kui_shell_update_storage storage;
@@ -59,11 +61,13 @@ struct kui_shell_update_request {
 struct kui_shell_update_row {
     char name[96],path[KUI_SHELL_UPDATE_PATH_BYTES];
     uint64_t bytes;
+    bool is_directory,is_zip;
 };
 struct kui_shell_update_view {
     struct kui_app_status status;
     enum kui_shell_update_stage stage;
     unsigned generation,page,count,total;
+    char directory[KUI_SHELL_UPDATE_PATH_BYTES];
     struct kui_shell_update_row rows[KUI_SHELL_UPDATE_ROWS];
     struct kui_shell_update_request reviewed;
     char running[KUI_UPDATE_BUILD_BYTES],selected[KUI_UPDATE_BUILD_BYTES],previous[KUI_UPDATE_BUILD_BYTES];
@@ -212,7 +216,7 @@ enum kui_shell_action {
     KUI_SHELL_VMU_HISTORY_RUN, KUI_SHELL_GAMES_EDIT_LOAD, KUI_SHELL_GAMES_EDIT_SAVE,
     KUI_SHELL_GAMES_JUMP, KUI_SHELL_GAMES_IDENTITY_VERIFY, KUI_SHELL_PROBLEM_REPORT,
     KUI_SHELL_GAMES_LAYOUT_SAVE, KUI_SHELL_VMU_BACKUP_SAVES, KUI_SHELL_DISC_CARDS_RUN,
-    KUI_SHELL_UPDATE_RUN
+    KUI_SHELL_UPDATE_RUN, KUI_SHELL_RESTART_KUI
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
     KUI_SHELL_OUTCOME_STOPPED, KUI_SHELL_OUTCOME_FAILED };
@@ -224,7 +228,7 @@ struct kui_shell {
     struct kui_system_settings system_saved, system_draft;
     unsigned system_selected, controls_selected;
     unsigned update_generation,update_selected;
-    bool update_loading,update_stopping;
+    bool update_loading,update_stopping,update_restart;
     struct kui_shell_update_request update_request,update_confirm_request;
     struct kui_shell_update_view update;
     bool video_trial, confirm_defaults, confirm_clock, confirm_vmu_restore;

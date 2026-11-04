@@ -26,3 +26,10 @@ establish support on the others. Label unresolved behavior explicitly.
 Do not repeat settled compatibility matrices for an unrelated GUI/updater
 change. Use production routing, filesystem and package checks for preservation;
 request console tests only for changed behavior and observable new questions.
+
+Future selectable test ZIPs must contain exactly one validated `.kup`, with
+explicit replacement paths and a unique admitted build identity. Use
+`tools/update_test_bundle.py` after assembling the reviewed variant. Old
+manual-install archives require an explicit role/variant conversion; do not
+guess from directory order, install their old GUI, or silently add historical
+optional modules. Updates supports nested folders and direct K-UI restart.
