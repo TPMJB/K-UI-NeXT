@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Build and package a GUI-only offline updater add-on, preserving root modules."""
+"""Historical engine1/2 fixture builder; current repairs use make_updater_repair.py."""
 import argparse
 import fnmatch
 import hashlib
@@ -349,11 +349,15 @@ def main():
     make = commands.add_parser("build")
     make.add_argument("--output", required=True, type=Path)
     make.add_argument("--jobs", type=int, default=2)
+    make.add_argument("--legacy-fixture", action="store_true")
     package = commands.add_parser("package")
     package.add_argument("--baseline", required=True, type=Path)
     package.add_argument("--candidate", required=True, type=Path)
     package.add_argument("--output", required=True, type=Path)
+    package.add_argument("--legacy-fixture", action="store_true")
     args = parser.parse_args()
+    if not args.legacy_fixture:
+        parser.error("Historical fixture tool. Use make_updater_repair.py for repair or make_update.py for tests; --legacy-fixture is for regression evidence only.")
     try:
         result = build(args.output, args.jobs) if args.command == "build" else package_addon(args.baseline, args.candidate, args.output)
         print(json.dumps(result, indent=2))

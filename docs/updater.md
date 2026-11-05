@@ -1,121 +1,153 @@
 # K-UI software updates
 
-The normal workflow is: receive a test .kup, select it in Settings -> Updates,
-install, Restart K-UI, then run the test. Updates may be placed in subfolders
-such as KUI/updates/test. A ZIP with exactly one embedded .kup also works.
-The producer checks the actual output with the current Main C decoder before
-it is delivered. The user should not repair manifests or choose a decoder.
+Use the current Main producer and current updater implementation. The intended
+workflow is a prepared .kup in KUI/updates/test, select/check/install it in
+Settings -> Updates, then Restart K-UI. Folder browsing and a ZIP containing
+exactly one .kup are supported. The producer validates the exact output with
+its current C consumer before delivery; users should not edit manifests.
 
-## Tests and complete versions
+## Confirmed failures and revision3
 
-| Package | Meaning |
+Engine2 incorrectly classified every flat apps/*.bin file as immutable code.
+FULL omission therefore hid physical launch-settings and selection slots and
+runtime-generated VMU sessions, while writes still reached root. Actual app
+services reproduced failed saves and overwritten preset collections. This was
+a functional routing defect, not an SD-card or package-count problem.
+
+A root-only updater replacement was also insufficient: the dispatcher could
+chain into an existing GUI2 bank and run that GUI's older wrappers again. Prior
+host tests loaded old SH bytes as data but then simulated the next process with
+current C functions. They did not establish the recipient's actual behavior.
+
+Revision3 fixes ownership and binds new deliveries to that behavior. Wire
+format remains v2; bit0 is FULL and bit1 requires engine revision3. New packages
+set bit1, so older engine2 decoders reject them before writes. GUI replacements
+must carry the revision3 capability. A revision3 dispatcher refuses older GUI
+implementations and legacy receipts before handing off. Legacy formats remain
+parseable for migration and negative tests, not as ordinary new deliveries.
+
+The repair bootstrap updates both KUI/boot.kui and KUI/runtime.kui with identical
+fixed GUI bytes and selects that copied root. It preserves bank directories,
+physical readers, cards, saves, preferences and games. This is necessary once;
+a selected old GUI must not immediately undo the repair. The working VC2 game
+source and accepted module/helper bytes are preserved separately from the
+updater-only Main merge. The bootstrap is a manual-copy repair, while subsequent
+prepared tests and version updates use .kup installation and Restart K-UI.
+
+## Software ownership and user data
+
+| Path | Ownership |
 | --- | --- |
-| Partial/test | Replace only declared software; keep the effective running GUI, readers, helpers, assets and absence for everything else |
-| FULL/version | Install the complete declared software set and its GUI; omitted software stays absent rather than leaking older root modules |
-| REMOVE entry | Deliberately hide a software path in this version; never delete user data |
+| runtime/tools/recovery.kui and flat apps/{games,disc,music}/*.kui | Immutable software |
+| Flat apps/*/*-helper.bin with a nonempty role prefix | Immutable RAW helper |
+| apps/games/probe.dat, redump.db, tosec.db | Immutable software data |
+| Official apps/music/*.ogg/*.wav and bounded assets/ trees | Immutable software assets |
+| launch-settings-{a,b}.bin, selection-{a,b}.bin, generated *-session.bin | Shared mutable app data |
+| Cards, journals, preferences, caches, games and reports | Shared user/runtime data |
 
-Package identity is based on content/configuration. Each .kui keeps its real
-embedded build and exact SHA/CRC; raw software keeps its exact SHA. Different
-tests built from one source commit can coexist without same-build collisions.
-There is no requirement that all components share one commit or catalog count.
-Unchanged accepted readers do not need rebuilding to fit a package label.
-Game ABI/admission remains checked: a reader experiment needing new admission
-must include a compatible current-engine GUI, prepared by its developer.
+An arbitrary .bin extension is not software ownership. Mutable/generated app
+records bypass software routing in ROOT, partial BANK, FULL BANK and blocked
+code states. They are forbidden in package admission. FULL absence and explicit
+REMOVE apply only to immutable-owned software. Writes remain physical; read
+and stat routing cannot hide the records that those writes just created.
 
-A partial update snapshots the actual running version, including a checked
-fallback. Omitted components never silently revert from an installed bank to
-physical root. Preserved files are verified before copying. New replacements
-can repair corrupt overwritten components; FULL does not depend on a broken
-old bank receipt. Installation writes/rereads an unselected bank and publishes
-its checked receipt and activation last. Failed or stopped installs leave the
-prior selected software available. Source/host fault tests do not certify
-filesystem metadata against every real power loss.
+## Partial tests and complete versions
 
-Save data, cards, journals, preferences, credentials and games are outside the
-software namespace. They stay shared; rolling back software does not roll
-back saves. Root writes from ordinary apps are not redirected into banks.
+| Delivery | Result |
+| --- | --- |
+| Partial/test | Overlay declared software onto the actual effective running version; retain its GUI, readers, helpers, assets and deliberate absence |
+| FULL/version | Supply the complete intended software set and current GUI; omit obsolete software without leaking older root modules |
+| REMOVE | Preserve absence of a software path; never delete shared app/user data |
 
-## Current engine setup
+Each .kui keeps its actual embedded build and exact CRC/SHA. Package and
+snapshot identities describe applied content/configuration independently of
+component build IDs. Settled readers are not rebuilt or retagged to share one
+cohort. Game ABI/admission remains checked; a reader experiment that needs new
+admission must ship a compatible current-updater GUI prepared by its developer.
 
-Engine2 adds typed components and snapshot receipts that engine1 cannot read.
-The physical KUI/runtime.kui dispatcher must be engine2 once; merely selecting
-a newer bank leaves the older dispatcher in charge at cold boot. Retain a
-backup of the working root and use the supplied small engine setup delivery.
-Keep every existing reader and user file. If an old KUI/boot.kui override is
-present, preserve/rename it so the boot CD reaches the updated root.
+Installation verifies the package, prepares an unselected bank, rereads software,
+then publishes its checked receipt and activation. Partial inheritance uses the
+actual running checked root/bank, not a stale pending or rejected saved choice.
+A FULL replacement does not depend on broken prior payloads or receipts.
+A corrupt same-content complete bank is retained; FULL repair uses a separate
+verified bank instance and publishes only after it is complete. Existing or
+referenced banks are never rewritten in place. Space and repair targets are
+rechecked at installation, not assumed from the earlier preview.
 
-Engine2 skips selected GUI banks with an older updater. A prior bank is not
-deleted; the capable root runs and a FULL test can establish the new selected
-software set. The setup preserves current GUI features and already verified
-reader bytes. It does not require individual test folders to be recopied.
-After setup, ordinary tests and complete version updates use .kup only.
+A positively checked running root can recover malformed activation records
+through normal reviewed installation or Restore Baseline. Listing stays
+read-only. I/O failures and unknown/blocked runtime state do not authorize a
+metadata reset. CRC-valid contradictory bank choices remain protected when
+there is no safe authoritative root slot; manual repair is required for that
+ambiguous history. Restore checks receipt requirements and actual GUI capability
+before confirmation, so it cannot report success then silently boot an older
+incompatible updater. Power-cut tests model write/sync/cancel boundaries; they
+do not certify every filesystem metadata failure on real hardware.
 
-The earlier literal 'Incomplete update cohort' comes from older exact26/34
-consumers. The failed136 delivery declared34 rows but replaced only its GUI;
-all33 other rows inherited root while its evidence ZIP contained26 modules
-and helpers. That was not a self-contained software update. The v2 producer
-inventories the actual staged software, includes its bytes, rejects an old
-GUI before producing output, and validates through the current consumer.
+## Produce a delivery
 
-## Build one update
-
-Use a checkout containing the current Main updater. Stage intended software
-under a KUI directory. For a test changing only one reader, stage that reader;
-the effective GUI and other software will be retained automatically.
+Stage intended software only, never a whole live SD-card KUI directory.
 
     python3 tools/make_update.py stage/KUI test.kup
     make update KUI_UPDATE_STAGE=stage/KUI KUI_UPDATE_OUTPUT=test.kup
 
-For a complete software version, stage its current-engine GUI plus its entire
-intended software set. The version displayed by the GUI comes from that
-release's actual source; the updater does not invent a 2.8.5 build or retag old
-binaries as new software.
+For a complete software release, stage its actual release GUI and every intended
+software file. This does not invent a 2.8.5 release or version-label old binaries.
 
     python3 tools/make_update.py release/KUI version.kup --full --channel stable
     make update-release KUI_UPDATE_STAGE=release/KUI KUI_UPDATE_OUTPUT=version.kup
 
-The central producer can also convert a software ZIP. It reads every software
-member, ignores source/evidence outside KUI and reports replaced embedded
-update artifacts. Old GUI code must first receive the current updater source;
-renaming the ZIP or .kup cannot upgrade its embedded engine.
+The current producer inventories staged software, supports independent builds
+and raw helpers, compiles the current C consumer, and checks final bytes before
+atomic output publication. Unsupported staging paths, obsolete GUIs, traversal,
+symlinks and user data fail on the developer's machine before delivery. Ordinary
+packages support 256 software entries and 128 MiB payload. Full release assets
+are compared byte-for-byte with the installation ZIP's software inventory.
+Common test packagers emit an identical standalone .kup and embedded ZIP payload.
+Historical custom packagers must use make_update for new deliveries. Their old
+CLI paths require --legacy-fixture; they cannot silently produce another
+root-only or obsolete-engine repair.
 
-Common GUI/disc test builders emit a standalone sibling .kup and the same
-payload inside their evidence ZIP. The full release pipeline publishes a
-standalone .kup with checksums and checks it against the installation ZIP.
-Historical standalone packagers are not automatically trusted: route new
-deliveries through make_update. The explicit build-legacy CLI exists only for
-bootstrap and migration tests, not ordinary test/release deliveries.
+For the one-time manual bootstrap, stage the accepted GUI with the current
+updater and its intended immutable software, then run:
 
-## Supported software
+    python3 tools/make_updater_repair.py stage/KUI repair.zip --kup-output test.kup
 
-Typed .kui and raw .bin modules may live under apps/games, apps/disc and
-apps/music. Root runtime/tools/recovery images, official music .ogg/.wav,
-probe.dat, redump.db/tosec.db and bounded immutable assets are supported.
-No traversal, symlinks, arbitrary KUI data or user files are allowed. The
-producer rejects unsupported staging contents before an artifact is delivered.
-V2 supports up to 256 software entries and 128 MiB payload; resource bounds have
-specific errors, independent of historical catalog counts.
+The builder creates identical boot.kui/runtime.kui, both ROOT selectors, and
+one embedded KUP identical to the standalone output. It validates the actual
+activation bytes and KUP with current production C, records source/file hashes,
+and refuses existing outputs. Each file publishes atomically; an ordinary
+failure rolls back newly published outputs. Publication of two sibling files
+is not a single filesystem transaction across power loss; the ZIP is complete
+on its own. These checks do not execute the SH GUI.
 
-## Integrity and startup
+## Regression evidence and startup
 
-Declared replacements never fall back to root when missing or corrupt. Raw
-helpers/assets are checked through read-only GUI software routing. .kui SHA
-verification shares the load stream. Full snapshots hide omitted software;
-partial snapshots retain that mode. Checked handoff binds GUI identity,
-selection sequence and manifest independently of the snapshot ID. Equal GUI
-build labels with different bytes/configuration still execute the right image.
-The ordinary empty root startup retains its 64-byte header fast path.
+The real GUI update_work is exercised with production FatFs, installer, boot,
+producer and unchanged launch-settings/selection services. Tests cover corrupt
+selectors, stale confirmation, actual resulting snapshot identity, partial A/B
+switching, shared presets, incompatible Restore and same-content FULL repair.
 
-The startup selection screen covers storage/selection work and has no timed
-pause; package integrity and copying still take time on the selected adapter.
-Startup reuses the pinned boot transport, avoiding AUTO's extra probe mount.
-Each rejected bank/receipt GUI source is read at most once per selection pass;
-sequence-specific RAM adoption is still attempted for each activation slot.
-The selected GUI keeps its full SHA/CRC and marker checks. Its EMPTY-slot scan
-is reused for handoff and updater CRC passes use the existing fast equivalent.
-The physical dispatcher writes bounded phase timings to KUI/updater-startup.txt
-(connection, mount and version selection). A checked chained GUI preserves that
-first dispatcher's report. Reporting errors do not change software selection.
-These changes remove duplicate work; no measured console boot time is claimed.
-Restart K-UI reloads directly. Returning from a game remains a separate loader
-feature; this updater does not add universal CDDA/WinCE in-game return.
+The frozen tests/fixtures/updater-engine2 source is a deliberately broken
+negative witness. A separate program compiles that actual older C; another
+compiles current C. A serialized dispatcher-to-old-GUI handoff reproduces the
+recipient's old read/save failure. Production revision3 blocks that transfer.
+The frozen source is never a package validator or production build input.
+SH payloads are verified as bytes; host checks do not execute Dreamcast code or
+replace console testing.
+
+The accepted338 GUI was reproduced byte-for-byte with the current SDK before
+adoption: its exact four-module compressed bundle, both original admission
+manifests and KUI_SMASH_LAUNCH_TIMING=1 are required. A rebuild missing those
+options is not the accepted baseline. The optional embedded-module provider
+remains available for root/inherited reads; pinned bank replacements bypass it
+so embedded old modules cannot shadow an installed test. The supplied game and
+helper binaries remain byte-identical; Main receives no game-source merge.
+
+There is no separate version-selection status page. Selection still performs
+necessary storage and integrity work before the normal launcher splash. It
+reuses the pinned transport, avoids duplicate rejected GUI reads, uses equivalent
+fast updater CRC, and reuses a checked handoff-slot scan. Startup timing reports
+remain available. A valid current GUI handoff adopts through receipt/header/slot
+reads; it does not reread the complete GUI. Returning from a game remains a
+separate route-specific loader feature.

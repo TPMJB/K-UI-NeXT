@@ -12,7 +12,7 @@
 #define MODULE_BUILD "222222222222"
 #define BANK_A "444444444444"
 #define BANK_B "555555555555"
-#define RAW_PATH "0:/KUI/apps/games/retail-boot.bin"
+#define RAW_PATH "0:/KUI/apps/games/retail-boot-helper.bin"
 #define MODULE_PATH "0:/KUI/apps/games/retail-boot.kui"
 #define REMOVED_PATH "0:/KUI/apps/games/optional.kui"
 #define USER_PATH "0:/KUI/prefs/settings.bin"
@@ -83,7 +83,7 @@ static void seed_bank_flags(const char *bank,uint64_t sequence,const uint8_t gui
     struct kui_update_package p={.version=2u,.channel=1u,.count=6u,.flags=flags};strcpy(p.build,bank);
     pin(p.entries,"runtime.kui",gui,UF_FILE_BYTES,GUI_BUILD);
     pin(p.entries+1u,"apps/games/retail-boot.kui",module,UF_FILE_BYTES,MODULE_BUILD);
-    pin(p.entries+2u,"apps/games/retail-boot.bin",raw,raw_bytes,NULL);
+    pin(p.entries+2u,"apps/games/retail-boot-helper.bin",raw,raw_bytes,NULL);
     strcpy(p.entries[3u].path,"apps/games/optional.kui");p.entries[3u].policy=KUI_UPDATE_REMOVE;
     pin(p.entries+4u,"assets/ui/nested/font.bin",raw,raw_bytes,NULL);
     pin(p.entries+5u,"redump.db",raw,raw_bytes,NULL);
@@ -184,7 +184,7 @@ static void software_reads(const uint8_t module[UF_FILE_BYTES],const uint8_t *ra
     UINT done=0;CHECK(f_write(&file,"new root",8u,&done)==FR_OK && done==8u && f_close(&file)==FR_OK);
     expect_file(RAW_PATH,raw,raw_bytes);expect_file("0:/KUI/prefs/settings.bin","user",4u);
     /* A corrupt pin never falls back to an available root helper. */
-    bank_path(BANK_A,"apps/games/retail-boot.bin",physical);
+    bank_path(BANK_A,"apps/games/retail-boot-helper.bin",physical);
     uint8_t altered[8192];CHECK(raw_bytes<=sizeof(altered));memcpy(altered,raw,raw_bytes);altered[raw_bytes-1u]^=1u;
     write_file(physical,altered,raw_bytes);
     CHECK(f_open(&file,RAW_PATH,FA_READ)==FR_INT_ERR);

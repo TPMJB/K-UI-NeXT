@@ -18,8 +18,10 @@
 #define KUI_UPDATE_CAPABILITY_BYTES 16u
 #define KUI_UPDATE_CAPABILITY_INITIALIZER {'K','U','I','B','A','N','K','1',1,0,0,0,254,255,255,255}
 #define KUI_UPDATE_ENGINE_BYTES 16u
-#define KUI_UPDATE_ENGINE_INITIALIZER {'K','U','I','E','N','G','2','!',2,0,0,0,253,255,255,255}
+#define KUI_UPDATE_ENGINE_CURRENT 3u
+#define KUI_UPDATE_ENGINE_INITIALIZER {'K','U','I','E','N','G','3','!',3,0,0,0,252,255,255,255}
 #define KUI_UPDATE_FULL 1u
+#define KUI_UPDATE_REQUIRES_ENGINE3 2u
 enum kui_update_member_policy {
     KUI_UPDATE_REPLACE=0, KUI_UPDATE_APPROVED_LEGACY=1, KUI_UPDATE_INHERIT_ROOT=2,
     KUI_UPDATE_KEEP=2, KUI_UPDATE_SELF_KUI=3, KUI_UPDATE_RAW=4, KUI_UPDATE_REMOVE=5
@@ -62,7 +64,7 @@ struct kui_update_activation {
  * channel@44; zero45..63; manifest SHA256@64; zero96..123; CRC32@124
  * over the preceding124 bytes. Entries128: zero-padded path80,size64@80,
  * full-file SHA256@88,policy@120,zero121..127. All payload files follow in order.
- * V2 uses KUIUPD2\0/version2, flags@45 (FULL bit0 only), zero46..63,
+ * V2 uses KUIUPD2\0/version2, flags@45 (FULL bit0, requires engine3 bit1), zero46..63,
  * entries160 with own build12@128 and zero140..159
  * (including the required build terminator@140). Policies3/4 replace .kui/raw
  * software, policy5 preserves absence, and policy2 keeps effective current.
@@ -77,7 +79,7 @@ struct kui_update_activation {
 size_t kui_update_catalog_count(void);
 const char *kui_update_catalog_path(size_t index);
 /* Bounded software namespace: root runtime/tools/recovery.kui, flat lowercase
- * .kui/.bin under apps/{games,disc,music}, music .ogg/.wav, the exact game probe.dat,
+ * .kui or *-helper.bin under apps/{games,disc,music}, music .ogg/.wav, the exact game probe.dat,
  * redump.db/tosec.db and assets/ with at most four safe lowercase path components.
  * No traversal or user data. V1 wire descriptors retain the legacy namespace. */
 bool kui_update_module_path_valid(const char *path);
@@ -91,6 +93,10 @@ const struct kui_update_legacy *kui_update_legacy_for_path(const char *path);
  * have no envelope build and return NULL. */
 const char *kui_update_entry_build(const char *release_build,const struct kui_update_entry *entry);
 uint32_t kui_update_package_version(const struct kui_update_package *package);
+/* Wire v2 remains compatible. New deliveries set the engine3 bit so an older
+ * engine2 decoder rejects them before writing or selecting a bank. Legacy v2
+ * descriptors remain parseable for migration on the current engine. */
+unsigned kui_update_engine_minimum(const struct kui_update_package *package);
 size_t kui_update_entry_bytes(const struct kui_update_package *package);
 /* Normalize validated descriptor offsets/sizes and recompute manifest SHA.
  * Used to seal a fully materialized v2 snapshot before writing its receipt. */
@@ -119,7 +125,8 @@ bool kui_update_package_member(const struct kui_update_package *,const char *rel
 /* Exactly one initialized KUIBANK1/protocol/inverse marker is required in the
  * GUI payload. A valid legacy runtime cannot safely load a selected bank. */
 bool kui_update_capability_valid(const void *payload,size_t bytes);
-/* Exactly one initialized KUIENG2!/2/inverse marker returns 2; otherwise 0. */
+/* Exactly one initialized KUIENG2!/2 or KUIENG3!/3 inverse marker returns its
+ * level. Missing, duplicate or mixed initialized records return 0. */
 unsigned kui_update_engine_level(const void *payload,size_t bytes);
 bool kui_update_activation_encode(const struct kui_update_activation *,uint8_t wire[128]);
 bool kui_update_activation_decode(const uint8_t wire[128],struct kui_update_activation *out);
@@ -139,8 +146,17 @@ enum kui_update_result kui_update_install(const char *path,const struct kui_upda
     struct kui_app_status *,kui_log_fn,kui_cancel_fn,kui_app_progress_fn);
 enum kui_update_result kui_update_activation_read(unsigned slot,struct kui_update_activation *,kui_cancel_fn);
 enum kui_update_result kui_update_activation_latest(struct kui_update_activation *,unsigned *slot,kui_cancel_fn);
+/* UI/installer recovery view. Only malformed activation metadata may normalize
+ * to ROOT after the running context and physical root are positively checked.
+ * Storage I/O failure never becomes permission to publish a new selection. */
+enum kui_update_result kui_update_activation_for_update(struct kui_update_activation *,unsigned *slot,kui_cancel_fn);
 enum kui_update_result kui_update_bank_receipt_read(const char *build,struct kui_update_package *,kui_cancel_fn);
 enum kui_update_result kui_update_bank_verify(const char *build,struct kui_update_package *,
+    struct kui_app_status *,kui_log_fn,kui_cancel_fn,kui_app_progress_fn);
+/* Restore preview/selection verification includes the running production and
+ * physical-root engine floors. An empty build verifies ROOT; out may then be
+ * NULL. Whole-bank integrity alone does not establish restore compatibility. */
+enum kui_update_result kui_update_target_verify(const char *build,struct kui_update_package *,
     struct kui_app_status *,kui_log_fn,kui_cancel_fn,kui_app_progress_fn);
 /* Read-only quota for an inspected package. available is actual free bytes;
  * required is additional allocation after reclaiming only declared members

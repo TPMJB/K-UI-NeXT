@@ -401,7 +401,7 @@ static void namespace_paths(void) {
         "apps/games/a:b.kui","apps/games/a%b.kui","apps/games/\177.kui","KUI/runtime.kui","saves/a.kui"};
     CHECK(!kui_update_module_path_valid(NULL));
     for(unsigned i=0u;i<sizeof(valid)/sizeof(valid[0]);i++)CHECK(kui_update_module_path_valid(valid[i]));
-    CHECK(kui_update_module_path_valid("apps/games/a.bin"));
+    CHECK(kui_update_module_path_valid("apps/games/a-helper.bin"));
     for(unsigned i=0u;i<sizeof(invalid)/sizeof(invalid[0]);i++)CHECK(!kui_update_module_path_valid(invalid[i]));
     char longest[81];memcpy(longest,"apps/games/",11u);memset(longest+11u,'a',64u);memcpy(longest+75u,".kui",5u);
     CHECK(strlen(longest)==79u && kui_update_module_path_valid(longest));

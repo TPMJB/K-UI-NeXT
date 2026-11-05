@@ -42,7 +42,7 @@ static void mixed_builds_and_sealing(void) {
         {"apps/games/current-reader.kui","111111111111",96u,KUI_UPDATE_SELF_KUI},
         {"runtime.kui","222222222222",512u,KUI_UPDATE_SELF_KUI},
         {"apps/music/player.kui","333333333333",64u,KUI_UPDATE_SELF_KUI},
-        {"apps/games/helper.bin",NULL,17u,KUI_UPDATE_RAW},
+        {"apps/games/test-helper.bin",NULL,17u,KUI_UPDATE_RAW},
         {"assets/fonts/ui/font.bin",NULL,0u,KUI_UPDATE_RAW},
         {"redump.db",NULL,40u,KUI_UPDATE_RAW},
         {"apps/disc/keep.kui",NULL,0u,KUI_UPDATE_KEEP},
@@ -95,7 +95,7 @@ static void reader_only_and_roles(void) {
     CHECK(member.policy==KUI_UPDATE_KEEP && !member.bytes && !member.build[0]);
     CHECK(kui_update_package_find(&p,"tools.kui")==p.entries+1u);
     static const char *const allowed[]={"runtime.kui","tools.kui","recovery.kui","redump.db","tosec.db",
-        "apps/games/a.bin","apps/disc/read.kui","apps/music/player.bin","assets/font.bin","assets/a/b/c/d.bin",
+        "apps/games/a-helper.bin","apps/disc/read.kui","apps/music/player-helper.bin","assets/font.bin","assets/a/b/c/d.bin",
         "apps/games/probe.dat","apps/music/song.ogg","apps/music/song.wav"};
     static const char *const denied[]={"settings.ini","prefs.ini","saves/a.bin","vmu/a.bin","games/a.bin",
         "updates/a.kui","system/a.bin","apps/games/a/b.kui","assets/../settings.ini","assets/.hidden",
@@ -110,7 +110,7 @@ static void reader_only_and_roles(void) {
 static void malformed(void) {
     static const struct row rows[]={
         {"apps/games/test.kui","012345abcdef",32u,KUI_UPDATE_SELF_KUI},
-        {"apps/games/helper.bin",NULL,9u,KUI_UPDATE_RAW}
+        {"apps/games/test-helper.bin",NULL,9u,KUI_UPDATE_RAW}
     };
     uint8_t wire[KUI_UPDATE_RECEIPT_MAX],saved[KUI_UPDATE_RECEIPT_MAX];struct kui_update_package p;
     uint64_t bytes=wire_make(saved,2u,rows,2u);
@@ -157,7 +157,7 @@ static void v1_compatibility_and_engine(void) {
     size_t written=0u;CHECK(kui_update_receipt_encode(&p,encoded,sizeof(encoded),&written)==KUI_UPDATE_OK);
     CHECK(written==384u && !memcmp(encoded,wire,written));
     CHECK(kui_update_package_seal(&p)==KUI_UPDATE_OK && !memcmp(p.manifest_sha256,wire+64u,32u));
-    struct kui_update_entry member;CHECK(kui_update_package_member(&p,"apps/games/a.bin",&member) &&
+    struct kui_update_entry member;CHECK(kui_update_package_member(&p,"apps/games/a-helper.bin",&member) &&
         member.policy==KUI_UPDATE_INHERIT_ROOT);
     struct kui_update_pin pin;kui_update_package_pin(&p,&pin);CHECK(pin.version==1u);pin.version=0u;
     CHECK(kui_update_pin_matches(&pin,&p));pin.version=2u;CHECK(!kui_update_pin_matches(&pin,&p));
@@ -166,7 +166,7 @@ static void v1_compatibility_and_engine(void) {
     static const uint8_t marker[16]=KUI_UPDATE_ENGINE_INITIALIZER;uint8_t payload[64]={0};
     CHECK(!kui_update_engine_level(NULL,64u) && !kui_update_engine_level(marker,15u));
     for(unsigned i=0u;i<16u;i++) {
-        memset(payload,0,sizeof(payload));memcpy(payload+i,marker,16u);CHECK(kui_update_engine_level(payload,sizeof(payload))==2u);
+        memset(payload,0,sizeof(payload));memcpy(payload+i,marker,16u);CHECK(kui_update_engine_level(payload,sizeof(payload))==KUI_UPDATE_ENGINE_CURRENT);
         payload[i+15u]^=1u;CHECK(!kui_update_engine_level(payload,sizeof(payload)));
     }
     memcpy(payload,marker,16u);memcpy(payload+32u,marker,16u);CHECK(!kui_update_engine_level(payload,sizeof(payload)));
@@ -217,10 +217,10 @@ static void full_release_flags(void) {
     CHECK(kui_update_package_seal(&p)==KUI_UPDATE_OK && p.flags==KUI_UPDATE_FULL && kui_update_pin_matches(&pin,&p));
     size_t written=0u;CHECK(kui_update_receipt_encode(&p,encoded,sizeof(encoded),&written)==KUI_UPDATE_OK);
     CHECK(encoded[45u]==KUI_UPDATE_FULL && !memcmp(wire,encoded,written));
-    p.flags=2u;CHECK(kui_update_package_seal(&p)==KUI_UPDATE_FORMAT);
+    p.flags=4u;CHECK(kui_update_package_seal(&p)==KUI_UPDATE_FORMAT);
     CHECK(kui_update_receipt_encode(&p,encoded,sizeof(encoded),&written)==KUI_UPDATE_FORMAT);
     p.flags=KUI_UPDATE_FULL;p.version=1u;CHECK(kui_update_package_seal(&p)==KUI_UPDATE_FORMAT);
-    static const uint8_t invalid_flags[]={2u,3u,255u};
+    static const uint8_t invalid_flags[]={4u,5u,255u};
     for(unsigned i=0u;i<sizeof(invalid_flags);i++) {
         wire[45u]=invalid_flags[i];put32(wire+124u,kui_crc32(0u,wire,124u));CHECK(decode(wire,bytes,&p)==KUI_UPDATE_FORMAT);
     }

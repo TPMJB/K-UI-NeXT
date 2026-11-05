@@ -1,0 +1,126 @@
+{
+  "purpose": "Negative regression fixture only; never a package producer, validator or production build input",
+  "source_commit": "5300782c62f68cccb11db89c26188f30045e6ad4",
+  "source_tree": "6f3fb0e252374d5333b2ca4bab82b2de78fc9629",
+  "source_original_game_commit": "136234822d5209106976c25bcb8d75fc42336caf",
+  "copied_files": {
+    "src/core/update.c": {
+      "bytes": 24822,
+      "sha256": "06bb565d1df0a2281a3c71d5cba986cd93e443f0d8dbe57985604486e5dd869b"
+    },
+    "src/core/update_file.c": {
+      "bytes": 48342,
+      "sha256": "d5d234e1d0a9f6bbf3ce6370f821f81f25dbbe15ddce979d90490a9c67db883d"
+    },
+    "src/core/update_boot.c": {
+      "bytes": 19457,
+      "sha256": "1e6ccb7c88ccde52a778b6b15cb90f7be659916ee9a92b840d7bb7de5d8cd102"
+    },
+    "src/core/update_software_file.c": {
+      "bytes": 2770,
+      "sha256": "aecf57b11b1389bebea872ce36240c3b91b7d5b0a81748a07d0eb871a1e33b4d"
+    },
+    "src/core/runtime_file.c": {
+      "bytes": 3413,
+      "sha256": "d1982a79e93f95d89ad56d0211819dc7766402d747493721ffb72d511d0e6c2e"
+    },
+    "src/core/data.c": {
+      "bytes": 4731,
+      "sha256": "2899e0f28ea7af1dd8cc0dc72a4f9dfed32a33f2e21908505c70e050b43941a5"
+    },
+    "src/core/diskio.c": {
+      "bytes": 5855,
+      "sha256": "b4c66f3f51318e5da859ab591b78eedec9c81329f0347556b7cbfb0d439ffd23"
+    },
+    "include/kui/update.h": {
+      "bytes": 9892,
+      "sha256": "9c437a89d2008d1a5db74cd064ddb4724134c18c606c5ee415239a1257ed6862"
+    },
+    "include/kui/update_boot.h": {
+      "bytes": 4987,
+      "sha256": "de698a24752b95c088e78d0d83d9239dc6d8f72175d3368e578d6cf108312c50"
+    },
+    "include/kui/update_catalog.inc": {
+      "bytes": 1741,
+      "sha256": "c7b04e96aa7b78b66c0a3aa057994ab4a5c618a15749e770babfccfec16d6e53"
+    },
+    "include/kui/media.h": {
+      "bytes": 1610,
+      "sha256": "db7218afda33082b51f13a6b815f5835a0e259c3624cf893e2137f7cbadc3c2f"
+    }
+  },
+  "shared_current_files": {
+    "src/core/update_handoff.c": {
+      "bytes": 5136,
+      "sha256": "feccf54f48b3da43ac65721e96e5927b4717e98e96e81ee3ef026f42c0476b32"
+    },
+    "src/core/runtime_image.c": {
+      "bytes": 2793,
+      "sha256": "d5949dd721492c882f6d09c1b1bea9502ed2f92a63e58d8a11704da9d36b05e7"
+    },
+    "src/core/storage_policy.c": {
+      "bytes": 2070,
+      "sha256": "7a238a1b16d9148ef578dd69dbb1dcc98cde5720969765b9e135ed96a0d26e4a"
+    },
+    "src/core/hash.c": {
+      "bytes": 5891,
+      "sha256": "1dda19d3dc6a645396d24484cd8842c72bba811dce38f317660a2eeda7dc0d67"
+    },
+    "src/core/game_launch_settings.c": {
+      "bytes": 16470,
+      "sha256": "41048f35fcbd6645336db0d8c8738897d08206f2cc6e7b34998d4e4fa8dbf04e"
+    },
+    "src/core/game_ram_patches.c": {
+      "bytes": 5316,
+      "sha256": "8f29e465084a31c311276c2f898ab32cc5534e8d2383a058b9fb34763f11bd4b"
+    },
+    "src/apps/game_launch_settings_file.c": {
+      "bytes": 10305,
+      "sha256": "906521c3d71f86cf25bfcebe4044bf912a5c82f23cc24a291d46b188d4efe752"
+    },
+    "include/kui/update_software_file.h": {
+      "bytes": 851,
+      "sha256": "8d9b49b0a6241ab3d06dfc9403199d6777aaa0ec6b49ccb416e55ad44bd656d0"
+    },
+    "include/kui/update_handoff.h": {
+      "bytes": 2104,
+      "sha256": "60a21f6914a1fd103799c736e4d63acea8b42f08308e897780e097eaa2f13167"
+    },
+    "include/kui/update_legacy.inc": {
+      "bytes": 492,
+      "sha256": "370ac64b0465a31b4a9760092fe71a9b3dfd5fc60b8b48a3e896ea7cfb38a764"
+    },
+    "include/kui/runtime.h": {
+      "bytes": 1831,
+      "sha256": "e520dd8ef950134327fc1a22ae6be07fea2b175f17577d011ff9a2e42cde5db4"
+    },
+    "include/kui/apps.h": {
+      "bytes": 7720,
+      "sha256": "bc11151b8d736a261052bc92476d06c17dcb2f0fa1752e5952a16a052e43ce4b"
+    },
+    "include/kui/probe.h": {
+      "bytes": 499,
+      "sha256": "582a6eb24ac40ac7a9c258965271ee7f864e7bd7360d12b412d12a7c4b443010"
+    },
+    "include/kui/core.h": {
+      "bytes": 3611,
+      "sha256": "f1265c9f8f2732b67870bf60f0033ca218877f31951afc8445a11e71e7594aa9"
+    },
+    "include/kui/storage_policy.h": {
+      "bytes": 1169,
+      "sha256": "f9f5acb38ad9b2ca0af53fe8113404855a464e760d9d687ef57dd440e8b27123"
+    },
+    "include/kui/game_launch_settings.h": {
+      "bytes": 6810,
+      "sha256": "9c91afeadbd17f7c8db94225092bacc0530f062e40525ee932cc46c03f6ee0c0"
+    },
+    "include/kui/game_ram_patches.h": {
+      "bytes": 3410,
+      "sha256": "d1f8f9c3fad35b77806197e015ef1c1ea3d88d6ef4d9c2a9b8fa65fe79b50ca3"
+    },
+    "include/kui/zso.h": {
+      "bytes": 3614,
+      "sha256": "46abd22af5e295719c82e803c9d24ec156541cc11b0a3d6e9a6c6860a1bfcdc4"
+    }
+  }
+}

@@ -78,9 +78,9 @@ class ProducerV2Tests(unittest.TestCase):
         self.put("tosec.db", b"dbbytes")
         report = self.build(release=True, channel="stable")
         self.assertTrue(report["full"])
-        self.assertEqual(report["flags"], update.FULL)
+        self.assertEqual(report["flags"], update.FULL | update.REQUIRES_ENGINE3)
         self.assertTrue(report["consumer"]["full"])
-        self.assertEqual(self.output.read_bytes()[45], update.FULL)
+        self.assertEqual(self.output.read_bytes()[45], update.FULL | update.REQUIRES_ENGINE3)
         expected = set(update.inventory_v2(self.stage))
         self.assertEqual({e["path"] for e in report["members"]}, expected)
         self.assertTrue(all(e["policy"] in (update.SELF_KUI, update.RAW_SOFTWARE) for e in report["members"]))
@@ -114,10 +114,10 @@ class ProducerV2Tests(unittest.TestCase):
 
     def test_keep_and_remove_have_no_payload(self):
         self.reader()
-        report = self.build(keep=["apps/disc/retained.kui"], remove=["apps/games/absent.bin"])
+        report = self.build(keep=["apps/disc/retained.kui"], remove=["apps/games/absent-helper.bin"])
         directives = {e["path"]: e for e in report["members"] if e["policy"] in (2, 5)}
         self.assertEqual(directives["apps/disc/retained.kui"]["policy"], 2)
-        self.assertEqual(directives["apps/games/absent.bin"]["policy"], 5)
+        self.assertEqual(directives["apps/games/absent-helper.bin"]["policy"], 5)
         self.assertTrue(all(not e["bytes"] and e["sha256"] == "00" * 32 for e in directives.values()))
 
     def test_old_gui_is_refused_before_existing_output_changes(self):
@@ -166,7 +166,7 @@ class ProducerV2Tests(unittest.TestCase):
         self.put("runtime.kui", self.gui())
         self.build()
         data = bytearray(self.output.read_bytes())
-        data[45] = 2
+        data[45] = 4
         struct.pack_into("<I", data, 124, zlib.crc32(data[:124]))
         self.output.write_bytes(data)
         with self.assertRaisesRegex(ValueError, "Invalid v2 update header"):
@@ -251,12 +251,12 @@ class ProducerV2Tests(unittest.TestCase):
         with zipfile.ZipFile(old, "w") as archive:
             archive.writestr("KUI/runtime.kui", self.gui())
             archive.writestr("KUI/apps/games/test.kui", self.kui())
-            archive.writestr("KUI/apps/games/helper.bin", b"helper bytes")
+            archive.writestr("KUI/apps/games/test-helper.bin", b"helper bytes")
             archive.writestr("KUI/updates/stale.kup", b"ignored derived delivery")
             archive.writestr("source/unused.tar.gz", b"unrelated source archive")
         report = make_update(old, self.output)
         self.assertEqual({e["path"] for e in report["members"]},
-                         {"runtime.kui", "apps/games/test.kui", "apps/games/helper.bin"})
+                         {"runtime.kui", "apps/games/test.kui", "apps/games/test-helper.bin"})
         self.assertEqual(report["replaced_embedded_update_files"], ["KUI/updates/stale.kup"])
 
     def test_zip_with_only_one_v2_package_is_checked_and_copied(self):

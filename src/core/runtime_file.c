@@ -7,6 +7,8 @@
 
 extern bool kui_update_runtime_resolve(const char *,char *,size_t,
     struct kui_update_runtime_stream *) __attribute__((weak));
+extern enum kui_runtime_result kui_runtime_module_bundle_read(const char *,
+    struct kui_runtime_image *,kui_cancel_fn,bool *) __attribute__((weak));
 
 static bool resolve(const char *path,char *out,size_t capacity,struct kui_update_runtime_stream *stream) {
     if(stream)memset(stream,0,sizeof(*stream));
@@ -32,6 +34,19 @@ enum kui_runtime_result kui_runtime_read(const char *path,
     if(!resolve(path,resolved,sizeof(resolved),&stream))return result;
     if(stream.raw)return KUI_RUNTIME_HEADER;
     if(cancelled()) return KUI_RUNTIME_CANCELLED;
+    /* Some GUIs already carry checked immutable modules in their image.
+     * Preserve that provider for root/inherited reads. A declared bank
+     * replacement always uses its pinned stream, so an older embedded module
+     * cannot shadow the reader selected by an update. */
+    if(!stream.pinned && !strcmp(path,resolved) && kui_runtime_module_bundle_read) {
+        bool handled=false;
+        result=kui_runtime_module_bundle_read(path,out,cancelled,&handled);
+        if(handled) {
+            if(result==KUI_RUNTIME_OK)log("Embedded package %s (%" PRIu32 " bytes)",out->info.build,out->info.payload_bytes);
+            return result;
+        }
+        result=KUI_RUNTIME_IO;
+    }
     FRESULT r = f_open(&file, resolved, FA_READ);
     if(r != FR_OK) {
         log("Cannot open %s: FatFs=%u", path + 2, (unsigned)r);

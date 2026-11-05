@@ -24,7 +24,7 @@ def module(build="012345abcdef", gui=False, engine=True):
     if gui:
         payload += update.CAPABILITY + update.HANDOFF_HEADER + bytes(176)
         if engine:
-            payload += b"KUIENG2!" + struct.pack("<II", 2, 0xfffffffd)
+            payload += update.ENGINE
     return envelope(payload, len(payload), build)
 
 

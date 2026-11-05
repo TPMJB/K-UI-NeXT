@@ -32,12 +32,15 @@ MAX_ENTRIES = 256
 MAX_PAYLOAD = 128 * 1024 * 1024
 MAX_MEMBER = 4 * 1024 * 1024 + 64
 CAPABILITY = b"KUIBANK1" + struct.pack("<II", 1, 0xFFFFFFFE)
-ENGINE = b"KUIENG2!" + struct.pack("<II", 2, 0xFFFFFFFD)
+ENGINE_CURRENT = 3
+ENGINE_LEGACY = b"KUIENG2!" + struct.pack("<II", 2, 0xFFFFFFFD)
+ENGINE = b"KUIENG3!" + struct.pack("<II", 3, 0xFFFFFFFC)
 HANDOFF_HEADER = b"KUIHOF1\0" + struct.pack("<II", 1, 192)
 CHANNELS = {"stable": 0, "testing": 1}
 INHERIT_ROOT = 2
 SELF_KUI, RAW_SOFTWARE, REMOVE = 3, 4, 5
 FULL = 1
+REQUIRES_ENGINE3 = 2
 WITHDRAWN_BUILDS = frozenset(("28cadccf0e71", "33b04057db86"))
 RAW_INHERIT_PATHS = frozenset(("apps/games/smash-vc2-vmu-helper.bin",
     "apps/games/smash-swirl-vmu-helper.bin", "apps/games/vc2-vmu-helper.bin"))
@@ -292,7 +295,11 @@ def software_path_v2(path):
         return True
     if path == "apps/games/probe.dat":
         return True
-    if re.fullmatch(r"apps/(games|disc|music)/[a-z0-9][a-z0-9._-]*\.(kui|bin)", path):
+    # App folders mix immutable modules/helpers with generated sessions and
+    # mutable settings. A .bin extension alone never grants update ownership.
+    if re.fullmatch(r"apps/(games|disc|music)/[a-z0-9][a-z0-9._-]*\.kui", path):
+        return True
+    if re.fullmatch(r"apps/(games|disc|music)/[a-z0-9][a-z0-9._-]*-helper\.bin", path):
         return True
     if re.fullmatch(r"apps/music/[a-z0-9][a-z0-9._-]*\.(ogg|wav)", path):
         return True
@@ -303,7 +310,7 @@ def software_path_v2(path):
         re.fullmatch(r"[a-z0-9][a-z0-9._-]*", p) for p in parts)
 
 
-def member_info_v2(path, data):
+def member_info_v2(path, data, *, minimum_engine=ENGINE_CURRENT):
     if not software_path_v2(path):
         raise ValueError("Not an immutable software path: " + str(path))
     if len(data) > MAX_PAYLOAD:
@@ -322,8 +329,10 @@ def member_info_v2(path, data):
             payload = data[64:]
             if payload.count(CAPABILITY) != 1 or not handoff_empty(payload):
                 raise ValueError("GUI has invalid bank or handoff capability: " + path)
-            if payload.count(ENGINE) != 1:
-                raise ValueError("GUI needs the current updater engine (v2); build the GUI from current Main")
+            current, legacy = payload.count(ENGINE), payload.count(ENGINE_LEGACY)
+            level = ENGINE_CURRENT if current == 1 and legacy == 0 else 2 if legacy == 1 and current == 0 else 0
+            if level < minimum_engine:
+                raise ValueError("GUI needs the current updater engine3; build the GUI from current Main")
     return {"path": path, "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest(),
             "policy": policy, "build": own_build}
 
@@ -340,7 +349,7 @@ def verify_v2(path):
                 not 1 <= count <= MAX_ENTRIES or manifest_bytes != count * V2_ENTRY_BYTES or
                 total > MAX_PAYLOAD or channel not in CHANNELS.values() or
                 not re.fullmatch(r"[0-9a-f]{12}", package_id) or
-                flags & ~FULL or any(header[46:64]) or any(header[96:124]) or
+                flags & ~(FULL | REQUIRES_ENGINE3) or any(header[46:64]) or any(header[96:124]) or
                 zlib.crc32(header[:124]) != struct.unpack_from("<I", header, 124)[0]):
             raise ValueError("Invalid v2 update header")
         manifest = read_exact(stream, manifest_bytes)
@@ -389,7 +398,8 @@ def verify_v2(path):
             if entry["policy"] in (INHERIT_ROOT, REMOVE):
                 continue
             if entry["policy"] == SELF_KUI:
-                actual = member_info_v2(entry["path"], read_exact(stream, entry["bytes"]))
+                actual = member_info_v2(entry["path"], read_exact(stream, entry["bytes"]),
+                                        minimum_engine=ENGINE_CURRENT if flags & REQUIRES_ENGINE3 else 2)
                 if actual != entry:
                     raise ValueError("Member metadata/checksum mismatch: " + entry["path"])
             else:
@@ -403,7 +413,7 @@ def verify_v2(path):
         if stream.read(1):
             raise ValueError("Trailing update package data")
     return {"format": 2, "build": package_id, "channel": next(k for k, v in CHANNELS.items() if v == channel),
-            "engine_minimum": 2, "flags": flags, "full": bool(flags & FULL),
+            "engine_minimum": ENGINE_CURRENT if flags & REQUIRES_ENGINE3 else 2, "flags": flags, "full": bool(flags & FULL),
             "manifest_sha256": header[64:96].hex(), "payload_bytes": total,
             "file_bytes": HEADER_BYTES + manifest_bytes + total, "members": entries}
 
@@ -511,7 +521,7 @@ def build_package_v2(root, output, channel="testing", *, remove=(), keep=(), rel
     if channel not in CHANNELS or not isinstance(release, bool) or not isinstance(full, bool):
         raise ValueError("Expected stable/testing channel and explicit release/full booleans")
     full = full or release
-    flags = FULL if full else 0
+    flags = REQUIRES_ENGINE3 | (FULL if full else 0)
     if full and keep:
         raise ValueError("A full software package cannot keep unspecified prior-version software")
     root, output = Path(root).absolute(), Path(output).absolute()

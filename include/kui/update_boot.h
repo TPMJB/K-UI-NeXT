@@ -57,6 +57,9 @@ void kui_update_boot_reset(void);
  * level only increases for the lifetime of this GUI; legacy host fixtures
  * that do not opt in preserve their original protocol admission behavior. */
 void kui_update_boot_require_engine(unsigned level);
+/* Production floor requested by the running GUI. Installer/restore checks
+ * must not accept a weaker physical root after an external manual copy. */
+unsigned kui_update_boot_engine_minimum(void);
 /* Effective running selection for constructing a subsequent partial update.
  * Returns 0 before the production context opt-in, -1 when loads are blocked,
  * or +1 with the bank ID + receipt SHA (empty/zero means retained root). A

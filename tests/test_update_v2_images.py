@@ -22,7 +22,7 @@ def main():
         run(*flags, "tests/update_v2_image.c", "src/core/update.c", "src/core/update_file.c",
             "src/core/update_handoff.c", "src/core/runtime_image.c", "src/core/hash.c", "src/core/data.c",
             "src/core/diskio.c", str(source / "ff.c"), str(source / "ffunicode.c"),
-            "-Wl,--wrap=f_open,--wrap=f_getfree", "-o", str(binary))
+            "-Wl,--wrap=f_open,--wrap=f_getfree,--wrap=f_write", "-o", str(binary))
         formatter = private_formatter(base)
         for kind in ("fat32", "exfat"):
             image = base / (kind + ".img")

@@ -2583,7 +2583,7 @@ static bool update_storage_same(const struct kui_shell_update_storage *a,
 }
 static bool update_activation_current(struct kui_update_activation *out) {
     memset(out,0,sizeof(*out));unsigned slot=0;
-    enum kui_update_result r=kui_update_activation_latest(out,&slot,kui_cancelled);
+    enum kui_update_result r=kui_update_activation_for_update(out,&slot,kui_cancelled);
     return r==KUI_UPDATE_OK || r==KUI_UPDATE_NOT_FOUND;
 }
 static bool update_activation_same(const struct kui_update_activation *a,const struct kui_update_activation *b) {
@@ -2644,9 +2644,18 @@ static void update_work(const struct kui_shell_update_request *request,struct ku
     kui_sd_set_params(KUI_STORAGE_AUTO,true);
     bool opened=kui_games_storage_open(kui_log)==KUI_GAMES_STORAGE_OK;
     struct kui_update_activation activation={0};struct kui_shell_update_storage storage={0};
-    bool ok=opened && update_activation_current(&activation) && update_storage_read(&storage);
-    if(!ok)update_view_error(out,"Cannot verify update storage and selection; refresh after checking the SD card.");
-    if(ok) {
+    bool storage_ok=opened && update_storage_read(&storage);unsigned activation_slot=0u;
+    enum kui_update_result selection_result=storage_ok?
+        kui_update_activation_for_update(&activation,&activation_slot,kui_cancelled):KUI_UPDATE_IO;
+    bool selection_ok=selection_result==KUI_UPDATE_OK || selection_result==KUI_UPDATE_NOT_FOUND;
+    /* Browsing is read-only and remains available even when saved selection
+     * cannot be recovered safely. Only review/publication needs that pin. */
+    bool ok=storage_ok && (selection_ok || request->op==KUI_SHELL_UPDATE_LIST);
+    if(!ok)update_view_error(out,!storage_ok?"Cannot verify the update SD card; refresh after checking storage.":
+        selection_result==KUI_UPDATE_PROTECTED?"Saved bank selections conflict; use the bootstrap repair ZIP.":
+        selection_result==KUI_UPDATE_ENGINE?"Root updater needs repair; use the bootstrap repair ZIP.":
+        "Cannot read the saved update selection; check the SD card before installing.");
+    if(storage_ok && selection_ok) {
         out->selection_known=true;
         memcpy(out->selected,activation.selected,sizeof(out->selected));
         memcpy(out->previous,activation.previous,sizeof(out->previous));
@@ -2713,8 +2722,7 @@ static void update_work(const struct kui_shell_update_request *request,struct ku
                 const char *target=request->op==KUI_SHELL_UPDATE_BASELINE?"":activation.previous;
                 snprintf(out->reviewed.target,sizeof(out->reviewed.target),"%s",target);
                 out->baseline=!target[0];
-                if(target[0])result=kui_update_bank_verify(target,package,&out->status,kui_log,kui_cancelled,app_progress);
-                else {memset(package,0,sizeof(*package));result=KUI_UPDATE_OK;}
+                result=kui_update_target_verify(target,package,&out->status,kui_log,kui_cancelled,app_progress);
             }
             if(result!=KUI_UPDATE_OK) {
                 if(!out->status.message[0])snprintf(out->status.message,sizeof(out->status.message),"Update check: %s",kui_update_result_name(result));
@@ -4793,14 +4801,8 @@ static void update_boot_start(void) {
     for(unsigned i=0;i<KUI_UPDATE_HANDOFF_BYTES;i++)handoff.wire[i]=kui_update_ram_handoff[i];
     for(unsigned i=16u;i<KUI_UPDATE_HANDOFF_BYTES;i++)kui_update_ram_handoff[i]=0;
     bool baseline=(controller_buttons()&CONT_B)!=0;
-    /* Draw a bounded RAM-only status before a slow selected-card read. No
-     * music, browser preload, app worker or storage callback exists yet. */
-    vid_clear(8,15,35);
-    kui_shell_font_draw(vram_s,40,138,0xffff,"K-UI / Starting",true);
-    kui_shell_font_draw(vram_s,40,190,0x07ff,baseline?
-        "B held: using the original baseline.":"Checking the selected version on the boot SD card...",false);
-    kui_shell_font_draw(vram_s,40,232,0xbdf7,"The installed software bank is checked before use.",false);
-    vid_waitvbl();vid_flip(-1);
+    /* Resolve software before app workers start, without a separate startup
+     * status page. The normal launcher splash follows this checked dispatch. */
     kui_update_boot_block();
     /* The CD/previous GUI already pinned the boot device. Opening that exact
      * device avoids AUTO's extra probe mount/unmount before our own mount. */
@@ -4846,7 +4848,7 @@ static void update_boot_start(void) {
 int main(void) {
     kui_storage_boot_begin();
 #ifdef KUI_SD_RUNTIME
-    if(kui_update_bank_capability[8]!=1u || kui_update_engine_capability[8]!=2u) return 1;
+    if(kui_update_bank_capability[8]!=1u || kui_update_engine_capability[8]!=KUI_UPDATE_ENGINE_CURRENT) return 1;
 #endif
     ui_thread = thd_get_current();
     vid_set_mode(DM_640x480 | DM_MULTIBUFFER, PM_RGB565);
@@ -4874,7 +4876,7 @@ int main(void) {
 #endif
     kui_log("Use a spare test card for write tests. No formatting; existing files preserved.");
 #ifdef KUI_SD_RUNTIME
-    kui_update_boot_require_engine(2u);
+    kui_update_boot_require_engine(KUI_UPDATE_ENGINE_CURRENT);
     update_boot_start();
     kui_system_settings_default(&system_current);system_pending=system_current;
     kui_music_init(kui_log);kui_disc_identity_init(&disc_identity);

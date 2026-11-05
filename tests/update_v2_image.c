@@ -13,6 +13,8 @@
 static uint8_t *disk;static size_t disk_bytes;static FATFS fs;static bool mounted,active,low_space;
 static unsigned checks,writes,syncs;static int fail_write=-1,fail_sync=-1,cancel_after=-1;
 static int effective_mode;static char effective_bank[13];static uint8_t effective_hash[32];
+static unsigned boot_minimum;static bool activation_io,tear_activation;static char read_failure[160];
+unsigned kui_update_boot_engine_minimum(void) {return boot_minimum;}
 int kui_update_effective_snapshot(char bank[13],uint8_t hash[32]) {
     if(effective_mode>0) {memcpy(bank,effective_bank,13u);memcpy(hash,effective_hash,32u);}
     return effective_mode;
@@ -38,14 +40,24 @@ static bool cancel(void) {return cancel_after>=0 && writes>=(unsigned)cancel_aft
 FRESULT __real_f_open(FIL *,const TCHAR *,BYTE);
 FRESULT __wrap_f_open(FIL *file,const TCHAR *path,BYTE flags) {
     if(active && (flags&FA_WRITE))CHECK(!strncmp(path,KUI_UPDATE_SYSTEM "/",sizeof(KUI_UPDATE_SYSTEM)));
+    if(active && activation_io && (strstr(path,"/active0.bin") || strstr(path,"/active1.bin")))return FR_DISK_ERR;
+    if(active && flags==FA_READ && read_failure[0] && !strcmp(path,read_failure))return FR_DISK_ERR;
     return __real_f_open(file,path,flags);
+}
+FRESULT __real_f_write(FIL *,const void *,UINT,UINT *);
+FRESULT __wrap_f_write(FIL *file,const void *data,UINT bytes,UINT *put) {
+    if(active && tear_activation && bytes==128u) {
+        tear_activation=false;FRESULT result=__real_f_write(file,data,64u,put);
+        return result==FR_OK?FR_DISK_ERR:result;
+    }
+    return __real_f_write(file,data,bytes,put);
 }
 FRESULT __real_f_getfree(const TCHAR *,DWORD *,FATFS **);
 FRESULT __wrap_f_getfree(const TCHAR *path,DWORD *clusters,FATFS **volume) {
     FRESULT r=__real_f_getfree(path,clusters,volume);if(active && low_space && r==FR_OK)*clusters=0u;return r;
 }
 static void clear_faults(void) {
-    active=low_space=false;fail_write=fail_sync=cancel_after=-1;writes=syncs=0u;effective_mode=0;
+    active=low_space=activation_io=tear_activation=false;fail_write=fail_sync=cancel_after=-1;writes=syncs=0u;effective_mode=0;read_failure[0]=0;
     memset(effective_bank,0,sizeof(effective_bank));memset(effective_hash,0,sizeof(effective_hash));
 }
 static void mount_volume(void) {kui_media_set(&media);CHECK(f_mount(&fs,"0:",1)==FR_OK);mounted=true;}
@@ -85,6 +97,11 @@ static uint8_t *runtime(const char *build,unsigned variant,bool gui,bool engine)
     uf_put32(file+16u,BODY);uf_put32(file+20u,KUI_RUNTIME_ADDRESS);uf_put32(file+24u,KUI_RUNTIME_ADDRESS);
     uf_put32(file+28u,BODY);uf_put32(file+32u,kui_crc32(0u,body,BODY));memcpy(file+40u,build,12u);
     uf_put32(file+60u,kui_crc32(0u,file,60u));return file;
+}
+static void runtime_engine(uint8_t *file,unsigned level) {
+    uint8_t *marker=file+64u+32760u;memcpy(marker,level==3u?"KUIENG3!":"KUIENG2!",8u);
+    uf_put32(marker+8u,level);uf_put32(marker+12u,~(uint32_t)level);
+    uf_put32(file+32u,kui_crc32(0u,file+64u,BODY));uf_put32(file+60u,kui_crc32(0u,file,60u));
 }
 struct fixture {struct kui_update_package package;const uint8_t *files[KUI_UPDATE_MAX_ENTRIES];uint8_t *wire;size_t bytes;};
 static void add(struct fixture *fixture,const char *path,uint8_t policy,const char *build,const void *data,size_t bytes) {
@@ -141,6 +158,208 @@ static void unchanged(const uint8_t *root,const uint8_t *root_module,const uint8
 static void old_or_new(const char *old,const char *new_id) {
     struct kui_update_activation a=latest();CHECK(!strcmp(a.selected,old) || !strcmp(a.selected,new_id));verify(a.selected);
 }
+static void full_repair_cases(const uint8_t *saved,const struct fixture *full,const struct kui_update_pin *pin,
+    const char *old,const uint8_t *root,const uint8_t *root_module,const uint8_t *user,size_t user_bytes,
+    uint8_t *raw,size_t raw_bytes) {
+    reset(saved);clear_faults();snprintf(read_failure,sizeof(read_failure),KUI_UPDATE_SYSTEM "/%s/package.bin",old);
+    CHECK(install(FULL,pin)==KUI_UPDATE_IO && !writes);
+    reset(saved);struct kui_update_package expected;
+    CHECK(kui_update_bank_receipt_read(old,&expected,cancel)==KUI_UPDATE_OK);
+    char path[160];CHECK(kui_update_bank_path(old,"apps/games/test-helper.bin",path,sizeof(path)));
+    raw[500]^=1u;file_write(path,raw,raw_bytes);uint8_t *damaged=malloc(disk_bytes);CHECK(damaged);memcpy(damaged,disk,disk_bytes);raw[500]^=1u;
+    uint64_t needed=0u,available=0u;clear_faults();active=true;
+    CHECK(kui_update_plan_space(&full->package,&needed,&available,cancel)==KUI_UPDATE_OK && needed>0u && !writes);active=false;
+    CHECK(install(FULL,pin)==KUI_UPDATE_OK);unsigned repair_writes=writes,repair_syncs=syncs;
+    char repaired[13];memcpy(repaired,latest().selected,13u);CHECK(strcmp(repaired,old));verify(repaired);
+    bank_equal(repaired,"apps/games/test-helper.bin",raw,raw_bytes);
+    clear_faults();CHECK(install(FULL,pin)==KUI_UPDATE_OK && !writes && !strcmp(latest().selected,repaired));
+    for(unsigned kind=0;kind<3u;kind++) {
+        unsigned limit=kind==1u?repair_syncs:repair_writes;
+        for(unsigned cut=0;cut<=limit;cut++) {
+            reset(damaged);if(kind==0u)fail_write=(int)cut;else if(kind==1u)fail_sync=(int)cut;else cancel_after=(int)cut;
+            enum kui_update_result result=install(FULL,pin);CHECK(result==KUI_UPDATE_OK || result==KUI_UPDATE_IO || result==KUI_UPDATE_CANCELLED);
+            clear_faults();unmount_volume();mount_volume();struct kui_update_activation a=latest();
+            CHECK(!strcmp(a.selected,old) || !strcmp(a.selected,repaired));if(!strcmp(a.selected,repaired))verify(repaired);
+            raw[500]^=1u;equal(path,raw,raw_bytes);raw[500]^=1u;unchanged(root,root_module,user,user_bytes);
+            CHECK(install(FULL,pin)==KUI_UPDATE_OK);struct kui_update_activation final=latest();CHECK(strcmp(final.selected,old));verify(final.selected);
+            struct kui_update_package installed;CHECK(kui_update_bank_receipt_read(final.selected,&installed,cancel)==KUI_UPDATE_OK);
+            CHECK(installed.flags==expected.flags && !memcmp(installed.manifest_sha256,expected.manifest_sha256,32u));
+            clear_faults();CHECK(install(FULL,pin)==KUI_UPDATE_OK && !writes && !strcmp(latest().selected,final.selected));
+        }
+    }
+    reset(saved);snprintf(path,sizeof(path),KUI_UPDATE_SYSTEM "/%s/package.bin",old);file_write(path,"broken",6u);
+    clear_faults();CHECK(install(FULL,pin)==KUI_UPDATE_OK && !strcmp(latest().selected,repaired));equal(path,"broken",6u);verify(repaired);
+    clear_faults();CHECK(install(FULL,pin)==KUI_UPDATE_OK && !writes);
+    /* A formerly complete alternate remains immutable even after it stops
+     * being selected/previous and its receipt is later damaged. */
+    struct kui_app_status root_status;CHECK(kui_update_select("",NULL,&root_status,logger,cancel,NULL)==KUI_UPDATE_OK);
+    struct kui_update_activation root_choice={.sequence=50u};uint8_t root_wire[128];CHECK(kui_update_activation_encode(&root_choice,root_wire));
+    file_write(KUI_UPDATE_ACTIVE0,root_wire,sizeof(root_wire));root_choice.sequence=49u;CHECK(kui_update_activation_encode(&root_choice,root_wire));
+    file_write(KUI_UPDATE_ACTIVE1,root_wire,sizeof(root_wire));char alternate_receipt[160];
+    snprintf(alternate_receipt,sizeof(alternate_receipt),KUI_UPDATE_SYSTEM "/%s/package.bin",repaired);file_write(alternate_receipt,"bad alternate",13u);
+    clear_faults();effective_mode=1;CHECK(install(FULL,pin)==KUI_UPDATE_OK && strcmp(latest().selected,repaired));
+    equal(alternate_receipt,"bad alternate",13u);equal(path,"broken",6u);verify(latest().selected);
+    printf("PASS immutable FULL repair: %u write cuts, %u sync cuts, %u cancellation cuts; corrupt original retained, alternate reused\n",repair_writes+1u,repair_syncs+1u,repair_writes+1u);
+    free(damaged);
+}
+static void activation_recovery_cases(const uint8_t *saved,const struct fixture *full,const struct kui_update_pin *pin,
+    const char *bank,const uint8_t *root,const uint8_t *root_module,const uint8_t *user,size_t user_bytes) {
+    reset(saved);file_write(KUI_UPDATE_ACTIVE0,"bad",3u);file_write(KUI_UPDATE_ACTIVE1,"bad",3u);
+    uint8_t *damaged=malloc(disk_bytes);CHECK(damaged);memcpy(damaged,disk,disk_bytes);
+    struct kui_update_activation a;unsigned slot=0u;clear_faults();active=true;
+    CHECK(kui_update_activation_for_update(&a,&slot,cancel)==KUI_UPDATE_FORMAT && !writes);
+    effective_mode=-1;CHECK(kui_update_activation_for_update(&a,&slot,cancel)==KUI_UPDATE_FORMAT && !writes);
+    effective_mode=1;strcpy(effective_bank,bank);CHECK(kui_update_activation_for_update(&a,&slot,cancel)==KUI_UPDATE_FORMAT && !writes);effective_bank[0]=0;
+    effective_mode=1;activation_io=true;CHECK(kui_update_activation_for_update(&a,&slot,cancel)==KUI_UPDATE_IO && !writes);
+    activation_io=false;CHECK(kui_update_activation_for_update(&a,&slot,cancel)==KUI_UPDATE_OK && !a.sequence && !a.selected[0] && !writes);
+    uint64_t needed=0u,available=0u;CHECK(kui_update_plan_space(&full->package,&needed,&available,cancel)==KUI_UPDATE_OK && !writes);active=false;
+    CHECK(install(FULL,pin)==KUI_UPDATE_OK && !strcmp(latest().selected,bank));unsigned recovery_writes=writes,recovery_syncs=syncs;
+    for(unsigned kind=0;kind<3u;kind++) {
+        unsigned limit=kind==1u?recovery_syncs:recovery_writes;
+        for(unsigned cut=0;cut<=limit;cut++) {
+            reset(damaged);effective_mode=1;
+            if(kind==0u)fail_write=(int)cut;else if(kind==1u)fail_sync=(int)cut;else cancel_after=(int)cut;
+            enum kui_update_result result=install(FULL,pin);CHECK(result==KUI_UPDATE_OK || result==KUI_UPDATE_IO || result==KUI_UPDATE_CANCELLED);
+            clear_faults();unmount_volume();mount_volume();effective_mode=1;
+            CHECK(kui_update_activation_for_update(&a,&slot,cancel)==KUI_UPDATE_OK);
+            CHECK(!a.selected[0] || !strcmp(a.selected,bank));unchanged(root,root_module,user,user_bytes);
+            CHECK(install(FULL,pin)==KUI_UPDATE_OK && !strcmp(latest().selected,bank));verify(bank);
+        }
+    }
+    reset(damaged);effective_mode=1;struct kui_app_status status;active=true;
+    CHECK(kui_update_select("",NULL,&status,logger,cancel,NULL)==KUI_UPDATE_OK);active=false;
+    CHECK(latest().sequence==1u && !latest().selected[0]);
+    /* CRC-valid conflicts also recover ROOT, above both retained epochs. */
+    reset(saved);struct kui_update_activation conflict={.sequence=90u};strcpy(conflict.selected,bank);
+    memcpy(conflict.manifest_sha256,full->package.manifest_sha256,32u);uint8_t wire[128];CHECK(kui_update_activation_encode(&conflict,wire));
+    file_write(KUI_UPDATE_ACTIVE0,wire,sizeof(wire));memset(conflict.selected,0,sizeof(conflict.selected));memset(conflict.manifest_sha256,0,32u);
+    CHECK(kui_update_activation_encode(&conflict,wire));file_write(KUI_UPDATE_ACTIVE1,wire,sizeof(wire));clear_faults();effective_mode=1;active=true;
+    CHECK(kui_update_activation_for_update(&a,&slot,cancel)==KUI_UPDATE_OK && a.sequence==90u && !a.selected[0] && !writes);
+    CHECK(kui_update_select("",NULL,&status,logger,cancel,NULL)==KUI_UPDATE_OK);active=false;
+    CHECK(latest().sequence==91u && !latest().selected[0]);
+    printf("PASS checked ROOT activation recovery: %u write cuts, %u sync cuts, %u cancellation cuts; read-only plan, no IO bypass, conflict epoch retained\n",recovery_writes+1u,recovery_syncs+1u,recovery_writes+1u);
+    free(damaged);
+}
+static void fixture_bank(const struct fixture *fixture) {
+    char path[160];
+    for(uint32_t i=0;i<fixture->package.count;i++)if(fixture->package.entries[i].bytes) {
+        CHECK(kui_update_bank_path(fixture->package.build,fixture->package.entries[i].path,path,sizeof(path)));
+        file_write(path,fixture->files[i],(size_t)fixture->package.entries[i].bytes);
+    }
+    snprintf(path,sizeof(path),KUI_UPDATE_SYSTEM "/%s/package.bin",fixture->package.build);
+    file_write(path,fixture->wire,128u+fixture->package.count*kui_update_entry_bytes(&fixture->package));
+}
+static void empty_directory(const char *path) {
+    DIR directory;FILINFO info;CHECK(f_opendir(&directory,path)==FR_OK);
+    for(;;) {
+        CHECK(f_readdir(&directory,&info)==FR_OK);if(!info.fname[0])break;
+        char child[192];CHECK(snprintf(child,sizeof(child),"%s/%s",path,info.fname)<(int)sizeof(child));
+        if(info.fattrib&AM_DIR)empty_directory(child);
+        CHECK(f_unlink(child)==FR_OK);
+    }
+    CHECK(f_closedir(&directory)==FR_OK);
+}
+static void conflict_recovery_cases(const uint8_t *saved,const struct fixture *full,const struct kui_update_pin *pin,const char *bank) {
+    uint8_t *conflicted=malloc(disk_bytes);CHECK(conflicted);uint8_t root_wire[128],bank_wire[128];
+    struct kui_update_activation root={.sequence=90u},choice=root;strcpy(choice.selected,bank);
+    memcpy(choice.manifest_sha256,full->package.manifest_sha256,32u);
+    CHECK(kui_update_activation_encode(&root,root_wire) && kui_update_activation_encode(&choice,bank_wire));
+    for(unsigned root_slot=0;root_slot<2u;root_slot++) {
+        const char *root_path=root_slot?KUI_UPDATE_ACTIVE1:KUI_UPDATE_ACTIVE0;
+        reset(saved);file_write(root_path,root_wire,sizeof(root_wire));
+        file_write(root_slot?KUI_UPDATE_ACTIVE0:KUI_UPDATE_ACTIVE1,bank_wire,sizeof(bank_wire));memcpy(conflicted,disk,disk_bytes);
+        clear_faults();effective_mode=1;struct kui_update_activation review;unsigned slot=0u;active=true;
+        CHECK(kui_update_activation_for_update(&review,&slot,cancel)==KUI_UPDATE_OK && slot==root_slot && review.sequence==90u && !writes);active=false;
+        CHECK(install(FULL,pin)==KUI_UPDATE_OK && latest().sequence==91u);unsigned full_writes=writes,full_syncs=syncs;
+        for(unsigned kind=0;kind<3u;kind++) {
+            unsigned limit=kind==1u?full_syncs:full_writes;
+            for(unsigned cut=0;cut<=limit;cut++) {
+                reset(conflicted);effective_mode=1;
+                if(kind==0u)fail_write=(int)cut;else if(kind==1u)fail_sync=(int)cut;else cancel_after=(int)cut;
+                enum kui_update_result result=install(FULL,pin);CHECK(result==KUI_UPDATE_OK || result==KUI_UPDATE_IO || result==KUI_UPDATE_CANCELLED);
+                clear_faults();unmount_volume();mount_volume();effective_mode=1;equal(root_path,root_wire,sizeof(root_wire));
+                enum kui_update_result selected=kui_update_activation_latest(&review,&slot,cancel);
+                CHECK(selected==KUI_UPDATE_FORMAT || (selected==KUI_UPDATE_OK &&
+                    (!review.selected[0] || (review.sequence==91u && !strcmp(review.selected,bank)))));
+                CHECK(install(FULL,pin)==KUI_UPDATE_OK && !strcmp(latest().selected,bank));equal(root_path,root_wire,sizeof(root_wire));
+            }
+        }
+        reset(conflicted);effective_mode=1;tear_activation=true;
+        CHECK(install(FULL,pin)==KUI_UPDATE_IO);clear_faults();unmount_volume();mount_volume();effective_mode=1;
+        CHECK(kui_update_activation_latest(&review,&slot,cancel)==KUI_UPDATE_OK && !review.selected[0] && review.sequence==90u);
+        equal(root_path,root_wire,sizeof(root_wire));CHECK(install(FULL,pin)==KUI_UPDATE_OK && latest().sequence==91u);
+    }
+    /* Two conflicting BANK choices have no durable ROOT anchor. Refuse them
+     * without altering either record rather than unmasking one during a cut. */
+    reset(saved);file_write(KUI_UPDATE_ACTIVE0,bank_wire,sizeof(bank_wire));strcpy(choice.selected,"abababababab");
+    CHECK(kui_update_activation_encode(&choice,root_wire));file_write(KUI_UPDATE_ACTIVE1,root_wire,sizeof(root_wire));clear_faults();effective_mode=1;
+    struct kui_update_activation review;unsigned slot=0u;active=true;
+    CHECK(kui_update_activation_for_update(&review,&slot,cancel)==KUI_UPDATE_PROTECTED && !writes);active=false;
+    CHECK(install(FULL,pin)==KUI_UPDATE_PROTECTED && !writes);equal(KUI_UPDATE_ACTIVE0,bank_wire,sizeof(bank_wire));equal(KUI_UPDATE_ACTIVE1,root_wire,sizeof(root_wire));
+    /* A bank mentioned only as PREVIOUS in the other valid conflicting slot
+     * must remain protected, even with an empty directory/missing receipt. */
+    reset(saved);char original[160];snprintf(original,sizeof(original),KUI_UPDATE_SYSTEM "/%s",bank);empty_directory(original);
+    strcpy(choice.previous,bank);CHECK(kui_update_activation_encode(&choice,bank_wire));file_write(KUI_UPDATE_ACTIVE0,bank_wire,sizeof(bank_wire));
+    CHECK(kui_update_activation_encode(&root,root_wire));file_write(KUI_UPDATE_ACTIVE1,root_wire,sizeof(root_wire));clear_faults();effective_mode=1;
+    CHECK(install(FULL,pin)==KUI_UPDATE_OK && strcmp(latest().selected,bank));
+    DIR untouched;FILINFO info;CHECK(f_opendir(&untouched,original)==FR_OK && f_readdir(&untouched,&info)==FR_OK && !info.fname[0] && f_closedir(&untouched)==FR_OK);
+    equal(KUI_UPDATE_ACTIVE1,root_wire,sizeof(root_wire));verify(latest().selected);free(conflicted);
+    puts("PASS conflict recovery: ROOT slot retained through write/sync/cancel and torn-record cuts, both-BANK conflict refused, union of valid references protected");
+}
+static void restore_engine_cases(const uint8_t *saved,const struct fixture *full,const struct kui_update_pin *full_pin,
+    const struct fixture *legacy,const struct kui_update_pin *delta_pin,const char *old,const uint8_t *root_old) {
+    struct kui_update_package *package=malloc(sizeof(*package));CHECK(package);struct kui_app_status status;
+    reset(saved);fixture_bank(legacy);clear_faults();active=true;
+    CHECK(kui_update_bank_verify(legacy->package.build,package,&status,logger,cancel,NULL)==KUI_UPDATE_OK);
+    CHECK(kui_update_target_verify(legacy->package.build,package,&status,logger,cancel,NULL)==KUI_UPDATE_ENGINE);
+    CHECK(kui_update_select(legacy->package.build,legacy->package.manifest_sha256,&status,logger,cancel,NULL)==KUI_UPDATE_ENGINE && !writes);active=false;
+    struct kui_update_activation selected={.sequence=20u};strcpy(selected.selected,old);strcpy(selected.previous,legacy->package.build);
+    memcpy(selected.manifest_sha256,full->package.manifest_sha256,32u);uint8_t wire[128];CHECK(kui_update_activation_encode(&selected,wire));
+    file_write(KUI_UPDATE_ACTIVE0,wire,sizeof(wire));clear_faults();active=true;
+    CHECK(kui_update_rollback(&status,logger,cancel,NULL)==KUI_UPDATE_ENGINE && !writes);active=false;
+    uint8_t *root3=runtime("999999999999",8u,true,true),*gui3=runtime("777777777777",9u,true,true);
+    runtime_engine(root3,3u);runtime_engine(gui3,3u);
+    struct fixture current={0},legacy3={0};
+    add(&current,"runtime.kui",KUI_UPDATE_SELF_KUI,"777777777777",gui3,64u+BODY);
+    current.package.flags=KUI_UPDATE_FULL|KUI_UPDATE_REQUIRES_ENGINE3;seal(&current,"eeee77777777",2u);
+    struct fixture bridge=current;bridge.wire=NULL;bridge.package.flags=KUI_UPDATE_FULL;seal(&bridge,"eeee88888888",2u);
+    add(&legacy3,"runtime.kui",KUI_UPDATE_REPLACE,NULL,gui3,64u+BODY);seal(&legacy3,"777777777777",1u);
+    reset(saved);file_write(BAD,current.wire,current.bytes);CHECK(inspect(BAD,package)==KUI_UPDATE_OK);
+    struct kui_update_pin current_pin;kui_update_package_pin(package,&current_pin);clear_faults();
+    CHECK(install(BAD,&current_pin)==KUI_UPDATE_ENGINE && !writes);
+    boot_minimum=3u;clear_faults();CHECK(install(FULL,full_pin)==KUI_UPDATE_ENGINE && !writes);boot_minimum=0u;
+    file_write(BAD,bridge.wire,bridge.bytes);boot_minimum=3u;CHECK(inspect(BAD,package)==KUI_UPDATE_OK);
+    struct kui_update_pin bridge_pin;kui_update_package_pin(package,&bridge_pin);clear_faults();
+    uint64_t needed=0u,available=0u;active=true;
+    CHECK(kui_update_plan_space(&bridge.package,&needed,&available,cancel)==KUI_UPDATE_ENGINE && !writes);active=false;
+    CHECK(install(BAD,&bridge_pin)==KUI_UPDATE_ENGINE && !writes);file_write(BAD,current.wire,current.bytes);
+    file_write(KUI_RUNTIME_PATH,root3,64u+BODY);boot_minimum=3u;clear_faults();
+    CHECK(inspect(FULL,package)==KUI_UPDATE_ENGINE && !writes);
+    CHECK(install(FULL,full_pin)==KUI_UPDATE_ENGINE && !writes);
+    active=true;CHECK(kui_update_target_verify(old,package,&status,logger,cancel,NULL)==KUI_UPDATE_ENGINE && !writes);active=false;
+    fixture_bank(&legacy3);clear_faults();active=true;
+    CHECK(kui_update_bank_verify(legacy3.package.build,package,&status,logger,cancel,NULL)==KUI_UPDATE_OK);
+    CHECK(kui_update_target_verify(legacy3.package.build,package,&status,logger,cancel,NULL)==KUI_UPDATE_ENGINE && !writes);active=false;
+    fixture_bank(&bridge);clear_faults();active=true;
+    CHECK(kui_update_bank_verify(bridge.package.build,package,&status,logger,cancel,NULL)==KUI_UPDATE_OK);
+    CHECK(kui_update_target_verify(bridge.package.build,package,&status,logger,cancel,NULL)==KUI_UPDATE_ENGINE && !writes);active=false;
+    clear_faults();CHECK(install(BAD,&current_pin)==KUI_UPDATE_OK);char full3[13];memcpy(full3,latest().selected,13u);
+    CHECK(kui_update_bank_receipt_read(full3,package,cancel)==KUI_UPDATE_OK && package->flags==(KUI_UPDATE_FULL|KUI_UPDATE_REQUIRES_ENGINE3));
+    clear_faults();active=true;CHECK(kui_update_target_verify(full3,package,&status,logger,cancel,NULL)==KUI_UPDATE_OK && !writes);active=false;
+    clear_faults();effective_mode=1;CHECK(install(READER,delta_pin)==KUI_UPDATE_OK);
+    CHECK(kui_update_bank_receipt_read(latest().selected,package,cancel)==KUI_UPDATE_OK && package->flags==KUI_UPDATE_REQUIRES_ENGINE3);
+    bank_equal(latest().selected,"runtime.kui",root3,64u+BODY);
+    file_write(BAD,legacy3.wire,legacy3.bytes);CHECK(inspect(BAD,package)==KUI_UPDATE_OK);
+    struct kui_update_pin legacy_pin;kui_update_package_pin(package,&legacy_pin);clear_faults();effective_mode=1;
+    CHECK(install(BAD,&legacy_pin)==KUI_UPDATE_OK);
+    CHECK(kui_update_bank_receipt_read(latest().selected,package,cancel)==KUI_UPDATE_OK && package->flags==KUI_UPDATE_REQUIRES_ENGINE3);
+    bank_equal(latest().selected,"runtime.kui",gui3,64u+BODY);
+    file_write(KUI_RUNTIME_PATH,root_old,64u+BODY);clear_faults();active=true;
+    CHECK(kui_update_target_verify("",NULL,&status,logger,cancel,NULL)==KUI_UPDATE_ENGINE);
+    CHECK(kui_update_select("",NULL,&status,logger,cancel,NULL)==KUI_UPDATE_ENGINE && !writes);active=false;
+    boot_minimum=0u;reset(saved);free(current.wire);free(legacy3.wire);free(bridge.wire);free(root3);free(gui3);free(package);
+    puts("PASS restore engine admission: ROOT2/3 floors, GUI1/2 and legacy-GUI3 refusal before publication, current GUI3 and reader-only flag retention");
+}
 int main(int argc,char **argv) {
     CHECK(argc==2);FILE *input=fopen(argv[1],"rb");CHECK(input && !fseek(input,0,SEEK_END));long length=ftell(input);
     CHECK(length>0 && !fseek(input,0,SEEK_SET));disk_bytes=(size_t)length;disk=malloc(disk_bytes);
@@ -158,15 +377,15 @@ int main(int argc,char **argv) {
     add(&full,"runtime.kui",KUI_UPDATE_SELF_KUI,"222222222222",gui,64u+BODY);
     add(&full,"apps/games/cdda.kui",KUI_UPDATE_SELF_KUI,"333333333333",game,64u+BODY);
     add(&full,"apps/music/player.kui",KUI_UPDATE_SELF_KUI,"666666666666",music,64u+BODY);
-    add(&full,"apps/games/helper.bin",KUI_UPDATE_RAW,NULL,raw,sizeof(raw));
+    add(&full,"apps/games/test-helper.bin",KUI_UPDATE_RAW,NULL,raw,sizeof(raw));
     add(&full,"assets/theme/icons/controller.dat",KUI_UPDATE_RAW,NULL,asset,sizeof(asset));
     add(&full,"apps/disc/retired.kui",KUI_UPDATE_REMOVE,NULL,NULL,0u);full.package.flags=KUI_UPDATE_FULL;
     seal(&full,"bbbbbbbbbbbb",2u);
     struct fixture root_mode=full;root_mode.wire=NULL;root_mode.package.flags=0u;seal(&root_mode,"121212121212",2u);
     add(&delta,"apps/games/cdda.kui",KUI_UPDATE_SELF_KUI,"444444444444",reader,64u+BODY);
-    add(&delta,"apps/games/helper.bin",KUI_UPDATE_KEEP,NULL,NULL,0u);seal(&delta,"cccccccccccc",2u);
+    add(&delta,"apps/games/test-helper.bin",KUI_UPDATE_KEEP,NULL,NULL,0u);seal(&delta,"cccccccccccc",2u);
     add(&config,"runtime.kui",KUI_UPDATE_SELF_KUI,"222222222222",gui_config,64u+BODY);
-    add(&config,"apps/games/helper.bin",KUI_UPDATE_REMOVE,NULL,NULL,0u);seal(&config,"dddddddddddd",2u);
+    add(&config,"apps/games/test-helper.bin",KUI_UPDATE_REMOVE,NULL,NULL,0u);seal(&config,"dddddddddddd",2u);
     add(&bad_gui,"runtime.kui",KUI_UPDATE_SELF_KUI,"111111111111",root_old,64u+BODY);seal(&bad_gui,"eeeeeeeeeeee",2u);
     add(&bad_component,"apps/games/cdda.kui",KUI_UPDATE_SELF_KUI,"555555555555",reader,64u+BODY);
     seal(&bad_component,"ffffffffffff",2u);
@@ -207,7 +426,7 @@ int main(int argc,char **argv) {
     clear_faults();CHECK(install(READER,&delta_pin)==KUI_UPDATE_OK);struct kui_update_activation first=latest();verify(first.selected);
     fallback_mode(first.selected,false);
     bank_equal(first.selected,"runtime.kui",root,64u+BODY);bank_equal(first.selected,"apps/games/cdda.kui",reader,64u+BODY);
-    bank_absent(first.selected,"apps/games/helper.bin");unchanged(root,root_module,user,sizeof(user));reset(saved);
+    bank_absent(first.selected,"apps/games/test-helper.bin");unchanged(root,root_module,user,sizeof(user));reset(saved);
     file_write(BAD,root_mode.wire,root_mode.bytes);CHECK(inspect(BAD,&package)==KUI_UPDATE_OK);struct kui_update_pin root_mode_pin;
     kui_update_package_pin(&package,&root_mode_pin);CHECK(install(BAD,&root_mode_pin)==KUI_UPDATE_OK);
     char root_mode_bank[13];memcpy(root_mode_bank,latest().selected,13u);fallback_mode(root_mode_bank,false);reset(saved);
@@ -224,7 +443,7 @@ int main(int argc,char **argv) {
     CHECK(install(BAD,&legacy_keep_pin)==KUI_UPDATE_OK);struct kui_update_activation legacy_applied=latest();verify(legacy_applied.selected);
     fallback_mode(legacy_applied.selected,true);
     CHECK(strcmp(legacy_applied.selected,legacy_keep.package.build));bank_equal(legacy_applied.selected,"runtime.kui",gui_config,64u+BODY);
-    bank_equal(legacy_applied.selected,"apps/games/cdda.kui",game,64u+BODY);bank_equal(legacy_applied.selected,"apps/games/helper.bin",raw,sizeof(raw));
+    bank_equal(legacy_applied.selected,"apps/games/cdda.kui",game,64u+BODY);bank_equal(legacy_applied.selected,"apps/games/test-helper.bin",raw,sizeof(raw));
     reset(saved);
     uint64_t needed=0u,available=0u;clear_faults();active=true;
     CHECK(kui_update_plan_space(&delta.package,&needed,&available,cancel)==KUI_UPDATE_OK && needed>0u && available>=needed);active=false;
@@ -234,7 +453,7 @@ int main(int argc,char **argv) {
     fallback_mode(delta_bank,true);
     CHECK(!strcmp(a.previous,full_bank));bank_equal(delta_bank,"runtime.kui",gui,64u+BODY);
     bank_equal(delta_bank,"apps/games/cdda.kui",reader,64u+BODY);bank_equal(delta_bank,"apps/music/player.kui",music,64u+BODY);
-    bank_equal(delta_bank,"apps/games/helper.bin",raw,sizeof(raw));bank_equal(delta_bank,"assets/theme/icons/controller.dat",asset,sizeof(asset));
+    bank_equal(delta_bank,"apps/games/test-helper.bin",raw,sizeof(raw));bank_equal(delta_bank,"assets/theme/icons/controller.dat",asset,sizeof(asset));
     bank_absent(delta_bank,"apps/disc/retired.kui");unchanged(root,root_module,user,sizeof(user));
     clear_faults();low_space=true;CHECK(install(READER,&delta_pin)==KUI_UPDATE_OK && !writes);clear_faults();
     CHECK(latest().sequence==a.sequence);
@@ -244,9 +463,9 @@ int main(int argc,char **argv) {
     a=latest();char config_bank[13];memcpy(config_bank,a.selected,13u);CHECK(strcmp(config_bank,delta_bank));verify(config_bank);
     fallback_mode(config_bank,true);
     bank_equal(config_bank,"runtime.kui",gui_config,64u+BODY);bank_equal(config_bank,"apps/games/cdda.kui",reader,64u+BODY);
-    bank_absent(config_bank,"apps/games/helper.bin");bank_absent(config_bank,"apps/disc/retired.kui");
+    bank_absent(config_bank,"apps/games/test-helper.bin");bank_absent(config_bank,"apps/disc/retired.kui");
     struct kui_app_status status;CHECK(kui_update_rollback(&status,logger,cancel,NULL)==KUI_UPDATE_OK);
-    CHECK(!strcmp(latest().selected,delta_bank));bank_equal(delta_bank,"apps/games/helper.bin",raw,sizeof(raw));
+    CHECK(!strcmp(latest().selected,delta_bank));bank_equal(delta_bank,"apps/games/test-helper.bin",raw,sizeof(raw));
     /* Every physical write/sync cut and every write-boundary cancellation is
      * recoverable, retaining the prior complete bank or the complete new one. */
     for(unsigned kind=0;kind<3u;kind++) {
@@ -259,11 +478,11 @@ int main(int argc,char **argv) {
             CHECK(install(READER,&delta_pin)==KUI_UPDATE_OK);CHECK(!strcmp(latest().selected,delta_bank));verify(delta_bank);
         }
     }
-    reset(saved);char corrupt[160];CHECK(kui_update_bank_path(full_bank,"apps/games/helper.bin",corrupt,sizeof(corrupt)));
+    reset(saved);char corrupt[160];CHECK(kui_update_bank_path(full_bank,"apps/games/test-helper.bin",corrupt,sizeof(corrupt)));
     raw[500]^=1u;file_write(corrupt,raw,sizeof(raw));clear_faults();CHECK(install(READER,&delta_pin)==KUI_UPDATE_CHECKSUM && !writes);raw[500]^=1u;
     /* Corruption in a preserved source blocks before writes. An explicit
      * replacement/removal can still repair it through a separate new bank. */
-    clear_faults();CHECK(install(CONFIG,&config_pin)==KUI_UPDATE_OK);bank_absent(latest().selected,"apps/games/helper.bin");verify(latest().selected);
+    clear_faults();CHECK(install(CONFIG,&config_pin)==KUI_UPDATE_OK);bank_absent(latest().selected,"apps/games/test-helper.bin");verify(latest().selected);
     reset(saved);CHECK(kui_update_bank_path(full_bank,"apps/games/cdda.kui",corrupt,sizeof(corrupt)));
     game[500]^=1u;file_write(corrupt,game,64u+BODY);game[500]^=1u;clear_faults();CHECK(install(READER,&delta_pin)==KUI_UPDATE_OK);
     bank_equal(latest().selected,"apps/games/cdda.kui",reader,64u+BODY);verify(latest().selected);
@@ -283,7 +502,7 @@ int main(int argc,char **argv) {
     CHECK(kui_update_plan_space(&delta.package,&needed,&available,cancel)==KUI_UPDATE_OK && needed>0u);active=false;
     CHECK(install(READER,&delta_pin)==KUI_UPDATE_OK);verify(latest().selected);fallback_mode(latest().selected,false);
     bank_equal(latest().selected,"runtime.kui",root,64u+BODY);bank_equal(latest().selected,"apps/games/cdda.kui",reader,64u+BODY);
-    bank_absent(latest().selected,"apps/music/player.kui");bank_absent(latest().selected,"apps/games/helper.bin");
+    bank_absent(latest().selected,"apps/music/player.kui");bank_absent(latest().selected,"apps/games/test-helper.bin");
     unchanged(root,root_module,user,sizeof(user));
     /* A pending root selection likewise cannot discard the running bank's
      * software before restart; publish still guards the saved selection. */
@@ -292,6 +511,10 @@ int main(int argc,char **argv) {
     effective_mode=1;memcpy(effective_bank,full_bank,13u);memcpy(effective_hash,package.manifest_sha256,32u);
     CHECK(install(READER,&delta_pin)==KUI_UPDATE_OK);CHECK(!strcmp(latest().selected,delta_bank) && !latest().previous[0]);
     bank_equal(delta_bank,"runtime.kui",gui,64u+BODY);bank_equal(delta_bank,"apps/music/player.kui",music,64u+BODY);fallback_mode(delta_bank,true);
+    full_repair_cases(saved,&full,&full_pin,full_bank,root,root_module,user,sizeof(user),raw,sizeof(raw));
+    activation_recovery_cases(saved,&full,&full_pin,full_bank,root,root_module,user,sizeof(user));
+    conflict_recovery_cases(saved,&full,&full_pin,full_bank);
+    restore_engine_cases(saved,&full,&full_pin,&legacy,&delta_pin,full_bank,root_old);
     reset(saved);clear_faults();CHECK(install(READER,&delta_pin)==KUI_UPDATE_OK);
     printf("PASS updater v2: %u checks, FULL/partial identity and absence, independent component builds, reader-only retention, raw/nested assets, tombstones, same-build GUI configs, v1 translation, full receipt repair, effective root/bank selection, blocked-state guard, capacity guard, rollback, engine floor, %u write cuts, %u sync cuts, %u cancellation cuts, verified retries and unchanged root/user data\n",checks,full_writes+1u,full_syncs+1u,full_writes+1u);
     unmount_volume();free(saved);free(root);free(root_old);free(root_module);free(gui);free(gui_config);free(game);free(music);free(reader);

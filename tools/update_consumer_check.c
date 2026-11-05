@@ -51,9 +51,9 @@ static int member(FILE *file,const struct kui_update_package *package,
                !kui_update_handoff_empty(data+64u,info.payload_bytes,NULL)) {
                 free(data);return failed(entry->path,"GUI bank/handoff contract is incompatible");
             }
-            if(kui_update_engine_level(data+64u,info.payload_bytes)<2u &&
-               !(allow_legacy && kui_update_package_version(package)==1u)) {
-                free(data);return failed(entry->path,"requires the current Main updater engine v2");
+            unsigned minimum=allow_legacy?kui_update_engine_minimum(package):KUI_UPDATE_ENGINE_CURRENT;
+            if(kui_update_engine_level(data+64u,info.payload_bytes)<minimum) {
+                free(data);return failed(entry->path,"requires the current Main updater engine3");
             }
         }
         kui_sha256_update(&hash,data,(size_t)entry->bytes);free(data);
@@ -78,12 +78,16 @@ int main(int argc,char **argv) {
     if(!manifest || !exact(file,manifest,bytes)) {free(manifest);free(package);fclose(file);return failed(NULL,"cannot read package manifest");}
     result=kui_update_manifest_decode(package,manifest,bytes);free(manifest);
     if(result!=KUI_UPDATE_OK) {free(package);fclose(file);return failed(NULL,kui_update_result_name(result));}
+    if(!legacy && (kui_update_package_version(package)!=2u ||
+       !(package->flags&KUI_UPDATE_REQUIRES_ENGINE3))) {
+        free(package);fclose(file);return failed(NULL,"new deliveries must require the current engine3");
+    }
     for(uint32_t i=0u;i<package->count;i++)if(member(file,package,package->entries+i,legacy)) {
         free(package);fclose(file);return 1;
     }
     if(fclose(file)) {free(package);return failed(NULL,"package close failed");}
-    printf("{\"format\":%u,\"package\":\"%s\",\"members\":%u,\"flags\":%u,\"full\":%s,\"engine_minimum\":2,\"decoder\":\"current-source\"}\n",
+    printf("{\"format\":%u,\"package\":\"%s\",\"members\":%u,\"flags\":%u,\"full\":%s,\"engine_minimum\":%u,\"decoder\":\"current-source\"}\n",
         kui_update_package_version(package),package->build,package->count,(unsigned)package->flags,
-        package->flags&KUI_UPDATE_FULL?"true":"false");
+        package->flags&KUI_UPDATE_FULL?"true":"false",kui_update_engine_minimum(package));
     free(package);return 0;
 }

@@ -8,10 +8,12 @@
 #include <string.h>
 
 #define CHUNK 32768u
+#define REPAIR_BANKS 16u
 /* GUI read wrappers resolve logical software paths into the active bank.
  * Engine admission and baseline cloning must inspect the physical root. */
 extern FRESULT kui_update_physical_open(FIL *,const TCHAR *,BYTE) __attribute__((weak));
 extern int kui_update_effective_snapshot(char [13],uint8_t [32]) __attribute__((weak));
+extern unsigned kui_update_boot_engine_minimum(void) __attribute__((weak));
 static FRESULT physical_open(FIL *file,const char *path,BYTE flags) {
     return kui_update_physical_open?kui_update_physical_open(file,path,flags):f_open(file,path,flags);
 }
@@ -20,6 +22,7 @@ static enum kui_update_result snapshot_prepare(const struct kui_update_package *
     const struct kui_update_activation *,struct kui_update_package *,struct snapshot_source *,
     struct kui_app_status *,kui_cancel_fn,kui_app_progress_fn);
 static enum kui_update_result baseline_verify(struct kui_app_status *,kui_cancel_fn,kui_app_progress_fn,unsigned *);
+static enum kui_update_result activation_for_update(struct kui_update_activation *,unsigned *,kui_cancel_fn,bool *);
 static uint32_t get32(const uint8_t *p) {
     return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24;
 }
@@ -80,17 +83,18 @@ static unsigned capability_count(const uint8_t *p,size_t n) {
     return count;
 }
 struct capability {uint8_t tail[15];size_t bytes;unsigned count;};
-static unsigned engine_count(const uint8_t *p,size_t n) {
+static unsigned engine_count(const uint8_t *p,size_t n,unsigned level) {
     unsigned count=0u;
     for(size_t i=0;i+16u<=n;i++)
-        if(p[i]=='K' && !memcmp(p+i,"KUIENG2!",8u) && get32(p+i+8u)==2u && get32(p+i+12u)==UINT32_MAX-2u)
+        if(p[i]=='K' && !memcmp(p+i,level==3u?"KUIENG3!":"KUIENG2!",8u) &&
+           get32(p+i+8u)==level && get32(p+i+12u)==~(uint32_t)level)
             ++count;
     return count;
 }
-static void marker_update(struct capability *c,const uint8_t *p,size_t n,bool engine) {
+static void marker_update(struct capability *c,const uint8_t *p,size_t n,unsigned engine) {
     uint8_t edge[30];size_t first=n<15u?n:15u;
     memcpy(edge,c->tail,c->bytes);memcpy(edge+c->bytes,p,first);
-    c->count+=engine?engine_count(edge,c->bytes+first)+engine_count(p,n):
+    c->count+=engine?engine_count(edge,c->bytes+first,engine)+engine_count(p,n,engine):
         capability_count(edge,c->bytes+first)+capability_count(p,n);
     if(n>=15u) {memcpy(c->tail,p+n-15u,15u);c->bytes=15u;}
     else {
@@ -99,13 +103,16 @@ static void marker_update(struct capability *c,const uint8_t *p,size_t n,bool en
     }
 }
 static void capability_update(struct capability *c,const uint8_t *p,size_t n) {marker_update(c,p,n,false);}
+static unsigned engine_marker_level(const struct capability *two,const struct capability *three) {
+    return two->count+three->count==1u?(three->count?3u:2u):0u;
+}
 static bool has_payload(const struct kui_update_entry *entry) {
     return entry->policy!=KUI_UPDATE_INHERIT_ROOT && entry->policy!=KUI_UPDATE_REMOVE;
 }
 /* Optional sink is a newly staged, unselected bank member. No bytes from a
  * bank with a complete receipt are ever passed as a writable destination. */
 static enum kui_update_result admit(FIL *source,uint64_t offset,const struct kui_update_entry *entry,
-    const char *build,bool gui,bool engine_required,FIL *sink,uint8_t *buffer,struct kui_app_status *s,
+    const char *build,bool gui,unsigned minimum,FIL *sink,uint8_t *buffer,struct kui_app_status *s,
     kui_cancel_fn cancel,kui_app_progress_fn progress) {
     if(stopped(cancel))return KUI_UPDATE_CANCELLED;
     if(!has_payload(entry))return KUI_UPDATE_OK;
@@ -124,13 +131,13 @@ static enum kui_update_result admit(FIL *source,uint64_t offset,const struct kui
         if(sink && (r=write_exact(sink,header,sizeof(header)))!=KUI_UPDATE_OK)return r;
         done=sizeof(header);if(s)s->done+=done;
     }
-    struct capability capability={0},engine={0};struct kui_update_handoff_scan handoff={0};
+    struct capability capability={0},engine2={0},engine3={0};struct kui_update_handoff_scan handoff={0};
     uint32_t crc=0u;
     while(done<entry->bytes) {
         UINT n=(UINT)(entry->bytes-done>CHUNK?CHUNK:entry->bytes-done);
         r=read_exact(source,buffer,n,cancel);if(r)return r;
         kui_sha256_update(&sha,buffer,n);if(!raw)crc=kui_crc32(crc,buffer,n);
-        if(gui) {capability_update(&capability,buffer,n);marker_update(&engine,buffer,n,true);
+        if(gui) {capability_update(&capability,buffer,n);marker_update(&engine2,buffer,n,2u);marker_update(&engine3,buffer,n,3u);
             kui_update_handoff_scan_update(&handoff,buffer,n);}
         if(sink && (r=write_exact(sink,buffer,n))!=KUI_UPDATE_OK)return r;
         done+=n;
@@ -139,7 +146,7 @@ static enum kui_update_result admit(FIL *source,uint64_t offset,const struct kui
     uint8_t digest[32];kui_sha256_digest(&sha,digest);
     if((!raw && crc!=runtime.crc32) || memcmp(digest,entry->sha256,32u))return KUI_UPDATE_CHECKSUM;
     if(gui && (capability.count!=1u || !kui_update_handoff_scan_valid(&handoff)))return KUI_UPDATE_RUNTIME;
-    if(gui && engine_required && engine.count!=1u)return KUI_UPDATE_ENGINE;
+    if(gui && minimum && engine_marker_level(&engine2,&engine3)<minimum)return KUI_UPDATE_ENGINE;
     return stopped(cancel)?KUI_UPDATE_CANCELLED:KUI_UPDATE_OK;
 }
 enum kui_update_result kui_update_inspect(const char *path,struct kui_update_package *out,
@@ -154,9 +161,11 @@ enum kui_update_result kui_update_inspect(const char *path,struct kui_update_pac
     r=package_read(&file,false,out,cancel);uint8_t *buffer=NULL;
     if(!r) {buffer=malloc(CHUNK);if(!buffer)r=KUI_UPDATE_MEMORY;}
     if(!r && s)s->total=out->payload_bytes;
+    unsigned minimum=kui_update_engine_minimum(out),running_required=kui_update_boot_engine_minimum?kui_update_boot_engine_minimum():0u;
+    if(minimum<running_required)minimum=running_required;
     for(uint32_t i=0;!r && i<out->count;i++)
         r=admit(&file,out->entries[i].payload_offset,&out->entries[i],out->build,
-            !strcmp(out->entries[i].path,"runtime.kui"),kui_update_package_version(out)==2u,NULL,buffer,s,cancel,progress);
+            !strcmp(out->entries[i].path,"runtime.kui"),minimum,NULL,buffer,s,cancel,progress);
     free(buffer);if(f_close(&file)!=FR_OK && !r)r=KUI_UPDATE_IO;
     if(r)memset(out,0,sizeof(*out));
     return finish(r,s,log,progress,"Offline update package verified.");
@@ -219,7 +228,7 @@ static enum kui_update_result bank_withdrawn(const char *build,bool *withdrawn,k
     free(p);return r;
 }
 static enum kui_update_result verify_member(const char *build,const struct kui_update_entry *entry,
-    bool gui,uint8_t *buffer,struct kui_app_status *s,kui_cancel_fn cancel,kui_app_progress_fn progress) {
+    bool gui,unsigned minimum,uint8_t *buffer,struct kui_app_status *s,kui_cancel_fn cancel,kui_app_progress_fn progress) {
     if(stopped(cancel))return KUI_UPDATE_CANCELLED;
     if(entry->policy==KUI_UPDATE_INHERIT_ROOT)return KUI_UPDATE_OK;
     char path[160];if(!kui_update_bank_path(build,entry->path,path,sizeof(path)))return KUI_UPDATE_ARGUMENT;
@@ -231,20 +240,106 @@ static enum kui_update_result verify_member(const char *build,const struct kui_u
     FIL file;FRESULT f=f_open(&file,path,FA_READ);
     if(f!=FR_OK)return f==FR_NO_FILE || f==FR_NO_PATH?KUI_UPDATE_NOT_FOUND:KUI_UPDATE_IO;
     enum kui_update_result r=f_size(&file)==entry->bytes?
-        admit(&file,0u,entry,build,gui,entry->policy==KUI_UPDATE_SELF_KUI,NULL,buffer,s,cancel,progress):KUI_UPDATE_CHECKSUM;
+        admit(&file,0u,entry,build,gui,minimum,NULL,buffer,s,cancel,progress):KUI_UPDATE_CHECKSUM;
     if(f_close(&file)!=FR_OK && !r)r=KUI_UPDATE_IO;
     return r;
 }
-enum kui_update_result kui_update_bank_verify(const char *build,struct kui_update_package *out,
-    struct kui_app_status *s,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
+static enum kui_update_result bank_verify_minimum(const char *build,struct kui_update_package *out,
+    unsigned minimum,struct kui_app_status *s,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
     phase(s,"Verifying installed update bank...",0u,progress);
     if(!out)return finish(KUI_UPDATE_ARGUMENT,s,log,progress,"");
     enum kui_update_result r=kui_update_bank_receipt_read(build,out,cancel);uint8_t *buffer=NULL;
+    if(!r && minimum>=3u && kui_update_engine_minimum(out)<minimum)r=KUI_UPDATE_ENGINE;
     if(!r) {buffer=malloc(CHUNK);if(!buffer)r=KUI_UPDATE_MEMORY;}
     if(!r && s)s->total=out->payload_bytes;
-    for(uint32_t i=0;!r && i<out->count;i++)r=verify_member(build,&out->entries[i],!strcmp(out->entries[i].path,"runtime.kui"),buffer,s,cancel,progress);
+    if(!r && minimum<kui_update_engine_minimum(out))minimum=kui_update_engine_minimum(out);
+    for(uint32_t i=0;!r && i<out->count;i++)r=verify_member(build,&out->entries[i],!strcmp(out->entries[i].path,"runtime.kui"),minimum,buffer,s,cancel,progress);
     free(buffer);if(r)memset(out,0,sizeof(*out));
     return finish(r,s,log,progress,"Installed update bank verified.");
+}
+enum kui_update_result kui_update_bank_verify(const char *build,struct kui_update_package *out,
+    struct kui_app_status *s,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
+    return bank_verify_minimum(build,out,0u,s,log,cancel,progress);
+}
+static bool snapshot_same(const struct kui_update_package *a,const struct kui_update_package *b) {
+    return kui_update_package_version(a)==kui_update_package_version(b) && a->channel==b->channel && a->flags==b->flags &&
+        a->count==b->count && a->payload_bytes==b->payload_bytes && a->file_bytes==b->file_bytes &&
+        !memcmp(a->manifest_sha256,b->manifest_sha256,32u);
+}
+static bool recoverable_bank_error(enum kui_update_result r) {
+    return r==KUI_UPDATE_NOT_FOUND || r==KUI_UPDATE_FORMAT || r==KUI_UPDATE_CHECKSUM ||
+        r==KUI_UPDATE_COHORT || r==KUI_UPDATE_RUNTIME || r==KUI_UPDATE_STALE || r==KUI_UPDATE_ENGINE;
+}
+/* A damaged completed bank is never a writable destination. FULL delivery
+ * bytes can repair its content through a separate deterministic instance.
+ * Nonempty interrupted instances are retained too; a retry advances to the
+ * next free instance and reuses any already verified matching completion. */
+static enum kui_update_result snapshot_target(struct kui_update_package *snapshot,
+    const struct kui_update_activation *active,struct kui_update_package *other,bool allow_repair,bool *complete,
+    struct kui_app_status *s,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
+    char canonical[13],effective[13]={0};uint8_t effective_hash[32]={0};memcpy(canonical,snapshot->build,13u);
+    int known=kui_update_effective_snapshot?kui_update_effective_snapshot(effective,effective_hash):0;
+    if(!known)memcpy(effective,active->selected,sizeof(effective));
+    struct kui_update_activation retained[2];bool retained_valid[2]={false,false};
+    for(unsigned i=0;i<2u;i++) {
+        enum kui_update_result record=kui_update_activation_read(i,retained+i,cancel);
+        if(record==KUI_UPDATE_IO || record==KUI_UPDATE_CANCELLED)return record;
+        retained_valid[i]=record==KUI_UPDATE_OK;
+    }
+    bool full=allow_repair;*complete=false;
+    if(!full && effective[0] && strcmp(effective,canonical)) {
+        enum kui_update_result found=kui_update_bank_receipt_read(effective,other,cancel);
+        if(!found && snapshot_same(snapshot,other)) {
+            enum kui_update_result verified=kui_update_bank_verify(effective,other,s,log,cancel,progress);
+            if(verified)return verified;
+            memcpy(snapshot->build,effective,13u);*complete=true;return KUI_UPDATE_OK;
+        }
+        if(found && !recoverable_bank_error(found))return found;
+    }
+    for(uint32_t attempt=0u;attempt<=REPAIR_BANKS;attempt++) {
+        if(stopped(cancel))return KUI_UPDATE_CANCELLED;
+        if(attempt) {
+            struct kui_sha256 hash;uint8_t identity[32],index[4];char hex[65];
+            for(unsigned i=0;i<4u;i++)index[i]=(uint8_t)(attempt>>(8u*i));
+            kui_sha256_init(&hash);kui_sha256_update(&hash,"KUIREPAIR",9u);kui_sha256_update(&hash,canonical,12u);
+            kui_sha256_update(&hash,snapshot->manifest_sha256,32u);kui_sha256_update(&hash,&snapshot->flags,1u);
+            kui_sha256_update(&hash,index,sizeof(index));kui_sha256_digest(&hash,identity);kui_hex(identity,32u,hex);
+            memcpy(snapshot->build,hex,12u);snapshot->build[12]=0;
+        }
+        enum kui_update_result found=kui_update_bank_receipt_read(snapshot->build,other,cancel);
+        if(!found) {
+            if(!snapshot_same(snapshot,other)) {if(full)continue;return KUI_UPDATE_STALE;}
+            enum kui_update_result verified=kui_update_bank_verify(snapshot->build,other,s,log,cancel,progress);
+            if(!verified) {*complete=true;return KUI_UPDATE_OK;}
+            if(!full || !recoverable_bank_error(verified))return verified;
+            continue;
+        }
+        if(!recoverable_bank_error(found))return found;
+        bool protected=!strcmp(active->selected,snapshot->build) || !strcmp(active->previous,snapshot->build) ||
+            (effective[0] && !strcmp(effective,snapshot->build));
+        for(unsigned i=0;i<2u;i++)if(retained_valid[i] &&
+            (!strcmp(retained[i].selected,snapshot->build) || !strcmp(retained[i].previous,snapshot->build)))protected=true;
+        if(protected) {if(full)continue;return KUI_UPDATE_PROTECTED;}
+        char directory_path[160];FILINFO info;
+        snprintf(directory_path,sizeof(directory_path),KUI_UPDATE_SYSTEM "/%s",snapshot->build);
+        FRESULT stat=f_stat(directory_path,&info);
+        if(stat==FR_OK && !(info.fattrib&AM_DIR)) {if(full)continue;return KUI_UPDATE_PROTECTED;}
+        if(stat!=FR_OK && stat!=FR_NO_FILE && stat!=FR_NO_PATH)return KUI_UPDATE_IO;
+        if(full && stat==FR_OK) {
+            /* Missing/bad receipts cannot prove that an old bank was never
+             * complete. Preserve every nonempty candidate, including failed
+             * repair instances. An empty directory is safe to reuse. */
+            DIR directory;FILINFO member;
+            if(f_opendir(&directory,directory_path)!=FR_OK)return KUI_UPDATE_IO;
+            FRESULT read=f_readdir(&directory,&member),closed=f_closedir(&directory);
+            if(read!=FR_OK || closed!=FR_OK)return KUI_UPDATE_IO;
+            if(member.fname[0])continue;
+        }
+        if(attempt && log)log("Offline update: recovery %u/%u bank %s; original %s retained",attempt,REPAIR_BANKS,snapshot->build,canonical);
+        return KUI_UPDATE_OK;
+    }
+    if(log)log("Offline update: all %u recovery bank identities are occupied; original banks retained",REPAIR_BANKS);
+    return KUI_UPDATE_LIMIT;
 }
 static enum kui_update_result directory(const char *path) {
     FILINFO info;FRESULT r=f_stat(path,&info);
@@ -324,9 +419,10 @@ enum kui_update_result kui_update_plan_space(const struct kui_update_package *p,
     if(!needed || !available)return KUI_UPDATE_ARGUMENT;
     *needed=*available=0u;
     if(!p || (kui_update_package_version(p)!=2u && !kui_update_package_find(p,"runtime.kui")))return KUI_UPDATE_ARGUMENT;
+    bool allow_repair=(p->flags&KUI_UPDATE_FULL)!=0u;
     struct kui_update_activation a;unsigned slot;
-    enum kui_update_result r=kui_update_activation_latest(&a,&slot,cancel);
-    if(r==KUI_UPDATE_NOT_FOUND)memset(&a,0,sizeof(a));else if(r)return r;
+    enum kui_update_result r=kui_update_activation_for_update(&a,&slot,cancel);
+    if(r)return r;
     struct kui_update_package *bank=malloc(sizeof(*bank)),*snapshot=NULL;
     if(!bank)return KUI_UPDATE_MEMORY;
     unsigned root_engine=0u;
@@ -335,13 +431,22 @@ enum kui_update_result kui_update_plan_space(const struct kui_update_package *p,
         if(r==KUI_UPDATE_NOT_FOUND)r=KUI_UPDATE_OK;
         if(r) {free(bank);return r;}
     }
-    if(kui_update_package_version(p)==2u || root_engine==2u) {
+    if(kui_update_package_version(p)==2u || root_engine>=2u) {
         snapshot=malloc(sizeof(*snapshot));
         struct snapshot_source *sources=calloc(KUI_UPDATE_MAX_ENTRIES,sizeof(*sources));
         r=snapshot && sources?snapshot_prepare(p,&a,snapshot,sources,NULL,cancel,NULL):KUI_UPDATE_MEMORY;
         free(sources);
         if(r) {free(snapshot);free(bank);return r;}
         p=snapshot;
+    }
+    if(snapshot) {
+        bool complete=false;r=snapshot_target(snapshot,&a,bank,allow_repair,&complete,NULL,NULL,cancel,NULL);
+        if(!r && complete) {
+            FATFS *fs=NULL;DWORD free_clusters=0u;
+            if(f_getfree("0:",&free_clusters,&fs)!=FR_OK || !fs)r=KUI_UPDATE_IO;
+            else *available=(uint64_t)free_clusters*fs->csize*512u;
+        } else if(!r)r=quota(snapshot,needed,available);
+        free(snapshot);free(bank);return r;
     }
     r=kui_update_bank_receipt_read(p->build,bank,cancel);
     if(!r) {
@@ -395,12 +500,11 @@ static enum kui_update_result record_write(const char *path,const uint8_t *wire,
 static enum kui_update_result publish(const char *build,const uint8_t *hash,
     const struct kui_update_activation *review,unsigned review_slot,struct kui_app_status *s,
     kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
-    struct kui_update_activation current;unsigned slot;
-    enum kui_update_result r=kui_update_activation_latest(&current,&slot,cancel);
-    if(r==KUI_UPDATE_NOT_FOUND) {memset(&current,0,sizeof(current));slot=0u;}
-    else if(r)return r;
+    struct kui_update_activation current;unsigned slot;bool recovering=false;
+    enum kui_update_result r=activation_for_update(&current,&slot,cancel,&recovering);
+    if(r)return r;
     if(!activation_equal(review,&current) || (current.sequence && slot!=review_slot))return KUI_UPDATE_STALE;
-    if(!strcmp(current.selected,build) && (!build[0] || !memcmp(current.manifest_sha256,hash,32u)))return KUI_UPDATE_OK;
+    if(!recovering && !strcmp(current.selected,build) && (!build[0] || !memcmp(current.manifest_sha256,hash,32u)))return KUI_UPDATE_OK;
     if(current.sequence==UINT64_MAX)return KUI_UPDATE_SEQUENCE;
     struct kui_update_activation next={.sequence=current.sequence+1u};
     memcpy(next.selected,build,strlen(build));
@@ -424,9 +528,41 @@ static enum kui_update_result publish(const char *build,const uint8_t *hash,
     return r;
 }
 static enum kui_update_result current(struct kui_update_activation *a,unsigned *slot,kui_cancel_fn cancel) {
+    return kui_update_activation_for_update(a,slot,cancel);
+}
+static enum kui_update_result activation_for_update(struct kui_update_activation *a,unsigned *slot,
+    kui_cancel_fn cancel,bool *recovered) {
+    if(recovered)*recovered=false;
     enum kui_update_result r=kui_update_activation_latest(a,slot,cancel);
     if(r==KUI_UPDATE_NOT_FOUND) {memset(a,0,sizeof(*a));*slot=0u;return KUI_UPDATE_OK;}
+    if(r==KUI_UPDATE_FORMAT && kui_update_effective_snapshot) {
+        char bank[13]={0};uint8_t hash[32]={0};
+        if(kui_update_effective_snapshot(bank,hash)>0 && !bank[0]) {
+            struct kui_update_activation first,second;
+            enum kui_update_result ar=kui_update_activation_read(0u,&first,cancel),br=kui_update_activation_read(1u,&second,cancel);
+            if(ar==KUI_UPDATE_IO || br==KUI_UPDATE_IO)return KUI_UPDATE_IO;
+            if(ar==KUI_UPDATE_CANCELLED || br==KUI_UPDATE_CANCELLED)return KUI_UPDATE_CANCELLED;
+            bool conflict=!ar && !br && first.sequence==second.sequence && !activation_equal(&first,&second);
+            /* A valid choice appearing since the first read invalidates this
+             * recovery review. A conflicting valid pair needs a higher epoch,
+             * otherwise its retained record would outrank a fresh sequence1. */
+            if((!ar || !br) && !conflict)return KUI_UPDATE_STALE;
+            if(conflict && first.selected[0] && second.selected[0])return KUI_UPDATE_PROTECTED;
+            uint64_t sequence=conflict?first.sequence:0u;
+            unsigned keep=conflict && first.selected[0]?1u:0u;
+            unsigned engine=0u;
+            r=baseline_verify(NULL,cancel,NULL,&engine);
+            unsigned required=kui_update_boot_engine_minimum?kui_update_boot_engine_minimum():0u;
+            if(!r && (engine<2u || engine<required))r=KUI_UPDATE_ENGINE;
+            if(!r) {
+                memset(a,0,sizeof(*a));a->sequence=sequence;*slot=keep;if(recovered)*recovered=true;
+            }
+        }
+    }
     return r;
+}
+enum kui_update_result kui_update_activation_for_update(struct kui_update_activation *a,unsigned *slot,kui_cancel_fn cancel) {
+    return activation_for_update(a,slot,cancel,NULL);
 }
 static enum kui_update_result baseline_verify(struct kui_app_status *s,kui_cancel_fn cancel,
     kui_app_progress_fn progress,unsigned *engine_level) {
@@ -439,14 +575,15 @@ static enum kui_update_result baseline_verify(struct kui_app_status *s,kui_cance
     enum kui_update_result r=read_exact(&file,header,sizeof(header),cancel);
     if(!r && (kui_runtime_header(header,f_size(&file),&info)!=KUI_RUNTIME_OK ||
        kui_update_build_withdrawn(info.build)))r=KUI_UPDATE_RUNTIME;
-    struct capability capability={0},engine={0};struct kui_update_handoff_scan handoff={0};
+    struct capability capability={0},engine2={0},engine3={0};struct kui_update_handoff_scan handoff={0};
     uint32_t crc=0u,done=0u;
     if(!r && s)s->total=info.payload_bytes;
     while(!r && done<info.payload_bytes) {
         UINT n=info.payload_bytes-done;if(n>sizeof(buffer))n=sizeof(buffer);
         r=read_exact(&file,buffer,n,cancel);
         if(!r) {
-            crc=kui_crc32(crc,buffer,n);capability_update(&capability,buffer,n);marker_update(&engine,buffer,n,true);
+            crc=kui_crc32(crc,buffer,n);capability_update(&capability,buffer,n);
+            marker_update(&engine2,buffer,n,2u);marker_update(&engine3,buffer,n,3u);
             kui_update_handoff_scan_update(&handoff,buffer,n);done+=n;
             if(s) {s->done=done;if(progress)progress(s);}
         }
@@ -454,7 +591,7 @@ static enum kui_update_result baseline_verify(struct kui_app_status *s,kui_cance
     if(!r && (crc!=info.crc32 || capability.count!=1u || !kui_update_handoff_scan_valid(&handoff)))r=KUI_UPDATE_CHECKSUM;
     if(f_close(&file)!=FR_OK && !r)r=KUI_UPDATE_IO;
     if(!r && stopped(cancel))r=KUI_UPDATE_CANCELLED;
-    if(!r && engine_level && engine.count==1u)*engine_level=2u;
+    if(!r && engine_level)*engine_level=engine_marker_level(&engine2,&engine3);
     return r;
 }
 static enum kui_update_result root_descriptor(struct kui_update_entry *entry,kui_cancel_fn cancel) {
@@ -509,7 +646,7 @@ static enum kui_update_result snapshot_sources_verify(const struct kui_update_pa
         FIL file;FRESULT opened=physical_open(&file,sources[i].path,FA_READ);
         if(opened!=FR_OK) {r=opened==FR_NO_FILE || opened==FR_NO_PATH?KUI_UPDATE_NOT_FOUND:KUI_UPDATE_IO;break;}
         if(f_size(&file)!=entry->bytes)r=KUI_UPDATE_CHECKSUM;
-        if(!r)r=admit(&file,sources[i].offset,entry,snapshot->build,!strcmp(entry->path,"runtime.kui"),true,
+        if(!r)r=admit(&file,sources[i].offset,entry,snapshot->build,!strcmp(entry->path,"runtime.kui"),kui_update_engine_minimum(snapshot),
             NULL,buffer,s,cancel,progress);
         if(f_close(&file)!=FR_OK && !r)r=KUI_UPDATE_IO;
     }
@@ -538,7 +675,10 @@ static enum kui_update_result snapshot_prepare(const struct kui_update_package *
     }
     unsigned engine=0u;
     r=baseline_verify(s,cancel,progress,&engine);
-    if(!r && engine!=2u)r=KUI_UPDATE_ENGINE;
+    unsigned required=kui_update_engine_minimum(incoming);if(required<2u)required=2u;
+    unsigned running_required=kui_update_boot_engine_minimum?kui_update_boot_engine_minimum():0u;
+    if(required<running_required)required=running_required;
+    if(!r && engine<required)r=KUI_UPDATE_ENGINE;
     if(r)return r;
     memset(snapshot,0,sizeof(*snapshot));snapshot->version=2u;snapshot->flags=incoming->flags;
     /* A snapshot names applied software, independent of the incoming package's
@@ -570,6 +710,8 @@ static enum kui_update_result snapshot_prepare(const struct kui_update_package *
     }
     free(prior);
     if(r)return r;
+    if(engine>=3u)snapshot->flags|=KUI_UPDATE_REQUIRES_ENGINE3;
+    if(engine<kui_update_engine_minimum(snapshot))return KUI_UPDATE_ENGINE;
     bool have_gui=false;
     for(uint32_t i=0;i<snapshot->count;i++)if(!strcmp(snapshot->entries[i].path,"runtime.kui"))have_gui=true;
     bool incoming_gui=false;
@@ -624,6 +766,20 @@ static enum kui_update_result final_selection(enum kui_update_result r,struct ku
     if(r==KUI_UPDATE_IO && s && s->complete && strstr(s->message,"Activation could not"))return r;
     return finish(r,s,log,progress,message);
 }
+enum kui_update_result kui_update_target_verify(const char *build,struct kui_update_package *out,
+    struct kui_app_status *s,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
+    if(out)memset(out,0,sizeof(*out));
+    phase(s,"Checking restore target and updater engine...",0u,progress);
+    if(!build || (build[0] && (!kui_update_build_valid(build) || !out)))
+        return finish(KUI_UPDATE_ARGUMENT,s,log,progress,"");
+    unsigned root_engine=0u;
+    enum kui_update_result r=baseline_verify(NULL,cancel,NULL,&root_engine);
+    unsigned minimum=kui_update_boot_engine_minimum?kui_update_boot_engine_minimum():0u;
+    if(minimum<root_engine)minimum=root_engine;
+    if(!r && root_engine<minimum)r=KUI_UPDATE_ENGINE;
+    if(!r && build[0])r=bank_verify_minimum(build,out,minimum,s,log,cancel,progress);
+    return finish(r,s,log,progress,"Restore target verified.");
+}
 enum kui_update_result kui_update_select(const char *build,const uint8_t expected[32],
     struct kui_app_status *s,kui_log_fn log,kui_cancel_fn cancel,kui_app_progress_fn progress) {
     phase(s,"Checking selected update version...",0u,progress);
@@ -633,10 +789,10 @@ enum kui_update_result kui_update_select(const char *build,const uint8_t expecte
     struct kui_update_package *p=NULL;
     if(!r && build[0]) {
         p=malloc(sizeof(*p));if(!p)r=KUI_UPDATE_MEMORY;
-        else r=kui_update_bank_verify(build,p,s,log,cancel,progress);
+        else r=kui_update_target_verify(build,p,s,log,cancel,progress);
         if(!r && memcmp(expected,p->manifest_sha256,32u))r=KUI_UPDATE_STALE;
     }
-    if(!r && !build[0])r=baseline_verify(s,cancel,progress,NULL);
+    if(!r && !build[0])r=kui_update_target_verify(build,NULL,s,log,cancel,progress);
     if(!r)r=publish(build,expected,&a,slot,s,log,cancel,progress);
     free(p);return final_selection(r,s,log,progress,"Selected update version saved; restart to use it.");
 }
@@ -649,10 +805,10 @@ enum kui_update_result kui_update_rollback(struct kui_app_status *s,kui_log_fn l
     const char *target=!r && !withdrawn?a.previous:"";
     if(!r && target[0]) {
         p=malloc(sizeof(*p));if(!p)r=KUI_UPDATE_MEMORY;
-        else r=kui_update_bank_verify(target,p,s,log,cancel,progress);
+        else r=kui_update_target_verify(target,p,s,log,cancel,progress);
         if(!r)hash=p->manifest_sha256;
     }
-    if(!r && !target[0])r=baseline_verify(s,cancel,progress,NULL);
+    if(!r && !target[0])r=kui_update_target_verify(target,NULL,s,log,cancel,progress);
     if(!r)r=publish(target,hash,&a,slot,s,log,cancel,progress);
     free(p);return final_selection(r,s,log,progress,"Previous version selected; restart to use it.");
 }
@@ -664,18 +820,25 @@ static enum kui_update_result install_snapshot(const char *path,const struct kui
     uint8_t *buffer=NULL,*receipt=NULL;FIL package;bool package_open=false;
     enum kui_update_result r=snapshot && other && sources?KUI_UPDATE_OK:KUI_UPDATE_MEMORY;
     if(!r)r=snapshot_prepare(incoming,active,snapshot,sources,s,cancel,progress);
+    if(!r && kui_update_engine_minimum(snapshot)>kui_update_engine_minimum(incoming)) {
+        const struct kui_update_entry *gui=kui_update_package_find(incoming,"runtime.kui");
+        if(gui && has_payload(gui)) {
+            buffer=malloc(CHUNK);if(!buffer)r=KUI_UPDATE_MEMORY;
+            if(!r && f_open(&package,path,FA_READ)!=FR_OK)r=KUI_UPDATE_IO;
+            else if(!r) {
+                r=package_read(&package,false,other,cancel);
+                if(!r && !kui_update_pin_matches(expected,other))r=KUI_UPDATE_STALE;
+                if(!r)r=admit(&package,gui->payload_offset,gui,incoming->build,true,
+                    kui_update_engine_minimum(snapshot),NULL,buffer,NULL,cancel,NULL);
+                if(f_close(&package)!=FR_OK && !r)r=KUI_UPDATE_IO;
+            }
+            free(buffer);buffer=NULL;
+        }
+    }
+    bool complete=false;
+    if(!r)r=snapshot_target(snapshot,active,other,(incoming->flags&KUI_UPDATE_FULL)!=0u,&complete,s,log,cancel,progress);
     struct kui_update_pin snapshot_pin;
     if(!r)kui_update_package_pin(snapshot,&snapshot_pin);
-    bool complete=false;
-    if(!r) {
-        enum kui_update_result found=kui_update_bank_receipt_read(snapshot->build,other,cancel);
-        if(found==KUI_UPDATE_OK) {
-            complete=true;
-            if(!kui_update_pin_matches(&snapshot_pin,other))r=KUI_UPDATE_STALE;
-            else r=kui_update_bank_verify(snapshot->build,other,s,log,cancel,progress);
-        } else if(found==KUI_UPDATE_IO || found==KUI_UPDATE_CANCELLED || found==KUI_UPDATE_MEMORY)r=found;
-        else if(!strcmp(active->selected,snapshot->build) || !strcmp(active->previous,snapshot->build))r=KUI_UPDATE_PROTECTED;
-    }
     uint64_t required=0u,available=0u;
     if(!r && !complete)r=quota(snapshot,&required,&available);
     if(!r && !complete)r=directories(snapshot);
@@ -708,13 +871,13 @@ static enum kui_update_result install_snapshot(const char *path,const struct kui
             else destination_open=true;
         }
         if(!r)r=admit(source,sources[i].offset,entry,snapshot->build,!strcmp(entry->path,"runtime.kui"),
-            true,&destination,buffer,s,cancel,progress);
+            kui_update_engine_minimum(snapshot),&destination,buffer,s,cancel,progress);
         if(destination_open) {
             if(f_sync(&destination)!=FR_OK)r=KUI_UPDATE_IO;
             if(f_close(&destination)!=FR_OK)r=KUI_UPDATE_IO;
         }
         if(input_open && f_close(&input)!=FR_OK && !r)r=KUI_UPDATE_IO;
-        if(!r)r=verify_member(snapshot->build,entry,!strcmp(entry->path,"runtime.kui"),buffer,s,cancel,progress);
+        if(!r)r=verify_member(snapshot->build,entry,!strcmp(entry->path,"runtime.kui"),kui_update_engine_minimum(snapshot),buffer,s,cancel,progress);
     }
     if(package_open && f_close(&package)!=FR_OK && !r)r=KUI_UPDATE_IO;
     if(!r && !complete) {
@@ -758,17 +921,7 @@ enum kui_update_result kui_update_install(const char *path,const struct kui_upda
         enum kui_update_result root=baseline_verify(NULL,cancel,NULL,&root_engine);
         if(root!=KUI_UPDATE_NOT_FOUND && root!=KUI_UPDATE_OK)r=root;
     }
-    if(!r && root_engine==2u) {
-        const struct kui_update_entry *gui=kui_update_package_find(p,"runtime.kui");
-        buffer=malloc(CHUNK);if(!buffer)r=KUI_UPDATE_MEMORY;
-        if(!r && f_open(&source,path,FA_READ)!=FR_OK)r=KUI_UPDATE_IO;
-        else if(!r) {
-            r=admit(&source,gui->payload_offset,gui,p->build,true,true,NULL,buffer,NULL,cancel,NULL);
-            if(f_close(&source)!=FR_OK && !r)r=KUI_UPDATE_IO;
-        }
-        free(buffer);buffer=NULL;
-    }
-    if(!r && root_engine==2u) {
+    if(!r && root_engine>=2u) {
         /* Legacy wire packages remain usable after engine migration. Their
          * policy2 rows preserve the effective selected software, and exact
          * legacy replacements are normalized into the new snapshot model. */
@@ -804,10 +957,10 @@ enum kui_update_result kui_update_install(const char *path,const struct kui_upda
         if(!kui_update_bank_path(p->build,p->entries[i].path,path_buffer,sizeof(path_buffer))) {r=KUI_UPDATE_ARGUMENT;break;}
         FIL destination;
         if(f_open(&destination,path_buffer,FA_WRITE|FA_CREATE_ALWAYS)!=FR_OK) {r=KUI_UPDATE_IO;break;}
-        r=admit(&source,p->entries[i].payload_offset,&p->entries[i],p->build,i==0u,root_engine==2u,&destination,buffer,s,cancel,progress);
+        r=admit(&source,p->entries[i].payload_offset,&p->entries[i],p->build,i==0u,root_engine,&destination,buffer,s,cancel,progress);
         if(f_sync(&destination)!=FR_OK)r=KUI_UPDATE_IO;
         if(f_close(&destination)!=FR_OK)r=KUI_UPDATE_IO;
-        if(!r)r=verify_member(p->build,&p->entries[i],i==0u,buffer,s,cancel,progress);
+        if(!r)r=verify_member(p->build,&p->entries[i],i==0u,0u,buffer,s,cancel,progress);
     }
     if(source_open && f_close(&source)!=FR_OK && !r)r=KUI_UPDATE_IO;
     if(!r && !complete) {

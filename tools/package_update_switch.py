@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Deliver an updater upgrade and a ready-to-select ZIP in updates/test."""
+"""Historical updater switch fixture; current tests use make_update.py."""
 import argparse
 import hashlib
 import json
@@ -105,7 +105,10 @@ def main():
     parser.add_argument("--upgrade", required=True, type=Path)
     parser.add_argument("--test", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--legacy-fixture", action="store_true")
     args = parser.parse_args()
+    if not args.legacy_fixture:
+        parser.error("Historical switch fixture. Use make_updater_repair.py or make_update.py; --legacy-fixture is for regression evidence only.")
     try:
         print(json.dumps(package_switch(args.upgrade, args.test, args.output), indent=2))
     except (OSError, ValueError) as error:

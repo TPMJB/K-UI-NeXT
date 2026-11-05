@@ -20,6 +20,7 @@ void kui_update_boot_require_engine(unsigned level) {
     if(level>required_engine)required_engine=level;
     context_known=true;
 }
+unsigned kui_update_boot_engine_minimum(void) {return required_engine;}
 int kui_update_effective_snapshot(char bank[13],uint8_t manifest_sha256[32]) {
     if(!bank || !manifest_sha256)return -1;
     memset(bank,0,13u);memset(manifest_sha256,0,32u);
@@ -182,11 +183,11 @@ static bool load_receipt(const struct kui_update_activation *selected,kui_cancel
 static bool adopt(const char *compiled,unsigned transport,const struct kui_update_activation *selected,
     const struct kui_update_handoff_context *context,kui_cancel_fn cancel) {
     struct kui_update_handoff h;
-    /* V1 transfers predate an engine floor. Once the production GUI opts in,
-     * reread those sources rather than adopting a legacy GUI1 transfer. V2
-     * always checks engine2 before creating a handoff; future floors require
-     * a fresh read as well. */
-    if((required_engine && kui_update_package_version(running)<2u) || required_engine>2u ||
+    /* A handoff proves the sender checked its own declared engine minimum.
+     * A legacy v2 receipt says only engine2: it cannot authorize bypassing the
+     * current engine3 check merely because the GUI build/sequence still match.
+     * Re-read legacy sources under a stricter production floor. */
+    if(required_engine>kui_update_engine_minimum(running) || required_engine>KUI_UPDATE_ENGINE_CURRENT ||
        !context || !kui_update_handoff_decode(context->wire,&h) ||
        strcmp(compiled,h.build) || h.transport!=transport || h.payload_offset!=context->payload_offset ||
        h.sequence!=selected->sequence ||
@@ -212,7 +213,8 @@ static bool adopt(const char *compiled,unsigned transport,const struct kui_updat
 }
 static bool load_runtime(struct kui_runtime_image *out,uint32_t *handoff_offset,kui_log_fn log,kui_cancel_fn cancel) {
     enum kui_runtime_result loaded=kui_runtime_read(KUI_RUNTIME_PATH,out,log,cancel);
-    unsigned minimum=kui_update_package_version(running)>=2u && required_engine<2u?2u:required_engine;
+    unsigned minimum=kui_update_engine_minimum(running);
+    if(required_engine>minimum)minimum=required_engine;
     return loaded==KUI_RUNTIME_OK && kui_update_capability_valid(out->data,out->info.payload_bytes) &&
         kui_update_engine_level(out->data,out->info.payload_bytes)>=minimum &&
         kui_update_handoff_empty(out->data,out->info.payload_bytes,handoff_offset);
@@ -272,6 +274,14 @@ static enum kui_update_boot_result read_selected(const char *compiled,unsigned t
             return baseline(compiled,transport,out,view,log,cancel,force_root);
         }
         if(load_receipt(selected,cancel)) {
+            /* Engine3 snapshots explicitly carry their required feature bit.
+             * Old receipts cannot authorize engine3 adoption. Reject them
+             * before loading, rather than chaining a GUI3 forever with a
+             * receipt that would refuse its handoff on the next entry. */
+            if(required_engine>=3u && kui_update_engine_minimum(running)<required_engine) {
+                view->fallback=true;log("Updates: retained bank predates the current updater; using a compatible selection");
+                block_modules();continue;
+            }
             const struct kui_update_entry *gui=kui_update_package_find(running,"runtime.kui");
             const char *gui_build=gui?kui_update_entry_build(running->build,gui):NULL;
             /* A v2 bank ID describes a complete configuration. Withdrawal

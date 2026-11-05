@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Deliver an admitted GUI through a deterministic manual root migration."""
+"""Historical root-only migration fixture; use make_updater_repair.py for repairs."""
 import argparse
 import json
 import os
@@ -154,7 +154,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--addon", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--legacy-fixture", action="store_true")
     args = parser.parse_args()
+    if not args.legacy_fixture:
+        parser.error("Root-only repair is obsolete. Use make_updater_repair.py; --legacy-fixture is for regression evidence only.")
     try:
         print(json.dumps(package_repair(args.addon, args.output), indent=2))
     except (OSError, ValueError) as error:

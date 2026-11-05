@@ -112,8 +112,12 @@ bool kui_update_module_path_valid(const char *path) {
     size_t prefix=bytes>11u && !memcmp(path,"apps/games/",11u)?11u:
         bytes>10u && !memcmp(path,"apps/disc/",10u)?10u:
         bytes>11u && !memcmp(path,"apps/music/",11u)?11u:0u;
+    /* These folders also contain generated sessions and mutable app records.
+     * Only an explicitly named helper owns a raw .bin software path. */
+    static const char helper[]="-helper.bin";
     if(prefix)return bytes-prefix>=5u &&
-        (!memcmp(path+bytes-4u,".kui",4u) || !memcmp(path+bytes-4u,".bin",4u) ||
+        (!memcmp(path+bytes-4u,".kui",4u) ||
+         (bytes-prefix>sizeof(helper)-1u && !memcmp(path+bytes-(sizeof(helper)-1u),helper,sizeof(helper)-1u)) ||
          (prefix==11u && !memcmp(path,"apps/music/",11u) &&
           (!memcmp(path+bytes-4u,".ogg",4u) || !memcmp(path+bytes-4u,".wav",4u)))) &&
         safe_component(path+prefix,bytes-prefix);
@@ -138,6 +142,10 @@ bool kui_update_bank_path(const char *build,const char *relative,char *out,size_
     out[root+13u]='/';memcpy(out+root+14u,relative,path+1u);return true;
 }
 uint32_t kui_update_package_version(const struct kui_update_package *p) {return p && p->version?p->version:1u;}
+unsigned kui_update_engine_minimum(const struct kui_update_package *p) {
+    if(kui_update_package_version(p)!=2u)return 0u;
+    return p && (p->flags&KUI_UPDATE_REQUIRES_ENGINE3)?3u:2u;
+}
 size_t kui_update_entry_bytes(const struct kui_update_package *p) {
     uint32_t version=kui_update_package_version(p);
     return version==1u?KUI_UPDATE_ENTRY_BYTES:version==2u?KUI_UPDATE_ENTRY_V2_BYTES:0u;
@@ -146,7 +154,7 @@ static uint32_t entry_limit(uint32_t version) {
     return version==1u?KUI_UPDATE_V1_MAX_ENTRIES:version==2u?KUI_UPDATE_MAX_ENTRIES:0u;
 }
 static bool flags_valid(uint32_t version,uint8_t flags) {
-    return version==1u?!flags:version==2u && !(flags&~KUI_UPDATE_FULL);
+    return version==1u?!flags:version==2u && !(flags&~(KUI_UPDATE_FULL|KUI_UPDATE_REQUIRES_ENGINE3));
 }
 static bool scalar_valid(const struct kui_update_package *p) {
     size_t entry_bytes=kui_update_entry_bytes(p);
@@ -355,11 +363,16 @@ bool kui_update_capability_valid(const void *payload,size_t bytes) {
 }
 unsigned kui_update_engine_level(const void *payload,size_t bytes) {
     if(!span(payload,bytes) || bytes<KUI_UPDATE_ENGINE_BYTES)return 0u;
-    const uint8_t *p=payload;unsigned found=0u;
-    for(size_t i=0u;i<=bytes-KUI_UPDATE_ENGINE_BYTES;i++)
-        if(p[i]=='K' && !memcmp(p+i,"KUIENG2!",8u) && get32(p+i+8u)==2u && get32(p+i+12u)==UINT32_C(0xfffffffd))
+    const uint8_t *p=payload;unsigned found=0u,level=0u;
+    for(size_t i=0u;i<=bytes-KUI_UPDATE_ENGINE_BYTES;i++) {
+        if(p[i]!='K')continue;
+        unsigned candidate=!memcmp(p+i,"KUIENG2!",8u)?2u:!memcmp(p+i,"KUIENG3!",8u)?3u:0u;
+        if(candidate && get32(p+i+8u)==candidate && get32(p+i+12u)==~(uint32_t)candidate) {
             if(++found!=1u)return 0u;
-    return found==1u?2u:0u;
+            level=candidate;
+        }
+    }
+    return found==1u?level:0u;
 }
 static bool activation_valid(const struct kui_update_activation *a) {
     if(!a->sequence || (a->selected[0] && !kui_update_build_valid(a->selected)) ||

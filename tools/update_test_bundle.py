@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Wrap one checked test .kup for direct selection in K-UI's Updates browser.
+"""Historical same-build test bundle fixture.
 
 Manual-install ZIPs are not converted implicitly. Assemble an explicit variant
 with update_package.py first; only its declared replacements will be installed.
@@ -82,7 +82,10 @@ def main():
     parser.add_argument("output", type=Path)
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--label", required=True)
+    parser.add_argument("--legacy-fixture", action="store_true")
     args = parser.parse_args()
+    if not args.legacy_fixture:
+        parser.error("Historical cohort bundle. Use make_update.py for current packages; --legacy-fixture is for regression evidence only.")
     try:
         print(json.dumps(bundle(args.package, args.output, args.source_commit, args.label), indent=2))
     except (OSError, ValueError) as error:
