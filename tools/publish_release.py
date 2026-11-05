@@ -15,6 +15,7 @@ from package import ROOT, GAME_FILES, NATIVE_RELEASE_FLAGS, guide_version, relea
 from runtime_package import verify
 from retail_package import inspect_retail
 from zso_package import inspect_zso
+from update_package import current_consumer_check, verify as verify_update, SELF_KUI, RAW_SOFTWARE
 
 SUPPORTED_RELEASES = {"1.7", "1.8.5", "2.0.0"}
 
@@ -90,11 +91,37 @@ def public_notes(notes, repository, tag, asset_ref=None):
     return re.sub(r"(?<=\])\(([^)\s]+)\)", replace, notes)
 
 
+def verify_update_asset(package, installation):
+    """Bind a standalone update to every software byte in its release ZIP."""
+    try:
+        report = verify_update(package)
+        require(report["format"] == 2 and report["full"] and report["channel"] == "stable" and
+                all(row["policy"] in (SELF_KUI, RAW_SOFTWARE) for row in report["members"]),
+                "Release update must contain exact replacements for all staged software")
+        current_consumer_check(package)
+        with zipfile.ZipFile(installation) as archive:
+            software = {name[4:]: name for name in archive.namelist()
+                        if name.startswith("KUI/") and not name.endswith("/")}
+            require({row["path"] for row in report["members"]} == set(software),
+                    "Release update software inventory differs from the installation ZIP")
+            for row in report["members"]:
+                data = archive.read(software[row["path"]])
+                require(len(data) == row["bytes"] and hashlib.sha256(data).hexdigest() == row["sha256"],
+                        "Release update software differs from the installation ZIP: " + row["path"])
+    except (OSError, ValueError, KeyError, zipfile.BadZipFile) as error:
+        require(False, "Invalid release update: " + str(error))
+
+
 def verify_assets(directory, release, commit):
     prefix = release["artifact_prefix"]
     names = {prefix + "-release.zip", prefix + "-source.zip"}
     if release["version"] == "2.0.0":
         names.add(prefix + "-press.zip")
+    # Previously published releases predate .kup delivery; new package.py
+    # outputs include the standalone update beside the installation/source ZIPs.
+    update_name = prefix + "-update.kup"
+    if (directory / update_name).is_file():
+        names.add(update_name)
     checksums = {}
     for line in (directory / "SHA256SUMS.txt").read_text().splitlines():
         digest, name = line.split("  ", 1)
@@ -105,6 +132,9 @@ def verify_assets(directory, release, commit):
         with (directory / name).open("rb") as stream:
             require(hashlib.file_digest(stream, "sha256").hexdigest() == expected,
                     "Release asset checksum mismatch: " + name)
+        if name == update_name:
+            verify_update_asset(directory / name, directory / (prefix + "-release.zip"))
+            continue
         with zipfile.ZipFile(directory / name) as archive:
             record = json.loads(archive.read("build.json"))
             require(record["commit"] == commit and record["release"] == release,
@@ -282,7 +312,8 @@ def publish_draft(repository, commit, release, tag, message):
     release_path = endpoint + "/releases/" + str(draft["id"])
     with tempfile.TemporaryDirectory(prefix="kui-publish-draft-") as temporary:
         gh("release", "download", tag, "--repo", repository, "--dir", temporary,
-           "--pattern", release["artifact_prefix"] + "-*.zip", "--pattern", "SHA256SUMS.txt")
+           "--pattern", release["artifact_prefix"] + "-*.zip",
+           "--pattern", release["artifact_prefix"] + "-update.kup", "--pattern", "SHA256SUMS.txt")
         verify_assets(Path(temporary), release, source)
         require(api(endpoint + "/git/ref/heads/main")["object"]["sha"] == commit,
                 "Main advanced while the draft was being verified")

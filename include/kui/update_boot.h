@@ -41,12 +41,27 @@ enum kui_update_boot_result kui_update_boot_reload(const char *compiled_build,
     unsigned transport,struct kui_runtime_image *out,struct kui_update_boot_view *view,
     kui_log_fn log,kui_cancel_fn cancel);
 void kui_update_boot_reload_abort(void);
-/* Safe manual bypass: a bank GUI chains to the root GUI rather than merely
- * clearing its bank pin and continuing with root modules. */
+/* Root/direct-entry helper for callers without a captured RAM handoff.
+ * Startup bypass with a handoff must use the context-aware variant below. */
 enum kui_update_boot_result kui_update_boot_baseline(const char *compiled_build,
     unsigned transport,struct kui_runtime_image *out,struct kui_update_boot_view *view,
     kui_log_fn log,kui_cancel_fn cancel);
+/* Startup bypass must preserve its RAM provenance. A filled or damaged bank
+ * handoff forces root execution even if the GUI build strings are equal. */
+enum kui_update_boot_result kui_update_boot_baseline_handoff(const char *compiled_build,
+    unsigned transport,const struct kui_update_handoff_context *,
+    struct kui_runtime_image *out,struct kui_update_boot_view *view,
+    kui_log_fn log,kui_cancel_fn cancel);
 void kui_update_boot_reset(void);
+/* Production GUI calls this before startup selection. The required engine
+ * level only increases for the lifetime of this GUI; legacy host fixtures
+ * that do not opt in preserve their original protocol admission behavior. */
+void kui_update_boot_require_engine(unsigned level);
+/* Effective running selection for constructing a subsequent partial update.
+ * Returns 0 before the production context opt-in, -1 when loads are blocked,
+ * or +1 with the bank ID + receipt SHA (empty/zero means retained root). A
+ * failed/newer saved activation must never override this checked fallback. */
+int kui_update_effective_snapshot(char bank[13],uint8_t manifest_sha256[32]);
 /* Call on startup mount/release/staging failures before the helper can run,
  * or if its checked chain image cannot be handed off. */
 void kui_update_boot_block(void);
@@ -56,7 +71,7 @@ void kui_update_boot_block(void);
  * callbacks keep SHA dependencies in the updater implementation; runtime_file
  * feeds the same open stream's header and exact payload through them. */
 struct kui_update_runtime_stream {
-    bool pinned;
+    bool pinned,raw;
     uint64_t bytes;
     char build[13];
     uint8_t expected[32];
@@ -66,4 +81,7 @@ struct kui_update_runtime_stream {
 };
 bool kui_update_runtime_resolve(const char *logical,char *resolved,size_t capacity,
     struct kui_update_runtime_stream *stream);
+/* True for a checked bank's explicit tombstone or an omitted FULL software
+ * path. Ordinary root absence, invalid paths and a blocked resolver are false. */
+bool kui_update_runtime_absent(const char *logical);
 #endif

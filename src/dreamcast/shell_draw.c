@@ -797,7 +797,11 @@ static void updates_page(struct paint *p,const struct kui_shell *s,const struct 
         } else label(p,48,244,MUTED,u->baseline?
             "Original root baseline; checked again before selection.":
             "The complete target version was checked before this review.");
-        if(!u->restore && u->inherited_count) {
+        if(!u->restore && u->reviewed.package.version==2u) {
+            snprintf(line,sizeof(line),"Files to update: %u; remove: %u. Others kept.",
+                u->replacement_count,u->removed_count);
+            label(p,48,294,CYAN,line);
+        } else if(!u->restore && u->inherited_count) {
             if(u->replacement_count==1u)
                 label(p,48,294,CYAN,"GUI update; keeps your installed game readers.");
             else {

@@ -246,7 +246,7 @@ class UpdatePackageTests(unittest.TestCase):
         future = "apps/games/cli-future.kui"
         (self.root / future).write_bytes(envelope(bytes(24), 24, BUILD))
         members = self.base / "members.json"
-        command = [sys.executable, str(update.ROOT / "tools/update_package.py"), "build", str(self.root),
+        command = [sys.executable, str(update.ROOT / "tools/update_package.py"), "build-legacy", str(self.root),
                    str(self.output), "--build-id", BUILD, "--members", str(members)]
         members.write_text(json.dumps(["runtime.kui", future]))
         built = subprocess.run(command, text=True, capture_output=True)
@@ -538,7 +538,7 @@ class UpdatePackageTests(unittest.TestCase):
 
     def test_cli_requires_explicit_inheritance_opt_in(self):
         self.gui_only()
-        command = [sys.executable, str(update.ROOT / "tools/update_package.py"), "build", str(self.root),
+        command = [sys.executable, str(update.ROOT / "tools/update_package.py"), "build-legacy", str(self.root),
                    str(self.output), "--build-id", BUILD]
         strict = subprocess.run(command, text=True, capture_output=True)
         self.assertNotEqual(strict.returncode, 0)

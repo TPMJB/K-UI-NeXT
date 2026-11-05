@@ -395,12 +395,13 @@ static void namespace_paths(void) {
         "apps/games/future-loader-v9.kui","apps/disc/native.v2-9_x.kui"};
     static const char *const invalid[]={"","Runtime.kui","runtime.kui/","apps/games/.a.kui","apps/games/-a.kui",
         "apps/games/_a.kui","apps/games/.kui","apps/games/A.kui","Apps/games/a.kui","apps/game/a.kui",
-        "apps/discs/a.kui","0:/KUI/apps/games/a.kui","/apps/games/a.kui","apps/games/a.KUI","apps/games/a.bin",
+        "apps/discs/a.kui","0:/KUI/apps/games/a.kui","/apps/games/a.kui","apps/games/a.KUI",
         "apps/games/a.kui/","apps/games/a/b.kui","apps/disc/a\\b.kui","apps/games/a..b.kui","apps/games/a..kui",
         "apps/games/../a.kui","apps/games/a b.kui","apps/games/a\tb.kui","apps/games/a\nb.kui",
         "apps/games/a:b.kui","apps/games/a%b.kui","apps/games/\177.kui","KUI/runtime.kui","saves/a.kui"};
     CHECK(!kui_update_module_path_valid(NULL));
     for(unsigned i=0u;i<sizeof(valid)/sizeof(valid[0]);i++)CHECK(kui_update_module_path_valid(valid[i]));
+    CHECK(kui_update_module_path_valid("apps/games/a.bin"));
     for(unsigned i=0u;i<sizeof(invalid)/sizeof(invalid[0]);i++)CHECK(!kui_update_module_path_valid(invalid[i]));
     char longest[81];memcpy(longest,"apps/games/",11u);memset(longest+11u,'a',64u);memcpy(longest+75u,".kui",5u);
     CHECK(strlen(longest)==79u && kui_update_module_path_valid(longest));
@@ -450,7 +451,8 @@ static void namespace_paths(void) {
     CHECK(!kui_update_package_find(&decoded,"apps/games/next-generation.kui"));
     CHECK(kui_update_package_member(&decoded,"apps/games/next-generation.kui",&member) &&
         member.policy==KUI_UPDATE_INHERIT_ROOT && !member.bytes);
-    CHECK(!kui_update_package_member(&decoded,"apps/games/unapproved-helper.bin",&member));
+    CHECK(kui_update_package_member(&decoded,"apps/games/unapproved-helper.bin",&member) &&
+        member.policy==KUI_UPDATE_INHERIT_ROOT && !member.bytes);
     CHECK(!kui_update_package_member(&decoded,"apps/games/save.vmd",&member));
     CHECK(!kui_update_package_member(&decoded,"saves/a.kui",&member));
     uf_free(&wire);
@@ -461,7 +463,7 @@ static void namespace_paths(void) {
         snprintf(names[i-1u],sizeof(names[i-1u]),"apps/games/future-%02u.kui",64u-i);many[i]=names[i-1u];
     }
     wire=path_package(many,64u,0u);CHECK(uf_decode(&wire,&decoded)==KUI_UPDATE_OK && decoded.count==64u);
-    CHECK(kui_update_receipt_encode(&decoded,receipt,sizeof(receipt),&bytes)==KUI_UPDATE_OK && bytes==KUI_UPDATE_RECEIPT_MAX);
+    CHECK(kui_update_receipt_encode(&decoded,receipt,sizeof(receipt),&bytes)==KUI_UPDATE_OK && bytes==KUI_UPDATE_HEADER_BYTES+64u*KUI_UPDATE_ENTRY_BYTES);
     CHECK(!memcmp(receipt,wire.data,bytes));uf_free(&wire);
     for(unsigned i=0u;i<sizeof(invalid)/sizeof(invalid[0]);i++) {
         const char *bad[]={"runtime.kui",invalid[i]};wire=path_package(bad,2u,0u);

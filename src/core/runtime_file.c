@@ -30,6 +30,7 @@ enum kui_runtime_result kui_runtime_read(const char *path,
     if(!path || !log || !cancelled)return result;
     char resolved[KUI_UPDATE_BOOT_PATH_BYTES];struct kui_update_runtime_stream stream;
     if(!resolve(path,resolved,sizeof(resolved),&stream))return result;
+    if(stream.raw)return KUI_RUNTIME_HEADER;
     if(cancelled()) return KUI_RUNTIME_CANCELLED;
     FRESULT r = f_open(&file, resolved, FA_READ);
     if(r != FR_OK) {

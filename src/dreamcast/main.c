@@ -11,10 +11,15 @@
 #endif
 #ifdef KUI_SD_RUNTIME
 #include "kui/update_handoff.h"
+#include "kui/update.h"
 /* One retained marker admits this runtime to immutable update banks. A
  * volatile read in main keeps the capability in the linked payload. */
 static volatile const uint8_t kui_update_bank_capability[16] __attribute__((used))={
     'K','U','I','B','A','N','K','1',1,0,0,0,0xfe,0xff,0xff,0xff};
+/* Feature level is separate from the legacy bank marker. A test GUI must not
+ * silently replace the updater with an older fixed-catalog implementation. */
+static volatile const uint8_t kui_update_engine_capability[KUI_UPDATE_ENGINE_BYTES]
+    __attribute__((used))=KUI_UPDATE_ENGINE_INITIALIZER;
 /* This initialized slot is EMPTY on disk. Only a fully checked RAM chain
  * image receives a filled context, consumed before any startup storage I/O. */
 static volatile uint8_t kui_update_ram_handoff[KUI_UPDATE_HANDOFF_BYTES]
@@ -2671,8 +2676,18 @@ static void update_work(const struct kui_shell_update_request *request,struct ku
                     &out->status,kui_log,kui_cancelled,app_progress);
             out->restart_required=result==KUI_UPDATE_OK || result==KUI_UPDATE_IO;
             if(result==KUI_UPDATE_OK) {
-                memcpy(out->previous,activation.selected,sizeof(out->previous));
-                memcpy(out->selected,review->target,sizeof(out->selected));
+                /* A v2 package is applied to the effective installation. Its
+                 * resulting snapshot identity can differ from the input ID. */
+                struct kui_update_activation installed;
+                if(update_activation_current(&installed)) {
+                    memcpy(out->previous,installed.previous,sizeof(out->previous));
+                    memcpy(out->selected,installed.selected,sizeof(out->selected));
+                } else {
+                    result=KUI_UPDATE_IO;out->selection_known=false;
+                    out->status.errors=1u;out->status.passed=false;
+                    snprintf(out->status.message,sizeof(out->status.message),
+                        "Activation could not be confirmed; restart and check selected version.");
+                }
             } else if(result==KUI_UPDATE_IO)out->selection_known=false;
             if(result==KUI_UPDATE_IO && !strstr(out->status.message,"Activation")) {
                 snprintf(out->status.lines[0],KUI_APP_LINE_CAP,"Restart before retrying; check the selected version.");out->status.line_count=1u;
@@ -2712,6 +2727,7 @@ static void update_work(const struct kui_shell_update_request *request,struct ku
                 kui_update_package_pin(package,&out->reviewed.package);
                 for(uint32_t i=0;i<package->count;i++) {
                     if(package->entries[i].policy==KUI_UPDATE_INHERIT_ROOT)++out->inherited_count;
+                    else if(package->entries[i].policy==KUI_UPDATE_REMOVE)++out->removed_count;
                     else ++out->replacement_count;
                 }
                 if(!out->restore)memcpy(out->reviewed.target,package->build,sizeof(out->reviewed.target));
@@ -4763,7 +4779,7 @@ static void update_boot_start(void) {
     bool connected=kui_sd_connect(),mounted=connected && kui_mount(&fs,kui_log);
     enum kui_update_boot_result result=KUI_UPDATE_BOOT_ERROR;
     if(mounted)result=baseline?
-        kui_update_boot_baseline(KUI_BUILD_ID,kui_storage_selected(),&image,&update_boot_view,kui_log,update_boot_no_cancel):
+        kui_update_boot_baseline_handoff(KUI_BUILD_ID,kui_storage_selected(),&handoff,&image,&update_boot_view,kui_log,update_boot_no_cancel):
         kui_update_boot_read_handoff(KUI_BUILD_ID,kui_storage_selected(),&handoff,&image,&update_boot_view,kui_log,update_boot_no_cancel);
     else snprintf(update_boot_view.notice,sizeof(update_boot_view.notice),"Update storage unavailable; module loading blocked. Restart after checking SD.");
     bool released=!mounted || f_mount(NULL,"0:",0)==FR_OK;
@@ -4787,7 +4803,7 @@ static void update_boot_start(void) {
 int main(void) {
     kui_storage_boot_begin();
 #ifdef KUI_SD_RUNTIME
-    if(kui_update_bank_capability[8]!=1u) return 1;
+    if(kui_update_bank_capability[8]!=1u || kui_update_engine_capability[8]!=2u) return 1;
 #endif
     ui_thread = thd_get_current();
     vid_set_mode(DM_640x480 | DM_MULTIBUFFER, PM_RGB565);
@@ -4815,6 +4831,7 @@ int main(void) {
 #endif
     kui_log("Use a spare test card for write tests. No formatting; existing files preserved.");
 #ifdef KUI_SD_RUNTIME
+    kui_update_boot_require_engine(2u);
     update_boot_start();
     kui_system_settings_default(&system_current);system_pending=system_current;
     kui_music_init(kui_log);kui_disc_identity_init(&disc_identity);

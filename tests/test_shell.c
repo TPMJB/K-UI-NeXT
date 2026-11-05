@@ -1625,6 +1625,9 @@ static void update_controls(void) {
     render(&view);assert(strstr(drawn,"GUI update; keeps your installed game readers."));
     s.update.replacement_count=3u;s.update.inherited_count=23u;
     render(&view);assert(strstr(drawn,"Updates 3 files; retains 23 installed modules."));
+    s.update.reviewed.package.version=2u;s.update.replacement_count=1u;s.update.removed_count=1u;
+    render(&view);assert(strstr(drawn,"Files to update: 1; remove: 1. Others kept."));
+    s.update.reviewed.package.version=0u;s.update.removed_count=0u;
     /* Confirmation owns a deep copy; later display/caller edits cannot change
      * the package, target, activation or storage that the A action dispatches. */
     strcpy(s.update.reviewed.target,"111111111111");s.update.reviewed.package.manifest_sha256[0]=0xffu;

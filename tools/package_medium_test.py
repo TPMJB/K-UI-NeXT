@@ -15,6 +15,7 @@ import zipfile
 import zlib
 
 from runtime_package import MAX_BYTES, MAX_MEMORY, envelope, flatten_elf, verify
+from package_update_payload import add_update_payload, publish_update_payload
 
 ROOT = Path(__file__).resolve().parents[1]
 GUIDE = "docs/3.0-medium-first-pass.md"
@@ -84,8 +85,10 @@ def readme(guide, head, public):
     return (title + "\n\n" +
             (f"Local build: `{head[:12]}`. Public source commit: `{public}`.\n\n" if public else
              f"Local build: `{head[:12]}`. Source is included in this ZIP; this update is not published to GitHub.\n\n") +
-            "Copy only `KUI/runtime.kui` onto the existing SD installation with the console powered off. "
-            "No Python installer or loader-module replacement is needed. Before testing, back up the "
+            "Use the accompanying `.kup` in Settings → Updates, or select this ZIP there. "
+            "The updater installs the exact staged test software and preserves other effective software. "
+            "The ZIP retains the `KUI/` files as build evidence; the standalone `.kup` is sufficient to install. "
+            "A one-time current updater-engine root upgrade is required on older installations. Before testing, back up the "
             "working runtime and preferences/game-choice metadata (or the complete existing KUI folder). "
             "Older runtimes may not understand new schemas and may use fallback/default choices; "
             "restoring only the runtime does not restore those settings. Keep original cards and saves.\n\n" +
@@ -153,8 +156,11 @@ def package(args):
         name = f"evidence/{index:02d}-" + re.sub(r"[^A-Za-z0-9._-]", "_", path.name)
         files[name] = path.read_bytes()
         evidence.append(name)
-    manifest = {"format": 1, "purpose": "K-UI 3.0 medium-feature copy-over console test",
-                "source": source, "base": baseline, "runtime": info, "install": ["KUI/runtime.kui"],
+    update_name = output.with_suffix(".kup").name
+    update_report = add_update_payload(files, update_name)
+    manifest = {"format": 1, "purpose": "K-UI 3.0 medium-feature updater console test",
+                "source": source, "base": baseline, "runtime": info, "install": [update_name],
+                "update_package": update_report,
                 "evidence": evidence, "console_acceptance": "not established by this package or host logs",
                 "manifest_coverage": "All ZIP members except manifest.json itself",
                 "files": {name: {"bytes": len(data), "sha256": sha(data)} for name, data in sorted(files.items())}}
@@ -181,12 +187,14 @@ def package(args):
                 stream.flush()
                 os.fsync(stream.fileno())
             verify_zip(temporary, files)
+            update_output = publish_update_payload(files[update_name], output.with_suffix(".kup"))
             os.replace(temporary, output)
         finally:
             if temporary is not None and temporary.exists():
                 temporary.unlink()
     return {"output": str(output), "bytes": output.stat().st_size, "sha256": sha(output.read_bytes()),
-            "members": len(files), "build": info["build"], "source": source, "base": baseline}
+            "members": len(files), "build": info["build"], "source": source, "base": baseline,
+            "update_package": update_output}
 
 
 def main():

@@ -14,7 +14,7 @@
 #define RING_BYTES 32768u
 #define STAGE_DIR "0:/KUI/system/update-stage"
 #define PARTIAL STAGE_DIR "/owned.partial"
-#define PACKAGE_LIMIT (KUI_UPDATE_MAX_PAYLOAD+KUI_UPDATE_HEADER_BYTES+KUI_UPDATE_MAX_ENTRIES*KUI_UPDATE_ENTRY_BYTES)
+#define PACKAGE_LIMIT (KUI_UPDATE_MAX_PAYLOAD+KUI_UPDATE_RECEIPT_MAX)
 struct member {
     char name[176];uint16_t flags,method,name_bytes;
     uint32_t crc,compressed,bytes,local;uint64_t data,directory;

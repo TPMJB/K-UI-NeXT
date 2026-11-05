@@ -17,6 +17,7 @@ from package_medium_test import (ROOT, build_info, clean_head, commit, git,
                                  public_mapping, require, sha, verify_zip, wire)
 from package_physical_disc_test import collect_vmu_build, ordinary, provenance
 from runtime_package import ELF_HEADER, PROGRAM_HEADER, envelope, flatten_elf, verify
+from package_update_payload import add_update_payload, publish_update_payload
 
 GUIDE = "docs/gd-play-large-executables.md"
 PURPOSE = "Native GD Play larger-executable console test"
@@ -109,7 +110,10 @@ def readme(guide, head, public):
     title, _, rest = guide.decode("utf-8").partition("\n")
     publication = (f"Public source commit: `{public}`." if public else
                    "This update is not published to GitHub; exact source is included.")
-    return (f"{title}\n\nLocal build: `{head[:12]}`. {publication}\n\n{rest.lstrip()}").encode()
+    return (f"{title}\n\nLocal build: `{head[:12]}`. {publication}\n\n"
+            "Install the accompanying `.kup` from Settings → Updates, or select this ZIP there. "
+            "The standalone `.kup` contains the GUI and all three test modules; the ZIP is optional evidence. "
+            "Older installations first need the current updater-engine root upgrade.\n\n" + rest.lstrip()).encode()
 
 
 def package(args):
@@ -149,9 +153,15 @@ def package(args):
         name = f"evidence/{index:02d}-" + re.sub(r"[^A-Za-z0-9._-]", "_", path.name)
         files[name] = ordinary(path)
         evidence.append(name)
+    output = args.output.resolve()
+    require(output.suffix.lower() == ".zip", "Output must be a ZIP path")
+    require(not output.is_relative_to(ROOT), "Save the package outside the source checkout")
+    update_name = output.with_suffix(".kup").name
+    update_report = add_update_payload(files, update_name)
     manifest = {"format": 1, "purpose": PURPOSE,
                 "source": source, "base": baseline, "runtime": gui, "modules": modules,
-                "install": list(TARGETS), "native_executable_limit_bytes": limit,
+                "install": [update_name], "update_package": update_report,
+                "native_executable_limit_bytes": limit,
                 "staging_ram_required": "available contiguous main RAM with checked handoff margins",
                 "virtual_vmu_preference_changed_by_install": False,
                 "native_gd_only": True, "windows_ce_direct_boot_added": False,
@@ -159,9 +169,6 @@ def package(args):
                 "manifest_coverage": "All ZIP members except manifest.json itself",
                 "files": {name: {"bytes": len(data), "sha256": sha(data)} for name, data in sorted(files.items())}}
     files["manifest.json"] = wire(manifest)
-    output = args.output.resolve()
-    require(output.suffix.lower() == ".zip", "Output must be a ZIP path")
-    require(not output.is_relative_to(ROOT), "Save the package outside the source checkout")
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
     try:
@@ -177,13 +184,14 @@ def package(args):
             os.fsync(stream.fileno())
         verify_zip(temporary, files)
         clean_head(head)
+        update_output = publish_update_payload(files[update_name], output.with_suffix(".kup"))
         os.replace(temporary, output)
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
     return {"output": str(output), "bytes": output.stat().st_size, "sha256": sha(ordinary(output)),
-            "members": len(files), "build": head[:12], "install": list(TARGETS),
-            "source": source, "base": baseline}
+            "members": len(files), "build": head[:12], "install": [update_name],
+            "source": source, "base": baseline, "update_package": update_output}
 
 
 def main():

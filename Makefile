@@ -26,12 +26,26 @@ VMU_MANAGEMENT += src/core/vmu_game_candidates.c src/core/vmu_import_plan.c
 UPDATE_CODEC = src/core/update.c src/core/update_handoff.c src/core/runtime_image.c src/core/hash.c src/core/data.c
 UPDATE_FILES = $(UPDATE_CODEC) src/core/update_file.c
 UPDATE_TEST_FLAGS = $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES)
+KUI_UPDATE_STAGE ?= build/update-stage/KUI
+KUI_UPDATE_OUTPUT ?= build/test-update.kup
+.PHONY: update update-release
+# Every test/release uses the same current-source producer and C consumer.
+# Reader-only stages preserve the installed GUI and effective other modules.
+update:
+	python3 tools/make_update.py "$(KUI_UPDATE_STAGE)" "$(KUI_UPDATE_OUTPUT)" --channel testing
+update-release:
+	python3 tools/make_update.py "$(KUI_UPDATE_STAGE)" "$(KUI_UPDATE_OUTPUT)" --channel stable --full
 .PHONY: test-updater
-test-updater: build/test-update build/test-update-handoff build/update-image build/update-boot
+test-updater: build/test-update build/test-update-v2 build/test-update-handoff build/update-image build/update-boot
 	python3 -c "import sys; sys.path.insert(0,'tools'); import update_addon as a; r=a.check_sources(a.source_state()); print('PASS updater-only main source preservation:',len(r['checked_paths']),'protected paths')"
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-update
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-update-v2
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-update-handoff
 	python3 tests/test_update_package.py
+	python3 tests/test_update_package_v2.py
+	python3 tests/test_update_software_images.py
+	python3 tests/test_update_v2_images.py
+	python3 tests/test_package_update_payload.py
 	python3 tests/test_update_addon.py
 	python3 tests/test_update_repair.py
 	python3 tests/test_update_test_bundle.py
@@ -43,6 +57,10 @@ test-updater: build/test-update build/test-update-handoff build/update-image bui
 build/test-update: tests/test_update.c tests/update_fixture.h $(UPDATE_CODEC) include/kui/update.h include/kui/update_catalog.inc include/kui/update_legacy.inc include/kui/update_handoff.h
 	@mkdir -p $(@D)
 	$(CC) $(UPDATE_TEST_FLAGS) tests/test_update.c $(UPDATE_CODEC) -o $@
+
+build/test-update-v2: tests/test_update_v2.c src/core/update.c src/core/hash.c src/core/data.c include/kui/update.h
+	@mkdir -p $(@D)
+	$(CC) $(UPDATE_TEST_FLAGS) tests/test_update_v2.c src/core/update.c src/core/hash.c src/core/data.c -o $@
 
 build/test-update-handoff: tests/test_update_handoff.c src/core/update_handoff.c src/core/data.c include/kui/update_handoff.h
 	@mkdir -p $(@D)

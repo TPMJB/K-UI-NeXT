@@ -4,25 +4,31 @@
 #include "kui/apps.h"
 #define KUI_UPDATE_HEADER_BYTES 128u
 #define KUI_UPDATE_ENTRY_BYTES 128u
-#define KUI_UPDATE_MAX_ENTRIES 64u
+#define KUI_UPDATE_ENTRY_V2_BYTES 160u
+#define KUI_UPDATE_V1_MAX_ENTRIES 64u
+#define KUI_UPDATE_MAX_ENTRIES 256u
 #define KUI_UPDATE_MAX_PAYLOAD (128u*1024u*1024u)
 #define KUI_UPDATE_PATH_BYTES 80u
 #define KUI_UPDATE_BUILD_BYTES 13u
 #define KUI_UPDATE_ACTIVATION_BYTES 128u
-#define KUI_UPDATE_RECEIPT_MAX (128u+64u*128u)
+#define KUI_UPDATE_RECEIPT_MAX (KUI_UPDATE_HEADER_BYTES+KUI_UPDATE_MAX_ENTRIES*KUI_UPDATE_ENTRY_V2_BYTES)
 #define KUI_UPDATE_SYSTEM "0:/KUI/system"
 #define KUI_UPDATE_ACTIVE0 KUI_UPDATE_SYSTEM "/active0.bin"
 #define KUI_UPDATE_ACTIVE1 KUI_UPDATE_SYSTEM "/active1.bin"
 #define KUI_UPDATE_CAPABILITY_BYTES 16u
 #define KUI_UPDATE_CAPABILITY_INITIALIZER {'K','U','I','B','A','N','K','1',1,0,0,0,254,255,255,255}
+#define KUI_UPDATE_ENGINE_BYTES 16u
+#define KUI_UPDATE_ENGINE_INITIALIZER {'K','U','I','E','N','G','2','!',2,0,0,0,253,255,255,255}
+#define KUI_UPDATE_FULL 1u
 enum kui_update_member_policy {
-    KUI_UPDATE_REPLACE=0, KUI_UPDATE_APPROVED_LEGACY=1, KUI_UPDATE_INHERIT_ROOT=2
+    KUI_UPDATE_REPLACE=0, KUI_UPDATE_APPROVED_LEGACY=1, KUI_UPDATE_INHERIT_ROOT=2,
+    KUI_UPDATE_KEEP=2, KUI_UPDATE_SELF_KUI=3, KUI_UPDATE_RAW=4, KUI_UPDATE_REMOVE=5
 };
 enum kui_update_result {
     KUI_UPDATE_OK, KUI_UPDATE_ARGUMENT, KUI_UPDATE_NOT_FOUND, KUI_UPDATE_FORMAT,
     KUI_UPDATE_CHECKSUM, KUI_UPDATE_COHORT, KUI_UPDATE_RUNTIME, KUI_UPDATE_IO,
     KUI_UPDATE_CANCELLED, KUI_UPDATE_SPACE, KUI_UPDATE_STALE, KUI_UPDATE_PROTECTED,
-    KUI_UPDATE_MEMORY, KUI_UPDATE_SEQUENCE
+    KUI_UPDATE_MEMORY, KUI_UPDATE_SEQUENCE, KUI_UPDATE_ENGINE, KUI_UPDATE_LIMIT
 };
 struct kui_update_entry {
     char path[KUI_UPDATE_PATH_BYTES];
@@ -30,18 +36,21 @@ struct kui_update_entry {
     uint8_t sha256[32];
     uint8_t policy; /* enum kui_update_member_policy */
     uint64_t payload_offset; /* absolute byte offset in .kup */
+    char build[KUI_UPDATE_BUILD_BYTES]; /* policy3 envelope identity, independent of package ID */
 };
 struct kui_update_package {
     char build[KUI_UPDATE_BUILD_BYTES];
-    uint8_t channel,manifest_sha256[32]; /* 0 stable, 1 testing */
+    uint8_t channel,flags,manifest_sha256[32]; /* channel: 0 stable, 1 testing */
     uint32_t count;
     uint64_t payload_bytes,file_bytes;
+    uint32_t version; /* zero denotes v1 for callers constructing legacy descriptors */
     struct kui_update_entry entries[KUI_UPDATE_MAX_ENTRIES];
 };
 struct kui_update_pin {
     char build[KUI_UPDATE_BUILD_BYTES];
-    uint8_t channel,manifest_sha256[32];
+    uint8_t channel,flags,manifest_sha256[32];
     uint64_t file_bytes;
+    uint32_t version; /* zero means v1 for legacy pins */
 };
 struct kui_update_activation {
     uint64_t sequence;
@@ -53,29 +62,39 @@ struct kui_update_activation {
  * channel@44; zero45..63; manifest SHA256@64; zero96..123; CRC32@124
  * over the preceding124 bytes. Entries128: zero-padded path80,size64@80,
  * full-file SHA256@88,policy@120,zero121..127. All payload files follow in order.
- * Pure codec. runtime.kui is mandatory first. Other declared paths use the
- * bounded software namespace and may appear in any order, without duplicates.
- * Omitted allowed non-GUI paths inherit root through package_member(), exactly
- * as explicit policy2 entries do; declared replacements never fall back.
- * Policy2 explicitly inherits a non-GUI path from the retained root, with
- * size0, SHAallzero and no payload. Missing root files remain missing. Root
- * inheritance is shared/mutable, not an immutable bank-member guarantee.
+ * V2 uses KUIUPD2\0/version2, flags@45 (FULL bit0 only), zero46..63,
+ * entries160 with own build12@128 and zero140..159
+ * (including the required build terminator@140). Policies3/4 replace .kui/raw
+ * software, policy5 preserves absence, and policy2 keeps effective current.
+ * Runtime is optional in incoming v2 packages; installation seals the effective
+ * GUI into the resulting snapshot. Omitted/KEEP roles retain effective current
+ * software; FULL snapshots instead resolve omitted software as absence,
+ * require an explicit SELF_KUI GUI, and cannot contain KEEP directives.
+ * REMOVE is an explicit absence. Policies2/5 have size0, zero SHA,
+ * empty own build and no payload. In v1 runtime.kui remains mandatory first;
+ * non-GUI policy2 and omitted roles inherit mutable retained root software.
  * No user data, arbitrary paths or root writes are allowed. */
 size_t kui_update_catalog_count(void);
 const char *kui_update_catalog_path(size_t index);
-/* Software namespace, independent of the builder's default role catalog:
- * runtime.kui, flat lowercase .kui names under apps/games/ or apps/disc/, and the
- * three retained raw helper paths (inheritance only). No traversal or data. */
+/* Bounded software namespace: root runtime/tools/recovery.kui, flat lowercase
+ * .kui/.bin under apps/{games,disc,music}, music .ogg/.wav, the exact game probe.dat,
+ * redump.db/tosec.db and assets/ with at most four safe lowercase path components.
+ * No traversal or user data. V1 wire descriptors retain the legacy namespace. */
 bool kui_update_module_path_valid(const char *path);
 struct kui_update_legacy {
     const char *path,*build,*sha256;
     uint64_t bytes;
 };
 const struct kui_update_legacy *kui_update_legacy_for_path(const char *path);
-/* Policy1 admits only exact pinned adapter metadata, never a general mixed
- * cohort. The returned ID is the only allowed .kui envelope build for a bank
- * replacement. Policy2 has no pinned build and returns NULL. */
+/* V1 policy0 binds to the release ID and policy1 to exact pinned legacy
+ * metadata. V2 policy3 binds to the entry's own envelope build. Other policies
+ * have no envelope build and return NULL. */
 const char *kui_update_entry_build(const char *release_build,const struct kui_update_entry *entry);
+uint32_t kui_update_package_version(const struct kui_update_package *package);
+size_t kui_update_entry_bytes(const struct kui_update_package *package);
+/* Normalize validated descriptor offsets/sizes and recompute manifest SHA.
+ * Used to seal a fully materialized v2 snapshot before writing its receipt. */
+enum kui_update_result kui_update_package_seal(struct kui_update_package *package);
 bool kui_update_build_valid(const char *build);
 /* Known withdrawn GUI releases must not be installed or selected again.
  * Activation records retain syntactic validity and their sequence numbers. */
@@ -92,12 +111,16 @@ bool kui_update_pin_matches(const struct kui_update_pin *pin,const struct kui_up
 const struct kui_update_entry *kui_update_package_find(const struct kui_update_package *,const char *relative);
 /* Declared-only lookup above preserves exact wire identity. Effective lookup
  * copies the declared descriptor, or synthesizes policy2 for an omitted allowed
- * role. Unknown paths, invalid packages and output/input overlap are refused. */
+ * role (effective current in v2; root in v1), or policy5 for an omitted FULL
+ * snapshot role. Unknown paths, invalid packages
+ * and output/input overlap are refused. */
 bool kui_update_package_member(const struct kui_update_package *,const char *relative,
     struct kui_update_entry *out);
 /* Exactly one initialized KUIBANK1/protocol/inverse marker is required in the
  * GUI payload. A valid legacy runtime cannot safely load a selected bank. */
 bool kui_update_capability_valid(const void *payload,size_t bytes);
+/* Exactly one initialized KUIENG2!/2/inverse marker returns 2; otherwise 0. */
+unsigned kui_update_engine_level(const void *payload,size_t bytes);
 bool kui_update_activation_encode(const struct kui_update_activation *,uint8_t wire[128]);
 bool kui_update_activation_decode(const uint8_t wire[128],struct kui_update_activation *out);
 const char *kui_update_result_name(enum kui_update_result result);
@@ -106,7 +129,8 @@ const char *kui_update_result_name(enum kui_update_result result);
  * inspect verifies all payload SHA, runtime headers/build/CRC and GUI marker.
  * install re-inspects the exact pin, completes and rereads bank replacements,
  * writes/syncs/rereads package.bin LAST, then publishes an inactive activation.
- * Explicit inherited root entries are not opened, copied or verified here.
+ * V2 installs materialize effective selected replacements and GUI, preserving
+ * omitted/KEEP roles and explicit absence in the normalized snapshot receipt.
  * Existing complete same-build banks must match exactly; selected/previous
  * banks are never modified. Stop before activation leaves selection intact. */
 enum kui_update_result kui_update_inspect(const char *path,struct kui_update_package *out,

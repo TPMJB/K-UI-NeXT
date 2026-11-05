@@ -40,3 +40,24 @@ The accepted compact 72-KiB VMU and combined284-KiB/cache192-KiB installations
 remain distinct from VMU-only operation. This updater does not change any
 service reservation, promote session-controls variants or add a universal
 cacheless profile. Native/disc/CDDA/WinCE support remains route-specific.
+
+## Robust updater v2 follow-up
+
+The next updater-only change fixes the contract rather than adding another
+catalog exception. The source remains the published-main updater; no reader,
+stage, memory geometry or reader recipe is rebuilt or merged here.
+
+Partial packages materialize a checked snapshot of the actual running ROOT or
+BANK plus intended changes. FULL packages are independent of the prior bank,
+can replace corrupt prior files/receipts, and preserve absence for omitted
+software. Component builds are independent; configuration/content determines
+package and snapshot identities. Raw helpers, official audio/assets and data
+catalogues are supported. The current C consumer preflights every generated
+KUP before delivery; default test/release producer paths create v2.
+
+Root engine2 is a one-time setup requirement. Its startup floor skips older
+GUI banks instead of reinstalling their decoder. Normal tests then install a
+standalone KUP and restart directly. The current136 GUI adoption preserves
+all its game/UI code and startup reporting, ports only Main updater code,
+and uses the exact26 original module/helper binaries without rebuilding them.
+That adoption is a test deliverable, not a merge of its game code into Main.

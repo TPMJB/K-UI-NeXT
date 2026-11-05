@@ -15,6 +15,7 @@ from image_probe_package import inspect_image_probe
 from retail_package import inspect_retail
 from zso_package import inspect_zso
 from boot_badge import BADGE, inspect_badge, verify_cdi_badge
+from package_update_payload import write_release_update
 
 ROOT = Path(__file__).resolve().parents[1]
 WINCE_CDDA_PROFILES = {"armada": "armada-us", "bam4": "bam4-us", "worms": "worms-us", "wwp": "wwp-us"}
@@ -448,7 +449,7 @@ def write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, can
     return bundle
 
 
-def write_release_assets(dist, bundle, source, release):
+def write_release_assets(dist, bundle, source, release, update_payload=None):
     """Archive the install tree and corresponding source with exact checksums."""
     # Permanent release assets: normal installation files plus corresponding source.
     # Include notices and build identity alongside the complete pinned source inputs.
@@ -456,6 +457,8 @@ def write_release_assets(dist, bundle, source, release):
     if assets.exists():
         shutil.rmtree(assets)
     assets.mkdir()
+    if update_payload is not None:
+        shutil.copyfile(update_payload, assets / (release["artifact_prefix"] + "-update.kup"))
     shutil.make_archive(str(assets / (release["artifact_prefix"] + "-release")), "zip", bundle)
     with zipfile.ZipFile(assets / (release["artifact_prefix"] + "-source.zip"), "w", zipfile.ZIP_DEFLATED) as archive:
         for tree in (source, dist / "LICENSES"):
@@ -486,7 +489,7 @@ def write_release_assets(dist, bundle, source, release):
                 checksums.append(f"{hashlib.sha256(data).hexdigest()}  {name}")
             archive.writestr("SHA256SUMS", "\n".join(checksums) + "\n")
     asset_hashes = []
-    for path in sorted(assets.glob("*.zip")):
+    for path in sorted((*assets.glob("*.zip"), *assets.glob("*.kup"))):
         with path.open("rb") as stream:
             asset_hashes.append(f"{hashlib.file_digest(stream, 'sha256').hexdigest()}  {path.name}")
     (assets / "SHA256SUMS.txt").write_text("\n".join(asset_hashes) + "\n")
@@ -901,7 +904,19 @@ def main():
             boot_hashes.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(boot)}")
     (boot / "SHA256SUMS").write_text("\n".join(boot_hashes) + "\n")
     bundle = write_release_bundle(dist, sd, cdi, music_manifest, record, boot_record, candidate)
-    write_release_assets(dist, bundle, source, release)
+    # The official install tree contains the complete intended software, with
+    # generated diagnostic fixtures and user preferences already excluded.
+    # Inventory it directly: no old catalog or source-build retagging is used.
+    update_payload = dist / (release["artifact_prefix"] + "-update.kup")
+    update_report = write_release_update(
+        bundle / "KUI", update_payload,
+        channel="testing" if candidate or development_test(release) or release_is_rc(release) else "stable")
+    (dist / "update-package.json").write_text(json.dumps(update_report, indent=2) + "\n", encoding="utf-8")
+    shutil.copyfile(update_payload, update / update_payload.name)
+    update_hashes = [f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(update)}"
+                     for path in sorted(update.rglob("*")) if path.is_file() and path.name != "SHA256SUMS"]
+    (update / "SHA256SUMS").write_text("\n".join(update_hashes) + "\n")
+    write_release_assets(dist, bundle, source, release, update_payload)
     hashes = []
     for path in sorted(dist.rglob("*")):
         if path.is_file() and path != dist / "SHA256SUMS":

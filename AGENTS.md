@@ -1,39 +1,57 @@
-# K-UI updater-only integration
+# K-UI updater integration rules
 
-This branch starts at published main `0045dd96937ee7485ecd4fe0432b28babea8646a`.
-Read `docs/accepted-progress.md` before building or packaging. Do not merge the
-recovered ab1 loader tree to obtain updater code.
+Read docs/accepted-progress.md before selecting a build or delivering an update.
+This work extends only the updater from published Main commit 758f62c. Never import a
+recovered reader/VMU/Smash branch to obtain updater functionality. Reader/stage
+sources, reader recipes, layouts and game-selection policy remain unchanged.
+The preserved-main source guard and exact Standard/CDDA GUI bindings still apply.
 
-Preserve every main reader/stage source, reader recipe, worker/cache geometry,
-game-selection policy and optional-file absence. No `src/loader/` file or
-reader-specific Makefile is part of this change. Do not add Smash/VC2/Swirl
-routing, session controls or experimental reader profiles.
+## Required delivery path
 
-Permitted GUI glue is limited to three bank-path existence checks in
-`src/apps/games_retail.c`, and exact installed-reader recognition in
-`src/core/native_vmu_standard.c`/its header and `src/core/games_cdda_profile.h`.
-The verified Standard/CDDA headers prevent a GUI-only update from rejecting
-already installed readers. They neither rebuild nor install a reader.
-`tools/update_addon.py` checks the complete main reader source map and the
-reviewed GUI glue before compiling. Do not regenerate it from arbitrary files.
+Every NEW test/release update must use the current Main producer:
 
-The updater resolves inherited roles to root, including ordinary absence.
-Declared replacements are pinned to their bank and never fall back to root.
-Admission uses bounded software paths, not an exact catalog count. The current
-builder retains main's 26-role catalog; the decoder also accepts valid older
-34-role receipts, sparse manifests and allowed new roles. Do not populate
-optional modules to satisfy a catalog.
+    python3 tools/make_update.py staged/KUI test.kup
+    python3 tools/make_update.py staged/KUI release.kup --full --channel stable
 
-Root-only migration delivers only KUI/runtime.kui, no .kup or KUI/apps files.
-Preserve and rename KUI/system and optional KUI/boot.kui before replacing the
-root GUI. Leave KUI/apps/system and all readers, saves and settings in place.
-Verify the actual rename/root-copy/boot/restart flow on FAT32 and exFAT.
-Restart K-UI uses worker action126; updates retain action120. Slots121–125 do
-not import the recovered branch's unrelated actions.
+The normal tools/update_package.py build command also creates v2. Its explicit
+build-legacy command is only for engine bootstrap/migration fixtures. Never
+qualify a new delivery with a frozen old decoder or a Python-only verifier.
+The producer compiles the actual current C consumer and validates the exact
+output before publishing it. Keep its source fingerprint/report with evidence.
+Deliver the standalone .kup by default. An optional ZIP has exactly one .kup;
+source/evidence archives are separate from the install payload.
 
-Run the focused updater, shell, source-preservation and GUI-admission checks.
-Do not repeat settled game compatibility matrices or rebuild readers for this
-work. Source/host checks do not establish universal console compatibility.
-The withdrawn full-cohort recipes are excluded from this updater-only port;
-only GUI-only packaging is included. Future reader experiments need their own
-reviewed replacement packages and matching GUI admission.
+Use the actual staged software inventory, not a compiled count/catalog.
+Changed .kui components retain their real embedded builds; do not retag them
+or rebuild settled readers merely to obtain one cohort label. Raw helpers,
+release audio/assets and catalogues are typed and pinned by full SHA. Stage
+only intended software; never cards, saves, preferences, credentials or games.
+A GUI replacement must contain the current engine capability and matching
+reader admission. Reader-only tests preserve the effective GUI automatically.
+Do not disable game ABI/admission guards to force a package to run.
+
+## Update semantics
+
+Partial updates retain the effective running software, including checked
+bank replacements and deliberate absence. They never revert omitted bank
+components to an older physical root. FULL packages supply their GUI and
+complete intended software; omitted software stays absent. User data remains
+shared and is never part of a software package. Explicit REMOVE is for
+software paths only. Package/snapshot identities are independent of GUI and
+reader build IDs and include flags/configuration identity.
+
+V2 requires a persistent engine2 root dispatcher. It refuses engine downgrades
+and skips old incompatible selected GUIs after that one-time setup. Use the
+actual running fallback for partial overlays; stale saved selection must not
+prevent a valid root-based test. Preserve old banks and user files during
+engine setup; do not silently install optional workers. Future tests then use
+only .kup selection and Restart K-UI. Restart uses worker 126; update uses 120.
+
+Read-only software open/stat wrappers are GUI-only. Writes and all user data
+bypass them; raw pinned reads are verified before use. Root setup/verification
+uses physical bypass helpers, never the currently selected bank alias.
+
+Run focused v1/v2 codec, producer/current-consumer, snapshot/power-cut,
+ZIP/folder, boot/handoff, software-wrapper, shell and native GUI checks.
+Keep the header-only normal-root boot path. Do not repeat settled game
+matrices for an updater-only change. Source/host checks are not console tests.

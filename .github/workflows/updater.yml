@@ -26,6 +26,12 @@ on:
       - 'tests/*updat*'
       - 'tests/test_shell.c'
       - 'tools/update*.py'
+      - 'tools/update_consumer_check.c'
+      - 'tools/make_update.py'
+      - 'tools/package.py'
+      - 'tools/package_medium_test.py'
+      - 'tools/package_large_disc_test.py'
+      - 'tools/publish_release.py'
       - 'tools/package_update*.py'
       - 'resources/updater-bindings/**'
       - 'src/core/native_vmu_standard.c'
@@ -63,6 +69,12 @@ on:
       - 'tests/*updat*'
       - 'tests/test_shell.c'
       - 'tools/update*.py'
+      - 'tools/update_consumer_check.c'
+      - 'tools/make_update.py'
+      - 'tools/package.py'
+      - 'tools/package_medium_test.py'
+      - 'tools/package_large_disc_test.py'
+      - 'tools/publish_release.py'
       - 'tools/package_update*.py'
       - 'resources/updater-bindings/**'
       - 'src/core/native_vmu_standard.c'
@@ -173,7 +185,7 @@ jobs:
           sys.path.insert(0, 'tools')
           from package import storage_image
           from runtime_package import flatten_elf
-          from update_package import CAPABILITY, HANDOFF_HEADER, handoff_empty
+          from update_package import CAPABILITY, ENGINE, HANDOFF_HEADER, handoff_empty
           build = subprocess.check_output(['git', 'rev-parse', '--short=12', 'HEAD'], text=True).strip()
           for name, expected in (('runtime', 1), ('diagnostic', 0)):
               elf = Path('build/kui-' + name + '.elf').read_bytes()
@@ -181,6 +193,8 @@ jobs:
               payload, _ = flatten_elf(elf)
               if payload.count(CAPABILITY) != expected:
                   raise SystemExit(name + ': unexpected immutable-bank capability count')
+              if payload.count(ENGINE) != expected:
+                  raise SystemExit(name + ': unexpected updater engine capability count')
               if (expected and not handoff_empty(payload)) or (not expected and HANDOFF_HEADER in payload):
                   raise SystemExit(name + ': unexpected update handoff slot')
           print('PASS native envelopes, unique storage handoffs, GUI bank capability and unchanged CD contract')

@@ -106,6 +106,7 @@ RUNTIME_OBJECTS += build/dc/src/core/runtime_image.o build/dc/src/core/runtime_f
 RUNTIME_OBJECTS += build/dc/src/core/update.o build/dc/src/core/update_file.o build/dc/src/core/update_boot.o
 RUNTIME_OBJECTS += build/dc/src/core/update_handoff.o
 RUNTIME_OBJECTS += build/dc/src/core/update_browser.o build/dc/src/core/update_zip.o
+RUNTIME_OBJECTS += build/dc/src/core/update_software_file.o
 RUNTIME_OBJECTS += build/dc/src/core/resident_image.o
 RUNTIME_OBJECTS += build/dc/src/core/retail_image.o
 RUNTIME_OBJECTS += build/dc/src/core/shell.o build/dc/src/dreamcast/shell_draw.o build/dc/src/dreamcast/shell_font.o
@@ -191,7 +192,7 @@ $(TARGET): $(OBJECTS) $(LOADER_OBJECTS)
 	kos-cc -o $@ $(OBJECTS) $(LOADER_OBJECTS) -Wl,-Map,build/kui-diagnostic.map
 	python3 tools/record_build.py $@
 $(RUNTIME): $(RUNTIME_OBJECTS)
-	kos-cc -o $@ $(RUNTIME_OBJECTS) -lm -Wl,-Map,build/kui-runtime.map
+	kos-cc -o $@ $(RUNTIME_OBJECTS) -lm -Wl,--wrap=f_open,--wrap=f_stat -Wl,-Map,build/kui-runtime.map
 	python3 tools/record_build.py $@
 
 -include $(OBJECTS:.o=.d) $(LOADER_OBJECTS:.o=.d) $(RUNTIME_OBJECTS:.o=.d)

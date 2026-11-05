@@ -520,7 +520,8 @@ static void subset_bank_tests(struct uf_package *root) {
     FILINFO info;CHECK(f_stat(resolved,&info)==FR_NO_FILE);
     observe=true;CHECK(kui_runtime_read(logical,&image,logger,cancel)==KUI_RUNTIME_IO);observe=false;
     write_file(logical,uf_file(root,added_helper?0u:role),UF_FILE_BYTES);
-    CHECK(!kui_runtime_resolve_path("0:/KUI/apps/games/not-allowed.bin",resolved,sizeof(resolved)));
+    CHECK(kui_runtime_resolve_path("0:/KUI/apps/games/not-allowed.bin",resolved,sizeof(resolved)) &&
+        !strcmp(resolved,"0:/KUI/apps/games/not-allowed.bin"));
     /* A future software path needs no compiled catalog entry. Omission has
      * deliberate root-inheritance semantics; declaring it replaces only the
      * bank member and never falls back when that replacement goes missing. */
