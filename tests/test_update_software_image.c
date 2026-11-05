@@ -17,6 +17,7 @@
 #define REMOVED_PATH "0:/KUI/apps/games/optional.kui"
 #define USER_PATH "0:/KUI/prefs/settings.bin"
 static unsigned checks,writes,reads;
+static bool budget_active;static uint64_t runtime_bytes;
 static uint8_t *disk;static size_t disk_bytes;static FATFS fs;
 #define CHECK(x) do {++checks;if(!(x)){fprintf(stderr,"Software selection failed %u: %s\n",__LINE__,#x);exit(1);}}while(0)
 static uint64_t blocks(void *unused) {(void)unused;return disk_bytes/512u;}
@@ -35,7 +36,9 @@ static void logger(const char *format,...) {(void)format;}
 static bool cancel(void) {return false;}
 FRESULT __real_f_read(FIL *,void *,UINT,UINT *);
 FRESULT __wrap_f_read(FIL *file,void *data,UINT bytes,UINT *got) {
-    FRESULT result=__real_f_read(file,data,bytes,got);reads+=*got;return result;
+    FRESULT result=__real_f_read(file,data,bytes,got);reads+=*got;
+    if(budget_active && f_size(file)==UF_FILE_BYTES)runtime_bytes+=*got;
+    return result;
 }
 static void parents(const char *path) {
     char copy[192];CHECK(strlen(path)<sizeof(copy));strcpy(copy,path);
@@ -119,6 +122,18 @@ static void seed_legacy(const char *bank,uint64_t sequence,bool engine2) {
     memcpy(activation.manifest_sha256,p.data+64u,32u);
     uint8_t wire[128];CHECK(kui_update_activation_encode(&activation,wire));
     write_file(KUI_UPDATE_ACTIVE0,wire,sizeof(wire));uf_free(&p);
+}
+static struct kui_update_activation selected(void) {
+    struct kui_update_activation activation;unsigned slot=0u;
+    CHECK(kui_update_activation_latest(&activation,&slot,cancel)==KUI_UPDATE_OK);return activation;
+}
+static void selection_write(unsigned slot,const struct kui_update_activation *activation) {
+    uint8_t wire[128];CHECK(kui_update_activation_encode(activation,wire));
+    write_file(slot?KUI_UPDATE_ACTIVE1:KUI_UPDATE_ACTIVE0,wire,sizeof(wire));
+}
+static void budget_begin(void) {reads=0u;runtime_bytes=0u;budget_active=true;}
+static void budget_end(uint64_t expected_runtime,uint64_t maximum,unsigned writes_before) {
+    budget_active=false;CHECK(runtime_bytes==expected_runtime && reads<=maximum && writes==writes_before);
 }
 static bool all_zero(const uint8_t *data,size_t bytes) {
     for(size_t i=0;i<bytes;i++)if(data[i])return false;
@@ -236,6 +251,45 @@ static void production_context(const uint8_t gui[UF_FILE_BYTES],const uint8_t mo
     kui_update_boot_block();CHECK(kui_update_effective_snapshot(bank,sha)==-1 && !bank[0] && all_zero(sha,sizeof(sha)));
     kui_update_boot_reset();CHECK(kui_update_effective_snapshot(bank,sha)==1 && !bank[0] && all_zero(sha,sizeof(sha)));
 }
+static void boot_read_budgets(const uint8_t gui[UF_FILE_BYTES],const uint8_t module[UF_FILE_BYTES],
+    const uint8_t *raw,size_t raw_bytes) {
+    const uint64_t activations=2u*KUI_UPDATE_ACTIVATION_BYTES,v2_receipt=128u+6u*KUI_UPDATE_ENTRY_V2_BYTES;
+    const uint64_t legacy_receipt=128u+kui_update_catalog_count()*KUI_UPDATE_ENTRY_BYTES;
+    struct kui_update_handoff_context empty={.payload_offset=128u,.wire=KUI_UPDATE_HANDOFF_INITIALIZER};
+    struct kui_runtime_image image;struct kui_update_boot_view view;char physical[192];uint8_t corrupt[UF_FILE_BYTES];
+    unsigned before;
+    /* Two saved choices may name the identical rejected GUI. Read its bytes
+     * once, retain both selection attempts, and continue with physical root. */
+    seed_legacy("aaaaaaaaaaaa",40u,false);struct kui_update_activation same=selected();same.sequence=39u;selection_write(1u,&same);
+    kui_update_boot_reset();before=writes;budget_begin();
+    CHECK(kui_update_boot_read_handoff(GUI_BUILD,KUI_STORAGE_SCI,&empty,&image,&view,logger,cancel)==KUI_UPDATE_BOOT_BASELINE);
+    CHECK(view.fallback && !image.data && !view.bank[0]);
+    budget_end(UF_FILE_BYTES+64u,activations+2u*legacy_receipt+UF_FILE_BYTES+64u,before);
+    /* The same bound applies to a v2 source that fails its pinned CRC/SHA. */
+    seed_bank("bbbbbbbbbbbb",50u,gui,module,raw,raw_bytes);same=selected();same.sequence=49u;selection_write(1u,&same);
+    bank_path("bbbbbbbbbbbb","runtime.kui",physical);memcpy(corrupt,gui,sizeof(corrupt));corrupt[sizeof(corrupt)-1u]^=1u;
+    write_file(physical,corrupt,sizeof(corrupt));kui_update_boot_reset();before=writes;budget_begin();
+    CHECK(kui_update_boot_read_handoff(GUI_BUILD,KUI_STORAGE_SCI,&empty,&image,&view,logger,cancel)==KUI_UPDATE_BOOT_BASELINE);
+    CHECK(view.fallback && !image.data && !view.bank[0]);
+    budget_end(UF_FILE_BYTES+64u,activations+2u*v2_receipt+UF_FILE_BYTES+64u,before);
+    /* A different older valid bank remains eligible for its own full read. */
+    seed_bank("cccccccccccc",59u,gui,module,raw,raw_bytes);struct kui_update_activation older=selected();selection_write(1u,&older);
+    seed_bank("bbbbbbbbbbbb",60u,gui,module,raw,raw_bytes);bank_path("bbbbbbbbbbbb","runtime.kui",physical);
+    write_file(physical,corrupt,sizeof(corrupt));kui_update_boot_reset();before=writes;budget_begin();
+    CHECK(kui_update_boot_read_handoff(GUI_BUILD,KUI_STORAGE_SCI,&empty,&image,&view,logger,cancel)==KUI_UPDATE_BOOT_CHAIN);
+    CHECK(view.fallback && image.data && !strcmp(view.bank,"cccccccccccc"));
+    budget_end(2u*UF_FILE_BYTES,activations+2u*v2_receipt+2u*UF_FILE_BYTES,before);kui_runtime_free(&image);
+    /* A valid RAM image bound to the older sequence must still adopt on the
+     * second slot, even if the newer slot names that same now-corrupt file. */
+    seed_bank("dddddddddddd",70u,gui,module,raw,raw_bytes);struct kui_update_handoff_context context;
+    chain_and_adopt("dddddddddddd",&context);older=selected();selection_write(1u,&older);
+    same=older;same.sequence=71u;selection_write(0u,&same);bank_path("dddddddddddd","runtime.kui",physical);
+    write_file(physical,corrupt,sizeof(corrupt));kui_update_boot_reset();before=writes;budget_begin();
+    CHECK(kui_update_boot_read_handoff(GUI_BUILD,KUI_STORAGE_SCI,&context,&image,&view,logger,cancel)==KUI_UPDATE_BOOT_PINNED);
+    CHECK(view.fallback && !image.data && !strcmp(view.bank,"dddddddddddd"));
+    budget_end(UF_FILE_BYTES+64u+KUI_UPDATE_HANDOFF_BYTES,
+        activations+2u*v2_receipt+UF_FILE_BYTES+64u+KUI_UPDATE_HANDOFF_BYTES,before);
+}
 int main(int argc,char **argv) {
     CHECK(argc==2);FILE *host=fopen(argv[1],"rb");CHECK(host && !fseek(host,0,SEEK_END));
     long length=ftell(host);CHECK(length>0 && !fseek(host,0,SEEK_SET));disk_bytes=(size_t)length;
@@ -290,6 +344,7 @@ int main(int argc,char **argv) {
     kui_update_boot_reset();expect_file(RAW_PATH,"new root",8u);
     CHECK(f_stat(REMOVED_PATH,&info)==FR_OK && info.fsize==UF_FILE_BYTES);
     production_context(gui,module,raw,sizeof(raw));
+    boot_read_budgets(gui,module,raw,sizeof(raw));
     CHECK(f_mount(NULL,"0:",0)==FR_OK);kui_media_set(NULL);free(disk);
-    printf("PASS %u v2 bank identity, handoff and software file checks\n",checks);return 0;
+    printf("PASS %u v2 bank identity, handoff, software file and bounded boot-read checks\n",checks);return 0;
 }

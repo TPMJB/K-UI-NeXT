@@ -19,7 +19,7 @@
 #define SAVED_BOOT "0:/KUI/boot-before-engine2.kui"
 #define SAVED_MAX 512u
 static uint8_t *disk;static size_t disk_bytes;static FATFS fs;
-static unsigned checks,writes;static uint64_t reads;
+static unsigned checks,writes;static uint64_t reads,logical_reads,adoption_bytes;
 #define CHECK(x) do {++checks;if(!(x)){fprintf(stderr,"Engine setup failed %u: %s\n",__LINE__,#x);exit(1);}}while(0)
 static uint64_t blocks(void *unused) {(void)unused;return disk_bytes/512u;}
 static int read_blocks(void *unused,uint32_t block,size_t count,uint8_t *out) {
@@ -35,6 +35,10 @@ static const struct kui_media_ops media={NULL,blocks,read_blocks,write_blocks,sy
 uint32_t kui_clock_fattime(void) {return ((2026u-1980u)<<25)|(11u<<21)|(5u<<16);}
 static void logger(const char *format,...) {(void)format;}
 static bool cancel(void) {return false;}
+FRESULT __real_f_read(FIL *,void *,UINT,UINT *);
+FRESULT __wrap_f_read(FIL *file,void *data,UINT bytes,UINT *got) {
+    FRESULT result=__real_f_read(file,data,bytes,got);logical_reads+=*got;return result;
+}
 static void mount_volume(void) {kui_media_set(&media);CHECK(f_mount(&fs,"0:",1)==FR_OK);}
 static void unmount_volume(void) {CHECK(f_mount(NULL,"0:",0)==FR_OK);kui_media_set(NULL);}
 static void parents(const char *path) {
@@ -129,19 +133,30 @@ static void bootstrap(enum kui_boot_mode mode,const char *build) {
     CHECK(kui_boot_image_read_mode(&media,KUI_STORAGE_SCI,mode,&image,logger,cancel)==KUI_RUNTIME_OK);
     CHECK(image.data && !strcmp(image.info.build,build) && writes==before);kui_runtime_free(&image);mount_volume();
 }
-static void context_from_chain(const struct kui_runtime_image *image,uint32_t offset,
+static void context_from_chain(const struct kui_runtime_image *image,
     const struct kui_update_activation *activation,struct kui_update_handoff_context *context) {
-    CHECK(offset<=image->info.payload_bytes-KUI_UPDATE_HANDOFF_BYTES);context->payload_offset=offset;
-    memcpy(context->wire,(uint8_t *)image->data+offset,sizeof(context->wire));struct kui_update_handoff handoff;
+    CHECK(image->data && image->info.payload_bytes>=KUI_UPDATE_HANDOFF_BYTES);
+    const uint8_t *body=image->data;unsigned found=0u;
+    /* The dispatcher and selected GUI can have different layouts. Discover
+     * the stamped slot in the checked selected image, not in the root GUI. */
+    for(uint32_t offset=0u;offset<=image->info.payload_bytes-KUI_UPDATE_HANDOFF_BYTES;offset++) {
+        if(body[offset]!='K' || memcmp(body+offset,"KUIHOF1",8u))continue;
+        struct kui_update_handoff candidate;
+        if(!kui_update_handoff_decode(body+offset,&candidate))continue;
+        CHECK(candidate.payload_offset==offset);++found;context->payload_offset=offset;
+        memcpy(context->wire,body+offset,sizeof(context->wire));
+    }
+    CHECK(found==1u);struct kui_update_handoff handoff;
     CHECK(kui_update_handoff_decode(context->wire,&handoff));
     CHECK(!strcmp(handoff.build,image->info.build) && strcmp(handoff.build,activation->selected));
     CHECK(handoff.sequence==activation->sequence && !memcmp(handoff.manifest_sha256,activation->manifest_sha256,32u));
 }
 static uint64_t adopt(const char *build,const struct kui_update_activation *activation,
     const struct kui_update_handoff_context *context) {
-    uint64_t before=reads;unsigned writes_before=writes;struct kui_runtime_image image={0};struct kui_update_boot_view view;
+    uint64_t before=reads,logical_before=logical_reads;unsigned writes_before=writes;struct kui_runtime_image image={0};struct kui_update_boot_view view;
     CHECK(kui_update_boot_read_handoff(build,KUI_STORAGE_SCI,context,&image,&view,logger,cancel)==KUI_UPDATE_BOOT_PINNED);
     CHECK(!image.data && !strcmp(view.bank,activation->selected) && !strcmp(view.build,build) && writes==writes_before);
+    CHECK(logical_reads-logical_before==adoption_bytes);
     char bank[13];uint8_t sha[32];CHECK(kui_update_effective_snapshot(bank,sha)==1 && !strcmp(bank,activation->selected));
     CHECK(!memcmp(sha,activation->manifest_sha256,32u));return reads-before;
 }
@@ -204,6 +219,13 @@ int main(int argc,char **argv) {
     char old_directory[160];CHECK(snprintf(old_directory,sizeof(old_directory),KUI_UPDATE_SYSTEM "/%s",old->build)<(int)sizeof(old_directory));
     capture_tree(old_directory,old_files,&old_count);CHECK(old_count>1u);
     unsigned old_slot=0u;struct kui_update_activation old_activation=latest(&old_slot);CHECK(!strcmp(old_activation.selected,old->build));
+    /* Both retained records can name the same GUI1. Its failed engine check
+     * must consume one complete GUI read across the two selection attempts. */
+    struct kui_update_activation duplicate=old_activation;CHECK(duplicate.sequence>1u);--duplicate.sequence;
+    uint8_t duplicate_wire[128];CHECK(kui_update_activation_encode(&duplicate,duplicate_wire));FIL older_slot;UINT put=0u;
+    CHECK(f_open(&older_slot,old_slot?KUI_UPDATE_ACTIVE0:KUI_UPDATE_ACTIVE1,FA_WRITE|FA_CREATE_ALWAYS)==FR_OK);
+    CHECK(f_write(&older_slot,duplicate_wire,sizeof(duplicate_wire),&put)==FR_OK && put==sizeof(duplicate_wire));
+    CHECK(f_sync(&older_slot)==FR_OK && f_close(&older_slot)==FR_OK);
     struct digest old_record=file_digest(old_slot?KUI_UPDATE_ACTIVE1:KUI_UPDATE_ACTIVE0);
     /* Only the dispatcher is replaced. Existing selection and banks stay in
      * system/, and every physical reader/raw helper stays where it was. */
@@ -212,33 +234,39 @@ int main(int argc,char **argv) {
     CHECK(strcmp(original.build,current.build));bootstrap(KUI_BOOT_MODE_AUTOBOOT,original.build);
     CHECK(f_rename("0:/KUI/boot.kui",SAVED_BOOT)==FR_OK);same_digest(SAVED_BOOT,&boot);
     bootstrap(KUI_BOOT_MODE_AUTOBOOT,current.build);bootstrap(KUI_BOOT_MODE_NORMAL,current.build);
-    kui_update_boot_require_engine(2u);unsigned before=writes;struct kui_runtime_image image={0};struct kui_update_boot_view view;
+    kui_update_boot_require_engine(2u);unsigned before=writes;uint64_t logical_before=logical_reads;
+    struct kui_runtime_image image={0};struct kui_update_boot_view view;
     CHECK(kui_update_boot_read_handoff(current.build,KUI_STORAGE_SCI,&empty,&image,&view,logger,cancel)==KUI_UPDATE_BOOT_BASELINE);
     CHECK(!image.data && view.fallback && !view.bank[0] && !strcmp(view.build,current.build) && writes==before);
+    const struct kui_update_entry *old_gui_entry=kui_update_package_find(old,"runtime.kui");CHECK(old_gui_entry);
+    CHECK(logical_reads-logical_before==2u*KUI_UPDATE_ACTIVATION_BYTES+
+        2u*(KUI_UPDATE_HEADER_BYTES+old->count*kui_update_entry_bytes(old))+old_gui_entry->bytes+KUI_RUNTIME_HEADER_BYTES);
     char effective[13];uint8_t effective_hash[32];CHECK(kui_update_effective_snapshot(effective,effective_hash)==1 && !effective[0]);
     CHECK(!strcmp(latest(NULL).selected,old->build));preserved(&root,&boot,old_directory);
     CHECK(kui_update_inspect(PACKAGE,incoming,&status,logger,cancel,NULL)==KUI_UPDATE_OK && incoming->version==2u && incoming->flags==KUI_UPDATE_FULL);
     const struct kui_update_entry *gui=kui_update_package_find(incoming,"runtime.kui");CHECK(gui);
-    CHECK(!strcmp(gui->build,current.build) && gui->bytes==root.bytes && !memcmp(gui->sha256,root.sha256,32u));
+    bool same_gui=gui->bytes==root.bytes && !memcmp(gui->sha256,root.sha256,32u);
     kui_update_package_pin(incoming,&pin);CHECK(kui_update_install(PACKAGE,&pin,&status,logger,cancel,NULL)==KUI_UPDATE_OK);
-    struct kui_update_activation selected=latest(NULL);CHECK(strcmp(selected.selected,current.build) && strcmp(selected.selected,incoming->build));
+    struct kui_update_activation selected=latest(NULL);CHECK(strcmp(selected.selected,gui->build) && strcmp(selected.selected,incoming->build));
     CHECK(selected.sequence==old_activation.sequence+1u && !strcmp(selected.previous,old->build));
     CHECK(kui_update_bank_verify(selected.selected,receipt,&status,logger,cancel,NULL)==KUI_UPDATE_OK);
     CHECK(receipt->flags==KUI_UPDATE_FULL && !memcmp(receipt->manifest_sha256,selected.manifest_sha256,32u));
+    adoption_bytes=2u*KUI_UPDATE_ACTIVATION_BYTES+KUI_UPDATE_HEADER_BYTES+
+        receipt->count*kui_update_entry_bytes(receipt)+KUI_RUNTIME_HEADER_BYTES+KUI_UPDATE_HANDOFF_BYTES;
     same_digest(old_slot?KUI_UPDATE_ACTIVE1:KUI_UPDATE_ACTIVE0,&old_record);preserved(&root,&boot,old_directory);
     CHECK(kui_update_boot_reload(current.build,KUI_STORAGE_SCI,&image,&view,logger,cancel)==KUI_UPDATE_BOOT_CHAIN);
-    CHECK(image.data && !strcmp(image.info.build,current.build) && !strcmp(view.bank,selected.selected));
-    struct kui_update_handoff_context handoff;context_from_chain(&image,empty.payload_offset,&selected,&handoff);kui_runtime_free(&image);
+    CHECK(image.data && !strcmp(image.info.build,gui->build) && !strcmp(view.bank,selected.selected));
+    struct kui_update_handoff_context handoff;context_from_chain(&image,&selected,&handoff);kui_runtime_free(&image);
     /* Model transfer into a fresh GUI process without executing SH bytes. */
-    kui_update_boot_reload_abort();kui_update_boot_reset();uint64_t adopted=adopt(current.build,&selected,&handoff);
-    CHECK(adopted<current.payload_bytes);exact_members(incoming,receipt);preserved(&root,&boot,old_directory);same_digest(PACKAGE,&delivered);
-    /* Direct cold entry with the same GUI source build must still chain the
-     * selected configuration; only its checked RAM handoff permits adoption. */
+    kui_update_boot_reload_abort();kui_update_boot_reset();uint64_t adopted=adopt(gui->build,&selected,&handoff);
+    CHECK(adopted<gui->bytes-KUI_RUNTIME_HEADER_BYTES);exact_members(incoming,receipt);preserved(&root,&boot,old_directory);same_digest(PACKAGE,&delivered);
+    /* Cold entry must execute the selected GUI, including when its build or
+     * bytes match root. Only its checked RAM handoff permits adoption. */
     kui_update_boot_reset();before=writes;
     CHECK(kui_update_boot_read_handoff(current.build,KUI_STORAGE_SCI,&empty,&image,&view,logger,cancel)==KUI_UPDATE_BOOT_CHAIN);
-    CHECK(image.data && !strcmp(view.bank,selected.selected) && writes==before);
-    context_from_chain(&image,empty.payload_offset,&selected,&handoff);kui_runtime_free(&image);(void)adopt(current.build,&selected,&handoff);
+    CHECK(image.data && !strcmp(image.info.build,gui->build) && !strcmp(view.bank,selected.selected) && writes==before);
+    context_from_chain(&image,&selected,&handoff);kui_runtime_free(&image);(void)adopt(gui->build,&selected,&handoff);
     exact_members(incoming,receipt);preserved(&root,&boot,old_directory);
-    printf("PASS actual engine2 setup: %u checks; legacy26 %s retained, root GUI %s, FULL %u-file package %s -> snapshot %s, same-GUI restart/cold handoff, %llu-byte checked adoption, exact bank KUI/raw bytes, %u physical app files and user data unchanged, optional boot override preserved, no system archive\n",checks,old->build,current.build,incoming->count,incoming->build,selected.selected,(unsigned long long)adopted,app_count);
+    printf("PASS actual engine2 setup: %u checks; legacy26 %s retained, root GUI %s, selected GUI %s, FULL %u-file package %s -> snapshot %s, duplicate old-GUI read once, %s-GUI restart/cold handoff, %llu logical/%llu physical bytes per checked adoption, exact bank KUI/raw bytes, %u physical app files and user data unchanged, optional boot override preserved, no system archive\n",checks,old->build,current.build,gui->build,incoming->count,incoming->build,selected.selected,same_gui?"same":"different",(unsigned long long)adoption_bytes,(unsigned long long)adopted,app_count);
     kui_update_boot_reset();unmount_volume();free(old);free(incoming);free(receipt);free(disk);return 0;
 }

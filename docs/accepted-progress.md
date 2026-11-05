@@ -61,3 +61,16 @@ standalone KUP and restart directly. The current136 GUI adoption preserves
 all its game/UI code and startup reporting, ports only Main updater code,
 and uses the exact26 original module/helper binaries without rebuilding them.
 That adoption is a test deliverable, not a merge of its game code into Main.
+
+## Startup latency follow-up
+
+The owner reported about five seconds at the pre-splash version-selection
+screen. There is no fixed delay in that function. Current code could reread
+one refused multi-MiB bank GUI for both activation slots, rescan the EMPTY
+slot after validation, and remount an already pinned boot device for discovery.
+The updater-only follow-up deduplicates refused GUI sources after each slot's
+handoff attempt, reuses the checked slot offset, uses the existing equivalent
+fast CRC only in updater paths, and opens the pinned transport directly.
+KUI/updater-startup.txt records phase timings so another video is unnecessary.
+Cold selection still reads and verifies a distinct bank GUI once; no console
+timing improvement is asserted from host read-budget or integrity tests.

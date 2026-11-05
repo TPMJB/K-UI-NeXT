@@ -76,6 +76,7 @@ struct kui_update_runtime_stream {
     char build[13];
     uint8_t expected[32];
     struct kui_sha256 hash;
+    uint32_t (*crc32)(uint32_t,const void *,size_t);
     void (*update)(struct kui_update_runtime_stream *,const void *,size_t);
     bool (*finish)(const struct kui_update_runtime_stream *);
 };

@@ -108,5 +108,14 @@ The ordinary empty root startup retains its 64-byte header fast path.
 
 The startup selection screen covers storage/selection work and has no timed
 pause; package integrity and copying still take time on the selected adapter.
+Startup reuses the pinned boot transport, avoiding AUTO's extra probe mount.
+Each rejected bank/receipt GUI source is read at most once per selection pass;
+sequence-specific RAM adoption is still attempted for each activation slot.
+The selected GUI keeps its full SHA/CRC and marker checks. Its EMPTY-slot scan
+is reused for handoff and updater CRC passes use the existing fast equivalent.
+The physical dispatcher writes bounded phase timings to KUI/updater-startup.txt
+(connection, mount and version selection). A checked chained GUI preserves that
+first dispatcher's report. Reporting errors do not change software selection.
+These changes remove duplicate work; no measured console boot time is claimed.
 Restart K-UI reloads directly. Returning from a game remains a separate loader
 feature; this updater does not add universal CDDA/WinCE in-game return.

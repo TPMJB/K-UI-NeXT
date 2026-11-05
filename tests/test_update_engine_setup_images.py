@@ -43,7 +43,7 @@ def main():
             "src/core/runtime_image.c", "src/core/runtime_file.c", "src/core/storage_policy.c",
             "src/core/hash.c", "src/core/data.c", "src/core/boot_image.c", "src/core/boot_volume.c",
             "src/core/storage_probe.c", "src/core/diskio.c", str(source / "ff.c"), str(source / "ffunicode.c"),
-            "-Wl,--wrap=f_open,--wrap=f_stat", "-o", str(binary))
+            "-Wl,--wrap=f_open,--wrap=f_stat,--wrap=f_read", "-o", str(binary))
         formatter = private_formatter(base)
         for kind in ("fat32", "exfat"):
             image = base / (kind + ".img")

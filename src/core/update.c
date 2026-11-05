@@ -349,7 +349,7 @@ bool kui_update_capability_valid(const void *payload,size_t bytes) {
     if(!span(payload,bytes) || bytes<KUI_UPDATE_CAPABILITY_BYTES)return false;
     const uint8_t *p=payload;unsigned found=0u;
     for(size_t i=0;i<=bytes-KUI_UPDATE_CAPABILITY_BYTES;i++)
-        if(!memcmp(p+i,"KUIBANK1",8u) && get32(p+i+8u)==1u && get32(p+i+12u)==UINT32_C(0xfffffffe))
+        if(p[i]=='K' && !memcmp(p+i,"KUIBANK1",8u) && get32(p+i+8u)==1u && get32(p+i+12u)==UINT32_C(0xfffffffe))
             if(++found!=1u)return false;
     return found==1u;
 }
@@ -357,7 +357,7 @@ unsigned kui_update_engine_level(const void *payload,size_t bytes) {
     if(!span(payload,bytes) || bytes<KUI_UPDATE_ENGINE_BYTES)return 0u;
     const uint8_t *p=payload;unsigned found=0u;
     for(size_t i=0u;i<=bytes-KUI_UPDATE_ENGINE_BYTES;i++)
-        if(!memcmp(p+i,"KUIENG2!",8u) && get32(p+i+8u)==2u && get32(p+i+12u)==UINT32_C(0xfffffffd))
+        if(p[i]=='K' && !memcmp(p+i,"KUIENG2!",8u) && get32(p+i+8u)==2u && get32(p+i+12u)==UINT32_C(0xfffffffd))
             if(++found!=1u)return 0u;
     return found==1u?2u:0u;
 }

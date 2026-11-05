@@ -50,6 +50,7 @@ test-updater: build/test-update build/test-update-v2 build/test-update-handoff b
 	python3 tests/test_update_repair.py
 	python3 tests/test_update_test_bundle.py
 	python3 tests/test_update_restart_gui.py
+	python3 tests/test_update_boot_timings.py
 	python3 tests/test_update_browser_images.py
 	python3 tests/test_update_zip_images.py
 	python3 tests/test_update_images.py --skip-codec --binary $(CURDIR)/build/update-image --boot-binary $(CURDIR)/build/update-boot

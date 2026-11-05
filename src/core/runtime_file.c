@@ -64,7 +64,7 @@ enum kui_runtime_result kui_runtime_read(const char *path,
         if(f_read(&file, data, n, &done) != FR_OK || done != n) {
             result = KUI_RUNTIME_IO; goto close;
         }
-        crc = kui_crc32(crc, data, n);
+        crc = stream.pinned && stream.crc32?stream.crc32(crc,data,n):kui_crc32(crc,data,n);
         if(stream.pinned)stream.update(&stream,data,n);
         offset += n;
     }

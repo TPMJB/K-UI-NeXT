@@ -4757,7 +4757,34 @@ static bool boot_cancelled(void) {
 
 #ifdef KUI_SD_RUNTIME
 static bool update_boot_no_cancel(void) {return false;}
+static void update_boot_timing_save(uint64_t connected_at,uint64_t mounted_at,uint64_t selected_at,
+    uint64_t started,uint64_t connect_started,enum kui_update_boot_result result) {
+    /* The startup caller already owns this mount. Keep the last dispatcher's
+     * timings outside software banks; a chained test GUI cannot overwrite it.
+     * Reporting failure is diagnostic only and never changes selection. */
+    char text[768];
+    int bytes=snprintf(text,sizeof(text),
+        "K-UI updater startup\nBuild: %.12s\nStorage: %s\n"
+        "Display setup: %llu ms\nConnection: %llu ms\nMount: %llu ms\nVersion selection: %llu ms\n"
+        "Before report: %llu ms\nResult: %u\nBank: %s\nGUI: %s\nFallback: %s\nNotice: %s\n",
+        KUI_BUILD_ID,kui_storage_name(kui_storage_selected()),
+        (unsigned long long)(connect_started-started),(unsigned long long)(connected_at-connect_started),
+        (unsigned long long)(mounted_at-connected_at),
+        (unsigned long long)(selected_at-mounted_at),(unsigned long long)(selected_at-started),
+        (unsigned)result,update_boot_view.bank[0]?update_boot_view.bank:"root",
+        update_boot_view.build[0]?update_boot_view.build:KUI_BUILD_ID,
+        update_boot_view.fallback?"yes":"no",update_boot_view.notice);
+    if(bytes<0 || (size_t)bytes>=sizeof(text))return;
+    FIL file;
+    if(f_open(&file,"0:/KUI/updater-startup.txt",FA_WRITE|FA_CREATE_ALWAYS)!=FR_OK)return;
+    UINT written=0;
+    bool saved=f_write(&file,text,(UINT)bytes,&written)==FR_OK && written==(UINT)bytes;
+    if(saved)saved=f_sync(&file)==FR_OK;
+    if(f_close(&file)!=FR_OK)saved=false;
+    kui_log("Updater startup timings %s: /KUI/updater-startup.txt",saved?"saved":"unavailable");
+}
 static void update_boot_start(void) {
+    uint64_t started=timer_ms_gettime64();
     struct kui_runtime_image image={0};FATFS fs;
     struct kui_update_handoff_context handoff={.payload_offset=UINT32_MAX};
     uintptr_t slot=(uintptr_t)kui_update_ram_handoff;
@@ -4769,21 +4796,37 @@ static void update_boot_start(void) {
     /* Draw a bounded RAM-only status before a slow selected-card read. No
      * music, browser preload, app worker or storage callback exists yet. */
     vid_clear(8,15,35);
-    kui_shell_font_draw(vram_s,40,138,0xffff,"K-UI / Selecting installed version",true);
+    kui_shell_font_draw(vram_s,40,138,0xffff,"K-UI / Starting",true);
     kui_shell_font_draw(vram_s,40,190,0x07ff,baseline?
         "B held: using the original baseline.":"Checking the selected version on the boot SD card...",false);
     kui_shell_font_draw(vram_s,40,232,0xbdf7,"The installed software bank is checked before use.",false);
     vid_waitvbl();vid_flip(-1);
     kui_update_boot_block();
-    kui_sd_set_params(KUI_STORAGE_AUTO,true);
-    bool connected=kui_sd_connect(),mounted=connected && kui_mount(&fs,kui_log);
+    /* The CD/previous GUI already pinned the boot device. Opening that exact
+     * device avoids AUTO's extra probe mount/unmount before our own mount. */
+    kui_sd_set_params(kui_storage_selected(),true);
+    uint64_t connect_started=timer_ms_gettime64();
+    bool connected=kui_sd_connect();
+    uint64_t connected_at=timer_ms_gettime64();
+    bool mounted=connected && kui_mount(&fs,kui_log);
+    uint64_t mounted_at=timer_ms_gettime64();
     enum kui_update_boot_result result=KUI_UPDATE_BOOT_ERROR;
     if(mounted)result=baseline?
         kui_update_boot_baseline_handoff(KUI_BUILD_ID,kui_storage_selected(),&handoff,&image,&update_boot_view,kui_log,update_boot_no_cancel):
         kui_update_boot_read_handoff(KUI_BUILD_ID,kui_storage_selected(),&handoff,&image,&update_boot_view,kui_log,update_boot_no_cancel);
     else snprintf(update_boot_view.notice,sizeof(update_boot_view.notice),"Update storage unavailable; module loading blocked. Restart after checking SD.");
+    uint64_t selected_at=timer_ms_gettime64();
+    kui_log("Updater startup: connection=%llu ms mount=%llu ms selection=%llu ms",
+        (unsigned long long)(connected_at-connect_started),(unsigned long long)(mounted_at-connected_at),
+        (unsigned long long)(selected_at-mounted_at));
+    if(mounted && (kui_update_handoff_empty(handoff.wire,sizeof(handoff.wire),NULL) ||
+       result!=KUI_UPDATE_BOOT_PINNED))
+        update_boot_timing_save(connected_at,mounted_at,selected_at,started,connect_started,result);
     bool released=!mounted || f_mount(NULL,"0:",0)==FR_OK;
     kui_sd_disconnect();
+    kui_log("Updater startup: report/release=%llu ms total=%llu ms",
+        (unsigned long long)(timer_ms_gettime64()-selected_at),
+        (unsigned long long)(timer_ms_gettime64()-started));
     if(!released) {
         kui_update_boot_block();result=KUI_UPDATE_BOOT_ERROR;
         snprintf(update_boot_view.notice,sizeof(update_boot_view.notice),"Could not release update boot storage; restart after checking SD.");
