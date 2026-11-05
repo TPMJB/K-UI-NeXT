@@ -1,0 +1,167 @@
+{
+  "schema": "kui.native.cdda-build-manifest.v1",
+  "source_commit": "ab1b145b33b4b4cf252f61d7f5cfb06a55ac5f87",
+  "source_dirty": false,
+  "header_sha256": "624a8d6a6661cae756c12bc913c7e21a1b73db1131b7eb7818bcd72ed4a84bc0",
+  "profiles": {
+    "toy-raw": {
+      "build": "ab1b145b33b4",
+      "payload_bytes": 85156,
+      "payload_sha256": "6de1f46a6f9c8165158c583e1dba13a0f21220de4d81ac06827fbd5644b78fdd",
+      "module_sha256": "c5948934355c0f98bafbccf595ece4d78b99496db28ad01e6cf97ea6a2826b3f",
+      "crc32": "b9aa6206",
+      "aliases": [
+        "KUI/apps/games/cdda-toy-raw.kui",
+        "KUI/apps/games/cdda-native-toy-raw.kui"
+      ],
+      "source_provenance": {
+        "current": {
+          "receipt": {
+            "commit": "ab1b145b33b4b4cf252f61d7f5cfb06a55ac5f87",
+            "source_dirty": false,
+            "elf_sha256": "214b032aff5f481d407c5921a478c6ab490f7ee301fe31cb41a15196f45909e8"
+          },
+          "receipt_sha256": "514bdc848c2ce02d55cdd83acb0a36b93f9c940014358d92ebd00d2504198690"
+        },
+        "reference": {
+          "receipt": {
+            "commit": "ab1b145b33b4b4cf252f61d7f5cfb06a55ac5f87",
+            "source_dirty": false,
+            "elf_sha256": "16ce0e6ff426f38c29bec9f3c92a1b5ed6de0ea02c2c5f98162eed9240b12522"
+          },
+          "receipt_sha256": "f2245a6d1378b166c676c34f4cd4bab87b3dc1fa2fb6278d49d6b3f098a1ca0a"
+        }
+      },
+      "linked_audit": {
+        "profile": "toy-raw",
+        "experimental": true,
+        "console_tested": false,
+        "descriptor_bytes": 128,
+        "package": {
+          "format": 1,
+          "build": "ab1b145b33b4",
+          "payload_bytes": 85156,
+          "memory_bytes": 85156,
+          "crc32": "b9aa6206"
+        },
+        "unchanged_reference_playback_sha256": {
+          "resident-sci": "730b5c9ebba365f0056635b87c4d3b743dab035625c45f566c9e0b060024833d",
+          "worker": "7fac5eabdb2a64e61e0039c2c638d7f611ac5ede653d848a920db512e1551e2a"
+        },
+        "private_worker_stack_upper_bound": 4904,
+        "private_worker_stack_capacity": 8192,
+        "reference_directory": "native-reference-toy-raw"
+      },
+      "old_exact_admission_preserved": true,
+      "descriptor_admission_required": true,
+      "new_console_acceptance_claimed": false
+    },
+    "toy-cooked": {
+      "build": "ab1b145b33b4",
+      "payload_bytes": 85188,
+      "payload_sha256": "3eb2de11160bb0cad975dc25aeb189a9ce05ceb96309e88d2f06062bbb8e8856",
+      "module_sha256": "1a9adc8efa419c070c28d2ff0816b5d20f9dc155e2c5cf00115b98e9a105bd6e",
+      "crc32": "c49fac8c",
+      "aliases": [
+        "KUI/apps/games/cdda-toy-cooked.kui",
+        "KUI/apps/games/cdda-native-toy-cooked.kui"
+      ],
+      "source_provenance": {
+        "current": {
+          "receipt": {
+            "commit": "ab1b145b33b4b4cf252f61d7f5cfb06a55ac5f87",
+            "source_dirty": false,
+            "elf_sha256": "bc99ba8095ca8b2eca04990c10139c41d1eb3d591420e48e2504cb86d908a6af"
+          },
+          "receipt_sha256": "43da23efc9bbe7c63f4d0ac72272f98e9542f7e1c57723f125cff3130504e63f"
+        },
+        "reference": {
+          "receipt": {
+            "commit": "ab1b145b33b4b4cf252f61d7f5cfb06a55ac5f87",
+            "source_dirty": false,
+            "elf_sha256": "58a30c15d8e8725b1f3d934c30cf90576e5f15916363237546142aeaab2230ca"
+          },
+          "receipt_sha256": "0e230e3a45f8dff5621e67f6b1e967afb286f5e32024c87ba394b72f64788e15"
+        }
+      },
+      "linked_audit": {
+        "profile": "toy-cooked",
+        "experimental": true,
+        "console_tested": false,
+        "descriptor_bytes": 128,
+        "package": {
+          "format": 1,
+          "build": "ab1b145b33b4",
+          "payload_bytes": 85188,
+          "memory_bytes": 85188,
+          "crc32": "c49fac8c"
+        },
+        "unchanged_reference_playback_sha256": {
+          "resident-sci": "730b5c9ebba365f0056635b87c4d3b743dab035625c45f566c9e0b060024833d",
+          "worker": "7fac5eabdb2a64e61e0039c2c638d7f611ac5ede653d848a920db512e1551e2a"
+        },
+        "private_worker_stack_upper_bound": 4904,
+        "private_worker_stack_capacity": 8192,
+        "reference_directory": "native-reference-toy-cooked"
+      },
+      "old_exact_admission_preserved": true,
+      "descriptor_admission_required": true,
+      "new_console_acceptance_claimed": false
+    },
+    "mdk2": {
+      "build": "ab1b145b33b4",
+      "payload_bytes": 67176,
+      "payload_sha256": "d6a3d5396f9f10a4003837dee16498970ab983f282e213ba68a3f4190fa3edba",
+      "module_sha256": "f3dba85b5a646c1400e4246b34651834f47d7d1ef3b2cc90491f041ad7fcda85",
+      "crc32": "33d65d6c",
+      "aliases": [
+        "KUI/apps/games/retail-cdda-mdk2.kui",
+        "KUI/apps/games/cdda-native-mdk2.kui"
+      ],
+      "source_provenance": {
+        "current": {
+          "receipt": {
+            "commit": "ab1b145b33b4b4cf252f61d7f5cfb06a55ac5f87",
+            "source_dirty": false,
+            "elf_sha256": "0254d0c20f46b2437a42772b82eb94ad8f52801aa101ac1820e3ee5a8eb59819"
+          },
+          "receipt_sha256": "7cf50b3a6db3cb13ef81921faf265592cf4fdd84539dda3e603a08131a891a84"
+        },
+        "reference": {
+          "receipt": {
+            "commit": "ab1b145b33b4b4cf252f61d7f5cfb06a55ac5f87",
+            "source_dirty": false,
+            "elf_sha256": "b86b8abe651fb19c6b86fa3a891b6f3866ffd62da6a23ddbe8b0230b4538b192"
+          },
+          "receipt_sha256": "3851556010b38b4a2f02e9f708ab5cc54e08c7141d082a066aca4a9274fd022d"
+        }
+      },
+      "linked_audit": {
+        "profile": "mdk2",
+        "experimental": true,
+        "console_tested": false,
+        "descriptor_bytes": 128,
+        "package": {
+          "format": 1,
+          "build": "ab1b145b33b4",
+          "payload_bytes": 67176,
+          "memory_bytes": 67176,
+          "crc32": "33d65d6c"
+        },
+        "unchanged_reference_playback_sha256": {
+          "resident-sci": "58f20abc11b1b008c4252e74cca51e0788858fec7e8ca882a93292515a9ac316",
+          "worker": "618ad2647ae38a06a76e2cd954dca56336e008a938a58acc09d58760049eb545"
+        },
+        "private_worker_stack_upper_bound": 3684,
+        "private_worker_stack_capacity": 8192,
+        "reference_directory": "native-reference-mdk2"
+      },
+      "old_exact_admission_preserved": true,
+      "descriptor_admission_required": true,
+      "new_console_acceptance_claimed": false
+    }
+  },
+  "installed_module_self_authorization": false,
+  "routing_precedence_changed": false,
+  "playback_configuration_retuned": false
+}

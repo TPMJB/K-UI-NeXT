@@ -15,6 +15,20 @@ enum kui_games_cdda_profile {
     KUI_GAMES_CDDA_TOY_RAW_COMPAT, KUI_GAMES_CDDA_TOY_COOKED_COMPAT,
     KUI_GAMES_CDDA_MDK2_RAW_COMPAT
 };
+#ifdef KUI_NATIVE_CDDA_MANIFEST
+/* Built from the separately audited compatibility cohort. Exact old paths
+ * may contain these new bytes without changing path/presence precedence. */
+struct kui_games_cdda_manifest_entry {
+    enum kui_games_cdda_profile profile;
+    uint32_t payload_bytes,crc32;
+    char build[13];
+    uint8_t sha256[32];
+};
+#include KUI_NATIVE_CDDA_MANIFEST
+#if KUI_NATIVE_CDDA_MANIFEST_VERSION != 1
+#error "Unsupported native CDDA build manifest"
+#endif
+#endif
 /* Routing is deliberately narrower than the binaries' final loaded-byte
  * checks. Every track, including the low-density separator, must be mapped;
  * the separator alone never establishes playable high-density CD audio.
@@ -178,12 +192,12 @@ static inline bool kui_games_cdda_mdk2_package_admit(const struct kui_runtime_im
 /* Runtime parsing checks the envelope and its payload CRC first. Bind the
  * actual allocation to the delivered binary as well: build text alone is
  * insufficient. The map is still empty when this SHA is checked. */
-static inline bool kui_games_cdda_package_admit(enum kui_games_cdda_profile profile,
+static inline bool kui_games_cdda_descriptor_admit(enum kui_games_cdda_profile profile,
     const struct kui_runtime_image *image) {
-    if(kui_games_cdda_is_experimental(profile)) {
         static const struct kui_native_cdda_descriptor descriptors[3]={
             KUI_NATIVE_CDDA_TOY_DESCRIPTOR(0u),KUI_NATIVE_CDDA_TOY_DESCRIPTOR(1u),
             KUI_NATIVE_CDDA_MDK2_DESCRIPTOR};
+        if(!kui_games_cdda_is_experimental(profile))return false;
         unsigned index=profile==KUI_GAMES_CDDA_TOY_RAW_COMPAT?0u:
             profile==KUI_GAMES_CDDA_TOY_COOKED_COMPAT?1u:2u;
         const uint8_t *identity=(const uint8_t *)&descriptors[index];
@@ -199,7 +213,32 @@ static inline bool kui_games_cdda_package_admit(enum kui_games_cdda_profile prof
             if(memcmp(payload+i,identity,sizeof(descriptors[0])) || ++found>1u) return false;
         }
         return found==1u;
+}
+#ifdef KUI_NATIVE_CDDA_MANIFEST
+static inline bool kui_games_cdda_manifest_admit(enum kui_games_cdda_profile profile,
+    const struct kui_runtime_image *image) {
+    if(!image || !image->data)return false;
+    for(unsigned i=0u;i<sizeof(kui_games_cdda_manifest)/sizeof(kui_games_cdda_manifest[0]);i++) {
+        const struct kui_games_cdda_manifest_entry *entry=&kui_games_cdda_manifest[i];
+        if(profile!=entry->profile || image->info.payload_bytes!=entry->payload_bytes ||
+           image->info.memory_bytes!=entry->payload_bytes || image->info.crc32!=entry->crc32 ||
+           memcmp(image->info.build,entry->build,13u))continue;
+        struct kui_sha256 hash;uint8_t digest[32];kui_sha256_init(&hash);
+        kui_sha256_update(&hash,image->data,image->info.payload_bytes);
+        kui_sha256_digest(&hash,digest);
+        if(memcmp(digest,entry->sha256,sizeof(digest)))return false;
+        return kui_games_cdda_descriptor_admit((enum kui_games_cdda_profile)(profile+3),image);
     }
+    return false;
+}
+#endif
+static inline bool kui_games_cdda_package_admit(enum kui_games_cdda_profile profile,
+    const struct kui_runtime_image *image) {
+    if(kui_games_cdda_is_experimental(profile))
+        return kui_games_cdda_descriptor_admit(profile,image);
+#ifdef KUI_NATIVE_CDDA_MANIFEST
+    if(kui_games_cdda_manifest_admit(profile,image))return true;
+#endif
     if(profile==KUI_GAMES_CDDA_MDK2_RAW) return kui_games_cdda_mdk2_package_admit(image);
     static const uint8_t raw_sha[32]={
         0x78,0xc1,0x5a,0x85,0x80,0x32,0x0d,0xc2,0xb5,0x30,0x1d,0x85,0x76,0xcd,0x48,0x77,

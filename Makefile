@@ -23,6 +23,44 @@ VMU_MANAGEMENT = src/core/vmu_collection.c src/core/vmu_image.c src/core/vmu_ima
 VMU_MANAGEMENT += src/core/vmu_library.c src/core/vmu_game_assign.c src/core/vmu_game_card.c src/core/vmu_persist_profile.c src/core/retail_image.c src/core/game_cover.c
 VMU_MANAGEMENT += src/core/vmu_game_candidates.c src/core/vmu_import_plan.c
 
+UPDATE_CODEC = src/core/update.c src/core/update_handoff.c src/core/runtime_image.c src/core/hash.c src/core/data.c
+UPDATE_FILES = $(UPDATE_CODEC) src/core/update_file.c
+UPDATE_TEST_FLAGS = $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES)
+.PHONY: test-updater
+test-updater: build/test-update build/test-update-handoff build/update-image build/update-boot
+	python3 -c "import sys; sys.path.insert(0,'tools'); import update_addon as a; r=a.check_sources(a.source_state()); print('PASS updater-only main source preservation:',len(r['checked_paths']),'protected paths')"
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-update
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-update-handoff
+	python3 tests/test_update_package.py
+	python3 tests/test_update_addon.py
+	python3 tests/test_update_repair.py
+	python3 tests/test_update_test_bundle.py
+	python3 tests/test_update_restart_gui.py
+	python3 tests/test_update_browser_images.py
+	python3 tests/test_update_zip_images.py
+	python3 tests/test_update_images.py --skip-codec --binary $(CURDIR)/build/update-image --boot-binary $(CURDIR)/build/update-boot
+
+build/test-update: tests/test_update.c tests/update_fixture.h $(UPDATE_CODEC) include/kui/update.h include/kui/update_catalog.inc include/kui/update_legacy.inc include/kui/update_handoff.h
+	@mkdir -p $(@D)
+	$(CC) $(UPDATE_TEST_FLAGS) tests/test_update.c $(UPDATE_CODEC) -o $@
+
+build/test-update-handoff: tests/test_update_handoff.c src/core/update_handoff.c src/core/data.c include/kui/update_handoff.h
+	@mkdir -p $(@D)
+	$(CC) $(UPDATE_TEST_FLAGS) tests/test_update_handoff.c src/core/update_handoff.c src/core/data.c -o $@
+
+build/update-image: tests/update_image.c tests/update_fixture.h $(UPDATE_FILES) src/core/diskio.c $(FATFS) include/kui/update.h include/kui/update_catalog.inc include/kui/update_legacy.inc include/kui/update_handoff.h
+	@mkdir -p $(@D)
+	$(CC) $(UPDATE_TEST_FLAGS) tests/update_image.c $(UPDATE_FILES) src/core/diskio.c $(FATFS) -Wl,--wrap=f_open -Wl,--wrap=f_close -Wl,--wrap=f_write -Wl,--wrap=f_getfree -o $@
+
+build/update-boot: tests/update_boot_image.c tests/update_fixture.h $(UPDATE_FILES) src/core/update_boot.c src/core/runtime_file.c src/core/storage_policy.c src/core/diskio.c $(FATFS) include/kui/update_boot.h include/kui/update_legacy.inc include/kui/update_handoff.h
+	@mkdir -p $(@D)
+	$(CC) $(UPDATE_TEST_FLAGS) tests/update_boot_image.c $(UPDATE_FILES) src/core/update_boot.c src/core/runtime_file.c src/core/storage_policy.c src/core/diskio.c $(FATFS) -Wl,--wrap=f_open -Wl,--wrap=f_read -Wl,--wrap=f_close -o $@
+
+UPDATE_ROLE_FILES = src/core/native_vmu_standard.c src/core/vmu_game_card.c src/core/vmu_persist_profile.c src/core/retail_image.c
+build/update-release-image: tests/update_release_image.c $(UPDATE_FILES) $(UPDATE_ROLE_FILES) src/core/update_boot.c src/core/runtime_file.c src/core/storage_policy.c src/core/diskio.c $(FATFS) include/kui/update_boot.h include/kui/update_legacy.inc include/kui/update_handoff.h
+	@mkdir -p $(@D)
+	$(CC) $(UPDATE_TEST_FLAGS) tests/update_release_image.c $(UPDATE_FILES) $(UPDATE_ROLE_FILES) src/core/update_boot.c src/core/runtime_file.c src/core/storage_policy.c src/core/diskio.c $(FATFS) -o $@
+
 
 
 include config/lwext4.mk
@@ -1610,6 +1648,7 @@ test-disc-cards: build/test-disc-launcher build/test-shell
 	python3 tests/test_disc_cards_dispatch.py
 	python3 tests/test_disc_idle.py
 build/test-shell build/render-shell: include/kui/disc_cards.h
+build/test-shell build/render-shell: include/kui/update_browser.h
 
 .PHONY: test-disc-vmu
 test-disc-vmu: test-disc-native test-disc-vmu-probe build/test-disc-launch-vmu

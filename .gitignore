@@ -19,3 +19,6 @@ resources/music/*.wav
 *-backups/
 fp-info-cache
 _autosave-*
+
+# Dependency cache may be linked from a pinned local toolchain.
+.deps

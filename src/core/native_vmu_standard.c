@@ -3,6 +3,14 @@
 #include "kui/vmu_game_card.h"
 #include "kui/hash.h"
 #include <string.h>
+#ifdef KUI_NATIVE_STANDARD_MANIFEST
+/* Generated from this build's separately audited Standard module, never
+ * inferred from an installed file at launch. Unknown payloads still refuse. */
+#include KUI_NATIVE_STANDARD_MANIFEST
+#if KUI_NATIVE_STANDARD_MANIFEST_VERSION != 1
+#error "Unsupported native Standard build manifest"
+#endif
+#endif
 
 #define STANDARD_PAYLOAD_BYTES 213288u
 #define STANDARD_PROFILE_OFFSET 97600u
@@ -16,7 +24,28 @@ static const uint8_t payload_hashes[2][32]={
     {0x41,0x3b,0x50,0x76,0x11,0x5f,0x33,0x4a,0x7f,0x94,0xfb,0xeb,0x81,0x61,0x74,0xe8,
      0x94,0x6a,0x3f,0x7b,0x5a,0x72,0xd2,0x7f,0xef,0x6f,0x29,0x03,0x83,0xc7,0x46,0x4d}
 };
+#ifdef KUI_NATIVE_STANDARD_MANIFEST
+static bool recognize_manifest(const struct kui_runtime_image *package,size_t *profile_slot) {
+    const size_t bytes=KUI_NATIVE_STANDARD_MANIFEST_PAYLOAD_BYTES;
+    const size_t slot=KUI_NATIVE_STANDARD_MANIFEST_PROFILE_OFFSET;
+    if(!package || !package->data || bytes<4096u || slot>bytes-4096u ||
+       package->info.payload_bytes!=bytes || package->info.memory_bytes!=bytes ||
+       memcmp(package->info.build,KUI_NATIVE_STANDARD_MANIFEST_BUILD,13u) ||
+       kui_vmu_game_card_profile_slot(package->data,bytes)!=slot)return false;
+    const uint8_t *data=package->data;
+    static const uint8_t zero[64]={0};struct kui_sha256 hash;uint8_t digest[32];
+    kui_sha256_init(&hash);kui_sha256_update(&hash,data,slot);
+    for(unsigned i=0u;i<4096u/sizeof(zero);i++)kui_sha256_update(&hash,zero,sizeof(zero));
+    kui_sha256_update(&hash,data+slot+4096u,bytes-slot-4096u);kui_sha256_digest(&hash,digest);
+    if(memcmp(digest,kui_native_standard_manifest_sha256,32u))return false;
+    if(profile_slot)*profile_slot=slot;
+    return true;
+}
+#endif
 bool kui_native_vmu_standard_recognize(const struct kui_runtime_image *package,size_t *profile_slot) {
+#ifdef KUI_NATIVE_STANDARD_MANIFEST
+    if(recognize_manifest(package,profile_slot))return true;
+#endif
     if(!package || !package->data || package->info.payload_bytes!=STANDARD_PAYLOAD_BYTES ||
        package->info.memory_bytes!=STANDARD_PAYLOAD_BYTES || package->info.build[12]) return false;
     for(unsigned i=0;i<12u;i++) if(!((package->info.build[i]>='0' && package->info.build[i]<='9') ||

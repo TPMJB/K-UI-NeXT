@@ -1,0 +1,4210 @@
+{
+  "schema": "kui.updater.preserved-source.v1",
+  "baseline": "0045dd96937ee7485ecd4fe0432b28babea8646a",
+  "patterns": [
+    "src/loader/*",
+    "Makefile.vmu*",
+    "Makefile.native*",
+    "Makefile.armada*",
+    "Makefile.disc*",
+    "Makefile.smash*",
+    "Makefile.vc2*",
+    "Makefile.swirl*",
+    "src/apps/vmu*",
+    "src/core/vmu*",
+    "include/kui/vmu*",
+    "include/kui/native*",
+    "src/apps/disc_*",
+    "src/core/disc_*",
+    "include/kui/disc_*",
+    "src/core/games_*",
+    "src/apps/games.c",
+    "src/core/retail_*",
+    "include/kui/retail_*",
+    "src/apps/games_retail.c",
+    "src/apps/games_native*",
+    "src/apps/native_*",
+    "src/core/native_*",
+    "src/apps/smash*",
+    "src/core/smash*",
+    "include/kui/smash*",
+    "src/apps/vc2*",
+    "src/core/vc2*",
+    "include/kui/vc2*",
+    "src/apps/swirl*",
+    "src/core/swirl*",
+    "include/kui/swirl*",
+    "src/core/ce_*",
+    "include/kui/ce_*",
+    "include/kui/wince_*",
+    "include/kui/cdda_*",
+    "src/core/game_launch_settings.c",
+    "include/kui/game_launch_settings.h",
+    "include/kui/games_retail.h"
+  ],
+  "blobs": {
+    "Makefile.armada-audio": {
+      "mode": "100644",
+      "blob": "93316b380f8ab5aa8029733aab4d5830be20a4e8"
+    },
+    "Makefile.armada-bind": {
+      "mode": "100644",
+      "blob": "100edb61780ef4e94a9c95e44645199797587d32"
+    },
+    "Makefile.armada-excerpt": {
+      "mode": "100644",
+      "blob": "58d92c60065f37f8d70b2f5d153be7c9ed167eec"
+    },
+    "Makefile.armada-maple-fence": {
+      "mode": "100644",
+      "blob": "8aab1ac31b91549016a91825ab2a6e4ddb55516d"
+    },
+    "Makefile.armada-maple-hook": {
+      "mode": "100644",
+      "blob": "6d4083ca1e02d8e9f1bd77fc31895cb6605c7aa0"
+    },
+    "Makefile.armada-maple-observe": {
+      "mode": "100644",
+      "blob": "2c8d99ad8eeb3b20751e4673032008e88373ec21"
+    },
+    "Makefile.armada-maple-test": {
+      "mode": "100644",
+      "blob": "92ef8552c4de0159358445325e27f3ac814e2291"
+    },
+    "Makefile.armada-maple-traffic": {
+      "mode": "100644",
+      "blob": "493c8056b14e285bd561260754f0e8f4e5e306a5"
+    },
+    "Makefile.armada-persist-test": {
+      "mode": "100644",
+      "blob": "a4c28265519427bc0549b047eb1aa8ce1e9b394b"
+    },
+    "Makefile.armada-stream": {
+      "mode": "100644",
+      "blob": "50e671088c65fce96af25808dcef964c9f8098c3"
+    },
+    "Makefile.armada-vmu-a2": {
+      "mode": "100644",
+      "blob": "7fba14e2ae6e2dcb648aadbdb681ef11112b2304"
+    },
+    "Makefile.armada-vmu-loan-test": {
+      "mode": "100644",
+      "blob": "1797b07e416648ad233225b473720af167889cfe"
+    },
+    "Makefile.armada-vmu-runtime-sd-test": {
+      "mode": "100644",
+      "blob": "3d2fd545fef07edc26913b1cdc5d9b25025b1685"
+    },
+    "Makefile.armada-vmu-runtime-test": {
+      "mode": "100644",
+      "blob": "64ee3232ebfef9d66674ab50f1bd336cb072946a"
+    },
+    "Makefile.disc-native": {
+      "mode": "100644",
+      "blob": "0b1eb976f01955e02256e0a062c9cc0520f123e5"
+    },
+    "Makefile.disc-vmu": {
+      "mode": "100644",
+      "blob": "bcbaad7060a04bc0bb0210641b5e65650d694a16"
+    },
+    "Makefile.disc-vmu-a1": {
+      "mode": "100644",
+      "blob": "4bcbc01aae22a4e14e29178fa5464dabeb0ec9a2"
+    },
+    "Makefile.disc-vmu-support": {
+      "mode": "100644",
+      "blob": "3fbdbabe1733c1edc204eb00015983a2a5573d91"
+    },
+    "Makefile.native-standalone-doa2": {
+      "mode": "100644",
+      "blob": "0a295ed8411b629b3671860b95f5890b833b8703"
+    },
+    "Makefile.native-standalone-general": {
+      "mode": "100644",
+      "blob": "8ee2790ae6d45af91cc9612847e71b2394a5c49c"
+    },
+    "Makefile.native-standalone-ram-map": {
+      "mode": "100644",
+      "blob": "ef6a42404db0aa00a51070cc38b9073db1a22dbb"
+    },
+    "Makefile.native-standalone-stream-report": {
+      "mode": "100644",
+      "blob": "f138c562bb29d01ea7fd126d5aaa097783e5fdd3"
+    },
+    "Makefile.vmu": {
+      "mode": "100644",
+      "blob": "3f7c112de47e164f114c969f2ed0f7f25d752f54"
+    },
+    "Makefile.vmu-collection-test": {
+      "mode": "100644",
+      "blob": "d9f77e90ec85fc415ce0adaf1b60fcc817082969"
+    },
+    "Makefile.vmu-deferred-persist-test": {
+      "mode": "100644",
+      "blob": "b15702e9efe20c697a68873c1a34de52190ae41a"
+    },
+    "Makefile.vmu-deferred-test": {
+      "mode": "100644",
+      "blob": "91ae8149b4b1292856f05cd160521371d7810811"
+    },
+    "Makefile.vmu-heap-test": {
+      "mode": "100644",
+      "blob": "bf8eee08e55c64b4cd18ead15981d9bb8e896f86"
+    },
+    "Makefile.vmu-native-background": {
+      "mode": "100644",
+      "blob": "4debaeca72860ed923ae49dc1c13c6b1e3f4f4b5"
+    },
+    "Makefile.vmu-native-background-compact": {
+      "mode": "100644",
+      "blob": "075a00afff4e233c8b47a37c367e6cd95354fa13"
+    },
+    "Makefile.vmu-native-background-compact-a1": {
+      "mode": "100644",
+      "blob": "db747b1a0d6f24abda1ede8038da5f4d150f4c3b"
+    },
+    "Makefile.vmu-native-compat": {
+      "mode": "100644",
+      "blob": "95da16772ed36fd0a607e6a86467512c248cd03d"
+    },
+    "Makefile.vmu-native-cooperative": {
+      "mode": "100644",
+      "blob": "a7777fdb81d88b71de27aa87f9d6079475aa5cc8"
+    },
+    "Makefile.vmu-native-dual-readers": {
+      "mode": "100644",
+      "blob": "b1189657cf15da3856324cf75cee07a80fe80857"
+    },
+    "Makefile.vmu-native-heap-probe": {
+      "mode": "100644",
+      "blob": "d79ab63eaee90880fab2561ad86956dcdfd3aee5"
+    },
+    "Makefile.vmu-native-irq-rearm": {
+      "mode": "100644",
+      "blob": "da145006076bdd3229457b5ccffb20bfd21925ff"
+    },
+    "Makefile.vmu-native-isolation-demand": {
+      "mode": "100644",
+      "blob": "91de92e58ef0212751d7c07b5820f7ecc6c1e6f4"
+    },
+    "Makefile.vmu-native-isolation-maple-bypass": {
+      "mode": "100644",
+      "blob": "d273ca6be267ae2fbfa1e94d8eb3c7e00f00e8df"
+    },
+    "Makefile.vmu-native-isolation-maple-complete-delay": {
+      "mode": "100644",
+      "blob": "0fc44673c1b185c2d8bd99740aeaa19fb3d1cc74"
+    },
+    "Makefile.vmu-native-isolation-maple-delay": {
+      "mode": "100644",
+      "blob": "89b3048143d77e329f67f37eba8c2d7f7b3f503a"
+    },
+    "Makefile.vmu-native-isolation-maple-post-start-delay": {
+      "mode": "100644",
+      "blob": "dcb5558c3537036d34aca67cbe2b6a735c648ac5"
+    },
+    "Makefile.vmu-native-isolation-maple-submit-delay": {
+      "mode": "100644",
+      "blob": "54c02389c5ed2e357f7548b98089547b113704a2"
+    },
+    "Makefile.vmu-native-isolation-metadata-cache": {
+      "mode": "100644",
+      "blob": "6d6bd4f126e7304d36bf9b9d4f536366747fe403"
+    },
+    "Makefile.vmu-native-isolation-reader": {
+      "mode": "100644",
+      "blob": "7fdf1716d25a5e8f1a533d1b7f33f14622049b2e"
+    },
+    "Makefile.vmu-native-isolation-split-controller": {
+      "mode": "100644",
+      "blob": "106b2db084d787fbfc9ced718cc011e905de1a0a"
+    },
+    "Makefile.vmu-native-isolation-split-controller-general": {
+      "mode": "100644",
+      "blob": "9da6dce80104ca114ab77f663b727dcd8a224b75"
+    },
+    "Makefile.vmu-native-isolation-standard": {
+      "mode": "100644",
+      "blob": "cdf8ef1684bf99676e8f5eb1730c491f65cc467b"
+    },
+    "Makefile.vmu-native-isolation-wait": {
+      "mode": "100644",
+      "blob": "56cb673d0c3f0056ccae1aec67bcebbbbf30341d"
+    },
+    "Makefile.vmu-native-open": {
+      "mode": "100644",
+      "blob": "a4cd0cb0e745aef60b8cacc1f82c75e17e75554e"
+    },
+    "Makefile.vmu-native-paced": {
+      "mode": "100644",
+      "blob": "3f2cc92a2049c84baa904506e63473faa4813788"
+    },
+    "Makefile.vmu-native-passive": {
+      "mode": "100644",
+      "blob": "0d86ad16c78e4b3450c27ce87d03ac47b14963cc"
+    },
+    "Makefile.vmu-native-performance": {
+      "mode": "100644",
+      "blob": "6971c52af2c587b181d12139ff8d69303c880886"
+    },
+    "Makefile.vmu-native-persistent": {
+      "mode": "100644",
+      "blob": "f52375a213088af72d1943c304c04206c599545a"
+    },
+    "Makefile.vmu-native-priority7": {
+      "mode": "100644",
+      "blob": "c169483dc7d34da01a44285285be2170cc6d9ec6"
+    },
+    "Makefile.vmu-native-readahead": {
+      "mode": "100644",
+      "blob": "3c9995676be4c819b13d2a768b4bed1ff5e1e4cb"
+    },
+    "Makefile.vmu-native-readonly": {
+      "mode": "100644",
+      "blob": "a340077ee3bfe3f27ed1cae76b6035d6742af204"
+    },
+    "Makefile.vmu-native-sdk-sci-route": {
+      "mode": "100644",
+      "blob": "f6df1f99eba61d1661ca6316f3a58aac9a69f50f"
+    },
+    "Makefile.vmu-native-sdk-sci-structural": {
+      "mode": "100644",
+      "blob": "a4e7bff576dcf013f05232cc355268bd8a5d3393"
+    },
+    "Makefile.vmu-native-session-controls": {
+      "mode": "100644",
+      "blob": "c69ce5abd2ba58131b8ed647409d891a8b3f3f5f"
+    },
+    "Makefile.vmu-native-session-controls-a1": {
+      "mode": "100644",
+      "blob": "32d11a047e1aba196c8194aa39f2edd73a33ef28"
+    },
+    "Makefile.vmu-native-split-controller-prefetch": {
+      "mode": "100644",
+      "blob": "2ac7ab939c77f202e7e9e95d6d9ad95e317667f8"
+    },
+    "Makefile.vmu-native-split-controller-stream-guard": {
+      "mode": "100644",
+      "blob": "d1b7ada0bfa2cb9beec0dac12144540dc37b9159"
+    },
+    "Makefile.vmu-native-stall": {
+      "mode": "100644",
+      "blob": "e2702d1a3f0424b027b214b56da4b6f684d6f65a"
+    },
+    "Makefile.vmu-native-timed": {
+      "mode": "100644",
+      "blob": "50b7c6d0dba24aceb568ae428aa9590a6ab7e27d"
+    },
+    "Makefile.vmu-native-timeline": {
+      "mode": "100644",
+      "blob": "a4a51213c629cdafa14ec5e6f5e26cc158e934ea"
+    },
+    "Makefile.vmu-native-vmu-lite": {
+      "mode": "100644",
+      "blob": "65bc07cda43097dc1951ca5cfbaa2811732226ba"
+    },
+    "Makefile.vmu-native-vmu-lite-full-submit": {
+      "mode": "100644",
+      "blob": "c961d44a13a66d936cc7ab3db3183386a9c786af"
+    },
+    "Makefile.vmu-native-vmu-lite-paced": {
+      "mode": "100644",
+      "blob": "11ba2aa405aa5bb81945387055ae31d044e48da0"
+    },
+    "Makefile.vmu-native-vmu-lite-pio": {
+      "mode": "100644",
+      "blob": "292ed3a8e9a5d3cc949ad44f1ccff50582a2bbf1"
+    },
+    "Makefile.vmu-native-vmu-lite-unpaced": {
+      "mode": "100644",
+      "blob": "98baa89b56186b8b37fa38c5a28d808b89e46a91"
+    },
+    "Makefile.vmu-native-vmu-only": {
+      "mode": "100644",
+      "blob": "8c58d0ac8784d4f205beb3b14141c890cf814e98"
+    },
+    "Makefile.vmu-native-vmu-only-full-submit": {
+      "mode": "100644",
+      "blob": "2f9ee58585ad16624351218915218ae9b998585a"
+    },
+    "Makefile.vmu-native-worker": {
+      "mode": "100644",
+      "blob": "09f466db50a528e5d85181cd762b00d45f8d62f3"
+    },
+    "Makefile.vmu-pack-test": {
+      "mode": "100644",
+      "blob": "fea56f2bc8f905ab16a19071adfec9d2e0f37694"
+    },
+    "Makefile.vmu-read-probe": {
+      "mode": "100644",
+      "blob": "e448eefbeff9356f3c76a159ef6293b76ba202d7"
+    },
+    "Makefile.vmu-relocate-test": {
+      "mode": "100644",
+      "blob": "bb8789281a5f308024ab6b8d4a2cb456cc49a9f8"
+    },
+    "Makefile.vmu-runtime-test": {
+      "mode": "100644",
+      "blob": "b905b452327cf6cdd057367e60d13e36f6fbf5c7"
+    },
+    "Makefile.vmu-silver": {
+      "mode": "100644",
+      "blob": "8bd5e5c24c95292532ba81041a8418a9f5995d73"
+    },
+    "Makefile.vmu-silver-test": {
+      "mode": "100644",
+      "blob": "fc58ba165fa89ce74e0b8929ce95382f99b77bf0"
+    },
+    "Makefile.vmu-subset-test": {
+      "mode": "100644",
+      "blob": "a670267a39d56f5695834e03fdc01255cb8b2f2a"
+    },
+    "Makefile.vmu-subset-tool": {
+      "mode": "100644",
+      "blob": "6139441101ce90ebebdb8d2ec4844a37f38fef89"
+    },
+    "Makefile.vmu-toy": {
+      "mode": "100644",
+      "blob": "0c5fdd01ae34a48f79fe31585b93eb479a6ab725"
+    },
+    "Makefile.vmu-write-test": {
+      "mode": "100644",
+      "blob": "65d254ecc8d6351ba68f4458ae508b21847ca874"
+    },
+    "include/kui/cdda_audio64_profile.h": {
+      "mode": "100644",
+      "blob": "51edf742d0344f4d6c952bcfc8c30a62c321517b"
+    },
+    "include/kui/cdda_retail_binding.h": {
+      "mode": "100644",
+      "blob": "025c82e1c5109ba073e3a5697535145bc80e6b82"
+    },
+    "include/kui/ce_load_plan.h": {
+      "mode": "100644",
+      "blob": "0c9e2f8949c3abd5c71e19d4f7ef4d026c0630e7"
+    },
+    "include/kui/disc_boot.h": {
+      "mode": "100644",
+      "blob": "288e6f59425f7c0f3435cdcb008c1907c41f7f83"
+    },
+    "include/kui/disc_cards.h": {
+      "mode": "100644",
+      "blob": "0f4e9cfc96af8270589600d50e59b735d1e09cc9"
+    },
+    "include/kui/disc_identity.h": {
+      "mode": "100644",
+      "blob": "ae31da1a3d4d1a08f2d7debb36edab2ecf758ff1"
+    },
+    "include/kui/disc_idle.h": {
+      "mode": "100644",
+      "blob": "64c1028a397ef5ea0ce0be8625ff4352aa5e314c"
+    },
+    "include/kui/disc_launch.h": {
+      "mode": "100644",
+      "blob": "dc2af2e6182baf132ae7c0ed75897669af71c198"
+    },
+    "include/kui/disc_launch_limits.h": {
+      "mode": "100644",
+      "blob": "6f2c66ac9c6101dcb55534934d47da508dbeb91d"
+    },
+    "include/kui/disc_launcher.h": {
+      "mode": "100644",
+      "blob": "6cfe6be931507a001804ffce485c5ef2d9ade072"
+    },
+    "include/kui/disc_region.h": {
+      "mode": "100644",
+      "blob": "d7403a72dfdb6de807b4236a49f224fd53371c6a"
+    },
+    "include/kui/disc_vmu_card.h": {
+      "mode": "100644",
+      "blob": "0b89eead7b689f5e1747d6de1fdfae53742f36f0"
+    },
+    "include/kui/disc_vmu_entry.h": {
+      "mode": "100644",
+      "blob": "5906add1efd44b463fee206dd315e3948bf4a18d"
+    },
+    "include/kui/disc_vmu_layout.h": {
+      "mode": "100644",
+      "blob": "0fdbabf1ac774e6a2408f029bde692a601581ba8"
+    },
+    "include/kui/disc_vmu_probe.h": {
+      "mode": "100644",
+      "blob": "66fe2d741773ea85a3d7b02141b9041d35e84148"
+    },
+    "include/kui/disc_vmu_storage.h": {
+      "mode": "100644",
+      "blob": "04e549b885fe43c0f6c7cd7787e03e2640002d7e"
+    },
+    "include/kui/disc_vmu_support.h": {
+      "mode": "100644",
+      "blob": "e69d1bbba7d927a4721cb446bc5d489ba987ac6a"
+    },
+    "include/kui/disc_vmu_transport.h": {
+      "mode": "100644",
+      "blob": "7ccf1d6d2eac6033bf8b475e09f2d3087a64a7cc"
+    },
+    "include/kui/game_launch_settings.h": {
+      "mode": "100644",
+      "blob": "d8e2c2f2a1ec9ccd8b83daf366964c65ac65a90d"
+    },
+    "include/kui/games_retail.h": {
+      "mode": "100644",
+      "blob": "29d571de4106ed198b14a1cd4d700894ed877cf3"
+    },
+    "include/kui/native_background_budget.h": {
+      "mode": "100644",
+      "blob": "3532813b9a0c74e93b4ef768d4e35b8efb79ffad"
+    },
+    "include/kui/native_cdda_compat.h": {
+      "mode": "100644",
+      "blob": "d632a4f65c826ffa188274b19d9f433f5285da45"
+    },
+    "include/kui/native_disc_set.h": {
+      "mode": "100644",
+      "blob": "2c5d9e81371e56832d58236501b946fd76b819ee"
+    },
+    "include/kui/native_dual_reader.h": {
+      "mode": "100644",
+      "blob": "9a19ccf4b31b78415d8b4888ffcc3aef9a437e22"
+    },
+    "include/kui/native_isolation.h": {
+      "mode": "100644",
+      "blob": "03f2adadc9a29b5aa4d04389baecff4c82a5a982"
+    },
+    "include/kui/native_loader_timeline.h": {
+      "mode": "100644",
+      "blob": "4e981e548e76a7bba347fe4b6c78adbf9b3d26f3"
+    },
+    "include/kui/native_physical_capability.h": {
+      "mode": "100644",
+      "blob": "4dc326be06013dd7cad0810b1f73c49c70c8f971"
+    },
+    "include/kui/native_ram_map.h": {
+      "mode": "100644",
+      "blob": "d5390a959ac890f5d8af97f45333c7f00da58576"
+    },
+    "include/kui/native_readahead.h": {
+      "mode": "100644",
+      "blob": "5ce071d8207c99716211781cb31fb6dd432ea7e5"
+    },
+    "include/kui/native_readahead_cache.h": {
+      "mode": "100644",
+      "blob": "54aee460dbc82887574e22b95af7f69a349a664c"
+    },
+    "include/kui/native_readahead_layout.h": {
+      "mode": "100644",
+      "blob": "5194447ea48f5049a53b832361ce4596e7fde79a"
+    },
+    "include/kui/native_reader_capture.h": {
+      "mode": "100644",
+      "blob": "c3656abe26637e3a9b06aa890bcec2f3b76a3aed"
+    },
+    "include/kui/native_return.h": {
+      "mode": "100644",
+      "blob": "6e7e0119ad8ddbff857e8c0e0c929032a0438535"
+    },
+    "include/kui/native_scan_bytes.h": {
+      "mode": "100644",
+      "blob": "6c96398d100dd80e699978e16ca0cf9a3723c975"
+    },
+    "include/kui/native_sci_priority.h": {
+      "mode": "100644",
+      "blob": "4657bd0e2bcf1d66b6305750df283924e0d79921"
+    },
+    "include/kui/native_sdk_sci_family.h": {
+      "mode": "100644",
+      "blob": "33aa22b880aec510ce337a61a26dcfb6dc3d7f8e"
+    },
+    "include/kui/native_sdk_sci_route.h": {
+      "mode": "100644",
+      "blob": "6d6cad10ba02a4dbb374d50f2bdf037674a6c162"
+    },
+    "include/kui/native_sdk_sci_runtime.h": {
+      "mode": "100644",
+      "blob": "4badf17d99357f33a3d198f1798af8d01ad9f01f"
+    },
+    "include/kui/native_session.h": {
+      "mode": "100644",
+      "blob": "d16a8a31ea1f313ae466dd75f0bccc218630e50d"
+    },
+    "include/kui/native_session_binding.h": {
+      "mode": "100644",
+      "blob": "67d3930eea8c08fc2e39f3b3285d19ae5713e686"
+    },
+    "include/kui/native_session_prepare.h": {
+      "mode": "100644",
+      "blob": "5d2ad17c2cfb7d94efc4c4e3b94c52496f152500"
+    },
+    "include/kui/native_standalone_admission.h": {
+      "mode": "100644",
+      "blob": "297a0b3b6c8b7599fb28147abd758baffe827889"
+    },
+    "include/kui/native_standalone_capability.h": {
+      "mode": "100644",
+      "blob": "c821bc4618b6737e8cd01e4d5326189ea5c27fa5"
+    },
+    "include/kui/native_standalone_reader.h": {
+      "mode": "100644",
+      "blob": "1d82694a43c0e15bff649368c746d63479c24319"
+    },
+    "include/kui/native_vmu_standard.h": {
+      "mode": "100644",
+      "blob": "827b8ea3512187d67e543c4fc94b8090373d1e14"
+    },
+    "include/kui/retail_cursor.h": {
+      "mode": "100644",
+      "blob": "80d4100a1f6ec805581a6e88e30b7576dfecbb09"
+    },
+    "include/kui/retail_gd.h": {
+      "mode": "100644",
+      "blob": "71bb7044fbb3549d57e25d99df51735740a3845b"
+    },
+    "include/kui/retail_image.h": {
+      "mode": "100644",
+      "blob": "e30dcfec37d8dc13fe9deb3ece9f955971e0f2d1"
+    },
+    "include/kui/retail_loader_layout.h": {
+      "mode": "100644",
+      "blob": "b958a8529b7a9186902e9adf0d736ea87bc5ef8d"
+    },
+    "include/kui/retail_map_diagnostic.h": {
+      "mode": "100644",
+      "blob": "ac25d54ec2abaeebe1d52c1c9e03e147a9c180d4"
+    },
+    "include/kui/retail_native_disc.h": {
+      "mode": "100644",
+      "blob": "17bebf027aa39983b91ae5fccc06d78c39684bee"
+    },
+    "include/kui/retail_native_drive.h": {
+      "mode": "100644",
+      "blob": "6fbc503dd3fbd5ff1592a5d1a0087b1a4a005fb2"
+    },
+    "include/kui/retail_observe.h": {
+      "mode": "100644",
+      "blob": "b8a0fd654324db7e5bbdf4bfadb1a253487b3260"
+    },
+    "include/kui/retail_pace.h": {
+      "mode": "100644",
+      "blob": "b4770d40ffa043319606af2aa53d4249f2c77b75"
+    },
+    "include/kui/retail_resident.h": {
+      "mode": "100644",
+      "blob": "eb729c3af7594ad9d1fbadd37224498954c4379a"
+    },
+    "include/kui/retail_zso.h": {
+      "mode": "100644",
+      "blob": "3ec5789974394e43af704bd3a95ac1a39181c452"
+    },
+    "include/kui/vmu_backing.h": {
+      "mode": "100644",
+      "blob": "2c30c991236ffd6ed31dba09fe2c56a494917f2b"
+    },
+    "include/kui/vmu_collection.h": {
+      "mode": "100644",
+      "blob": "6e675d20d08929c9306c9f4fb0a7b22b8f5a9241"
+    },
+    "include/kui/vmu_deferred_io.h": {
+      "mode": "100644",
+      "blob": "321323126f1e94a812494e000d8ea791db1c79ad"
+    },
+    "include/kui/vmu_description.h": {
+      "mode": "100644",
+      "blob": "7539a2e66479eb0a5836f7c333aa33db60c4b8da"
+    },
+    "include/kui/vmu_durable.h": {
+      "mode": "100644",
+      "blob": "0e75b08fb65ab087a06aa11fe53e7964a09b9fd5"
+    },
+    "include/kui/vmu_emulation.h": {
+      "mode": "100644",
+      "blob": "d71663cb0320f4b97abb7f22fbad5bf8c9735282"
+    },
+    "include/kui/vmu_emulation_settings.h": {
+      "mode": "100644",
+      "blob": "d4e2b67591b9c5dff963f51abc37e964415257e5"
+    },
+    "include/kui/vmu_fs_admission.h": {
+      "mode": "100644",
+      "blob": "1512dcaff43068049e360a18267cfd7f5553bcd3"
+    },
+    "include/kui/vmu_game_assign.h": {
+      "mode": "100644",
+      "blob": "3fc6c513b579778c6a3e40089e473131a8625222"
+    },
+    "include/kui/vmu_game_candidates.h": {
+      "mode": "100644",
+      "blob": "4a0f440dd8725b8cde21d91df6df80488d6d9002"
+    },
+    "include/kui/vmu_game_card.h": {
+      "mode": "100644",
+      "blob": "efcb5096862f7ae032ad79da54e78b701d69dac9"
+    },
+    "include/kui/vmu_game_card_service.h": {
+      "mode": "100644",
+      "blob": "078b33360fcb0d2b0702a0ff0ebe2921dbf60b48"
+    },
+    "include/kui/vmu_game_info.h": {
+      "mode": "100644",
+      "blob": "2ca0bd7ed87d5d3967d11f77580b48ebeeb1e780"
+    },
+    "include/kui/vmu_history.h": {
+      "mode": "100644",
+      "blob": "447214c3bc16fd13cb0e199862d5cb455310255e"
+    },
+    "include/kui/vmu_history_record.h": {
+      "mode": "100644",
+      "blob": "3363dbbcc923fbd4afa89c54e1cc225dbf673bb3"
+    },
+    "include/kui/vmu_image.h": {
+      "mode": "100644",
+      "blob": "1bfc59d589c9dab23f4214dbbdfb5760cef23fdd"
+    },
+    "include/kui/vmu_image_clone.h": {
+      "mode": "100644",
+      "blob": "d5b4a6dedf7f9b7ac25538c7b65047e38db9a2bb"
+    },
+    "include/kui/vmu_image_merge.h": {
+      "mode": "100644",
+      "blob": "1a2a931ed57f02ed2ab5580307ca6c7738509114"
+    },
+    "include/kui/vmu_image_pack.h": {
+      "mode": "100644",
+      "blob": "9996ae832d7485efc5dcf57c175fd47a5b368f47"
+    },
+    "include/kui/vmu_image_subset.h": {
+      "mode": "100644",
+      "blob": "0def9bf8c1f3c688a9c9c9d5b4a92b5d0ce897fc"
+    },
+    "include/kui/vmu_import.h": {
+      "mode": "100644",
+      "blob": "d4e560ab19629bc139093681027ed96ac8ce5fdc"
+    },
+    "include/kui/vmu_import_match.h": {
+      "mode": "100644",
+      "blob": "ff7d064269b065e5e799378b0e76e8242c2d2110"
+    },
+    "include/kui/vmu_import_plan.h": {
+      "mode": "100644",
+      "blob": "774dfc3c24689e5bd13ddd0a428ffc9fda95f344"
+    },
+    "include/kui/vmu_launch_package.h": {
+      "mode": "100644",
+      "blob": "9d60e40edb47904a4a73e603e6edee97edfab1f8"
+    },
+    "include/kui/vmu_lcd.h": {
+      "mode": "100644",
+      "blob": "d3973afe5822ae51ef25c4e1bf5e9762aa52abe0"
+    },
+    "include/kui/vmu_library.h": {
+      "mode": "100644",
+      "blob": "5f4eb3fd1a4e88692e9fd935af11052921796fd6"
+    },
+    "include/kui/vmu_maple_dma.h": {
+      "mode": "100644",
+      "blob": "8942b3242b11d93f41ec7320f3096a08f96133bd"
+    },
+    "include/kui/vmu_maple_observe.h": {
+      "mode": "100644",
+      "blob": "6fb750404bd86d373ec9ae2465a2aa4aef41e0d7"
+    },
+    "include/kui/vmu_maple_observe_boot.h": {
+      "mode": "100644",
+      "blob": "3ce5cdcfc2a2a821bf431192a77e26df7a207f3c"
+    },
+    "include/kui/vmu_maple_observe_io.h": {
+      "mode": "100644",
+      "blob": "f92a2e183931f60a31fafb1ca89d92b9c8c216a7"
+    },
+    "include/kui/vmu_maple_observe_profile.h": {
+      "mode": "100644",
+      "blob": "eafa1cfda04f641f99903ac9509f9b2d43f47c3d"
+    },
+    "include/kui/vmu_match_memory.h": {
+      "mode": "100644",
+      "blob": "83715d2df6e9f178dbd678d1e696045ff1b84500"
+    },
+    "include/kui/vmu_native_async_loan.h": {
+      "mode": "100644",
+      "blob": "265d2995d49ac7863896a2f8809ea00de0105595"
+    },
+    "include/kui/vmu_native_background.h": {
+      "mode": "100644",
+      "blob": "cfd793b0014f625c4cfee0a342a941ca1c141bec"
+    },
+    "include/kui/vmu_native_cache.h": {
+      "mode": "100644",
+      "blob": "1199f5f1d1beaa29a07e586773e7a4cf42e8efae"
+    },
+    "include/kui/vmu_native_cache_seed.h": {
+      "mode": "100644",
+      "blob": "415efc3342152fc498d2fd29db3bb0d9b626efb8"
+    },
+    "include/kui/vmu_native_discovery.h": {
+      "mode": "100644",
+      "blob": "782165cd440bb047f72237964d752116b91cc297"
+    },
+    "include/kui/vmu_native_exit.h": {
+      "mode": "100644",
+      "blob": "3fe30545c75de6f4048ae1f883b740f17c8d0599"
+    },
+    "include/kui/vmu_native_heap.h": {
+      "mode": "100644",
+      "blob": "f0b7a461e4315c0c2977f2c7bb5a3e333d6cb59c"
+    },
+    "include/kui/vmu_native_heap_budget.h": {
+      "mode": "100644",
+      "blob": "53937fa7189cb656718b2439e525b2bb39229a43"
+    },
+    "include/kui/vmu_native_layout.h": {
+      "mode": "100644",
+      "blob": "732dd83fc6abec08b937ed8fe6489a1477a81b1f"
+    },
+    "include/kui/vmu_native_lifetime.h": {
+      "mode": "100644",
+      "blob": "fa5516910bddc000e9b4e9001b5f2b9b6275ba13"
+    },
+    "include/kui/vmu_native_live.h": {
+      "mode": "100644",
+      "blob": "b0b2e29c12830037a56572d8742e51f567c5af56"
+    },
+    "include/kui/vmu_native_mode.h": {
+      "mode": "100644",
+      "blob": "2a0d91faa2ce541290156831027f9912deeeffce"
+    },
+    "include/kui/vmu_native_passive.h": {
+      "mode": "100644",
+      "blob": "d312ad5f16226ab88ba9e706fbbf1d853ebddec4"
+    },
+    "include/kui/vmu_native_patch.h": {
+      "mode": "100644",
+      "blob": "9de786a6b9c1c83e63fa316bf53b8e24c755cf18"
+    },
+    "include/kui/vmu_native_profile.h": {
+      "mode": "100644",
+      "blob": "2507b359c9ea9500028e3f766ad4a1fa2c754d25"
+    },
+    "include/kui/vmu_native_program.h": {
+      "mode": "100644",
+      "blob": "75d399d0d2a9770564b7d02853f71d85208d4379"
+    },
+    "include/kui/vmu_native_relocate.h": {
+      "mode": "100644",
+      "blob": "4d539c5098bc1d6e80511cb73940960e53b13941"
+    },
+    "include/kui/vmu_native_resolution_cache.h": {
+      "mode": "100644",
+      "blob": "ac99b479a979d27fde101311c8af1bc144449770"
+    },
+    "include/kui/vmu_native_runtime.h": {
+      "mode": "100644",
+      "blob": "948509e544d30c63bd4aaf192e2cd1bcb26cd28c"
+    },
+    "include/kui/vmu_native_stage_placement.h": {
+      "mode": "100644",
+      "blob": "c8827183b57fd84dc6cbe636a3ad9ae8eacf61ef"
+    },
+    "include/kui/vmu_native_startup_stack.h": {
+      "mode": "100644",
+      "blob": "0c2007c79780d96699eda19048cd7d4fb9be88f3"
+    },
+    "include/kui/vmu_native_terminal_dispatch.h": {
+      "mode": "100644",
+      "blob": "a1e783fd676add0a1e806c1a9ec7af51af20be9a"
+    },
+    "include/kui/vmu_native_toggle.h": {
+      "mode": "100644",
+      "blob": "8681cdca604071312d5acc8a0e0fa2feb9e261f9"
+    },
+    "include/kui/vmu_native_trace.h": {
+      "mode": "100644",
+      "blob": "86015c4e73b060f805cc1f901f2af72bd4697cef"
+    },
+    "include/kui/vmu_native_worker.h": {
+      "mode": "100644",
+      "blob": "6f5c8d7660deb7f8d146995e2417ee8090421827"
+    },
+    "include/kui/vmu_persist_profile.h": {
+      "mode": "100644",
+      "blob": "ffc1f144383e41071d00f039e5b3026703eed573"
+    },
+    "include/kui/vmu_persist_session.h": {
+      "mode": "100644",
+      "blob": "8d89c32ea7d2ae68ce8d38afbae1748eb716e69d"
+    },
+    "include/kui/vmu_persist_stage.h": {
+      "mode": "100644",
+      "blob": "c9f98f40a93abb2ffa0132cb7e1730dc54fa5edd"
+    },
+    "include/kui/vmu_read_bounded.h": {
+      "mode": "100644",
+      "blob": "9e1beefa1dbf175e65dd7363ee3e86cad05f25b8"
+    },
+    "include/kui/vmu_readonly.h": {
+      "mode": "100644",
+      "blob": "35f58ee8db80ba01b0f18b23e095be8493a29b9b"
+    },
+    "include/kui/vmu_readonly_overlay.h": {
+      "mode": "100644",
+      "blob": "05aa8f8c0c489970caf01162ce4d06d0690c9638"
+    },
+    "include/kui/vmu_save_snapshot.h": {
+      "mode": "100644",
+      "blob": "f0d16edcb9274966e6843d5a7e4152092bb11761"
+    },
+    "include/kui/vmu_sd_lease.h": {
+      "mode": "100644",
+      "blob": "29815eab91710063570ee336a5d2a8c9d3a747c2"
+    },
+    "include/kui/vmu_sd_profile.h": {
+      "mode": "100644",
+      "blob": "02c754228d6e2dcf015961b84f6256bb52c5264a"
+    },
+    "include/kui/vmu_sd_stage_admission.h": {
+      "mode": "100644",
+      "blob": "a024562478bdb3900f9c5e6331afd91755a2e9b9"
+    },
+    "include/kui/vmu_service.h": {
+      "mode": "100644",
+      "blob": "251142d3a2b1bafb314b18d9893c194fb47ce3e8"
+    },
+    "include/kui/vmu_silver_observe_admission.h": {
+      "mode": "100644",
+      "blob": "3069230753ce5c7ea026107e532e8f58027cc692"
+    },
+    "include/kui/vmu_silver_observe_witnesses.h": {
+      "mode": "100644",
+      "blob": "a0526d683fcd79e0a42d6559db68bb42779e038a"
+    },
+    "include/kui/vmu_store.h": {
+      "mode": "100644",
+      "blob": "4619093e7e2a3301e6c756733951e326a2ed00d8"
+    },
+    "include/kui/vmu_toy_observe_admission.h": {
+      "mode": "100644",
+      "blob": "99b91f4141db8510ddaf4842333a5aa4506cf12e"
+    },
+    "include/kui/vmu_volatile.h": {
+      "mode": "100644",
+      "blob": "65685416869494d8faaea7c15cc316e12ba6009b"
+    },
+    "include/kui/vmu_volatile_chain.h": {
+      "mode": "100644",
+      "blob": "4a0924aa62820093c5365283e646eeb86b366a3d"
+    },
+    "include/kui/vmu_wizard.h": {
+      "mode": "100644",
+      "blob": "25325274ae7d0f92577d27809c65f053bd850ecc"
+    },
+    "include/kui/vmu_write_bounded.h": {
+      "mode": "100644",
+      "blob": "0776c7912fc46e14fb3089389cd624d0a80b312d"
+    },
+    "include/kui/wince_cdda_profiles.h": {
+      "mode": "100644",
+      "blob": "54a24219fadba44f9c5bc6ff35582876efe5d6a1"
+    },
+    "include/kui/wince_cdda_wwp_kernel.h": {
+      "mode": "100644",
+      "blob": "0ec9b6eab5cf849b1b904da3547aa5d5259de863"
+    },
+    "src/apps/disc_cards.c": {
+      "mode": "100644",
+      "blob": "49f63a18f94e98fd4e4c7dd680a4317286302dc2"
+    },
+    "src/apps/disc_identity.c": {
+      "mode": "100644",
+      "blob": "eeb8ceb6bf589e43b5a45505cd31b76035e1a6b3"
+    },
+    "src/apps/disc_launcher.c": {
+      "mode": "100644",
+      "blob": "258d4ad2940444f1e51a7d37c09007026287aae6"
+    },
+    "src/apps/disc_region.c": {
+      "mode": "100644",
+      "blob": "b2874b8381e01b56c80fa40cf377bba5361c9054"
+    },
+    "src/apps/disc_vmu_card.c": {
+      "mode": "100644",
+      "blob": "af70d29544f68adf99702cef01567b568af42650"
+    },
+    "src/apps/disc_vmu_launcher.c": {
+      "mode": "100644",
+      "blob": "86e726cc561ef5390535f96a8fbb3991d9bccfcc"
+    },
+    "src/apps/games.c": {
+      "mode": "100644",
+      "blob": "4c05c8c6e8d059ae7df107d5253dac362c0c7f66"
+    },
+    "src/apps/games_native_cache.inc": {
+      "mode": "100644",
+      "blob": "101c0800e1ef8e791a1ed997f19e01fa30edd80c"
+    },
+    "src/apps/games_native_vmu.inc": {
+      "mode": "100644",
+      "blob": "34474b7794284e61c81cedb5c64a8af5b1818caf"
+    },
+    "src/apps/games_retail.c": {
+      "mode": "100644",
+      "blob": "1537a223e88c450f3142420aec194f2616e5518f"
+    },
+    "src/apps/native_session_prepare.c": {
+      "mode": "100644",
+      "blob": "a4fdb60a7f2d25de3e5bf06630ee4dd7612f63be"
+    },
+    "src/apps/vmu.c": {
+      "mode": "100644",
+      "blob": "cebc7489f5bf753e1f3852cb6af359c923413fda"
+    },
+    "src/apps/vmu_collection.inc": {
+      "mode": "100644",
+      "blob": "fcd549c9d1c59a2dd54b8cd3863f3ecdf64a15d5"
+    },
+    "src/apps/vmu_game_info.c": {
+      "mode": "100644",
+      "blob": "715c1bc9c16d486533d0fc4743e4b8eb802b9bb8"
+    },
+    "src/apps/vmu_history.c": {
+      "mode": "100644",
+      "blob": "644084c377afcc351c6831c11f04e6567f6d2f31"
+    },
+    "src/apps/vmu_import.c": {
+      "mode": "100644",
+      "blob": "6495c26515b5094066b3409cbeaba81c95f0a9b0"
+    },
+    "src/apps/vmu_library_ui.c": {
+      "mode": "100644",
+      "blob": "ecd18c3436a80eff61d0eadedb6a2ef5244f61b3"
+    },
+    "src/apps/vmu_match_memory.c": {
+      "mode": "100644",
+      "blob": "95bacbbec63afaa213555ecd1015a7cd55a45fcc"
+    },
+    "src/apps/vmu_wizard.c": {
+      "mode": "100644",
+      "blob": "5c753127b0d4cacf3ae3c2021e53f99a2ed1f3af"
+    },
+    "src/apps/vmu_wizard_memory.inc": {
+      "mode": "100644",
+      "blob": "7fa89d6871d60448aa4bd886b7b4f40c6d48c0b1"
+    },
+    "src/core/ce_load_plan.c": {
+      "mode": "100644",
+      "blob": "5c7d9818a27f82dd63d005546dc3e5c79defc856"
+    },
+    "src/core/disc_boot.c": {
+      "mode": "100644",
+      "blob": "1e4a77814948394ac72eda32b0b1f259e855d5ad"
+    },
+    "src/core/disc_launch.c": {
+      "mode": "100644",
+      "blob": "cbb5b88e7af7cfea5a31dae09b6ed7937daed5c3"
+    },
+    "src/core/disc_vmu_entry.c": {
+      "mode": "100644",
+      "blob": "3e5413fb831726ae4909ec69ff8a91621a208129"
+    },
+    "src/core/disc_vmu_probe.c": {
+      "mode": "100644",
+      "blob": "c2680260da68ca5b79cc4efb1cccab07bc80129d"
+    },
+    "src/core/game_launch_settings.c": {
+      "mode": "100644",
+      "blob": "38d3514e504d27fa0cec0e60ca9268467118d434"
+    },
+    "src/core/games_activity.c": {
+      "mode": "100644",
+      "blob": "0f86e4b17f2624601b23786f830d8578c32d16e5"
+    },
+    "src/core/games_cdda_profile.h": {
+      "mode": "100644",
+      "blob": "f73ce18eec633a4b5ac6ba8c4f0a72cd140ccd29"
+    },
+    "src/core/games_group.c": {
+      "mode": "100644",
+      "blob": "a2e62278d79615c7cb5b55f2a43c0ea8376786db"
+    },
+    "src/core/games_metadata.c": {
+      "mode": "100644",
+      "blob": "1168b8f770f8e200faed62ac97055cf317801946"
+    },
+    "src/core/games_query.c": {
+      "mode": "100644",
+      "blob": "9ae850b8c4583d29dcaeac6733fb7528b54f0596"
+    },
+    "src/core/games_selection.c": {
+      "mode": "100644",
+      "blob": "106b51dfad8dd86d3b0ac6149ca36a7b85d4e1cd"
+    },
+    "src/core/native_disc_set.c": {
+      "mode": "100644",
+      "blob": "13775436ae41bf678a87470a5e2ee4732b39ec82"
+    },
+    "src/core/native_loader_timeline.c": {
+      "mode": "100644",
+      "blob": "c1d2eeaab7b8bee0ed4be94cabd092655f9100e9"
+    },
+    "src/core/native_readahead_cache.c": {
+      "mode": "100644",
+      "blob": "d939d8c5302b052159eb0f1f470581f58e32da11"
+    },
+    "src/core/native_return.c": {
+      "mode": "100644",
+      "blob": "71a124ec5a4d6cb82db9570c781a182f79aed69b"
+    },
+    "src/core/native_sdk_sci_family.c": {
+      "mode": "100644",
+      "blob": "12e02546da29d101c38207909deb86ab3dfc8861"
+    },
+    "src/core/native_sdk_sci_family.inc": {
+      "mode": "100644",
+      "blob": "624af83f24765c17809322ccfb1c23bd0fd79162"
+    },
+    "src/core/native_sdk_sci_route.c": {
+      "mode": "100644",
+      "blob": "8b4cd021e7aa3376a43e7007a36f109536e73426"
+    },
+    "src/core/native_session.c": {
+      "mode": "100644",
+      "blob": "50940aeb2e554dda5098f233e40d570de6e8dcf6"
+    },
+    "src/core/native_standalone_admission.c": {
+      "mode": "100644",
+      "blob": "f5508dd586af15071499bfc2161e7b259b7abd68"
+    },
+    "src/core/native_vmu_standard.c": {
+      "mode": "100644",
+      "blob": "9ade7f89232895831eedf81742945387f673b1c8"
+    },
+    "src/core/retail_cursor.c": {
+      "mode": "100644",
+      "blob": "f2816217a8d6357aa8f120111378cf7ed483f3e9"
+    },
+    "src/core/retail_gd.c": {
+      "mode": "100644",
+      "blob": "24010d011920f09da7f38c535e3386d616af1ef4"
+    },
+    "src/core/retail_image.c": {
+      "mode": "100644",
+      "blob": "a7705447516f8c581afc832ba08eca76a10c1074"
+    },
+    "src/core/retail_observe.c": {
+      "mode": "100644",
+      "blob": "017ea2d2a3bda46c1094147f9ffee55e3151d9fb"
+    },
+    "src/core/retail_pace.c": {
+      "mode": "100644",
+      "blob": "41d62da5a5cea0dd5d56d6a40efd4acdc80470a3"
+    },
+    "src/core/retail_zso.c": {
+      "mode": "100644",
+      "blob": "8bb6d2ddcb6f64fd9d4f245c067e53aab4467918"
+    },
+    "src/core/vmu_collection.c": {
+      "mode": "100644",
+      "blob": "d04983ba18788dffb4b43ca99aeefff265681ae4"
+    },
+    "src/core/vmu_deferred_io.c": {
+      "mode": "100644",
+      "blob": "9d1ace6e356a09fc213eef84f3c8b5117356cb3d"
+    },
+    "src/core/vmu_description.c": {
+      "mode": "100644",
+      "blob": "b39fff4abf12ff08e62281628d4c961a180f06b4"
+    },
+    "src/core/vmu_durable.c": {
+      "mode": "100644",
+      "blob": "940dab6b9f963654a0f855643f520f2744341ea2"
+    },
+    "src/core/vmu_emulation.c": {
+      "mode": "100644",
+      "blob": "e04038c7ee94a6d3ea7a17fa41c3bf05f67ea5db"
+    },
+    "src/core/vmu_emulation_settings.c": {
+      "mode": "100644",
+      "blob": "48ea4920b7fbecb38dd789085336371e52bfe6fc"
+    },
+    "src/core/vmu_fs_admission.c": {
+      "mode": "100644",
+      "blob": "a4952a9250f80ed8edfcdb2720f5f1a2379d0519"
+    },
+    "src/core/vmu_game_assign.c": {
+      "mode": "100644",
+      "blob": "4a228c25da2813ce7ca8fe0ffed9f990ab88edb5"
+    },
+    "src/core/vmu_game_candidates.c": {
+      "mode": "100644",
+      "blob": "99033cacbec9a13b1e1f819d568e55be14b8388e"
+    },
+    "src/core/vmu_game_card.c": {
+      "mode": "100644",
+      "blob": "03572f2be000c2cf9c44700e71d8affde93fb709"
+    },
+    "src/core/vmu_game_card_service.c": {
+      "mode": "100644",
+      "blob": "a9b1a0e98229d3c53b3b7e41a67b1cc009938972"
+    },
+    "src/core/vmu_history.c": {
+      "mode": "100644",
+      "blob": "258ec4545efa807dd680d0a5d24cabbff2f7824e"
+    },
+    "src/core/vmu_history_record.c": {
+      "mode": "100644",
+      "blob": "843f17aa10ed1102ff0c3bf32e47bfa520f2d1ce"
+    },
+    "src/core/vmu_history_session.c": {
+      "mode": "100644",
+      "blob": "69f8cf429d54a173304acdfa9c2b5be10f165e46"
+    },
+    "src/core/vmu_image.c": {
+      "mode": "100644",
+      "blob": "ee7d032800e6d6c2367ba58856b6e66281306bce"
+    },
+    "src/core/vmu_image_clone.c": {
+      "mode": "100644",
+      "blob": "20bdeb7da659c3a2de6f35a10ea3ae5a1823bf2a"
+    },
+    "src/core/vmu_image_merge.c": {
+      "mode": "100644",
+      "blob": "f42a305052ea3c30b795427af60c30a2eb90bbcb"
+    },
+    "src/core/vmu_image_pack.c": {
+      "mode": "100644",
+      "blob": "284365dc6e790d5f730d435adafa2b58d9b2db45"
+    },
+    "src/core/vmu_image_subset.c": {
+      "mode": "100644",
+      "blob": "b7e1574cca19df0e7cbc937ba1b9089bcb5719bf"
+    },
+    "src/core/vmu_import_match.c": {
+      "mode": "100644",
+      "blob": "0a0cf667de7ff61ec84761c9ea1011c745b25123"
+    },
+    "src/core/vmu_import_plan.c": {
+      "mode": "100644",
+      "blob": "e50854a63bb2888a29437d9d81c6b88749eca2a2"
+    },
+    "src/core/vmu_launch_package.c": {
+      "mode": "100644",
+      "blob": "a8bfde3c5bbf84568b9539919e6bed656bea7e57"
+    },
+    "src/core/vmu_lcd.c": {
+      "mode": "100644",
+      "blob": "4dfcd31aae096e6438d1425987e3c9c2dc064a9f"
+    },
+    "src/core/vmu_library.c": {
+      "mode": "100644",
+      "blob": "2a247d1ca032ede71f802e644d16ad4ead17c93a"
+    },
+    "src/core/vmu_native_cache.c": {
+      "mode": "100644",
+      "blob": "ab775cdb9da9950d6a94ac0174ce29951b5e5312"
+    },
+    "src/core/vmu_native_cache_seed.c": {
+      "mode": "100644",
+      "blob": "e29ffbca49802b221942478a7137cdbf3a911cf5"
+    },
+    "src/core/vmu_native_discovery.c": {
+      "mode": "100644",
+      "blob": "3fec5fedf72df561c9110fde26cbbe17c8fe2fc7"
+    },
+    "src/core/vmu_native_exit.c": {
+      "mode": "100644",
+      "blob": "823ec18f3132ceb83676e8bfe6e61b329d69d27b"
+    },
+    "src/core/vmu_native_heap.c": {
+      "mode": "100644",
+      "blob": "243b2aa9a8af1cbde6df6fcaaafc1c909ad5529c"
+    },
+    "src/core/vmu_native_heap_bottom_code.inc": {
+      "mode": "100644",
+      "blob": "ebc51da4a87bab3c12637c9e746058b6bcf5f475"
+    },
+    "src/core/vmu_native_heap_budget.c": {
+      "mode": "100644",
+      "blob": "1f299c7f14ffaac25c2bb3d88d62cf8001f915f3"
+    },
+    "src/core/vmu_native_layout.c": {
+      "mode": "100644",
+      "blob": "54791f45d1154b7070fb76ff11ba0c50ddd01133"
+    },
+    "src/core/vmu_native_lifetime.c": {
+      "mode": "100644",
+      "blob": "ad773a9022c8f8a94a5f4a4858c407996122f53c"
+    },
+    "src/core/vmu_native_live.c": {
+      "mode": "100644",
+      "blob": "bab00abc1e4e70465c40da0faa0834430379b097"
+    },
+    "src/core/vmu_native_mode.c": {
+      "mode": "100644",
+      "blob": "4cb6f799803c02216e66c1423785464e8bb75ffe"
+    },
+    "src/core/vmu_native_patch.c": {
+      "mode": "100644",
+      "blob": "bfef669cb0172961a3ba059b114043c72029d614"
+    },
+    "src/core/vmu_native_profile.c": {
+      "mode": "100644",
+      "blob": "6ef342d7f89128183ab635dde6d4d5fc11e52b38"
+    },
+    "src/core/vmu_native_program.c": {
+      "mode": "100644",
+      "blob": "85e721a0e3c88127e2b8e78087fdf6f633489ea5"
+    },
+    "src/core/vmu_native_relocate.c": {
+      "mode": "100644",
+      "blob": "6fe44d8a803c6304cb96e6ae314bf03aa1e06d31"
+    },
+    "src/core/vmu_native_resolution_cache.c": {
+      "mode": "100644",
+      "blob": "8e3170fd815a1d397497a24e2fb257d5445b3a69"
+    },
+    "src/core/vmu_native_runtime.c": {
+      "mode": "100644",
+      "blob": "e1cf0b57340fdf6d64d056ff4b65c06c5c56ba67"
+    },
+    "src/core/vmu_native_stage_placement.c": {
+      "mode": "100644",
+      "blob": "a1200015d29c785388bb126fcf7e2dd144a90f2a"
+    },
+    "src/core/vmu_native_worker_protocol.c": {
+      "mode": "100644",
+      "blob": "0c578eb88112712837671c18e1aac824774bd081"
+    },
+    "src/core/vmu_persist_profile.c": {
+      "mode": "100644",
+      "blob": "a64333e78b74945fbf3675e81dcf8a0e3c52835b"
+    },
+    "src/core/vmu_persist_session.c": {
+      "mode": "100644",
+      "blob": "bd1549a742d9510c8e3a6d54691842f36839f859"
+    },
+    "src/core/vmu_readonly.c": {
+      "mode": "100644",
+      "blob": "730e6b2f67cd2ab85584c1d1f0ccf4aea69f10a1"
+    },
+    "src/core/vmu_save_format.c": {
+      "mode": "100644",
+      "blob": "c86e71c910d78f726aac8d7326db4764af6b28c3"
+    },
+    "src/core/vmu_save_snapshot.c": {
+      "mode": "100644",
+      "blob": "88d70d4bf23fdfeb328580bfed22bfcf00618858"
+    },
+    "src/core/vmu_sd_profile.c": {
+      "mode": "100644",
+      "blob": "9c781791660aa86a82c61d2dd79c8c04b040d80d"
+    },
+    "src/core/vmu_store.c": {
+      "mode": "100644",
+      "blob": "478895a225e96b0ba7b386af30e99bd9628bb594"
+    },
+    "src/core/vmu_volatile.c": {
+      "mode": "100644",
+      "blob": "a91f111c5ca37b16c6f646eb943c8c92895d6185"
+    },
+    "src/loader/armada_ce_audio_observe.inc": {
+      "mode": "100644",
+      "blob": "a2619e5fe2ad8d10130f52f03060fe4e9cb73f0b"
+    },
+    "src/loader/armada_ce_bind_probe.c": {
+      "mode": "100644",
+      "blob": "bf13abafecd99c6210d85d738ae6eca3c0c5fedd"
+    },
+    "src/loader/armada_ce_bind_probe.ld": {
+      "mode": "100644",
+      "blob": "ab9aef69d08acac5dea8b583715cc2ac0b9e6361"
+    },
+    "src/loader/armada_ce_cache_snapshot.S": {
+      "mode": "100644",
+      "blob": "018cc1877ec5e821f218a1cb10b40d0fee2697dc"
+    },
+    "src/loader/armada_ce_excerpt.S": {
+      "mode": "100644",
+      "blob": "389defb550df29fbe1c6f55fa113cd5ff9fde895"
+    },
+    "src/loader/armada_ce_excerpt.c": {
+      "mode": "100644",
+      "blob": "e6d75a4ec139785bf2559bfcfcfa73384dbd30b6"
+    },
+    "src/loader/armada_ce_excerpt_entry.c": {
+      "mode": "100644",
+      "blob": "2270cfd6514f39a9ce3ce7b5756267f74c464fd5"
+    },
+    "src/loader/armada_ce_maple_array.S": {
+      "mode": "100644",
+      "blob": "bd5aa77e1fcfe4a7c89f9591b1517ac29bfde11f"
+    },
+    "src/loader/armada_ce_maple_fence.ld": {
+      "mode": "100644",
+      "blob": "bc3fd1d31c6e5d928414a57523d1881a206348cf"
+    },
+    "src/loader/armada_ce_maple_fence_bridge.S": {
+      "mode": "100644",
+      "blob": "529d41f9e11d76e37e41b469ba4386a1c29cd3f0"
+    },
+    "src/loader/armada_ce_maple_hook.S": {
+      "mode": "100644",
+      "blob": "40185664784f7f359332c4eaf29452e2de7dcbf0"
+    },
+    "src/loader/armada_ce_maple_hook.ld": {
+      "mode": "100644",
+      "blob": "ade64da0f385e3f331060c36b21b420acb57c29d"
+    },
+    "src/loader/armada_ce_maple_probe.c": {
+      "mode": "100644",
+      "blob": "c033a228a1762fc6a9c4a9b4c9cf6e7e2b9299cb"
+    },
+    "src/loader/armada_ce_maple_probe.ld": {
+      "mode": "100644",
+      "blob": "d375f0a806db1bf801dd3595111aaca732915d57"
+    },
+    "src/loader/armada_ce_maple_traffic.c": {
+      "mode": "100644",
+      "blob": "f57de560c0bde408e985638d6a3e2acf687c0ba7"
+    },
+    "src/loader/armada_ce_maple_traffic.ld": {
+      "mode": "100644",
+      "blob": "65acf98d0c50b4411ce040bdbd221981edbd97dc"
+    },
+    "src/loader/armada_ce_maple_traffic_entry.S": {
+      "mode": "100644",
+      "blob": "bec45906bce047fe3c57a4d6c7cc61eb1993eab3"
+    },
+    "src/loader/armada_ce_stream.ld": {
+      "mode": "100644",
+      "blob": "b6171f163848e68ae65cf89f06e77289af9d3e34"
+    },
+    "src/loader/armada_ce_stream_model.c": {
+      "mode": "100644",
+      "blob": "52473601fb0ca370e89db2f8c34f9a0e4fd27704"
+    },
+    "src/loader/armada_ce_stream_native.c": {
+      "mode": "100644",
+      "blob": "30525977445fad1b292802ab7a7f4c3a0b737031"
+    },
+    "src/loader/armada_ce_stream_player.c": {
+      "mode": "100644",
+      "blob": "6cc66f556003ef762c5f5cb31108b30f7b7930bf"
+    },
+    "src/loader/armada_ce_stream_trace.c": {
+      "mode": "100644",
+      "blob": "d58f24c75cba6de222359c007174629ccda9612f"
+    },
+    "src/loader/armada_ce_stream_transport.c": {
+      "mode": "100644",
+      "blob": "739bd64f56a4fb49f69e436af7edec3d1d88c023"
+    },
+    "src/loader/armada_ce_vmu_a2.ld": {
+      "mode": "100644",
+      "blob": "a8e3b1d5dd8d974b8d11698dc2575ee018064962"
+    },
+    "src/loader/armada_ce_vmu_a2_publish.c": {
+      "mode": "100644",
+      "blob": "0ab8db30ea030cc8be4cca7c266c824c617e1681"
+    },
+    "src/loader/armada_ce_vmu_a2_write.ld.S": {
+      "mode": "100644",
+      "blob": "ce386a9cfb6b2eff0dd299daf41a481f46dd1e00"
+    },
+    "src/loader/armada_ce_vmu_persist_stage.c": {
+      "mode": "100644",
+      "blob": "95c3f78bcf10cece6217b76447d0137b7ba4b8e6"
+    },
+    "src/loader/armada_ce_vmu_persist_stage.inc": {
+      "mode": "100644",
+      "blob": "ef7342341b98c987e4375355c9a2d1eeb5a11d54"
+    },
+    "src/loader/armada_ce_vmu_runtime.c": {
+      "mode": "100644",
+      "blob": "019e75d1fa9c5ee60e25848c1afddb4a676b6163"
+    },
+    "src/loader/armada_ce_vmu_sd.c": {
+      "mode": "100644",
+      "blob": "34895c2eb399103e725cf3d515f41a088ea4c106"
+    },
+    "src/loader/armada_ce_vmu_sd_pio.c": {
+      "mode": "100644",
+      "blob": "f4be6e14f6bd435dde6ff4394a0452539c3605cb"
+    },
+    "src/loader/client.c": {
+      "mode": "100644",
+      "blob": "262a83b4a2706ca4c3974e2ff99de6e686a0cc7d"
+    },
+    "src/loader/client.ld": {
+      "mode": "100644",
+      "blob": "3d264dc193cdf1f5e7afb3c94ccdaace4576d366"
+    },
+    "src/loader/client_start.S": {
+      "mode": "100644",
+      "blob": "95c73e9e465fc40b8bcbf712d0dba149a7e2f795"
+    },
+    "src/loader/disc_entry.S": {
+      "mode": "100644",
+      "blob": "ce85af591657750059f8dd98d0a2675c08267c3f"
+    },
+    "src/loader/disc_entry.ld": {
+      "mode": "100644",
+      "blob": "a3670c96bee719c73ff175f3f09e030b7645b85c"
+    },
+    "src/loader/disc_stage.S": {
+      "mode": "100644",
+      "blob": "d975f882e07b1c40007b9865d3a157146a72e654"
+    },
+    "src/loader/disc_stage.c": {
+      "mode": "100644",
+      "blob": "7fc9f9135d59548cf27b1a7510388e517f8d1bc7"
+    },
+    "src/loader/disc_stage.ld": {
+      "mode": "100644",
+      "blob": "26e0d78402a64e535d30fd77d59494e5933d4c72"
+    },
+    "src/loader/disc_vmu_entry.ld": {
+      "mode": "100644",
+      "blob": "acb386a2b5e2c0d81c57e7ae48136a0348aefc1f"
+    },
+    "src/loader/disc_vmu_return_stage.inc": {
+      "mode": "100644",
+      "blob": "0fd7d3038dc5062bbc9fe082d4b179afa71657d0"
+    },
+    "src/loader/disc_vmu_stage.c": {
+      "mode": "100644",
+      "blob": "29ddd5e73ff96e00acaec37f2b6732be7e6805f6"
+    },
+    "src/loader/disc_vmu_stage.ld": {
+      "mode": "100644",
+      "blob": "45b1bd6a4aeffde36114384336347c2b4ee881bd"
+    },
+    "src/loader/disc_vmu_stage_asm.S": {
+      "mode": "100644",
+      "blob": "5dfd02eff334f233e1d3fa21450fc0b982bd7346"
+    },
+    "src/loader/disc_vmu_storage.c": {
+      "mode": "100644",
+      "blob": "dda1cf838daff248298e4e65f471b4d5397496c2"
+    },
+    "src/loader/disc_vmu_support.S": {
+      "mode": "100644",
+      "blob": "f0f2f774883a0478407399ac3c6154982b474e7b"
+    },
+    "src/loader/disc_vmu_support.c": {
+      "mode": "100644",
+      "blob": "f9466687ab25f9e810c23387373a98c6e1344d0b"
+    },
+    "src/loader/disc_vmu_support.ld": {
+      "mode": "100644",
+      "blob": "c89a4b4c1bcb32e10b6be792308b9afe6216c75f"
+    },
+    "src/loader/disc_vmu_transport.c": {
+      "mode": "100644",
+      "blob": "002fea593d6e1b77c00a57afbaa685f9b9757387"
+    },
+    "src/loader/display.c": {
+      "mode": "100644",
+      "blob": "d890f571a189d381c76030e958c0b63c630c161b"
+    },
+    "src/loader/display.h": {
+      "mode": "100644",
+      "blob": "6a3a502f5f6df743da9b10a48a960f5715bf986e"
+    },
+    "src/loader/entry.S": {
+      "mode": "100644",
+      "blob": "afb4f642449011833eacebcd9cc5b15947a331f1"
+    },
+    "src/loader/entry.ld": {
+      "mode": "100644",
+      "blob": "a8a00759bbfb7e917e4aa3b07266de936a6f8f9b"
+    },
+    "src/loader/gd_hook.S": {
+      "mode": "100644",
+      "blob": "274bb2416dcbeeccfb06cc5b706e7cd989c95245"
+    },
+    "src/loader/image_client.c": {
+      "mode": "100644",
+      "blob": "79d9d2dd8dca5f68bde211ae38938a797cc5d2d5"
+    },
+    "src/loader/image_client.ld": {
+      "mode": "100644",
+      "blob": "3d264dc193cdf1f5e7afb3c94ccdaace4576d366"
+    },
+    "src/loader/image_client_call.S": {
+      "mode": "100644",
+      "blob": "5125177e9415062720fc3c0d278a0794962c43ed"
+    },
+    "src/loader/image_client_start.S": {
+      "mode": "100644",
+      "blob": "adefb402e98194262cf932b9ab52f2247a305ca0"
+    },
+    "src/loader/image_display.c": {
+      "mode": "100644",
+      "blob": "d6c220777632bc11712892ed3d602627ff16295b"
+    },
+    "src/loader/image_entry.S": {
+      "mode": "100644",
+      "blob": "b8a29ca16b0912ae249a60b97d0ea1e4b393533c"
+    },
+    "src/loader/image_entry.ld": {
+      "mode": "100644",
+      "blob": "26dffca36ec75e2fdbe2b88acfbe5b966e23e76d"
+    },
+    "src/loader/image_main.c": {
+      "mode": "100644",
+      "blob": "d31652df7b2068f4271a32022ce122e4057cb32b"
+    },
+    "src/loader/image_resident.ld": {
+      "mode": "100644",
+      "blob": "0cdea792df075577c6416104ccdbff495e680f5b"
+    },
+    "src/loader/image_resident_start.S": {
+      "mode": "100644",
+      "blob": "cb97c1b4c07ed9e92f393ba709ebdce53fe14e34"
+    },
+    "src/loader/main.c": {
+      "mode": "100644",
+      "blob": "0bdd49f285e434c60e490929a0715fd86aca1ae7"
+    },
+    "src/loader/mdk2_cdda_admission.h": {
+      "mode": "100644",
+      "blob": "59bd552ea321e20fded60a2c2f13a26ab5df570a"
+    },
+    "src/loader/mdk2_cdda_boot.S": {
+      "mode": "100644",
+      "blob": "3cc0e44e5fde696a2afc48ea2cb51ce0edb4d338"
+    },
+    "src/loader/mdk2_cdda_resident.ld": {
+      "mode": "100644",
+      "blob": "e808eb7f4ef4e022bc698c88908d632993f40969"
+    },
+    "src/loader/mdk2_cdda_stage.c": {
+      "mode": "100644",
+      "blob": "9d0c44a13754a88ef8cf4211cce5eed880630e45"
+    },
+    "src/loader/mdk2_cdda_worker.S": {
+      "mode": "100644",
+      "blob": "b38b36fd088882fc6bb3fe4d49849592d034c020"
+    },
+    "src/loader/minic.c": {
+      "mode": "100644",
+      "blob": "8227220bc8be52e31b1ad9b4d6753ddab4ef692d"
+    },
+    "src/loader/native_ram_map_stage.inc": {
+      "mode": "100644",
+      "blob": "17ca06010e1ccdcb9da2f8a436f6edf2273fe1b6"
+    },
+    "src/loader/native_readahead_aux.c": {
+      "mode": "100644",
+      "blob": "e5ccb7b1f1cbc3fa0afe17bdc29c908e4e61816e"
+    },
+    "src/loader/native_readahead_aux.ld": {
+      "mode": "100644",
+      "blob": "e34bcb86e397a3aae158859b6b94d7dd985f08e2"
+    },
+    "src/loader/native_readahead_aux_entry.S": {
+      "mode": "100644",
+      "blob": "7ded6ddc1d525ef4873ca4540e6546e78315b2c8"
+    },
+    "src/loader/native_readahead_aux_internal.h": {
+      "mode": "100644",
+      "blob": "553b7b20fc749dc48ab40bc8731d3dfa7e2b5d97"
+    },
+    "src/loader/native_return_hardware.S": {
+      "mode": "100644",
+      "blob": "bd31b00019394fcc51b00154d87cd1e6673cacd2"
+    },
+    "src/loader/native_return_hardware.c": {
+      "mode": "100644",
+      "blob": "36eae5b0e5daccc8a979f418a54729e5c626294f"
+    },
+    "src/loader/native_return_hardware.h": {
+      "mode": "100644",
+      "blob": "0c245753129bb41bd0162ddd805659043bde37c8"
+    },
+    "src/loader/native_session_cold_bind.inc": {
+      "mode": "100644",
+      "blob": "a94f5defeabc9449ed39fe143c3c33472477d445"
+    },
+    "src/loader/native_session_worker.inc": {
+      "mode": "100644",
+      "blob": "d28cd91bd21c5b8b24f8e74763cef8b14979387d"
+    },
+    "src/loader/native_standalone_reader.inc": {
+      "mode": "100644",
+      "blob": "aa9863846bf09b5d4a902fce0337105dbcbb3505"
+    },
+    "src/loader/native_standalone_reader_stage.inc": {
+      "mode": "100644",
+      "blob": "99df595ea71e1bea8dbc3a38bc05a421806bc190"
+    },
+    "src/loader/native_vmu_io_diagnostic.h": {
+      "mode": "100644",
+      "blob": "9631b5bd4bd72fad4187b28ca231de91896dbf0f"
+    },
+    "src/loader/resident.ld": {
+      "mode": "100644",
+      "blob": "d7bae6a73c74b7ea6f462d6397d939de2b7995ce"
+    },
+    "src/loader/resident_start.S": {
+      "mode": "100644",
+      "blob": "b49df22c6bd70515060b12a0a3ee6de6511ae77e"
+    },
+    "src/loader/retail_async.c": {
+      "mode": "100644",
+      "blob": "c7ee74ae0963203bd988db2b126183e4c1e0c7fc"
+    },
+    "src/loader/retail_async.h": {
+      "mode": "100644",
+      "blob": "471b6fa42c9f1884d50d9f0111f33ef23e34984e"
+    },
+    "src/loader/retail_boot.h": {
+      "mode": "100644",
+      "blob": "ddb94d3ec8f51e2f031a7760a23942dd072e2fd6"
+    },
+    "src/loader/retail_display.c": {
+      "mode": "100644",
+      "blob": "2ecd80309693b5a93bce82c8b467e7222d81ed90"
+    },
+    "src/loader/retail_display.h": {
+      "mode": "100644",
+      "blob": "a6c0253a43a4fce658c726dcacd0a40bdb19d4ae"
+    },
+    "src/loader/retail_entry.S": {
+      "mode": "100644",
+      "blob": "e9ab9bd9316caec3da72c251a793cdbec554043a"
+    },
+    "src/loader/retail_entry.ld": {
+      "mode": "100644",
+      "blob": "34d7d860815aa11bb8da67773407e76932df3e8d"
+    },
+    "src/loader/retail_resident.S": {
+      "mode": "100644",
+      "blob": "53b7e16d73cec03fb45eca34f2423f8c62d43ddd"
+    },
+    "src/loader/retail_resident.c": {
+      "mode": "100644",
+      "blob": "9fa2f872c3aa9847783eb55e0d93f27fe06fed52"
+    },
+    "src/loader/retail_resident.ld": {
+      "mode": "100644",
+      "blob": "3952abe64d4e5a8ee78ab9ba6fc40895bb4f8303"
+    },
+    "src/loader/retail_resident_async.ld": {
+      "mode": "100644",
+      "blob": "1269951640de8fbae4a5e039ee0bbc2f7bf0a4fe"
+    },
+    "src/loader/retail_resident_async_low.ld": {
+      "mode": "100644",
+      "blob": "889e9aa80c797e43d55e52c377d395791ee917ac"
+    },
+    "src/loader/retail_resident_ce.ld": {
+      "mode": "100644",
+      "blob": "a05f5ea7fea197087a84d60fdd730bf18dfd5fb6"
+    },
+    "src/loader/retail_resident_ce_async.ld": {
+      "mode": "100644",
+      "blob": "620012bf96ccc3a0517e10f0a7ed53cf573d8c1b"
+    },
+    "src/loader/retail_resident_ce_async_vmu_write.ld": {
+      "mode": "100644",
+      "blob": "0d95f5fc87c51ee0366e9e885b18faaec15300d0"
+    },
+    "src/loader/retail_resident_low.ld": {
+      "mode": "100644",
+      "blob": "728a3ca5bed250247846fd434354c71d3ca7a125"
+    },
+    "src/loader/retail_sd.c": {
+      "mode": "100644",
+      "blob": "5e271b33accb276992d98345b011010eded635a8"
+    },
+    "src/loader/retail_sd.h": {
+      "mode": "100644",
+      "blob": "7a2ee746c2e95123d887bd2d71f2e8eb40ea80e8"
+    },
+    "src/loader/retail_sd_bench.c": {
+      "mode": "100644",
+      "blob": "b858b8ce42e6272babc21e3ae1090308fdeba132"
+    },
+    "src/loader/retail_sd_bench.h": {
+      "mode": "100644",
+      "blob": "a62baec9d060bced09326fbe04300b7d7642a3c7"
+    },
+    "src/loader/retail_stage.S": {
+      "mode": "100644",
+      "blob": "9956e0e1c3cd9769a51d75b43264658d2fecd4ba"
+    },
+    "src/loader/retail_stage.c": {
+      "mode": "100644",
+      "blob": "5f7ff4ffdd90563d55c659d9ee2253fb3d0a4dda"
+    },
+    "src/loader/retail_stage.ld": {
+      "mode": "100644",
+      "blob": "f9e15ba43d39879dbe6610d793d1fd24e857f456"
+    },
+    "src/loader/retail_stage_ce.ld": {
+      "mode": "100644",
+      "blob": "5842bff773a1d61e88d9ddb2b2ed7ef3043f3dd6"
+    },
+    "src/loader/retail_storage.c": {
+      "mode": "100644",
+      "blob": "f184fdd7d1b82117cea47690e7595136147f4bf3"
+    },
+    "src/loader/retail_storage.h": {
+      "mode": "100644",
+      "blob": "8eefdd199cd12808aab701d558f67b79bee2c692"
+    },
+    "src/loader/retail_storage_impl.h": {
+      "mode": "100644",
+      "blob": "954fb1aec959525c680e24f5193f5e8df067e62b"
+    },
+    "src/loader/sci_sd_bus.c": {
+      "mode": "100644",
+      "blob": "593828501874a493f44e3ac07c7277be52732d9a"
+    },
+    "src/loader/sci_sd_bus.h": {
+      "mode": "100644",
+      "blob": "d8e23e590417db6f4bc23f8c98e1554492ac88a6"
+    },
+    "src/loader/sci_stream.c": {
+      "mode": "100644",
+      "blob": "ed16a37eb0c2dc74c15be80ef25dae7cd111ba51"
+    },
+    "src/loader/sci_stream.h": {
+      "mode": "100644",
+      "blob": "f44c8d56b4c66126447eb26b7c0ef8f16cad8295"
+    },
+    "src/loader/sd_reader.c": {
+      "mode": "100644",
+      "blob": "16bbc54bf3dd0f8c379c289047b1d29fa7cd9501"
+    },
+    "src/loader/sd_reader.h": {
+      "mode": "100644",
+      "blob": "fc17c51cdfb37a63d40125dacfc5ba009bdd3521"
+    },
+    "src/loader/stage_fast_crc32.h": {
+      "mode": "100644",
+      "blob": "943447644c907e2ec9cc8b275da7381d589fb9f9"
+    },
+    "src/loader/toy_loader_data_probe.c": {
+      "mode": "100644",
+      "blob": "dac2921ccf0ca4a639d1514ecfe071dd01b63d62"
+    },
+    "src/loader/toy_loader_payload_control.c": {
+      "mode": "100644",
+      "blob": "0543868e044f4fc1799ebe83f4dff23c59124f8c"
+    },
+    "src/loader/toy_loader_schedule_report.c": {
+      "mode": "100644",
+      "blob": "2e7ad955d3b28799742bc08394d728e2d4015295"
+    },
+    "src/loader/toy_loader_trace.c": {
+      "mode": "100644",
+      "blob": "542fcf50a4408c5f372d55533578dac79820a0e2"
+    },
+    "src/loader/toy_loader_trace_report.c": {
+      "mode": "100644",
+      "blob": "7e2e33141b1aa583779f393ed8246a9d6b8b5d7b"
+    },
+    "src/loader/toy_pilot_admission.h": {
+      "mode": "100644",
+      "blob": "2634d7d71f88077d78d2c99c485b67998f70035f"
+    },
+    "src/loader/toy_pilot_boot.S": {
+      "mode": "100644",
+      "blob": "01bb2061203a21ac243113fde4261343443e70d5"
+    },
+    "src/loader/toy_pilot_bus.c": {
+      "mode": "100644",
+      "blob": "d3388d29618b73655a554f561932492d98fb0267"
+    },
+    "src/loader/toy_pilot_bus_admission.h": {
+      "mode": "100644",
+      "blob": "f8066dfa4b5baa49ee0f171812ca5d21cca7aec2"
+    },
+    "src/loader/toy_pilot_cooked_admission.h": {
+      "mode": "100644",
+      "blob": "a165a02edb7f5c3abacf5cc4c10e0143e717ec5a"
+    },
+    "src/loader/toy_pilot_frame.inc": {
+      "mode": "100644",
+      "blob": "99fc8958d083cf08823666c9b856be84edd43df3"
+    },
+    "src/loader/toy_pilot_gd.c": {
+      "mode": "100644",
+      "blob": "07a08d0b067f92cc9f1bbbd1f0db46f85177af99"
+    },
+    "src/loader/toy_pilot_lease.c": {
+      "mode": "100644",
+      "blob": "7fd18d6ae41869ebb684ad0787f2b2f105beb2d0"
+    },
+    "src/loader/toy_pilot_pause.S": {
+      "mode": "100644",
+      "blob": "164a729cc92d4407d1ebba9b4266ab5e588127d7"
+    },
+    "src/loader/toy_pilot_pause.c": {
+      "mode": "100644",
+      "blob": "06237481accb93279a55c4f8c6869c64360f680c"
+    },
+    "src/loader/toy_pilot_resident.c": {
+      "mode": "100644",
+      "blob": "2c5009f86fe84182720940857173fcfbb0af9318"
+    },
+    "src/loader/toy_pilot_resident_p2.ld": {
+      "mode": "100644",
+      "blob": "3791c61edf07bf9880c187dd85adb5269c8e0c47"
+    },
+    "src/loader/toy_pilot_sci.c": {
+      "mode": "100644",
+      "blob": "701aab505516ac6b304bb947b8a15a3810d9e949"
+    },
+    "src/loader/toy_pilot_sci.h": {
+      "mode": "100644",
+      "blob": "1c9e7046a3f53b8daf3d182c199a6b8c105e431a"
+    },
+    "src/loader/toy_pilot_sci_irq.S": {
+      "mode": "100644",
+      "blob": "a9b57c9572f0e9b9ce8c07df495bcc1fec7c9482"
+    },
+    "src/loader/toy_pilot_stage.c": {
+      "mode": "100644",
+      "blob": "9748a7e5361f218f5342b8a37892681917ba23f7"
+    },
+    "src/loader/toy_pilot_worker.S": {
+      "mode": "100644",
+      "blob": "d43980ee8608781a400e9fca9c81409946c8baa8"
+    },
+    "src/loader/toy_pilot_worker.c": {
+      "mode": "100644",
+      "blob": "71235a23953ae3f3123e985df50e44e331c9c07b"
+    },
+    "src/loader/toy_pilot_worker.ld": {
+      "mode": "100644",
+      "blob": "232d7881cd9d1f2f3374a8d695b18f20d06d74a8"
+    },
+    "src/loader/vmu_backing.c": {
+      "mode": "100644",
+      "blob": "905ff19c75da712f318ddb8320feecc0dcf39cc3"
+    },
+    "src/loader/vmu_maple_dma.c": {
+      "mode": "100644",
+      "blob": "e19247552c6d7290dec3a536ff1eeba75fe068dd"
+    },
+    "src/loader/vmu_maple_hook.S": {
+      "mode": "100644",
+      "blob": "83a80dec31f3457a918e83a3734846a84fd718e2"
+    },
+    "src/loader/vmu_maple_observe_boot.S": {
+      "mode": "100644",
+      "blob": "d0ac7577216b0c77ff000f1380e673781b6a5729"
+    },
+    "src/loader/vmu_maple_observe_resident.c": {
+      "mode": "100644",
+      "blob": "a0d5029b1769a062745f5b678c2c74408ebd328a"
+    },
+    "src/loader/vmu_maple_observe_stage.c": {
+      "mode": "100644",
+      "blob": "6c752a5b205f7e3179aecd3528a768157691896a"
+    },
+    "src/loader/vmu_maple_observe_worker.c": {
+      "mode": "100644",
+      "blob": "a83ec36d6f7bd351e020e60fb93c4a1f3f1aaaa6"
+    },
+    "src/loader/vmu_maple_observe_worker.ld": {
+      "mode": "100644",
+      "blob": "44ff3fffdf47721f512661f7af7975940118fd75"
+    },
+    "src/loader/vmu_native_background_compact.ld": {
+      "mode": "100644",
+      "blob": "8145e9017484283a2c6da028e58221f1a83981b9"
+    },
+    "src/loader/vmu_native_background_resident.c": {
+      "mode": "100644",
+      "blob": "374c104a220ea28e9173c930f6008ea2372ddc2f"
+    },
+    "src/loader/vmu_native_background_resident.ld": {
+      "mode": "100644",
+      "blob": "07d2f9abc0eb8dadcc350c93feadd9d4eaf6c371"
+    },
+    "src/loader/vmu_native_crt_bootstrap_stage.inc": {
+      "mode": "100644",
+      "blob": "48913322ac6bb21d75f2a448aa5383cb7af47e04"
+    },
+    "src/loader/vmu_native_evolution_fault_stage.inc": {
+      "mode": "100644",
+      "blob": "66d8f4e05b43af15edc9b38c52d603cd61ee4f95"
+    },
+    "src/loader/vmu_native_evolution_trace_stage.inc": {
+      "mode": "100644",
+      "blob": "4be66e018ff6a0117103a030e9c5f6aa2d8cf771"
+    },
+    "src/loader/vmu_native_fault_capture.S": {
+      "mode": "100644",
+      "blob": "f7c2f8654cac229a7324f230e327656f32b02645"
+    },
+    "src/loader/vmu_native_fault_capture.c": {
+      "mode": "100644",
+      "blob": "fe5f26929cfac77a9d2995d06505656c0204e1b7"
+    },
+    "src/loader/vmu_native_fault_capture.h": {
+      "mode": "100644",
+      "blob": "efdef8d6fa7568feee9c44f221d762c7c3f66908"
+    },
+    "src/loader/vmu_native_general_lean.ld": {
+      "mode": "100644",
+      "blob": "c8cda7380725da0ac7a2805aae3e457ffe042757"
+    },
+    "src/loader/vmu_native_heap_probe_stage.c": {
+      "mode": "100644",
+      "blob": "ce63373a0ecb79589007691a0c285e5e3d720006"
+    },
+    "src/loader/vmu_native_lite.ld": {
+      "mode": "100644",
+      "blob": "b1c21b9900685535d6217fb41567bd10469d416e"
+    },
+    "src/loader/vmu_native_loader_timeline.inc": {
+      "mode": "100644",
+      "blob": "f8368198718184e9677d2160ad6e3395489e8e84"
+    },
+    "src/loader/vmu_native_maple_delay.inc": {
+      "mode": "100644",
+      "blob": "1c5f6fa3c9c4a952f0ba9d014c7d7100598053d0"
+    },
+    "src/loader/vmu_native_metadata_cache.inc": {
+      "mode": "100644",
+      "blob": "ca781139e1cb89de767cd9306b1e3c9de6895ba7"
+    },
+    "src/loader/vmu_native_metadata_cache.ld": {
+      "mode": "100644",
+      "blob": "c05e5428450fa08444a79fbbd74b593a94a4cadd"
+    },
+    "src/loader/vmu_native_passive.c": {
+      "mode": "100644",
+      "blob": "fa2eafd9033f6620ef300a6dedd115cdea6ce06a"
+    },
+    "src/loader/vmu_native_passive_exports.S": {
+      "mode": "100644",
+      "blob": "6820038b2762dc00550b21ce03847eea7175c56c"
+    },
+    "src/loader/vmu_native_passive_hooks.S": {
+      "mode": "100644",
+      "blob": "483145829c8f9d464d41919f2d2836755abbf469"
+    },
+    "src/loader/vmu_native_passive_stage.inc": {
+      "mode": "100644",
+      "blob": "c569890ed18d82f869426b2b2e9f2a3fa998934c"
+    },
+    "src/loader/vmu_native_performance.ld": {
+      "mode": "100644",
+      "blob": "a7ccacdb84f2d304db9cd6bffef9ea40aead8b4b"
+    },
+    "src/loader/vmu_native_persist_stage.inc": {
+      "mode": "100644",
+      "blob": "41ddb9fb2b4fde1fa7d68ddf00f35f17adb6051f"
+    },
+    "src/loader/vmu_native_persistent.ld": {
+      "mode": "100644",
+      "blob": "21c74ba1e78b40e472d97d15147a9c2886c19f64"
+    },
+    "src/loader/vmu_native_phase.inc": {
+      "mode": "100644",
+      "blob": "cff609d8d34481b6dd835b4b17214df04d9a3112"
+    },
+    "src/loader/vmu_native_readahead_stage.inc": {
+      "mode": "100644",
+      "blob": "85177c9b860dd90176c926606c6c6d989cc2cec1"
+    },
+    "src/loader/vmu_native_reader_capture.inc": {
+      "mode": "100644",
+      "blob": "39bcd76f342885a98d4063bc191245c06bed5415"
+    },
+    "src/loader/vmu_native_sdk_coherence.S": {
+      "mode": "100644",
+      "blob": "e2d859b19dc47e516bd9c44e4835c50065fa9cd9"
+    },
+    "src/loader/vmu_native_sdk_coherence.c": {
+      "mode": "100644",
+      "blob": "144abfad91feb19fdf2dd7851f26c210f3d0fa2c"
+    },
+    "src/loader/vmu_native_sdk_coherence.h": {
+      "mode": "100644",
+      "blob": "46d17dc4e04afc0ccade9359caeeccaaa5c03a43"
+    },
+    "src/loader/vmu_native_sdk_coherence_stage.inc": {
+      "mode": "100644",
+      "blob": "c8f16cf11b5f47b63f156df66b51adee9c190e45"
+    },
+    "src/loader/vmu_native_sdk_sci_route_stage.inc": {
+      "mode": "100644",
+      "blob": "a09a99489043464dacf24e5ef8f6c9b434e799ee"
+    },
+    "src/loader/vmu_native_session_stage.inc": {
+      "mode": "100644",
+      "blob": "9321c22d5d8aaa2ccfe018a03ec3d7bb7f4af03f"
+    },
+    "src/loader/vmu_native_split_controller.inc": {
+      "mode": "100644",
+      "blob": "69a14c4e2ffbfafae7a904f3fb257779a6071ff8"
+    },
+    "src/loader/vmu_native_trace.c": {
+      "mode": "100644",
+      "blob": "542e39cbf49f43c3347641382fd2e1154380e1b5"
+    },
+    "src/loader/vmu_native_trace_hooks.S": {
+      "mode": "100644",
+      "blob": "80e7abcfb3bac2ac224d6e84ccb6a1ab5fdc6657"
+    },
+    "src/loader/vmu_native_transport.h": {
+      "mode": "100644",
+      "blob": "74ab5a2ae5f3a95d845010fbd34176ffe17207ec"
+    },
+    "src/loader/vmu_native_wait_capture.inc": {
+      "mode": "100644",
+      "blob": "2adc84ad3d2705e1bffcaf0aa71cd5b73f90f45b"
+    },
+    "src/loader/vmu_native_wait_report.inc": {
+      "mode": "100644",
+      "blob": "d3f544acb3ff7b748527b1c0849eee88d128058b"
+    },
+    "src/loader/vmu_native_worker.c": {
+      "mode": "100644",
+      "blob": "b8d393b57a3412b4bbf44cec62cf64c8b9c20bff"
+    },
+    "src/loader/vmu_native_worker.ld": {
+      "mode": "100644",
+      "blob": "05f71445cfd749f6c770deb3445973c9f6b159c1"
+    },
+    "src/loader/vmu_native_worker_call.S": {
+      "mode": "100644",
+      "blob": "c60b257d5914f3d07269727e780ff8b871dcfcc5"
+    },
+    "src/loader/vmu_native_worker_exports.S": {
+      "mode": "100644",
+      "blob": "3bfe13e6d79b473bfd58927c3c0082b2e412b3e2"
+    },
+    "src/loader/vmu_native_worker_stage.inc": {
+      "mode": "100644",
+      "blob": "5179c70d490181a24e130809be0b7ef9a60cd37f"
+    },
+    "src/loader/vmu_persist_stage.c": {
+      "mode": "100644",
+      "blob": "d3c6826c50a77d672002431126a9aa39839c2622"
+    },
+    "src/loader/vmu_readonly_overlay.c": {
+      "mode": "100644",
+      "blob": "5f47a7cbd4cdc3e42e67914004dad6e0c4170394"
+    },
+    "src/loader/vmu_sd_lease.inc": {
+      "mode": "100644",
+      "blob": "e4d155cbfb8083077d982443cbcff435af35513e"
+    },
+    "src/loader/vmu_sd_readonly_resident.ld": {
+      "mode": "100644",
+      "blob": "5514748b08cc534206728b387303829199351536"
+    },
+    "src/loader/vmu_service.c": {
+      "mode": "100644",
+      "blob": "1491025868c5eb0ca3c4ec822924b3a34f17be63"
+    },
+    "src/loader/vmu_volatile_chain.c": {
+      "mode": "100644",
+      "blob": "f1897c5bef5725c318f14679d96d255dc43ea8e0"
+    },
+    "src/loader/wwp_ce_stream_status.inc": {
+      "mode": "100644",
+      "blob": "012b62d905c411215085dabcc45c58894e2b3843"
+    }
+  },
+  "bindings": {
+    "resources/updater-bindings/native-cdda-manifest.h": {
+      "bytes": 956,
+      "sha256": "624a8d6a6661cae756c12bc913c7e21a1b73db1131b7eb7818bcd72ed4a84bc0"
+    },
+    "resources/updater-bindings/native-cdda-manifest.json": {
+      "bytes": 6522,
+      "sha256": "f72c75bec9d680bcd1fe0746677d88eeaf05b0cf5aa85b72458ecc1a36b4465f"
+    },
+    "resources/updater-bindings/preserved-standard-manifest.h": {
+      "bytes": 585,
+      "sha256": "9f74bad8ba9937d41b18acab59df23d8e872f9b43648b504c893b398d8c9de00"
+    },
+    "resources/updater-bindings/preserved-standard-manifest.json": {
+      "bytes": 1616,
+      "sha256": "f9faac957192cfa38c5c30d6ffa4a3869d7e49a2aad78be043094b866d32c89b"
+    }
+  },
+  "reviewed_gui_glue": [
+    "include/kui/native_vmu_standard.h",
+    "src/apps/games_retail.c",
+    "src/core/games_cdda_profile.h",
+    "src/core/native_vmu_standard.c"
+  ],
+  "reader_policy": "main reader sources and recipes unchanged; only bank-path resolution and exact installed-reader GUI admission differ",
+  "baseline_blobs": {
+    "Makefile.armada-audio": {
+      "mode": "100644",
+      "blob": "93316b380f8ab5aa8029733aab4d5830be20a4e8"
+    },
+    "Makefile.armada-bind": {
+      "mode": "100644",
+      "blob": "100edb61780ef4e94a9c95e44645199797587d32"
+    },
+    "Makefile.armada-excerpt": {
+      "mode": "100644",
+      "blob": "58d92c60065f37f8d70b2f5d153be7c9ed167eec"
+    },
+    "Makefile.armada-maple-fence": {
+      "mode": "100644",
+      "blob": "8aab1ac31b91549016a91825ab2a6e4ddb55516d"
+    },
+    "Makefile.armada-maple-hook": {
+      "mode": "100644",
+      "blob": "6d4083ca1e02d8e9f1bd77fc31895cb6605c7aa0"
+    },
+    "Makefile.armada-maple-observe": {
+      "mode": "100644",
+      "blob": "2c8d99ad8eeb3b20751e4673032008e88373ec21"
+    },
+    "Makefile.armada-maple-test": {
+      "mode": "100644",
+      "blob": "92ef8552c4de0159358445325e27f3ac814e2291"
+    },
+    "Makefile.armada-maple-traffic": {
+      "mode": "100644",
+      "blob": "493c8056b14e285bd561260754f0e8f4e5e306a5"
+    },
+    "Makefile.armada-persist-test": {
+      "mode": "100644",
+      "blob": "a4c28265519427bc0549b047eb1aa8ce1e9b394b"
+    },
+    "Makefile.armada-stream": {
+      "mode": "100644",
+      "blob": "50e671088c65fce96af25808dcef964c9f8098c3"
+    },
+    "Makefile.armada-vmu-a2": {
+      "mode": "100644",
+      "blob": "7fba14e2ae6e2dcb648aadbdb681ef11112b2304"
+    },
+    "Makefile.armada-vmu-loan-test": {
+      "mode": "100644",
+      "blob": "1797b07e416648ad233225b473720af167889cfe"
+    },
+    "Makefile.armada-vmu-runtime-sd-test": {
+      "mode": "100644",
+      "blob": "3d2fd545fef07edc26913b1cdc5d9b25025b1685"
+    },
+    "Makefile.armada-vmu-runtime-test": {
+      "mode": "100644",
+      "blob": "64ee3232ebfef9d66674ab50f1bd336cb072946a"
+    },
+    "Makefile.disc-native": {
+      "mode": "100644",
+      "blob": "0b1eb976f01955e02256e0a062c9cc0520f123e5"
+    },
+    "Makefile.disc-vmu": {
+      "mode": "100644",
+      "blob": "bcbaad7060a04bc0bb0210641b5e65650d694a16"
+    },
+    "Makefile.disc-vmu-a1": {
+      "mode": "100644",
+      "blob": "4bcbc01aae22a4e14e29178fa5464dabeb0ec9a2"
+    },
+    "Makefile.disc-vmu-support": {
+      "mode": "100644",
+      "blob": "3fbdbabe1733c1edc204eb00015983a2a5573d91"
+    },
+    "Makefile.native-standalone-doa2": {
+      "mode": "100644",
+      "blob": "0a295ed8411b629b3671860b95f5890b833b8703"
+    },
+    "Makefile.native-standalone-general": {
+      "mode": "100644",
+      "blob": "8ee2790ae6d45af91cc9612847e71b2394a5c49c"
+    },
+    "Makefile.native-standalone-ram-map": {
+      "mode": "100644",
+      "blob": "ef6a42404db0aa00a51070cc38b9073db1a22dbb"
+    },
+    "Makefile.native-standalone-stream-report": {
+      "mode": "100644",
+      "blob": "f138c562bb29d01ea7fd126d5aaa097783e5fdd3"
+    },
+    "Makefile.vmu": {
+      "mode": "100644",
+      "blob": "3f7c112de47e164f114c969f2ed0f7f25d752f54"
+    },
+    "Makefile.vmu-collection-test": {
+      "mode": "100644",
+      "blob": "d9f77e90ec85fc415ce0adaf1b60fcc817082969"
+    },
+    "Makefile.vmu-deferred-persist-test": {
+      "mode": "100644",
+      "blob": "b15702e9efe20c697a68873c1a34de52190ae41a"
+    },
+    "Makefile.vmu-deferred-test": {
+      "mode": "100644",
+      "blob": "91ae8149b4b1292856f05cd160521371d7810811"
+    },
+    "Makefile.vmu-heap-test": {
+      "mode": "100644",
+      "blob": "bf8eee08e55c64b4cd18ead15981d9bb8e896f86"
+    },
+    "Makefile.vmu-native-background": {
+      "mode": "100644",
+      "blob": "4debaeca72860ed923ae49dc1c13c6b1e3f4f4b5"
+    },
+    "Makefile.vmu-native-background-compact": {
+      "mode": "100644",
+      "blob": "075a00afff4e233c8b47a37c367e6cd95354fa13"
+    },
+    "Makefile.vmu-native-background-compact-a1": {
+      "mode": "100644",
+      "blob": "db747b1a0d6f24abda1ede8038da5f4d150f4c3b"
+    },
+    "Makefile.vmu-native-compat": {
+      "mode": "100644",
+      "blob": "95da16772ed36fd0a607e6a86467512c248cd03d"
+    },
+    "Makefile.vmu-native-cooperative": {
+      "mode": "100644",
+      "blob": "a7777fdb81d88b71de27aa87f9d6079475aa5cc8"
+    },
+    "Makefile.vmu-native-dual-readers": {
+      "mode": "100644",
+      "blob": "b1189657cf15da3856324cf75cee07a80fe80857"
+    },
+    "Makefile.vmu-native-heap-probe": {
+      "mode": "100644",
+      "blob": "d79ab63eaee90880fab2561ad86956dcdfd3aee5"
+    },
+    "Makefile.vmu-native-irq-rearm": {
+      "mode": "100644",
+      "blob": "da145006076bdd3229457b5ccffb20bfd21925ff"
+    },
+    "Makefile.vmu-native-isolation-demand": {
+      "mode": "100644",
+      "blob": "91de92e58ef0212751d7c07b5820f7ecc6c1e6f4"
+    },
+    "Makefile.vmu-native-isolation-maple-bypass": {
+      "mode": "100644",
+      "blob": "d273ca6be267ae2fbfa1e94d8eb3c7e00f00e8df"
+    },
+    "Makefile.vmu-native-isolation-maple-complete-delay": {
+      "mode": "100644",
+      "blob": "0fc44673c1b185c2d8bd99740aeaa19fb3d1cc74"
+    },
+    "Makefile.vmu-native-isolation-maple-delay": {
+      "mode": "100644",
+      "blob": "89b3048143d77e329f67f37eba8c2d7f7b3f503a"
+    },
+    "Makefile.vmu-native-isolation-maple-post-start-delay": {
+      "mode": "100644",
+      "blob": "dcb5558c3537036d34aca67cbe2b6a735c648ac5"
+    },
+    "Makefile.vmu-native-isolation-maple-submit-delay": {
+      "mode": "100644",
+      "blob": "54c02389c5ed2e357f7548b98089547b113704a2"
+    },
+    "Makefile.vmu-native-isolation-metadata-cache": {
+      "mode": "100644",
+      "blob": "6d6bd4f126e7304d36bf9b9d4f536366747fe403"
+    },
+    "Makefile.vmu-native-isolation-reader": {
+      "mode": "100644",
+      "blob": "7fdf1716d25a5e8f1a533d1b7f33f14622049b2e"
+    },
+    "Makefile.vmu-native-isolation-split-controller": {
+      "mode": "100644",
+      "blob": "106b2db084d787fbfc9ced718cc011e905de1a0a"
+    },
+    "Makefile.vmu-native-isolation-split-controller-general": {
+      "mode": "100644",
+      "blob": "9da6dce80104ca114ab77f663b727dcd8a224b75"
+    },
+    "Makefile.vmu-native-isolation-standard": {
+      "mode": "100644",
+      "blob": "cdf8ef1684bf99676e8f5eb1730c491f65cc467b"
+    },
+    "Makefile.vmu-native-isolation-wait": {
+      "mode": "100644",
+      "blob": "56cb673d0c3f0056ccae1aec67bcebbbbf30341d"
+    },
+    "Makefile.vmu-native-open": {
+      "mode": "100644",
+      "blob": "a4cd0cb0e745aef60b8cacc1f82c75e17e75554e"
+    },
+    "Makefile.vmu-native-paced": {
+      "mode": "100644",
+      "blob": "3f2cc92a2049c84baa904506e63473faa4813788"
+    },
+    "Makefile.vmu-native-passive": {
+      "mode": "100644",
+      "blob": "0d86ad16c78e4b3450c27ce87d03ac47b14963cc"
+    },
+    "Makefile.vmu-native-performance": {
+      "mode": "100644",
+      "blob": "6971c52af2c587b181d12139ff8d69303c880886"
+    },
+    "Makefile.vmu-native-persistent": {
+      "mode": "100644",
+      "blob": "f52375a213088af72d1943c304c04206c599545a"
+    },
+    "Makefile.vmu-native-priority7": {
+      "mode": "100644",
+      "blob": "c169483dc7d34da01a44285285be2170cc6d9ec6"
+    },
+    "Makefile.vmu-native-readahead": {
+      "mode": "100644",
+      "blob": "3c9995676be4c819b13d2a768b4bed1ff5e1e4cb"
+    },
+    "Makefile.vmu-native-readonly": {
+      "mode": "100644",
+      "blob": "a340077ee3bfe3f27ed1cae76b6035d6742af204"
+    },
+    "Makefile.vmu-native-sdk-sci-route": {
+      "mode": "100644",
+      "blob": "f6df1f99eba61d1661ca6316f3a58aac9a69f50f"
+    },
+    "Makefile.vmu-native-sdk-sci-structural": {
+      "mode": "100644",
+      "blob": "a4e7bff576dcf013f05232cc355268bd8a5d3393"
+    },
+    "Makefile.vmu-native-session-controls": {
+      "mode": "100644",
+      "blob": "c69ce5abd2ba58131b8ed647409d891a8b3f3f5f"
+    },
+    "Makefile.vmu-native-session-controls-a1": {
+      "mode": "100644",
+      "blob": "32d11a047e1aba196c8194aa39f2edd73a33ef28"
+    },
+    "Makefile.vmu-native-split-controller-prefetch": {
+      "mode": "100644",
+      "blob": "2ac7ab939c77f202e7e9e95d6d9ad95e317667f8"
+    },
+    "Makefile.vmu-native-split-controller-stream-guard": {
+      "mode": "100644",
+      "blob": "d1b7ada0bfa2cb9beec0dac12144540dc37b9159"
+    },
+    "Makefile.vmu-native-stall": {
+      "mode": "100644",
+      "blob": "e2702d1a3f0424b027b214b56da4b6f684d6f65a"
+    },
+    "Makefile.vmu-native-timed": {
+      "mode": "100644",
+      "blob": "50b7c6d0dba24aceb568ae428aa9590a6ab7e27d"
+    },
+    "Makefile.vmu-native-timeline": {
+      "mode": "100644",
+      "blob": "a4a51213c629cdafa14ec5e6f5e26cc158e934ea"
+    },
+    "Makefile.vmu-native-vmu-lite": {
+      "mode": "100644",
+      "blob": "65bc07cda43097dc1951ca5cfbaa2811732226ba"
+    },
+    "Makefile.vmu-native-vmu-lite-full-submit": {
+      "mode": "100644",
+      "blob": "c961d44a13a66d936cc7ab3db3183386a9c786af"
+    },
+    "Makefile.vmu-native-vmu-lite-paced": {
+      "mode": "100644",
+      "blob": "11ba2aa405aa5bb81945387055ae31d044e48da0"
+    },
+    "Makefile.vmu-native-vmu-lite-pio": {
+      "mode": "100644",
+      "blob": "292ed3a8e9a5d3cc949ad44f1ccff50582a2bbf1"
+    },
+    "Makefile.vmu-native-vmu-lite-unpaced": {
+      "mode": "100644",
+      "blob": "98baa89b56186b8b37fa38c5a28d808b89e46a91"
+    },
+    "Makefile.vmu-native-vmu-only": {
+      "mode": "100644",
+      "blob": "8c58d0ac8784d4f205beb3b14141c890cf814e98"
+    },
+    "Makefile.vmu-native-vmu-only-full-submit": {
+      "mode": "100644",
+      "blob": "2f9ee58585ad16624351218915218ae9b998585a"
+    },
+    "Makefile.vmu-native-worker": {
+      "mode": "100644",
+      "blob": "09f466db50a528e5d85181cd762b00d45f8d62f3"
+    },
+    "Makefile.vmu-pack-test": {
+      "mode": "100644",
+      "blob": "fea56f2bc8f905ab16a19071adfec9d2e0f37694"
+    },
+    "Makefile.vmu-read-probe": {
+      "mode": "100644",
+      "blob": "e448eefbeff9356f3c76a159ef6293b76ba202d7"
+    },
+    "Makefile.vmu-relocate-test": {
+      "mode": "100644",
+      "blob": "bb8789281a5f308024ab6b8d4a2cb456cc49a9f8"
+    },
+    "Makefile.vmu-runtime-test": {
+      "mode": "100644",
+      "blob": "b905b452327cf6cdd057367e60d13e36f6fbf5c7"
+    },
+    "Makefile.vmu-silver": {
+      "mode": "100644",
+      "blob": "8bd5e5c24c95292532ba81041a8418a9f5995d73"
+    },
+    "Makefile.vmu-silver-test": {
+      "mode": "100644",
+      "blob": "fc58ba165fa89ce74e0b8929ce95382f99b77bf0"
+    },
+    "Makefile.vmu-subset-test": {
+      "mode": "100644",
+      "blob": "a670267a39d56f5695834e03fdc01255cb8b2f2a"
+    },
+    "Makefile.vmu-subset-tool": {
+      "mode": "100644",
+      "blob": "6139441101ce90ebebdb8d2ec4844a37f38fef89"
+    },
+    "Makefile.vmu-toy": {
+      "mode": "100644",
+      "blob": "0c5fdd01ae34a48f79fe31585b93eb479a6ab725"
+    },
+    "Makefile.vmu-write-test": {
+      "mode": "100644",
+      "blob": "65d254ecc8d6351ba68f4458ae508b21847ca874"
+    },
+    "include/kui/cdda_audio64_profile.h": {
+      "mode": "100644",
+      "blob": "51edf742d0344f4d6c952bcfc8c30a62c321517b"
+    },
+    "include/kui/cdda_retail_binding.h": {
+      "mode": "100644",
+      "blob": "025c82e1c5109ba073e3a5697535145bc80e6b82"
+    },
+    "include/kui/ce_load_plan.h": {
+      "mode": "100644",
+      "blob": "0c9e2f8949c3abd5c71e19d4f7ef4d026c0630e7"
+    },
+    "include/kui/disc_boot.h": {
+      "mode": "100644",
+      "blob": "288e6f59425f7c0f3435cdcb008c1907c41f7f83"
+    },
+    "include/kui/disc_cards.h": {
+      "mode": "100644",
+      "blob": "0f4e9cfc96af8270589600d50e59b735d1e09cc9"
+    },
+    "include/kui/disc_identity.h": {
+      "mode": "100644",
+      "blob": "ae31da1a3d4d1a08f2d7debb36edab2ecf758ff1"
+    },
+    "include/kui/disc_idle.h": {
+      "mode": "100644",
+      "blob": "64c1028a397ef5ea0ce0be8625ff4352aa5e314c"
+    },
+    "include/kui/disc_launch.h": {
+      "mode": "100644",
+      "blob": "dc2af2e6182baf132ae7c0ed75897669af71c198"
+    },
+    "include/kui/disc_launch_limits.h": {
+      "mode": "100644",
+      "blob": "6f2c66ac9c6101dcb55534934d47da508dbeb91d"
+    },
+    "include/kui/disc_launcher.h": {
+      "mode": "100644",
+      "blob": "6cfe6be931507a001804ffce485c5ef2d9ade072"
+    },
+    "include/kui/disc_region.h": {
+      "mode": "100644",
+      "blob": "d7403a72dfdb6de807b4236a49f224fd53371c6a"
+    },
+    "include/kui/disc_vmu_card.h": {
+      "mode": "100644",
+      "blob": "0b89eead7b689f5e1747d6de1fdfae53742f36f0"
+    },
+    "include/kui/disc_vmu_entry.h": {
+      "mode": "100644",
+      "blob": "5906add1efd44b463fee206dd315e3948bf4a18d"
+    },
+    "include/kui/disc_vmu_layout.h": {
+      "mode": "100644",
+      "blob": "0fdbabf1ac774e6a2408f029bde692a601581ba8"
+    },
+    "include/kui/disc_vmu_probe.h": {
+      "mode": "100644",
+      "blob": "66fe2d741773ea85a3d7b02141b9041d35e84148"
+    },
+    "include/kui/disc_vmu_storage.h": {
+      "mode": "100644",
+      "blob": "04e549b885fe43c0f6c7cd7787e03e2640002d7e"
+    },
+    "include/kui/disc_vmu_support.h": {
+      "mode": "100644",
+      "blob": "e69d1bbba7d927a4721cb446bc5d489ba987ac6a"
+    },
+    "include/kui/disc_vmu_transport.h": {
+      "mode": "100644",
+      "blob": "7ccf1d6d2eac6033bf8b475e09f2d3087a64a7cc"
+    },
+    "include/kui/game_launch_settings.h": {
+      "mode": "100644",
+      "blob": "d8e2c2f2a1ec9ccd8b83daf366964c65ac65a90d"
+    },
+    "include/kui/games_retail.h": {
+      "mode": "100644",
+      "blob": "29d571de4106ed198b14a1cd4d700894ed877cf3"
+    },
+    "include/kui/native_background_budget.h": {
+      "mode": "100644",
+      "blob": "3532813b9a0c74e93b4ef768d4e35b8efb79ffad"
+    },
+    "include/kui/native_cdda_compat.h": {
+      "mode": "100644",
+      "blob": "d632a4f65c826ffa188274b19d9f433f5285da45"
+    },
+    "include/kui/native_disc_set.h": {
+      "mode": "100644",
+      "blob": "2c5d9e81371e56832d58236501b946fd76b819ee"
+    },
+    "include/kui/native_dual_reader.h": {
+      "mode": "100644",
+      "blob": "9a19ccf4b31b78415d8b4888ffcc3aef9a437e22"
+    },
+    "include/kui/native_isolation.h": {
+      "mode": "100644",
+      "blob": "03f2adadc9a29b5aa4d04389baecff4c82a5a982"
+    },
+    "include/kui/native_loader_timeline.h": {
+      "mode": "100644",
+      "blob": "4e981e548e76a7bba347fe4b6c78adbf9b3d26f3"
+    },
+    "include/kui/native_physical_capability.h": {
+      "mode": "100644",
+      "blob": "4dc326be06013dd7cad0810b1f73c49c70c8f971"
+    },
+    "include/kui/native_ram_map.h": {
+      "mode": "100644",
+      "blob": "d5390a959ac890f5d8af97f45333c7f00da58576"
+    },
+    "include/kui/native_readahead.h": {
+      "mode": "100644",
+      "blob": "5ce071d8207c99716211781cb31fb6dd432ea7e5"
+    },
+    "include/kui/native_readahead_cache.h": {
+      "mode": "100644",
+      "blob": "54aee460dbc82887574e22b95af7f69a349a664c"
+    },
+    "include/kui/native_readahead_layout.h": {
+      "mode": "100644",
+      "blob": "5194447ea48f5049a53b832361ce4596e7fde79a"
+    },
+    "include/kui/native_reader_capture.h": {
+      "mode": "100644",
+      "blob": "c3656abe26637e3a9b06aa890bcec2f3b76a3aed"
+    },
+    "include/kui/native_return.h": {
+      "mode": "100644",
+      "blob": "6e7e0119ad8ddbff857e8c0e0c929032a0438535"
+    },
+    "include/kui/native_scan_bytes.h": {
+      "mode": "100644",
+      "blob": "6c96398d100dd80e699978e16ca0cf9a3723c975"
+    },
+    "include/kui/native_sci_priority.h": {
+      "mode": "100644",
+      "blob": "4657bd0e2bcf1d66b6305750df283924e0d79921"
+    },
+    "include/kui/native_sdk_sci_family.h": {
+      "mode": "100644",
+      "blob": "33aa22b880aec510ce337a61a26dcfb6dc3d7f8e"
+    },
+    "include/kui/native_sdk_sci_route.h": {
+      "mode": "100644",
+      "blob": "6d6cad10ba02a4dbb374d50f2bdf037674a6c162"
+    },
+    "include/kui/native_sdk_sci_runtime.h": {
+      "mode": "100644",
+      "blob": "4badf17d99357f33a3d198f1798af8d01ad9f01f"
+    },
+    "include/kui/native_session.h": {
+      "mode": "100644",
+      "blob": "d16a8a31ea1f313ae466dd75f0bccc218630e50d"
+    },
+    "include/kui/native_session_binding.h": {
+      "mode": "100644",
+      "blob": "67d3930eea8c08fc2e39f3b3285d19ae5713e686"
+    },
+    "include/kui/native_session_prepare.h": {
+      "mode": "100644",
+      "blob": "5d2ad17c2cfb7d94efc4c4e3b94c52496f152500"
+    },
+    "include/kui/native_standalone_admission.h": {
+      "mode": "100644",
+      "blob": "297a0b3b6c8b7599fb28147abd758baffe827889"
+    },
+    "include/kui/native_standalone_capability.h": {
+      "mode": "100644",
+      "blob": "c821bc4618b6737e8cd01e4d5326189ea5c27fa5"
+    },
+    "include/kui/native_standalone_reader.h": {
+      "mode": "100644",
+      "blob": "1d82694a43c0e15bff649368c746d63479c24319"
+    },
+    "include/kui/native_vmu_standard.h": {
+      "mode": "100644",
+      "blob": "777475062eb908b7ac8f6113fa9eb42a0ba79ff5"
+    },
+    "include/kui/retail_cursor.h": {
+      "mode": "100644",
+      "blob": "80d4100a1f6ec805581a6e88e30b7576dfecbb09"
+    },
+    "include/kui/retail_gd.h": {
+      "mode": "100644",
+      "blob": "71bb7044fbb3549d57e25d99df51735740a3845b"
+    },
+    "include/kui/retail_image.h": {
+      "mode": "100644",
+      "blob": "e30dcfec37d8dc13fe9deb3ece9f955971e0f2d1"
+    },
+    "include/kui/retail_loader_layout.h": {
+      "mode": "100644",
+      "blob": "b958a8529b7a9186902e9adf0d736ea87bc5ef8d"
+    },
+    "include/kui/retail_map_diagnostic.h": {
+      "mode": "100644",
+      "blob": "ac25d54ec2abaeebe1d52c1c9e03e147a9c180d4"
+    },
+    "include/kui/retail_native_disc.h": {
+      "mode": "100644",
+      "blob": "17bebf027aa39983b91ae5fccc06d78c39684bee"
+    },
+    "include/kui/retail_native_drive.h": {
+      "mode": "100644",
+      "blob": "6fbc503dd3fbd5ff1592a5d1a0087b1a4a005fb2"
+    },
+    "include/kui/retail_observe.h": {
+      "mode": "100644",
+      "blob": "b8a0fd654324db7e5bbdf4bfadb1a253487b3260"
+    },
+    "include/kui/retail_pace.h": {
+      "mode": "100644",
+      "blob": "b4770d40ffa043319606af2aa53d4249f2c77b75"
+    },
+    "include/kui/retail_resident.h": {
+      "mode": "100644",
+      "blob": "eb729c3af7594ad9d1fbadd37224498954c4379a"
+    },
+    "include/kui/retail_zso.h": {
+      "mode": "100644",
+      "blob": "3ec5789974394e43af704bd3a95ac1a39181c452"
+    },
+    "include/kui/vmu_backing.h": {
+      "mode": "100644",
+      "blob": "2c30c991236ffd6ed31dba09fe2c56a494917f2b"
+    },
+    "include/kui/vmu_collection.h": {
+      "mode": "100644",
+      "blob": "6e675d20d08929c9306c9f4fb0a7b22b8f5a9241"
+    },
+    "include/kui/vmu_deferred_io.h": {
+      "mode": "100644",
+      "blob": "321323126f1e94a812494e000d8ea791db1c79ad"
+    },
+    "include/kui/vmu_description.h": {
+      "mode": "100644",
+      "blob": "7539a2e66479eb0a5836f7c333aa33db60c4b8da"
+    },
+    "include/kui/vmu_durable.h": {
+      "mode": "100644",
+      "blob": "0e75b08fb65ab087a06aa11fe53e7964a09b9fd5"
+    },
+    "include/kui/vmu_emulation.h": {
+      "mode": "100644",
+      "blob": "d71663cb0320f4b97abb7f22fbad5bf8c9735282"
+    },
+    "include/kui/vmu_emulation_settings.h": {
+      "mode": "100644",
+      "blob": "d4e2b67591b9c5dff963f51abc37e964415257e5"
+    },
+    "include/kui/vmu_fs_admission.h": {
+      "mode": "100644",
+      "blob": "1512dcaff43068049e360a18267cfd7f5553bcd3"
+    },
+    "include/kui/vmu_game_assign.h": {
+      "mode": "100644",
+      "blob": "3fc6c513b579778c6a3e40089e473131a8625222"
+    },
+    "include/kui/vmu_game_candidates.h": {
+      "mode": "100644",
+      "blob": "4a0f440dd8725b8cde21d91df6df80488d6d9002"
+    },
+    "include/kui/vmu_game_card.h": {
+      "mode": "100644",
+      "blob": "efcb5096862f7ae032ad79da54e78b701d69dac9"
+    },
+    "include/kui/vmu_game_card_service.h": {
+      "mode": "100644",
+      "blob": "078b33360fcb0d2b0702a0ff0ebe2921dbf60b48"
+    },
+    "include/kui/vmu_game_info.h": {
+      "mode": "100644",
+      "blob": "2ca0bd7ed87d5d3967d11f77580b48ebeeb1e780"
+    },
+    "include/kui/vmu_history.h": {
+      "mode": "100644",
+      "blob": "447214c3bc16fd13cb0e199862d5cb455310255e"
+    },
+    "include/kui/vmu_history_record.h": {
+      "mode": "100644",
+      "blob": "3363dbbcc923fbd4afa89c54e1cc225dbf673bb3"
+    },
+    "include/kui/vmu_image.h": {
+      "mode": "100644",
+      "blob": "1bfc59d589c9dab23f4214dbbdfb5760cef23fdd"
+    },
+    "include/kui/vmu_image_clone.h": {
+      "mode": "100644",
+      "blob": "d5b4a6dedf7f9b7ac25538c7b65047e38db9a2bb"
+    },
+    "include/kui/vmu_image_merge.h": {
+      "mode": "100644",
+      "blob": "1a2a931ed57f02ed2ab5580307ca6c7738509114"
+    },
+    "include/kui/vmu_image_pack.h": {
+      "mode": "100644",
+      "blob": "9996ae832d7485efc5dcf57c175fd47a5b368f47"
+    },
+    "include/kui/vmu_image_subset.h": {
+      "mode": "100644",
+      "blob": "0def9bf8c1f3c688a9c9c9d5b4a92b5d0ce897fc"
+    },
+    "include/kui/vmu_import.h": {
+      "mode": "100644",
+      "blob": "d4e560ab19629bc139093681027ed96ac8ce5fdc"
+    },
+    "include/kui/vmu_import_match.h": {
+      "mode": "100644",
+      "blob": "ff7d064269b065e5e799378b0e76e8242c2d2110"
+    },
+    "include/kui/vmu_import_plan.h": {
+      "mode": "100644",
+      "blob": "774dfc3c24689e5bd13ddd0a428ffc9fda95f344"
+    },
+    "include/kui/vmu_launch_package.h": {
+      "mode": "100644",
+      "blob": "9d60e40edb47904a4a73e603e6edee97edfab1f8"
+    },
+    "include/kui/vmu_lcd.h": {
+      "mode": "100644",
+      "blob": "d3973afe5822ae51ef25c4e1bf5e9762aa52abe0"
+    },
+    "include/kui/vmu_library.h": {
+      "mode": "100644",
+      "blob": "5f4eb3fd1a4e88692e9fd935af11052921796fd6"
+    },
+    "include/kui/vmu_maple_dma.h": {
+      "mode": "100644",
+      "blob": "8942b3242b11d93f41ec7320f3096a08f96133bd"
+    },
+    "include/kui/vmu_maple_observe.h": {
+      "mode": "100644",
+      "blob": "6fb750404bd86d373ec9ae2465a2aa4aef41e0d7"
+    },
+    "include/kui/vmu_maple_observe_boot.h": {
+      "mode": "100644",
+      "blob": "3ce5cdcfc2a2a821bf431192a77e26df7a207f3c"
+    },
+    "include/kui/vmu_maple_observe_io.h": {
+      "mode": "100644",
+      "blob": "f92a2e183931f60a31fafb1ca89d92b9c8c216a7"
+    },
+    "include/kui/vmu_maple_observe_profile.h": {
+      "mode": "100644",
+      "blob": "eafa1cfda04f641f99903ac9509f9b2d43f47c3d"
+    },
+    "include/kui/vmu_match_memory.h": {
+      "mode": "100644",
+      "blob": "83715d2df6e9f178dbd678d1e696045ff1b84500"
+    },
+    "include/kui/vmu_native_async_loan.h": {
+      "mode": "100644",
+      "blob": "265d2995d49ac7863896a2f8809ea00de0105595"
+    },
+    "include/kui/vmu_native_background.h": {
+      "mode": "100644",
+      "blob": "cfd793b0014f625c4cfee0a342a941ca1c141bec"
+    },
+    "include/kui/vmu_native_cache.h": {
+      "mode": "100644",
+      "blob": "1199f5f1d1beaa29a07e586773e7a4cf42e8efae"
+    },
+    "include/kui/vmu_native_cache_seed.h": {
+      "mode": "100644",
+      "blob": "415efc3342152fc498d2fd29db3bb0d9b626efb8"
+    },
+    "include/kui/vmu_native_discovery.h": {
+      "mode": "100644",
+      "blob": "782165cd440bb047f72237964d752116b91cc297"
+    },
+    "include/kui/vmu_native_exit.h": {
+      "mode": "100644",
+      "blob": "3fe30545c75de6f4048ae1f883b740f17c8d0599"
+    },
+    "include/kui/vmu_native_heap.h": {
+      "mode": "100644",
+      "blob": "f0b7a461e4315c0c2977f2c7bb5a3e333d6cb59c"
+    },
+    "include/kui/vmu_native_heap_budget.h": {
+      "mode": "100644",
+      "blob": "53937fa7189cb656718b2439e525b2bb39229a43"
+    },
+    "include/kui/vmu_native_layout.h": {
+      "mode": "100644",
+      "blob": "732dd83fc6abec08b937ed8fe6489a1477a81b1f"
+    },
+    "include/kui/vmu_native_lifetime.h": {
+      "mode": "100644",
+      "blob": "fa5516910bddc000e9b4e9001b5f2b9b6275ba13"
+    },
+    "include/kui/vmu_native_live.h": {
+      "mode": "100644",
+      "blob": "b0b2e29c12830037a56572d8742e51f567c5af56"
+    },
+    "include/kui/vmu_native_mode.h": {
+      "mode": "100644",
+      "blob": "2a0d91faa2ce541290156831027f9912deeeffce"
+    },
+    "include/kui/vmu_native_passive.h": {
+      "mode": "100644",
+      "blob": "d312ad5f16226ab88ba9e706fbbf1d853ebddec4"
+    },
+    "include/kui/vmu_native_patch.h": {
+      "mode": "100644",
+      "blob": "9de786a6b9c1c83e63fa316bf53b8e24c755cf18"
+    },
+    "include/kui/vmu_native_profile.h": {
+      "mode": "100644",
+      "blob": "2507b359c9ea9500028e3f766ad4a1fa2c754d25"
+    },
+    "include/kui/vmu_native_program.h": {
+      "mode": "100644",
+      "blob": "75d399d0d2a9770564b7d02853f71d85208d4379"
+    },
+    "include/kui/vmu_native_relocate.h": {
+      "mode": "100644",
+      "blob": "4d539c5098bc1d6e80511cb73940960e53b13941"
+    },
+    "include/kui/vmu_native_resolution_cache.h": {
+      "mode": "100644",
+      "blob": "ac99b479a979d27fde101311c8af1bc144449770"
+    },
+    "include/kui/vmu_native_runtime.h": {
+      "mode": "100644",
+      "blob": "948509e544d30c63bd4aaf192e2cd1bcb26cd28c"
+    },
+    "include/kui/vmu_native_stage_placement.h": {
+      "mode": "100644",
+      "blob": "c8827183b57fd84dc6cbe636a3ad9ae8eacf61ef"
+    },
+    "include/kui/vmu_native_startup_stack.h": {
+      "mode": "100644",
+      "blob": "0c2007c79780d96699eda19048cd7d4fb9be88f3"
+    },
+    "include/kui/vmu_native_terminal_dispatch.h": {
+      "mode": "100644",
+      "blob": "a1e783fd676add0a1e806c1a9ec7af51af20be9a"
+    },
+    "include/kui/vmu_native_toggle.h": {
+      "mode": "100644",
+      "blob": "8681cdca604071312d5acc8a0e0fa2feb9e261f9"
+    },
+    "include/kui/vmu_native_trace.h": {
+      "mode": "100644",
+      "blob": "86015c4e73b060f805cc1f901f2af72bd4697cef"
+    },
+    "include/kui/vmu_native_worker.h": {
+      "mode": "100644",
+      "blob": "6f5c8d7660deb7f8d146995e2417ee8090421827"
+    },
+    "include/kui/vmu_persist_profile.h": {
+      "mode": "100644",
+      "blob": "ffc1f144383e41071d00f039e5b3026703eed573"
+    },
+    "include/kui/vmu_persist_session.h": {
+      "mode": "100644",
+      "blob": "8d89c32ea7d2ae68ce8d38afbae1748eb716e69d"
+    },
+    "include/kui/vmu_persist_stage.h": {
+      "mode": "100644",
+      "blob": "c9f98f40a93abb2ffa0132cb7e1730dc54fa5edd"
+    },
+    "include/kui/vmu_read_bounded.h": {
+      "mode": "100644",
+      "blob": "9e1beefa1dbf175e65dd7363ee3e86cad05f25b8"
+    },
+    "include/kui/vmu_readonly.h": {
+      "mode": "100644",
+      "blob": "35f58ee8db80ba01b0f18b23e095be8493a29b9b"
+    },
+    "include/kui/vmu_readonly_overlay.h": {
+      "mode": "100644",
+      "blob": "05aa8f8c0c489970caf01162ce4d06d0690c9638"
+    },
+    "include/kui/vmu_save_snapshot.h": {
+      "mode": "100644",
+      "blob": "f0d16edcb9274966e6843d5a7e4152092bb11761"
+    },
+    "include/kui/vmu_sd_lease.h": {
+      "mode": "100644",
+      "blob": "29815eab91710063570ee336a5d2a8c9d3a747c2"
+    },
+    "include/kui/vmu_sd_profile.h": {
+      "mode": "100644",
+      "blob": "02c754228d6e2dcf015961b84f6256bb52c5264a"
+    },
+    "include/kui/vmu_sd_stage_admission.h": {
+      "mode": "100644",
+      "blob": "a024562478bdb3900f9c5e6331afd91755a2e9b9"
+    },
+    "include/kui/vmu_service.h": {
+      "mode": "100644",
+      "blob": "251142d3a2b1bafb314b18d9893c194fb47ce3e8"
+    },
+    "include/kui/vmu_silver_observe_admission.h": {
+      "mode": "100644",
+      "blob": "3069230753ce5c7ea026107e532e8f58027cc692"
+    },
+    "include/kui/vmu_silver_observe_witnesses.h": {
+      "mode": "100644",
+      "blob": "a0526d683fcd79e0a42d6559db68bb42779e038a"
+    },
+    "include/kui/vmu_store.h": {
+      "mode": "100644",
+      "blob": "4619093e7e2a3301e6c756733951e326a2ed00d8"
+    },
+    "include/kui/vmu_toy_observe_admission.h": {
+      "mode": "100644",
+      "blob": "99b91f4141db8510ddaf4842333a5aa4506cf12e"
+    },
+    "include/kui/vmu_volatile.h": {
+      "mode": "100644",
+      "blob": "65685416869494d8faaea7c15cc316e12ba6009b"
+    },
+    "include/kui/vmu_volatile_chain.h": {
+      "mode": "100644",
+      "blob": "4a0924aa62820093c5365283e646eeb86b366a3d"
+    },
+    "include/kui/vmu_wizard.h": {
+      "mode": "100644",
+      "blob": "25325274ae7d0f92577d27809c65f053bd850ecc"
+    },
+    "include/kui/vmu_write_bounded.h": {
+      "mode": "100644",
+      "blob": "0776c7912fc46e14fb3089389cd624d0a80b312d"
+    },
+    "include/kui/wince_cdda_profiles.h": {
+      "mode": "100644",
+      "blob": "54a24219fadba44f9c5bc6ff35582876efe5d6a1"
+    },
+    "include/kui/wince_cdda_wwp_kernel.h": {
+      "mode": "100644",
+      "blob": "0ec9b6eab5cf849b1b904da3547aa5d5259de863"
+    },
+    "src/apps/disc_cards.c": {
+      "mode": "100644",
+      "blob": "49f63a18f94e98fd4e4c7dd680a4317286302dc2"
+    },
+    "src/apps/disc_identity.c": {
+      "mode": "100644",
+      "blob": "eeb8ceb6bf589e43b5a45505cd31b76035e1a6b3"
+    },
+    "src/apps/disc_launcher.c": {
+      "mode": "100644",
+      "blob": "258d4ad2940444f1e51a7d37c09007026287aae6"
+    },
+    "src/apps/disc_region.c": {
+      "mode": "100644",
+      "blob": "b2874b8381e01b56c80fa40cf377bba5361c9054"
+    },
+    "src/apps/disc_vmu_card.c": {
+      "mode": "100644",
+      "blob": "af70d29544f68adf99702cef01567b568af42650"
+    },
+    "src/apps/disc_vmu_launcher.c": {
+      "mode": "100644",
+      "blob": "86e726cc561ef5390535f96a8fbb3991d9bccfcc"
+    },
+    "src/apps/games.c": {
+      "mode": "100644",
+      "blob": "4c05c8c6e8d059ae7df107d5253dac362c0c7f66"
+    },
+    "src/apps/games_native_cache.inc": {
+      "mode": "100644",
+      "blob": "101c0800e1ef8e791a1ed997f19e01fa30edd80c"
+    },
+    "src/apps/games_native_vmu.inc": {
+      "mode": "100644",
+      "blob": "34474b7794284e61c81cedb5c64a8af5b1818caf"
+    },
+    "src/apps/games_retail.c": {
+      "mode": "100644",
+      "blob": "5b7d9148a6678f9f3b055e1cc8e5d2af7b8a49ee"
+    },
+    "src/apps/native_session_prepare.c": {
+      "mode": "100644",
+      "blob": "a4fdb60a7f2d25de3e5bf06630ee4dd7612f63be"
+    },
+    "src/apps/vmu.c": {
+      "mode": "100644",
+      "blob": "cebc7489f5bf753e1f3852cb6af359c923413fda"
+    },
+    "src/apps/vmu_collection.inc": {
+      "mode": "100644",
+      "blob": "fcd549c9d1c59a2dd54b8cd3863f3ecdf64a15d5"
+    },
+    "src/apps/vmu_game_info.c": {
+      "mode": "100644",
+      "blob": "715c1bc9c16d486533d0fc4743e4b8eb802b9bb8"
+    },
+    "src/apps/vmu_history.c": {
+      "mode": "100644",
+      "blob": "644084c377afcc351c6831c11f04e6567f6d2f31"
+    },
+    "src/apps/vmu_import.c": {
+      "mode": "100644",
+      "blob": "6495c26515b5094066b3409cbeaba81c95f0a9b0"
+    },
+    "src/apps/vmu_library_ui.c": {
+      "mode": "100644",
+      "blob": "ecd18c3436a80eff61d0eadedb6a2ef5244f61b3"
+    },
+    "src/apps/vmu_match_memory.c": {
+      "mode": "100644",
+      "blob": "95bacbbec63afaa213555ecd1015a7cd55a45fcc"
+    },
+    "src/apps/vmu_wizard.c": {
+      "mode": "100644",
+      "blob": "5c753127b0d4cacf3ae3c2021e53f99a2ed1f3af"
+    },
+    "src/apps/vmu_wizard_memory.inc": {
+      "mode": "100644",
+      "blob": "7fa89d6871d60448aa4bd886b7b4f40c6d48c0b1"
+    },
+    "src/core/ce_load_plan.c": {
+      "mode": "100644",
+      "blob": "5c7d9818a27f82dd63d005546dc3e5c79defc856"
+    },
+    "src/core/disc_boot.c": {
+      "mode": "100644",
+      "blob": "1e4a77814948394ac72eda32b0b1f259e855d5ad"
+    },
+    "src/core/disc_launch.c": {
+      "mode": "100644",
+      "blob": "cbb5b88e7af7cfea5a31dae09b6ed7937daed5c3"
+    },
+    "src/core/disc_vmu_entry.c": {
+      "mode": "100644",
+      "blob": "3e5413fb831726ae4909ec69ff8a91621a208129"
+    },
+    "src/core/disc_vmu_probe.c": {
+      "mode": "100644",
+      "blob": "c2680260da68ca5b79cc4efb1cccab07bc80129d"
+    },
+    "src/core/game_launch_settings.c": {
+      "mode": "100644",
+      "blob": "38d3514e504d27fa0cec0e60ca9268467118d434"
+    },
+    "src/core/games_activity.c": {
+      "mode": "100644",
+      "blob": "0f86e4b17f2624601b23786f830d8578c32d16e5"
+    },
+    "src/core/games_cdda_profile.h": {
+      "mode": "100644",
+      "blob": "c1452de04c8b410fefcdc4f098cc860119dc986c"
+    },
+    "src/core/games_group.c": {
+      "mode": "100644",
+      "blob": "a2e62278d79615c7cb5b55f2a43c0ea8376786db"
+    },
+    "src/core/games_metadata.c": {
+      "mode": "100644",
+      "blob": "1168b8f770f8e200faed62ac97055cf317801946"
+    },
+    "src/core/games_query.c": {
+      "mode": "100644",
+      "blob": "9ae850b8c4583d29dcaeac6733fb7528b54f0596"
+    },
+    "src/core/games_selection.c": {
+      "mode": "100644",
+      "blob": "106b51dfad8dd86d3b0ac6149ca36a7b85d4e1cd"
+    },
+    "src/core/native_disc_set.c": {
+      "mode": "100644",
+      "blob": "13775436ae41bf678a87470a5e2ee4732b39ec82"
+    },
+    "src/core/native_loader_timeline.c": {
+      "mode": "100644",
+      "blob": "c1d2eeaab7b8bee0ed4be94cabd092655f9100e9"
+    },
+    "src/core/native_readahead_cache.c": {
+      "mode": "100644",
+      "blob": "d939d8c5302b052159eb0f1f470581f58e32da11"
+    },
+    "src/core/native_return.c": {
+      "mode": "100644",
+      "blob": "71a124ec5a4d6cb82db9570c781a182f79aed69b"
+    },
+    "src/core/native_sdk_sci_family.c": {
+      "mode": "100644",
+      "blob": "12e02546da29d101c38207909deb86ab3dfc8861"
+    },
+    "src/core/native_sdk_sci_family.inc": {
+      "mode": "100644",
+      "blob": "624af83f24765c17809322ccfb1c23bd0fd79162"
+    },
+    "src/core/native_sdk_sci_route.c": {
+      "mode": "100644",
+      "blob": "8b4cd021e7aa3376a43e7007a36f109536e73426"
+    },
+    "src/core/native_session.c": {
+      "mode": "100644",
+      "blob": "50940aeb2e554dda5098f233e40d570de6e8dcf6"
+    },
+    "src/core/native_standalone_admission.c": {
+      "mode": "100644",
+      "blob": "f5508dd586af15071499bfc2161e7b259b7abd68"
+    },
+    "src/core/native_vmu_standard.c": {
+      "mode": "100644",
+      "blob": "c121c6f3ca6b6fdf462499ef4b99919425023bf6"
+    },
+    "src/core/retail_cursor.c": {
+      "mode": "100644",
+      "blob": "f2816217a8d6357aa8f120111378cf7ed483f3e9"
+    },
+    "src/core/retail_gd.c": {
+      "mode": "100644",
+      "blob": "24010d011920f09da7f38c535e3386d616af1ef4"
+    },
+    "src/core/retail_image.c": {
+      "mode": "100644",
+      "blob": "a7705447516f8c581afc832ba08eca76a10c1074"
+    },
+    "src/core/retail_observe.c": {
+      "mode": "100644",
+      "blob": "017ea2d2a3bda46c1094147f9ffee55e3151d9fb"
+    },
+    "src/core/retail_pace.c": {
+      "mode": "100644",
+      "blob": "41d62da5a5cea0dd5d56d6a40efd4acdc80470a3"
+    },
+    "src/core/retail_zso.c": {
+      "mode": "100644",
+      "blob": "8bb6d2ddcb6f64fd9d4f245c067e53aab4467918"
+    },
+    "src/core/vmu_collection.c": {
+      "mode": "100644",
+      "blob": "d04983ba18788dffb4b43ca99aeefff265681ae4"
+    },
+    "src/core/vmu_deferred_io.c": {
+      "mode": "100644",
+      "blob": "9d1ace6e356a09fc213eef84f3c8b5117356cb3d"
+    },
+    "src/core/vmu_description.c": {
+      "mode": "100644",
+      "blob": "b39fff4abf12ff08e62281628d4c961a180f06b4"
+    },
+    "src/core/vmu_durable.c": {
+      "mode": "100644",
+      "blob": "940dab6b9f963654a0f855643f520f2744341ea2"
+    },
+    "src/core/vmu_emulation.c": {
+      "mode": "100644",
+      "blob": "e04038c7ee94a6d3ea7a17fa41c3bf05f67ea5db"
+    },
+    "src/core/vmu_emulation_settings.c": {
+      "mode": "100644",
+      "blob": "48ea4920b7fbecb38dd789085336371e52bfe6fc"
+    },
+    "src/core/vmu_fs_admission.c": {
+      "mode": "100644",
+      "blob": "a4952a9250f80ed8edfcdb2720f5f1a2379d0519"
+    },
+    "src/core/vmu_game_assign.c": {
+      "mode": "100644",
+      "blob": "4a228c25da2813ce7ca8fe0ffed9f990ab88edb5"
+    },
+    "src/core/vmu_game_candidates.c": {
+      "mode": "100644",
+      "blob": "99033cacbec9a13b1e1f819d568e55be14b8388e"
+    },
+    "src/core/vmu_game_card.c": {
+      "mode": "100644",
+      "blob": "03572f2be000c2cf9c44700e71d8affde93fb709"
+    },
+    "src/core/vmu_game_card_service.c": {
+      "mode": "100644",
+      "blob": "a9b1a0e98229d3c53b3b7e41a67b1cc009938972"
+    },
+    "src/core/vmu_history.c": {
+      "mode": "100644",
+      "blob": "258ec4545efa807dd680d0a5d24cabbff2f7824e"
+    },
+    "src/core/vmu_history_record.c": {
+      "mode": "100644",
+      "blob": "843f17aa10ed1102ff0c3bf32e47bfa520f2d1ce"
+    },
+    "src/core/vmu_history_session.c": {
+      "mode": "100644",
+      "blob": "69f8cf429d54a173304acdfa9c2b5be10f165e46"
+    },
+    "src/core/vmu_image.c": {
+      "mode": "100644",
+      "blob": "ee7d032800e6d6c2367ba58856b6e66281306bce"
+    },
+    "src/core/vmu_image_clone.c": {
+      "mode": "100644",
+      "blob": "20bdeb7da659c3a2de6f35a10ea3ae5a1823bf2a"
+    },
+    "src/core/vmu_image_merge.c": {
+      "mode": "100644",
+      "blob": "f42a305052ea3c30b795427af60c30a2eb90bbcb"
+    },
+    "src/core/vmu_image_pack.c": {
+      "mode": "100644",
+      "blob": "284365dc6e790d5f730d435adafa2b58d9b2db45"
+    },
+    "src/core/vmu_image_subset.c": {
+      "mode": "100644",
+      "blob": "b7e1574cca19df0e7cbc937ba1b9089bcb5719bf"
+    },
+    "src/core/vmu_import_match.c": {
+      "mode": "100644",
+      "blob": "0a0cf667de7ff61ec84761c9ea1011c745b25123"
+    },
+    "src/core/vmu_import_plan.c": {
+      "mode": "100644",
+      "blob": "e50854a63bb2888a29437d9d81c6b88749eca2a2"
+    },
+    "src/core/vmu_launch_package.c": {
+      "mode": "100644",
+      "blob": "a8bfde3c5bbf84568b9539919e6bed656bea7e57"
+    },
+    "src/core/vmu_lcd.c": {
+      "mode": "100644",
+      "blob": "4dfcd31aae096e6438d1425987e3c9c2dc064a9f"
+    },
+    "src/core/vmu_library.c": {
+      "mode": "100644",
+      "blob": "2a247d1ca032ede71f802e644d16ad4ead17c93a"
+    },
+    "src/core/vmu_native_cache.c": {
+      "mode": "100644",
+      "blob": "ab775cdb9da9950d6a94ac0174ce29951b5e5312"
+    },
+    "src/core/vmu_native_cache_seed.c": {
+      "mode": "100644",
+      "blob": "e29ffbca49802b221942478a7137cdbf3a911cf5"
+    },
+    "src/core/vmu_native_discovery.c": {
+      "mode": "100644",
+      "blob": "3fec5fedf72df561c9110fde26cbbe17c8fe2fc7"
+    },
+    "src/core/vmu_native_exit.c": {
+      "mode": "100644",
+      "blob": "823ec18f3132ceb83676e8bfe6e61b329d69d27b"
+    },
+    "src/core/vmu_native_heap.c": {
+      "mode": "100644",
+      "blob": "243b2aa9a8af1cbde6df6fcaaafc1c909ad5529c"
+    },
+    "src/core/vmu_native_heap_bottom_code.inc": {
+      "mode": "100644",
+      "blob": "ebc51da4a87bab3c12637c9e746058b6bcf5f475"
+    },
+    "src/core/vmu_native_heap_budget.c": {
+      "mode": "100644",
+      "blob": "1f299c7f14ffaac25c2bb3d88d62cf8001f915f3"
+    },
+    "src/core/vmu_native_layout.c": {
+      "mode": "100644",
+      "blob": "54791f45d1154b7070fb76ff11ba0c50ddd01133"
+    },
+    "src/core/vmu_native_lifetime.c": {
+      "mode": "100644",
+      "blob": "ad773a9022c8f8a94a5f4a4858c407996122f53c"
+    },
+    "src/core/vmu_native_live.c": {
+      "mode": "100644",
+      "blob": "bab00abc1e4e70465c40da0faa0834430379b097"
+    },
+    "src/core/vmu_native_mode.c": {
+      "mode": "100644",
+      "blob": "4cb6f799803c02216e66c1423785464e8bb75ffe"
+    },
+    "src/core/vmu_native_patch.c": {
+      "mode": "100644",
+      "blob": "bfef669cb0172961a3ba059b114043c72029d614"
+    },
+    "src/core/vmu_native_profile.c": {
+      "mode": "100644",
+      "blob": "6ef342d7f89128183ab635dde6d4d5fc11e52b38"
+    },
+    "src/core/vmu_native_program.c": {
+      "mode": "100644",
+      "blob": "85e721a0e3c88127e2b8e78087fdf6f633489ea5"
+    },
+    "src/core/vmu_native_relocate.c": {
+      "mode": "100644",
+      "blob": "6fe44d8a803c6304cb96e6ae314bf03aa1e06d31"
+    },
+    "src/core/vmu_native_resolution_cache.c": {
+      "mode": "100644",
+      "blob": "8e3170fd815a1d397497a24e2fb257d5445b3a69"
+    },
+    "src/core/vmu_native_runtime.c": {
+      "mode": "100644",
+      "blob": "e1cf0b57340fdf6d64d056ff4b65c06c5c56ba67"
+    },
+    "src/core/vmu_native_stage_placement.c": {
+      "mode": "100644",
+      "blob": "a1200015d29c785388bb126fcf7e2dd144a90f2a"
+    },
+    "src/core/vmu_native_worker_protocol.c": {
+      "mode": "100644",
+      "blob": "0c578eb88112712837671c18e1aac824774bd081"
+    },
+    "src/core/vmu_persist_profile.c": {
+      "mode": "100644",
+      "blob": "a64333e78b74945fbf3675e81dcf8a0e3c52835b"
+    },
+    "src/core/vmu_persist_session.c": {
+      "mode": "100644",
+      "blob": "bd1549a742d9510c8e3a6d54691842f36839f859"
+    },
+    "src/core/vmu_readonly.c": {
+      "mode": "100644",
+      "blob": "730e6b2f67cd2ab85584c1d1f0ccf4aea69f10a1"
+    },
+    "src/core/vmu_save_format.c": {
+      "mode": "100644",
+      "blob": "c86e71c910d78f726aac8d7326db4764af6b28c3"
+    },
+    "src/core/vmu_save_snapshot.c": {
+      "mode": "100644",
+      "blob": "88d70d4bf23fdfeb328580bfed22bfcf00618858"
+    },
+    "src/core/vmu_sd_profile.c": {
+      "mode": "100644",
+      "blob": "9c781791660aa86a82c61d2dd79c8c04b040d80d"
+    },
+    "src/core/vmu_store.c": {
+      "mode": "100644",
+      "blob": "478895a225e96b0ba7b386af30e99bd9628bb594"
+    },
+    "src/core/vmu_volatile.c": {
+      "mode": "100644",
+      "blob": "a91f111c5ca37b16c6f646eb943c8c92895d6185"
+    },
+    "src/loader/armada_ce_audio_observe.inc": {
+      "mode": "100644",
+      "blob": "a2619e5fe2ad8d10130f52f03060fe4e9cb73f0b"
+    },
+    "src/loader/armada_ce_bind_probe.c": {
+      "mode": "100644",
+      "blob": "bf13abafecd99c6210d85d738ae6eca3c0c5fedd"
+    },
+    "src/loader/armada_ce_bind_probe.ld": {
+      "mode": "100644",
+      "blob": "ab9aef69d08acac5dea8b583715cc2ac0b9e6361"
+    },
+    "src/loader/armada_ce_cache_snapshot.S": {
+      "mode": "100644",
+      "blob": "018cc1877ec5e821f218a1cb10b40d0fee2697dc"
+    },
+    "src/loader/armada_ce_excerpt.S": {
+      "mode": "100644",
+      "blob": "389defb550df29fbe1c6f55fa113cd5ff9fde895"
+    },
+    "src/loader/armada_ce_excerpt.c": {
+      "mode": "100644",
+      "blob": "e6d75a4ec139785bf2559bfcfcfa73384dbd30b6"
+    },
+    "src/loader/armada_ce_excerpt_entry.c": {
+      "mode": "100644",
+      "blob": "2270cfd6514f39a9ce3ce7b5756267f74c464fd5"
+    },
+    "src/loader/armada_ce_maple_array.S": {
+      "mode": "100644",
+      "blob": "bd5aa77e1fcfe4a7c89f9591b1517ac29bfde11f"
+    },
+    "src/loader/armada_ce_maple_fence.ld": {
+      "mode": "100644",
+      "blob": "bc3fd1d31c6e5d928414a57523d1881a206348cf"
+    },
+    "src/loader/armada_ce_maple_fence_bridge.S": {
+      "mode": "100644",
+      "blob": "529d41f9e11d76e37e41b469ba4386a1c29cd3f0"
+    },
+    "src/loader/armada_ce_maple_hook.S": {
+      "mode": "100644",
+      "blob": "40185664784f7f359332c4eaf29452e2de7dcbf0"
+    },
+    "src/loader/armada_ce_maple_hook.ld": {
+      "mode": "100644",
+      "blob": "ade64da0f385e3f331060c36b21b420acb57c29d"
+    },
+    "src/loader/armada_ce_maple_probe.c": {
+      "mode": "100644",
+      "blob": "c033a228a1762fc6a9c4a9b4c9cf6e7e2b9299cb"
+    },
+    "src/loader/armada_ce_maple_probe.ld": {
+      "mode": "100644",
+      "blob": "d375f0a806db1bf801dd3595111aaca732915d57"
+    },
+    "src/loader/armada_ce_maple_traffic.c": {
+      "mode": "100644",
+      "blob": "f57de560c0bde408e985638d6a3e2acf687c0ba7"
+    },
+    "src/loader/armada_ce_maple_traffic.ld": {
+      "mode": "100644",
+      "blob": "65acf98d0c50b4411ce040bdbd221981edbd97dc"
+    },
+    "src/loader/armada_ce_maple_traffic_entry.S": {
+      "mode": "100644",
+      "blob": "bec45906bce047fe3c57a4d6c7cc61eb1993eab3"
+    },
+    "src/loader/armada_ce_stream.ld": {
+      "mode": "100644",
+      "blob": "b6171f163848e68ae65cf89f06e77289af9d3e34"
+    },
+    "src/loader/armada_ce_stream_model.c": {
+      "mode": "100644",
+      "blob": "52473601fb0ca370e89db2f8c34f9a0e4fd27704"
+    },
+    "src/loader/armada_ce_stream_native.c": {
+      "mode": "100644",
+      "blob": "30525977445fad1b292802ab7a7f4c3a0b737031"
+    },
+    "src/loader/armada_ce_stream_player.c": {
+      "mode": "100644",
+      "blob": "6cc66f556003ef762c5f5cb31108b30f7b7930bf"
+    },
+    "src/loader/armada_ce_stream_trace.c": {
+      "mode": "100644",
+      "blob": "d58f24c75cba6de222359c007174629ccda9612f"
+    },
+    "src/loader/armada_ce_stream_transport.c": {
+      "mode": "100644",
+      "blob": "739bd64f56a4fb49f69e436af7edec3d1d88c023"
+    },
+    "src/loader/armada_ce_vmu_a2.ld": {
+      "mode": "100644",
+      "blob": "a8e3b1d5dd8d974b8d11698dc2575ee018064962"
+    },
+    "src/loader/armada_ce_vmu_a2_publish.c": {
+      "mode": "100644",
+      "blob": "0ab8db30ea030cc8be4cca7c266c824c617e1681"
+    },
+    "src/loader/armada_ce_vmu_a2_write.ld.S": {
+      "mode": "100644",
+      "blob": "ce386a9cfb6b2eff0dd299daf41a481f46dd1e00"
+    },
+    "src/loader/armada_ce_vmu_persist_stage.c": {
+      "mode": "100644",
+      "blob": "95c3f78bcf10cece6217b76447d0137b7ba4b8e6"
+    },
+    "src/loader/armada_ce_vmu_persist_stage.inc": {
+      "mode": "100644",
+      "blob": "ef7342341b98c987e4375355c9a2d1eeb5a11d54"
+    },
+    "src/loader/armada_ce_vmu_runtime.c": {
+      "mode": "100644",
+      "blob": "019e75d1fa9c5ee60e25848c1afddb4a676b6163"
+    },
+    "src/loader/armada_ce_vmu_sd.c": {
+      "mode": "100644",
+      "blob": "34895c2eb399103e725cf3d515f41a088ea4c106"
+    },
+    "src/loader/armada_ce_vmu_sd_pio.c": {
+      "mode": "100644",
+      "blob": "f4be6e14f6bd435dde6ff4394a0452539c3605cb"
+    },
+    "src/loader/client.c": {
+      "mode": "100644",
+      "blob": "262a83b4a2706ca4c3974e2ff99de6e686a0cc7d"
+    },
+    "src/loader/client.ld": {
+      "mode": "100644",
+      "blob": "3d264dc193cdf1f5e7afb3c94ccdaace4576d366"
+    },
+    "src/loader/client_start.S": {
+      "mode": "100644",
+      "blob": "95c73e9e465fc40b8bcbf712d0dba149a7e2f795"
+    },
+    "src/loader/disc_entry.S": {
+      "mode": "100644",
+      "blob": "ce85af591657750059f8dd98d0a2675c08267c3f"
+    },
+    "src/loader/disc_entry.ld": {
+      "mode": "100644",
+      "blob": "a3670c96bee719c73ff175f3f09e030b7645b85c"
+    },
+    "src/loader/disc_stage.S": {
+      "mode": "100644",
+      "blob": "d975f882e07b1c40007b9865d3a157146a72e654"
+    },
+    "src/loader/disc_stage.c": {
+      "mode": "100644",
+      "blob": "7fc9f9135d59548cf27b1a7510388e517f8d1bc7"
+    },
+    "src/loader/disc_stage.ld": {
+      "mode": "100644",
+      "blob": "26e0d78402a64e535d30fd77d59494e5933d4c72"
+    },
+    "src/loader/disc_vmu_entry.ld": {
+      "mode": "100644",
+      "blob": "acb386a2b5e2c0d81c57e7ae48136a0348aefc1f"
+    },
+    "src/loader/disc_vmu_return_stage.inc": {
+      "mode": "100644",
+      "blob": "0fd7d3038dc5062bbc9fe082d4b179afa71657d0"
+    },
+    "src/loader/disc_vmu_stage.c": {
+      "mode": "100644",
+      "blob": "29ddd5e73ff96e00acaec37f2b6732be7e6805f6"
+    },
+    "src/loader/disc_vmu_stage.ld": {
+      "mode": "100644",
+      "blob": "45b1bd6a4aeffde36114384336347c2b4ee881bd"
+    },
+    "src/loader/disc_vmu_stage_asm.S": {
+      "mode": "100644",
+      "blob": "5dfd02eff334f233e1d3fa21450fc0b982bd7346"
+    },
+    "src/loader/disc_vmu_storage.c": {
+      "mode": "100644",
+      "blob": "dda1cf838daff248298e4e65f471b4d5397496c2"
+    },
+    "src/loader/disc_vmu_support.S": {
+      "mode": "100644",
+      "blob": "f0f2f774883a0478407399ac3c6154982b474e7b"
+    },
+    "src/loader/disc_vmu_support.c": {
+      "mode": "100644",
+      "blob": "f9466687ab25f9e810c23387373a98c6e1344d0b"
+    },
+    "src/loader/disc_vmu_support.ld": {
+      "mode": "100644",
+      "blob": "c89a4b4c1bcb32e10b6be792308b9afe6216c75f"
+    },
+    "src/loader/disc_vmu_transport.c": {
+      "mode": "100644",
+      "blob": "002fea593d6e1b77c00a57afbaa685f9b9757387"
+    },
+    "src/loader/display.c": {
+      "mode": "100644",
+      "blob": "d890f571a189d381c76030e958c0b63c630c161b"
+    },
+    "src/loader/display.h": {
+      "mode": "100644",
+      "blob": "6a3a502f5f6df743da9b10a48a960f5715bf986e"
+    },
+    "src/loader/entry.S": {
+      "mode": "100644",
+      "blob": "afb4f642449011833eacebcd9cc5b15947a331f1"
+    },
+    "src/loader/entry.ld": {
+      "mode": "100644",
+      "blob": "a8a00759bbfb7e917e4aa3b07266de936a6f8f9b"
+    },
+    "src/loader/gd_hook.S": {
+      "mode": "100644",
+      "blob": "274bb2416dcbeeccfb06cc5b706e7cd989c95245"
+    },
+    "src/loader/image_client.c": {
+      "mode": "100644",
+      "blob": "79d9d2dd8dca5f68bde211ae38938a797cc5d2d5"
+    },
+    "src/loader/image_client.ld": {
+      "mode": "100644",
+      "blob": "3d264dc193cdf1f5e7afb3c94ccdaace4576d366"
+    },
+    "src/loader/image_client_call.S": {
+      "mode": "100644",
+      "blob": "5125177e9415062720fc3c0d278a0794962c43ed"
+    },
+    "src/loader/image_client_start.S": {
+      "mode": "100644",
+      "blob": "adefb402e98194262cf932b9ab52f2247a305ca0"
+    },
+    "src/loader/image_display.c": {
+      "mode": "100644",
+      "blob": "d6c220777632bc11712892ed3d602627ff16295b"
+    },
+    "src/loader/image_entry.S": {
+      "mode": "100644",
+      "blob": "b8a29ca16b0912ae249a60b97d0ea1e4b393533c"
+    },
+    "src/loader/image_entry.ld": {
+      "mode": "100644",
+      "blob": "26dffca36ec75e2fdbe2b88acfbe5b966e23e76d"
+    },
+    "src/loader/image_main.c": {
+      "mode": "100644",
+      "blob": "d31652df7b2068f4271a32022ce122e4057cb32b"
+    },
+    "src/loader/image_resident.ld": {
+      "mode": "100644",
+      "blob": "0cdea792df075577c6416104ccdbff495e680f5b"
+    },
+    "src/loader/image_resident_start.S": {
+      "mode": "100644",
+      "blob": "cb97c1b4c07ed9e92f393ba709ebdce53fe14e34"
+    },
+    "src/loader/main.c": {
+      "mode": "100644",
+      "blob": "0bdd49f285e434c60e490929a0715fd86aca1ae7"
+    },
+    "src/loader/mdk2_cdda_admission.h": {
+      "mode": "100644",
+      "blob": "59bd552ea321e20fded60a2c2f13a26ab5df570a"
+    },
+    "src/loader/mdk2_cdda_boot.S": {
+      "mode": "100644",
+      "blob": "3cc0e44e5fde696a2afc48ea2cb51ce0edb4d338"
+    },
+    "src/loader/mdk2_cdda_resident.ld": {
+      "mode": "100644",
+      "blob": "e808eb7f4ef4e022bc698c88908d632993f40969"
+    },
+    "src/loader/mdk2_cdda_stage.c": {
+      "mode": "100644",
+      "blob": "9d0c44a13754a88ef8cf4211cce5eed880630e45"
+    },
+    "src/loader/mdk2_cdda_worker.S": {
+      "mode": "100644",
+      "blob": "b38b36fd088882fc6bb3fe4d49849592d034c020"
+    },
+    "src/loader/minic.c": {
+      "mode": "100644",
+      "blob": "8227220bc8be52e31b1ad9b4d6753ddab4ef692d"
+    },
+    "src/loader/native_ram_map_stage.inc": {
+      "mode": "100644",
+      "blob": "17ca06010e1ccdcb9da2f8a436f6edf2273fe1b6"
+    },
+    "src/loader/native_readahead_aux.c": {
+      "mode": "100644",
+      "blob": "e5ccb7b1f1cbc3fa0afe17bdc29c908e4e61816e"
+    },
+    "src/loader/native_readahead_aux.ld": {
+      "mode": "100644",
+      "blob": "e34bcb86e397a3aae158859b6b94d7dd985f08e2"
+    },
+    "src/loader/native_readahead_aux_entry.S": {
+      "mode": "100644",
+      "blob": "7ded6ddc1d525ef4873ca4540e6546e78315b2c8"
+    },
+    "src/loader/native_readahead_aux_internal.h": {
+      "mode": "100644",
+      "blob": "553b7b20fc749dc48ab40bc8731d3dfa7e2b5d97"
+    },
+    "src/loader/native_return_hardware.S": {
+      "mode": "100644",
+      "blob": "bd31b00019394fcc51b00154d87cd1e6673cacd2"
+    },
+    "src/loader/native_return_hardware.c": {
+      "mode": "100644",
+      "blob": "36eae5b0e5daccc8a979f418a54729e5c626294f"
+    },
+    "src/loader/native_return_hardware.h": {
+      "mode": "100644",
+      "blob": "0c245753129bb41bd0162ddd805659043bde37c8"
+    },
+    "src/loader/native_session_cold_bind.inc": {
+      "mode": "100644",
+      "blob": "a94f5defeabc9449ed39fe143c3c33472477d445"
+    },
+    "src/loader/native_session_worker.inc": {
+      "mode": "100644",
+      "blob": "d28cd91bd21c5b8b24f8e74763cef8b14979387d"
+    },
+    "src/loader/native_standalone_reader.inc": {
+      "mode": "100644",
+      "blob": "aa9863846bf09b5d4a902fce0337105dbcbb3505"
+    },
+    "src/loader/native_standalone_reader_stage.inc": {
+      "mode": "100644",
+      "blob": "99df595ea71e1bea8dbc3a38bc05a421806bc190"
+    },
+    "src/loader/native_vmu_io_diagnostic.h": {
+      "mode": "100644",
+      "blob": "9631b5bd4bd72fad4187b28ca231de91896dbf0f"
+    },
+    "src/loader/resident.ld": {
+      "mode": "100644",
+      "blob": "d7bae6a73c74b7ea6f462d6397d939de2b7995ce"
+    },
+    "src/loader/resident_start.S": {
+      "mode": "100644",
+      "blob": "b49df22c6bd70515060b12a0a3ee6de6511ae77e"
+    },
+    "src/loader/retail_async.c": {
+      "mode": "100644",
+      "blob": "c7ee74ae0963203bd988db2b126183e4c1e0c7fc"
+    },
+    "src/loader/retail_async.h": {
+      "mode": "100644",
+      "blob": "471b6fa42c9f1884d50d9f0111f33ef23e34984e"
+    },
+    "src/loader/retail_boot.h": {
+      "mode": "100644",
+      "blob": "ddb94d3ec8f51e2f031a7760a23942dd072e2fd6"
+    },
+    "src/loader/retail_display.c": {
+      "mode": "100644",
+      "blob": "2ecd80309693b5a93bce82c8b467e7222d81ed90"
+    },
+    "src/loader/retail_display.h": {
+      "mode": "100644",
+      "blob": "a6c0253a43a4fce658c726dcacd0a40bdb19d4ae"
+    },
+    "src/loader/retail_entry.S": {
+      "mode": "100644",
+      "blob": "e9ab9bd9316caec3da72c251a793cdbec554043a"
+    },
+    "src/loader/retail_entry.ld": {
+      "mode": "100644",
+      "blob": "34d7d860815aa11bb8da67773407e76932df3e8d"
+    },
+    "src/loader/retail_resident.S": {
+      "mode": "100644",
+      "blob": "53b7e16d73cec03fb45eca34f2423f8c62d43ddd"
+    },
+    "src/loader/retail_resident.c": {
+      "mode": "100644",
+      "blob": "9fa2f872c3aa9847783eb55e0d93f27fe06fed52"
+    },
+    "src/loader/retail_resident.ld": {
+      "mode": "100644",
+      "blob": "3952abe64d4e5a8ee78ab9ba6fc40895bb4f8303"
+    },
+    "src/loader/retail_resident_async.ld": {
+      "mode": "100644",
+      "blob": "1269951640de8fbae4a5e039ee0bbc2f7bf0a4fe"
+    },
+    "src/loader/retail_resident_async_low.ld": {
+      "mode": "100644",
+      "blob": "889e9aa80c797e43d55e52c377d395791ee917ac"
+    },
+    "src/loader/retail_resident_ce.ld": {
+      "mode": "100644",
+      "blob": "a05f5ea7fea197087a84d60fdd730bf18dfd5fb6"
+    },
+    "src/loader/retail_resident_ce_async.ld": {
+      "mode": "100644",
+      "blob": "620012bf96ccc3a0517e10f0a7ed53cf573d8c1b"
+    },
+    "src/loader/retail_resident_ce_async_vmu_write.ld": {
+      "mode": "100644",
+      "blob": "0d95f5fc87c51ee0366e9e885b18faaec15300d0"
+    },
+    "src/loader/retail_resident_low.ld": {
+      "mode": "100644",
+      "blob": "728a3ca5bed250247846fd434354c71d3ca7a125"
+    },
+    "src/loader/retail_sd.c": {
+      "mode": "100644",
+      "blob": "5e271b33accb276992d98345b011010eded635a8"
+    },
+    "src/loader/retail_sd.h": {
+      "mode": "100644",
+      "blob": "7a2ee746c2e95123d887bd2d71f2e8eb40ea80e8"
+    },
+    "src/loader/retail_sd_bench.c": {
+      "mode": "100644",
+      "blob": "b858b8ce42e6272babc21e3ae1090308fdeba132"
+    },
+    "src/loader/retail_sd_bench.h": {
+      "mode": "100644",
+      "blob": "a62baec9d060bced09326fbe04300b7d7642a3c7"
+    },
+    "src/loader/retail_stage.S": {
+      "mode": "100644",
+      "blob": "9956e0e1c3cd9769a51d75b43264658d2fecd4ba"
+    },
+    "src/loader/retail_stage.c": {
+      "mode": "100644",
+      "blob": "5f7ff4ffdd90563d55c659d9ee2253fb3d0a4dda"
+    },
+    "src/loader/retail_stage.ld": {
+      "mode": "100644",
+      "blob": "f9e15ba43d39879dbe6610d793d1fd24e857f456"
+    },
+    "src/loader/retail_stage_ce.ld": {
+      "mode": "100644",
+      "blob": "5842bff773a1d61e88d9ddb2b2ed7ef3043f3dd6"
+    },
+    "src/loader/retail_storage.c": {
+      "mode": "100644",
+      "blob": "f184fdd7d1b82117cea47690e7595136147f4bf3"
+    },
+    "src/loader/retail_storage.h": {
+      "mode": "100644",
+      "blob": "8eefdd199cd12808aab701d558f67b79bee2c692"
+    },
+    "src/loader/retail_storage_impl.h": {
+      "mode": "100644",
+      "blob": "954fb1aec959525c680e24f5193f5e8df067e62b"
+    },
+    "src/loader/sci_sd_bus.c": {
+      "mode": "100644",
+      "blob": "593828501874a493f44e3ac07c7277be52732d9a"
+    },
+    "src/loader/sci_sd_bus.h": {
+      "mode": "100644",
+      "blob": "d8e23e590417db6f4bc23f8c98e1554492ac88a6"
+    },
+    "src/loader/sci_stream.c": {
+      "mode": "100644",
+      "blob": "ed16a37eb0c2dc74c15be80ef25dae7cd111ba51"
+    },
+    "src/loader/sci_stream.h": {
+      "mode": "100644",
+      "blob": "f44c8d56b4c66126447eb26b7c0ef8f16cad8295"
+    },
+    "src/loader/sd_reader.c": {
+      "mode": "100644",
+      "blob": "16bbc54bf3dd0f8c379c289047b1d29fa7cd9501"
+    },
+    "src/loader/sd_reader.h": {
+      "mode": "100644",
+      "blob": "fc17c51cdfb37a63d40125dacfc5ba009bdd3521"
+    },
+    "src/loader/stage_fast_crc32.h": {
+      "mode": "100644",
+      "blob": "943447644c907e2ec9cc8b275da7381d589fb9f9"
+    },
+    "src/loader/toy_loader_data_probe.c": {
+      "mode": "100644",
+      "blob": "dac2921ccf0ca4a639d1514ecfe071dd01b63d62"
+    },
+    "src/loader/toy_loader_payload_control.c": {
+      "mode": "100644",
+      "blob": "0543868e044f4fc1799ebe83f4dff23c59124f8c"
+    },
+    "src/loader/toy_loader_schedule_report.c": {
+      "mode": "100644",
+      "blob": "2e7ad955d3b28799742bc08394d728e2d4015295"
+    },
+    "src/loader/toy_loader_trace.c": {
+      "mode": "100644",
+      "blob": "542fcf50a4408c5f372d55533578dac79820a0e2"
+    },
+    "src/loader/toy_loader_trace_report.c": {
+      "mode": "100644",
+      "blob": "7e2e33141b1aa583779f393ed8246a9d6b8b5d7b"
+    },
+    "src/loader/toy_pilot_admission.h": {
+      "mode": "100644",
+      "blob": "2634d7d71f88077d78d2c99c485b67998f70035f"
+    },
+    "src/loader/toy_pilot_boot.S": {
+      "mode": "100644",
+      "blob": "01bb2061203a21ac243113fde4261343443e70d5"
+    },
+    "src/loader/toy_pilot_bus.c": {
+      "mode": "100644",
+      "blob": "d3388d29618b73655a554f561932492d98fb0267"
+    },
+    "src/loader/toy_pilot_bus_admission.h": {
+      "mode": "100644",
+      "blob": "f8066dfa4b5baa49ee0f171812ca5d21cca7aec2"
+    },
+    "src/loader/toy_pilot_cooked_admission.h": {
+      "mode": "100644",
+      "blob": "a165a02edb7f5c3abacf5cc4c10e0143e717ec5a"
+    },
+    "src/loader/toy_pilot_frame.inc": {
+      "mode": "100644",
+      "blob": "99fc8958d083cf08823666c9b856be84edd43df3"
+    },
+    "src/loader/toy_pilot_gd.c": {
+      "mode": "100644",
+      "blob": "07a08d0b067f92cc9f1bbbd1f0db46f85177af99"
+    },
+    "src/loader/toy_pilot_lease.c": {
+      "mode": "100644",
+      "blob": "7fd18d6ae41869ebb684ad0787f2b2f105beb2d0"
+    },
+    "src/loader/toy_pilot_pause.S": {
+      "mode": "100644",
+      "blob": "164a729cc92d4407d1ebba9b4266ab5e588127d7"
+    },
+    "src/loader/toy_pilot_pause.c": {
+      "mode": "100644",
+      "blob": "06237481accb93279a55c4f8c6869c64360f680c"
+    },
+    "src/loader/toy_pilot_resident.c": {
+      "mode": "100644",
+      "blob": "2c5009f86fe84182720940857173fcfbb0af9318"
+    },
+    "src/loader/toy_pilot_resident_p2.ld": {
+      "mode": "100644",
+      "blob": "3791c61edf07bf9880c187dd85adb5269c8e0c47"
+    },
+    "src/loader/toy_pilot_sci.c": {
+      "mode": "100644",
+      "blob": "701aab505516ac6b304bb947b8a15a3810d9e949"
+    },
+    "src/loader/toy_pilot_sci.h": {
+      "mode": "100644",
+      "blob": "1c9e7046a3f53b8daf3d182c199a6b8c105e431a"
+    },
+    "src/loader/toy_pilot_sci_irq.S": {
+      "mode": "100644",
+      "blob": "a9b57c9572f0e9b9ce8c07df495bcc1fec7c9482"
+    },
+    "src/loader/toy_pilot_stage.c": {
+      "mode": "100644",
+      "blob": "9748a7e5361f218f5342b8a37892681917ba23f7"
+    },
+    "src/loader/toy_pilot_worker.S": {
+      "mode": "100644",
+      "blob": "d43980ee8608781a400e9fca9c81409946c8baa8"
+    },
+    "src/loader/toy_pilot_worker.c": {
+      "mode": "100644",
+      "blob": "71235a23953ae3f3123e985df50e44e331c9c07b"
+    },
+    "src/loader/toy_pilot_worker.ld": {
+      "mode": "100644",
+      "blob": "232d7881cd9d1f2f3374a8d695b18f20d06d74a8"
+    },
+    "src/loader/vmu_backing.c": {
+      "mode": "100644",
+      "blob": "905ff19c75da712f318ddb8320feecc0dcf39cc3"
+    },
+    "src/loader/vmu_maple_dma.c": {
+      "mode": "100644",
+      "blob": "e19247552c6d7290dec3a536ff1eeba75fe068dd"
+    },
+    "src/loader/vmu_maple_hook.S": {
+      "mode": "100644",
+      "blob": "83a80dec31f3457a918e83a3734846a84fd718e2"
+    },
+    "src/loader/vmu_maple_observe_boot.S": {
+      "mode": "100644",
+      "blob": "d0ac7577216b0c77ff000f1380e673781b6a5729"
+    },
+    "src/loader/vmu_maple_observe_resident.c": {
+      "mode": "100644",
+      "blob": "a0d5029b1769a062745f5b678c2c74408ebd328a"
+    },
+    "src/loader/vmu_maple_observe_stage.c": {
+      "mode": "100644",
+      "blob": "6c752a5b205f7e3179aecd3528a768157691896a"
+    },
+    "src/loader/vmu_maple_observe_worker.c": {
+      "mode": "100644",
+      "blob": "a83ec36d6f7bd351e020e60fb93c4a1f3f1aaaa6"
+    },
+    "src/loader/vmu_maple_observe_worker.ld": {
+      "mode": "100644",
+      "blob": "44ff3fffdf47721f512661f7af7975940118fd75"
+    },
+    "src/loader/vmu_native_background_compact.ld": {
+      "mode": "100644",
+      "blob": "8145e9017484283a2c6da028e58221f1a83981b9"
+    },
+    "src/loader/vmu_native_background_resident.c": {
+      "mode": "100644",
+      "blob": "374c104a220ea28e9173c930f6008ea2372ddc2f"
+    },
+    "src/loader/vmu_native_background_resident.ld": {
+      "mode": "100644",
+      "blob": "07d2f9abc0eb8dadcc350c93feadd9d4eaf6c371"
+    },
+    "src/loader/vmu_native_crt_bootstrap_stage.inc": {
+      "mode": "100644",
+      "blob": "48913322ac6bb21d75f2a448aa5383cb7af47e04"
+    },
+    "src/loader/vmu_native_evolution_fault_stage.inc": {
+      "mode": "100644",
+      "blob": "66d8f4e05b43af15edc9b38c52d603cd61ee4f95"
+    },
+    "src/loader/vmu_native_evolution_trace_stage.inc": {
+      "mode": "100644",
+      "blob": "4be66e018ff6a0117103a030e9c5f6aa2d8cf771"
+    },
+    "src/loader/vmu_native_fault_capture.S": {
+      "mode": "100644",
+      "blob": "f7c2f8654cac229a7324f230e327656f32b02645"
+    },
+    "src/loader/vmu_native_fault_capture.c": {
+      "mode": "100644",
+      "blob": "fe5f26929cfac77a9d2995d06505656c0204e1b7"
+    },
+    "src/loader/vmu_native_fault_capture.h": {
+      "mode": "100644",
+      "blob": "efdef8d6fa7568feee9c44f221d762c7c3f66908"
+    },
+    "src/loader/vmu_native_general_lean.ld": {
+      "mode": "100644",
+      "blob": "c8cda7380725da0ac7a2805aae3e457ffe042757"
+    },
+    "src/loader/vmu_native_heap_probe_stage.c": {
+      "mode": "100644",
+      "blob": "ce63373a0ecb79589007691a0c285e5e3d720006"
+    },
+    "src/loader/vmu_native_lite.ld": {
+      "mode": "100644",
+      "blob": "b1c21b9900685535d6217fb41567bd10469d416e"
+    },
+    "src/loader/vmu_native_loader_timeline.inc": {
+      "mode": "100644",
+      "blob": "f8368198718184e9677d2160ad6e3395489e8e84"
+    },
+    "src/loader/vmu_native_maple_delay.inc": {
+      "mode": "100644",
+      "blob": "1c5f6fa3c9c4a952f0ba9d014c7d7100598053d0"
+    },
+    "src/loader/vmu_native_metadata_cache.inc": {
+      "mode": "100644",
+      "blob": "ca781139e1cb89de767cd9306b1e3c9de6895ba7"
+    },
+    "src/loader/vmu_native_metadata_cache.ld": {
+      "mode": "100644",
+      "blob": "c05e5428450fa08444a79fbbd74b593a94a4cadd"
+    },
+    "src/loader/vmu_native_passive.c": {
+      "mode": "100644",
+      "blob": "fa2eafd9033f6620ef300a6dedd115cdea6ce06a"
+    },
+    "src/loader/vmu_native_passive_exports.S": {
+      "mode": "100644",
+      "blob": "6820038b2762dc00550b21ce03847eea7175c56c"
+    },
+    "src/loader/vmu_native_passive_hooks.S": {
+      "mode": "100644",
+      "blob": "483145829c8f9d464d41919f2d2836755abbf469"
+    },
+    "src/loader/vmu_native_passive_stage.inc": {
+      "mode": "100644",
+      "blob": "c569890ed18d82f869426b2b2e9f2a3fa998934c"
+    },
+    "src/loader/vmu_native_performance.ld": {
+      "mode": "100644",
+      "blob": "a7ccacdb84f2d304db9cd6bffef9ea40aead8b4b"
+    },
+    "src/loader/vmu_native_persist_stage.inc": {
+      "mode": "100644",
+      "blob": "41ddb9fb2b4fde1fa7d68ddf00f35f17adb6051f"
+    },
+    "src/loader/vmu_native_persistent.ld": {
+      "mode": "100644",
+      "blob": "21c74ba1e78b40e472d97d15147a9c2886c19f64"
+    },
+    "src/loader/vmu_native_phase.inc": {
+      "mode": "100644",
+      "blob": "cff609d8d34481b6dd835b4b17214df04d9a3112"
+    },
+    "src/loader/vmu_native_readahead_stage.inc": {
+      "mode": "100644",
+      "blob": "85177c9b860dd90176c926606c6c6d989cc2cec1"
+    },
+    "src/loader/vmu_native_reader_capture.inc": {
+      "mode": "100644",
+      "blob": "39bcd76f342885a98d4063bc191245c06bed5415"
+    },
+    "src/loader/vmu_native_sdk_coherence.S": {
+      "mode": "100644",
+      "blob": "e2d859b19dc47e516bd9c44e4835c50065fa9cd9"
+    },
+    "src/loader/vmu_native_sdk_coherence.c": {
+      "mode": "100644",
+      "blob": "144abfad91feb19fdf2dd7851f26c210f3d0fa2c"
+    },
+    "src/loader/vmu_native_sdk_coherence.h": {
+      "mode": "100644",
+      "blob": "46d17dc4e04afc0ccade9359caeeccaaa5c03a43"
+    },
+    "src/loader/vmu_native_sdk_coherence_stage.inc": {
+      "mode": "100644",
+      "blob": "c8f16cf11b5f47b63f156df66b51adee9c190e45"
+    },
+    "src/loader/vmu_native_sdk_sci_route_stage.inc": {
+      "mode": "100644",
+      "blob": "a09a99489043464dacf24e5ef8f6c9b434e799ee"
+    },
+    "src/loader/vmu_native_session_stage.inc": {
+      "mode": "100644",
+      "blob": "9321c22d5d8aaa2ccfe018a03ec3d7bb7f4af03f"
+    },
+    "src/loader/vmu_native_split_controller.inc": {
+      "mode": "100644",
+      "blob": "69a14c4e2ffbfafae7a904f3fb257779a6071ff8"
+    },
+    "src/loader/vmu_native_trace.c": {
+      "mode": "100644",
+      "blob": "542e39cbf49f43c3347641382fd2e1154380e1b5"
+    },
+    "src/loader/vmu_native_trace_hooks.S": {
+      "mode": "100644",
+      "blob": "80e7abcfb3bac2ac224d6e84ccb6a1ab5fdc6657"
+    },
+    "src/loader/vmu_native_transport.h": {
+      "mode": "100644",
+      "blob": "74ab5a2ae5f3a95d845010fbd34176ffe17207ec"
+    },
+    "src/loader/vmu_native_wait_capture.inc": {
+      "mode": "100644",
+      "blob": "2adc84ad3d2705e1bffcaf0aa71cd5b73f90f45b"
+    },
+    "src/loader/vmu_native_wait_report.inc": {
+      "mode": "100644",
+      "blob": "d3f544acb3ff7b748527b1c0849eee88d128058b"
+    },
+    "src/loader/vmu_native_worker.c": {
+      "mode": "100644",
+      "blob": "b8d393b57a3412b4bbf44cec62cf64c8b9c20bff"
+    },
+    "src/loader/vmu_native_worker.ld": {
+      "mode": "100644",
+      "blob": "05f71445cfd749f6c770deb3445973c9f6b159c1"
+    },
+    "src/loader/vmu_native_worker_call.S": {
+      "mode": "100644",
+      "blob": "c60b257d5914f3d07269727e780ff8b871dcfcc5"
+    },
+    "src/loader/vmu_native_worker_exports.S": {
+      "mode": "100644",
+      "blob": "3bfe13e6d79b473bfd58927c3c0082b2e412b3e2"
+    },
+    "src/loader/vmu_native_worker_stage.inc": {
+      "mode": "100644",
+      "blob": "5179c70d490181a24e130809be0b7ef9a60cd37f"
+    },
+    "src/loader/vmu_persist_stage.c": {
+      "mode": "100644",
+      "blob": "d3c6826c50a77d672002431126a9aa39839c2622"
+    },
+    "src/loader/vmu_readonly_overlay.c": {
+      "mode": "100644",
+      "blob": "5f47a7cbd4cdc3e42e67914004dad6e0c4170394"
+    },
+    "src/loader/vmu_sd_lease.inc": {
+      "mode": "100644",
+      "blob": "e4d155cbfb8083077d982443cbcff435af35513e"
+    },
+    "src/loader/vmu_sd_readonly_resident.ld": {
+      "mode": "100644",
+      "blob": "5514748b08cc534206728b387303829199351536"
+    },
+    "src/loader/vmu_service.c": {
+      "mode": "100644",
+      "blob": "1491025868c5eb0ca3c4ec822924b3a34f17be63"
+    },
+    "src/loader/vmu_volatile_chain.c": {
+      "mode": "100644",
+      "blob": "f1897c5bef5725c318f14679d96d255dc43ea8e0"
+    },
+    "src/loader/wwp_ce_stream_status.inc": {
+      "mode": "100644",
+      "blob": "012b62d905c411215085dabcc45c58894e2b3843"
+    }
+  }
+}
