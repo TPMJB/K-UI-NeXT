@@ -1,5 +1,12 @@
 # K-UI work and release requirements
 
+The current project goal is one maintained, broadly compatible launcher build
+which incorporates the lessons already established across the readers and VMU
+implementations. Follow `docs/universal-loader-roadmap.md` for integration order
+and remaining coverage. Optional VMU and read-ahead depend on each runtime's
+proved capabilities; preserve working demand-only and exact-adapter routes
+while extending shared support.
+
 Read `docs/accepted-progress.md` before selecting a build recipe, assembling an
 update, or requesting console tests. It records component-specific acceptance,
 preservation requirements and unresolved integration work. A newer commit or a

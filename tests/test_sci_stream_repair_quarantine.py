@@ -47,7 +47,12 @@ def main():
  before={n:sha(ROOT/n)for n in names}
  current=(ROOT/names[0]).read_text()
  if current.count(NEW_GUARD)!=1:raise AssertionError('Exact quarantine guard changed; audit the reference control')
- old=current.replace(NEW_GUARD,'        if(crc != sent) {').encode()
+ # CRC table factoring is independently exhaustively equivalent. Restore its
+ # exact, complete-source-hash-bound predecessor before reconstructing this
+ # older quarantine witness; retain the original historical hash below.
+ from test_ce_crc16_factoring import fragments
+ _,pre_crc,_=fragments()
+ old=pre_crc.replace(NEW_GUARD,'        if(crc != sent) {').encode()
  if hashlib.sha256(old).hexdigest()!=OLD_SHA:raise AssertionError('Full historical SCI source hash differs')
  report=dict(schema='kui.sci.lost-byte-quarantine.v1',status='FAIL',source_sha256=before,
   baseline_sci_sha256=OLD_SHA,profiles={},hardware_executed=False,

@@ -3,6 +3,9 @@
 #include "kui/native_session.h"
 #include <stdbool.h>
 #include <string.h>
+#ifdef KUI_RETAIL_CE
+#include "kui/retail_ce_payload_copy.h"
+#endif
 #if KUI_GUI_FAST_CRC32
 #include "../loader/stage_fast_crc32.h"
 #endif
@@ -350,7 +353,11 @@ static enum kui_game_result file_read(struct kui_retail_image *image,
             if(failed) return KUI_GAME_IO;
             ++image->blocks_read; image->cached_lba = card_lba; image->cache_valid = 1;
         }
+#ifdef KUI_RETAIL_CE
+        kui_retail_ce_payload_copy(out,image->block+inside,take);
+#else
         memcpy(out, image->block + inside, take);
+#endif
         out += take; bytes -= take; offset += take;
     }
     return KUI_GAME_OK;

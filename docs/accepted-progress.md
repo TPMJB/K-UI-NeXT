@@ -40,6 +40,25 @@ counts alone do not establish a user-visible speedup. See
 [the shared policy](global-launch-policy.md) and
 [the accepted read-recovery repair](sci-damaged-block-reread.md).
 
+## Universal loader integration started: 2026-11-06
+
+The owner requested an ordered roadmap and implementation toward one broadly
+compatible maintained build. Start from Main `d393b859a9ee`; the roadmap is
+`universal-loader-roadmap.md`. Shared correctness and reproducible deployment
+come before new service memory layouts, native SDK extensions, coordinated
+CDDA streaming and broader lifecycle/format/transport coverage.
+
+The first integration targets generic CE payload-write width, a recorded
+ordinary/CE/CDDA build plan, fail-closed cold-rollout output and actual native
+service geometry reporting. It preserves the accepted collection components
+and existing worker reservations. The already merged CE completion fixes and
+SCI lost-byte guard remain required in affected rebuilt readers.
+
+This entry records authorized scope, not console acceptance, completed global
+deployment, new virtual-card support for DOA2 or a CDDA/FMVs performance result.
+Record build/package outcomes and any refused family before offering a new
+installation. Keep accepted Smash gameplay and return results above intact.
+
 ## 0a hardware report: damaged reconstructed block reaches the sector parser
 
 The owner's three0a2ddd9bb9b6 photos show FN12 PIO_TRANSFER in the original VC2
