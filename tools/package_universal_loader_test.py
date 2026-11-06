@@ -70,7 +70,7 @@ def accepted_smash(path):
     for kind, name in HELPERS.items():
         raw = files['KUI/' + name]
         child = 'KUI/' + STAGES[2 if kind == 1 else 3]
-        require(len(raw) == 49152 and files[child][64:].count(helper_profile(raw, kind)) == 1,
+        require(len(raw) == 49152 and files[child][64:].count(helper_profile(raw, kind, embedded=True)) == 1,
                 'Accepted Smash child/helper ownership differs: ' + name)
     return files
 

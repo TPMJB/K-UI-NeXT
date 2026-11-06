@@ -114,19 +114,17 @@ class Primitive:
         if self.r[8:16]!=self.before[8:16]:raise ValueError('CRC callee-save damage')
         return self
 
-def resident_hotloop(path):
-    """Observe the actual linked byte-update loop, including LTO allocation.
-
-    Select a backward conditional loop containing normalized register CRC
-    update. Its closed instruction vocabulary admits no stack/data access
-    except a halfword table lookup and PC literals. Larger outer loops may
-    save reverse/cursor context; that is not a per-byte accumulator spill.
-    """
-    image=read_elf(path);at,code,_=symbol_bytes(image,'_kui_sci_stream_take',2)
-    table,table_bytes,_=symbol_bytes(image,'_ce_crc16_table',1)
-    if len(table_bytes)!=256:raise ValueError('Linked CE table is not the factored128-entry table')
-    matches=[]
+def _function_hotloops(at,code,table):
+    """Find bounded CRC loops and track the one permitted temporary index slot."""
     def word(pc):return struct.unpack_from('<H',code,pc-at)[0]
+    # Saved-register pushes are separate. Only a fixed local allocation before
+    # the first branch can own the optional SP-relative temporary index slot.
+    local_frame=0
+    for off in range(0,min(len(code),96)-1,2):
+        w=word(at+off)
+        if w&0xff00 in (0x8900,0x8b00,0x8d00,0x8f00) or w>>12 in (0xa,0xb) or w==0x000b:break
+        if w&0xff00==0x7f00 and signed(w&255,8)<0:local_frame-=signed(w&255,8)
+    matches=[]
     for offset in range(0,len(code)-1,2):
         pc=at+offset;op=word(pc)
         if op&0xff00 not in (0x8900,0x8b00,0x8d00,0x8f00):continue
@@ -140,30 +138,126 @@ def resident_hotloop(path):
             if any((x&0xf00f)==0x600d and (x>>8)&15==reg and (x>>4)&15==reg for _,x in ops) and any(
                 (x&0xf00f)==0x200a and (x>>8)&15==reg for _,x in ops):accumulators.append(reg)
         if len(accumulators)!=1:continue
-        allowed=True;table_literal=False
+        acc=accumulators[0];tags=['unknown']*16;tags[acc]='accumulator'
+        allowed=True;table_literal=False;stores=[];loads=[];slots={};index_test=False
         for p,w in ops:
-            low=w&0xf00f
+            n=(w>>8)&15;m=(w>>4)&15;low=w&0xf00f
             if w>>12==0xd:
                 loc=((p+4)&~3)+4*(w&255)
-                if at<=loc and loc+4<=at+len(code):
-                    table_literal|=int.from_bytes(code[loc-at:loc-at+4],'little')==table
-                continue
-            if w>>12==9:continue
+                if not at<=loc or loc+4>at+len(code):allowed=False;break
+                literal=int.from_bytes(code[loc-at:loc-at+4],'little')
+                table_literal|=literal==table;tags[n]='table-base' if literal==table else 'constant';continue
+            if w>>12==9:tags[n]='constant';continue
             if w&0xff00 in (0x8900,0x8b00,0x8d00,0x8f00):
                 target=p+4+2*signed(w&255,8)
                 if not start<=target<=end:allowed=False
                 continue
-            if (w==9 or low in (0x6003,0x600c,0x600d,0x200a,0x300c,0x000d) or
-                w&0xf0ff in (0x4019,0x4018,0x4010) or w&0xff00 in (0xc800,0xc900)):
+            if w>>12==1 and n==15:
+                slot=(w&15)*4
+                if tags[m]!='index' or slot+4>local_frame or slots:allowed=False;break
+                slots[slot]='index';stores.append((p,slot,m));continue
+            if w>>12==5 and m==15:
+                slot=(w&15)*4
+                if slots.get(slot)!='index' or loads or slot+4>local_frame:allowed=False;break
+                tags[n]='index';loads.append((p,slot,n));continue
+            if low==0x6003:tags[n]=tags[m];continue
+            if low==0x600c:
+                tags[n]='byte' if tags[m] not in ('accumulator','high-accumulator') else 'partial-accumulator';continue
+            if low==0x600d:
+                tags[n]='shifted-accumulator' if n==acc else tags[m];continue
+            if w&0xf0ff==0x4019:
+                tags[n]='high-accumulator' if tags[n]=='accumulator' else 'unknown';continue
+            if w&0xf0ff==0x4018:
+                tags[n]='shifted-accumulator' if n==acc else 'unknown';continue
+            if low==0x200a:
+                tags[n]='index' if {tags[n],tags[m]}=={'byte','high-accumulator'} else (
+                    'accumulator' if n==acc else 'unknown');continue
+            if low==0x300c:tags[n]='unknown';continue
+            if low==0x000d:tags[n]='table-value';continue
+            if w&0xff00==0xc800:
+                if (w&255)==128 and tags[0]=='index':index_test=True
                 continue
-            allowed=False
+            if w==9 or w&0xf0ff==0x4010 or w&0xff00==0xc900:continue
+            allowed=False;break
+        if stores and (len(stores)!=1 or len(loads)!=1 or stores[0][1]!=loads[0][1] or
+                       stores[0][0]>=loads[0][0] or not index_test):allowed=False
         if allowed and table_literal:
-            matches.append(dict(begin=hex(start),end=hex(end),accumulator_register='r'+str(accumulators[0]),
-                instruction_sites=len(ops),per_byte_memory_stores=0,per_byte_stack_accesses=0,
-                loop_sha256=sha(code[start-at:end-at])))
-    if len(matches)!=1:raise ValueError('Could not uniquely qualify register-only linked CRC byte loop')
-    return dict(elf=str(path),elf_sha256=sha(image[0]),take_sha256=sha(code),table_bytes=len(table_bytes),
-        table_sha256=sha(table_bytes),**matches[0],hardware_executed=False)
+            matches.append(dict(begin=hex(start),end=hex(end),accumulator_register='r'+str(acc),
+                instruction_sites=len(ops),per_byte_memory_stores=len(stores),
+                per_byte_stack_accesses=len(stores)+len(loads),accumulator_spills=0,
+                temporary_index_stack_slot=stores[0][1] if stores else None,
+                local_frame_bytes=local_frame,loop_sha256=sha(code[start-at:end-at]),
+                _stores=stores,_loads=loads))
+    return matches
+
+def _qualified_hotloop(functions,table):
+    # Aliases and overlapping function records must not count one instruction
+    # range twice. Independent additional loop bodies still fail uniqueness.
+    found={}
+    for name,at,code in functions:
+        for match in _function_hotloops(at,code,table):
+            key=(match['begin'],match['end']);entry=found.setdefault(key,dict(
+                match,owner_symbols=[],owner_address=at,owner_code=code))
+            entry['owner_symbols'].append(name)
+    if len(found)!=1:raise ValueError('Could not uniquely qualify the actual linked CRC byte-loop owner')
+    result=next(iter(found.values()));result['owner_symbols']=sorted(set(result['owner_symbols']))
+    return result
+
+def _hotloop_negative_controls(functions,table,result):
+    at=result['owner_address'];code=result['owner_code'];acc=int(result['accumulator_register'][1:])
+    if not result['_stores']:return []
+    store_pc,_,_=result['_stores'][0]
+    controls=[]
+    direct=bytearray(code);w=struct.unpack_from('<H',direct,store_pc-at)[0]
+    struct.pack_into('<H',direct,store_pc-at,(w&~0xf0)|(acc<<4))
+    controls.append(('accumulator-store',direct))
+    alias=bytearray(code)
+    # Replace the last index-producing XOR before the store by a raw
+    # accumulator alias. The store's register number itself stays unchanged.
+    for p in range(store_pc-2,int(result['begin'],16)-1,-2):
+        w=struct.unpack_from('<H',alias,p-at)[0]
+        if w&0xf00f==0x200a:
+            n=(w>>8)&15;struct.pack_into('<H',alias,p-at,0x6003|(n<<8)|(acc<<4));break
+    else:raise ValueError('Index-store provenance control has no producing XOR')
+    controls.append(('aliased-accumulator-store',alias))
+    load_pc,_,_=result['_loads'][0];unmatched=bytearray(code)
+    w=struct.unpack_from('<H',unmatched,load_pc-at)[0]
+    struct.pack_into('<H',unmatched,load_pc-at,(w&~15)|((w+1)&15))
+    controls.append(('unmatched-index-reload',unmatched))
+    rejected=[]
+    for label,changed in controls:
+        replacements=[(name,base,bytes(changed) if base==at and body==code else body)
+                      for name,base,body in functions]
+        try:_qualified_hotloop(replacements,table)
+        except ValueError:rejected.append(label)
+        else:raise ValueError('CRC loop mutation admitted: '+label)
+    return rejected
+
+def resident_hotloop(path):
+    """Qualify the actual FUNC owner after LTO, retaining real index traffic.
+
+    The accumulator remains a normalized SH register. Ordinary CE LTO may
+    save/reload the computed temporary index once inside its fixed local frame;
+    only a matched index-derived pair is admitted, never the accumulator or a
+    register alias of it. Full resident stack audits remain separate gates.
+    """
+    image=read_elf(path);table,table_bytes,_=symbol_bytes(image,'_ce_crc16_table',1)
+    if len(table_bytes)!=256:raise ValueError('Linked CE table is not the factored128-entry table')
+    functions=[]
+    for name,(_,size,kind,_) in image[4].items():
+        if kind==2 and size:
+            at,code,_=symbol_bytes(image,name,2);functions.append((name,at,code))
+    result=_qualified_hotloop(functions,table)
+    mutations=_hotloop_negative_controls(functions,table,result)
+    # Repeated symbols for the same real owner must leave unique discovery
+    # unchanged, without substituting a fictional source-function address.
+    alias=('_qualification_alias',result['owner_address'],result['owner_code'])
+    duplicate=_qualified_hotloop([*functions,alias],table)
+    if duplicate['begin']!=result['begin']:raise ValueError('Owner alias changes CRC loop discovery')
+    owner_code=result.pop('owner_code');result.pop('owner_address');result.pop('_stores');result.pop('_loads')
+    return dict(elf=str(path),elf_sha256=sha(image[0]),owner_sha256=sha(owner_code),
+        table_bytes=len(table_bytes),table_sha256=sha(table_bytes),**result,
+        rejected_spill_mutations=mutations,owner_alias_deduplicated=True,hardware_executed=False)
 
 def run(command):
     return subprocess.run(command,cwd=ROOT,text=True,capture_output=True,

@@ -39,7 +39,7 @@ class UniversalDelivery(unittest.TestCase):
                 kind = index - 1
                 helper = bytes([kind]) + bytes(49151)
                 self.smash['KUI/' + delivery.HELPERS[kind]] = helper
-                payload += profile(helper, kind)
+                payload += profile(helper, kind, embedded=True)
             self.smash['KUI/' + name] = envelope(payload + bytes(-len(payload) % 4),
                 (len(payload) + 3) & ~3, delivery.ACCEPTED_BUILD)
         with zipfile.ZipFile(self.accepted, 'w') as archive:
@@ -104,6 +104,24 @@ class UniversalDelivery(unittest.TestCase):
                 self.build()
         self.assertFalse(self.output.exists())
         self.assertFalse(self.evidence.exists())
+
+    def test_historical_external_helper_profile_cannot_replace_embedded_v2(self):
+        for kind, helper_name in delivery.HELPERS.items():
+            with self.subTest(kind=kind):
+                changed = dict(self.smash)
+                helper = changed['KUI/' + helper_name]
+                child = 'KUI/' + delivery.STAGES[2 if kind == 1 else 3]
+                payload = changed[child][64:]
+                current, historical = profile(helper, kind, embedded=True), profile(helper, kind)
+                self.assertEqual(payload.count(current), 1)
+                payload = payload.replace(current, historical)
+                changed[child] = envelope(payload, len(payload), delivery.ACCEPTED_BUILD)
+                archive = self.base / ('historical-' + str(kind) + '.zip')
+                with zipfile.ZipFile(archive, 'w') as target:
+                    for name, body in changed.items():target.writestr(name, body)
+                with patch.object(delivery, 'ACCEPTED_ZIP_SHA256', hashlib.sha256(archive.read_bytes()).hexdigest()):
+                    with self.assertRaisesRegex(ValueError, 'child/helper ownership'):
+                        delivery.accepted_smash(archive)
 
     def test_changed_accepted_gui_bundle_or_its_actual_bounds_refuse(self):
         members = {name: self.smash['KUI/' + name] for name in delivery.STAGES}
