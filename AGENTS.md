@@ -84,6 +84,18 @@ build label, host instruction count or compile success is not a console timing.
 If the combined candidate regresses, isolate or revert against the measured
 baseline instead of adding another combined optimization.
 
+## Original executable evidence
+
+For a changed SDK/game family, run the relevant production/linked tests against
+the actual supplied executables that are available. Stored hashes, authored
+fixtures and a successful compile complement that evidence; they do not replace
+an available original. Keep an input inventory with full hashes and distinguish
+original-backed execution, authored models, linked admission and console tests.
+If an original is unavailable, state that limit explicitly. Never distribute
+private game executables, disc data or saves in source/evidence/test packages.
+An external reviewer's original-backed result is attributed to that reviewer,
+not reported as a local test or Dreamcast execution.
+
 Startup performance is a shared loader requirement. Batch consecutive reads
 and keep every SD block CRC check by default across supported launch families;
 do not make the same optimization a new title-specific opt-in. Every installed
