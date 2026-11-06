@@ -1,0 +1,62 @@
+{
+  "schema": "kui.sci.erasure-crc-counterexample.v1",
+  "status": "INDEPENDENT_COUNTEREXAMPLE_CONFIRMED",
+  "generation": "Authored512bytes: byte[i]=(31*i+7)&255; replace bytes176..191 with00 FF FF FF FF FF FF FF FF FF FF 00 00 00 00 01.",
+  "origin": "Entirely authored test data; no original game bytes.",
+  "crc": {
+    "algorithm": "CRC16-CCITT, polynomial0x1021, initial0, MSB-first, no final XOR",
+    "reference": "Independent explicit eight-bit shifts per input byte; no table, production rebuild, or native implementation used.",
+    "correct": "0x9bdb",
+    "erased_and_corrupted": "0x6550",
+    "wrong_reconstructed": "0x9bdb"
+  },
+  "changes": [
+    {
+      "offset": 145,
+      "role": "known erased byte",
+      "correct": "0x96",
+      "received_placeholder": "0x00",
+      "matching_reconstruction": "0x5d",
+      "delta_from_correct": "0xcb"
+    },
+    {
+      "offset": 176,
+      "role": "next raw sector sync byte0",
+      "correct": "0x00",
+      "received": "0x01",
+      "delta": "0x01"
+    },
+    {
+      "offset": 177,
+      "role": "next raw sector sync byte1",
+      "correct": "0xff",
+      "received": "0x8b",
+      "delta": "0x74"
+    }
+  ],
+  "erasure_search": {
+    "offset": 145,
+    "candidates_checked": 256,
+    "unique_crc_matching_value": "0x5d",
+    "correct_value_is_a_matching_candidate": false
+  },
+  "parser_consequence": {
+    "raw_header_start_in_block": 176,
+    "required_sync_byte0": "0x00",
+    "wrong_sync_byte0": "0x01",
+    "required_sync_byte1": "0xff",
+    "wrong_sync_byte1": "0x8b",
+    "expected_result": "KUI_GAME_MODE from header_byte"
+  },
+  "sha256": {
+    "correct": "7e1f68ecd882c73952d3f86eac56ad3423717fefb5c5da97a77442e6db42b97c",
+    "erased_and_corrupted": "b9be65bc6c08cdec5d4378589d355b813020dcf0cc49b18680810fd002c5e8d2",
+    "wrong_reconstructed": "1cf97cd2703c7fb3bb4be358f15afc315f3a20d1d4f34189f4d71fd771bea9b5"
+  },
+  "bounds": {
+    "not_a_console_capture": true,
+    "physical_fault_pattern_proved": false,
+    "actual_console_source_bytes_recovered": false,
+    "purpose": "Show that one known erasure plus additional damage can yield a unique wrong CRC-matching reconstruction; matchingCRC alone cannot authenticate reconstructed bytes."
+  }
+}

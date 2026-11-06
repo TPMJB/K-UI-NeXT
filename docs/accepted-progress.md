@@ -1,5 +1,24 @@
 # K-UI accepted progress
 
+## 0a hardware report: damaged reconstructed block reaches the sector parser
+
+The owner's three0a2ddd9bb9b6 photos show FN12 PIO_TRANSFER in the original VC2
+driver, loading `VC2/BIN/COMMON/F_COMMON.BIN`. The sector parser rejects a header
+after0x69800 bytes. The accepted source block retains a DMA lost-byte marker;
+the mapper succeeded and the bus fault flag is clear. The blue pages are the
+now-visible terminal report. This package retained91fa's actual current helper
+and arbitration code; it did not roll them back. Fresh-first startup is still
+not reliable.
+
+An old-production negative control now demonstrates that CRC erasure repair
+can accept a wrong block with an invalid raw-sector header. Shared SCI source
+now rejects all reconstructed blocks and uses its existing bounded same-LBA
+retry/programmed-I/O fallback before game delivery. Normal batching, CRC checks,
+buffer geometry and current helper implementations remain required. This is
+a supported repair to the observed failure path, not proof of the console's
+exact corruption or a declaration that every freeze is solved. See
+[the repair and evidence](sci-damaged-block-reread.md).
+
 ## 91fa hardware rejection: repeated VC2 fails before its VMU message
 
 The owner tested the delivered91fa package and reported this exact sequence:

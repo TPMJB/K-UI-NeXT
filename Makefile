@@ -59,6 +59,12 @@ test-ce-gd-completion-lifecycle:
 	python3 tests/test_ce_gd_completion_lifecycle.py --cc "$(CC)" --report build/shared-loader-audit/ce-gd-completion-lifecycle.json
 test: test-runtime-module-bundle-make test-ce-gd-completion-lifecycle
 
+.PHONY: test-sci-stream-quarantine
+test-sci-stream-quarantine:
+	@mkdir -p build/sci-stream-quarantine
+	python3 tests/test_sci_stream_repair_quarantine.py --cc "$(CC)" --report build/sci-stream-quarantine/report.json
+test: test-sci-stream-quarantine
+
 .PHONY: test-updater
 test-updater: test-runtime-module-bundle-make
 test-updater: build/test-update build/test-update-v2 build/test-update-handoff build/update-image build/update-boot
