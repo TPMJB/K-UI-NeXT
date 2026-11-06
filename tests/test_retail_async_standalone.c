@@ -296,17 +296,19 @@ static void structural_owner_checks(void) {
 }
 #endif
 #if KUI_NATIVE_STANDALONE_STRUCTURAL && !defined(KUI_STANDALONE_DEMAND_ASAN)
-/* The early Shinobi family publishes one common handler as both roles. Its
- * live INTEVT copy is 13 words: only the R0 scratch (11) may differ, the
- * common (12) must be the reviewed one, and words past the stub are not its. */
-static void early_context(volatile uint32_t *copy,uint32_t common) {
+/* The early Shinobi family retains only its proved plain/nesting handlers.
+ * Its live INTEVT copy is 13 words, with only R0 scratch mutable. The
+ * install routine changes both source templates before copying its choice. */
+static void early_context(volatile uint32_t *copy,uint32_t common,
+    uint32_t alternate,uint32_t selected) {
     const struct kui_native_standalone_source descriptor={
-        TEST_VECTOR,common,common,TEST_DEFAULT,KUI_NATIVE_STANDALONE_SOURCE_MAGIC};
+        TEST_VECTOR,common,alternate,TEST_DEFAULT,KUI_NATIVE_STANDALONE_SOURCE_MAGIC};
     memcpy(R.vector100,&descriptor,sizeof(descriptor));
     R.vector600[KUI_NATIVE_SDK_SCI_DEFAULT_INDEX]=descriptor.original;
     volatile uint32_t *original=(void *)(uintptr_t)TEST_VECTOR;
     for(unsigned i=0u;i<24u;++i)original[i]=UINT32_C(0x90000000)+i;
-    original[11]=0u;original[12]=common;
+    original[-1]=selected; /* EXPEVT template's common word. */
+    original[11]=0u;original[12]=selected;
     for(unsigned i=0u;i<24u;++i)copy[i]=original[i];
     copy[11]=UINT32_C(0x11223344);
     for(unsigned i=13u;i<24u;++i)copy[i]=UINT32_C(0xdead0000)+i;
@@ -314,9 +316,12 @@ static void early_context(volatile uint32_t *copy,uint32_t common) {
 }
 static void early_family_late_bind(void) {
     const uint32_t common=(TEST_VECTOR+0x34u)&UINT32_C(0x1fffffff);
+    const uint32_t nesting=common+0x14cu;
     volatile uint32_t *copy=(void *)(uintptr_t)(TEST_VBR+0x600u);
-    for(int changed=-1;changed<13;++changed)for(unsigned variant=0u;variant<2u;++variant) {
-        setup_standalone(true,false,false);early_context(copy,common);
+    for(unsigned mode=0u;mode<3u;++mode)
+      for(int changed=-1;changed<13;++changed)for(unsigned variant=0u;variant<2u;++variant) {
+        const uint32_t alternate=mode?nesting:common,selected=mode==2u?nesting:common;
+        setup_standalone(true,false,false);early_context(copy,common,alternate,selected);
         if(changed>=0)copy[changed]^=variant?UINT32_C(0x80000000):1u;
         (void)gd(KUI_GD_DRIVE,STATUS,0u);
         bool bound=changed<0 || changed==11;
@@ -325,12 +330,25 @@ static void early_family_late_bind(void) {
             !R.vector600[KUI_NATIVE_SDK_SCI_COOKIE_INDEX] && slots()[0]==TEST_DEFAULT &&
             slots()[1]==TEST_DEFAULT && !publication_visits);
         ++source_cases;
+      }
+    /* Source templates and live copy must name the same proved handler.
+     * An unproved alternate, mixed selection, or unknown target refuses. */
+    for(unsigned bad=0u;bad<5u;++bad) {
+        setup_standalone(true,false,false);early_context(copy,common,nesting,nesting);
+        volatile uint32_t *original=(void *)(uintptr_t)TEST_VECTOR;
+        switch(bad) {
+        case 0u:R.vector100[2]=common;break;
+        case 1u:original[-1]=common;break;
+        case 2u:copy[12]=common;break;
+        case 3u:original[12]=common;break;
+        default:original[-1]=original[12]=copy[12]=nesting+4u;break;
+        }
+        (void)gd(KUI_GD_DRIVE,STATUS,0u);
+        CHECK(!R.vector600[KUI_NATIVE_SDK_SCI_COOKIE_INDEX] && slots()[0]==TEST_DEFAULT &&
+            slots()[1]==TEST_DEFAULT && !publication_visits);++source_cases;
     }
-    /* A live copy naming another handler than the reviewed common refuses. */
-    setup_standalone(true,false,false);early_context(copy,common);copy[12]=common+0x14cu;
-    (void)gd(KUI_GD_DRIVE,STATUS,0u);
-    CHECK(!R.vector600[KUI_NATIVE_SDK_SCI_COOKIE_INDEX] && slots()[0]==TEST_DEFAULT);++source_cases;
 }
+
 #endif
 int main(void) {
 #if KUI_NATIVE_STANDALONE_STRUCTURAL && !defined(KUI_STANDALONE_DEMAND_ASAN)

@@ -13,6 +13,10 @@ complete routed-module coverage and proof of the final reader actually used.
 The current operation-level corrections and the remaining allocation-proof
 cost are recorded in `shared-game-launch-performance.md`.
 
+The separately authorized `f7229ee` splash repair restores the original RAM
+artwork immediately after CD handoff. It is a narrow display exception, not a
+Games reader change or evidence of a gameplay/performance improvement.
+
 This work starts at Main `d393b859a9ee23d372daca54ef13c7839072097a` on
 2026-11-06, after acceptance of Smash Pack source `cc81e63ca4d2`.
 The initial implementation branch is `codex/universal-loader-integration`.
@@ -123,7 +127,7 @@ of these properties.
 | Runtime | Existing working route | Shared-service work |
 | --- | --- | --- |
 | DOA2 | Standalone demand reader | Prove memory ownership before adding virtual VMU or cache; earlier apparent free arenas were contradicted or incomplete |
-| Sonic Adventure | Ordinary/standalone New | Executable-loader and exit lifetime |
+| Sonic Adventure | Historical ordinary/standalone New play reports | Correct the standalone early-SDK nesting bind; restore the original executable for linked confirmation, then qualify hardware; executable-loader and exit lifetime still block shared VMU |
 | Silver | Exact Standard VMU adapter | Executable reclamation, exit consumers and lock behavior |
 | Crazy Taxi | Standalone New | Reviewed retained arena |
 | Zombie Revenge | Standalone New | Six-input Maple layout and allocator/reservation |
@@ -135,6 +139,16 @@ Keep successful image results for Time Stalkers and EGG. Preserve exact
 Standard adapters until their shared replacement qualifies. Admit structural
 SDK families through source-bound contracts rather than game-title guesses.
 No percentage of universal game compatibility is implied by the current corpus.
+
+The delivered standalone New reader exported the early plain handler in both
+roles, losing an already proved nesting alternative. The current generic SDK
+correction retains that alternative and checks agreement between both source
+templates and the live copied stub. An original-backed EGG linked-instruction
+model reproduces the old nesting refusal and the candidate's bind; console qualification is
+pending. The Background 7c route already handled that alternative, so EGG's
+Background virtual-VMU result is unaffected. A Library index naming a Sonic
+Adventure archive did not restore its missing executable and supplies no
+additional original-backed proof. See `native-zr-family.md`.
 
 Completion evidence per changed family: launch, loading-heavy gameplay, virtual
 card detection, game-requested save, power-cycle reload and appropriate exit.
@@ -153,6 +167,14 @@ count, completion cadence, audio-refill deadlines and masked execution windows.
 Retained bad Toy/Armada intros did not always have an active CDDA worker, so
 CDDA traffic alone is not an established cause. A finite buffer can absorb
 stalls but cannot repair sustained undersupply.
+
+The delivered CE CRC16 table folding preserves all checked bits but adds
+per-byte conditional work. Armada FMV timings from that cohort are therefore
+not a clean baseline for the original full-table receive loop. Restoring the
+256-entry table with unchanged resident/stack guards across generic CE and
+all four CE music profiles is still being qualified; current fit trials do
+not establish an installed fix or an FMV improvement. Keep coordinated native
+CDDA/WinCE streaming, service combinations and hardware acceptance outstanding.
 
 Keep demand traffic and audio deadlines ahead of speculative reads. Deferred
 VMU commits must retain journal/readback and acknowledgement ordering. Do not

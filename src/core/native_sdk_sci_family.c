@@ -39,7 +39,7 @@ int kui_native_sdk_sci_family_find(const void *image,size_t image_bytes,uint32_t
     }
     if(!vectors) {
         struct early_family early;int found=early_family(p,image_bytes,load,&early);
-        if(found==1)*out=(struct kui_native_sdk_sci_family){early.stub,early.common,early.common,early.original};
+        if(found==1)*out=(struct kui_native_sdk_sci_family){early.stub,early.common,early.nesting?early.nesting:early.common,early.original};
         return found;
     }
     if(image_bytes-vector_at<96u)return -1;

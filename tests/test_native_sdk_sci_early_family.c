@@ -75,13 +75,22 @@ static int discover(struct kui_native_sdk_sci_route_plan *out) {
     int found=kui_native_sdk_sci_family_find(image,bytes,LOAD,&family);
     CHECK(reads==before);
     if(result==1) {
-        /* The finder's roles are unchanged: the plain handler as both. */
+        /* The retained roles cover only independently proved handlers. */
         uint32_t common=role(LOAD+(uint32_t)stub_at+0x34u);
         CHECK(found==1 && family.vector==LOAD+(uint32_t)stub_at && family.normal==common &&
-              family.fpu==common && family.original==out->previous && out->common==live_common);
+              (family.fpu==common || family.fpu==nesting_handler()) &&
+              (out->common==common || out->common==family.fpu) &&
+              family.original==out->previous && out->common==live_common);
     } else if(found!=1) {CHECK(found==result);zero(&family,sizeof(family));}
     if(result!=1)zero(out,sizeof(*out));
     return result;
+}
+/* A plain selected source remains admissible when its optional nesting
+ * proof is damaged, but that damage must remove the retained alternate. */
+static void exported_alternate(uint32_t expected) {
+    struct kui_native_sdk_sci_family family;
+    CHECK(kui_native_sdk_sci_family_find(image,bytes,LOAD,&family)==1);
+    CHECK(family.normal==plain_handler() && family.fpu==expected);
 }
 static void good(void) {
     seed();struct kui_native_sdk_sci_route_plan out;
@@ -155,7 +164,7 @@ static void good_nesting(void) {
     seed_nesting();struct kui_native_sdk_sci_route_plan out;
     CHECK(discover(&out)==1 && out.common==role(LOAD+N_AT) && out.vbr==vbr &&
           out.previous==role(LOAD+(uint32_t)default_at));
-    CHECK(!memcmp(image,live,bytes));templates(plain_handler());
+    CHECK(!memcmp(image,live,bytes));exported_alternate(nesting_handler());templates(plain_handler());
 }
 static int nesting_result(void) {
     struct kui_native_sdk_sci_route_plan out;int result=discover(&out);
@@ -172,14 +181,14 @@ static void nesting_checks(void) {
         for(size_t at=0u;at<windows[w][1];at++)for(unsigned bit=0u;bit<8u;bit+=3u) {
             image[windows[w][0]+at]^=(uint8_t)(1u<<bit);
             seed_nesting();CHECK(nesting_result()==-1);
-            seed();CHECK(discover(&out)==1);
+            seed();CHECK(discover(&out)==1);exported_alternate(plain_handler());
             image[windows[w][0]+at]^=(uint8_t)(1u<<bit);++mutations;
         }
     for(size_t i=0u;i<sizeof(nesting_roles)/sizeof(nesting_roles[0]);i++)
         for(unsigned bit=0u;bit<32u;bit++) {
             uint32_t saved=word(image+nesting_roles[i]);put(image+nesting_roles[i],saved^(UINT32_C(1)<<bit));
             seed_nesting();CHECK(nesting_result()==-1);seed();CHECK(discover(&out)==1);
-            put(image+nesting_roles[i],saved);++mutations;
+            exported_alternate(plain_handler());put(image+nesting_roles[i],saved);++mutations;
         }
     /* Its live code, read before any slot. */
     for(size_t at=0u;at<0x180u;at++) {
@@ -450,7 +459,8 @@ static void probe(const char *path) {
     image=p;bytes=n;live=malloc(n);CHECK(live);
     struct kui_native_sdk_sci_family family;int found=kui_native_sdk_sci_family_find(p,n,LOAD,&family);
     int result=found,nesting=0,ran_nesting=0,ran_plain=0;
-    if(found==1 && family.vector-LOAD+0x34u<=n && family.normal==family.fpu) {
+    if(found==1 && family.vector-LOAD+0x34u<=n && (family.normal&UINT32_C(0x1fffffff))==
+        (family.vector&UINT32_C(0x1fffffff))+0x34u) {
         stub_at=family.vector-LOAD;area=family.original&UINT32_C(0xe0000000);
         default_at=((family.original&UINT32_C(0x1fffffff))|UINT32_C(0x80000000))-LOAD;
         vbr=UINT32_C(0x8c00f400);seed();
@@ -465,7 +475,8 @@ static void probe(const char *path) {
         ran_plain=executed(p,n,init,0u,0u,&handler);
         if(ran_plain==1)CHECK(handler==plain_handler());
     }
-    if(found==1 && family.normal==family.fpu)
+    if(found==1 && (family.normal&UINT32_C(0x1fffffff))==
+        (family.vector&UINT32_C(0x1fffffff))+0x34u)
         printf("%s: early family %s (finder %d, live model %d, nesting handler %d;"
             " after its own install routine: nesting mode %d, plain mode %d)\n",path,
             result==1?"admitted":"not admitted",found,result,nesting,ran_nesting,ran_plain);

@@ -6,7 +6,10 @@
 /* Roles of the one reviewed full/compact-FPU/round-toward-zero SDK interrupt family in an
  * immutable executable. vector is the source vector's canonical P1 address
  * in the loaded image; normal, fpu and original keep the raw pointer values
- * that the copied vector and the SDK callback slots hold (P1 or U0 RAM). */
+ * that the copied vector and the SDK callback slots hold (P1 or U0 RAM).
+ * The early family exports plain/nesting as normal/fpu, with fpu equal to
+ * normal unless the exact nesting handler and its installer are both proved.
+ * Its normal handler canonically follows vector by 0x34, rather than 0x8c. */
 struct kui_native_sdk_sci_family {uint32_t vector,normal,fpu,original;};
 _Static_assert(sizeof(struct kui_native_sdk_sci_family)==16u,"SDK SCI family roles");
 /* The image-only half of kui_native_sdk_sci_route_discover(): the same

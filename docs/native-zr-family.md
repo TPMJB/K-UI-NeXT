@@ -147,8 +147,9 @@ never branches outside itself.
   nesting handler and the plain one), the nesting handler, and its event word.
   The live INTEVT copy must then equal its template word for word, apart from
   its R0 scratch. The selected handler's live code is checked: 0x180 bytes for
-  the nesting one, 0x14c for the plain one. The image-only finder still reports
-  the plain handler.
+  the nesting one, 0x14c for the plain one. At that checkpoint the image-only
+  finder still exported the plain handler in both roles; the current
+  standalone follow-up below corrects that omission.
 - Compatibility tests 7 and 7b stopped The House of the Dead 2 at this bind
   (phase 10, detail 7), after the virtual card's worker had installed. Test 7
   knew only the plain handler. Test 7b accepted the nesting handler in the live
@@ -162,10 +163,10 @@ never branches outside itself.
 - The bind's refusals are now distinct: detail 0x0B for a live table that
   overlaps loader memory, 6 or 7 for the admission (7: the route check
   refused), and 0x0C for a plan with unexpected fields.
-- The standalone New resident's late bind still accepts only the plain
+- The delivered standalone New resident's late bind accepts only the plain
   handler, in the templates and in the copy. For a title in nesting mode it
   therefore never installs the SCI callbacks, and reading stays in the game's
-  own GD calls. That is a follow-up.
+  own GD calls. This confirmed gap is the current standalone follow-up.
 
 Blue Stinger (Shinobi 1.28) has the same stubs and handler but another table
 initializer, so it is still refused. Silver also fails its executable-extent
@@ -178,6 +179,39 @@ compatibility test 2, and Elemental Gimmick Gear since a fresh rip in test 4b.
 Its earlier "Invalid or unsupported data sector" came from a damaged copy of
 track03.bin on the card, where the executable occupies the track's last 486
 sectors.
+Those historical play reports do not establish whether the standalone SCI
+callbacks bound in nesting mode and do not qualify the current correction.
+
+## Standalone nesting follow-up (November 6)
+
+The delivered B source (`eeed38bd540e`) discarded the independently proved
+nesting alternative when exporting the early family: `normal` and `fpu` both
+named the plain handler. The standalone binder also used equality of those
+fields to select the 13-word early-stub layout. The Background 7c route had
+already handled the alternate; this finding does not invalidate EGG's
+Background virtual-VMU result.
+
+The common structural correction exports plain/nesting as `normal`/`fpu`
+only when the exact nesting handler and installer are proved. Without that
+proof both roles remain plain. The standalone reader recognizes the early
+shape from the canonical `normal == vector + 0x34` relation and requires both
+source templates and the copied live stub to name the same allowed handler.
+Unknown/mixed pointers, occupied callback slots and an active reader still
+refuse. The 16-byte family ABI and first-install-only ownership stay unchanged;
+there is no game-title mapping.
+
+The original EGG executable and actual linked old/candidate instructions now
+reproduce the gap in an SH model: old B binds plain mode and refuses nesting;
+the candidate binds both and preserves the negative controls. The local report is
+`build/standalone-irq-restoration/egg-linked.json`. Production core tests also
+exercise the installer and binder. See
+[`native_sdk_sci_family.c`](../src/core/native_sdk_sci_family.c),
+[`native_standalone_reader.inc`](../src/loader/native_standalone_reader.inc)
+and [`test_native_sdk_sci_early_family.c`](../tests/test_native_sdk_sci_early_family.c).
+These are source and linked-execution results; console launch/loading tests
+remain pending. Sonic Adventure's original executable is still unavailable:
+the Library index names an archive whose file was not restored, so no new
+original-backed Sonic Adventure result is claimed.
 
 ## Virtual VMU route for the early titles (The House of the Dead 2 admitted for test 7)
 
