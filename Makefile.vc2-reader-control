@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Explicit Smash Pack texture comparison03. Generic foreground ABI, zero
+# VMU/helper/game-RAM reservation; only the cold stage carries its typed tag.
+BUILD ?= build/vc2-reader-control
+include Makefile.native-ocram-bootstrap
+STAGE_FLAGS += -DKUI_SMASH_READER_CONTROL03=1

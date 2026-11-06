@@ -188,7 +188,7 @@ static void owner_patches(unsigned restored) {
 }
 static void arm(uint32_t *frame) {
     kui_retail_stage_relay(frame,TEST_CCR);
-    assert(hooks.published==4 && display_calls.pauses==1);
+    assert(hooks.published==4 && !display_calls.pauses);
     for(unsigned i=0;i<4;i++) published(i,points[i]);
     no_video_or_frame_write(frame);owner_patches(0);
 }
@@ -297,7 +297,7 @@ static void run_case(enum scenario scenario) {
         assert(display_calls.value[0][0]==point && !memcmp(frame,saved_frame,sizeof(saved_frame)));
     } else stopped_at(frame,message,point,passed);
     owner_patches(restored);
-    assert(display_calls.pauses==1);
+    assert(!display_calls.pauses);
     if(scenario==SCAN_ZERO_TIMEOUT) assert(hooks.reads[0]==READ_LIMIT+1u && display_calls.value[1][2]==READ_LIMIT);
     if(scenario==SCAN_SET_TIMEOUT) assert(hooks.reads[0]==READ_LIMIT+2u && display_calls.value[1][2]==READ_LIMIT+1u);
     if(scenario==G2_TIMEOUT) assert(hooks.reads[1]==READ_LIMIT+1u && display_calls.value[2][2]==READ_LIMIT);

@@ -39,6 +39,44 @@ therefore leave a harmless pending receipt which deduplicates at the next boot.
 Foreign/stale identities and receipts with no valid predecessor are retained
 and reported, rather than being silently discarded.
 
+When a pending receipt names the exact same card selected for the next launch,
+one exclusively owned operation verifies and checkpoints it once. It then
+publishes the new pending generation directly. The preceding pending receipt
+remains intact until its replacement passes sync and exact readback, so an
+interruption can recover either complete generation. A different card still
+gets independent recovery and pre-launch checkpoints. No verified state is
+retained across operations, storage changes or launches.
+
+These are shared VMU paths for every game. Image verification retains both
+complete reads, byte comparison, VMU validation and hashes while using bounded
+32 KiB reads that FatFs splits at physical cluster boundaries (4 KiB on scratch
+allocation failure). Allocation checks
+still examine every managed file, directory, chain, allocation bit and overlap;
+they coalesce read-only FAT/bitmap sectors only within that one exclusive walk.
+Each subsequent allocation check starts with empty metadata windows. The SD
+backend continues to verify every sector's CRC.
+
+Within that same read-only allocation walk, a bounded 64-sector memo also
+avoids physically rereading shared directory ancestors as FatFs opens each
+managed file. Its optional 33,024-byte heap scratch is released before the walk
+returns; low memory keeps uncached admission. Every first physical read still
+passes through the normal SD CRC checks. A write, I/O error or media/view reset
+disables the memo immediately. Snapshot/card payload verification never uses
+it, and the next allocation walk starts empty. Receipt placement, alternating
+generations, sync and exact readback remain unchanged.
+
+The real-FatFs eight-version launch fixture measures one unchanged receipt's
+allocation walk at 229 to 22 physical read calls on FAT32/512-byte clusters,
+and 214 to 20 on exFAT/4 KiB and 128 KiB clusters. A changed checkpoint retains
+both complete allocation walks. All six changed/unchanged final filesystem
+hashes, write counts and sync counts match the uncached implementation; both
+complete verification reads of every trusted retained image remain. These are
+device-callback counts, not predicted console elapsed times. Reproduce with
+`tests/test_vmu_history_launch_io.py --reference-diskio-source <uncached-diskio.c>`;
+`tests/test_media_read_cache.py` checks scope/write/error/reset invalidation and
+`tests/test_vmu_history_receipt_io.py` cuts pending/clear publication at every
+device-write boundary without rerunning unrelated compatibility matrices.
+
 History uses the existing virtual-card library admission. A complete committed
 redo journal block is validated against the original card identity and mapping
 and overlaid into RAM. The stored `card.vmd` and `card.journal` are never edited
@@ -74,3 +112,9 @@ deduplication, corrupt records/images, stale identities, original-file
 preservation, retention and explicit exports. The host runner uses a private
 FatFs formatter; independent mkfs/fsck utilities were unavailable in the
 executor. Physical Dreamcast timing and power-cut acceptance are still needed.
+`python3 tests/test_vmu_history_performance.py --json` also checks the common
+read-call budgets, same-card receipt transition and all real-FatFs regressions.
+The bounded history reader uses 32 calls per 128 KiB verification pass instead
+of 256. Same-card pending relaunches perform one full checkpoint and one
+allocation-checked receipt publication instead of two of each. These are host
+call-count results, not measured console elapsed-time claims.

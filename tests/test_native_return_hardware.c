@@ -120,16 +120,18 @@ static void quiesce(void) {
         *value(UINT32_C(0xa05f7800)+channel*32u+20u)=1u;
         *value(UINT32_C(0xffa0000c)+channel*16u)=UINT32_C(0x00004910)|(channel<<4)|(channel==1u?0u:1u);
     }
+    *value(UINT32_C(0xa05f7c14))=1u;
     *value(UINT32_C(0xa0702c00))=0x80u;
     CHECK(kui_native_return_quiesce() && cache_calls==1u);
     for(unsigned channel=0;channel<4u;channel++)event(channel,UINT32_C(0xa05f7800)+channel*32u+20u,0);
-    event(4,MAPLE_ENABLE,0);
+    event(4,UINT32_C(0xa05f7c14),0);
+    event(5,MAPLE_ENABLE,0);
     for(unsigned bank=0;bank<3u;bank++)for(unsigned kind=0;kind<3u;kind++)
-        event(5u+bank*3u+kind,UINT32_C(0xa05f6910)+bank*16u+kind*4u,0);
+        event(6u+bank*3u+kind,UINT32_C(0xa05f6910)+bank*16u+kind*4u,0);
     for(unsigned channel=0;channel<4u;channel++)
-        event(14u+channel,UINT32_C(0xffa0000c)+channel*16u,(UINT32_C(0x00004910)|(channel<<4))&~1u);
-    event(18,UINT32_C(0xa0702c00),0x81u);event(19,CACHE_EVENT,0);
-    CHECK(write_count==20u && *value(MAPLE_ENABLE)==0u);
+        event(15u+channel,UINT32_C(0xffa0000c)+channel*16u,(UINT32_C(0x00004910)|(channel<<4))&~1u);
+    event(19,UINT32_C(0xa0702c00),0x81u);event(20,CACHE_EVENT,0);
+    CHECK(write_count==21u && *value(MAPLE_ENABLE)==0u && !*value(UINT32_C(0xa05f7c14)));
     reset();sr=0;CHECK(!kui_native_return_quiesce() && !write_count && !cache_calls);
     reset();*value(MAPLE_STATE)=1u;CHECK(!kui_native_return_quiesce() && !write_count && !cache_calls);
     reset();*value(UINT32_C(0xffa0001c))=1u;CHECK(!kui_native_return_quiesce() && !write_count && !cache_calls);
@@ -139,10 +141,14 @@ static void quiesce(void) {
         CHECK(!kui_native_return_quiesce() && !cache_calls && write_count==channel+1u);
         for(unsigned done=0;done<=channel;done++)event(done,UINT32_C(0xa05f7800)+done*32u+20u,0);
     }
-    reset();*value(UINT32_C(0xa05f6808))=1u;
-    CHECK(!kui_native_return_quiesce() && !cache_calls && write_count==4u);
+    const uint32_t blocked[]={UINT32_C(0xa05f7c18),UINT32_C(0xa05f6820),UINT32_C(0xa05f6808)};
+    for(unsigned i=0;i<sizeof(blocked)/sizeof(*blocked);i++) {
+        reset();*value(blocked[i])=1u;*value(UINT32_C(0xa05f7c14))=1u;
+        CHECK(!kui_native_return_quiesce() && !cache_calls && write_count==5u);
+        event(4,UINT32_C(0xa05f7c14),0);
+    }
     const uint32_t drain[]={MAPLE_STATE,UINT32_C(0xa05f7418),UINT32_C(0xa05f7818),
-        UINT32_C(0xa05f7878),UINT32_C(0xa05f6808)};
+        UINT32_C(0xa05f7878),UINT32_C(0xa05f7c18),UINT32_C(0xa05f6820),UINT32_C(0xa05f6808)};
     for(unsigned i=0;i<sizeof(drain)/sizeof(*drain);i++) {
         reset();*value(drain[i])=1u;settle_address=drain[i];settle_reads=4u;
         CHECK(kui_native_return_quiesce() && cache_calls==1u && !*value(drain[i]));

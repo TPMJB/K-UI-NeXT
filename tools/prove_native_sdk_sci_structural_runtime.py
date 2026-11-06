@@ -288,12 +288,12 @@ def dynamic_runtime_cases(resident):
                 c=SDKCPU(resident,field,mask,vbr=vbr);c.iprb=0xa50f|field
                 c.writes=[];before=c.snapshot();c.run_symbol('_hook');assert_c_abi(c,before)
                 require(c.iprb&0xf0==0x10 and c.read(FRAME+4)==field and
-                        c.read(FRAME+8)==0x10 and c.read(HOOKED)==1,'dynamic hook SCI owner differs')
+                        c.read(FRAME+8)==0x10 and c.read(c.hooked)==1,'dynamic hook SCI owner differs')
                 c.write(c.rxi_slot,c.previous);c.run_symbol('_hook')
                 require(c.iprb&0xf0==0 and c.read(FRAME+4)==field and c.read(FRAME+8)==0,
                         'dynamic lost-route hook adopted our SCI field as the owner')
                 c.run_symbol('_unhook')
-                require(c.iprb&0xf0==field and not c.read(HOOKED) and not c.vbr_writes,
+                require(c.iprb&0xf0==field and not c.read(c.hooked) and not c.vbr_writes,
                         'dynamic unhook failed original SCI restoration')
                 hooks+=1;transitions+=1
     invalid=(0,0x0c00f400,0xac00f400,0x8bffff00,0x8cfffa00,0x8cffff00,0x8d000000,0xffffffff,

@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/smash-card-session-host
+HOST_CC ?= cc
+MENU_LOADER ?=
+MENU_NATIVE ?=
+MENU_VC2 ?=
+MENU_SWIRL ?=
+.DEFAULT_GOAL := smash-card-session-tests
+.PHONY: smash-card-session-tests smash-card-session-actual-tests smash-card-session-prepare-build
+smash-card-session-tests: smash-card-session-prepare-build
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic \
+	 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-pie -no-pie \
+	 -ffunction-sections -fdata-sections -Iinclude -Ifatfs/source tests/test_smash_card_session.c \
+	 src/core/smash_card_session.c src/core/vmu_persist_profile.c src/core/smash_menu_capsule.c \
+	 src/core/retail_image.c src/core/hash.c -Wl,--gc-sections -o $(BUILD)/test-codec
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-codec $(BUILD)/template.bin
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-prepare $(BUILD)/template.bin
+
+# Bind production GUI record discovery and patching to the exact four emitted
+# envelopes; the real FatFs/profile fixture only supplies the card boundary.
+smash-card-session-actual-tests: smash-card-session-prepare-build
+	@test -n "$(MENU_LOADER)" -a -n "$(MENU_NATIVE)" -a -n "$(MENU_VC2)" -a -n "$(MENU_SWIRL)"
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-prepare $(BUILD)/template.bin \
+	 $(MENU_LOADER) $(MENU_NATIVE) $(MENU_VC2) $(MENU_SWIRL)
+
+smash-card-session-prepare-build:
+	@mkdir -p $(BUILD)
+	python3 tools/vmu_persist_profile.py --template $(BUILD)/template.bin > $(BUILD)/template-report.json
+	python3 -c 'from pathlib import Path; p=Path("config/ffconf.h").read_text(); assert p.count("#define FF_USE_MKFS 0")==1; Path("$(BUILD)/ffconf-test.h").write_text(p.replace("#define FF_USE_MKFS 0","#define FF_USE_MKFS 1"))'
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic -Wno-unused-function \
+	 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-pie -no-pie \
+	 -ffunction-sections -fdata-sections -Iinclude -Ifatfs/source -include $(BUILD)/ffconf-test.h \
+	 tests/test_smash_card_session_prepare.c src/core/smash_card_session.c src/core/vmu_persist_profile.c \
+	 src/core/smash_menu_capsule.c src/core/game_launch_settings.c src/core/retail_image.c src/core/runtime_image.c \
+	 src/core/diskio.c src/core/data.c src/core/clock.c src/core/hash.c \
+	 fatfs/source/ff.c fatfs/source/ffunicode.c -Wl,--gc-sections -o $(BUILD)/test-prepare

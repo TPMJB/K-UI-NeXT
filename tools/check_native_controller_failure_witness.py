@@ -56,6 +56,16 @@ DATA_PINS={
     '_kui_vmu_native_terminal_dispatch_words':(96,'5304ca217467bd183ac4ec020dd7793ad95b46229c4caea4ed3ea8d3e947c82b'),
     '_kui_vmu_native_terminal_dispatch_entries':(16,'8477f830f8adb39068e9fe7d4f16e7729d6939c9d7cdaa5da013e519325a68ac'),
 }
+# Exact compact A1 variants reviewed against the A2 functions and source.
+# Submit differs only at +0x43a (virtual address argument 2 ->1). Completion
+# changes the occupied/presence bits and the inlined physical-slot validator:
+# virtual1 is filtered, physical2 retains its typed replies. Register/literal
+# scheduling in that validator differs; every byte remains pinned, while the
+# controller conflict and single-byte publication execute below for each slot.
+COMPACT_A1_PINS={
+    '_kui_vmu_native_passive_complete':(4100,'5585cc14f96e72aefcf5b6c9a4e2f5eb4a4657b87a71afae7ff8a74dccf29ed1'),
+    '_kui_vmu_native_passive_submit':(1272,'ea43ff0af4b7ad382f435eb6b1052ec28eb8c456179a0cb71f3d2ddb8da2e69e'),
+}
 # Separate complete pins for the bounded application-timer policy. The new
 # callback helper and its FILE-owned RAM/range callees execute in the model;
 # older workers retain every preceding pin and the original zero-only guard.
@@ -136,17 +146,70 @@ def owned_timer_profile(worker):
     return True
 
 
+def virtual_slot(worker):
+    """Keep modern reviewed slots and the independently paired compact kernels."""
+    from check_native_session_witness_profile import profile as session_profile
+    selected=session_profile(worker)
+    if selected is not None:return selected
+    from check_native_ordinary_general_profile import profile as ordinary_profile
+    selected=ordinary_profile(worker)
+    if selected is not None:return selected
+    from native_runtime_layout import BACKGROUND_COMPACT,layout_for
+    if layout_for(worker[4]) is not BACKGROUND_COMPACT:return 2
+    matches=[]
+    for name,expected in COMPACT_A1_PINS.items():
+        _,body,section=symbol_bytes(worker,name,2)
+        matches.append(section[2]&7==6 and (len(body),sha(body))==expected)
+    require(all(matches) or not any(matches),'A1 controller completion and submission identities must be paired')
+    return 1 if all(matches) else 2
+
+
+def slot_instructions(worker):
+    """Bind the selected address to actual compact conflict/publication opcodes."""
+    from native_runtime_layout import BACKGROUND_COMPACT,layout_for
+    slot=virtual_slot(worker)
+    if layout_for(worker[4]) is not BACKGROUND_COMPACT:return {'virtual_slot':slot,'compact':False}
+    expected={
+        '_kui_vmu_native_passive_complete':((0x724,0xc800|slot),(0x838,0xcb00|slot),
+            (0xbd4,0x8800|slot),(0xc8e,0x8800|(3-slot)),(0xc9c,0x8800|(3-slot))),
+        '_kui_vmu_native_passive_submit':((0x43a,0xe100|slot),),
+    }
+    for name,words in expected.items():
+        _,body,_=symbol_bytes(worker,name,2)
+        require(all(struct.unpack_from('<H',body,at)[0]==word for at,word in words),
+                'Slot-specific controller instructions differ: '+name)
+    _,body,_=symbol_bytes(worker,'_kui_vmu_native_passive_complete',2)
+    require(struct.unpack_from('<I',body,0x92c)[0]==(MASK^(slot<<16)),
+            'Occupied-slot failure must clear only the selected virtual attachment')
+    return dict(virtual_slot=slot,physical_slot=3-slot,compact=True,
+        occupied_attachment_bit=slot<<16,presence_or_bit=slot,
+        virtual_packet_skipped=True,other_physical_slot_validated=True)
+
+
 def code_pins(worker):
+    from check_native_session_witness_profile import profile as session_profile, PINS as session_pins
+    slot=session_profile(worker)
+    if slot is not None:
+        require(slot in session_pins,'session witness needs its reviewed complete code map')
+        return {name:(count,digest) for name,(digest,count) in session_pins[slot].items()}
+    from check_native_ordinary_general_profile import profile as ordinary_profile, PINS as ordinary_pins
+    slot=ordinary_profile(worker)
+    if slot is not None:
+        return {name:(count,digest) for name,(digest,count) in ordinary_pins[slot].items()}
     selected=OWNED_TIMER_PINS if owned_timer_profile(worker) else PINS
     from check_native_followup_profile import worker_pins
     selected=worker_pins(worker,'witness',selected)
     require(selected,'controller witness timer profile lacks independently reviewed pins')
+    if virtual_slot(worker)==1:selected={**selected,**COMPACT_A1_PINS}
     return selected
 
 
 def timer_symbol_aliases(worker):
     """Bind duplicate local helper names by their actual ELF FILE owner."""
     if not owned_timer_profile(worker):return worker
+    from check_native_compact_background_profile import worker_profile as compact_worker
+    compact=compact_worker(worker);patch_ram=None
+    modern=all(name in worker[4] for name in ('_controller_layout_valid','_controller_pair_valid'))
     found={};symbol=struct.Struct('<IIIBBH')
     for section in worker[3]:
         if section[1]!=2:continue
@@ -162,27 +225,62 @@ def timer_symbol_aliases(worker):
                 require(info>>4==0 and name not in found,
                         'timer helper local source binding is not unique')
                 found[name]=(address,count,2,owner)
+            if (compact or modern) and owner_file=='vmu_native_patch.c' and name=='_ram' and info&15==2:
+                require(info>>4==0 and patch_ram is None,
+                        'compact patch RAM helper lacks unique source ownership')
+                patch_ram=(address,count,2,owner)
     require(set(found)=={'_ram','_in'},'timer helper lacks both source-owned actual callees')
     symbols=dict(worker[4])
     for name,record in found.items():symbols['_timer_runtime'+name]=record
+    if compact or modern:
+        require(patch_ram is not None,'compact witness lacks its source-owned patch RAM helper')
+        symbols['_patch_ram']=patch_ram
     image=(*worker[:4],symbols)
     _,body,_=symbol_bytes(image,'_kui_vmu_native_timer_callback_owned',2)
     for name in found:
         require(body.count(struct.pack('<I',found[name][0]))==1,
                 'timer callback helper does not bind its exact source-owned callee')
+    if compact or modern:
+        _,body,_=symbol_bytes(image,'_kui_vmu_native_patch_encode',2)
+        require(struct.unpack_from('<I',body,0x88)[0]==patch_ram[0],
+                'compact patch encoder does not bind its exact source-owned RAM helper')
     return image
+
+
+def compact_shape_proof(worker):
+    from check_native_compact_background_profile import worker_profile as compact_worker
+    if not compact_worker(worker):return None
+    from check_native_exit_shape import exact_component
+    return exact_component(worker,'worker')
 
 
 def pinned(worker):
     worker=timer_symbol_aliases(worker)
     selected=code_pins(worker)
     result={}
+    from check_native_session_witness_profile import profile as session_profile, pinned as session_pinned
+    session=session_profile(worker)
+    from check_native_ordinary_general_profile import profile as ordinary_profile, pinned as ordinary_pinned
+    ordinary=ordinary_profile(worker)
+    if session is not None:
+        result.update(session_pinned(worker))
+    elif ordinary is not None:
+        result.update(ordinary_pinned(worker))
     for kind,pins in ((2,selected),(1,DATA_PINS)):
+        if kind==2 and (session is not None or ordinary is not None):continue
         for name,(count,digest) in pins.items():
             address,body,section=symbol_bytes(worker,name,kind)
             require(section[2]&7==(6 if kind==2 else 2) and (len(body),sha(body))==(count,digest),
                     'controller witness instructions/targets changed: '+name)
             result[name]=dict(address=hex(address),bytes=count,sha256=digest)
+    # The new header predicate reads a policy table and a specialized config
+    # base. Pin both typed roles before executing even a failure-only path.
+    shape=compact_shape_proof(worker)
+    if shape is not None:
+        from check_native_compact_background_profile import EXIT_SHAPE_OBJECTS
+        for name in EXIT_SHAPE_OBJECTS['worker']:
+            row=shape['exact_linked_closure'][name]
+            result[name]={**row,'address':hex(row['address'])}
     return result
 
 
@@ -201,6 +299,8 @@ def witness_companion(worker,read_ahead_proof):
             'controller witness companion lacks the matching exact linked worker')
     require(proof.get('immutable_pins')==pinned(worker),
             'controller witness companion lacks reviewed actual instruction pins')
+    require(proof.get('slot_instructions')==slot_instructions(worker),
+            'controller witness companion differs from its actual virtual-slot instructions')
     require(proof.get('uncached_owned_objects')==objects(worker) and
             proof.get('model_scope',{}).get('actual_linked_worker_c_executed') is True and
             proof.get('scalar_truth_cases')==1584,
@@ -761,8 +861,12 @@ def terminal_identity_cases(resident,worker,layout):
         invalid_capability_preserves_raw_first_failure=True,owner_writes=0)
 
 
-def complete_cases(resident,worker,layout):
+def complete_cases(resident,worker,layout,slot=None):
+    slot=virtual_slot(worker) if slot is None else slot
+    require(slot in (1,2),'controller witness requires an exact virtual slot')
     cases=successes=failures=0;coverage=set();fail_indices={}
+    virtual=slot
+    occupied=virtual<<16;physical=(3-virtual)<<16
     def fixture(ports=(0,1,2,3),commands=(9,1,2,9),bank=0):
         c=WitnessCPU(resident,worker,layout);c.packet(ports,commands,bank);return c
     def rejected(c,expected):
@@ -778,8 +882,9 @@ def complete_cases(resident,worker,layout):
                     commands=[9 if port==0 else command for port in ports]
                     c=fixture(tuple(ports),tuple(commands),bank)
                     c.write(c.durable+layout['durable.commits'],bank)
-                    # A physical A1 bitmap is permitted; only A2 conflicts.
-                    c.write(c.rx[parent]|0xa0000000,c.reply_headers[parent]|0x10000)
+                    # The other physical slot is permitted; only this virtual
+                    # endpoint conflicts, with the same eleven refusal reasons.
+                    c.write(c.rx[parent]|0xa0000000,c.reply_headers[parent]|physical)
                     c.writes=[];before=c.snapshot();c.execute('_kui_vmu_native_passive_complete',[c.frame])
                     assert_c_abi(c,before)
                     c.assert_no_owner_writes([((c.rx[parent]+2)|0xa0000000,1)])
@@ -827,9 +932,9 @@ def complete_cases(resident,worker,layout):
         rejected(c,(0x40008|(index<<8),(rx+4)|0xa0000000,0,0x01000000))
         c=fixture(tuple(ports),tuple(commands));rx=c.rx[index];c.write(rx|0xa0000000,MASK)
         rejected(c,(0x40009|(index<<8),rx|0xa0000000,MASK,0))
-        c=fixture(tuple(ports),tuple(commands));rx=c.rx[index];value=c.reply_headers[index]|0x20000
+        c=fixture(tuple(ports),tuple(commands));rx=c.rx[index];value=c.reply_headers[index]|occupied
         c.write(rx|0xa0000000,value)
-        rejected(c,(0x4000a|(index<<8),rx|0xa0000000,value,value&~0x20000))
+        rejected(c,(0x4000a|(index<<8),rx|0xa0000000,value,value&~occupied))
         c=fixture(tuple(ports),tuple(commands));rx=c.rx[index]+4
         c.write(c.pair+156+8*index,rx);c.write(rx|0xa0000000,c.reply_headers[index]);c.write((rx+4)|0xa0000000,0x01000000)
         c.write(c.manager+0xfe8,rx|0xa0000000);c.write(c.config+layout['config.runtime.rx_slots'],rx|0xa0000000)
@@ -846,13 +951,15 @@ def complete_cases(resident,worker,layout):
             parent=ports.index(0);c.writes=[];before=c.snapshot()
             c.execute('_kui_vmu_native_passive_complete',[c.frame]);assert_c_abi(c,before)
             c.assert_no_owner_writes([((c.rx[parent]+2)|0xa0000000,1)])
-            assert c.read((c.rx[parent]+2)|0xa0000000,1)==0x22 and c.witness()==(0,0,0,0)
+            assert c.read((c.rx[parent]+2)|0xa0000000,1)==(0x20|virtual) and c.witness()==(0,0,0,0)
             cases+=1;successes+=1
     assert coverage==set(range(1,12)),coverage
     return dict(cases=cases,successes=successes,failures=failures,reasons=sorted(coverage),
                 failure_indices={str(k):sorted(v) for k,v in sorted(fail_indices.items())},
                 aggregate_pending_bit_unreachable_after_outer_dispatch=True,
-                success_only_parent_presence_byte=True,failure_no_owner_writes=True)
+                success_only_parent_presence_byte=True,failure_no_owner_writes=True,
+                virtual_slot=slot,physical_slot=3-slot,
+                occupied_virtual_slot_refused=True,physical_attachment_preserved=True)
 
 
 def objects(worker):
@@ -861,9 +968,14 @@ def objects(worker):
     if geometry['lean']:
         from check_native_general_lean_profile import prepared_objects
         from check_native_compact_background_profile import worker_profile as compact_profile
-        prepared_objects(worker)
-        overlay_bytes=1452 if compact_profile(worker) else 17172
-        selected=(('_state',100),('_controller_pair',188),('_config',2304),
+        from check_native_session_witness_profile import profile as session_profile
+        session=session_profile(worker)
+        from check_native_ordinary_general_profile import profile as ordinary_profile, owned_objects
+        ordinary=ordinary_profile(worker)
+        if ordinary is not None:owned_objects(worker)
+        elif session is None:prepared_objects(worker)
+        overlay_bytes=1452 if compact_profile(worker) or session is not None else 17172
+        selected=(('_state',100),('_controller_pair',188),('_config',2316 if session is not None else 2304),
             ('_live_plan',456),('_lifetime_plan',616),('_overlay',overlay_bytes),('_durable_card',4160))
     else:
         selected=(('_state',100),('_controller_pair',188),('_config',2300),
@@ -878,8 +990,74 @@ def objects(worker):
     return result
 
 
+def compact_shape_mutations(worker):
+    shape=compact_shape_proof(worker)
+    from check_native_session_witness_profile import profile as session_profile, SHAPE_TABLE
+    session=session_profile(worker)
+    from check_native_ordinary_general_profile import profile as ordinary_profile
+    ordinary=ordinary_profile(worker)
+    modern=session is not None or ordinary is not None
+    if shape is None and not modern:return {}
+    from check_native_bottom_heap import records
+    from check_native_compact_background_profile import EXIT_SHAPE_OBJECTS
+    table,=(EXIT_SHAPE_OBJECTS['worker'] if not modern else (SHAPE_TABLE,))
+    available=records(worker)
+    address,body,_,section=available[table];start=section[4]+address-section[3]
+    bits=typed=0
+    def refused(data,message):
+        try:pinned((bytes(data),*worker[1:]))
+        except ValueError:return
+        raise ValueError('compact witness accepted '+message)
+    # Function text and every old witness data table stay untouched here.
+    for byte in range(len(body)):
+        for bit in range(8):
+            data=bytearray(worker[0]);data[start+byte]^=1<<bit
+            refused(data,'changed descriptor-policy table bit');bits+=1
+    roles={table:('type','address','size') if modern else ('type','address'),
+        '_kui_vmu_native_exit_shape_valid.constprop.0@vmu_native_passive.c':('type','address'),
+        '_config@vmu_native_passive.c':('type','address','size'),
+        '_ram@vmu_native_patch.c':('type','address')}
+    seen=set()
+    for symbols in worker[3]:
+        if symbols[1]!=2:continue
+        strings=worker[3][symbols[6]];names=worker[0][strings[4]:strings[4]+strings[5]];source=''
+        for at in range(symbols[4],symbols[4]+symbols[5],16):
+            label,address,size,info,_,_=struct.unpack_from('<IIIBBH',worker[0],at)
+            label=names[label:].split(b'\0',1)[0].decode('ascii')
+            if info&15==4:source=label
+            name=label+('@'+source if not info>>4 else '')
+            if name not in roles:continue
+            require(name not in seen,'compact witness mutation role is ambiguous');seen.add(name)
+            for variant in roles[name]:
+                data=bytearray(worker[0])
+                if variant=='type':data[at+12]=(info&0xf0)|(2 if info&15==1 else 1)
+                elif variant=='address':struct.pack_into('<I',data,at+4,address+2)
+                else:
+                    require(size==(20 if name==table else 2304 if session is None else 2316),
+                            'witness constant/configuration span differs')
+                    struct.pack_into('<I',data,at+8,size-4)
+                refused(data,'changed typed '+variant+' role: '+name);typed+=1
+    require(seen==set(roles),'compact witness lacks complete typed-role mutation coverage')
+    prefix='session' if session is not None else 'ordinary' if ordinary is not None else 'compact'
+    return {prefix+'_policy_table_bit_mutation_rejections':bits,
+        prefix+'_policy_and_patch_typed_role_mutation_rejections':typed}
+
+
 def mutations(resident,worker,layout):
     worker=timer_symbol_aliases(worker)
+    from check_native_ordinary_general_profile import profile as ordinary_profile, signatures as ordinary_signatures, PINS as ordinary_pins
+    ordinary=ordinary_profile(worker)
+    from check_native_session_witness_profile import profile as session_profile, PINS as session_pins
+    session=session_profile(worker)
+    modern=ordinary if ordinary is not None else session
+    modern_pins=ordinary_pins if ordinary is not None else session_pins
+    if modern is not None:
+        # Establish the complete original closure once. Each fixture below
+        # changes exactly one byte of exactly one known function; unchanged
+        # members retain that proof. Recheck the changed member with the same
+        # complete normalized instruction/typed-reference algorithm used by
+        # pinned(), rather than regenerating every unaffected signature.
+        pinned(worker)
     functional=bytes_rejected=schemas=timer_branches=0
     address,body,section=symbol_bytes(worker,'_failure_witness.isra.0',2)
     offset=section[4]+address-section[3]
@@ -895,9 +1073,18 @@ def mutations(resident,worker,layout):
     require(body.count(pattern)==1,'controller masked-response functional mutation is not unique')
     changed=bytearray(worker[0]);at=section[4]+address-section[3]+body.index(pattern)
     changed[at:at+4]=struct.pack('<I',MASK);trial=(bytes(changed),*worker[1:])
-    try:complete_cases(resident,trial,layout)
+    slot=virtual_slot(worker)
+    try:complete_cases(resident,trial,layout,slot)
     except (AssertionError,Failure):functional+=1
-    else:raise ValueError('actual completion model accepted loss of allowed A1 attachment bits')
+    else:raise ValueError('actual completion model accepted loss of allowed physical attachment bits')
+    from native_runtime_layout import BACKGROUND_COMPACT,layout_for
+    if layout_for(worker[4]) is BACKGROUND_COMPACT:
+        for at,old in ((0x724,0xc800|slot),(0x838,0xcb00|slot)):
+            require(struct.unpack_from('<H',body,at)[0]==old,'slot-specific mutation site differs')
+            changed=bytearray(worker[0]);struct.pack_into('<H',changed,section[4]+address-section[3]+at,old^3)
+            try:complete_cases(resident,(bytes(changed),*worker[1:]),layout,slot)
+            except (AssertionError,Failure):functional+=1
+            else:raise ValueError('actual completion model accepted the opposite slot conflict/presence bit')
     if owned_timer_profile(worker):
         typed=timer_symbol_aliases(worker)
         # Invert each actual policy branch while retaining its delay-slot
@@ -922,7 +1109,13 @@ def mutations(resident,worker,layout):
             address,body,section=symbol_bytes(worker,name,kind);offset=section[4]+address-section[3]
             for i in range(len(body)):
                 changed=bytearray(worker[0]);changed[offset+i]^=1
-                try:pinned((bytes(changed),*worker[1:]))
+                try:
+                    trial=(bytes(changed),*worker[1:])
+                    if modern is not None and kind==2:
+                        digest,count,_=ordinary_signatures(trial,(name,))[name]
+                        require((digest,count)==modern_pins[modern][name],
+                                'Modern changed function differs from its independent normalized pin')
+                    else:pinned(trial)
                 except ValueError:bytes_rejected+=1
                 else:raise ValueError('witness pin accepted changed linked instructions/targets: '+name)
     for name in DATA_PINS:
@@ -976,7 +1169,8 @@ def mutations(resident,worker,layout):
                 owned_timer_policy_branch_mutation_rejections=timer_branches,
                 instruction_and_literal_byte_mutation_rejections=bytes_rejected,
                 typed_constant_schema_mutation_rejections=schemas,
-                lean_owned_state_schema_mutation_rejections=geometry_schemas)
+                lean_owned_state_schema_mutation_rejections=geometry_schemas,
+                **compact_shape_mutations(worker))
 
 
 def companion_mutations(worker,report):
@@ -986,7 +1180,7 @@ def companion_mutations(worker,report):
     variants=[]
     for field,value in (('schema','wrong'),('artifact_sha256','0'*64),('immutable_pins',{}),
                         ('helper_model_cases',0),('controller_model_cases',0),('identity_model_cases',0),
-                        ('enabled',False)):
+                        ('enabled',False),('slot_instructions',{})):
         candidate=copy.deepcopy(report);candidate[field]=value;variants.append(candidate)
     for field,value in (('all_controller_reasons',[]),('all_controller_context_reasons',[]),
                         ('old_transfer_witness_preserved',False),('failure_no_owner_writes',False),
@@ -994,6 +1188,14 @@ def companion_mutations(worker,report):
         candidate=copy.deepcopy(report);candidate['predicate_coverage'][field]=value;variants.append(candidate)
     for name in DATA_PINS:
         candidate=copy.deepcopy(report);candidate['immutable_pins'].pop(name);variants.append(candidate)
+    if compact_shape_proof(worker) is not None:
+        from check_native_compact_background_profile import EXIT_SHAPE_OBJECTS
+        for name in EXIT_SHAPE_OBJECTS['worker']:
+            candidate=copy.deepcopy(report);candidate['immutable_pins'].pop(name);variants.append(candidate)
+    from check_native_session_witness_profile import profile as session_profile, SHAPE_TABLE
+    from check_native_ordinary_general_profile import profile as ordinary_profile
+    if session_profile(worker) is not None or ordinary_profile(worker) is not None:
+        candidate=copy.deepcopy(report);candidate['immutable_pins'].pop(SHAPE_TABLE);variants.append(candidate)
     for key,field,value in (('terminal_identity','actual_validation_owner_reads',17),
                             ('terminal_identity','invalid_capability_preserves_raw_first_failure',False),
                             ('identity','ordinary_capability_absent_owner_reads',9)):
@@ -1033,7 +1235,7 @@ def companion_mutations(worker,report):
 def check(directory,self_test=False):
     directory=Path(directory);worker=read_elf(directory/'native-worker.elf')
     if not witness_profile(worker):return dict(schema=SCHEMA,enabled=False)
-    pins=pinned(worker);owned=objects(worker)
+    pins=pinned(worker);owned=objects(worker);slot=slot_instructions(worker)
     resident=read_elf(directory/'resident-sci.elf');layout=console_layout()
     truth=scalar_truth_cases()
     MODELED_FUNCTIONS.clear()
@@ -1045,7 +1247,7 @@ def check(directory,self_test=False):
     complete=complete_cases(resident,worker,layout)
     require(MODELED_FUNCTIONS<=set(code_pins(worker)),'actual witness execution entered an unpinned function')
     report=dict(schema=SCHEMA,enabled=True,artifact_sha256=sha(worker[0]),immutable_pins=pins,
-        uncached_owned_objects=owned,scalar_truth_cases=truth,executed_owned_functions=sorted(MODELED_FUNCTIONS),
+        uncached_owned_objects=owned,slot_instructions=slot,scalar_truth_cases=truth,executed_owned_functions=sorted(MODELED_FUNCTIONS),
         actual_sh_console_layout=layout,helper_model_cases=helpers,
         controller_model_cases=context['cases']+complete['cases'],identity_model_cases=identity['cases']+terminal['cases'],
         success_model_cases=complete['successes'],failure_model_cases=complete['failures'],

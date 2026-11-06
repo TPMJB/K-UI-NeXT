@@ -151,3 +151,21 @@ fast updater CRC, and reuses a checked handoff-slot scan. Startup timing reports
 remain available. A valid current GUI handoff adopts through receipt/header/slot
 reads; it does not reread the complete GUI. Returning from a game remains a
 separate route-specific loader feature.
+
+## Current reader integration scope
+
+The historical updater-only adoption described above did not merge game sources.
+The current integration is explicitly authorized to publish the existing K-UI
+reader, VMU and Smash work for review. It preserves Main's revision3 updater,
+helper-only RAW ownership, GUI admission manifests and unrelated functionality.
+This authorization does not change the updater's production ownership rules or
+turn the frozen engine2 fixture into a delivery implementation.
+
+Read `docs/accepted-progress.md` for the actual route-specific evidence and open
+issues. Keep the current 72 KiB worker configuration and the current reader code;
+this integration adds no gameplay experiment or universal return claim. The
+reported warm VC2 failure after a multi-game sequence remains unresolved.
+`make test-updater-source-preservation` retains the exact historical Main
+GUI-only add-on source guard for that narrower delivery profile. The general
+`test-updater` target runs the functional updater tests for this explicit reader
+integration without rewriting or bypassing that historical guard.

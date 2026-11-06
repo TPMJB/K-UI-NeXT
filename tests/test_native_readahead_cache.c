@@ -6,8 +6,16 @@
 
 static unsigned checks;
 #define CHECK(test) do { ++checks; assert(test); } while(0)
+#include "native_readahead_extent_reference.h"
+/* Every existing geometry case also executes the frozen original validator.
+ * The checked map is immutable throughout either serialized read. */
+static uint32_t compared_extent_end(const struct kui_retail_manifest *map,uint32_t lba) {
+    uint32_t result=kui_native_ra_extent_end(map,lba);
+    CHECK(result==reference_extent_end(map,lba));return result;
+}
+#define kui_native_ra_extent_end compared_extent_end
 static _Alignas(32) uint8_t arena[KUI_NATIVE_RA_CACHE_BYTES+64u];
-static uint8_t block[512];
+static _Alignas(32) uint8_t block[512];
 static struct kui_retail_manifest manifest;
 
 static uint8_t byte_at(uint32_t lba,unsigned i) {
@@ -129,6 +137,61 @@ static void aliases(void) {
     uint8_t expected[512];memcpy(expected,c.data+16u,512u);
     CHECK(kui_native_ra_cache_append(&c,3u,c.data+16u));
     CHECK(!memcmp(kui_native_ra_cache_lookup(&c,3u),expected,512u));
+}
+static void copy_alignments_and_overlap(void) {
+    uint8_t expected[2048];
+    unsigned cases=0u;
+    memset(arena,0xa7,sizeof(arena));
+    /* Compare the whole affected neighborhood with libc memmove for every
+     * overlap distance, including all four source alignments. Exercise an
+     * ordinary slot and the identical copy after ring-index wrap. */
+    for(unsigned wrapped=0u;wrapped<2u;wrapped++) for(int delta=-511;delta<=511;delta++) {
+        struct kui_native_ra_cache c;
+        CHECK(kui_native_ra_cache_init(&c,arena+32u,KUI_NATIVE_RA_CACHE_BYTES));
+        CHECK(kui_native_ra_cache_rebase(&c,100u,1000u));
+        c.head=wrapped?383u:1u;c.count=wrapped?2u:1u;
+        unsigned at=wrapped?512u:1024u,count=c.count;
+        for(unsigned i=0u;i<sizeof(expected);i++)
+            c.data[i]=expected[i]=(uint8_t)((i*37u)^(i>>3)^(unsigned)delta);
+        memmove(expected+at,expected+at+delta,512u);
+        CHECK(kui_native_ra_cache_append(&c,100u+count,c.data+at+delta));
+        CHECK(!memcmp(c.data,expected,sizeof(expected)));
+        CHECK(c.head==(wrapped?383u:1u) && c.base==100u && c.end==1000u && c.count==count+1u);
+        sentinels();++cases;
+    }
+    /* Nonoverlapping stream-like buffers can also arrive unaligned. */
+    _Alignas(32) uint8_t external[516];
+    for(unsigned offset=0u;offset<4u;offset++) {
+        struct kui_native_ra_cache c;
+        for(unsigned i=0u;i<sizeof(external);i++)external[i]=(uint8_t)((i*17u)^(i>>2));
+        CHECK(kui_native_ra_cache_init(&c,arena+32u,KUI_NATIVE_RA_CACHE_BYTES));
+        CHECK(kui_native_ra_cache_rebase(&c,3u,8u));
+        CHECK(kui_native_ra_cache_append(&c,3u,external+offset));
+        CHECK(!memcmp(c.data,external+offset,512u));sentinels();++cases;
+    }
+    printf("Cache block copy: %u memmove differential cases across overlap, alignment and ring wrap\n",cases);
+}
+static void source_metadata_overlap(void) {
+    struct {
+        _Alignas(32) uint8_t prefix[512];
+        struct kui_native_ra_cache cache;
+        uint8_t suffix[512];
+    } storage;
+    uint8_t *bytes=(void *)&storage;
+    uint8_t before[sizeof(storage)];
+    struct kui_native_ra_cache *c=&storage.cache;
+    const size_t at=(uint8_t *)(void *)c-bytes;
+    /* Refuse every partial or complete source intersection with validity
+     * metadata, before either the word path or byte path can touch data. */
+    for(int delta=-511;delta<(int)sizeof(*c);delta++) {
+        memset(bytes,0x9b,sizeof(storage));
+        CHECK(kui_native_ra_cache_init(c,arena+32u,KUI_NATIVE_RA_CACHE_BYTES));
+        CHECK(kui_native_ra_cache_rebase(c,100u,1000u));
+        memcpy(before,bytes,sizeof(storage));
+        uint8_t arena_before[512];memcpy(arena_before,c->data,sizeof(arena_before));
+        CHECK(!kui_native_ra_cache_append(c,100u,bytes+at+delta));
+        CHECK(!memcmp(before,bytes,sizeof(storage)) && !memcmp(arena_before,c->data,sizeof(arena_before)));
+    }
 }
 static uint32_t rng=UINT32_C(0x13579bdf);
 static uint32_t random_word(void) {rng^=rng<<13;rng^=rng>>17;rng^=rng<<5;return rng;}
@@ -259,8 +322,66 @@ static void extent_faults(void) {
     manifest.slots[1].extent.card_lba=UINT32_MAX-4u;
     CHECK(kui_native_ra_extent_end(&manifest,UINT32_MAX-1u)==UINT32_MAX);
 }
+static void fragmented_differential(void) {
+    /* A single mapped extent has no pair even when preceded by many
+     * unmapped audio tracks. All tracks still require the complete prepass. */
+    for(unsigned tracks=1u;tracks<64u;tracks++) {
+        fixture(4u|KUI_RETAIL_TRACK_COOKED,0u,1u,1u);
+        struct kui_retail_track data=manifest.slots[0].track;
+        struct kui_retail_extent extent=manifest.slots[1].extent;
+        manifest.track_count=tracks;
+        for(unsigned i=0u;i+1u<tracks;i++)
+            manifest.slots[i].track=(struct kui_retail_track){i*2u,i*2u+1u,(uint16_t)tracks,0u,0u};
+        data.first_extent=(uint16_t)tracks;manifest.slots[tracks-1u].track=data;
+        manifest.slots[tracks].extent=extent;
+        CHECK(kui_native_ra_extent_end(&manifest,extent.card_lba)==extent.card_lba+extent.blocks);
+    }
+    for(unsigned fragments=1u;fragments<64u;fragments++)for(unsigned order=0u;order<3u;order++) {
+        fixture(4u,511u,75u,fragments);
+        uint32_t position=1000u;
+        for(unsigned i=0u;i<fragments;i++) {
+            struct kui_retail_extent *e=&manifest.slots[1u+i].extent;
+            if(order==1u)e->card_lba=1000u+600u*(fragments-1u-i);
+            if(order==2u) {e->card_lba=position;position+=e->blocks;}
+        }
+        for(unsigned i=0u;i<fragments;i++) {
+            const struct kui_retail_extent *e=&manifest.slots[1u+i].extent;
+            CHECK(kui_native_ra_extent_end(&manifest,e->card_lba)==e->card_lba+e->blocks);
+            CHECK(kui_native_ra_extent_end(&manifest,e->card_lba+e->blocks-1u)==e->card_lba+e->blocks);
+        }
+        CHECK(!kui_native_ra_extent_end(&manifest,UINT32_MAX));
+        if(fragments>1u) {
+            manifest.slots[fragments].extent.card_lba=manifest.slots[1].extent.card_lba;
+            CHECK(!kui_native_ra_extent_end(&manifest,1000u));
+        }
+    }
+    /* Validated physical endpoints just below2^32 must retain their exact
+     * exclusive end. An extent reaching/crossing2^32 still refuses before
+     * the narrowed pair pass, including a bad extent after the query owner. */
+    fixture(4u|KUI_RETAIL_TRACK_COOKED,0u,75u,63u);
+    manifest.card_sectors=manifest.partition_end=UINT64_C(0x100000000);
+    for(unsigned i=0u;i<63u;i++)manifest.slots[1u+i].extent.card_lba=UINT32_MAX-600u*(63u-i);
+    CHECK(kui_native_ra_extent_end(&manifest,manifest.slots[1].extent.card_lba));
+    manifest.slots[63].extent.card_lba=UINT32_MAX-1u;
+    CHECK(!kui_native_ra_extent_end(&manifest,manifest.slots[1].extent.card_lba));
+    manifest.slots[63].extent.blocks=UINT32_MAX;
+    CHECK(!kui_native_ra_extent_end(&manifest,manifest.slots[1].extent.card_lba));
+    /* Mutate every bit of the complete64-slot descriptor and every header
+     * field. Preserve the old function as an independent arithmetic oracle,
+     * including its acceptance of irrelevant presentation bytes. */
+    fixture(4u|KUI_RETAIL_TRACK_COOKED,511u,75u,63u);
+    unsigned bytes=(unsigned)offsetof(struct kui_retail_manifest,slots)+64u*sizeof(union kui_retail_slot);
+    uint8_t *raw=(uint8_t *)(void *)&manifest;
+    for(unsigned at=0u;at<bytes;at++)for(unsigned bit=0u;bit<8u;bit++) {
+        raw[at]^=(uint8_t)(1u<<bit);
+        (void)kui_native_ra_extent_end(&manifest,1000u);
+        (void)kui_native_ra_extent_end(&manifest,UINT32_MAX);
+        raw[at]^=(uint8_t)(1u<<bit);
+    }
+}
 int main(void) {
-    ring();invalid();aliases();randomized();extents();extent_faults();
+    ring();invalid();aliases();copy_alignments_and_overlap();source_metadata_overlap();
+    randomized();extents();extent_faults();fragmented_differential();
     printf("native read-ahead cache: %u checks;384-slot wrap, overlap, seeks, publication, bounded extents and invalid geometry passed\n",checks);
     return 0;
 }

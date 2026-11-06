@@ -11,6 +11,13 @@
 #include "kui/armada_ce_stream_seed.h"
 #include "kui/games.h"
 #include "kui/game_metadata.h"
+#include "kui/smash_native_child.h"
+#include "kui/smash_menu_loader.h"
+#include "kui/smash_menu_loader_capability.h"
+#include "kui/smash_menu_return.h"
+#include "kui/smash_menu_collection.h"
+#include "kui/smash_launch_timing.h"
+#include "kui/smash_reader_control.h"
 #include "kui/retail_image.h"
 #include "kui/retail_zso.h"
 #include "kui/retail_loader_layout.h"
@@ -18,9 +25,12 @@
 #include "kui/native_dual_reader.h"
 #include "kui/native_standalone_capability.h"
 #include "kui/native_physical_capability.h"
+#include "kui/native_standard_route.h"
+#include "kui/native_background_route.h"
 #include "kui/native_vmu_standard.h"
 #include "kui/vmu_emulation_settings.h"
 #include "kui/native_session_prepare.h"
+#include "kui/native_session.h"
 #include "kui/media.h"
 #include "../core/games_cdda_profile.h"
 #include "platform.h"
@@ -84,8 +94,15 @@ static enum kui_game_result read_file(void *ctx,const char *name,uint64_t offset
     FIL *file=&f->reader;
     bool ok=offset<=f_size(file) && bytes<=f_size(file)-offset;
     UINT got=0;
-    if(ok && f_tell(file)!=offset) ok=f_lseek(file,(FSIZE_t)offset)==FR_OK && f_tell(file)==offset;
-    if(ok) ok=f_read(file,out,(UINT)bytes,&got)==FR_OK && got==bytes;
+    if(ok && f_tell(file)!=offset) {
+        kui_smash_launch_timing_add(KUI_SMASH_UI_SOURCE_SEEKS,1u);
+        ok=f_lseek(file,(FSIZE_t)offset)==FR_OK && f_tell(file)==offset;
+    }
+    if(ok) {
+        kui_smash_launch_timing_add(KUI_SMASH_UI_SOURCE_READ_CALLBACKS,1u);
+        ok=f_read(file,out,(UINT)bytes,&got)==FR_OK && got==bytes;
+        kui_smash_launch_timing_add(KUI_SMASH_UI_SOURCE_READ_BYTES,got);
+    }
     return stopped(f)?KUI_GAME_CANCELLED:ok?KUI_GAME_OK:KUI_GAME_IO;
 }
 static enum kui_game_metadata_io_result metadata_read(void *ctx,uint32_t lba,uint8_t out[2048]) {
@@ -331,23 +348,49 @@ static enum map_result map_tracks(struct files *files,FATFS *fs,const struct kui
  * CRC is prepared here and checked against the detached physical read. */
 static enum kui_game_result extent_crc(const struct kui_game_image *image,
     uint32_t lba,uint32_t bytes,uint32_t *crc,uint32_t *failed) {
-    if(!bytes) return KUI_GAME_INVALID;
-    enum kui_game_result result=kui_game_image_check(image,lba,(bytes+2047u)/2048u,
+    if(!bytes || !crc) return KUI_GAME_INVALID;
+    enum kui_game_result result=kui_game_image_check(image,lba,bytes/2048u+(bytes%2048u!=0u),
         KUI_GAME_SECTOR_MODE1);
     if(result!=KUI_GAME_OK) return result;
-    uint8_t sector[2048];uint32_t value=0;
+    /* The temporary logical window lets every image layout use the common
+     * bounded reader. Allocation failure retains the original stack path. */
+    uint8_t sector[2048],*allocated=bytes>sizeof(sector)?malloc(16u*sizeof(sector)):NULL;
+    uint8_t *buffer=allocated?allocated:sector;
+    uint32_t capacity=allocated?16u*sizeof(sector):sizeof(sector),value=0;
     for(uint32_t done=0;done<bytes;) {
         if(failed) *failed=lba;
-        result=kui_game_image_read(image,lba++,1,KUI_GAME_SECTOR_MODE1,sector,sizeof(sector));
-        if(result!=KUI_GAME_OK) return result;
-        uint32_t take=bytes-done;if(take>sizeof(sector)) take=sizeof(sector);
-        value=kui_retail_crc32(value,sector,take);done+=take;
+        uint32_t take=bytes-done;if(take>capacity)take=capacity;
+        uint32_t count=take/2048u+(take%2048u!=0u);
+        result=kui_game_image_read(image,lba,count,KUI_GAME_SECTOR_MODE1,buffer,(size_t)count*2048u);
+        if(result!=KUI_GAME_OK) {
+            /* A batched failure does not identify one sector. Only a
+             * repeatable mode failure may supply an exact diagnostic LBA;
+             * rereading never changes the original refusal to success. */
+            if(failed && count>1u) {
+                *failed=UINT32_MAX;
+                if(result==KUI_GAME_MODE &&
+                   !(image->files.read==read_file && stopped(image->files.ctx))) {
+                    for(uint32_t i=0;i<count;i++) {
+                        enum kui_game_result diagnostic=kui_game_image_read(image,lba+i,1u,
+                            KUI_GAME_SECTOR_MODE1,sector,sizeof(sector));
+                        if(diagnostic==KUI_GAME_MODE){*failed=lba+i;break;}
+                        if(diagnostic!=KUI_GAME_OK)break;
+                    }
+                }
+            }
+            break;
+        }
+        value=kui_retail_crc32(value,buffer,take);done+=take;lba+=count;
     }
-    *crc=value;return KUI_GAME_OK;
+    free(allocated);if(result==KUI_GAME_OK)*crc=value;return result;
 }
 /* Name the sector an executable read stopped at, with its raw header, so an
  * unusual or damaged image can be told apart from an unsupported layout. */
 static void log_bad_sector(const struct kui_game_image *image,uint32_t lba,kui_log_fn log) {
+    if(lba==UINT32_MAX) {
+        log("Retail boot: executable batch failed validation; no single failing LBA was identified");
+        return;
+    }
     for(unsigned i=0;i<image->count;i++) {
         const struct kui_game_image_track *t=&image->tracks[i];
         if(lba<t->start_lba || lba>=t->end_lba) continue;
@@ -366,20 +409,31 @@ static void log_bad_sector(const struct kui_game_image *image,uint32_t lba,kui_l
 }
 /* Hash the complete IP-selected kernel before choosing an ABI. File size,
  * product strings and a similar-looking header never select native addresses. */
-static enum kui_game_result extent_sha(const struct kui_game_image *image,
-    uint32_t lba,uint32_t bytes,uint8_t digest[32]) {
+static enum kui_game_result extent_sha_crc(const struct kui_game_image *image,
+    uint32_t lba,uint32_t bytes,uint8_t digest[32],uint32_t *source_crc) {
     if(!bytes || !digest) return KUI_GAME_INVALID;
-    enum kui_game_result result=kui_game_image_check(image,lba,(bytes+2047u)/2048u,
+    enum kui_game_result result=kui_game_image_check(image,lba,bytes/2048u+(bytes%2048u!=0u),
         KUI_GAME_SECTOR_MODE1);
     if(result!=KUI_GAME_OK) return result;
-    struct kui_sha256 hash;kui_sha256_init(&hash);uint8_t sector[2048];
+    struct kui_sha256 hash;kui_sha256_init(&hash);
+    uint8_t sector[2048],*allocated=bytes>sizeof(sector)?malloc(16u*sizeof(sector)):NULL;
+    uint8_t *buffer=allocated?allocated:sector;
+    uint32_t capacity=allocated?16u*sizeof(sector):sizeof(sector),crc=0u;
     for(uint32_t done=0;done<bytes;) {
-        result=kui_game_image_read(image,lba++,1,KUI_GAME_SECTOR_MODE1,sector,sizeof(sector));
-        if(result!=KUI_GAME_OK) return result;
-        uint32_t take=bytes-done;if(take>sizeof(sector)) take=sizeof(sector);
-        kui_sha256_update(&hash,sector,take);done+=take;
+        uint32_t take=bytes-done;if(take>capacity)take=capacity;
+        uint32_t count=take/2048u+(take%2048u!=0u);
+        result=kui_game_image_read(image,lba,count,KUI_GAME_SECTOR_MODE1,buffer,(size_t)count*2048u);
+        if(result!=KUI_GAME_OK)break;
+        kui_sha256_update(&hash,buffer,take);
+        if(source_crc)crc=kui_retail_crc32(crc,buffer,take);
+        done+=take;lba+=count;
     }
-    kui_sha256_digest(&hash,digest);return KUI_GAME_OK;
+    free(allocated);if(result!=KUI_GAME_OK)return result;
+    kui_sha256_digest(&hash,digest);if(source_crc)*source_crc=crc;return KUI_GAME_OK;
+}
+static enum kui_game_result extent_sha(const struct kui_game_image *image,
+    uint32_t lba,uint32_t bytes,uint8_t digest[32]) {
+    return extent_sha_crc(image,lba,bytes,digest,NULL);
 }
 bool kui_games_retail_prepare(const char *path,struct kui_runtime_image *package,
     kui_log_fn log,kui_cancel_fn cancel) {
@@ -499,8 +553,13 @@ static bool fill_ram_patches(struct kui_runtime_image *package,
         KUI_GAME_RAM_PATCH_SEED_BYTES,patches,exec_bytes);
 }
 #include "games_native_cache.inc"
+#include "games_native_owner_cache.inc"
+#include "games_native_cache_hint.inc"
 #if KUI_VMU_GAME_CARDS
 #include "games_vmu_card.inc"
+#include "vc2_ce_vmu_late_prepare.inc"
+#include "vc2_ce_vmu_persist_prepare.inc"
+#include "smash_native_child_prepare.inc"
 #endif
 
 bool kui_native_session_map_gdi(FATFS *fs,const struct kui_volume *volume,
@@ -610,16 +669,187 @@ bool kui_native_session_map_file(FATFS *fs,const struct kui_volume *volume,
     } else *problem="return runtime allocation exceeds its bounded map";
     free(map);return ok;
 }
+#if KUI_VMU_GAME_CARDS
+/* The outer menu is native, but its supported VC2 child owns a separate CE
+ * adapter. Select it only after exact source proof and an actual installed
+ * capability; neither a product string nor the global native-VMU preference
+ * can authorize the nested runtime on its own. */
+/* 1=persistent CE adapter,3=explicit no-VMU control,0=ordinary module,
+ * -1=contradictory or damaged comparison identity. */
+static int smash_collection_capability(const struct kui_runtime_image *package) {
+    if(!package)return 0;
+    int control=kui_smash_reader_control_find(package->data,package->info.payload_bytes,NULL);
+    if(control<0)return -1;
+    if(kui_native_standard_module_find(package->data,package->info.payload_bytes)!=KUI_NATIVE_STANDARD_FOREGROUND)
+        return control?-1:0;
+    size_t at=0u;
+    if(kui_native_foreground_descriptor_find(package->data,package->info.payload_bytes,&at)!=1)return control?-1:0;
+    uint32_t flags=le32((const uint8_t *)package->data+at+28u);
+    if(control)return flags==0u?3:-1;
+    return flags==KUI_NATIVE_FOREGROUND_CAP_VC2_PERSIST?1:0;
+}
+static bool smash_collection_route(const struct kui_game_metadata *metadata,
+    const struct kui_game_image *image,uint32_t transport,uint32_t options,
+    bool patched,bool emulation_enabled,unsigned child,uint32_t ip_crc,
+    const uint8_t menu_sha[32],const struct kui_runtime_image *package) {
+    if(!metadata || !image || !package || !emulation_enabled || child || options || patched ||
+       transport!=KUI_STORAGE_SCI || image->format!=KUI_GAME_IMAGE_GDI ||
+       image->compressed || image->scrambled || image->cd_image ||
+       !kui_smash_native_child_candidate(metadata) ||
+       !kui_smash_native_child_menu_owner(ip_crc,metadata->boot_bytes,menu_sha))return false;
+    return smash_collection_capability(package)>0;
+}
+struct smash_collection_request {
+    struct files *files;
+    const struct kui_game_metadata *metadata;
+    struct kui_game_image *image;
+    struct kui_retail_manifest *map;
+    bool native_standard,patched,emulation_enabled;
+    unsigned child;uint32_t options;
+};
+typedef enum kui_game_result (*smash_collection_proof_fn)(const struct smash_collection_request *,
+    uint32_t *,uint8_t [32],uint32_t *);
+static enum kui_game_result smash_collection_source_proof(const struct smash_collection_request *q,
+    uint32_t *ip,uint8_t sha[32],uint32_t *crc) {
+    enum kui_game_result result=extent_crc(q->image,q->map->session_lba,KUI_RETAIL_IP_BYTES,ip,NULL);
+    return result==KUI_GAME_OK?extent_sha_crc(q->image,q->metadata->boot_lba,q->metadata->boot_bytes,sha,crc):result;
+}
+/* Execute the actual optional-module probe separately from later map/card
+ * preparation. Source proof is an explicit read-only seam for host fixtures;
+ * production always passes smash_collection_source_proof above. */
+static bool smash_collection_probe(const struct smash_collection_request *q,
+    struct kui_runtime_image *package,bool *selected,uint32_t *menu_crc,
+    const char **launch_package,const char **problem,kui_log_fn log,kui_cancel_fn cancel,
+    smash_collection_proof_fn proof) {
+    *selected=false;
+    if(!q->native_standard || q->child || !q->emulation_enabled || q->options || q->patched ||
+       q->map->storage_transport!=KUI_STORAGE_SCI || q->image->format!=KUI_GAME_IMAGE_GDI ||
+       q->image->compressed || q->image->scrambled || q->image->cd_image ||
+       !kui_smash_native_child_candidate(q->metadata))return true;
+    const char *physical=kui_native_standard_package(false);FILINFO installed;char resolved[192];
+    FRESULT present=kui_runtime_resolve_path(physical,resolved,sizeof(resolved))?
+        f_stat(resolved,&installed):FR_INVALID_NAME;
+    if(present==FR_NO_FILE || present==FR_NO_PATH)return true;
+    if(present!=FR_OK) {*problem="cannot inspect the Smash Pack collection loader";return false;}
+    if(installed.fattrib&AM_DIR) {*problem="Smash Pack collection loader path is a directory";return false;}
+    if(!close_reader(q->files)) {*problem="cannot close metadata reader";return false;}
+    enum kui_runtime_result result=kui_runtime_read(physical,package,log,cancel);
+    if(result!=KUI_RUNTIME_OK) {*problem="Smash Pack collection loader is unreadable or corrupt";return false;}
+    if(!layout_codec(package,false,false,KUI_ZSO_LZ4) ||
+       kui_native_standard_module_find(package->data,package->info.payload_bytes)==KUI_NATIVE_STANDARD_REFUSED) {
+        *problem="Smash Pack collection loader capability is invalid";return false;
+    }
+    int adapter=smash_collection_capability(package);
+    if(adapter<0) {*problem="Smash Pack comparison03 tag is invalid or contradicts its loader capability";return false;}
+    if(adapter>0) {
+        uint8_t menu_sha[32];uint32_t ip=0u,crc=0u;
+        enum kui_game_result source=proof(q,&ip,menu_sha,&crc);
+        if(source!=KUI_GAME_OK) {*problem=kui_game_result_name(source);return false;}
+        *selected=crc==KUI_SMASH_NATIVE_MENU_CRC32 && smash_collection_route(q->metadata,q->image,
+            q->map->storage_transport,q->options,q->patched,q->emulation_enabled,q->child,ip,menu_sha,package);
+        if(*selected) {
+            q->map->ip_crc32=ip;*menu_crc=crc;*launch_package=physical;
+            log(adapter==3?
+                "Smash Pack: exact collection menu verified; selecting no-VMU/no-reservation comparison03 independently of the native VMU preference":
+                "Smash Pack: exact collection menu verified; selecting VC2 shared-card loader independently of the native VMU preference");
+        }
+    }
+    if(!*selected)kui_runtime_free(package);
+    return true;
+}
+/* Prefer the separate native-menu adapter when it is installed. Its presence
+ * is not source authority: the original IP and full menu SHA/CRC are checked
+ * before routing. An absent adapter leaves the accepted CE collection path
+ * available. An inspected different source needs no second menu hash. */
+static bool smash_native_menu_probe(const struct smash_collection_request *q,
+    struct kui_runtime_image *package,bool *selected,bool *examined,uint32_t *menu_crc,
+    const char **launch_package,const char **problem,kui_log_fn log,kui_cancel_fn cancel,
+    smash_collection_proof_fn proof) {
+    *selected=false;*examined=false;
+    if(!q->native_standard || q->child || !q->emulation_enabled || q->options || q->patched ||
+       q->map->storage_transport!=KUI_STORAGE_SCI || q->image->format!=KUI_GAME_IMAGE_GDI ||
+       q->image->compressed || q->image->scrambled || q->image->cd_image ||
+       !kui_smash_native_child_candidate(q->metadata))return true;
+    FILINFO installed;char resolved[192];
+    bool bundled=kui_runtime_bundle_contains(KUI_SMASH_MENU_LOADER_PACKAGE);
+    bool resolved_ok=kui_runtime_resolve_path(KUI_SMASH_MENU_LOADER_PACKAGE,resolved,sizeof(resolved));
+    bool replacement=resolved_ok && strcmp(resolved,KUI_SMASH_MENU_LOADER_PACKAGE);
+    FRESULT present=bundled?FR_OK:
+        resolved_ok?
+        f_stat(resolved,&installed):FR_INVALID_NAME;
+    if((present==FR_NO_FILE || present==FR_NO_PATH) && !replacement)return true;
+    *examined=true;
+    if(present!=FR_OK) {*problem="cannot inspect the Smash Pack native menu loader";return false;}
+    if(!bundled && (installed.fattrib&AM_DIR)) {*problem="Smash Pack native menu loader path is a directory";return false;}
+    if(!close_reader(q->files)) {*problem="cannot close metadata reader";return false;}
+    if(kui_runtime_read(KUI_SMASH_MENU_LOADER_PACKAGE,package,log,cancel)!=KUI_RUNTIME_OK) {
+        *problem="Smash Pack native menu loader is unreadable or corrupt";return false;
+    }
+    size_t at=0u,cap_at=0u;
+    if(!layout(package,false) ||
+       kui_native_standard_module_find(package->data,package->info.payload_bytes)!=KUI_NATIVE_STANDARD_FOREGROUND ||
+       kui_native_foreground_descriptor_find(package->data,package->info.payload_bytes,&at)!=1 ||
+       le32((const uint8_t *)package->data+at+28u)!=KUI_NATIVE_FOREGROUND_CAP_SMASH_MENU ||
+       kui_smash_reader_control_find(package->data,package->info.payload_bytes,NULL)!=0 ||
+       kui_smash_menu_loader_capability_find(package->data,package->info.payload_bytes,&cap_at)!=1 ||
+       (le32((const uint8_t *)package->data+cap_at+8u)==2u?
+        kui_smash_menu_collection_find(package->data,package->info.payload_bytes):
+        kui_smash_menu_loader_seed_find(package->data,package->info.payload_bytes))==SIZE_MAX ||
+       kui_smash_menu_return_seed_find(package->data,package->info.payload_bytes)==SIZE_MAX) {
+        *problem="Smash Pack native menu loader capability or blank seed is invalid";return false;
+    }
+    uint8_t sha[32];uint32_t ip=0u,crc=0u;
+    enum kui_game_result source=proof(q,&ip,sha,&crc);
+    if(source!=KUI_GAME_OK) {*problem=kui_game_result_name(source);return false;}
+    *selected=crc==KUI_SMASH_NATIVE_MENU_CRC32 &&
+        kui_smash_native_child_menu_owner(ip,q->metadata->boot_bytes,sha);
+    if(*selected) {
+        q->map->ip_crc32=ip;*menu_crc=crc;*launch_package=KUI_SMASH_MENU_LOADER_PACKAGE;
+        log("Smash Pack: exact original menu verified; preparing native Genesis selections with the shared A1 card");
+    } else kui_runtime_free(package);
+    return true;
+}
+static bool smash_collection_select(const struct smash_collection_request *q,
+    struct kui_runtime_image *package,bool *selected,bool *native_menu,uint32_t *menu_crc,
+    const char **launch_package,const char **problem,kui_log_fn log,kui_cancel_fn cancel,
+    smash_collection_proof_fn proof) {
+    bool examined=false;*selected=false;*native_menu=false;
+    if(!smash_native_menu_probe(q,package,native_menu,&examined,menu_crc,
+        launch_package,problem,log,cancel,proof))return false;
+    *selected=*native_menu;
+    return examined || smash_collection_probe(q,package,selected,menu_crc,
+        launch_package,problem,log,cancel,proof);
+}
+/* The manifest wire requires every byte after a text field's first NUL to
+ * be zero. A shorter child filename must retire the original menu's tail. */
+static void smash_native_boot_target(struct kui_game_metadata *metadata,
+    struct kui_retail_manifest *map,uint32_t lba,uint32_t bytes) {
+    metadata->boot_lba=map->boot_lba=lba;metadata->boot_bytes=map->boot_bytes=bytes;
+    memset(metadata->bootfile,0,sizeof(metadata->bootfile));
+    memset(map->bootfile,0,sizeof(map->bootfile));
+    memcpy(metadata->bootfile,"MDE_US.BIN",sizeof("MDE_US.BIN"));
+    memcpy(map->bootfile,"MDE_US.BIN",sizeof("MDE_US.BIN"));
+}
+#include "smash_menu_capsule_prepare.inc"
+#endif
 static bool prepare_launch(const char *path,uint32_t reader,const struct kui_game_ram_patches *patches,
     const struct kui_vmu_game_selection *selection,const struct kui_native_session_request *session,
-    bool reporting,struct kui_runtime_image *package,kui_log_fn log,kui_cancel_fn cancel) {
+    bool reporting,struct kui_runtime_image *package,kui_log_fn log,kui_cancel_fn cancel,unsigned smash_child) {
     if(!package) return false;
     *package=(struct kui_runtime_image){0};
     if(!log || !cancel) return false;
+    kui_smash_launch_timing_phase(KUI_SMASH_UI_METADATA);
     const struct kui_game_ram_patches off={0};
     if(!patches) patches=&off;
     if(!kui_game_ram_patches_valid(patches)) {log("RAM patches: invalid address or duplicate target");return false;}
     const bool patched=kui_game_ram_patches_enabled(patches);
+    const bool smash_native=smash_child!=KUI_SMASH_NATIVE_CHILD_NONE;
+#if !KUI_VMU_GAME_CARDS
+    if(smash_native) {log("Smash Pack native test needs the matching Games UI");return false;}
+#endif
+    if(smash_native && (!kui_smash_native_child_name(smash_child) || reader || patched)) {
+        log("Smash Pack native test requires Standard, original boot, CD music and RAM patches Off");return false;
+    }
     /* The virtual card's slot chooses the module; it is not a launch option.
      * An A1 game takes the same preparation, proofs and card as A2. */
     const uint32_t requested_options=reader&~KUI_GAMES_RETAIL_VIRTUAL_A1;
@@ -655,13 +885,21 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
         (reader==KUI_RETAIL_READER_ASYNC || reader==KUI_RETAIL_READER_ASYNC_EAGER);
     const bool native_standard=!ce && !cdda && !ce_excerpt && !zso && reader==KUI_RETAIL_READER_STANDARD;
 #if KUI_VMU_GAME_CARDS
-    bool standard_virtual_a2=false;
+    bool standard_virtual_a2=false,foreground_control=false,vc2_late=false,vc2_persist=false;
+    bool smash_collection=false,smash_native_menu=false;uint32_t smash_menu_crc=0u;
+    uint32_t foreground_slots=KUI_RETAIL_ASYNC_SLOTS;
 #endif
     if(native_dual && patched) {
         log("Native virtual-A2 background testing requires RAM patches Off");return false;
     }
     struct files files={.cancel=cancel};char name[KUI_GAME_NAME_CAP];
     if(!split(path,&files,name) || stopped(&files)) {log("Retail boot: invalid path or cancelled");return false;}
+    /* A failure report is subject to the same reserved-directory rule as
+     * a successful launch. Establish it before native timing is activated. */
+    char report_root[KUI_GAME_LAUNCH_SETTINGS_PATH_CAP];
+    bool report_safe=!strcmp(files.root,"/") ||
+        (kui_game_launch_settings_normalize(report_root,files.root) && strcmp(report_root,"/kui/apps/games"));
+    kui_smash_launch_timing_report_allowed(report_safe);
     if(!kui_sd_connect()) {log("Retail boot: storage unavailable");return false;}
     FATFS fs;bool ok=false;const char *problem="cannot mount storage";
     struct kui_retail_manifest *map=NULL;struct kui_game_image *image=NULL;uint8_t *gdi=NULL;
@@ -672,7 +910,7 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     bool emulation_enabled=true;
     /* This preference controls native virtual cards. Separate WinCE modules
      * neither consult it nor inherit a failure from damaged native settings. */
-    if(!ce && !ce_excerpt) {
+    if(!ce && !ce_excerpt && !smash_native) {
         if(!kui_vmu_emulation_settings_load(&emulation_enabled,log)) {
             problem="cannot read the saved VMU emulation setting; check VMU tools";goto done;
         }
@@ -683,47 +921,6 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
         problem="VMU Off needs the matching toggle-capable Games UI and native module";goto done;
     }
 #endif
-    enum kui_wince_cdda_profile music_profile=KUI_WINCE_CDDA_NONE;
-    const char *launch_package=zso?(codec==KUI_ZSO_LZO1X?KUI_GAMES_RETAIL_LZO_PACKAGE:KUI_GAMES_RETAIL_ZSO_PACKAGE):ce?KUI_GAMES_RETAIL_CE_PACKAGE:KUI_GAMES_RETAIL_PACKAGE;
-    /* With Virtual VMU Off neither module emulates a card, so Off always
-     * takes the A2 module and its unchanged reader. */
-    const bool dual_a1=native_dual && virtual_a1 && emulation_enabled;
-    if(native_dual)launch_package=dual_a1?KUI_GAMES_RETAIL_NATIVE_DUAL_A1_PACKAGE:KUI_GAMES_RETAIL_NATIVE_DUAL_PACKAGE;
-    if(dual_a1) log("Virtual card in A1 for this game: %s",KUI_GAMES_RETAIL_NATIVE_DUAL_A1_PACKAGE);
-#if KUI_VMU_GAME_CARDS
-    if(native_standard && !emulation_enabled) launch_package=KUI_GAMES_RETAIL_PHYSICAL_PACKAGE;
-#else
-    (void)native_standard;
-#endif
-    enum kui_runtime_result rr=KUI_RUNTIME_OK;
-    if(!cdda && !ce_excerpt) {
-        rr=kui_runtime_read(launch_package,package,log,cancel);
-        if(rr!=KUI_RUNTIME_OK) {
-            problem=dual_a1?"A1 Background module (retail-native-dual-a1.kui) missing or unreadable; install the update or set the card to A2":
-                native_dual?"native X/Y virtual-A2 module missing or unreadable; install the matching candidate":kui_runtime_result_name(rr);goto done;
-        }
-        if(!layout_codec(package,ce,zso,codec)) {problem="unsupported game-launch package layout";goto done;}
-#if KUI_VMU_GAME_CARDS
-        if(native_standard) {
-            if(!emulation_enabled) {
-                if(kui_native_physical_descriptor_find(package->data,package->info.payload_bytes,NULL)!=1) {
-                    problem="physical Standard module capability missing or ambiguous; reinstall this update";goto done;
-                }
-            } else {
-                standard_virtual_a2=kui_native_vmu_standard_recognize(package,NULL);
-                if(!standard_virtual_a2) {
-                    problem="Standard virtual VMU needs the matching paced SCI72 module; reinstall the accepted candidate";goto done;
-                }
-            }
-        }
-#endif
-        if(native_dual && kui_native_dual_descriptor_find(package->data,package->info.payload_bytes,NULL)!=1) {
-            problem="native X/Y module capability missing or ambiguous; install the matching candidate";goto done;
-        }
-#if KUI_VMU_GAME_CARDS
-        if(native_dual && !games_card_emulation_mode(package,emulation_enabled,&problem)) goto done;
-#endif
-    }
     uint64_t size=0;
     if(stat_file(&files,name,&size)!=KUI_GAME_OK || !size) {
         problem="selected image missing or unreadable";goto done;
@@ -741,15 +938,6 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     }
     if(image->compressed!=zso) {problem="compressed image/backend mismatch";goto done;}
     map->storage_transport=kui_storage_active();
-#if KUI_VMU_GAME_CARDS
-    if(native_standard && !emulation_enabled &&
-       !kui_native_physical_launch_valid(reader,map->storage_transport)) {
-        problem="physical Standard module does not support this storage transport";goto done;
-    }
-    if(standard_virtual_a2 && map->storage_transport!=KUI_STORAGE_SCI) {
-        problem="paced Standard virtual VMU requires SCI microSD";goto done;
-    }
-#endif
     if(zso && map->storage_transport!=KUI_STORAGE_SCI) {
         problem="ZSO direct launch needs SCI microSD";goto done;
     }
@@ -767,6 +955,99 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     struct kui_game_metadata metadata;struct kui_game_metadata_ops metadata_ops={image,metadata_read,metadata_range};
     enum kui_game_metadata_status ms=kui_game_metadata_read(&metadata_ops,map->session_lba,&metadata);
     if(ms!=KUI_GAME_METADATA_OK) {problem=kui_game_metadata_status_text(ms);goto done;}
+    if((native_standard || native_dual) && metadata.native_gd)
+        kui_smash_launch_timing_native(path,KUI_BUILD_ID,metadata.product,native_dual?
+            (reader==KUI_RETAIL_READER_ASYNC?"Background New":"Background Legacy"):"Standard",
+            emulation_enabled,0u,0u);
+    enum kui_wince_cdda_profile music_profile=KUI_WINCE_CDDA_NONE;
+    const char *launch_package=zso?(codec==KUI_ZSO_LZO1X?KUI_GAMES_RETAIL_LZO_PACKAGE:KUI_GAMES_RETAIL_ZSO_PACKAGE):ce?KUI_GAMES_RETAIL_CE_PACKAGE:KUI_GAMES_RETAIL_PACKAGE;
+    /* With Virtual VMU Off neither module emulates a card, so Off always
+     * takes the A2 module and its unchanged reader. */
+    const bool dual_a1=native_dual && virtual_a1 && emulation_enabled;
+    if(native_dual)launch_package=kui_native_background_package(reader,dual_a1);
+    if(dual_a1) log("Virtual card in A1 for this game: %s",launch_package);
+#if KUI_VMU_GAME_CARDS
+    if(native_standard) launch_package=smash_native?KUI_SMASH_NATIVE_CHILD_PACKAGE:kui_native_standard_package(emulation_enabled);
+#else
+    (void)native_standard;
+#endif
+    enum kui_runtime_result rr=KUI_RUNTIME_OK;
+#if KUI_VMU_GAME_CARDS
+    kui_smash_launch_timing_phase(KUI_SMASH_UI_MENU_PROOF);
+    const struct smash_collection_request request={&files,&metadata,image,map,
+        native_standard,patched,emulation_enabled,smash_child,requested_options};
+    if(!smash_collection_select(&request,package,&smash_collection,&smash_native_menu,&smash_menu_crc,
+        &launch_package,&problem,log,cancel,smash_collection_source_proof))goto done;
+    if(smash_native_menu)kui_smash_launch_timing_native(path,KUI_BUILD_ID,metadata.product,
+        "Smash Pack / Standard",emulation_enabled,package->info.crc32,package->info.payload_bytes);
+#endif
+    if(!cdda && !ce_excerpt) {
+        if(!close_reader(&files)) {problem="cannot close metadata reader";goto done;}
+        kui_smash_launch_timing_phase(KUI_SMASH_UI_MODULE_LOAD);
+#if KUI_VMU_GAME_CARDS
+        if(!smash_collection)
+#endif
+            rr=kui_runtime_read(launch_package,package,log,cancel);
+        if(rr!=KUI_RUNTIME_OK) {
+            problem=native_dual?"Background module missing or unreadable; install the matching update":
+                kui_runtime_result_name(rr);goto done;
+        }
+        kui_smash_launch_timing_phase(KUI_SMASH_UI_MODULE_VERIFY);
+        kui_smash_launch_timing_metric(KUI_SMASH_UI_MODULE_CRC32,package->info.crc32);
+        kui_smash_launch_timing_metric(KUI_SMASH_UI_MODULE_BYTES,package->info.payload_bytes);
+        if(!layout_codec(package,ce,zso,codec)) {problem="unsupported game-launch package layout";goto done;}
+#if KUI_VMU_GAME_CARDS
+        if(native_standard) {
+            if(!emulation_enabled || smash_collection) {
+                enum kui_native_standard_module module=kui_native_standard_module_find(
+                    package->data,package->info.payload_bytes);
+                if(module==KUI_NATIVE_STANDARD_REFUSED) {
+                    problem="physical Standard module capability missing or ambiguous; reinstall this update";goto done;
+                }
+                foreground_control=module==KUI_NATIVE_STANDARD_FOREGROUND;
+                if(foreground_control) {
+                    size_t at=0u;
+                    if(kui_native_foreground_descriptor_find(package->data,package->info.payload_bytes,&at)!=1) {
+                        problem="foreground control capability changed during preparation";goto done;
+                    }
+                    const uint8_t *cap=(const uint8_t *)package->data+at;
+                    foreground_slots=le32(cap+20u);
+                    vc2_late=le32(cap+28u)==KUI_NATIVE_FOREGROUND_CAP_VC2_LATE;
+                    vc2_persist=le32(cap+28u)==KUI_NATIVE_FOREGROUND_CAP_VC2_PERSIST;
+                }
+                if(foreground_control && patched) {
+                    problem="foreground control requires RAM patches Off";goto done;
+                }
+            } else {
+                standard_virtual_a2=smash_native?smash_native_seed_slot(package)!=SIZE_MAX:kui_native_vmu_standard_recognize(package,NULL);
+                if(!standard_virtual_a2) {
+                    problem="Standard virtual VMU module does not match this K-UI build; reinstall the update";goto done;
+                }
+            }
+        }
+#endif
+        if(native_dual && kui_native_dual_descriptor_find(package->data,package->info.payload_bytes,NULL)!=1) {
+            problem="native X/Y module capability missing or ambiguous; install the matching candidate";goto done;
+        }
+        if(native_dual && !kui_native_background_module_matches(reader,package->data,package->info.payload_bytes)) {
+            problem="Background module does not match the selected reader; reinstall the matching update";goto done;
+        }
+#if KUI_VMU_GAME_CARDS
+        if(native_dual && !games_card_emulation_mode(package,emulation_enabled,&problem)) goto done;
+#endif
+    }
+#if KUI_VMU_GAME_CARDS
+    if(native_standard && !emulation_enabled &&
+       !kui_native_physical_launch_valid(reader,map->storage_transport)) {
+        problem="physical Standard module does not support this storage transport";goto done;
+    }
+    if(foreground_control && map->storage_transport!=KUI_STORAGE_SCI) {
+        problem="foreground control needs SCI microSD";goto done;
+    }
+    if(standard_virtual_a2 && map->storage_transport!=KUI_STORAGE_SCI) {
+        problem="paced Standard virtual VMU requires SCI microSD";goto done;
+    }
+#endif
     if(native_dual && (metadata.windows_ce || !metadata.native_gd ||
         image->format!=KUI_GAME_IMAGE_GDI || image->compressed || image->scrambled || image->cd_image)) {
         problem="native X/Y virtual-A2 testing requires a native GDI with original boot encoding";goto done;
@@ -849,7 +1130,7 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     snprintf(map->bootfile,sizeof(map->bootfile),"%s",metadata.bootfile);
     bool optional_virtual=emulation_enabled && !native_dual;
 #if KUI_VMU_GAME_CARDS
-    if(standard_virtual_a2) optional_virtual=false;
+    if(standard_virtual_a2 || smash_collection) optional_virtual=false;
 #endif
     if(optional_virtual && (kui_vmu_launch_silver_candidate(map) || kui_vmu_launch_toy_candidate(map))) {
         bool silver=kui_vmu_launch_silver_candidate(map);
@@ -884,8 +1165,45 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
             audio_info.candidate_tracks);
     else if(!cdda && !ce_excerpt && audio_info.classification==KUI_GAME_AUDIO_UNKNOWN)
         log("Retail audio: bare ISO/raw image has no original audio-track inventory; CD audio playback remains unsupported");
-    r=extent_crc(image,map->session_lba,KUI_RETAIL_IP_BYTES,&map->ip_crc32,NULL);
+#if KUI_VMU_GAME_CARDS
+    if(!smash_collection)
+#endif
+    {
+        kui_smash_launch_timing_phase(KUI_SMASH_UI_IP_CHECK);
+        r=extent_crc(image,map->session_lba,KUI_RETAIL_IP_BYTES,&map->ip_crc32,NULL);
+    }
     if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
+#if KUI_VMU_GAME_CARDS
+    if(smash_native) {
+        uint8_t menu_sha[32];uint32_t engine_lba=0u,engine_bytes=0u,dir_lba=0u,dir_bytes=0u,rom_lba=0u,rom_bytes=0u;
+        if(image->format!=KUI_GAME_IMAGE_GDI || image->compressed || image->scrambled || image->cd_image ||
+           map->storage_transport!=KUI_STORAGE_SCI || !kui_smash_native_child_candidate(&metadata) ||
+           extent_sha(image,metadata.boot_lba,metadata.boot_bytes,menu_sha)!=KUI_GAME_OK ||
+           !kui_smash_native_child_menu_owner(map->ip_crc32,metadata.boot_bytes,menu_sha)) {
+            problem="Smash Pack native test requires the exact verified original release";goto done;
+        }
+        if(kui_game_metadata_find(&metadata_ops,&metadata,"MDE_US.BIN",KUI_SMASH_NATIVE_ENGINE_BYTES,
+           &engine_lba,&engine_bytes)!=KUI_GAME_METADATA_OK || engine_bytes!=KUI_SMASH_NATIVE_ENGINE_BYTES ||
+           kui_game_metadata_find_directory(&metadata_ops,&metadata,kui_smash_native_child_folder(smash_child),
+           &dir_lba,&dir_bytes)!=KUI_GAME_METADATA_OK) {
+            problem="Smash Pack native engine or selected ROM directory is unavailable";goto done;
+        }
+        struct kui_game_metadata directory=metadata;directory.root_lba=dir_lba;directory.root_bytes=dir_bytes;
+        uint32_t expected=smash_child==KUI_SMASH_NATIVE_CHILD_SHINING_FORCE?1572864u:786432u;
+        if(kui_game_metadata_find(&metadata_ops,&directory,kui_smash_native_child_rom(smash_child),expected,
+           &rom_lba,&rom_bytes)!=KUI_GAME_METADATA_OK || rom_bytes!=expected) {
+            problem="selected Smash Pack RPG ROM has an unexpected file layout";goto done;
+        }
+        uint8_t header[2048];
+        if(kui_game_image_read(image,rom_lba,1u,KUI_GAME_SECTOR_MODE1,header,sizeof(header))!=KUI_GAME_OK ||
+           header[0x1b0]!='R' || header[0x1b1]!='A' || header[0x1b3]!=0x20u ||
+           (header[0x1b2]!=0xf0u && header[0x1b2]!=0xf8u && header[0x1b2]!=0xe0u)) {
+            problem="selected Smash Pack RPG ROM has no supported cartridge save header";goto done;
+        }
+        smash_native_boot_target(&metadata,map,engine_lba,engine_bytes);
+        log("Smash Pack native test: %s; verified original menu, directory and cartridge header",kui_smash_native_child_name(smash_child));
+    }
+#endif
     r=kui_game_image_check(image,map->boot_lba,(map->boot_bytes+2047u)/2048u,KUI_GAME_SECTOR_MODE1);
     if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
     const uint32_t boot_end=map->boot_lba+(map->boot_bytes+2047u)/2048u;
@@ -894,7 +1212,8 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
         if(image->tracks[i].sector_bytes==KUI_GAME_DATA_BYTES &&
             image->tracks[i].start_lba<boot_end && image->tracks[i].end_lba>map->boot_lba)
             cooked_boot=true;
-    const bool need_boot_crc=reporting || patched || cdda || cooked_boot || vmu_package || image->format!=KUI_GAME_IMAGE_GDI;
+    const bool required_boot_crc=patched || cdda || cooked_boot || vmu_package || image->format!=KUI_GAME_IMAGE_GDI;
+    const bool need_boot_crc=reporting || required_boot_crc;
     /* Standard cache-bearing VMU modules also read the full source for SHA
      * and SDK preflight. Reuse that read's exact-byte CRC as X/Y already do.
      * An absent/incomplete source proof still takes the full CRC fallback;
@@ -909,7 +1228,11 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
         if(!defer_boot_crc) {
             log("Retail boot: checking exact executable CRC before detached launch");
             uint32_t failed=map->boot_lba;
-            r=extent_crc(image,map->boot_lba,map->boot_bytes,&map->boot_crc32,&failed);
+#if KUI_VMU_GAME_CARDS
+            if(smash_collection)map->boot_crc32=smash_menu_crc;
+            else
+#endif
+                r=extent_crc(image,map->boot_lba,map->boot_bytes,&map->boot_crc32,&failed);
             if(r==KUI_GAME_MODE) log_bad_sector(image,failed,log);
             if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
             log("Retail boot: executable CRC32=%08x",map->boot_crc32);
@@ -920,6 +1243,7 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     if(!volume.count || (uint64_t)volume.start+volume.count>UINT32_MAX) {problem="invalid partition bounds";goto done;}
     map->partition_start=volume.start;map->partition_end=(uint64_t)volume.start+volume.count;
     map->card_sectors=map->partition_end; /* detached stage checks actual capacity */
+    kui_smash_launch_timing_phase(KUI_SMASH_UI_TRACK_MAP);
     log("Retail boot: mapping %u tracks",image->count);
     bool background=reader!=KUI_RETAIL_READER_STANDARD,audio=true;
     if(background && map->storage_transport!=KUI_STORAGE_SCI) {
@@ -972,8 +1296,14 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
             background=false;
         }
     }
-    if(!zso && !cdda && !background && mapped!=MAP_FAILED)
-        mapped=map_tracks(&files,&fs,&volume,image,map,LEGACY_MAP_SLOTS,&audio);
+    if(!zso && !cdda && !background && mapped!=MAP_FAILED) {
+        uint32_t capacity=LEGACY_MAP_SLOTS;
+#if KUI_VMU_GAME_CARDS
+        capacity=(smash_native || smash_native_menu)?48u:
+            foreground_control?foreground_slots:kui_native_standard_map_capacity(false);
+#endif
+        mapped=map_tracks(&files,&fs,&volume,image,map,capacity,&audio);
+    }
     if(mapped!=MAP_OK) {
         if(cdda && mapped==MAP_FULL) {
             log("CDDA map requires %u slots (%u file extents); this adapter holds %u",
@@ -984,13 +1314,21 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
         } else if(zso) problem=mapped==MAP_FULL?
             "ZSO compressed file exceeds 31 physical extents; defragment or use offline import":
             "ZSO physical file map failed: changed file, I/O or bounds";
+#if KUI_VMU_GAME_CARDS
+        else if(foreground_control)problem=mapped==MAP_FULL?
+            "foreground control track map exceeds the selected module capacity":
+            "foreground control track map failed: changed file, I/O or bounds";
+#endif
         else problem=mapped==MAP_FULL?"track files too fragmented for the launch map (160 slots)":
             "track map failed: changed file, I/O or bounds";
         goto done;
     }
     for(unsigned i=0;i<image->count;i++) if(map->slots[i].track.extent_count)
+    {
         log("Retail map T%02u: %u-byte sectors, %u extents",image->tracks[i].number,
             image->tracks[i].sector_bytes,map->slots[i].track.extent_count);
+    }
+    kui_smash_launch_timing_phase(KUI_SMASH_UI_PREPARE_OTHER);
     if(!audio)
         log("Retail boot: audio tracks listed without their files to fit %u tracks; their sectors cannot be read",
             image->count);
@@ -1002,6 +1340,14 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
         else log("Retail boot reader: background SCI stream (test, %s)",
             reader==KUI_RETAIL_READER_ASYNC_EAGER?"25 blocks per call":"20 blocks per call");
     }
+#if KUI_VMU_GAME_CARDS
+    if(foreground_control) {
+        if(!kui_native_foreground_manifest_valid(map)) {
+            problem="foreground control needs a plain SCI Standard map with at most64 slots";goto done;
+        }
+        log("Foreground control selected: %s; physical VMUs, no SDK callbacks",launch_package);
+    }
+#endif
     if(cdda) {
         enum kui_games_cdda_profile profile=kui_games_cdda_compatible_profile(image,map);
         const char *package_path=kui_games_cdda_package(profile);
@@ -1079,10 +1425,38 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
         launch_package=vmu_package;
         log("Virtual card: separate persistent A1 module selected; startup will show its card path");
     }
-    struct native_cache_source_proof source_proof;bool standalone_candidate=false;
-    const enum native_cache_result cache=native_cache_prepare(image,map,!ce && metadata.native_gd,
-       requested_options,patched,package,files.root,emulation_enabled,log,cancel,defer_boot_crc?&source_proof:NULL,
-       native_dual?&standalone_candidate:NULL);
+    struct native_cache_source_proof source_proof={0};bool standalone_candidate=false;
+    /* A saved mapping is only a candidate, not source identity. Raw native
+     * launches whose CRC was requested solely for a diagnostic report may
+     * send a unique candidate directly to the unchanged stage. That stage
+     * reads the source, proves its extent, hashes its own bytes and rebinds
+     * live ownership; a different image causes normal fresh discovery.
+     * Cooked/patch/CDDA/special-module CRC and Smash's full SHA owner proof
+     * retain their fresh preflight. No cached digest enters source_proof. */
+    const bool hint_allowed=emulation_enabled && !required_boot_crc &&
+        !smash_native &&
+#if KUI_VMU_GAME_CARDS
+        !smash_collection &&
+#endif
+        kui_native_session_descriptor_find(package->data,package->info.payload_bytes,NULL)==0 &&
+        native_cache_source_eligible(image,map,!ce && metadata.native_gd,
+            requested_options,patched,package,native_dual);
+    enum native_cache_result cache=hint_allowed?
+        native_cache_hint_prepare(map,native_dual,package,files.root,log,cancel):NATIVE_CACHE_SKIPPED;
+    const bool mapping_hint=cache==NATIVE_CACHE_READY;
+    if(mapping_hint) {
+        kui_smash_launch_timing_metric(KUI_SMASH_UI_MDE_BYTES,map->boot_bytes);
+        kui_smash_launch_timing_metric(KUI_SMASH_UI_CACHE_HIT,1u);
+    }
+    if(cache==NATIVE_CACHE_SKIPPED)
+        cache=native_cache_prepare(image,map,!ce && metadata.native_gd,
+            requested_options,patched,package,files.root,emulation_enabled,log,cancel,defer_boot_crc?&source_proof:NULL,
+            native_dual?&standalone_candidate:NULL);
+    if(smash_native && (cache!=NATIVE_CACHE_READY || !source_proof.complete ||
+       source_proof.crc32!=KUI_SMASH_NATIVE_ENGINE_CRC32 ||
+       !kui_smash_native_child_engine_owner(map->boot_bytes,source_proof.sha256))) {
+        problem="Smash Pack native engine identity or guarded SDK mapping refused";goto done;
+    }
     if(cache==NATIVE_CACHE_CANCELLED) {
         problem="cancelled during native executable mapping";goto done;
     }
@@ -1121,12 +1495,17 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     }
     const bool virtual_a2=emulation_enabled &&
         ((native_dual && !native_standalone && cache==NATIVE_CACHE_READY) || standard_virtual_a2);
-    if(!games_card_route(map,emulation_enabled,virtual_a2,native_standalone,&problem,cancel)) goto done;
+    /* Verified collection adapters bind their own shared KUIVC2TEST card.
+     * An outer-menu MK-51146 native-card assignment cannot divert that card. */
+    if(!smash_collection &&
+       !games_card_route(map,emulation_enabled,virtual_a2,native_standalone,&problem,cancel)) goto done;
     /* The virtual-A2 module will run this game: hand it the game's own card.
      * Its raw ownership scan unmounts FatFs, so no image file stays open. */
     if(virtual_a2) {
+        kui_smash_launch_timing_phase(KUI_SMASH_UI_CARD);
         if(!close_reader(&files)) {problem="cannot close image reader";goto done;}
-        bool prepared=selection && selection->selected?
+        bool prepared=smash_native?smash_native_card_prepare(map,package,&fs,&problem,log,cancel):
+            selection && selection->selected?
             games_card_prepare_selected(map,package,&fs,selection,&problem,log,cancel):
             games_card_prepare(map,package,&fs,&problem,log,cancel);
         if(!prepared) goto done;
@@ -1136,7 +1515,12 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
 #else
     (void)cache;(void)selection;
 #endif
-    if(defer_boot_crc) {
+    if(mapping_hint) {
+        /* This flag existed only for reporting in this branch. Never copy
+         * an old CRC into a fresh manifest or claim a completed source read. */
+        map->flags&=~KUI_RETAIL_IMAGE_BOOT_CRC;
+        log("Native mapping hint: executable identity will be freshly checked by the detached stage");
+    } else if(defer_boot_crc) {
         if(source_proof.complete)map->boot_crc32=source_proof.crc32;
         else {
             log("Retail boot: checking exact executable CRC after native preflight skipped");
@@ -1148,8 +1532,19 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
         log("Retail boot: executable CRC32=%08x",map->boot_crc32);
     }
     if(!close_reader(&files)) {problem="cannot close reader before preparing in-game controls";goto done;}
+    kui_smash_launch_timing_phase(KUI_SMASH_UI_SESSION_PREPARE);
     if(!ce && !cdda && !ce_excerpt && !zso &&
        !kui_native_session_prepare(&fs,&volume,path,session,map,metadata.version,package,&problem,log,cancel))goto done;
+#if KUI_VMU_GAME_CARDS
+    if(smash_native_menu) {
+        if(!smash_menu_capsule_prepare(&files,image,&metadata_ops,&metadata,map,&fs,&volume,
+            package->info.build,package,&problem,log,cancel))goto done;
+    }
+    kui_smash_launch_timing_phase(KUI_SMASH_UI_REPORT_CLEANUP);
+    if(smash_native && !smash_native_seed_fill(package,smash_child,&problem))goto done;
+    if(vc2_late && !vc2_ce_vmu_late_prepare(&fs,&volume,package,&problem,log,cancel))goto done;
+    if(vc2_persist && !vc2_ce_vmu_persist_prepare_launch(&fs,&volume,map,package,&problem,log,cancel))goto done;
+#endif
     if(zso) {
         zso_map=malloc(sizeof(*zso_map));
         if(!zso_map) {problem="not enough memory for ZSO launch map";goto done;}
@@ -1161,12 +1556,10 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
         problem="RAM patches need a matching ordinary native loader; reinstall the game-launch package";goto done;
     }
     if(patched) log("RAM patches: validated one-time writes inside %u executable bytes",map->boot_bytes);
-    char report_root[KUI_GAME_LAUNCH_SETTINGS_PATH_CAP];
     /* Track names are sibling components. Keeping all source files outside
      * the report directory also excludes FAT short-name aliases of either
      * report filename, without guessing which spelling refers to a file. */
-    bool report_safe=!strcmp(files.root,"/") ||
-        (kui_game_launch_settings_normalize(report_root,files.root) && strcmp(report_root,"/kui/apps/games"));
+    kui_smash_launch_timing_report_allowed(report_safe);
     if(reporting && !report_safe)
         log("Launch report skipped: selected image shares the reserved report directory");
     if(reporting && report_safe && !stopped(&files)) {
@@ -1192,6 +1585,7 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
         map->track_count,map->extent_count,map->ip_crc32,map->bootfile,map->boot_bytes);
     ok=true;
 done:
+    kui_smash_launch_timing_phase(KUI_SMASH_UI_FILE_CLEANUP);
     if(!close_reader(&files)) {ok=false;problem="cannot close image reader";}
     if(f_mount(NULL,"0:",0)!=FR_OK) {ok=false;problem="cannot release filesystem";}
     kui_sd_disconnect();free(zso_map);free(gdi);free(image);free(map);
@@ -1202,25 +1596,31 @@ done:
 
 bool kui_games_retail_prepare_reader(const char *path,uint32_t reader,
     struct kui_runtime_image *image,kui_log_fn log,kui_cancel_fn cancelled) {
-    return prepare_launch(path,reader,NULL,NULL,NULL,false,image,log,cancelled);
+    return prepare_launch(path,reader,NULL,NULL,NULL,false,image,log,cancelled,KUI_SMASH_NATIVE_CHILD_NONE);
 }
 bool kui_games_retail_prepare_launch(const char *path,uint32_t reader,
     const struct kui_game_ram_patches *patches,struct kui_runtime_image *image,
     kui_log_fn log,kui_cancel_fn cancelled) {
-    return prepare_launch(path,reader,patches,NULL,NULL,true,image,log,cancelled);
+    return prepare_launch(path,reader,patches,NULL,NULL,true,image,log,cancelled,KUI_SMASH_NATIVE_CHILD_NONE);
 }
 bool kui_games_retail_prepare_launch_card(const char *path,uint32_t reader,
     const struct kui_game_ram_patches *patches,const struct kui_vmu_game_selection *selection,
     struct kui_runtime_image *image,kui_log_fn log,kui_cancel_fn cancelled) {
-    return prepare_launch(path,reader,patches,selection,NULL,true,image,log,cancelled);
+    return prepare_launch(path,reader,patches,selection,NULL,true,image,log,cancelled,KUI_SMASH_NATIVE_CHILD_NONE);
 }
 bool kui_games_retail_prepare_launch_session_card(const char *path,uint32_t reader,
     const struct kui_game_ram_patches *patches,const struct kui_vmu_game_selection *selection,
     const struct kui_native_session_request *session,struct kui_runtime_image *image,
     kui_log_fn log,kui_cancel_fn cancelled) {
-    return prepare_launch(path,reader,patches,selection,session,true,image,log,cancelled);
+    return prepare_launch(path,reader,patches,selection,session,true,image,log,cancelled,KUI_SMASH_NATIVE_CHILD_NONE);
 }
 
+bool kui_games_smash_native_prepare(unsigned child,const char *path,uint32_t reader,
+    const struct kui_game_ram_patches *patches,const struct kui_vmu_game_selection *selection,
+    const struct kui_native_session_request *session,struct kui_runtime_image *image,
+    kui_log_fn log,kui_cancel_fn cancelled) {
+    return prepare_launch(path,reader,patches,selection,session,true,image,log,cancelled,child);
+}
 bool kui_games_retail_check_launch(const char *path,uint32_t reader,
     const struct kui_game_ram_patches *patches,kui_log_fn log,kui_cancel_fn cancelled) {
     return kui_games_retail_check_launch_card(path,reader,patches,NULL,log,cancelled);

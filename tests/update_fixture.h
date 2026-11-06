@@ -47,6 +47,20 @@ static inline struct uf_package uf_build(const char build[13],unsigned channel) 
         uf_put32(file+32u,kui_crc32(0,body,UF_PAYLOAD_BYTES));memcpy(file+40u,build,12u);
         uf_put32(file+60u,kui_crc32(0,file,60u));uf_hash(file,UF_FILE_BYTES,entry+88u);
     }
+    /* The retained raw helper roles may only inherit root. Keep their
+     * synthetic root fixtures allocated, outside the serialized payload. */
+    bool raw_tail=false;
+    for(unsigned i=0;i<p.count;i++) {
+        const char *path=kui_update_catalog_path(i);
+        bool raw=strstr(path,".bin")!=NULL;
+        assert(!raw_tail || raw);raw_tail|=raw;
+        if(raw) {
+            uint8_t *entry=uf_entry(&p,i);uf_put64(entry+80u,0u);
+            memset(entry+88u,0,32u);entry[120u]=KUI_UPDATE_INHERIT_ROOT;
+            p.bytes-=UF_FILE_BYTES;
+        }
+    }
+    uf_put64(p.data+24u,p.bytes-128u-128u*p.count);
     uf_manifest_hash(&p);return p;
 }
 static inline enum kui_update_result uf_decode(struct uf_package *p,struct kui_update_package *out) {

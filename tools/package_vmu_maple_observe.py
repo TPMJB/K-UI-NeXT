@@ -250,8 +250,9 @@ def inspect_worker(directory, *, maple_profile=None):
 
 def inspect_private_dma(elf, image, exports):
     """Mutating virtual cards own exact uncached objects before MDSTAR."""
+    # Each SH frame owns four uint32 fields and its four-byte payload pointer.
     required = (("issued_chain", "_issued_chain", 512, 32),
-                ("captured_chain", "_captured_chain", 512, 4),
+                ("captured_chain", "_captured_chain", 640, 4),
                 ("write_payloads", "_write_payloads", 4096, 4))
     typed = _linked_symbols(elf, {symbol for _, symbol, _, _ in required})
     if exports["readonly_mode"] not in (3, 4):

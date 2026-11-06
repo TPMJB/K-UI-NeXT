@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/vc2-persist-stage-host
+HOST_CC ?= cc
+.DEFAULT_GOAL := vc2-persist-stage-tests
+PERSIST_STAGE_FLAGS := -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic \
+ -fsanitize=address,undefined -fno-sanitize-recover=all -fno-pie -no-pie \
+ -ffunction-sections -fdata-sections -Iinclude -Isrc/loader \
+ -DKUI_ARMADA_CE_VMU_WRITE_RUNTIME=1 -DKUI_VC2_VMU_PERSIST=1 \
+ -DKUI_NATIVE_STANDALONE_STAGE=1 -DKUI_VC2_STAGE_CLOCK_TEST=1 -DKUI_VC2_STAGE_OWNERSHIP_PROFILE=1 \
+ -DKUI_VC2_PERSIST_PROFILE_BIN='"$(BUILD)/template.bin"'
+PERSIST_STAGE_SOURCES := tests/test_vc2_ce_vmu_persist_stage.c \
+ src/core/retail_image.c src/core/hash.c src/core/vmu_persist_profile.c src/core/vmu_durable.c \
+ src/loader/vc2_ce_vmu_stage_cache.c src/loader/vc2_ce_vmu_stage_clock.c
+.PHONY: vc2-persist-stage-tests
+vc2-persist-stage-tests:
+	@mkdir -p $(BUILD)
+	python3 tools/vmu_persist_profile.py --template $(BUILD)/template.bin > $(BUILD)/template-report.json
+	$(HOST_CC) $(PERSIST_STAGE_FLAGS) $(PERSIST_STAGE_SOURCES) -Wl,--gc-sections -o $(BUILD)/test-persist-stage
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-persist-stage
+
+.PHONY: vc2-persist-stage-return-tests
+vc2-persist-stage-return-tests: vc2-persist-stage-tests
+	@set -e; for profile in 0 1; do for offset in 0 256; do \
+	 $(HOST_CC) $(PERSIST_STAGE_FLAGS) -Wno-unused-function \
+	  -DKUI_VC2_PERSIST_CE_RETURN_TEST=1 -DKUI_SMASH_CE_RETURN=1 \
+	  -DKUI_SMASH_SWIRL_VMU=$$profile -DKUI_SMASH_CE_RETURN_RUNTIME_OFFSET=$$offset \
+	  $(PERSIST_STAGE_SOURCES) src/core/smash_card_session.c src/core/smash_ce_return_loader.c \
+	  -Wl,--gc-sections -o $(BUILD)/test-return-$$profile-$$offset; \
+	 ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-return-$$profile-$$offset; \
+	 done; done

@@ -1,0 +1,105 @@
+{
+  "schema": "kui.smash-ce.relaunch-state.v1",
+  "status": "PASS",
+  "inputs": {
+    "build/smash-shared-card-3337e554b21c/outer/stage.elf": "a0a4f5aab83cec9acf00beb49fbd1258fa10a81a787e91b34ab3d3982f698bb8",
+    "build/smash-shared-card-3337e554b21c/vc2/stage.elf": "89f9b7a66d859c4a9c50276841d77fae322f44c6e415d4e9d51a73b31ba395a6",
+    "build/smash-shared-card-3337e554b21c/vc2/helper/helper.elf": "1bae997552d9221badefe69f8c040fd2a2f28901329c22dbb64c43c8243a33aa",
+    "build/smash-shared-card-3337e554b21c/swirl/helper/helper.elf": "620d289363d39f04f387c7f267caa58f9b637fb7f984f3f722ad0ff235608805",
+    "build/smash-shared-card-3337e554b21c/vc2/helper/helper.bin": "85e864ae8d386b4b2d5cec731f788441367fdf9f2bef86f57ccd12a430e214e8",
+    "build/smash-shared-card-3337e554b21c/vc2/resident-sci.elf": "75eeb0a059b45e9d93436fc4ebfecd2763cc4a7bd5ebc25688b4f533bba3ee50"
+  },
+  "test_sha256": "cd0de21a9bee4e176abeb309833ecf187537838c07e438ca18a32ff2c7f23d14",
+  "source_sha256": {
+    "tests/test_smash_ce_relaunch_state.py": "cd0de21a9bee4e176abeb309833ecf187537838c07e438ca18a32ff2c7f23d14",
+    "tests/sh4_integer_fast.c": "71485a59bcf3a9e1c9bd3b6c1c440f9094f201ff52ae3e02002321476b1dbb32",
+    "tests/test_smash_native_gin_linked.py": "a85273fdc0164a11720d6fc099f2671a0bb0c06a9087b2ac23450ef135222676",
+    "tests/test_smash_menu_loader_runtime.py": "0d29e7fcecec5288897f1e46ce2fe35d33fb36a8fbbf70e1269f77b523980581",
+    "tests/test_smash_ce_return_late.py": "f750a7b05fd013a8fc886290b33d56d4bf7be578488c23c9d2c47f2cf07eddb2",
+    "tools/check_vmu_native_worker_gateway.py": "5980f8d1a959126f68c36a380db19dd24d586ddc07217e3f1c55e89db7f95e50",
+    "src/core/smash_card_session.c": "5119b09b2567f6ada62ba0dab551578df67e96e6ca7805d5e5d23f637a440d4b",
+    "src/loader/retail_resident.S": "762ee657b282e4c0ef3336223822e8019da28bc77d8e697a65552d09c8115ea2",
+    "src/loader/vc2_ce_vmu_prepare_entry.S": "f0617971285056382faa6d76107806504d01049c9bf5fcc32e13b0fa88c43d17"
+  },
+  "decoder": {
+    "base_sha256": "71485a59bcf3a9e1c9bd3b6c1c440f9094f201ff52ae3e02002321476b1dbb32",
+    "adapted_source_sha256": "51afcb858071a1818f4593e2c758a78240aef04575376022ced9b0a59c096d2c",
+    "extension": "STC GBR,Rn"
+  },
+  "receipt_lifecycle": {
+    "cases": [
+      {
+        "case": "cold_outer_to_vc2",
+        "initial_owner": 1,
+        "initial_sequence": 1,
+        "final_owner": 3,
+        "final_sequence": 2,
+        "generation": 7,
+        "binding_and_admission_unchanged": true,
+        "actual_linked_instructions": 8025
+      },
+      {
+        "case": "swirl_outer_to_vc2",
+        "initial_owner": 4,
+        "initial_sequence": 2,
+        "final_owner": 3,
+        "final_sequence": 4,
+        "generation": 7,
+        "binding_and_admission_unchanged": true,
+        "actual_linked_instructions": 18618
+      }
+    ],
+    "direct_owner4_to3_refused": true,
+    "limits": "Actual linked pure receipt+CRC operations; fresh CID, backend rebind and storage I/O are separate gates."
+  },
+  "helper_reset": {
+    "helper_elf_sha256": "1bae997552d9221badefe69f8c040fd2a2f28901329c22dbb64c43c8243a33aa",
+    "previous_swirl_layout_equal": true,
+    "workspace": {
+      "begin": "0xacfc0000",
+      "end": "0xacfc3538",
+      "old_pattern_cleared": true
+    },
+    "mutable_tail": {
+      "begin": "0xacfce0c0",
+      "end": "0xacfd0000",
+      "cleared_before_wrapper_frame": true,
+      "frame_bytes": 24
+    },
+    "tracked_objects_zero": [
+      "_runtime",
+      "_loan",
+      "_a2_continuation",
+      "_fence_state",
+      "_vc2_saved_region",
+      "_kui_armada_ce_maple_traffic_freeze"
+    ],
+    "immutable_helper_unchanged": true,
+    "low_reader_unchanged": true,
+    "ICI_before_cached_C_entry": true,
+    "constructor_args_preserved": true,
+    "actual_instructions": 21658,
+    "limits": "Actual accepted helper entry over authored old Swirl state to cached initializer C; coherent RAM/CCR observations only."
+  },
+  "low_reader_reset": {
+    "resident_elf_sha256": "75eeb0a059b45e9d93436fc4ebfecd2763cc4a7bd5ebc25688b4f533bba3ee50",
+    "bss": {
+      "begin": "0x8c007804",
+      "end": "0x8c007e84",
+      "bytes": 1664,
+      "old_pattern_cleared": true
+    },
+    "region": "0x8c007500",
+    "manifest": "0x8c007b48",
+    "raw512_unchanged": true,
+    "initialized_code_unchanged": true,
+    "constructor_args_preserved": true,
+    "actual_instructions": 2507,
+    "limits": "Actual reader entry clears authored inherited BSS before constructor; subsequent map/card adoption and physical SCI are separate gates."
+  },
+  "limits": [
+    "These are independent actual-instruction boundary checks, not complete original Swirl\u2192menu\u2192VC2 execution.",
+    "No original game bytes are embedded or required. Old private data is an authored pattern.",
+    "No physical cache/MMU, IRQ scheduling, SD protocol, AICA/PVR state or console compatibility is certified."
+  ]
+}

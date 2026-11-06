@@ -529,7 +529,10 @@ static void registered_timer_callbacks(void) {
             state.fault_expect==input.driver.load_address);
     }
 }
-int main(void) {
+#ifndef KUI_CONTROLLER_TEST_MAIN
+#define KUI_CONTROLLER_TEST_MAIN main
+#endif
+int KUI_CONTROLLER_TEST_MAIN(void) {
     success_and_cost();mixed_queries_and_cost();mixed_query_refusals();mixed_query_errors();layouts_and_live_aliases();fallback();
     refused_without_publication();lane_switches_and_lease();failure_witness_cases();exact_response_and_read_witnesses();
     registered_timer_callbacks();

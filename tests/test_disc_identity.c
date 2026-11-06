@@ -60,6 +60,15 @@ static void identify(struct kui_disc_identity *id,const struct kui_disc_identity
 int main(void) {
     const struct kui_disc_identity_ops *ops=kui_disc_identity_console_ops();assert(ops);
     struct kui_disc_identity id;
+    for(unsigned disc=1u;disc<=4u;disc++) {
+        reset("Shenmue");memcpy(fake.raw+16u+32u,"0000 GD-ROM1/4  ",16u);
+        fake.raw[16u+43u]=(uint8_t)('0'+disc);seal();kui_disc_identity_init(&id);identify(&id,ops,500u);
+        char title[64];snprintf(title,sizeof(title),"Shenmue (Disc %u)",disc);
+        assert(id.state==KUI_DISC_IDENTITY_READY && !strcmp(id.title,title));
+        fake.status=CD_STATUS_OPEN;assert(!kui_disc_identity_poll(&id,ops,1000u,true) && !id.title[0]);
+    }
+    reset("Shenmue");memcpy(fake.raw+16u+32u,"0000 GD-ROM5/4  ",16u);seal();
+    kui_disc_identity_init(&id);identify(&id,ops,500u);assert(!strcmp(id.title,"Shenmue"));
     /* Startup STOP policy: all status-only startup observations, including
      * transient/stale types and errors, must leave the same disc uninitialized.
      * Physical removal is the only automatic rearm after parking. */

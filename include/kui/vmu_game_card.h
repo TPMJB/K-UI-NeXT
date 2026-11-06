@@ -13,6 +13,10 @@
 #define KUI_VMU_GAME_CARD_KEY_BYTES 12u
 #define KUI_VMU_GAME_CARD_BINDING_BYTES 64u
 #define KUI_VMU_GAME_CARD_BINDING_NAME "game.bin"
+/* Preserve the original VC2 pilot's on-disk identity while sharing that
+ * existing card across the complete Smash Pack collection. */
+#define KUI_VMU_SMASHPACK_KEY "KUIVC2TEST"
+#define KUI_VMU_SMASHPACK_LABEL "Sega Smash Pack VMU"
 
 /* The binding key is the IP product number, trimmed and upper-cased: 1..10
  * letters, digits or '-' with at least one letter or nonzero digit. Discs of

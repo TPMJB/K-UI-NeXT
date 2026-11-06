@@ -1,0 +1,423 @@
+{
+  "format": "vc2-ce-vmu-owner-source-v1",
+  "license": "GPL-3.0-only",
+  "status": "reviewed-source-metadata-matched",
+  "scope": "Exact-owner metadata only; no retail bytes or disassembly. Nominal CE and ROM storage addresses are not established live-call addresses.",
+  "runtime_admitted": false,
+  "patching_admitted": false,
+  "card_read_admitted": false,
+  "card_write_admitted": false,
+  "source_identity": {
+    "file": "VIRTCOP2/0WINCEOS.BIN",
+    "bytes": 1841152,
+    "sha256": "b728e8eaef03bd7cc5acbe3dc3363ec9fafcaca90916cf21781d2e72ff99b3bc"
+  },
+  "load_prefix": {
+    "count": 1,
+    "address": "0x0c010000",
+    "file_offset": 2048,
+    "bytes": 1839104,
+    "entry": "0x0c010000"
+  },
+  "memory": {
+    "rom_header_address": "0x8c1d063c",
+    "ram_end_word_address": "0x8c1d0658",
+    "ram_start": "0x8c1d1000",
+    "ram_free": "0x8c1e0000",
+    "ram_end": "0x8cfd0000",
+    "driver_globals_address": "0x8cfd0000",
+    "driver_globals_bytes": "0x00030000",
+    "candidate_writable_reserve_begin": "0x8cfc4000",
+    "candidate_writable_reserve_end": "0x8cfd0000",
+    "candidate_writable_reserve_bytes": 49152,
+    "reservation_lifetime_proven": false
+  },
+  "modules": [
+    {
+      "name": "maple.dll",
+      "toc_address": "0x8c1d0830",
+      "e32_address": "0x8c0a6cf4",
+      "o32_address": "0x8c0a6d58",
+      "load_address": "0x8c114000",
+      "nominal_virtual_base": "0x01ce0000",
+      "entry_rva": "0x0000788c",
+      "virtual_bytes": "0x0000b000",
+      "object_flags": "0x0000210e",
+      "sections": [
+        {
+          "virtual_bytes": "0x00006c32",
+          "rva": "0x00001000",
+          "stored_bytes": "0x00006e00",
+          "data_address": "0x8c0b1000",
+          "real_address_field": "0x03ce1000",
+          "flags": "0x60000020",
+          "compressed": false,
+          "stored_sha256": "d6ea1f462a05584a43eee4fdd2e1000c611e3707ac6a4e2a829098e0e0fc9f4c"
+        },
+        {
+          "virtual_bytes": "0x000002c0",
+          "rva": "0x00008000",
+          "stored_bytes": "0x000000ad",
+          "data_address": "0x8c064da4",
+          "real_address_field": "0x03ce8000",
+          "flags": "0xc0002040",
+          "compressed": true,
+          "stored_sha256": "998947233bcae201fcf69504179f63ee7482bc7cdb1693642e2e36570df291cf"
+        },
+        {
+          "virtual_bytes": "0x000002a0",
+          "rva": "0x00009000",
+          "stored_bytes": "0x00000224",
+          "data_address": "0x8c0650ac",
+          "real_address_field": "0x03ce9000",
+          "flags": "0x40002040",
+          "compressed": true,
+          "stored_sha256": "9bfe990f9ecf041a9742b2b16b9f353cc1937468d50fa660e835ada22a3e74b3"
+        }
+      ]
+    },
+    {
+      "name": "mapledev.dll",
+      "toc_address": "0x8c1d0910",
+      "e32_address": "0x8c0aac94",
+      "o32_address": "0x8c0aacf8",
+      "load_address": "0x8c1a2000",
+      "nominal_virtual_base": "0x01c10000",
+      "entry_rva": "0x0000d7b8",
+      "virtual_bytes": "0x00011000",
+      "object_flags": "0x0000210e",
+      "sections": [
+        {
+          "virtual_bytes": "0x0000cabb",
+          "rva": "0x00001000",
+          "stored_bytes": "0x0000cc00",
+          "data_address": "0x8c10c000",
+          "real_address_field": "0x03c11000",
+          "flags": "0x60000020",
+          "compressed": false,
+          "stored_sha256": "fe332bc1ec282ca17d46eea24ef0b3e972f85017b2e1cb29a3f355e8715a94be"
+        },
+        {
+          "virtual_bytes": "0x00000564",
+          "rva": "0x0000e000",
+          "stored_bytes": "0x00000181",
+          "data_address": "0x8c096e6c",
+          "real_address_field": "0x03c1e000",
+          "flags": "0xc0002040",
+          "compressed": true,
+          "stored_sha256": "14483959ae28aa0dc0da3e924b7eb3bfd24fdd20fd13a71376c0bf6a667f1612"
+        },
+        {
+          "virtual_bytes": "0x000007f0",
+          "rva": "0x0000f000",
+          "stored_bytes": "0x00000621",
+          "data_address": "0x8c0a6044",
+          "real_address_field": "0x03c1f000",
+          "flags": "0x40002040",
+          "compressed": true,
+          "stored_sha256": "c818d7c120ff894d5e0661438fe6d1a4fa2649a430e596e738dbd71147a4239d"
+        }
+      ]
+    }
+  ],
+  "source_contracts": [
+    {
+      "id": "completion_entry",
+      "rva": "0x00006f64",
+      "bytes": 32,
+      "end_rva_exclusive": "0x00006f84",
+      "nominal_va": "0x01ce6f64",
+      "rom_storage_address": "0x8c0b6f64",
+      "file_offset": 685924,
+      "sha256": "341964a5ca5e3599f9efd9726f035e78bfcf8203e68aaf56ffd2e40032987677",
+      "crc32_ieee": "df56606e"
+    },
+    {
+      "id": "completion_walker",
+      "rva": "0x00006f64",
+      "bytes": 616,
+      "end_rva_exclusive": "0x000071cc",
+      "nominal_va": "0x01ce6f64",
+      "rom_storage_address": "0x8c0b6f64",
+      "file_offset": 685924,
+      "sha256": "029e36a7dd7e72eda9c9b216e62c684c52f70c2b30028b275161d7965ba8be93",
+      "crc32_ieee": "c3d92882"
+    },
+    {
+      "id": "completion_notification",
+      "rva": "0x00006f64",
+      "bytes": 72,
+      "end_rva_exclusive": "0x00006fac",
+      "nominal_va": "0x01ce6f64",
+      "rom_storage_address": "0x8c0b6f64",
+      "file_offset": 685924,
+      "sha256": "1e83627db4fdc3cfcf51d2f53c8f9ae7d33ed93d95b1e0391c3d1e8d7184395f",
+      "crc32_ieee": "91b94a28"
+    },
+    {
+      "id": "worker_loop",
+      "rva": "0x000071cc",
+      "bytes": 160,
+      "end_rva_exclusive": "0x0000726c",
+      "nominal_va": "0x01ce71cc",
+      "rom_storage_address": "0x8c0b71cc",
+      "file_offset": 686540,
+      "sha256": "385398ec000deaf1b2cfa456bc4e4ecba2658be330d577cf0424a0aed53a9ed6",
+      "crc32_ieee": "c79cb99f"
+    },
+    {
+      "id": "worker_completion_call",
+      "rva": "0x0000722a",
+      "bytes": 48,
+      "end_rva_exclusive": "0x0000725a",
+      "nominal_va": "0x01ce722a",
+      "rom_storage_address": "0x8c0b722a",
+      "file_offset": 686634,
+      "sha256": "68578ca5edbb1092e8dc1aedeec97c07831db1548a03ad950f834d69a40d11a1",
+      "crc32_ieee": "b53b3a8b"
+    },
+    {
+      "id": "worker_literals",
+      "rva": "0x0000726c",
+      "bytes": 48,
+      "end_rva_exclusive": "0x0000729c",
+      "nominal_va": "0x01ce726c",
+      "rom_storage_address": "0x8c0b726c",
+      "file_offset": 686700,
+      "sha256": "5fc521760cd35f8d90f7fa55ae742ea6369997363c9c6e9b6c420df2111d01b5",
+      "crc32_ieee": "309b0d98"
+    },
+    {
+      "id": "list_builder",
+      "rva": "0x00006c84",
+      "bytes": 512,
+      "end_rva_exclusive": "0x00006e84",
+      "nominal_va": "0x01ce6c84",
+      "rom_storage_address": "0x8c0b6c84",
+      "file_offset": 685188,
+      "sha256": "7d036c7f177199949a8d8130d7d1cef5e9d98f9af01a6dcdee94a0d31cfe7b99",
+      "crc32_ieee": "e21ee258"
+    },
+    {
+      "id": "root_load",
+      "rva": "0x0000180a",
+      "bytes": 58,
+      "end_rva_exclusive": "0x00001844",
+      "nominal_va": "0x01ce180a",
+      "rom_storage_address": "0x8c0b180a",
+      "file_offset": 663562,
+      "sha256": "a8212868bdfea9be1a06978542ea0864a09aee87f40a686e3dde5b72bef8282f",
+      "crc32_ieee": "ac2b54ea"
+    },
+    {
+      "id": "SetKMode_thunk",
+      "rva": "0x00007808",
+      "bytes": 12,
+      "end_rva_exclusive": "0x00007814",
+      "nominal_va": "0x01ce7808",
+      "rom_storage_address": "0x8c0b7808",
+      "file_offset": 688136,
+      "sha256": "19bb0f7377a6c71f53ee97642f5184cbef8e810363b0ca74d18926c58ed3e62c",
+      "crc32_ieee": "a79c772f"
+    },
+    {
+      "id": "ordinary_worker_create",
+      "rva": "0x00001ce8",
+      "bytes": 232,
+      "end_rva_exclusive": "0x00001dd0",
+      "nominal_va": "0x01ce1ce8",
+      "rom_storage_address": "0x8c0b1ce8",
+      "file_offset": 664808,
+      "sha256": "1606d300b9ac2736bf9db05b6927514dfc21b2129786a0a29a693d7d70c08252",
+      "crc32_ieee": "12e1c4bc"
+    },
+    {
+      "id": "ordinary_worker_shutdown",
+      "rva": "0x00001b5e",
+      "bytes": 68,
+      "end_rva_exclusive": "0x00001ba2",
+      "nominal_va": "0x01ce1b5e",
+      "rom_storage_address": "0x8c0b1b5e",
+      "file_offset": 664414,
+      "sha256": "9df70aee00a88b7b16dc200fc20155c3211c9fae8f85b312fb3c44cdfbb06561",
+      "crc32_ieee": "975df65d"
+    },
+    {
+      "id": "WaitForSingleObject_thunk",
+      "rva": "0x000077a8",
+      "bytes": 12,
+      "end_rva_exclusive": "0x000077b4",
+      "nominal_va": "0x01ce77a8",
+      "rom_storage_address": "0x8c0b77a8",
+      "file_offset": 688040,
+      "sha256": "42d0bf80006c6f2a238dba221a2cd5faf51df50d19920dd86853897e0e6c0349",
+      "crc32_ieee": "9cba802c"
+    },
+    {
+      "id": "main_worker_wrapper",
+      "rva": "0x00001a08",
+      "bytes": 24,
+      "end_rva_exclusive": "0x00001a20",
+      "nominal_va": "0x01ce1a08",
+      "rom_storage_address": "0x8c0b1a08",
+      "file_offset": 664072,
+      "sha256": "b383a52f823624424bf7e889853140ee0a2a3b4d6db4a337a4375b37e7b7ad20",
+      "crc32_ieee": "c41e50cf"
+    }
+  ],
+  "literals": [
+    {
+      "id": "root_global",
+      "rva": "0x00001840",
+      "value": "0x01ce82b8"
+    },
+    {
+      "id": "builder_target",
+      "rva": "0x00007280",
+      "value": "0x01ce6c84"
+    },
+    {
+      "id": "completion_target",
+      "rva": "0x00007294",
+      "value": "0x01ce6f64"
+    },
+    {
+      "id": "SetKMode_IAT",
+      "rva": "0x00007810",
+      "value": "0x01ce8044"
+    },
+    {
+      "id": "WaitForSingleObject_IAT",
+      "rva": "0x000077b0",
+      "value": "0x01ce8024"
+    },
+    {
+      "id": "main_worker_thread_entry",
+      "rva": "0x00001dbc",
+      "value": "0x01ce1a08"
+    },
+    {
+      "id": "main_worker_wrapper_target",
+      "rva": "0x00001a1c",
+      "value": "0x01ce71cc"
+    }
+  ],
+  "imports": [
+    {
+      "name": "WaitForSingleObject",
+      "ordinal": 497,
+      "iat_rva": "0x00008024",
+      "iat_nominal_va": "0x01ce8024"
+    },
+    {
+      "name": "CreateThread",
+      "ordinal": 492,
+      "iat_rva": "0x00008034",
+      "iat_nominal_va": "0x01ce8034"
+    },
+    {
+      "name": "SetKMode",
+      "ordinal": 630,
+      "iat_rva": "0x00008044",
+      "iat_nominal_va": "0x01ce8044"
+    },
+    {
+      "name": "EnterCriticalSection",
+      "ordinal": 4,
+      "iat_rva": "0x00008050",
+      "iat_nominal_va": "0x01ce8050"
+    },
+    {
+      "name": "LeaveCriticalSection",
+      "ordinal": 5,
+      "iat_rva": "0x00008054",
+      "iat_nominal_va": "0x01ce8054"
+    },
+    {
+      "name": "InterruptDone",
+      "ordinal": 628,
+      "iat_rva": "0x00008064",
+      "iat_nominal_va": "0x01ce8064"
+    },
+    {
+      "name": "SetThreadPriority",
+      "ordinal": 514,
+      "iat_rva": "0x00008068",
+      "iat_nominal_va": "0x01ce8068"
+    }
+  ],
+  "continuation_source": {
+    "main_worker_handle_offset": "0x00000180",
+    "dma_event_offset": "0x00000178",
+    "secondary_worker_handle_offset": "0x00000184",
+    "source_thread_wrapper_rva": "0x00001a08",
+    "source_worker_rva": "0x000071cc",
+    "shutdown_flag_offset": 0,
+    "shutdown_wait_ms": 1000,
+    "mapped_bridge_pre_return_rva": "0x00007c58",
+    "wait_thunk_rva": "0x000077a8",
+    "wait_iat_rva": "0x00008024",
+    "wait": {
+      "module": "coredll.dll",
+      "ordinal": 497,
+      "name": "WaitForSingleObject",
+      "export_rva": "0x0000877c",
+      "body_bytes": 64,
+      "body_sha256": "f56df5e42b716fe798c85046cd28b6fbee6026792ecfbc1ba3e20326bfefd6e8",
+      "prologue_bytes": 12,
+      "prologue_sha256": "eb4ff033e28645b20333d091360c6f2b3c616b3be66fa24dc1994bb625ebc6ef",
+      "prologue_saved_bytes": 8,
+      "callee_frame_bytes": 28,
+      "nested_calls_present": true,
+      "caller_home_bytes": 16,
+      "caller_home_offsets": [
+        0,
+        4,
+        8,
+        12
+      ],
+      "nominal_va": "0x01d6877c",
+      "rom_storage_address": "0x8c03877c",
+      "body_crc32": "ddc37b5c"
+    },
+    "claims": [
+      "CreateThread returns the ordinary worker HANDLE into extension +180; extension +178 is its separate SYSINTR 18 DMA event.",
+      "The shutdown path sets extension word 0, signals event +178, then waits up to 1000 ms on thread +180 before possible termination.",
+      "The ordinary worker waits on event +178, consumes SYSINTR 18 status, calls completion and then InterruptDone 18; a self-thread wait must not consume event +178.",
+      "COREDLL WaitForSingleObject writes all 16 caller argument-home bytes; injected calls require the ordinary CE stack and an explicit ABI adapter."
+    ],
+    "live_continuation_admitted": false
+  },
+  "completion_root": {
+    "rva": "0x000082b8",
+    "writable_virtual_data": true,
+    "initial_value_decoded": false
+  },
+  "candidate_bridge_padding": {
+    "rva": "0x00007c34",
+    "bytes": 460,
+    "end_rva_exclusive": "0x00007e00",
+    "all_zero": true,
+    "nominal_va": "0x01ce7c34",
+    "rom_storage_address": "0x8c0b7c34",
+    "sha256": "7479649f4176c2a256e12d26259cba094d654d57dc58cf51fbe25c14e67c7fd9",
+    "crc32_ieee": "26c44ea2",
+    "patching_admitted": false,
+    "relocation_exclusion_proven": false,
+    "reference_exclusion_proven": false
+  },
+  "findings": [
+    "VC2 MAPLE and MAPLEDEV differ from Armada; its reviewed offsets and fingerprints cannot be reused unchanged.",
+    "The ordinary worker calls completion RVA0x6f64 after SYSINTR18 status bit0x1000; InterruptDone18 follows.",
+    "The worker writes1 to mapped controller base+0x88 for list-ready; completion-spanning DMA ownership still needs proof.",
+    "Completion begins with extension+0x15c notification state and extension+0x160 event handling, which require a VC2 ownership review.",
+    "SetKMode is COREDLL ordinal630; ordinal514 is SetThreadPriority and is not evidence of kernel-mode execution.",
+    "The same allocator ceiling as Armada offers candidate space; no helper lifetime or nested-launch reservation has been established."
+  ],
+  "limits": [
+    "No game, kernel, hook, Maple packet, SD I/O or bridge is executed by this tool.",
+    "Compressed sections are bounded and hashed, not decoded; text padding reference and relocation exclusion remain open.",
+    "Smash Pack boots native code before nested CE; this audit establishes neither direct CE startup arguments nor a pre-NK reservation hook.",
+    "The working foreground reader remains unchanged; this report is not a VMU-enabled compatibility build."
+  ]
+}

@@ -61,6 +61,8 @@ def load(reports, *, qualified=False, scope=None):
         return scope + ":" + result if scope and result != "__indirect_call" else result
     for report in reports:
         text = report.read_text()
+        if not text.rstrip().endswith("\n}"):
+            raise ValueError(f"Truncated compiler callgraph: {report}")
         for title, label in NODE.findall(text):
             function = graph_name(title)
             if function == "__indirect_call":

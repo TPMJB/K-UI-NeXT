@@ -175,6 +175,14 @@ def flat_aux(aux):
 class ReadAheadBinderCPU(ColdBinderCPU):
     def __init__(self,stage,resident,aux,*,cache=True,payload=0x8c400000,stream=0,owner_name='Evolution2',sdk_vbr=0x8c00f400):
         super().__init__(stage,resident,cache=cache,payload=payload,stream=stream,owner_name=owner_name)
+        from check_vmu_native_readahead import session_region_offsets
+        self.region_offsets=session_region_offsets(resident)
+        # Project only fixture initialization onto the actual SH-compiled
+        # session layout. Executed load/store addresses remain untouched.
+        for offset,value in ((0x378,1),(0x470,stream)):
+            actual=self.region_offsets.get(offset,offset)
+            if actual!=offset:self.put32(self.region+offset,0)
+            self.put32(self.region+actual,value)
         self.layout=auxiliary_layout(aux)
         self.expected_display_lines=RA_PROGRESS if self.progress else (RA_READY,)
         self.display_lines=[]
@@ -218,6 +226,9 @@ class ReadAheadBinderCPU(ColdBinderCPU):
         assert installer_bytes==0x10000 and installer&31==0
         self.r[15]=installer+installer_bytes-32
         self.publisher_calls=[];self.writes=[];self.initial=self.snapshot()
+
+    def region_field(self,offset):
+        return self.region+self.region_offsets.get(offset,offset)
 
     def plain(self,op,pc):
         if op&0xf0ff==0x4010: # DT Rn: decrement and set T exactly on zero.
@@ -422,6 +433,16 @@ def pin_stage(stage,*,diagnostic=False,pio=False,pair=False,multi_owner=False,st
     selected=GAME_STARTUP_STAGE_PINS if owned_timers else WITNESS_DUAL_PINS if witness else DUAL_PINS if dual else STRUCTURAL_PINS if structural else MULTI_OWNER_PINS if multi_owner else PIO_PAIR_PINS if pair else PIO_PINS if pio else DIAGNOSTIC_PINS if diagnostic else PINS
     from check_native_followup_profile import stage_pins as followup_stage_pins,callback_profile
     require(not callback_profile(stage) or owned_timers, 'Selected low callbacks require the owned-timer cold binder')
+    from check_native_session_readahead_profile import profile as session_profile,pinned_functions as session_pins
+    if session_profile(stage):
+        require(owned_timers and witness and dual and structural and multi_owner and pair and pio and diagnostic and progress,
+                'Session read-ahead map requires the full paired witness/owned-timer cold architecture')
+        return session_pins(stage)
+    from check_native_general_readahead_profile import profile as ordinary_profile,pinned_functions as ordinary_pins
+    if ordinary_profile(stage):
+        require(owned_timers and witness and dual and structural and multi_owner and pair and pio and diagnostic and progress,
+                'Ordinary General read-ahead map requires the full paired witness/owned-timer cold architecture')
+        return ordinary_pins(stage)
     selected=followup_stage_pins(stage,'read_ahead',selected)
     for name,(count,digest) in selected.items():
         address,body,section=symbol_bytes(stage,name,2)
@@ -438,7 +459,7 @@ def pin_stage(stage,*,diagnostic=False,pio=False,pair=False,multi_owner=False,st
     return result
 
 
-def check_stage(stage,resident,aux,*,self_test=False,worker=None):
+def check_stage(stage,resident,aux,*,self_test=False,worker=None,legacy=None):
     require(__debug__,'cold read-ahead proof requires Python assertions')
     layout=auxiliary_layout(aux)
     multi_owner=multi_owner_profile(stage,layout)
@@ -453,6 +474,14 @@ def check_stage(stage,resident,aux,*,self_test=False,worker=None):
     def pin_selected(image):return pin_stage(image,diagnostic=layout['diagnostic'],pio=layout['pio'],
                                               pair=layout['pair'],multi_owner=multi_owner,structural=structural,dual=dual,witness=witness,progress=progress,owned_timers=owned_timers)
     pins=pin_selected(stage)
+    from check_native_session_readahead_profile import profile as session_profile,REFERENCE_COMMIT,REFERENCE_ELF_SHA256,REFERENCE_RELOCS_SHA256
+    session_reference=(dict(reference_commit=REFERENCE_COMMIT,reference_elf_sha256=REFERENCE_ELF_SHA256,
+        reference_relocations_sha256=REFERENCE_RELOCS_SHA256,complete_functions=5,immutable_objects=2,
+        exact_named_literal_roles=36,candidate_learned_pins=False) if session_profile(stage) else None)
+    if session_reference is not None:
+        from check_native_session_readahead_profile import callback_table
+        require(legacy is not None,'Full session stage admission requires both actual low-reader ELFs')
+        session_reference['paired_callback_table']=callback_table(stage,resident,legacy)
     owners=('Evolution1','Evolution2') if multi_owner else ('Evolution2',)
     positives=negatives=mutations=pin_mutations=layout_mutations=stage_marker_mutations=0
     worker_profile_mutations=worker_binding_mutations=progress_marker_mutations=0
@@ -492,13 +521,13 @@ def check_stage(stage,resident,aux,*,self_test=False,worker=None):
     case('lease_unaligned',5,lambda c:setattr(c,'r',[*c.r[:4],0x8c400001,*c.r[5:]]))
     case('retained_lease_disagrees',5,lambda c:c.put32(resident[4]['_kui_vmu_observe_boot_control'][0]+12,0))
     case('wrong_control_status',5,lambda c:c.put32(resident[4]['_kui_vmu_observe_boot_control'][0]+8,3))
-    case('pending_demand',6,lambda c:c.put32(c.region+0x370,1))
-    case('executing_demand',6,lambda c:c.put32(c.region+0x374,1))
-    case('engine_active',6,lambda c:c.put32(c.region+0x2bc,1))
-    case('reader_in_irq',6,lambda c:c.put32(c.region+0x2cc,1))
-    case('reader_hooked',6,lambda c:c.put32(c.region+0x2d0,1))
-    case('loan_active',6,lambda c:c.put32(c.region+0x2f4,1))
-    case('stream_receiving',6,lambda c:c.put32(c.region+0x470,2))
+    case('pending_demand',6,lambda c:c.put32(c.region_field(0x370),1))
+    case('executing_demand',6,lambda c:c.put32(c.region_field(0x374),1))
+    case('engine_active',6,lambda c:c.put32(c.region_field(0x2bc),1))
+    case('reader_in_irq',6,lambda c:c.put32(c.region_field(0x2cc),1))
+    case('reader_hooked',6,lambda c:c.put32(c.region_field(0x2d0),1))
+    case('loan_active',6,lambda c:c.put32(c.region_field(0x2f4),1))
+    case('stream_receiving',6,lambda c:c.put32(c.region_field(0x470),2))
     case('missing_sdk_cookie',6,lambda c:c.put32(c.region+0x530,0))
     case('preexisting_cache_entry',6,lambda c:c.put32(c.region+0x500,1))
     case('preexisting_cache_context',6,lambda c:c.put32(c.region+0x504,1))
@@ -555,7 +584,10 @@ def check_stage(stage,resident,aux,*,self_test=False,worker=None):
                 assert c.sdk_state()==sdk_before,'refused read-ahead changed the SDK owner tuple'
                 negatives+=1
             else:raise ValueError('cold read-ahead binder accepted malformed '+name)
+    session_object_mutations=0
     if self_test:
+        from check_native_session_readahead_profile import profile as session_profile,object_mutations
+        if session_profile(stage):session_object_mutations=object_mutations(stage,resident,legacy)
         context_name='_kui_native_readahead_aux_context'
         symbol_mutations=[]
         context=aux[4][context_name]
@@ -652,12 +684,14 @@ def check_stage(stage,resident,aux,*,self_test=False,worker=None):
         admitted_dynamic_sdk_vbr_preservation_cases=dynamic_vbr_cases,
         malformed_descriptor_context_aux_and_init_cases=negatives,omitted_activation_ocbp_rejections=mutations,
         reviewed_body_byte_mutation_rejections=pin_mutations,
+        session_immutable_object_mutation_rejections=session_object_mutations,
         context_and_diagnostic_schema_mutation_rejections=layout_mutations,
         multi_owner_stage_marker_mutation_rejections=stage_marker_mutations,
         witness_worker_marker_mutation_rejections=worker_profile_mutations,
         embedded_worker_binding_mutation_rejections=worker_binding_mutations,
         cold_progress_marker_mutation_rejections=progress_marker_mutations,
         exact_instruction_literal_pins=pins,p1_cache_and_p2_ram_distinct=True,
+        session_stage_immutable_reference=session_reference,
         cold_aux_and_cache_lines_purged=(SPAN+DATA_BYTES)//32,cache_data_not_initialized_or_trusted=True,
         context_published_before_entry=True,guards_checked_after_init=True,
         memcpy_memcmp_memset='faithful bounded ABI substitutes',
@@ -685,7 +719,8 @@ def main():
     p.add_argument('--self-test',action='store_true');a=p.parse_args()
     try:
         s,r,x=(read_elf(a.directory/name) for name in ('stage.elf','resident-sci.elf','native-ra-aux.elf'))
-        result=check_stage(s,r,x,self_test=a.self_test,worker=read_elf(a.directory/'native-worker.elf'))
+        result=check_stage(s,r,x,self_test=a.self_test,worker=read_elf(a.directory/'native-worker.elf'),
+                           legacy=read_elf(a.directory/'resident-legacy.elf'))
     except (OSError,ValueError,AssertionError,KeyError,struct.error) as e:
         p.exit(2,'Read-ahead cold binder audit refused: '+str(e)+'\n')
     print(json.dumps(result,indent=2))

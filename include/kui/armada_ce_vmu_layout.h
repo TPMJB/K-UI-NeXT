@@ -5,14 +5,22 @@
 /* C/assembler/linker-preprocessor scalars. The default is the accepted
  * 24 KiB readonly reservation. The separate experimental 48 KiB profile
  * reserves space only: it grants no WRITE, storage or worker capability.
- * Both are installed before NK; OEM globals still begin at 0x8cfd0000. */
+ * The separate VC2 persistent profile adds16KiB lower working BSS, retaining
+ * the48KiB code image/entry. All are installed before NK; OEM globals still
+ * begin at0x8cfd0000. */
 #ifndef KUI_ARMADA_CE_MAPLE_WRITE_LAYOUT
 #define KUI_ARMADA_CE_MAPLE_WRITE_LAYOUT 0
 #endif
 #if KUI_ARMADA_CE_MAPLE_WRITE_LAYOUT != 0 && KUI_ARMADA_CE_MAPLE_WRITE_LAYOUT != 1
 #error "CE VMU WRITE layout must be explicitly disabled or enabled"
 #endif
-#if KUI_ARMADA_CE_MAPLE_WRITE_LAYOUT
+#if KUI_SMASH_SWIRL_VMU
+/* Includes Swirl's separately copied Maple text. The existing working BSS,
+ * initialized helper and fixed stacks retain their original addresses. */
+#define KUI_ARMADA_CE_VMU_RESERVE_BEGIN 0x8cfb8000
+#elif KUI_VC2_VMU_PERSIST
+#define KUI_ARMADA_CE_VMU_RESERVE_BEGIN 0x8cfc0000
+#elif KUI_ARMADA_CE_MAPLE_WRITE_LAYOUT
 #define KUI_ARMADA_CE_VMU_RESERVE_BEGIN 0x8cfc4000
 #else
 #define KUI_ARMADA_CE_VMU_RESERVE_BEGIN 0x8cfca000

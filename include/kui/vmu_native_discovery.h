@@ -14,12 +14,19 @@
  * server entry is completion_call-0x3a instead of -0x4a. Discovery selects it only from
  * the exact server entry and lock helper; every other image is UNIFORM_V1. */
 #define KUI_VMU_NATIVE_FAMILY_EARLY_V1 2u
+/* The same early server, with a separately proved startup normalizer that
+ * stores the lock byte's P2 pointer before its unique heap-init call. The
+ * cold SDK gate must retire both idle aliases before the first TAS. */
+#define KUI_VMU_NATIVE_FAMILY_EARLY_P2_V1 3u
+static inline bool kui_vmu_native_early_server(uint32_t family) {
+    return family-KUI_VMU_NATIVE_FAMILY_EARLY_V1<2u;
+}
 static inline bool kui_vmu_native_family_valid(uint32_t family) {
-    return family==KUI_VMU_NATIVE_FAMILY_UNIFORM_V1 || family==KUI_VMU_NATIVE_FAMILY_EARLY_V1;
+    return family-KUI_VMU_NATIVE_FAMILY_UNIFORM_V1<3u;
 }
 /* Bytes from the Maple server entry to its completion call. */
 static inline uint32_t kui_vmu_native_server_span(uint32_t family) {
-    return family==KUI_VMU_NATIVE_FAMILY_EARLY_V1?0x3au:0x4au;
+    return kui_vmu_native_early_server(family)?0x3au:0x4au;
 }
 /* Discovery is never authority to patch or reserve game RAM. These three
  * capabilities must be supplied independently on every actual launch. */
@@ -58,4 +65,10 @@ enum kui_vmu_native_discovery_result kui_vmu_native_discover(
  * the scan for speed and still supplies no runtime capability. */
 bool kui_vmu_native_discovery_cache_valid(const struct kui_vmu_native_discovery *,
     const void *image,size_t bytes,uint32_t load);
+/* Cold, immutable startup-role binding for EARLY_P2 only. The unique source
+ * normalizer dominates the heap-call head; the independently proved heap
+ * and Maple calls must be its exact ordered call sites. This is not live
+ * alias ownership or cache-coherence authority. Neither output ABI grows. */
+bool kui_vmu_native_early_p2_calls_valid(const void *image,size_t bytes,
+    const struct kui_vmu_native_discovery *,uint32_t heap_call,uint32_t maple_call);
 #endif

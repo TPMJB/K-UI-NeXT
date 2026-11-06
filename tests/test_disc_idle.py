@@ -23,7 +23,7 @@ info=source[source.index('if(action==105) {\n                struct kui_app_stat
 info=info[:info.index('if(action==56 || action==57')]
 assert 'inspection_passed=result.complete && result.passed && !result.stopped;' in info
 assert 'inspection_read=inspection_passed && info.enabled;' in info
-handoff=source[source.index('if(action==56 || action==57 || action==58 || action==104) {',
+handoff=source[source.index('if(action==56 || action==57 || action==58 || action==104 || action==121 || action==122) {',
     source.index('if(action==105) {\n                struct kui_app_status result;')):]
 assert handoff.index('for(;;) {')<handoff.index('if(kui_disc_idle_cleanup(action)) {')
 with tempfile.TemporaryDirectory(prefix='disc-idle-') as d:

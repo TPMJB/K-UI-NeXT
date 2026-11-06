@@ -1,0 +1,69 @@
+{
+  "schema": "kui.smash.owner-genesis-save-report.v1",
+  "build": "858ca7ee3db1",
+  "report_sha256": "20d35d6bf1d3171259d0ee76d92ba426c2f83f43bc85d9a228c81903fb6b2b24",
+  "source_sectors_read": 21,
+  "titles": [
+    {
+      "number": 1,
+      "title": "ALTERED BEAST",
+      "rom": "ALTBEAST/ALTBEAST.SGA",
+      "sram_bytes": 0
+    },
+    {
+      "number": 2,
+      "title": "COLUMNS",
+      "rom": "COLUMNS/COLUMNS.SGA",
+      "sram_bytes": 0
+    },
+    {
+      "number": 3,
+      "title": "GOLDEN AXE",
+      "rom": "GOLDAXE/GOLDAXE.SGA",
+      "sram_bytes": 0
+    },
+    {
+      "number": 4,
+      "title": "PHANTASY STAR II",
+      "rom": "PHSTAR2/PHSTAR2.SGA",
+      "sram_bytes": 8192
+    },
+    {
+      "number": 5,
+      "title": "THE REVENGE OF SHINOBI",
+      "rom": "REVSHIN/REVSHIN.SGA",
+      "sram_bytes": 0
+    },
+    {
+      "number": 6,
+      "title": "SHINING FORCE",
+      "rom": "SHFORCE/SHFORCE.SGA",
+      "sram_bytes": 8192
+    },
+    {
+      "number": 7,
+      "title": "SONIC THE HEDGEHOG",
+      "rom": "SONIC1/SONIC1.SGA",
+      "sram_bytes": 0
+    },
+    {
+      "number": 8,
+      "title": "STREETS OF RAGE 2",
+      "rom": "STRAGE2/STRAGE2.SGA",
+      "sram_bytes": 0
+    },
+    {
+      "number": 9,
+      "title": "VECTORMAN",
+      "rom": "VECTORM/VECTORM.SGA",
+      "sram_bytes": 0
+    },
+    {
+      "number": 10,
+      "title": "WRESTLE WAR",
+      "rom": "WRESTWAR/WRESTWAR.SGA",
+      "sram_bytes": 0
+    }
+  ],
+  "scope": "Original engine RA-header eligibility. Does not establish persistent high scores or complete save/load behavior."
+}

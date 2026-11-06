@@ -59,7 +59,13 @@ bool kui_disc_vmu_probe_run(const void *image,size_t file_bytes,uint32_t load,
     out->stage=KUI_DISC_VMU_PROBE_HEAP_SLOT;
     if(!out->heap.initializer_slot) return false;
     out->stage=KUI_DISC_VMU_PROBE_HEAP_CALL;
-    if(!kui_vmu_native_heap_call_discover(image,program_bytes,&out->heap,&out->call)) return false;
+    if(!kui_vmu_native_heap_call_discover(image,program_bytes,&out->heap,&out->call) ||
+       (out->driver.family==KUI_VMU_NATIVE_FAMILY_EARLY_P2_V1 &&
+        !kui_vmu_native_early_p2_calls_valid(image,program_bytes,&out->driver,out->call.call,out->layout.initializer_call))) return false;
+    out->stage=KUI_DISC_VMU_PROBE_STARTUP_CLEAR;
+    struct kui_vmu_native_heap_preclear clear;
+    if(kui_vmu_native_heap_preclear_plan(image,program_bytes,out->driver.image_sha256,
+       &out->heap,&out->call,&clear)!=0) return false;
     out->stage=KUI_DISC_VMU_PROBE_READY;return true;
 }
 const char *kui_disc_vmu_probe_stage_text(uint32_t stage) {
@@ -71,6 +77,7 @@ const char *kui_disc_vmu_probe_stage_text(uint32_t stage) {
     case KUI_DISC_VMU_PROBE_HEAP_DISCOVERY:return "Native allocator is unsupported";
     case KUI_DISC_VMU_PROBE_HEAP_SLOT:return "Native allocator startup pointer is unavailable";
     case KUI_DISC_VMU_PROBE_HEAP_CALL:return "Native allocator startup call is unsupported";
+    case KUI_DISC_VMU_PROBE_STARTUP_CLEAR:return "Startup RAM clear is unsafe for the physical-disc VMU installer";
     case KUI_DISC_VMU_PROBE_READY:return "Immutable VMU probe passed";
     default:return "Unknown native VMU probe stage";
     }

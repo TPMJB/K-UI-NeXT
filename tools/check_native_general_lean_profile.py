@@ -358,12 +358,26 @@ def low_pins(image, role, historical):
     return LOW_PINS[role]
 
 
+def prepared_object_schema(worker, compact):
+    if compact:
+        from check_native_compact_background_profile import MUTABLE_OBJECTS as objects
+        return objects
+    if '__kui_native_session_controls_worker' in worker[4]:
+        from check_native_session_prepared_profile import image, MUTABLE_OBJECTS as objects
+        image(worker)
+        return objects
+    from check_native_ordinary_general_profile import profile, MUTABLE_OBJECTS as objects
+    if profile(worker) is not None:
+        return objects
+    return MUTABLE_OBJECTS
+
+
 def prepared_objects(worker):
     """Require the complete source-qualified mutable object inventory."""
     require(worker_profile(worker), 'Lean state inventory requires its explicit worker')
     from check_native_compact_background_profile import worker_profile as compact_profile, MUTABLE_OBJECTS as compact_objects
     compact=compact_profile(worker)
-    expected=compact_objects if compact else MUTABLE_OBJECTS
+    expected=prepared_object_schema(worker, compact)
     worker_bytes=0x12000 if compact else WORKER_BYTES
     from native_runtime_layout import BACKGROUND_COMPACT, GENERAL
     stack_bytes=(BACKGROUND_COMPACT if compact else GENERAL).WORKER_STACK_BYTES
@@ -397,7 +411,7 @@ def profile_mutation_checks(stage, worker, resident, legacy):
     from check_loader_layout import SYM, region
     from check_native_compact_background_profile import worker_profile as compact_profile, MUTABLE_OBJECTS as compact_objects
     compact=compact_profile(worker)
-    expected_objects=compact_objects if compact else MUTABLE_OBJECTS
+    expected_objects=prepared_object_schema(worker, compact)
     worker_bytes=0x12000 if compact else WORKER_BYTES
     from native_runtime_layout import BACKGROUND_COMPACT, GENERAL
     stack_bytes=(BACKGROUND_COMPACT if compact else GENERAL).WORKER_STACK_BYTES

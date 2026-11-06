@@ -1,0 +1,95 @@
+{
+  "schema": "kui.swirl.application-save-source.v1",
+  "source": {
+    "file": "SWIRL/SWIRLDC.EXE",
+    "bytes": 340480,
+    "sha256": "a80f177febbd4f3bcd683b1dc960a0c4b8425b88e9159b739398669d079112bc",
+    "image_base": "0x10000"
+  },
+  "scope": "Reviewed original application source contracts only, not a runtime compatibility or persistence proof",
+  "imports": [
+    {
+      "dll": "MAPLEDEV.dll",
+      "symbols": [
+        {
+          "iat_rva": 278936,
+          "iat_nominal_va": 344472,
+          "hint": 2,
+          "name": "MapleEnumerateDevices"
+        },
+        {
+          "iat_rva": 278940,
+          "iat_nominal_va": 344476,
+          "hint": 1,
+          "name": "MapleCreateDevice"
+        }
+      ]
+    }
+  ],
+  "contracts": [
+    {
+      "name": "fixed_A1_selector",
+      "nominal_va": "0x3e758",
+      "bytes": 90,
+      "sha256": "1466c8c0a816dca28ca2724bb384984e35a6b821b3b219482cd59538841083ab",
+      "crc32_ieee": "8dc2e9a3"
+    },
+    {
+      "name": "port_subunit_callback",
+      "nominal_va": "0x3e68c",
+      "bytes": 78,
+      "sha256": "e6df078f3a2b1a1c7d4018b58685b0037331df5725571cae9786508c2a943078",
+      "crc32_ieee": "91077d3c"
+    },
+    {
+      "name": "highscore_load",
+      "nominal_va": "0x3f15c",
+      "bytes": 146,
+      "sha256": "b0bc570e9b21d363df121b6137209f5aab4aae06aad392a7f601640c04705e7b",
+      "crc32_ieee": "dc3471ab"
+    },
+    {
+      "name": "highscore_save_open_create",
+      "nominal_va": "0x3f238",
+      "bytes": 230,
+      "sha256": "1ce1ef10a8d0916ba2b45bff1fc0ea09ece7b2ca4db0eee115971b87de49d51e",
+      "crc32_ieee": "4cd0d437"
+    },
+    {
+      "name": "highscore_write_completion",
+      "nominal_va": "0x3f4e0",
+      "bytes": 112,
+      "sha256": "6034fbf0ea4cb166f11c509aac6458912cc8065c1a8b92545695e607f0c64290",
+      "crc32_ieee": "ced1c448"
+    }
+  ],
+  "endpoint": {
+    "port": 0,
+    "subunit": 1,
+    "slot": "A1",
+    "selector_arguments": [
+      0,
+      0
+    ],
+    "slot_argument_is_zero_based": true,
+    "enumeration_function": 2,
+    "callback_fields": {
+      "port_offset": 20,
+      "subunit_offset": 24
+    }
+  },
+  "save": {
+    "filename": "SWIRL_HS.SYS",
+    "description": "swirl hi-scores",
+    "kind": "High score tables",
+    "data_bytes": 1280,
+    "required_free_blocks": 4,
+    "missing_at_load": "Returns without creating a file",
+    "save_missing": "Creates file",
+    "save_existing": "Requests overwrite confirmation",
+    "success_ui": "Save Successful!",
+    "prompt_ui": "Save To VMU?",
+    "test": "Finish a game with a new high score, accept saving, wait for success, power-cycle then relaunch and compare the score"
+  },
+  "hardware_verified": false
+}

@@ -71,10 +71,12 @@ static bool exit_early_pair(const uint8_t *p,size_t bytes,uint32_t load,size_t a
         value_at(p,bytes,load,at+16u,3u,at+0x1cu,UINT32_C(0x8c0000e0)) &&
         code_at(p,bytes,load,at+10u,3u,at+0x20u,cleanup);
 }
-/* The early pair must be the only firmware consumer: exactly its own two
- * loads of the BIOS vector cell, and no boot-entry consumer at all. */
-static bool early_consumers(const uint8_t *p,size_t bytes,uint32_t load,size_t pair) {
-    unsigned vectors=0u;
+/* The early pair owns exactly two vector loads. A separately proved compact
+ * loader may own one bootstrap load; an unknown consumer never becomes safe
+ * merely because both adjacent SDK exits can be intercepted. */
+static bool early_consumers(const uint8_t *p,size_t bytes,uint32_t load,size_t pair,
+    size_t exec) {
+    unsigned vectors=0u,boots=0u;
     for(size_t at=0;at+2u<=bytes;at+=2u) {
         uint16_t op=u16(p+at);uint32_t address,value;
         if((op&UINT16_C(0xf000))!=UINT16_C(0xd000) ||
@@ -82,9 +84,12 @@ static bool early_consumers(const uint8_t *p,size_t bytes,uint32_t load,size_t p
         if(physical(value)==UINT32_C(0x0c0000e0)) {
             if(at!=pair && at!=pair+16u) return false;
             ++vectors;
-        } else if(physical(value)==UINT32_C(0x0c008300)) return false;
+        } else if(physical(value)==UINT32_C(0x0c008300)) {
+            if(exec==SIZE_MAX || at!=exec+78u) return false;
+            ++boots;
+        }
     }
-    return vectors==2u;
+    return vectors==2u && boots==(exec==SIZE_MAX?0u:1u);
 }
 struct exec_shape {uint32_t family,thunk,boot;};
 /* The alternate table is useful only after its common fatal entry has itself
@@ -290,6 +295,44 @@ static bool exec_compact(const uint8_t *p,size_t bytes,uint32_t load,size_t at,
         if(!code_at(p,bytes,load,at+calls[i],i==4u?2u:3u,at+0x58u+4u*i,&target)) return false;
     *shape=(struct exec_shape){KUI_VMU_NATIVE_EXIT_PVR_COMPACT,76u,78u};return true;
 }
+/* Every byte of the compact loader and its pool is bound above. The thunk
+ * tail-branches back to the intercepted entry; it is the only other allowed
+ * outside entry. Refuse outside encoded branches, raw image pointers and
+ * PC-relative reads/address transports to any remaining body/pool byte.
+ * In particular, borrowing its bootstrap literal cannot bypass the loader
+ * entry. This retains the existing encoded-control contract; arbitrary
+ * synthesized destinations are not inferred. */
+static bool exec_compact_no_external_interiors(const uint8_t *p,size_t bytes,
+    uint32_t load,size_t exec) {
+    uint32_t first=physical(load)+(uint32_t)exec,last=first+0x78u;
+    for(size_t at=0;at+2u<=bytes;at+=2u) {
+        if(at>=exec && at<exec+0x78u) continue;
+        uint16_t op=u16(p+at);int32_t displacement=0;bool branch=false;
+        if((op&0xf000u)==0xa000u || (op&0xf000u)==0xb000u) {
+            displacement=(int32_t)((op&4095u)^2048u)-2048;branch=true;
+        } else if((op&0xff00u)==0x8900u || (op&0xff00u)==0x8b00u ||
+                  (op&0xff00u)==0x8d00u || (op&0xff00u)==0x8f00u) {
+            displacement=(int32_t)((op&255u)^128u)-128;branch=true;
+        }
+        if(branch) {
+            uint32_t target=physical(load+(uint32_t)at+4u+(uint32_t)(2*displacement));
+            if(target>first && target<last && target!=first+76u) return false;
+        }
+        if(!((load+(uint32_t)at)&3u) && at+4u<=bytes) {
+            uint32_t value=u32(p+at),target=physical(value);
+            if(direct(value) && target>first && target<last && target!=first+76u) return false;
+        }
+        uint32_t target;
+        if((op&0xf000u)==0xd000u || (op&0xff00u)==0xc700u) {
+            target=((physical(load)+(uint32_t)at+4u)&~3u)+4u*(op&255u);
+            if(target>=first && target<last) return false;
+        } else if((op&0xf000u)==0x9000u) {
+            target=physical(load)+(uint32_t)at+4u+2u*(op&255u);
+            if(target>=first && target<last) return false;
+        }
+    }
+    return true;
+}
 /* A second CRT may remain linked beside the active executable loader. Its
  * complete restart path changes FPSCR and SP, clears BSS, initializes the
  * platform and enters the BIOS bootstrap. Cover its ENTRY, not just the
@@ -379,6 +422,17 @@ static bool consumers(const uint8_t *p,size_t bytes,uint32_t load,size_t pair,si
     }
     return vectors==3u && boots==(pair_only?1u:crt==SIZE_MAX?2u:3u);
 }
+#include "vmu_native_firmware_exit.inc"
+
+/* This extension owns a terminal check, never a CRT restart. A recognizable
+ * restart stays unsupported even if its bootstrap pointer is damaged and
+ * therefore disappears from the platform-literal census. */
+static bool firmware_exit_no_crt(const uint8_t *p,size_t bytes) {
+    for(size_t at=0;at+0x4cu<=bytes;at+=4u)
+        if(crt_prologue(p,bytes,at)) return false;
+    return true;
+}
+
 static bool aliases_overlap(uintptr_t a,size_t an,uintptr_t b,size_t bn) {
 #if UINTPTR_MAX>UINT32_MAX
     if(a>UINT32_MAX || b>UINT32_MAX) return false;
@@ -431,16 +485,39 @@ bool kui_vmu_native_exit_discover_guarded(const void *image,size_t bytes,uint32_
     }
     if(count!=1u) return false;
     if(early) {
-        /* No loader or boot-entry consumer exists in this family. */
-        if(!early_consumers(p,bytes,load,pair)) return false;
-        struct kui_vmu_native_patch_window windows[7]={
+        unsigned loaders=0u,prologues=0u;
+        size_t selected=SIZE_MAX;
+        for(size_t at=0;at+24u<=bytes;at+=4u) {
+            if(u16(p+at)!=UINT16_C(0x2fe6)) continue;
+            if(exec_prologue(p,bytes,at)) ++prologues;
+            struct exec_shape shape;
+            if(exec_compact(p,bytes,load,at,&shape)) {
+                selected=at;
+                if(++loaders>1u) return false;
+            }
+        }
+        /* A corrupted bootstrap literal/thunk must not erase evidence of a
+         * loader and downgrade the image to the pair-only capability. */
+        size_t firmware_entry=SIZE_MAX;
+        int firmware=loaders||prologues?0:
+            firmware_exit_extra(p,bytes,load,pair,true,false,NULL,&firmware_entry);
+        if(firmware<0 || (firmware && !firmware_exit_no_crt(p,bytes)) || prologues!=loaders ||
+           (!firmware && !early_consumers(p,bytes,load,pair,selected)) ||
+           (loaders && !exec_compact_no_external_interiors(p,bytes,load,selected))) return false;
+        uint32_t entries=loaders||firmware?3u:2u;
+        struct kui_vmu_native_patch_window windows[8]={
             {load+(uint32_t)pair,8u},{load+(uint32_t)pair+8u,12u}};
-        for(size_t i=0;i<extra_count;i++) windows[2u+i]=additional[i];
-        if(!kui_vmu_native_patch_no_interiors(image,bytes,load,windows,2u+extra_count)) return false;
+        if(loaders) windows[2]=(struct kui_vmu_native_patch_window){load+(uint32_t)selected,12u};
+        if(firmware) windows[2]=(struct kui_vmu_native_patch_window){load+(uint32_t)firmware_entry,12u};
+        for(size_t i=0;i<extra_count;i++) windows[entries+i]=additional[i];
+        if(!kui_vmu_native_patch_no_interiors(image,bytes,load,windows,entries+extra_count)) return false;
         *out=(struct kui_vmu_native_exit){.version=KUI_VMU_NATIVE_EXIT_VERSION,.bytes=sizeof(*out),
-            .family=KUI_VMU_NATIVE_EXIT_EARLY_PAIR,.load=load,.image_bytes=(uint32_t)bytes,.count=2u,
-            .entries={load+(uint32_t)pair,load+(uint32_t)pair+8u,0u,0u},
-            .bios_vector_literal=load+(uint32_t)pair+0x1cu,.cleanup=cleanup};
+            .family=firmware?KUI_VMU_NATIVE_EXIT_EARLY_FIRMWARE_CHECK:
+                loaders?KUI_VMU_NATIVE_EXIT_EARLY_COMPACT:KUI_VMU_NATIVE_EXIT_EARLY_PAIR,
+            .load=load,.image_bytes=(uint32_t)bytes,.count=entries,
+            .entries={load+(uint32_t)pair,load+(uint32_t)pair+8u,entries==3u?windows[2].begin:0u,0u},
+            .bios_vector_literal=load+(uint32_t)pair+0x1cu,
+            .exec_thunk=loaders?load+(uint32_t)selected+76u:0u,.cleanup=cleanup};
         return true;
     }
     count=0u;bool loader_prologue=false;
@@ -456,12 +533,21 @@ bool kui_vmu_native_exit_discover_guarded(const void *image,size_t bytes,uint32_
             matched=exec_compact(p,bytes,load,at,&shape);
         if(matched) {exec=at;exec_shape=shape;if(++count>1u) return false;}
     }
-    uint32_t entries=3u;
-    if(!count && !pvr && !loader_prologue) {
-        exec_shape=(struct exec_shape){KUI_VMU_NATIVE_EXIT_PAIR_ONLY,0u,0u};entries=2u;
+    uint32_t entries=3u;bool firmware=false;
+    if(!count && !loader_prologue) {
+        size_t firmware_entry=SIZE_MAX;
+        int capability=firmware_exit_extra(p,bytes,load,pair,false,pvr,&pair_shape,&firmware_entry);
+        if(capability<0) return false;
+        if(capability) {
+            if(!firmware_exit_no_crt(p,bytes)) return false;
+            exec=firmware_entry;firmware=true;
+            exec_shape=(struct exec_shape){KUI_VMU_NATIVE_EXIT_FIRMWARE_CHECK,0u,0u};
+        } else if(!pvr) {
+            exec_shape=(struct exec_shape){KUI_VMU_NATIVE_EXIT_PAIR_ONLY,0u,0u};entries=2u;
+        } else return false;
     } else if(count!=1u) return false;
     size_t crt=SIZE_MAX;
-    bool ordinary_consumers=consumers(p,bytes,load,pair,exec,&pair_shape,&exec_shape,SIZE_MAX);
+    bool ordinary_consumers=firmware || consumers(p,bytes,load,pair,exec,&pair_shape,&exec_shape,SIZE_MAX);
     if(exec_shape.family==KUI_VMU_NATIVE_EXIT_PVR_CLEAR) {
         /* The reviewed extension is the PVR-clear executable family with
          * exactly one complete additional CRT restart entry. A malformed or
@@ -499,7 +585,7 @@ bool kui_vmu_native_exit_discover_guarded(const void *image,size_t bytes,uint32_
         .entries={windows[0].begin,windows[1].begin,entries>=3u?windows[2].begin:0u,
             entries==4u?windows[3].begin:0u},
         .bios_vector_literal=load+(uint32_t)pair+pair_shape.vector,
-        .exec_thunk=terminal_table?0u:
+        .exec_thunk=terminal_table||firmware?0u:
             entries>=3u?load+(uint32_t)exec+exec_shape.thunk:0u,.cleanup=cleanup};
     if(terminal_table) out->terminal_dispatch.table=terminal_table;
     return true;

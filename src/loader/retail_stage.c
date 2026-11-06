@@ -1,6 +1,25 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
+#if KUI_SMASH_SWIRL_VMU
+__asm__(".global __kui_smash_swirl_ce_vmu\n.set __kui_smash_swirl_ce_vmu,1\n");
+#endif
 #include "kui/retail_loader_layout.h"
 #include "kui/retail_image.h"
+#if KUI_SMASH_NATIVE_MENU
+#include "kui/smash_menu_return_loader.h"
+#endif
+#if KUI_SMASH_READER_CONTROL03
+#include "kui/smash_reader_control.h"
+#if KUI_SMASH_READER_CONTROL03 != 1 || !KUI_NATIVE_STANDALONE_FOREGROUND || \
+    !KUI_NATIVE_OCRAM_BOOTSTRAP || KUI_VC2_CE_VMU || defined(KUI_RETAIL_CE) || \
+    KUI_NATIVE_VMU_ONLY || KUI_VMU_NATIVE_BACKGROUND || KUI_VMU_MAPLE_OBSERVE || \
+    KUI_NATIVE_READAHEAD || KUI_RETAIL_TOY_PILOT || KUI_RETAIL_ZSO
+#error Comparison03 tag belongs only to its generic foreground cold stage
+#endif
+const struct kui_smash_reader_control kui_smash_reader_control_tag
+    __attribute__((used,section(".rodata.smash_reader_control"),aligned(4)))={
+    KUI_SMASH_READER_CONTROL_WORDS};
+__asm__(".global __kui_smash_reader_control03\n.set __kui_smash_reader_control03,3\n");
+#endif
 #if KUI_RETAIL_ZSO
 #include "kui/retail_zso.h"
 #if KUI_ZSO_CODECS != 1 && KUI_ZSO_CODECS != 2
@@ -29,9 +48,22 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
-#if KUI_NATIVE_STAGE_FAST_CRC
+/* Every temporary cold stage verifies complete bytes with the byte-table
+ * implementation. The compact live residents keep their separate small CRC.
+ * This is a shared cold policy, independent of SDK, VMU or title flags. */
 #include "stage_fast_crc32.h"
 #define kui_retail_crc32 kui_stage_crc32
+__asm__(".global __kui_retail_cold_fast_crc\n.set __kui_retail_cold_fast_crc,1\n");
+#if KUI_NATIVE_CACHED_EXTENT && !defined(KUI_RETAIL_CE) && !KUI_SMASH_CE_CHILD && !KUI_NATIVE_PHYSICAL_DISC
+/* Only this immutable-byte leaf runs with operand caching enabled. The
+ * assembly scope admits the known relay CPU/cache profile and publishes its
+ * private stack before restoring it. No media or live ownership operation
+ * enters that scope, and unsupported profiles keep the original CRC call. */
+uint32_t __attribute__((noipa)) kui_retail_stage_crc32_leaf(
+    uint32_t previous,const void *data,size_t bytes) {
+    return kui_stage_crc32(previous,data,bytes);
+}
+extern uint32_t kui_native_stage_cached_crc32(uint32_t previous,const void *data,size_t bytes);
 #endif
 #include "kui/skies_read_diagnostic.h"
 #ifndef KUI_GAME_RAM_PATCHES_STAGE
@@ -210,9 +242,13 @@ const struct kui_native_dual_capability kui_native_dual_reader_capability
 extern const uint8_t __retail_trampoline_start[] __asm__("__retail_trampoline_start");
 extern const uint8_t __retail_trampoline_end[] __asm__("__retail_trampoline_end");
 extern void kui_retail_bootstrap_enter(void) __attribute__((noreturn));
-/* Handoff screens stay up about half a second: long enough to see, while a
- * failure still leaves its last screen for a photograph. */
-#define HANDOFF_PAUSE_FRAMES 30u
+/* Native handoff screens require no timed hold. Faults still leave their
+ * stopped screen visible. An explicitly requested photo diagnostic can opt
+ * into a native frame hold without changing the ordinary launch policy. */
+#ifndef KUI_RETAIL_NATIVE_HANDOFF_PAUSE_FRAMES
+#define KUI_RETAIL_NATIVE_HANDOFF_PAUSE_FRAMES 0u
+#endif
+#define HANDOFF_PAUSE_FRAMES KUI_RETAIL_NATIVE_HANDOFF_PAUSE_FRAMES
 #ifdef KUI_RETAIL_CE
 /* The Windows CE boot test holds each handoff screen for two seconds, so a
  * reset right afterwards still leaves the last step in a photograph. It
@@ -263,7 +299,11 @@ static enum kui_loader_sd_result last_card_result;
  * The executable's CRC32 is taken after loading, for the relay's check that
  * bootstrap 2 left it unchanged. */
 #define BOOT_CHUNK_SECTORS 16u
+#if !KUI_SMASH_CE_CHILD
+#if !KUI_SMASH_NATIVE_GIN_ADOPT
 static uint8_t raw_boot[BOOT_CHUNK_SECTORS*KUI_GAME_RAW_BYTES];
+#endif
+#endif
 static uint32_t boot_crc;
 static uint32_t source_boot_crc, boot_cooked;
 #ifndef KUI_RETAIL_CE
@@ -451,6 +491,41 @@ static void startup_gd_install(void);
 #endif
 
 static void stopped(const char *message,uint32_t detail) __attribute__((noreturn));
+#if KUI_SMASH_CARD_SESSION
+#include "smash_card_session_stage.inc"
+#endif
+#if KUI_SMASH_MENU_LOADER
+#include "smash_menu_loader_stage.inc"
+#endif
+#if KUI_SMASH_MENU_LOADER && KUI_SMASH_CARD_SESSION && KUI_SMASH_PHASE_DIAGNOSTIC
+#include "smash_return_fault_display.h"
+/* A captured return flag selects diagnostics only, never card authority.
+ * Initial GUI launches retain their existing display behavior. The return
+ * may inherit a game framebuffer at any supported base/format/stride. */
+static bool smash_outer_return_trace;
+static void __attribute__((noipa)) smash_outer_return_mark(uint32_t phase) {
+    if(smash_outer_return_trace)kui_smash_return_progress(phase,0u);
+}
+static void __attribute__((noipa)) smash_outer_return_stop(const char *message,uint32_t detail) {
+    if(!smash_outer_return_trace)return;
+    uint32_t reason=kui_retail_crc32(0u,message,strlen(message))|UINT32_C(0x80000000);
+    kui_smash_return_fault_display(reason,detail);
+    for(;;)__asm__ volatile("nop":::"memory");
+}
+#endif
+#if KUI_SMASH_CE_CHILD
+#include "smash_ce_child_stage.inc"
+#endif
+#if KUI_VC2_CE_VMU
+#if KUI_VC2_VMU_LATE
+#include "vc2_ce_vmu_late_stage.inc"
+#else
+#include "vc2_ce_vmu_stage.inc"
+#endif
+#if KUI_VC2_VMU_WATCH
+#include "vc2_ce_vmu_watch_stage.inc"
+#endif
+#endif
 #if KUI_NATIVE_STANDALONE_READER
 #include "native_standalone_reader_stage.inc"
 #endif
@@ -540,6 +615,13 @@ static void retire_launcher_serial(void) {
 }
 
 static void stopped(const char *message,uint32_t detail) {
+#if KUI_SMASH_MENU_LOADER && KUI_SMASH_CARD_SESSION && KUI_SMASH_PHASE_DIAGNOSTIC
+    smash_outer_return_stop(message,detail);
+#endif
+#if KUI_SMASH_CE_GIN_ADOPT || KUI_SMASH_NATIVE_GIN_ADOPT
+    retail_display_adoption_quiet(0u);
+    retail_display_restore(&display);
+#endif
     retail_display_line(message);
     retail_display_hex("DETAIL",detail);
     retail_display_line("LAUNCH STOPPED - PHOTOGRAPH THIS SCREEN");
@@ -559,6 +641,7 @@ static int physical_run(void *context,uint32_t lba,uint32_t available,uint8_t ou
     last_card_result=kui_retail_storage_read_run(context,lba,available,out);
     return last_card_result==KUI_LOADER_SD_OK?0:-1;
 }
+#if !KUI_SMASH_NATIVE_GIN_ADOPT
 static void read_sectors(uint32_t lba,uint32_t count,enum kui_game_sector_format format,void *out) {
     last_card_result=kui_retail_storage_acquire(&card);
     if(last_card_result!=KUI_LOADER_SD_OK)
@@ -584,9 +667,11 @@ static void read_sectors(uint32_t lba,uint32_t count,enum kui_game_sector_format
         stopped("IMAGE READ FAILED",(uint32_t)result);
     }
 }
+#endif
 /* Loads payload sectors from lba. Each chunk stays within one backing track;
  * mixed cooked data/raw audio maps retain their physical file stride. Raw
  * data keeps the original header checks, including its absolute address. */
+#if !KUI_SMASH_CE_CHILD && !KUI_SMASH_NATIVE_GIN_ADOPT
 static void load_sectors(uint32_t lba,uint32_t sectors,uint32_t file_bytes,uint8_t *out) {
     for(uint32_t done=0;done<sectors;) {
         const struct kui_retail_track *track=NULL;
@@ -625,6 +710,7 @@ static void load_sectors(uint32_t lba,uint32_t sectors,uint32_t file_bytes,uint8
         retail_display_progress(done,sectors);
     }
 }
+#endif /* !KUI_SMASH_CE_CHILD: original GIN already read the CE executable */
 #ifdef KUI_RETAIL_CE
 /* Windows CE boot test. The IP's peripheral field (seven hexadecimal digits
  * at 0x38, read as game_metadata.c does) must select Windows CE. The boot
@@ -1220,10 +1306,48 @@ static void report_invalid_map(const uint8_t *wire,enum kui_game_result result) 
 }
 #endif
 
+#if KUI_SMASH_NATIVE_GIN_ADOPT
+#include "smash_native_gin_stage.inc"
+#elif KUI_SMASH_NATIVE_MENU
+#include "smash_native_preload_stage.inc"
+#endif
+#if KUI_SMASH_CE_CHILD
+#include "smash_ce_gin_stage.inc"
+#endif
 void kui_retail_stage_main(const uint8_t *wire) {
+#if KUI_SMASH_MENU_LOADER && KUI_SMASH_CARD_SESSION && KUI_SMASH_PHASE_DIAGNOSTIC
+    smash_outer_return_trace=smash_menu_return_seed.flags==KUI_SMASH_MENU_RETURN_CONTEXT;
+    smash_outer_return_mark(UINT32_C(0x110));
+#endif
+#if KUI_SMASH_PHASE_DIAGNOSTIC && KUI_SMASH_NATIVE_MENU
+    smash_phase_stage_display(&display);
+#else
     retail_display_capture(&display);
+#endif
+#if KUI_SMASH_CE_CHILD
+    retail_display_adoption_quiet(1u);
+    smash_ce_gin_begin();
+#elif KUI_SMASH_NATIVE_GIN_ADOPT
+    smash_native_gin_begin();
+#endif
     retail_display_restore(&display);
+#if KUI_SMASH_PHASE_DIAGNOSTIC && KUI_SMASH_NATIVE_MENU
+    smash_phase_stage_begin();
+#endif
+#if KUI_SMASH_CARD_SESSION
+    smash_card_session_import(wire);
+#endif
     retail_display_line("LAUNCHER HAS SHUT DOWN");
+#if KUI_SMASH_READER_CONTROL03
+    /* Volatile typed reads keep this one complete tag linked. Do not embed
+     * its magic words a second time in code/literal pools. */
+    const volatile struct kui_smash_reader_control *control03=&kui_smash_reader_control_tag;
+    if(control03->version!=1u || control03->bytes!=KUI_SMASH_READER_CONTROL_BYTES ||
+       control03->variant!=3u || control03->reserved)
+        stopped("SMASH CONTROL03 TAG INVALID",control03->variant);
+    retail_display_line("SMASH PACK COMPARISON 03");
+    retail_display_line("NO VIRTUAL VMU / NO CE RESERVATION");
+#endif
     memcpy(wire_copy,wire,sizeof(wire_copy));
     enum kui_game_result result=
 #if KUI_RETAIL_ZSO
@@ -1256,7 +1380,14 @@ void kui_retail_stage_main(const uint8_t *wire) {
     if(!kui_retail_observe_admit(&manifest)) stopped("14 TOY SCI MAP REFUSED",manifest.gdi_crc32);
     retail_display_line("14 TOY RESOURCE OBSERVATION / NO CDDA");
 #endif
-#if KUI_NATIVE_STANDALONE_STRUCTURAL
+#if KUI_NATIVE_STANDALONE_FOREGROUND
+    if(!kui_native_foreground_descriptor_valid(&kui_native_foreground_reader_capability,
+           sizeof(kui_native_foreground_reader_capability)) ||
+       !kui_native_standalone_launch_prepare(&manifest))
+        stopped("FOREGROUND CONTROL NEEDS SCI STANDARD AND AT MOST64 SLOTS",manifest.reader);
+    retail_display_line("LOW FOREGROUND CONTROL");
+    retail_display_line("PHYSICAL VMU / NO SDK CALLBACKS");
+#elif KUI_NATIVE_STANDALONE_STRUCTURAL
     if(!kui_native_standalone_descriptor_valid(&kui_native_standalone_reader_capability,
            sizeof(kui_native_standalone_reader_capability)))
         stopped("STANDALONE CAPABILITY INVALID",0u);
@@ -1291,6 +1422,9 @@ void kui_retail_stage_main(const uint8_t *wire) {
             "BACKGROUND READER Y - 25 PER CALL":"BACKGROUND READER X - 20 PER CALL");
 #endif
 #endif
+#if KUI_SMASH_MENU_LOADER && KUI_SMASH_CARD_SESSION && KUI_SMASH_PHASE_DIAGNOSTIC
+    smash_outer_return_mark(UINT32_C(0x111));
+#endif
     last_card_result=kui_retail_storage_init(&card,manifest.storage_transport);
     if(last_card_result!=KUI_LOADER_SD_OK) {
         if(card.transport!=KUI_STORAGE_IDE) {
@@ -1299,6 +1433,18 @@ void kui_retail_stage_main(const uint8_t *wire) {
         }
         stopped("READ ONLY STORAGE INIT FAILED",(uint32_t)last_card_result);
     }
+#if KUI_SMASH_PHASE_DIAGNOSTIC && KUI_SMASH_NATIVE_MENU
+    kui_smash_phase_stage_mark(KUI_SMASH_PHASE_STORAGE_DONE);
+#endif
+#if KUI_SMASH_CARD_SESSION && KUI_SMASH_MENU_LOADER
+#if KUI_SMASH_PHASE_DIAGNOSTIC
+    smash_outer_return_mark(UINT32_C(0x112));
+#endif
+    smash_card_session_outer_prepare();
+#if KUI_SMASH_PHASE_DIAGNOSTIC
+    smash_outer_return_mark(UINT32_C(0x113));
+#endif
+#endif
     /* Preparation knows the validated partition end, a lower bound on the
      * physical card size. Trailing unpartitioned sectors are legitimate. */
     if(kui_retail_storage_blocks(&card)<manifest.card_sectors)
@@ -1324,10 +1470,15 @@ void kui_retail_stage_main(const uint8_t *wire) {
     if(result!=KUI_GAME_OK || zso_stop!=KUI_LOADER_SD_OK)stopped("ZSO HEADER OR INDEX CHANGED",(uint32_t)result);
 #endif
     retail_display_line("LOADING OWNER IP AND EXECUTABLE");
+#if !KUI_SMASH_CE_CHILD && !KUI_SMASH_NATIVE_GIN_ADOPT
     uint8_t *ip=(uint8_t *)(uintptr_t)KUI_RETAIL_IP_ADDRESS;
     read_sectors(manifest.session_lba,16,KUI_GAME_SECTOR_MODE1,ip);
     uint32_t crc=kui_retail_crc32(0,ip,KUI_RETAIL_IP_BYTES);
     if(crc!=manifest.ip_crc32) stopped("IP CHECKSUM CHANGED",crc);
+#endif
+#if KUI_SMASH_PHASE_DIAGNOSTIC && KUI_SMASH_NATIVE_MENU
+    kui_smash_phase_stage_mark(KUI_SMASH_PHASE_IP_DONE);
+#endif
 #if KUI_RETAIL_ZSO
     uint32_t peripheral=0;
     for(unsigned i=56;i<63;i++) {
@@ -1358,7 +1509,16 @@ void kui_retail_stage_main(const uint8_t *wire) {
     exec_bytes=ce_load(ip);
 #else
     exec_bytes=manifest.boot_bytes;
+#if KUI_SMASH_NATIVE_GIN_ADOPT
+    smash_native_gin_loaded();
+#elif KUI_SMASH_CE_CHILD
+    smash_ce_gin_restore(boot);
+#else
+#if KUI_SMASH_NATIVE_MENU
+    if(!smash_native_preloaded_image(boot))
+#endif
     load_sectors(manifest.boot_lba,(manifest.boot_bytes+2047u)/2048u,manifest.boot_bytes,boot);
+#endif
 #endif
     if((boot_cooked || (manifest.flags & KUI_RETAIL_IMAGE_BOOT_CRC)) && source_boot_crc!=manifest.boot_crc32)
         stopped("EXECUTABLE CHECKSUM CHANGED",source_boot_crc);
@@ -1371,10 +1531,46 @@ void kui_retail_stage_main(const uint8_t *wire) {
     if(manifest.flags & KUI_RETAIL_IMAGE_SCRAMBLED)
         stopped("SCRAMBLED WINDOWS CE BOOT IS UNSUPPORTED",0);
 #endif
+#if KUI_SMASH_MENU_LOADER && KUI_SMASH_CARD_SESSION && KUI_SMASH_PHASE_DIAGNOSTIC
+    smash_outer_return_mark(UINT32_C(0x114));
+#endif
     boot_crc=kui_retail_crc32(0,boot,exec_bytes);
+#if KUI_SMASH_PHASE_DIAGNOSTIC && KUI_SMASH_NATIVE_MENU
+    kui_smash_phase_stage_mark(KUI_SMASH_PHASE_MDE_DONE);
+#endif
+#if KUI_SMASH_NATIVE_MENU
+    kui_smash_native_return_stage_prepare();
+#endif
+#if KUI_SMASH_MENU_LOADER
+    smash_menu_loader_prepare();
+#endif
+#if KUI_VC2_CE_VMU
+    if(manifest.track_count+manifest.extent_count>KUI_NATIVE_FOREGROUND_VC2_SLOTS)
+        stopped("VC2 VMU MAP HAS TOO MANY EXTENTS",manifest.track_count+manifest.extent_count);
+#if KUI_SMASH_CE_CHILD
+    smash_ce_child_prepare();
+#else
+    if(exec_bytes!=212324u || boot_crc!=UINT32_C(0xc28e5f94) ||
+       manifest.ip_crc32!=UINT32_C(0x18efc93a))
+        stopped("VC2 VMU TEST NEEDS MATCHED SMASH PACK",boot_crc);
+#endif
+#if KUI_SMASH_SWIRL_VMU
+    retail_display_line("SEGA SWIRL / SHARED VMU A1");
+#endif
+#endif
 #if KUI_NATIVE_STANDALONE_READER
     standalone_source_check();
 #endif
+#if KUI_SMASH_CE_CHILD
+    /* GIN already performed its original transfer and RTE. Do not reload IP,
+     * repaint VRAM, run BOOT2 again, or synthesize a substitute CPU frame. */
+    smash_ce_gin_adopt();
+#elif KUI_SMASH_NATIVE_GIN_ADOPT
+    /* Original GIN already loaded this exact MDE and selected its CPU
+     * continuation. Attach the independently prepared card at its original
+     * allocator hook; no duplicate owner read or bootstrap is needed. */
+    smash_native_gin_adopt();
+#else
     if((size_t)(__retail_trampoline_end-__retail_trampoline_start)!=sizeof(original_entry))
         stopped("INVALID ENTRY TRAMPOLINE",0);
     memcpy(original_entry,boot,ENTRY_PATCH_BYTES);
@@ -1396,8 +1592,20 @@ void kui_retail_stage_main(const uint8_t *wire) {
     if(exec_bytes==6751168u && manifest.ip_crc32==0x22de24d8u && boot_crc==0x73f4277bu)
         retail_display_line("SONIC STACK TEST ACTIVE");
 #endif
+#if STEP_PAUSE_FRAMES
     retail_display_pause(STEP_PAUSE_FRAMES);
+#endif
+#if KUI_SMASH_PHASE_DIAGNOSTIC && KUI_SMASH_NATIVE_MENU
+    kui_smash_phase_stage_mark(KUI_SMASH_PHASE_BOOT2_BEGIN);
+#endif
+#if KUI_SMASH_CARD_SESSION
+    ++smash_card_boot2_calls;
+#endif
+#if KUI_SMASH_MENU_LOADER && KUI_SMASH_CARD_SESSION && KUI_SMASH_PHASE_DIAGNOSTIC
+    smash_outer_return_mark(UINT32_C(0x115));
+#endif
     kui_retail_bootstrap_enter();
+#endif
 }
 
 /* Called from P2 assembly with IRQs masked and caches clean/disabled. The
@@ -1408,6 +1616,9 @@ void kui_retail_stage_main(const uint8_t *wire) {
  * code audit keep every floating-point register unchanged. */
 static void relay_stopped(const char *message,uint32_t detail) __attribute__((noreturn));
 static void relay_stopped(const char *message,uint32_t detail) {
+#if KUI_SMASH_MENU_LOADER && KUI_SMASH_CARD_SESSION && KUI_SMASH_PHASE_DIAGNOSTIC
+    smash_outer_return_stop(message,detail);
+#endif
 #ifndef KUI_RETAIL_CE
     /* Only a terminal failure may reclaim video after the owner's bootstrap.
      * Successful native handoff must preserve its scanout and VRAM contents. */
@@ -2184,6 +2395,9 @@ static void skies_read_arm(void) {
 }
 #endif
 void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
+#if KUI_SMASH_MENU_LOADER && KUI_SMASH_CARD_SESSION && KUI_SMASH_PHASE_DIAGNOSTIC
+    smash_outer_return_mark(UINT32_C(0x116));
+#endif
 #ifdef KUI_RETAIL_CE
     retail_display_restore(&display);
     retail_display_line("BOOTSTRAP 2 REACHED GAME ENTRY");
@@ -2213,7 +2427,11 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
 #endif
     uint8_t *boot=(uint8_t *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS;
     memcpy(boot,original_entry,ENTRY_PATCH_BYTES);
+#if KUI_NATIVE_CACHED_EXTENT && !defined(KUI_RETAIL_CE) && !KUI_SMASH_CE_CHILD && !KUI_NATIVE_PHYSICAL_DISC
+    uint32_t crc=kui_native_stage_cached_crc32(0,boot,exec_bytes);
+#else
     uint32_t crc=kui_retail_crc32(0,boot,exec_bytes);
+#endif
     if(crc!=boot_crc) relay_stopped("BOOTSTRAP ALTERED EXECUTABLE",crc);
 #if KUI_NATIVE_STAGE_FAST_CRC
     retail_display_line("ENTIRE EXECUTABLE VERIFIED");
@@ -2238,7 +2456,29 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
 #endif
 #if KUI_NATIVE_STANDALONE_READER
     standalone_source_check();
+#if !KUI_NATIVE_STANDALONE_FOREGROUND
     standalone_source_publish();
+#endif
+#endif
+#if KUI_SMASH_MENU_LOADER
+    smash_menu_loader_return_arguments();
+    smash_menu_loader_publish();
+#endif
+#if KUI_VC2_CE_VMU
+    /* Bootstrap2 has completed and the admitted native executable/resident
+     * were restored above. Stage only now, immediately before outer native
+     * startup; this still grants no reservation across that startup. */
+#if KUI_SMASH_CE_CHILD
+    smash_ce_child_relay(frame);
+#endif
+#if KUI_VC2_VMU_LATE
+    vc2_ce_vmu_late_publish();
+#else
+    vc2_ce_vmu_stage_prepare();
+#endif
+#if KUI_VC2_VMU_WATCH
+    vc2_ce_vmu_watch_stage_arm();
+#endif
 #endif
 #if KUI_ARMADA_CE_RAM_BIND_STAGE
     /* Bootstrap 2 has completed; caches are clean and disabled here. Prove
@@ -2315,9 +2555,10 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
 #if KUI_NATIVE_RAM_MAP
     ram_map_fill();
 #endif
-    /* Preserve the existing read-only frame delay for this isolated video
-     * comparison. CPU/cache restoration remains entirely in the assembly. */
+    /* Optional photo hold only; CPU/cache restoration is in the assembly. */
+#if STEP_PAUSE_FRAMES
     retail_display_pause(STEP_PAUSE_FRAMES);
+#endif
 }
 #ifdef KUI_RETAIL_CE
 /* Set by the exception table in retail_stage.S: vector (1 general, 4 TLB

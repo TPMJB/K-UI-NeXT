@@ -1,0 +1,116 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# The original menu carries its selected GIN argv/folder into a fresh native
+# cold module. The direct PSII/SF developer modules retain their fixed seeds.
+BUILD ?= build/smash-native-menu
+include Makefile.smash-native-child
+FLAGS += -DKUI_SMASH_NATIVE_MENU=1 -DKUI_NATIVE_STAGE_FAST_CRC=1
+NATIVE_FLAGS += -DKUI_SMASH_NATIVE_MENU=1
+RESIDENT_LAYOUT := src/loader/smash_native_menu_resident.ld
+VMU_RESIDENT_OBJCOPY_FLAGS := --remove-section=.smash_return_raw
+VMU_SD_RESIDENT_EXPORTS += -Wl,-u,_kui_smash_menu_return_read_card -Wl,-u,_kui_smash_menu_return_stop
+$(BUILD)/resident-sci.elf: src/loader/smash_native_menu_resident.ld
+$(BUILD)/native/src/loader/vmu_native_passive.o: include/kui/smash_native_return.h Makefile.smash-native-menu
+$(BUILD)/native/src/loader/vmu_native_passive.o: private NATIVE_FLAGS += -fno-tree-fre -fno-caller-saves
+$(BUILD)/native-worker.elf: private LINK += -Wl,-u,_kui_smash_native_return_exports
+override STAGE_SRC += src/core/smash_native_menu.c src/core/cold_image.c
+$(BUILD)/stage.elf: $(STAGE_OBJ)
+$(BUILD)/stage/src/loader/vmu_native_heap_probe_stage.o: include/kui/smash_native_menu.h \
+ src/loader/smash_native_return_stage.inc include/kui/smash_menu_return_loader.h
+SMASH_RETURN_SRC := src/loader/smash_menu_return_loader.c src/core/smash_menu_return.c \
+ src/core/smash_menu_loader.c src/core/retail_image.c src/loader/minic.c src/loader/native_return_hardware.c \
+ src/loader/cold_load_crc32.c src/loader/smash_return_fault_display.c src/core/smash_phase_video.c
+SMASH_RETURN_OBJ := $(patsubst %.c,$(BUILD)/return/%.o,$(SMASH_RETURN_SRC)) \
+ $(BUILD)/return_entry.o $(BUILD)/return_hardware_asm.o $(BUILD)/return_cold_load_scope.o
+$(SMASH_RETURN_OBJ): Makefile.smash-native-menu
+$(BUILD)/return/%.o: %.c
+	@mkdir -p $(@D)
+	$(CC) $(FLAGS) -fcallgraph-info=su -MMD -MP -c $< -o $@
+$(BUILD)/return_entry.o: src/loader/smash_menu_return_entry.S
+	$(CC) $(FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/return_hardware_asm.o: src/loader/native_return_hardware.S
+	$(CC) $(FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/return_cold_load_scope.o: src/loader/cold_load_scope.S
+	$(CC) $(FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/return-loader.elf: $(SMASH_RETURN_OBJ) src/loader/smash_menu_return_loader.ld
+	$(CC) $(LINK) -Tsrc/loader/smash_menu_return_loader.ld -Wl,-Map,$(BUILD)/return-loader.map \
+	 -o $@ $(SMASH_RETURN_OBJ) -lgcc
+$(BUILD)/return-loader.bin: $(BUILD)/return-loader.elf
+	$(OBJCOPY) -O binary $< $@
+$(BUILD)/smash_menu_return_symbols.h: $(BUILD)/resident-sci.elf $(BUILD)/return-loader.elf \
+ $(BUILD)/return-loader.bin tools/smash_menu_return_symbols.py tools/smash_native_menu_resident.py
+	python3 tools/smash_menu_return_symbols.py $(BUILD)/resident-sci.elf $(BUILD)/return-loader.elf $@ \
+	 --raw-output $(BUILD)/smash-return-raw.bin --code $(BUILD)/return-loader.bin
+$(BUILD)/smash-return-raw.bin: $(BUILD)/smash_menu_return_symbols.h
+	@test -f $@
+$(BUILD)/vmu_maple_observe_symbols.h: tools/smash_native_menu_resident.py
+$(BUILD)/stage/src/loader/vmu_native_heap_probe_stage.o: $(BUILD)/smash_menu_return_symbols.h
+$(BUILD)/stage_asm.o: $(BUILD)/smash-return-raw.bin $(BUILD)/return-loader.bin
+FLAGS += -DKUI_SMASH_RETURN_RAW_BIN='"$(BUILD)/smash-return-raw.bin"' \
+ -DKUI_SMASH_RETURN_CODE_BIN='"$(BUILD)/return-loader.bin"'
+override STAGE_SRC += src/core/smash_menu_return.c src/core/smash_menu_loader.c
+ifneq ($(filter 1 2,$(SMASH_PHASE_DIAGNOSTIC)),)
+FLAGS += -DKUI_SMASH_PHASE_DIAGNOSTIC=1
+override STAGE_SRC += src/core/smash_phase_clock.c src/core/smash_phase_trace.c src/core/smash_phase_video.c
+$(BUILD)/stage/src/loader/vmu_native_heap_probe_stage.o: src/loader/smash_phase_stage.inc \
+ include/kui/smash_phase_clock.h include/kui/smash_phase_trace.h include/kui/smash_phase_video.h
+endif
+ifeq ($(SMASH_PHASE_DIAGNOSTIC),2)
+FLAGS += -DKUI_SMASH_PHASE_TEXT=1 -I.deps/fatfs/source
+$(BUILD)/stage.elf: private LINK += -Wl,-u,__smash_phase_text_capability
+override STAGE_SRC += src/core/smash_phase_text.c src/loader/smash_phase_file.c src/loader/smash_phase_string.c src/core/smash_menu_capsule.c
+STAGE_OBJ += $(BUILD)/phase-fatfs.o $(BUILD)/phase-ffunicode.o
+$(BUILD)/phase-fatfs.o: .deps/fatfs/source/ff.c .deps/fatfs/source/ffconf.h
+	@mkdir -p $(@D)
+	$(CC) $(FLAGS) -fcallgraph-info=su -MMD -MP -c $< -o $@
+$(BUILD)/phase-ffunicode.o: .deps/fatfs/source/ffunicode.c .deps/fatfs/source/ffconf.h
+	@mkdir -p $(@D)
+	$(CC) $(FLAGS) -fcallgraph-info=su -MMD -MP -c $< -o $@
+endif
+$(BUILD)/stage.elf: $(STAGE_OBJ)
+-include $(SMASH_RETURN_OBJ:.o=.d)
+$(BUILD)/retail-smash-native-menu.kui: $(BUILD)/retail-maple-observe.kui
+	cp $< $@
+all: $(BUILD)/retail-smash-native-menu.kui
+
+# Collection-only opt-in. Direct developer children and the established cold
+# menu route retain their entry/BOOT2 policy and exact 72KiB worker build.
+ifeq ($(SMASH_NATIVE_GIN_ADOPT),1)
+FLAGS += -DKUI_SMASH_NATIVE_GIN_ADOPT=1
+$(BUILD)/stage/src/loader/retail_display.o: private FLAGS += -DKUI_SMASH_NATIVE_GIN_ADOPTION_DISPLAY=1
+override STAGE_SRC += src/core/smash_native_gin.c
+STAGE_OBJ += $(BUILD)/native-gin-resume.o
+$(BUILD)/native-gin-resume.o: src/loader/smash_native_gin_resume.S src/loader/smash_ce_gin_resume.S include/kui/smash_native_gin.h
+	@mkdir -p $(@D)
+	$(CC) $(FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/stage.elf: $(STAGE_OBJ)
+$(BUILD)/stage/src/loader/vmu_native_heap_probe_stage.o: src/loader/smash_native_gin_stage.inc include/kui/smash_native_gin.h
+NATIVE_GIN_VERIFY_SRC := src/loader/smash_native_gin_verify.c src/core/smash_native_gin.c \
+ src/core/smash_native_menu.c src/core/hash.c src/core/retail_image.c src/loader/minic.c
+NATIVE_GIN_VERIFY_OBJ := $(patsubst %.c,$(BUILD)/gin-verify/%.o,$(NATIVE_GIN_VERIFY_SRC))
+NATIVE_GIN_VERIFY_FLAGS = -std=c11 -Os -Wall -Wextra -Werror $(CPU) -ffreestanding \
+ -fno-builtin -fno-stack-protector -fno-pic -ffunction-sections -fdata-sections \
+ -fno-jump-tables -fstack-usage -DKUI_RETAIL_FAST_IO=1 -Iinclude -I$(BUILD)
+$(BUILD)/smash_native_gin_offsets.h: $(BUILD)/stage.elf tools/smash_native_gin_symbols.py
+	python3 tools/smash_native_gin_symbols.py $< $@
+$(BUILD)/gin-verify/%.o: %.c $(BUILD)/smash_native_gin_offsets.h
+	@mkdir -p $(@D)
+	$(CC) $(NATIVE_GIN_VERIFY_FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/native-gin-verify.elf: $(NATIVE_GIN_VERIFY_OBJ) src/loader/smash_native_gin_verify.ld
+	$(CC) $(LINK) -Tsrc/loader/smash_native_gin_verify.ld -Wl,-Map,$(BUILD)/native-gin-verify.map -o $@ $(NATIVE_GIN_VERIFY_OBJ) -lgcc
+$(BUILD)/native-gin-verify.bin: $(BUILD)/native-gin-verify.elf
+	$(OBJCOPY) -O binary $< $@
+$(BUILD)/entry_asm.o: $(BUILD)/native-gin-verify.bin
+$(BUILD)/entry_asm.o: private FLAGS += -DKUI_SMASH_NATIVE_GIN_VERIFY_BIN='"$(BUILD)/native-gin-verify.bin"'
+-include $(NATIVE_GIN_VERIFY_OBJ:.o=.d) $(BUILD)/native-gin-resume.d
+endif
+
+# Reusing a build directory must never leave the diagnostic terminal enabled
+# in a subsequent ordinary package (or omit it from an opted-in package).
+.PHONY: smash-phase-config-force
+$(BUILD)/smash-phase-config: smash-phase-config-force
+	@mkdir -p $(@D)
+	@echo 'SMASH_PHASE_DIAGNOSTIC=$(if $(filter 2,$(SMASH_PHASE_DIAGNOSTIC)),2,$(if $(filter 1,$(SMASH_PHASE_DIAGNOSTIC)),1,0)) SMASH_NATIVE_GIN_ADOPT=$(if $(filter 1,$(SMASH_NATIVE_GIN_ADOPT)),1,0)' > $@.tmp
+	@cmp -s $@.tmp $@ && rm $@.tmp || mv $@.tmp $@
+$(RESIDENT_OBJ) $(STAGE_OBJ) $(SMASH_RETURN_OBJ): $(BUILD)/smash-phase-config
+
+include Makefile.smash-card-session

@@ -1,0 +1,151 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Matched Smash Pack/VC2 profiles; persistence is explicitly opt-in below.
+BUILD ?= build/vc2-ce-vmu
+VC2_VMU_DIR := $(BUILD)/helper
+include Makefile.native-ocram-bootstrap
+VC2_WATCH ?= 0
+VC2_LATE ?= 0
+VC2_PERSIST ?= 0
+VC2_DIAGNOSTIC_MODE ?= 0
+VC2_TEXTURE_PROBE ?= 0
+VC2_SWIRL ?= 0
+SMASH_CE_CHILD ?= 0
+ifneq ($(filter $(VC2_SWIRL),0 1),$(VC2_SWIRL))
+$(error VC2_SWIRL must be zero or one)
+endif
+ifeq ($(VC2_SWIRL),1)
+ifneq ($(VC2_PERSIST):$(VC2_LATE),1:1)
+$(error Sega Swirl requires its persistent late helper profile)
+endif
+endif
+FLAGS += -DKUI_VC2_CE_VMU=1 -DKUI_VC2_VMU_WATCH=$(VC2_WATCH) -DKUI_VC2_VMU_LATE=$(VC2_LATE) -DKUI_VC2_VMU_PERSIST=$(VC2_PERSIST) -DKUI_SMASH_SWIRL_VMU=$(VC2_SWIRL)
+ifeq ($(VC2_TEXTURE_PROBE),1)
+ifneq ($(VC2_PERSIST):$(VC2_LATE):$(VC2_DIAGNOSTIC_MODE),1:1:4)
+$(error VC2 texture evidence requires the reserve-only persistent late profile)
+endif
+FLAGS += -DKUI_VC2_TEXTURE_PROBE=1
+endif
+RESIDENT_FLAGS := $(filter-out -DKUI_RETAIL_MANIFEST_SLOTS=64,$(RESIDENT_FLAGS)) \
+ -DKUI_RETAIL_MANIFEST_SLOTS=48 -I$(VC2_VMU_DIR) -fno-tree-fre
+ifeq ($(VC2_PERSIST),1)
+# Keep the serialized GD wait gate within the existing low code/stack budget.
+RESIDENT_FLAGS += -fno-caller-saves
+endif
+STAGE_FLAGS += -I$(VC2_VMU_DIR) \
+ -DKUI_VC2_VMU_HELPER_BIN='"$(VC2_VMU_DIR)/helper.bin"'
+include Makefile.vc2-ce-vmu-helper
+ifeq ($(SMASH_CE_CHILD),1)
+STAGE_FLAGS += -DKUI_SMASH_CE_GIN_ADOPT=1
+STAGE_SRC += src/core/smash_ce_gin.c
+STAGE_OBJ += $(BUILD)/smash-ce-gin-resume.o
+$(BUILD)/smash-ce-gin-resume.o: src/loader/smash_ce_gin_resume.S $(BUILD)/config
+	$(CC) $(STAGE_FLAGS) -MMD -MP -c $< -o $@
+ifneq ($(VC2_PERSIST):$(VC2_LATE):$(VC2_DIAGNOSTIC_MODE):$(VC2_TEXTURE_PROBE),1:1:0:0)
+$(error Smash CE children require the complete normal persistent late helper)
+endif
+# Each child owns a sealed helper/profile and separate install/session names.
+# The original single-profile targets retain their original artifact names.
+SMASH_CE_PROFILE_KIND := $(if $(filter 1,$(VC2_SWIRL)),2,1)
+SMASH_CE_INSTALL_NAME := $(if $(filter 1,$(VC2_SWIRL)),retail-smash-swirl.kui,retail-smash-vc2.kui)
+SMASH_CE_HELPER_NAME := $(if $(filter 1,$(VC2_SWIRL)),smash-swirl-vmu-helper.bin,smash-vc2-vmu-helper.bin)
+SMASH_CE_SESSION_NAME := $(if $(filter 1,$(VC2_SWIRL)),smash-swirl-vmu-session.bin,smash-vc2-vmu-session.bin)
+STAGE_OBJ += $(BUILD)/smash-ce-profile.o
+# The late stage does not execute this linked copy; the GUI extracts it to
+# create the matching session capsule. Keep its typed owner despite GC.
+$(BUILD)/stage.elf: private LINK += -Wl,-u,__smash_ce_embedded_helper
+$(BUILD)/smash-ce-profile.bin: $(VC2_VMU_DIR)/helper.bin tools/smash_ce_profile.py
+	python3 tools/smash_ce_profile.py $< $@ --kind $(SMASH_CE_PROFILE_KIND) --embedded-helper $(if $(filter 1,$(SMASH_CE_RETURN)),--prepared-image $(VC2_VMU_DIR)/prepared.bin)
+$(BUILD)/smash-ce-profile.o: src/loader/smash_ce_profile_blob.S $(BUILD)/smash-ce-profile.bin $(BUILD)/config
+	$(CC) $(STAGE_FLAGS) -DKUI_SMASH_CE_PROFILE_BIN='"$(BUILD)/smash-ce-profile.bin"' -c $< -o $@
+$(BUILD)/stage.elf: $(BUILD)/smash-ce-profile.o
+endif
+$(RESIDENT_OBJ) $(STAGE_OBJ): $(VC2_VMU_DIR)/vc2_ce_vmu_symbols.h
+$(BUILD)/stage_asm.o: $(VC2_VMU_DIR)/helper.bin
+$(BUILD)/retail-native-foreground.kui: $(VC2_VMU_DIR)/bridge.bin
+ifeq ($(VC2_WATCH),1)
+RESIDENT_OBJ += $(BUILD)/vc2-watch-entry.o
+NATIVE_IRQ_ROOT += -Wl,-u,_kui_vc2_ce_vmu_watch_entry
+$(BUILD)/resident-sci.elf: $(BUILD)/vc2-watch-entry.o
+$(BUILD)/vc2-watch-entry.o: src/loader/vc2_ce_vmu_watch_entry.S
+	$(CC) $(RESIDENT_FLAGS) -c $< -o $@
+$(BUILD)/vc2_watch_symbols.h: $(BUILD)/resident-sci.elf tools/vc2_ce_vmu_watch_symbols.py
+	python3 tools/vc2_ce_vmu_watch_symbols.py $< $@
+$(STAGE_OBJ): $(BUILD)/vc2_watch_symbols.h
+endif
+
+.PHONY: vc2-persist-source-tests
+vc2-persist-source-tests: vc2-vmu-source-tests
+	$(HOST_CC) $(VC2_HOST_FLAGS) -DKUI_VC2_CE_VMU_PREPARE_HOST=1 -DKUI_VC2_VMU_PERSIST=1 \
+	 tests/test_vc2_ce_vmu_prepare.c src/loader/vc2_ce_vmu_prepare.c -o $(BUILD)/host/prepare-persistent
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/host/prepare-persistent "$(VC2_OWNER_KERNEL)"
+.PHONY: vc2-persist-owner-tests
+vc2-persist-owner-tests:
+	@mkdir -p $(BUILD)/host
+	python3 tests/test_ce_maple_bound_owner_profiles.py --cc "$(HOST_CC)" --json $(BUILD)/host/bound-owner-profiles.json
+ifeq ($(VC2_LATE),1)
+# The slow card bus dominates these bounded copies. Keep the low gate and its
+# guarded stack within the firmware reservation without changing other builds.
+RESIDENT_FLAGS += -DKUI_RETAIL_BYTE_COPY=1
+NATIVE_IRQ_ROOT += -Wl,-u,_kui_vc2_ce_vmu_read_card
+NATIVE_RESIDENT_LINKER_SCRIPT := src/loader/retail_resident_vc2_late.ld
+NATIVE_RESIDENT_OBJCOPY_FLAGS := --remove-section=.vc2_late_raw
+$(BUILD)/resident-sci.elf: src/loader/retail_resident_vc2_late.ld
+ifneq ($(VC2_WATCH),0)
+$(error VC2 late loading and write watch are separate profiles)
+endif
+$(BUILD)/vc2_late_symbols.h: $(BUILD)/resident-sci.elf tools/vc2_ce_vmu_late_symbols.py
+	python3 tools/vc2_ce_vmu_late_symbols.py $< $@ --raw-output $(BUILD)/vc2-raw.bin
+$(BUILD)/vc2-raw.bin: $(BUILD)/vc2_late_symbols.h
+	@test -f $@
+$(STAGE_OBJ): $(BUILD)/vc2_late_symbols.h
+$(BUILD)/stage_asm.o: $(BUILD)/vc2-raw.bin
+STAGE_FLAGS += -DKUI_VC2_LATE_RAW_BIN='"$(BUILD)/vc2-raw.bin"'
+endif
+
+HOST_CC ?= cc
+VC2_HOST_FLAGS := -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic \
+ -fsanitize=address,undefined -fno-sanitize-recover=all -fno-pie -no-pie -Iinclude -Isrc/loader
+.PHONY: vc2-vmu-host-tests vc2-vmu-source-tests
+vc2-vmu-host-tests:
+	@mkdir -p $(BUILD)/host
+	$(HOST_CC) $(VC2_HOST_FLAGS) -DKUI_RETAIL_ASYNC_TEST=1 -DKUI_NATIVE_OCRAM_BOOTSTRAP=1 \
+	 -DKUI_NATIVE_GD_LEGACY_STREAM=1 tests/test_vc2_ce_vmu_gate.c \
+	 src/loader/vc2_ce_vmu_service.c -o $(BUILD)/host/gate
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/host/gate
+	python3 tests/test_vc2_ce_maple_bridge.py
+	python3 tests/test_vc2_ce_vmu_package.py --helper $(VC2_VMU_DIR)
+vc2-vmu-source-tests:
+	@test -n "$(VC2_OWNER_KERNEL)" || (echo 'Set VC2_OWNER_KERNEL to the supplied original 0WINCEOS.BIN'; exit 2)
+	@mkdir -p $(BUILD)/host
+	$(HOST_CC) $(VC2_HOST_FLAGS) -DKUI_VC2_CE_VMU_PREPARE_HOST=1 \
+	 tests/test_vc2_ce_vmu_prepare.c src/loader/vc2_ce_vmu_prepare.c -o $(BUILD)/host/prepare
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/host/prepare "$(VC2_OWNER_KERNEL)"
+	python3 tests/test_vc2_ce_vmu_owner_audit.py --kernel "$(VC2_OWNER_KERNEL)"
+
+ifeq ($(VC2_PERSIST),1)
+ifneq ($(VC2_LATE),1)
+$(error Persistent VC2 requires late loading)
+endif
+# Every persistent helper build must exercise both actual production owner
+# profiles; zeroed or equal synthetic KData must never mask a stale address.
+$(VC2_VMU_DIR)/helper.elf: | vc2-persist-owner-tests
+STAGE_FLAGS += -DKUI_VC2_PERSIST_PROFILE_BIN='"$(BUILD)/vmu-sd-profile.bin"' \
+ -DKUI_VC2_STAGE_OWNERSHIP_PROFILE=1 -DKUI_VC2_STAGE_CACHED_RELAY=1
+STAGE_SRC += src/loader/vmu_persist_stage.c src/core/vmu_fs_admission.c \
+ src/core/vmu_persist_profile.c src/core/vmu_persist_session.c src/core/vmu_store.c \
+ src/core/vmu_image.c src/core/vmu_durable.c src/dreamcast/sci_sd_storage.c \
+ src/loader/vmu_backing.c src/loader/vc2_ce_vmu_stage_cache.c src/loader/vc2_ce_vmu_stage_clock.c
+$(BUILD)/vmu-sd-profile.bin: tools/vmu_persist_profile.py
+	@mkdir -p $(@D)
+	python3 $< --template $@
+$(STAGE_OBJ): $(BUILD)/vmu-sd-profile.bin
+$(BUILD)/stage.elf: $(STAGE_OBJ)
+VC2_PERSIST_STAGE_EXTRA := $(patsubst %.c,$(BUILD)/stage/%.o,src/loader/vmu_persist_stage.c src/core/vmu_fs_admission.c src/core/vmu_persist_profile.c src/core/vmu_persist_session.c src/core/vmu_store.c src/core/vmu_image.c src/core/vmu_durable.c src/dreamcast/sci_sd_storage.c src/loader/vmu_backing.c src/loader/vc2_ce_vmu_stage_cache.c src/loader/vc2_ce_vmu_stage_clock.c)
+$(VC2_PERSIST_STAGE_EXTRA): $(BUILD)/config
+$(VC2_PERSIST_STAGE_EXTRA): $(BUILD)/stage/%.o: %.c
+	@mkdir -p $(@D)
+	$(CC) $(STAGE_FLAGS) -MMD -MP -c $< -o $@
+.PHONY: vc2-cached-relay-test
+vc2-cached-relay-test: $(BUILD)/stage.elf
+	python3 tools/check_vc2_stage_cached_relay.py $(BUILD)/stage.elf --output $(BUILD)/vc2-stage-cached-relay.json
+endif

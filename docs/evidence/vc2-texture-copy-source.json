@@ -1,0 +1,306 @@
+{
+  "schema": "kui.vc2.texture-copy-source.v1",
+  "license": "GPL-3.0-only",
+  "status": "reviewed-source-metadata-matched",
+  "scope": "Exact private-kernel scalar contracts for possible virtual VRAM/PIO reads and RAMEND-derived allocation geometry; no executable bytes or disassembly.",
+  "runtime_admitted": false,
+  "patching_admitted": false,
+  "hardware_occurrence": {
+    "virtual_vram_PIO_request": "unknown",
+    "destination_readback_mismatch": "unknown",
+    "RAMEND_texture_corruption_cause": "unproven"
+  },
+  "source": {
+    "private_owner_relative_path": "VIRTCOP2/0WINCEOS.BIN",
+    "bytes": 1841152,
+    "sha256": "b728e8eaef03bd7cc5acbe3dc3363ec9fafcaca90916cf21781d2e72ff99b3bc",
+    "identity_gate_source": "tools/vc2_ce_vmu_owner_audit.py: VC2SourceROM.validate_identity",
+    "bounded_ROM_parser_source": "tools/armada_ce_rom_audit.py: ROMInventory",
+    "related_geometry_source": "docs/evidence/vc2-ce-vmu-runtime-geometry.json"
+  },
+  "source_contracts": [
+    {
+      "name": "ddhal_virtual_vram_mappings",
+      "module": "ddhal.dll",
+      "rva": "0x00008b90",
+      "bytes": 60,
+      "nominal_virtual_address": "0x01c68b90",
+      "rom_storage_address": "0x8c0e1b90",
+      "file_offset": 861072,
+      "sha256": "06956e009bfbf26693fe1ff3861adcff799e4828fa569b0d457e2838635b052f",
+      "crc32_ieee": "9a63c1a8"
+    },
+    {
+      "name": "wsegacd_scatter_alignment_accumulation",
+      "module": "wsegacd.dll",
+      "rva": "0x00002e0c",
+      "bytes": 112,
+      "nominal_virtual_address": "0x01cf2e0c",
+      "rom_storage_address": "0x8c0ade0c",
+      "file_offset": 648716,
+      "sha256": "c36a4deb2c2ab6286cf72507bd84a2f76c685dd9980378d8b4cb661f7e79efba",
+      "crc32_ieee": "1f881fea"
+    },
+    {
+      "name": "wsegacd_aligned_dma_selection",
+      "module": "wsegacd.dll",
+      "rva": "0x00003028",
+      "bytes": 32,
+      "nominal_virtual_address": "0x01cf3028",
+      "rom_storage_address": "0x8c0ae028",
+      "file_offset": 649256,
+      "sha256": "c15f041d548650ee2694c829c51833b3512fdefa537af22dbaa79fea24987f61",
+      "crc32_ieee": "ab18a69d"
+    },
+    {
+      "name": "wsegacd_original_pointer_pio_selection",
+      "module": "wsegacd.dll",
+      "rva": "0x00003070",
+      "bytes": 170,
+      "nominal_virtual_address": "0x01cf3070",
+      "rom_storage_address": "0x8c0ae070",
+      "file_offset": 649328,
+      "sha256": "4b543a257b03f15af24013cc7cd1fa9d615f86c466d8cd5a194aec52a2c301ce",
+      "crc32_ieee": "848b6a04"
+    },
+    {
+      "name": "nk_ramend_capture",
+      "module": "nk.exe",
+      "rva": "0x0000ed8c",
+      "bytes": 128,
+      "nominal_virtual_address": "0x8c01ed8c",
+      "rom_storage_address": "0x8c01ed8c",
+      "file_offset": 62860,
+      "sha256": "16865ab041113b43dce074e5ccb91d6d7e8bc5ba1502601b301d4a0964350b57",
+      "crc32_ieee": "179ee3ac"
+    },
+    {
+      "name": "nk_physical_region_builder",
+      "module": "nk.exe",
+      "rva": "0x0000eee8",
+      "bytes": 1132,
+      "nominal_virtual_address": "0x8c01eee8",
+      "rom_storage_address": "0x8c01eee8",
+      "file_offset": 63208,
+      "sha256": "d44edf97c9c66019be1b771179a7aa3bad8a01bd0308f9a38cf2277f532f54be",
+      "crc32_ieee": "661ca907"
+    },
+    {
+      "name": "nk_physical_page_state_initialization",
+      "module": "nk.exe",
+      "rva": "0x000189e0",
+      "bytes": 282,
+      "nominal_virtual_address": "0x8c0289e0",
+      "rom_storage_address": "0x8c0289e0",
+      "file_offset": 102880,
+      "sha256": "cfe10cf9803f99dac8f590ff066157f0aa18d162a0c36edcbd75122f710b00ba",
+      "crc32_ieee": "a1ffe542"
+    },
+    {
+      "name": "nk_no_extension_dram",
+      "module": "nk.exe",
+      "rva": "0x0001af54",
+      "bytes": 4,
+      "nominal_virtual_address": "0x8c02af54",
+      "rom_storage_address": "0x8c02af54",
+      "file_offset": 112468,
+      "sha256": "dace64cad776caad3db6eb281ed450fbeebf9edfeb5016560b4508f815ab9f05",
+      "crc32_ieee": "564fba65"
+    }
+  ],
+  "validated_literal_scalars": [
+    {
+      "name": "first_vram_physical_base",
+      "module": "ddhal.dll",
+      "rva": "0x00008be4",
+      "value": "0x04000000"
+    },
+    {
+      "name": "second_vram_physical_base",
+      "module": "ddhal.dll",
+      "rva": "0x00008bf8",
+      "value": "0x05000000"
+    },
+    {
+      "name": "MmMapIoSpace_thunk_nominal_address",
+      "module": "ddhal.dll",
+      "rva": "0x00008c20",
+      "value": "0x01c83d1c"
+    },
+    {
+      "name": "aligned_DMA_helper_nominal_address",
+      "module": "wsegacd.dll",
+      "rva": "0x0000306c",
+      "value": "0x01cf2b44"
+    },
+    {
+      "name": "DMA_refusal_status_falling_back_to_PIO",
+      "module": "wsegacd.dll",
+      "rva": "0x0000305c",
+      "value": "0xc0000182"
+    },
+    {
+      "name": "GD_gateway_address",
+      "module": "wsegacd.dll",
+      "rva": "0x000031c4",
+      "value": "0x8c0010f0"
+    },
+    {
+      "name": "RAMEND_snapshot_holder",
+      "module": "nk.exe",
+      "rva": "0x0000edf8",
+      "value": "0x8c1dd3dc"
+    },
+    {
+      "name": "physical_memory_summary",
+      "module": "nk.exe",
+      "rva": "0x0000f364",
+      "value": "0x8c1dd430"
+    },
+    {
+      "name": "physical_region_array",
+      "module": "nk.exe",
+      "rva": "0x0000f36c",
+      "value": "0x8c1dd400"
+    }
+  ],
+  "virtual_vram_mapping": {
+    "source_contract": "ddhal_virtual_vram_mappings",
+    "mapping_API": {
+      "dll": "WDMLIB.dll",
+      "name": "MmMapIoSpace",
+      "export_ordinal": 38,
+      "ddhal_IAT_rva": "0x000250f8",
+      "ddhal_thunk_rva": "0x00023d1c"
+    },
+    "mapping_calls": [
+      {
+        "physical_base": "0x04000000",
+        "physical_high_word": 0,
+        "length_device_field": "0x000013fc",
+        "cache_enable_argument": 0,
+        "returned_pointer_device_field": 52
+      },
+      {
+        "physical_base": "0x05000000",
+        "physical_high_word": 0,
+        "length_device_field": "0x000013fc",
+        "cache_enable_argument": 0,
+        "returned_pointer_device_field": 48
+      }
+    ],
+    "source_conclusion": "The original DDHAL requests virtual mappings for both VRAM apertures and stores returned pointers; a later pointer can represent VRAM without being a raw 0x04/0x05 bus address.",
+    "hardware_limit": "The reviewed source does not establish which mapping VC2 used for an observed damaged texture or whether any read targeted it."
+  },
+  "wsegacd_transfer_selection": {
+    "source_contracts": [
+      "wsegacd_scatter_alignment_accumulation",
+      "wsegacd_aligned_dma_selection",
+      "wsegacd_original_pointer_pio_selection"
+    ],
+    "request_fields": {
+      "scatter_count_offset": 20,
+      "scatter_pairs_offset": 24,
+      "pair_stride_bytes": 8,
+      "pair_pointer_offset": 0,
+      "pair_length_offset": 4
+    },
+    "alignment_summary": {
+      "pointer_low_bits_OR_mask": 31,
+      "length_low_bits_OR_mask": 31
+    },
+    "aligned_DMA": {
+      "helper_rva": "0x00002b44",
+      "requires_both_OR_summaries_zero": true,
+      "fallback_status": "0xc0000182"
+    },
+    "PIO": {
+      "odd_pointer_or_length_uses_bounce_path": true,
+      "even_but_not_32_byte_aligned_can_retain_original_destination": true,
+      "single_scatter_command": 16,
+      "single_scatter_original_pointer_load_rva": "0x00003088",
+      "multiple_scatter_command": 39,
+      "multiple_scatter_copies_original_pairs": true,
+      "GD_gateway": "0x8c0010f0"
+    },
+    "source_conclusion": "Original WSEGACD can issue PIO with an original even scatter destination, including a virtual destination; the branch is a real source path, not evidence that this hardware failure took it.",
+    "hardware_limit": "A diagnostic must record actual command, scatter count, destination, length, mapping and copied bytes before assigning a VRAM or cache cause."
+  },
+  "memory_geometry": {
+    "source_contracts": [
+      "nk_ramend_capture",
+      "nk_physical_region_builder",
+      "nk_physical_page_state_initialization",
+      "nk_no_extension_dram"
+    ],
+    "ROMHDR": {
+      "address": "0x8c1d063c",
+      "RAMFREE_word": "0x8c1d0654",
+      "RAMEND_word": "0x8c1d0658",
+      "original_RAMSTART": "0x8c1d1000",
+      "original_RAMFREE": "0x8c1e0000",
+      "original_RAMEND": "0x8cfd0000",
+      "OEM_globals_begin": "0x8cfd0000",
+      "OEM_globals_bytes": 196608
+    },
+    "persistent_control_RAMEND": "0x8cfc0000",
+    "RAMEND_difference_bytes": 65536,
+    "kernel_RAMEND_snapshot": "0x8c1dd3dc",
+    "physical_memory_summary": {
+      "address": "0x8c1dd430",
+      "lower_envelope_offset": 0,
+      "upper_envelope_offset": 4,
+      "region_count_offset": 8,
+      "region_array_pointer_offset": 12
+    },
+    "physical_regions": {
+      "source_array_address": "0x8c1dd400",
+      "stride_bytes": 20,
+      "fields": [
+        {
+          "offset": 0,
+          "meaning": "physical begin"
+        },
+        {
+          "offset": 4,
+          "meaning": "physical exclusive end"
+        },
+        {
+          "offset": 8,
+          "meaning": "allocatable physical begin"
+        },
+        {
+          "offset": 12,
+          "meaning": "cached byte-per-page reference-state address after page initialization"
+        },
+        {
+          "offset": 16,
+          "meaning": "cached page-aligned metadata boundary after page initialization"
+        }
+      ],
+      "capture_limit_regions": 2
+    },
+    "allocator_counter_sample_addresses": [
+      "0x8c1d5b10",
+      "0x8c1d5b2c",
+      "0x8c1d5b44"
+    ],
+    "extension_DRAM_callback_returns_zero": true,
+    "source_conclusion": "Lowering RAMEND moves physical-region limits and upper-end page metadata and changes later physical-page assignment; it is more than a passive hole in unused memory.",
+    "hardware_limit": "The actual post-NK descriptors/counters in clean and damaged runs have not been captured. Source geometry alone proves neither exhausted RAM nor an allocator overlap."
+  },
+  "bounded_diagnostic_questions": [
+    "Did the actual failing request use command16/39 PIO and a virtual destination?",
+    "Which stable UTLB entry or admitted page mapping resolves that destination, and does it map VRAM or main RAM?",
+    "Does the immediate post-copy destination readback match the bytes supplied by the reader, and where is the first mismatch?",
+    "Do live RAMEND, region bounds and page-metadata boundaries agree with the installed 64KiB exclusion?",
+    "How do physical destination pages and allocator counters differ from the clean reader-only control at the same request?"
+  ],
+  "limits": [
+    "All reviewed owner windows were read from the full SHA256-admitted private kernel; no commercial executable content is stored in this report.",
+    "ROM storage and nominal virtual addresses do not establish a current runtime mapping or lifetime.",
+    "Compressed writable/resource sections were not decoded or scanned for additional dependent constants.",
+    "The original source establishes possible copy paths. Hardware occurrence, destination mismatch and root cause remain unknown until measured.",
+    "This report authorizes no new memory writes, cache maintenance, MMU changes, I/O, VMU advertisement or normal-runtime behavior change."
+  ]
+}

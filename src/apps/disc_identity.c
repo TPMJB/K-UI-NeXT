@@ -1,7 +1,9 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/disc_identity.h"
+#include "kui/disc_number.h"
 #include "kui/hash.h"
 #include "../dreamcast/platform.h"
+#include <stdio.h>
 #include <string.h>
 
 /* Values from upstream KOS dc/syscalls.h at the dependencies.json pin. The
@@ -155,6 +157,14 @@ void kui_disc_identity_read(struct kui_disc_identity *id,
     size_t first=0;while(first<n && title[first]==' ') ++first;
     if(first) {memmove(title,title+first,n-first+1);n-=first;}
     if(!n) strcpy(title,"Untitled GD-ROM");
+    unsigned number,total;
+    if(kui_disc_number_read(raw+offset,&number,&total) && total>1u) {
+        char suffix[24];snprintf(suffix,sizeof(suffix)," (Disc %u)",number);
+        size_t bytes=strlen(title),tail=strlen(suffix),limit=sizeof(title)-1u-tail;
+        if(bytes>limit)bytes=limit;
+        while(bytes && title[bytes-1u]==' ')--bytes;
+        memcpy(title+bytes,suffix,tail+1u);
+    }
     /* Lid removal after the read must never publish the previous disc title. */
     int status,type;
     if(observe(id,ops,&status,&type)<0) {clear(id,KUI_DISC_IDENTITY_ERROR);return;}

@@ -187,7 +187,7 @@ ifneq ($(filter $(READONLY_PROOF),2 3 4),)
 	cp $(BUILD)/resident-sci.elf*.ci $(BUILD)/resident/lto/
 endif
 $(BUILD)/resident-sci.bin: $(BUILD)/resident-sci.elf
-	$(OBJCOPY) -O binary $< $@
+	$(OBJCOPY) $(VMU_RESIDENT_OBJCOPY_FLAGS) -O binary $< $@
 $(BUILD)/vmu_maple_observe_symbols.h: $(BUILD)/resident-sci.elf tools/vmu_maple_observe_symbols.py
 	python3 tools/vmu_maple_observe_symbols.py $< $@
 $(BUILD)/worker/%.o: %.c

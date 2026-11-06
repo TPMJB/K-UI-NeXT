@@ -69,7 +69,8 @@ int main(void) {
         strcpy(candidate.product,meta.product);strcpy(candidate.version,meta.version);strcpy(candidate.region,meta.region);
         CHECK(kui_game_profile_candidate(&candidate,NULL)==(fault!=9u));
         struct kui_game_profile_match profile;memset(&profile,0xa5,sizeof(profile));
-        enum kui_game_result result=tested_audio_status(&image,&files,&meta,&status,&profile,identity_log);
+        bool smash_child=false;
+        enum kui_game_result result=tested_audio_status(&image,&files,&meta,&status,&profile,&smash_child,identity_log);
         enum kui_game_result expected=(fault==0u || fault==9u)?KUI_GAME_OK:
             (fault==5u || fault==8u)?KUI_GAME_CANCELLED:KUI_GAME_IO;
         CHECK(result==expected && status==KUI_GAME_CDDA_UNTESTED);

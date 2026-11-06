@@ -1,37 +1,81 @@
-# Shared VMU compatibility test — @BUILD@
+# Games scan fix and current main — @BUILD@
 
-This follows build `26ed262974a8`. HOTD2 still worked but felt laggier, and Power Stone 2 physical-disc save/reload still worked with a long pause under the relocation caption. This test targets those two reports. The same worker source serves image and disc launches.
+This includes `main` through `34e0ddce89b3`: visible All games/Favorites/Recently
+played tabs, direct favorite toggling, screenshot Settings cleanup, and optional
+native SCI session controls. It also fixes the Games scan crash reported on
+`bbe142d4a278`. That build's Time Stalkers image boot and improved HOTD2 gameplay
+are now owner-confirmed.
 
-## Install
+## Install and scan
 
-Copy the ZIP's **KUI folder** onto the microSD root and merge/overwrite the existing KUI folder. Boot K-UI normally. Its build should show `@BUILD@`.
+Copy the ZIP's root **KUI folder** onto the microSD root and merge/overwrite.
+Boot normally and check the menu build **@BUILD@**. The root update contains the
+new menu and the five unchanged native modules from `bbe142d4a278`; their game
+diagnostic pages continue to identify that module build. Saves, cards, journals
+and existing activity records keep their paths.
 
-There is no installer to run. The six replaced files are the GUI, compact Background modules in A2/A1, standalone New reader, and physical-disc VMU modules in A2/A1. Card images, saves and settings remain in their existing locations. The separate physical-disc launcher without VMU remains the existing baseline.
+In Games, open **START → Library options → Scan for changes**. **X now toggles
+a favorite**, and **Y changes tabs**. Layout and rebuild are also in Library
+options. Hold L+R and press Y to save a K-UI menu screenshot under
+`KUI/screenshots`.
 
-## First test: House of the Dead 2 image
+The scan reads actual disc metadata from existing rips. A proven empty or
+manifest-only old rip folder is omitted from the saved launcher. Distinct real
+copies remain available, and interrupted/failed scans retain the preceding
+complete list. Existing uniquely matched disc-group favorites/history survive
+the catalogue upgrade.
 
-Use **Background, New (X), Virtual VMU On, slot A2**, with physical A2 empty. Play through the first boss in Original mode and compare the lag to the previous test. If stable, save, power off, and load once.
+## Test order
 
-The early driver retains the smaller controller-only path. Accessory-information queries now keep their former scheduling policy instead of starting extra read-ahead work, and completion avoids a duplicate command scan. Its full card/storage path is retained. Automated checks do not establish that the console lag or prior boss freeze is fixed.
+| Order | Check | Settings |
+|---|---|---|
+| 1 | Scan for changes completes, then leave/reopen Games | Games / START / Library options |
+| 2 | Deleted/re-ripped game has one live launcher entry | After the complete scan |
+| 3 | Existing Shenmue rips have the correct disc order | Open the grouped row |
+| 4 | Favorites, Recently played, layout and selection survive refresh | X favorite; Y tabs; layout in Options |
+| 5 | Time Stalkers image still boots and can save/reload | Background / New (X) / VMU On / A1 |
+| 6 | HOTD2 gameplay and EGG save/load regression | HOTD2 A2; EGG A1 |
 
-If it still freezes, hold **both triggers fully plus A+B+X+Y** for about three seconds. Capture the full `DETAIL 0000004F` page if it appears, and note where the freeze happened. The gesture is preserved across early controller fast completions.
+Leave the selected physical VMU slot empty. Time Stalkers' image startup repair
+and the HOTD2 optimizations remain in the normal modules. The latest HOTD2 photo
+records a 7.13 ms maximum foreground delivery visit, versus 8.48 ms in the earlier
+photo, with no recorded SD faults or PIO-window overruns. Different sessions do
+not establish a controlled performance gain or that all remaining lag is gone.
 
-## Physical-disc regression
+## Optional disc switching and return to K-UI
 
-Launch the **Power Stone 2 physical disc** with **Virtual VMU On over SCI** and physical A2 empty. Check the accepted save/reload behavior survives the shared-core integration.
+The separate **OPTIONAL-CONTROLS/KUI** folder contains the new A2/A1 SCI session
+modules. To test them, merge that folder's KUI contents onto the SD root after
+the normal update, replacing its two Background native modules. These use a
+112 KiB worker and 324 KiB complete lease, retaining the full 192 KiB cache.
+They have linked/protocol test evidence; physical-console acceptance remains a
+separate test. Restoring the root update's two modules restores the compact
+72 KiB / 284 KiB profile.
 
-Note which caption stays visible during the long startup pause: **RELOCATING PASSIVE MAPLE WORKER**, **INITIALIZING PASSIVE MAPLE STATE**, **ARMING PASSIVE MAPLE WORKER**, or **PUBLISHING PASSIVE MAPLE HOOKS**. Previously the first caption covered all four phases. Relocation uses aligned word accesses where possible while retaining byte accesses for unaligned buffers. The full pause is not yet explained by console timing evidence.
+Use SCI / Background On / New / VMU On / Auto encoding / CD music Off / RAM
+patches Off. Start with a single-disc intentional return, then a matched two-disc
+Skies or Code: Veronica set. The catalogue can snapshot at most four admitted
+paths; actual game handoff compatibility still requires testing.
 
-## Disc virtual-card slot
+- Intentional return: hold L+R+A+B+X+Y without Start across 180 completed
+  controller polls, photograph the diagnostic page, release, then press Start
+  when **START RETURNS TO K-UI** is offered.
+- Next disc: at the game's real disc request, hold L+R+Start with A/B/X/Y released
+  across 90 completed polls, then release.
 
-GD Play Options now offers **A1/A2**, with **A2** the default for new and existing settings. This disc preference is also available in the main VMU menu and persists between boots. The existing shared Virtual VMU On/Off preference is retained. Choosing a slot retains the same selected virtual card and save files; it changes the Maple endpoint, not the card identity. Leave the selected physical slot empty when using virtual VMU.
+Read `details/NATIVE-SESSION-HARDWARE-TEST.md` for the complete sequence and
+refusal/reporting rules. An unexpected fault page retains its diagnostic evidence.
 
-Use **A1** for the Sword of the Berserk physical-disc test, then check a save and power-cycle reload. Its physical-disc compatibility and save behavior still require a console test. Power Stone 2 in **A2** remains the known-working regression case. Image launches retain their existing per-game Background slot setting.
+## Remaining boundaries
 
-Power Stone 1's buffer layout is still unproved; its prior unsupported-layout refusal remains an expected result. HOTD2's reviewed image-module arena has not been extended to physical-disc launches.
+Physical-disc regression cases remain Power Stone 2 A2/SCI and Berserk A1/SCI.
+The persistent slot setting, insertion-readiness retry and preflight reuse are
+retained. Time Stalkers' physical-disc VMU handoff remains unsupported; its
+repaired continuation applies to image launches. Power Stone 1, Sonic Adventure
+exit handling and the shared Silver lifetime/alias boundaries remain documented
+separately; Silver's old Standard adapter is still the reference.
 
-## Other compatibility boundaries
-
-Silver's old SCI/Standard adapter already worked. This build does not claim new shared Silver support. Sonic Adventure, Time Stalkers and Elemental Gimmick Gear still need older allocator/exit work before shared virtual VMU admission. Berserk retains Claude's A1 selection.
-
-`details/REVIEW.md` records the corrected history and follow-up work. `details/BUILD.json` identifies the exact source commit and installed bytes. `details/source/source.tar.gz` contains that exact committed source. Attached evidence records checks that ran and any limits; it does not certify console behavior.
+The complete historical eight-title audit remains blocked by missing original
+Grandia II and Lodoss executables. No prebuilt discovery catalogue is installed.
+Targeted filesystem, source and linked-code evidence accompanies this package;
+this candidate still needs the console checks above.

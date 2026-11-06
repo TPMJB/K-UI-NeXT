@@ -3,6 +3,11 @@
 # 324 KiB complete lease and full 192 KiB cache; compact baseline is separate.
 BUILD ?= build/native-session-controls
 include Makefile.vmu-native-split-controller-stream-guard
+# The base stamp is also consulted when switching BACK to an ordinary
+# General build. Distinguish this ABI there, not only in session-config,
+# whose dependency disappears outside the optional profile. This variable
+# selects only the incremental-build witness, never compiled reader policy.
+override VMU_READER_PROFILE = session-controls-$(if $(filter -DKUI_VMU_VIRTUAL_A1=1,$(FLAGS)),a1,a2)
 FLAGS += -DKUI_NATIVE_SESSION_CONTROLS=1
 NATIVE_FLAGS += -DKUI_NATIVE_SESSION_CONTROLS=1 -DKUI_RETAIL_MANIFEST_SLOTS=64
 # The worker operates on the exact native reader region during a pinned
@@ -42,3 +47,7 @@ $(RESIDENT_OBJ) $(LEGACY_OBJ) $(STAGE_OBJ) $(NATIVE_OBJ) $(WORKER_OBJ) $(RA_OBJ)
 $(BUILD)/retail-native-session-controls.kui: $(BUILD)/retail-native-dual.kui
 	cp $< $@
 all: $(BUILD)/retail-native-session-controls.kui
+
+.PHONY: session-config-host-tests
+session-config-host-tests:
+	python3 tests/test_native_session_config.py

@@ -15,6 +15,7 @@ enum kui_disc_vmu_probe_stage {
     KUI_DISC_VMU_PROBE_HEAP_DISCOVERY,
     KUI_DISC_VMU_PROBE_HEAP_SLOT,
     KUI_DISC_VMU_PROBE_HEAP_CALL,
+    KUI_DISC_VMU_PROBE_STARTUP_CLEAR,
     KUI_DISC_VMU_PROBE_READY
 };
 /* Diagnostic metadata only, never a resident-launch capability. The caller
@@ -26,7 +27,10 @@ enum kui_disc_vmu_probe_stage {
  * READY says only that these immutable recognizers passed. It does not prove
  * allocator placement/lifetime, live SDK state, exit windows, card ownership,
  * transport support or safe installation. The stage must still run those
- * independent checks. Nothing here touches a device, card or game RAM. */
+ * independent checks. A recognized pre-allocator clear that can erase the
+ * high installer is refused: physical-disc boot has no surviving low-memory
+ * continuation for deferring that clear. Nothing here touches a device, card
+ * or game RAM. */
 struct kui_disc_vmu_probe {
     uint32_t version,bytes,stage,file_bytes,program_bytes,file_crc32;
     int32_t driver_result,heap_result;

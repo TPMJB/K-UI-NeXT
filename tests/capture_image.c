@@ -122,6 +122,13 @@ static void sector(uint32_t fad,bool data,uint8_t *out) {
         if(mode==2u) memset(out+16,0,8);
         if(fad==45150) {
             memcpy(out+offset,"SEGA SEGAKATANA",14);memset(out+offset+128,' ',128);
+            const char *disc_info=getenv("KUI_TEST_DISC_INFO");
+            if(disc_info) {
+                assert(strlen(disc_info)==3u);
+                memcpy(out+offset,"SEGA SEGAKATANA ",16u);
+                memcpy(out+offset+32u,"0000 GD-ROM1/1  ",16u);
+                memcpy(out+offset+43u,disc_info,3u);
+            }
             const char *title=getenv("KUI_TEST_TITLE");
             if(title) {assert(strlen(title)<=128);memcpy(out+offset+128,title,strlen(title));}
             else memcpy(out+offset+128,"KUI SYNTHETIC SIX TRACK DISC",28);
@@ -265,7 +272,16 @@ static void flip_byte(const char *path,FSIZE_t pos) {
 }
 static void mutate(const char *kind) {
     char dir[512],path[1024];assert(first_job(dir));
-    if(!strcmp(kind,"prefix")) {snprintf(path,sizeof(path),"%s/track01.bin",dir);flip_byte(path,123);}
+    if(!strcmp(kind,"legacy-disc-fields")) {
+        snprintf(path,sizeof(path),"%s/manifest.json",dir);FIL f;UINT n;char text[32768];
+        assert(f_open(&f,path,FA_READ|FA_WRITE)==FR_OK && f_size(&f)<sizeof(text));
+        assert(f_read(&f,text,sizeof(text)-1u,&n)==FR_OK);text[n]=0;
+        char *first=strstr(text,"  \"disc_number\":");assert(first);
+        char *end=strchr(first,'\n');assert(end);++end;
+        size_t left=strlen(end);memmove(first,end,left+1u);n=(UINT)strlen(text);
+        assert(f_lseek(&f,0u)==FR_OK && f_write(&f,text,n,&n)==FR_OK && f_truncate(&f)==FR_OK && f_close(&f)==FR_OK);
+    }
+    else if(!strcmp(kind,"prefix")) {snprintf(path,sizeof(path),"%s/track01.bin",dir);flip_byte(path,123);}
     else if(!strcmp(kind,"manifest")) {snprintf(path,sizeof(path),"%s/manifest.json",dir);flip_byte(path,123);}
     else if(!strcmp(kind,"cue")) {
         DIR entries;FILINFO info;bool found=false;assert(f_opendir(&entries,dir)==FR_OK);

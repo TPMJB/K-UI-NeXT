@@ -14,6 +14,10 @@
 #define KUI_GAME_DATA_BYTES 2048u
 #define KUI_GAME_MODE2_BYTES 2336u
 #define KUI_GAME_SUBCHANNEL_BYTES 2448u
+/* Shared UI read policy, independent of title, container and SDK family.
+ * Raw sectors are fetched in bounded consecutive windows, then every sector's
+ * header/subheader is checked before its user bytes are published. */
+#define KUI_GAME_READ_WINDOW_SECTORS 16u
 /* Same upper FAD as the existing raw-sector validation; exclusive LBA end. */
 #define KUI_GAME_LBA_LIMIT (719999u - 150u + 1u)
 
@@ -138,7 +142,10 @@ enum kui_game_result kui_game_image_check(const struct kui_game_image *image,
  * read directly; audio and Mode 2 Form 2 are refused.
  * Preflights the complete range, track types and output size before any read or
  * output modification. Later IO/cancel/mode errors may leave a partial output;
- * callers must discard all output unless OK. No whole-image hash is performed. */
+ * callers must discard all output unless OK. No whole-image hash is performed.
+ * Multi-sector raw reads use at most READ_WINDOW_SECTORS of temporary heap;
+ * allocation failure retains the single-sector path and every check. Windows
+ * never cross a track boundary or read beyond the requested sectors. */
 enum kui_game_result kui_game_image_read(const struct kui_game_image *image,
     uint32_t lba, uint32_t count, enum kui_game_sector_format format,
     void *out, size_t size);

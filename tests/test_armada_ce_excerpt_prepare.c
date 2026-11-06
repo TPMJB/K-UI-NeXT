@@ -523,14 +523,18 @@ FRESULT f_read(FIL *file,void *out,UINT bytes,UINT *got) {
         for(size_t i=0;i<bytes;i++) data[i]=generated_byte(offset+i);
         if(launch.variant && image.tracks[track-1u].control==4u) {
             const struct kui_game_image_track *t=&image.tracks[track-1u];
-            CHECK(bytes==t->sector_bytes && !(offset%t->sector_bytes));
+            CHECK(bytes && bytes<=16u*t->sector_bytes && !(bytes%t->sector_bytes) && !(offset%t->sector_bytes));
             uint64_t payload=offset/t->sector_bytes*2048u;
-            for(unsigned i=0;i<2048u;i++) data[t->data_offset+i]=generated_byte(payload+i);
+            for(unsigned n=0;n<bytes/t->sector_bytes;n++)
+                for(unsigned i=0;i<2048u;i++) data[n*t->sector_bytes+t->data_offset+i]=generated_byte(payload+n*2048u+i);
         }
         if((launch.variant?image.tracks[track-1u].control==4u &&
                 image.tracks[track-1u].sector_bytes==2352u:track==1u || track==3u || track==5u)) {
-            CHECK(bytes==2352u && !(offset%2352u));
-            data[0]=data[11]=0u;memset(data+1u,255,10u);data[15]=1u;
+            CHECK(bytes && bytes<=16u*2352u && !(bytes%2352u) && !(offset%2352u));
+            for(unsigned n=0;n<bytes/2352u;n++) {
+                uint8_t *raw=data+n*2352u;
+                raw[0]=raw[11]=0u;memset(raw+1u,255,10u);raw[15]=1u;
+            }
         }
     }
     if(fixture_sector_source) fixture_sector_source(launch.name,offset,out,bytes);
@@ -611,16 +615,17 @@ static enum kui_game_result generated_kernel_read(void *ctx,const char *name,uin
         void *out,size_t bytes) {
     CHECK(ctx==&image && !strcmp(name,"track03.raw"));
     const struct kui_game_image_track *track=&image.tracks[2];
-    CHECK(bytes==track->sector_bytes && !(offset%track->sector_bytes));
+    CHECK(bytes && bytes<=16u*track->sector_bytes && !(bytes%track->sector_bytes) && !(offset%track->sector_bytes));
     ++reads;if(read_result!=KUI_GAME_OK) return read_result;
     uint8_t *data=out;memset(data,0,bytes);
     uint64_t payload=offset/track->sector_bytes*2048u;
-    for(unsigned i=0;i<2048u;i++) {
-        data[track->data_offset+i]=generated_byte(payload+i);
-        if(payload+i==kernel_mutation_at) data[track->data_offset+i]^=1u;
-    }
-    if(track->sector_bytes==2352u) {
-        memset(data+1u,255,10u);data[15]=1u;
+    for(unsigned n=0;n<bytes/track->sector_bytes;n++) {
+        uint8_t *raw=data+n*track->sector_bytes;
+        for(unsigned i=0;i<2048u;i++) {
+            raw[track->data_offset+i]=generated_byte(payload+n*2048u+i);
+            if(payload+n*2048u+i==kernel_mutation_at)raw[track->data_offset+i]^=1u;
+        }
+        if(track->sector_bytes==2352u) {memset(raw+1u,255,10u);raw[15]=1u;}
     }
     return KUI_GAME_OK;
 }
@@ -638,7 +643,7 @@ static void complete_kernel_hashing(void) {
         }
         kernel_mutation_at=UINT64_MAX;uint8_t digest[32];
         CHECK(extent_sha(&image,45002u,2085u,digest)==KUI_GAME_OK);
-        CHECK(reads==2u && !memcmp(digest,expected,sizeof(digest)));
+        CHECK(reads==1u && !memcmp(digest,expected,sizeof(digest)));
         CHECK(ce_music_runtime_profile(&image,&metadata,digest)==KUI_WINCE_CDDA_NONE);
         kernel_mutation_at=4096u+2084u;
         CHECK(extent_sha(&image,45002u,2085u,digest)==KUI_GAME_OK);

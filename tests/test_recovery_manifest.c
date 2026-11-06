@@ -41,6 +41,23 @@ static void reject_from(const char *document,const char *from,const char *to) {
     assert(!kui_recovery_manifest_parse(changed,strlen(changed),&parsed));
 }
 static void reject(const char *from,const char *to) {reject_from(source,from,to);}
+static void disc_cases(void) {
+    for(unsigned disc=1u;disc<=4u;disc++) {
+        int n=snprintf(compressed,sizeof(compressed),"{\"disc_number\":%u,\"disc_total\":4,%s",disc,source+1u);
+        assert(n>0 && n<(int)sizeof(compressed));
+        assert(kui_recovery_manifest_parse(compressed,(size_t)n,&parsed));
+        assert(parsed.disc_number==disc && parsed.disc_total==4u);
+    }
+    reject_from(compressed,"\"disc_number\":4","\"disc_number\":0");
+    reject_from(compressed,"\"disc_number\":4","\"disc_number\":5");
+    reject_from(compressed,"\"disc_total\":4","\"disc_total\":10");
+    reject_from(compressed,"\"disc_total\":4","\"disc_total\":0");
+    reject_from(compressed,"\"disc_total\":4,","");
+    reject_from(compressed,"\"disc_number\":4,","");
+    reject_from(compressed,"\"disc_number\":4","\"disc_number\":4,\"disc_number\":4");
+    reject_from(compressed,"\"disc_total\":4","\"disc_total\":4,\"disc_total\":4");
+    puts("PASS optional actual disc ordinal/total, old manifest compatibility and malformed/duplicate rejection");
+}
 static void compressed_cases(void) {
     const char *const kinds[]={"cso","zso","chd"};
     const unsigned modes[]={1u,0u,2u};
@@ -94,6 +111,8 @@ int main(int argc,char **argv) {
     gdi_cases();
     assert(argc==2);FILE *file=fopen(argv[1],"rb");assert(file);
     size_t size=fread(source,1,sizeof(source)-1,file);assert(!ferror(file) && !fclose(file));
+    assert(kui_recovery_manifest_parse(source,size,&parsed));
+    assert(!parsed.disc_number && !parsed.disc_total);disc_cases();
     assert(kui_recovery_manifest_parse(source,size,&parsed));
     if(parsed.plan.profile==KUI_CAPTURE_PROFILE_CD_TOC) {
         assert(parsed.format==KUI_CAPTURE_FORMAT_BIN_CUE && parsed.plan.count>=1u &&

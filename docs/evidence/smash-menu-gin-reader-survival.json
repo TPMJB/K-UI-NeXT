@@ -1,0 +1,124 @@
+{
+  "schema": "kui.smashpack.actual-gin-copy.v1",
+  "passed": true,
+  "resident_sha256": "5f2ef8e9ec3dda5aa51fcd8ead7c9bfafd55e2a6c56d26f79ce81f5e9c0696df",
+  "cases": [
+    {
+      "file": "MDE_US.BIN",
+      "bytes": 1848288,
+      "sectors": 903,
+      "source": "0x8ce00000",
+      "copy_end": "0x8c1d3800",
+      "gin_context": "0x8c19ee60",
+      "protected_bytes": 16876,
+      "arguments": [
+        "\\MDE_US.BIN",
+        "SHFORCE.SGA",
+        "MODE0",
+        "SKIP0",
+        "SOUND1"
+      ],
+      "gin_single_bank_scalar_model_entry_contract": true,
+      "original_scalar_crt_preserves_context": true,
+      "original_ip_folder_setter_and_gdfs_consumer": [
+        "SHFORCE",
+        "PHSTAR2"
+      ]
+    },
+    {
+      "file": "1ST_READ.BIN",
+      "bytes": 212324,
+      "sectors": 104,
+      "source": "0x8cf90000",
+      "copy_end": "0x8c044000",
+      "gin_context": "0x8c036a44",
+      "protected_bytes": 16876,
+      "arguments": null,
+      "gin_single_bank_scalar_model_entry_contract": true,
+      "original_scalar_crt_preserves_context": false,
+      "original_ip_folder_setter_and_gdfs_consumer": []
+    }
+  ],
+  "owner_boot2_source_contract": {
+    "source_final_span": [
+      "0x8c00e07c",
+      "0x8c00e0b2"
+    ],
+    "sp": "0x8c00f400",
+    "vbr": "0x8c00f400",
+    "sr": "0x700000f0",
+    "pr": "0xac00e0b2",
+    "stage_values_preserved_by_boot2": {
+      "MACL": "0x00000000",
+      "MACH": "0x00000000",
+      "GBR": "0x8c000000"
+    },
+    "r0_through_r14_zero": true,
+    "frame_words": 21,
+    "frame": "0x8c00f3ac",
+    "frame_order": [
+      "MACL",
+      "MACH",
+      "GBR",
+      "VBR",
+      "SR",
+      "PR",
+      "R14",
+      "R13",
+      "R12",
+      "R11",
+      "R10",
+      "R9",
+      "R8",
+      "R7",
+      "R6",
+      "R5",
+      "R4",
+      "R3",
+      "R2",
+      "R1",
+      "R0"
+    ],
+    "explicit_cold_frame_initialization": {
+      "0": "0x00000028",
+      "5": "0x00000000",
+      "18": "0x00000800",
+      "19": "0x00000800",
+      "20": "0x8c0100a0"
+    },
+    "gin_banked_register_limit": "GIN clears RB before writing R0..R7, then RTE restores RB1. The existing scalar model does not prove hardware post-RTE banked R0..R7 values. Cold R0..R2 initialization is safe because the original MDE entry/CRT overwrites them before use.",
+    "untouched": [
+      "FPSCR",
+      "CCR"
+    ]
+  },
+  "native_save_port_source_contract": {
+    "method": "SHA-bound static instruction and table decoding",
+    "save_call": "0x8c0187e6",
+    "unit_zero_delay_slot": "0x8c0187e8",
+    "save_target": "0x8c01bd20",
+    "unit_table": "0x8c1d0f4c",
+    "unit_table_consumer": [
+      "0x8c1cd902",
+      "0x8c1cd90a"
+    ],
+    "receiver_table": "0x8c1d0f1c",
+    "transmit_consumer": "0x8c1cc8b8",
+    "native_save": {
+      "bup_unit": 0,
+      "sdk_device": 1,
+      "maple_receiver": "0x01",
+      "slot": "A1"
+    },
+    "next_unit": {
+      "bup_unit": 1,
+      "sdk_device": 2,
+      "maple_receiver": "0x02",
+      "slot": "A2"
+    }
+  },
+  "limits": [
+    "CPU copy, original scalar CRT, argument getters and IP-folder consumer only; no subsequent SDK helpers, directory resolution, media access, gameplay or VMU compatibility claim.",
+    "The existing scalar interpreter does not model register-bank switching; post-RTE hardware R0..R7 values are not established."
+  ]
+}

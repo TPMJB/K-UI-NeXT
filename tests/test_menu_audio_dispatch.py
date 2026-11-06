@@ -36,7 +36,7 @@ def function(source, name):
 loop = main[main.index("for(;;) {", main.index("int main(void)")):]
 assert "publish_music_if_ready();\n        mutex_lock(&lock);" in loop
 assert "kui_music_status_copy(&status);" in function(main, "publish_music")
-assert "last_draw=is_busy?t:timer_ms_gettime64();" in loop
+assert "last_draw=kui_ui_menu_frame_timestamp(is_busy,flow_motion,t,timer_ms_gettime64());" in loop
 assert "thd_sleep(kui_ui_menu_wait_ms(is_busy,menu_drew));" in loop
 
 program = r'''

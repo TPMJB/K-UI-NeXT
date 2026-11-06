@@ -21,5 +21,12 @@ void kui_media_set(const struct kui_media_ops *ops);
 bool kui_media_boot_view(const struct kui_media_ops *raw,const struct kui_volume *view);
 const struct kui_volume *kui_media_volume(void);
 const char *kui_media_problem(void);
+/* One exclusively owned, read-only metadata walk may memoize successful
+ * single-sector reads in caller-owned scratch. Begin starts empty; end must
+ * run before releasing the scratch or leaving the walk. Writes, I/O errors
+ * and device/view resets disable it. Never use around image verification or
+ * across operations: repeated verification passes must reach the device. */
+bool kui_media_read_cache_begin(void *scratch,size_t bytes);
+void kui_media_read_cache_end(void);
 
 #endif

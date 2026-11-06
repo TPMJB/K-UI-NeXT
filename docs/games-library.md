@@ -50,3 +50,33 @@ while the baseline is active, including Restore defaults, are not saved.
 Select Temporary baseline again to restore the previous choices and resume
 automatic saving. Reinspection or leaving the image also ends the temporary
 mode; persistent presets are never replaced merely by enabling it.
+
+
+An explicit **START → Library options → Scan for changes** renews the storage session and publishes one complete
+replacement catalogue. Proven empty or manifest-only old rip folders are
+omitted from the saved launcher; raw browsing still exposes them. Stopped,
+failed or changed-volume scans keep the preceding complete list.
+
+Catalogue v3 reads disc ordinal/total and set identity from each image's bounded
+IP header during the scan. Existing v2 catalogues load compatibly and gain
+those fields on the next explicit scan. Matching product/version/region/media/format
+sets group by distinct actual ordinals, even with a different Passport title.
+Duplicate ordinals and mismatching sets retain their individual entries;
+folder copy suffixes never supply disc numbers. Saves and launch settings are
+not rewritten by scanning.
+
+The storage worker has a fixed 64 KiB stack. Catalogue pages, disc-identity
+scratch, and selection-lookup pages have explicit heap ownership; allocation
+failure keeps the preceding complete catalogue. Warmup and page prefetch share
+one worker-only staging page. The menu's named image opener keeps its CUE and
+single-image transaction staging on the heap; GDI uses the existing validated
+core opener. Image output is published only after validation succeeds.
+
+Host sanitizer tests alone do not enforce the Dreamcast stack limit. With the
+KOS build environment sourced, `make -f Makefile.dc check-games-scan-stack`
+checks exact production SH instructions, linked frame prologues, scan and cold
+lookup paths, and an explicit allowance for remaining runtime leaves. Its
+negative control recompiles the historical `bbe142d4` source that overflowed
+the worker, so this check needs the repository's original Git history. Its scope
+is Games catalogue paths; GUI-wide and interrupt analysis require separate
+audits.

@@ -3,7 +3,7 @@
 #define KUI_ARMADA_CE_MAPLE_RX_SLICE_H
 #include "kui/armada_ce_maple_traffic.h"
 
-/* Exact-source provenance for one already-built port-A parent/A2 response.
+/* Exact-source provenance for one already-built port-A parent/selected VMU response.
  * Caller holds the accepted DMA-off fence and IMASK15 for the entire query,
  * staging, final query and publication. This is not a lock or allocator.
  * A live unit -> included function -> pooled RX pointer is the owner contract;
@@ -196,7 +196,7 @@ static inline bool kui_armada_ce_maple_rx_slice_pointer(struct kui_armada_ce_map
 static inline bool kui_armada_ce_maple_rx_slice_witness(struct kui_armada_ce_maple_rx_slice_io *io,
     const uint32_t *row) {
     const struct kui_armada_ce_maple_traffic_scratch *c=io->capture;uint32_t v;
-    static const uint32_t at[3]={0xff000008u,0x8c145890u,0xff00001cu};
+    static const uint32_t at[3]={0xff000008u,KUI_CE_MAPLE_CURRENT_PROCESS,0xff00001cu};
     const uint32_t expected[3]={io->ttb,io->process,io->ccr};
     for(unsigned i=0;i<3u;i++) {
         if(!kui_armada_ce_maple_rx_slice_table(io,at[i],&v)) return false;
@@ -234,7 +234,7 @@ static inline bool kui_armada_ce_maple_rx_slice_witness(struct kui_armada_ce_map
 static inline bool kui_armada_ce_maple_rx_slice_pass(struct kui_armada_ce_maple_rx_slice_io *io,
     const uint32_t *row,uint32_t min_bytes,struct kui_armada_ce_maple_rx_slice *out) {
     uint32_t unitraw,countword,unit,fnraw,fn,rxraw,explicit_rx,flags;
-    unsigned unitindex=((row[3]>>8)&63u)==32u?0u:2u;bool found=false;
+    unsigned unitindex=((row[3]>>8)&63u)==32u?0u:KUI_CE_VMU_UNIT_INDEX;bool found=false;
     if(!kui_armada_ce_maple_rx_slice_word(io,io->capture->map[0].virtual_address+4u+4u*unitindex,&unitraw) ||
        !kui_armada_ce_maple_rx_slice_pointer(io,unitraw,28u,&unit) ||
        !kui_armada_ce_maple_rx_slice_word(io,unit+8u,&countword)) return false;
@@ -242,7 +242,7 @@ static inline bool kui_armada_ce_maple_rx_slice_pass(struct kui_armada_ce_maple_
     if(!count || count>3u) return kui_armada_ce_maple_rx_slice_fail(io,KUI_ARMADA_CE_MAPLE_RX_SLICE_METADATA,unit+8u,count,3u,0);
     for(unsigned i=0;i<count;i++) {
         if(!kui_armada_ce_maple_rx_slice_word(io,unit+12u+4u*i,&fnraw) ||
-           !kui_armada_ce_maple_rx_slice_pointer(io,fnraw,0xf4u,&fn) ||
+           !kui_armada_ce_maple_rx_slice_pointer(io,fnraw,KUI_CE_MAPLE_FUNCTION_BYTES,&fn) ||
            !kui_armada_ce_maple_rx_slice_word(io,fn+12u,&rxraw)) return false;
         if(!rxraw || rxraw+io->capture->word[9]!=row[2]) continue;
         if(found) return kui_armada_ce_maple_rx_slice_fail(io,KUI_ARMADA_CE_MAPLE_RX_SLICE_ALIAS,fn,rxraw,row[2],i);
@@ -266,7 +266,7 @@ static inline bool kui_armada_ce_maple_rx_slice_pass(struct kui_armada_ce_maple_
         out->payload_words=(flags>>16)&255u;out->included=flags>>24;
         if(out->included!=1u || out->command!=(row[3]&255u) || out->payload_words!=(row[3]>>24))
             return kui_armada_ce_maple_rx_slice_fail(io,KUI_ARMADA_CE_MAPLE_RX_SLICE_METADATA,fn+20u,flags,row[3],0);
-        if(unitindex==2u && (out->dispatch==2u?(!out->pending_irp || out->expected_response!=0u):
+        if(unitindex==KUI_CE_VMU_UNIT_INDEX && (out->dispatch==2u?(!out->pending_irp || out->expected_response!=0u):
            (out->dispatch!=0u || out->command!=1u || out->expected_response!=5u ||
             out->payload_words || out->capacity!=116u || out->pending_irp)))
             return kui_armada_ce_maple_rx_slice_fail(io,KUI_ARMADA_CE_MAPLE_RX_SLICE_METADATA,fn,out->dispatch,out->pending_irp,flags);
@@ -291,15 +291,16 @@ static inline enum kui_armada_ce_maple_rx_slice_status kui_armada_ce_maple_rx_sl
     for(unsigned i=0;i<sizeof(*out)/4u;i++) ((volatile uint32_t *)(void *)out)[i]=0;
     if(!capture || !w || !p1 || !cache || !p2 || !records || records>16u || index>=records ||
        !min_bytes || min_bytes>1020u || (min_bytes&3u) ||
-       process<0x8c14e6e0u || process>0x8c14e6e0u+31u*0x9cu || (process-0x8c14e6e0u)%0x9cu ||
+       process<KUI_CE_MAPLE_PROCESS_BASE || process>KUI_CE_MAPLE_PROCESS_BASE+31u*KUI_CE_MAPLE_PROCESS_STRIDE ||
+       (process-KUI_CE_MAPLE_PROCESS_BASE)%KUI_CE_MAPLE_PROCESS_STRIDE ||
        (ccr&0xa1u)!=1u) return KUI_ARMADA_CE_MAPLE_RX_SLICE_ARGUMENT;
     w->reads=0;w->map_count=0;w->line_count=0;for(unsigned i=0;i<5u;i++) w->error[i]=0;
     struct kui_armada_ce_maple_rx_slice_io io={p1,cache,p2,context,capture,w,ttb,process,ccr,
-        (((process-0x8c14e6e0u)/0x9cu)+1u)<<25};
+        (((process-KUI_CE_MAPLE_PROCESS_BASE)/KUI_CE_MAPLE_PROCESS_STRIDE)+1u)<<25};
     const uint32_t *row=capture->row[index];uint32_t unit=(row[3]>>8)&255u;
     uint32_t end=capture->word[4]-capture->word[2],rx=capture->word[6];
     if(capture->word[0] || (capture->map[0].virtual_address&0xfe000000u)!=io.slot ||
-       (row[1]&0x00030000u) || ((row[3]>>16)&255u) || (unit!=32u && unit!=2u) ||
+       (row[1]&0x00030000u) || ((row[3]>>16)&255u) || (unit!=32u && unit!=KUI_CE_VMU_ADDRESS) ||
        (row[0]&3u) || end>4096u || end<12u || row[0]>end-12u ||
        row[2]<rx || row[2]-rx>0x1ffcu)
         return KUI_ARMADA_CE_MAPLE_RX_SLICE_ARGUMENT;

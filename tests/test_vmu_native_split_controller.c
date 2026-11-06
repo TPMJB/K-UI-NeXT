@@ -196,7 +196,7 @@ static void split_identity(void) {
  * U0/P1 lock pointer. Exercise the same deferred publication proof, on both
  * an allocator lease and HOTD2's no-allocator arena, without any SD loan for
  * controller-only transfers. */
-static void split_early_setup(unsigned cached,unsigned arena) {
+static void split_early_setup_mode(unsigned cached,unsigned arena,unsigned mode) {
     split_prepare();input.driver.family=KUI_VMU_NATIVE_FAMILY_EARLY_V1;
     if(cached) input.driver.lock_cell|=UINT32_C(0x80000000);
     put(input.driver.lock_cell,4u,kui_vmu_native_lock_pointer(&input.driver));
@@ -213,12 +213,17 @@ static void split_early_setup(unsigned cached,unsigned arena) {
     input.exits.family=KUI_VMU_NATIVE_EXIT_EARLY_PAIR;input.exits.count=2u;
     input.exits.entries[1]=input.exits.entries[0]+8u;
     input.exits.entries[2]=input.exits.exec_thunk=0u;
+    input.diagnostics=mode;
+    if(mode==KUI_VMU_NATIVE_DIAGNOSTICS_READER_ONLY) memset(&input.durable,0,sizeof(input.durable));
     arm();install_hooks();
     uint16_t patch[4];CHECK(kui_vmu_native_patch_encode_head(input.exits.entries[0],patch));
     for(unsigned byte=0u;byte<8u;byte++)
         put(input.exits.entries[0]+byte,1u,(patch[byte/2u]>>(8u*(byte&1u)))&255u);
     CHECK(installed_hooks_valid() && split_controller_geometry() && !live_plan.ready);
     held_report=0u;
+}
+static void split_early_setup(unsigned cached,unsigned arena) {
+    split_early_setup_mode(cached,arena,KUI_VMU_NATIVE_DIAGNOSTICS_NORMAL);
 }
 static void split_early_sessions(void) {
     unsigned sessions=0u;

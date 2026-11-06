@@ -67,6 +67,18 @@ def audit(directory,*,allow_dirty=False,self_test=True):
                 not any(name.startswith(('_feed_read','_dma_block')) for name in image[4]),
                 'Combined Background unexpectedly contains the Standard RX DMA feeder')
     full=check_persistent(directory,self_test=self_test)
+    # Preserve the historical full original-corpus gate above. A new preheap
+    # bridge additionally requires its own exact stage/low/original proof;
+    # it cannot turn a partial original corpus into a complete audit.
+    from check_native_preclear import check as check_preclear
+    preclear=check_preclear(directory,self_test=self_test)
+    # The compatibility expansion additionally binds the complete cold DAG
+    # guard and its exact immutable dispatcher. It cannot replace the full
+    # original-corpus gate above or enlarge either heap/preclear closure.
+    from check_native_patch_pool import check as check_patch_pool
+    patch_pool=check_patch_pool(stage,self_test=self_test)
+    from check_native_exit_shape import check as check_exit_shape
+    exit_shape=check_exit_shape(stage,worker,self_test=self_test)
     require(full.get('worker_span')==0x12000 and full.get('worker_stack_bytes')==geometry.WORKER_STACK_BYTES==0xc00 and
             full.get('stage_embedded_worker_verified') is True and
             full.get('maple_interception_installed') is True and
@@ -109,7 +121,7 @@ def audit(directory,*,allow_dirty=False,self_test=True):
         compiler_callgraphs=callgraphs,
         artifact_sha256={name:hashlib.sha256(image[0]).hexdigest()
                          for name,image in zip(names,(stage,worker,resident,legacy,aux))},
-        proofs=dict(persistent=full),console_execution_verified=False)
+        proofs=dict(persistent=full,preheap_clear=preclear,pointer_pool=patch_pool,exit_shape=exit_shape),console_execution_verified=False)
 
 
 def main():

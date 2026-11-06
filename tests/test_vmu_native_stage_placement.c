@@ -41,10 +41,17 @@ static bool oracle(const struct kui_vmu_native_heap *h,uint32_t image,uint32_t s
     if(stage<first || stage>=end_ram || limit<=stage || limit>end_ram ||
        (stage<(uint64_t)first+image && first<limit) ||
        bytes<0x30040u || begin<first || begin>=end_ram || finish>end_ram ||
-       (begin<(uint64_t)first+image && first<finish) || h->sentinel<4u) return false;
-    const uint32_t address[]={arena,h->sentinel-4u,h->dispatch_table};
-    const uint32_t length[]={64u,0x34u,8u};
-    for(unsigned i=0;i<3u;i++) {
+       (begin<(uint64_t)first+image && first<finish)) return false;
+    uint32_t address[3]={arena},length[3]={64u};unsigned count;
+    if(h->family==KUI_VMU_NATIVE_HEAP_TAIL32 && h->layout==KUI_VMU_NATIVE_HEAP_DISPATCH2) {
+        if(h->sentinel<4u) return false;
+        address[1]=h->sentinel-4u;length[1]=0x34u;
+        address[2]=h->dispatch_table;length[2]=8u;count=3u;
+    } else if(h->family==KUI_VMU_NATIVE_HEAP_DIRECT32 && h->layout==KUI_VMU_NATIVE_HEAP_DIRECT) {
+        if(h->dispatch_cell || h->dispatch_table) return false;
+        address[1]=h->sentinel;length[1]=0x30u;count=2u;
+    } else return false;
+    for(unsigned i=0;i<count;i++) {
         uint64_t at=phys(address[i]),end=at+length[i];
         if(!good_alias(address[i]) || at<first || at>=end_ram || end>end_ram ||
            (at<limit && stage<end)) return false;
@@ -53,6 +60,7 @@ static bool oracle(const struct kui_vmu_native_heap *h,uint32_t image,uint32_t s
 }
 static struct kui_vmu_native_heap fixture(void) {
     struct kui_vmu_native_heap h={0};h.sentinel=UINT32_C(0x8c280040);
+    h.family=KUI_VMU_NATIVE_HEAP_TAIL32;h.layout=KUI_VMU_NATIVE_HEAP_DISPATCH2;
     h.dispatch_table=UINT32_C(0x8c170000);return h;
 }
 static void compare(const struct kui_vmu_native_heap *h,uint32_t image,uint32_t stage,
@@ -148,6 +156,50 @@ static void malformed(void) {
         compare(&h,lengths[i],UINT32_C(0x8ce00000),UINT32_C(0x8ce40000),UINT32_C(0x8cc00000),0x400000u);
     compare(&h,1578116u,UINT32_C(0x8ce00000),UINT32_C(0xace40000),UINT32_C(0x8cc00000),0x400000u);
 }
+static void direct32_cases(void) {
+    struct kui_vmu_native_heap h=fixture();
+    h.family=KUI_VMU_NATIVE_HEAP_DIRECT32;h.layout=KUI_VMU_NATIVE_HEAP_DIRECT;
+    h.dispatch_cell=h.dispatch_table=0u;
+    const uint32_t stage=UINT32_C(0x0ce00000),limit=UINT32_C(0x0ce40000);
+    const uint32_t arena=UINT32_C(0x0cc00000),bytes=UINT32_C(0x400000);
+    for(unsigned a=0;a<3u;a++) for(unsigned b=0;b<3u;b++) for(unsigned c=0;c<3u;c++) {
+        h.sentinel=UINT32_C(0x0c280040)|areas[c];
+        CHECK(kui_vmu_native_stage_allocation_safe(&h,0x100000u,stage|areas[a],limit|areas[a],arena|areas[b],bytes));
+        for(int d=-64;d<=64;d++) {
+            h.sentinel=(stage+(uint32_t)d)|areas[c];
+            compare(&h,0x100000u,stage|areas[a],limit|areas[a],arena|areas[b],bytes);
+            h.sentinel=(limit+(uint32_t)d)|areas[c];
+            compare(&h,0x100000u,stage|areas[a],limit|areas[a],arena|areas[b],bytes);
+        }
+    }
+    /* The absent dispatch-cell word immediately below the sentinel is not
+     * part of this family's footprint; each real sentinel byte still is. */
+    h.sentinel=limit;
+    CHECK(kui_vmu_native_stage_allocation_safe(&h,0x100000u,stage,limit,arena,bytes));
+    h.sentinel=limit-1u;
+    CHECK(!kui_vmu_native_stage_allocation_safe(&h,0x100000u,stage,limit,arena,bytes));
+    h.sentinel=stage-0x30u;
+    CHECK(kui_vmu_native_stage_allocation_safe(&h,0x100000u,stage,limit,arena,bytes));
+    h.sentinel++;
+    CHECK(!kui_vmu_native_stage_allocation_safe(&h,0x100000u,stage,limit,arena,bytes));
+    h.sentinel=UINT32_C(0x0c280040);
+    for(unsigned family=0u;family<=5u;family++) for(unsigned layout=0u;layout<=4u;layout++) {
+        struct kui_vmu_native_heap bad=h;bad.family=family;bad.layout=layout;
+        compare(&bad,0x100000u,stage,limit,arena,bytes);
+    }
+    const uint32_t malformed[]={1u,UINT32_C(0x8ce00000),UINT32_C(0xac170000),UINT32_MAX};
+    for(unsigned i=0;i<sizeof(malformed)/sizeof(malformed[0]);i++) {
+        struct kui_vmu_native_heap bad=h;bad.dispatch_cell=malformed[i];
+        CHECK(!kui_vmu_native_stage_allocation_safe(&bad,0x100000u,stage,limit,arena,bytes));
+        bad=h;bad.dispatch_table=malformed[i];
+        CHECK(!kui_vmu_native_stage_allocation_safe(&bad,0x100000u,stage,limit,arena,bytes));
+        bad=h;bad.sentinel=malformed[i];compare(&bad,0x100000u,stage,limit,arena,bytes);
+    }
+    /* Family support does not permit an arena to touch loaded source bytes
+     * or any part of the retained allocation to touch the installer. */
+    CHECK(!kui_vmu_native_stage_allocation_safe(&h,0x100000u,stage,limit,first+0xfffe0u,0x400000u));
+    CHECK(!kui_vmu_native_stage_allocation_safe(&h,0x100000u,UINT32_C(0x0cfffffc),end_ram,arena,bytes));
+}
 static uint32_t get32(const uint8_t *p) {
     return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24;
 }
@@ -155,22 +207,26 @@ static void actual_record(const char *path) {
     uint8_t wire[1024];FILE *file=fopen(path,"rb");CHECK(file);
     CHECK(fread(wire,1,sizeof(wire),file)==sizeof(wire));CHECK(fgetc(file)==EOF);CHECK(!fclose(file));
     CHECK(!memcmp(wire,"KUINVR01",8u));
-    struct kui_vmu_native_heap h={0};h.dispatch_table=get32(wire+608u+12u*4u);h.sentinel=get32(wire+608u+13u*4u);
+    struct kui_vmu_native_heap h={0};h.family=get32(wire+608u+2u*4u);h.layout=get32(wire+608u+3u*4u);
+    h.dispatch_cell=get32(wire+608u+11u*4u);h.dispatch_table=get32(wire+608u+12u*4u);h.sentinel=get32(wire+608u+13u*4u);
     uint32_t begin=get32(wire+692u),bytes=get32(wire+696u),image=get32(wire+24u);
     CHECK(kui_vmu_native_stage_allocation_safe(&h,image,UINT32_C(0x8ce00000),UINT32_C(0x8ce40000),begin,bytes));
     uint32_t payload=phys(begin)+bytes-0x30000u,header=payload-32u;
     /* Independent recorded initializer/allocate write footprint: metadata,
      * arena first8B, tail header+4 and the original low owner stack. The
      * conservative production ranges include each of those writes. */
-    const uint32_t writes[]={h.sentinel-4u,h.sentinel,h.sentinel+4u,h.sentinel+0x20u,
+    const uint32_t writes[]={h.sentinel,h.sentinel+4u,h.sentinel+0x20u,
         h.sentinel+0x24u,h.sentinel+0x28u,h.sentinel+0x2cu,begin,begin+4u,header+4u};
+    if(h.family==KUI_VMU_NATIVE_HEAP_TAIL32) {
+        uint32_t at=phys(h.sentinel-4u);CHECK(at+4u<=UINT32_C(0x0ce00000) || at>=UINT32_C(0x0ce40000));
+    }
     for(unsigned i=0;i<sizeof(writes)/sizeof(writes[0]);i++) {
         uint32_t at=phys(writes[i]);CHECK(at+4u<=UINT32_C(0x0ce00000) || at>=UINT32_C(0x0ce40000));
     }
     CHECK(payload+0x20000u<=phys(begin)+bytes);
-    if(phys(begin)+bytes>UINT32_C(0x0cfe0000)) {
+    if(h.family==KUI_VMU_NATIVE_HEAP_TAIL32 && phys(begin)+bytes>UINT32_C(0x0cfe0000)) {
         CHECK(!old_safe(&h,image,UINT32_C(0x0ce40000),begin,bytes));
-    } else CHECK(old_safe(&h,image,UINT32_C(0x0ce40000),begin,bytes));
+    } else if(h.family==KUI_VMU_NATIVE_HEAP_TAIL32) CHECK(old_safe(&h,image,UINT32_C(0x0ce40000),begin,bytes));
     if(phys(begin)+bytes==end_ram) {
         CHECK(header==UINT32_C(0x0cfcffe0) && payload==UINT32_C(0x0cfd0000));
     }
@@ -218,7 +274,7 @@ static void arena_cases(void) {
         }
 }
 int main(int argc,char **argv) {
-    direct_cases();boundaries();malformed();arena_cases();
+    direct_cases();boundaries();malformed();direct32_cases();arena_cases();
     for(int i=1;i<argc;i++) actual_record(argv[i]);
     printf("Native temporary-stage placement: %u checks passed%s\n",checks,argc>1?" including actual cached heap geometry":"");
     return 0;

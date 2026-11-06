@@ -27,7 +27,8 @@ static struct kui_vmu_native_heap native_heap;
 static uint32_t exec_bytes,native_terminal,native_disc_entry_return_frame,native_disc_entry_return_entry;
 static uint8_t original_entry[128];
 static uint16_t persistent_exit_windows[KUI_VMU_NATIVE_EXIT_ENTRIES][6];
-static unsigned checks,patch_calls,word_reads;
+static unsigned checks,patch_calls,word_reads,published_count;
+static uint32_t published[16][2];
 static bool skip_patch,damage_patch,damage_head,fail_frame_read;
 static bool expect_report;
 static jmp_buf report_return;
@@ -37,7 +38,9 @@ static uint32_t native_word(uint32_t address) {
     return fail_frame_read && address==((FRAME|UINT32_C(0x20000000))+20u)?value^1u:value;
 }
 static void native_report(uint32_t phase,uint32_t detail);
-static void kui_native_passive_publish(uint32_t first,uint32_t last) {(void)first;(void)last;}
+static void kui_native_passive_publish(uint32_t first,uint32_t last) {
+    CHECK(published_count<16u);published[published_count][0]=first;published[published_count++][1]=last;
+}
 #include "disc-vmu-exit-writer-fixture.h"
 static void readonly_patch_entry(uint32_t address,uint32_t target) {
     ++patch_calls;
@@ -65,7 +68,7 @@ static void setup(void) {
     native_heap.initializer=KUI_RETAIL_EXEC_ADDRESS+0x2000u;
     native_heap.release=KUI_RETAIL_EXEC_ADDRESS+0x2400u;
     exec_bytes=native_exits.image_bytes;native_terminal=STAGE_RETURN;
-    skip_patch=damage_patch=damage_head=fail_frame_read=expect_report=false;patch_calls=word_reads=0u;
+    skip_patch=damage_patch=damage_head=fail_frame_read=expect_report=false;patch_calls=word_reads=published_count=0u;
     for(unsigned i=0u;i<4u;i++) for(unsigned j=0u;j<6u;j++) persistent_exit_windows[i][j]=(uint16_t)(0xe000u+i*16u+j);
     for(unsigned i=0u;i<native_exits.count;i++)
         memcpy((void *)(uintptr_t)native_exits.entries[i],persistent_exit_windows[i],12u);
@@ -141,6 +144,12 @@ static void immutable_admission(void) {
         }
         refused_before_write((void *)(uintptr_t)FRAME);
     }
+    /* Direct1.35's immutable allocator extends beyond the dispatch family's
+     * old0x1d0 span. An exit cannot borrow that additional code or its pool. */
+    setup();native_heap.family=KUI_VMU_NATIVE_HEAP_DIRECT32;native_heap.initializer=EXIT-0x240u;
+    refused_before_write((void *)(uintptr_t)FRAME);
+    setup();native_heap.family=KUI_VMU_NATIVE_HEAP_DIRECT32;native_heap.initializer=EXIT-0x268u;
+    CHECK(native_disc_entry_return_bind((void *)(uintptr_t)FRAME));
     setup();native_exits.family=KUI_VMU_NATIVE_EXIT_PAIR_ONLY;native_exits.count=2u;native_exits.entries[2]=0u;
     CHECK(native_disc_entry_return_bind((void *)(uintptr_t)FRAME));
     setup();native_exits.family=KUI_VMU_NATIVE_EXIT_PVR_CLEAR;native_exits.entries[0]=EXIT+2u;
@@ -209,6 +218,101 @@ static void early_pair_return_and_retarget(void) {
     if(!setjmp(report_return)) {actual_installer_exit_loop();CHECK(false);}
     CHECK(patch_calls==1u);
 }
+static void early_compact_return_and_retarget(void) {
+    for(uint32_t alignment=0u;alignment<=2u;alignment+=2u) {
+        setup_early_pair(alignment);
+        native_exits.family=KUI_VMU_NATIVE_EXIT_EARLY_COMPACT;native_exits.count=3u;
+        native_exits.entries[2]=EXIT+0x200u;native_exits.exec_thunk=native_exits.entries[2]+76u;
+        for(unsigned i=0;i<6u;i++)persistent_exit_windows[2][i]=(uint16_t)(0xe200u+i);
+        memcpy((void *)(uintptr_t)native_exits.entries[2],persistent_exit_windows[2],12u);
+        uint32_t *frame=(void *)(uintptr_t)FRAME,before[21];memcpy(before,frame,sizeof(before));
+        uint16_t head[4],patch[6];uint32_t veneer=native_exits.entries[1];
+        CHECK(native_disc_entry_return_bind(frame));
+        CHECK(frame[5]==veneer && native_disc_entry_return_entry==veneer);
+        for(unsigned i=0;i<21u;i++)CHECK(frame[i]==(i==5u?veneer:before[i]));
+        CHECK(kui_vmu_native_patch_encode_head(native_exits.entries[0],head));
+        CHECK(!memcmp((const void *)(uintptr_t)native_exits.entries[0],head,sizeof(head)));
+        native_terminal=OWNED_RETURN;actual_installer_exit_loop();CHECK(patch_calls==4u);
+        for(unsigned i=1;i<3u;i++) {
+            CHECK(kui_vmu_native_patch_encode(native_exits.entries[i],OWNED_RETURN,patch));
+            CHECK(!memcmp((const void *)(uintptr_t)native_exits.entries[i],patch,sizeof(patch)));
+        }
+        CHECK(!memcmp((const void *)(uintptr_t)native_exits.entries[0],head,sizeof(head)));
+    }
+    setup_early_pair(0u);native_exits.family=KUI_VMU_NATIVE_EXIT_EARLY_COMPACT;
+    native_exits.count=3u;native_exits.entries[2]=EXIT+0x200u;
+    native_exits.exec_thunk=native_exits.entries[2]+74u;
+    refused_before_write((void *)(uintptr_t)FRAME);
+}
+static void setup_firmware_check(bool early,uint32_t alignment) {
+    if(early)setup_early_pair(alignment);
+    else {
+        setup();for(unsigned i=0;i<3u;i++) {
+            native_exits.entries[i]+=alignment;
+            memcpy((void *)(uintptr_t)native_exits.entries[i],persistent_exit_windows[i],12u);
+        }
+    }
+    native_exits.family=early?KUI_VMU_NATIVE_EXIT_EARLY_FIRMWARE_CHECK:KUI_VMU_NATIVE_EXIT_FIRMWARE_CHECK;
+    native_exits.count=3u;native_exits.exec_thunk=0u;
+    native_exits.entries[2]=EXIT+0x200u+alignment;
+    for(unsigned i=0;i<6u;i++)persistent_exit_windows[2][i]=(uint16_t)(0xe200u+i);
+    memcpy((void *)(uintptr_t)native_exits.entries[2],persistent_exit_windows[2],12u);
+}
+static void require_exit_loop_refusal(void) {
+    expect_report=true;
+    if(!setjmp(report_return)) {actual_installer_exit_loop();CHECK(false);}
+}
+static void firmware_check_return_and_retarget(void) {
+    unsigned mutations=0u;
+    for(unsigned early=0;early<2u;early++)for(uint32_t alignment=0;alignment<=2u;alignment+=2u) {
+        setup_firmware_check(early!=0u,alignment);uint32_t selected=native_exits.entries[early?1u:0u];
+        uint32_t *frame=(void *)(uintptr_t)FRAME,before[21];memcpy(before,frame,sizeof(before));
+        CHECK(native_disc_entry_return_bind(frame));CHECK(frame[5]==selected && native_disc_entry_return_entry==selected);
+        for(unsigned i=0;i<21u;i++)CHECK(frame[i]==(i==5u?selected:before[i]));
+        CHECK(published_count==(early?2u:1u));
+        CHECK(published[0][0]==selected && published[0][1]==selected+12u);
+        if(early)CHECK(published[1][0]==native_exits.entries[0] && published[1][1]==native_exits.entries[0]+8u);
+        published_count=0u;native_terminal=OWNED_RETURN;actual_installer_exit_loop();CHECK(patch_calls==4u);
+        CHECK(published_count==3u);
+        const unsigned order[3]={early?1u:0u,early?0u:1u,2u};
+        for(unsigned at=0;at<3u;at++) {
+            unsigned i=order[at];unsigned bytes=i==0u&&early?8u:12u;
+            CHECK(published[at][0]==native_exits.entries[i] && published[at][1]==native_exits.entries[i]+bytes);
+            if(i==0u&&early) {
+                uint16_t head[4];CHECK(kui_vmu_native_patch_encode_head(native_exits.entries[i],head));
+                CHECK(!memcmp((const void *)(uintptr_t)native_exits.entries[i],head,sizeof(head)));
+            } else {
+                uint16_t patch[6];CHECK(kui_vmu_native_patch_encode(native_exits.entries[i],OWNED_RETURN,patch));
+                CHECK(!memcmp((const void *)(uintptr_t)(native_exits.entries[i]|UINT32_C(0x20000000)),patch,sizeof(patch)));
+            }
+        }
+        for(unsigned i=0;i<3u;i++)for(unsigned byte=0;byte<(i==0u&&early?8u:12u);byte++)for(unsigned bit=0;bit<8u;bit++) {
+            setup_firmware_check(early!=0u,alignment);CHECK(native_disc_entry_return_bind((void *)(uintptr_t)FRAME));
+            uint32_t after[21];memcpy(after,(void *)(uintptr_t)FRAME,sizeof(after));
+            ((uint8_t *)(uintptr_t)native_exits.entries[i])[byte]^=(uint8_t)(1u<<bit);
+            uint8_t corrupt=((const uint8_t *)(uintptr_t)native_exits.entries[i])[byte];
+            published_count=0u;native_terminal=OWNED_RETURN;require_exit_loop_refusal();
+            CHECK(((const uint8_t *)(uintptr_t)native_exits.entries[i])[byte]==corrupt);
+            for(unsigned at=0;at<published_count;at++)
+                CHECK(published[at][1]<=native_exits.entries[i] ||
+                    published[at][0]>=native_exits.entries[i]+(i==0u&&early?8u:12u));
+            unchanged((void *)(uintptr_t)FRAME,after);++mutations;
+        }
+    }
+    for(unsigned early=0;early<2u;early++)for(unsigned mode=0;mode<10u;mode++) {
+        setup_firmware_check(early!=0u,0u);
+        switch(mode) {
+        case 0:native_exits.count=2u;break;case 1:native_exits.count=4u;break;
+        case 2:native_exits.entries[2]=0u;break;case 3:native_exits.entries[3]=EXIT+0x300u;break;
+        case 4:native_exits.exec_thunk=native_exits.entries[2]+76u;break;case 5:native_exits.family=11u;break;
+        case 6:native_exits.version=1u;break;case 7:native_exits.bytes=48u;break;
+        case 8:if(early)native_exits.entries[1]+=2u;else native_exits.entries[0]|=UINT32_C(0x20000000);break;
+        default:if(early)native_exits.entries[0]=0u;else native_exits.entries[0]|=1u;break;
+        }
+        refused_before_write((void *)(uintptr_t)FRAME);CHECK(!published_count);
+    }
+    printf("Firmware return bind/retarget: %u byte-bit refusals and exact ordinary12/12/12,early8/12/12 publications\n",mutations);
+}
 static void failed_publication(void) {
     for(unsigned mode=0u;mode<3u;mode++) {
         setup();uint32_t before[21];memcpy(before,(const void *)(uintptr_t)FRAME,sizeof(before));
@@ -231,7 +335,7 @@ int main(void) {
         CHECK(mmap(at,0x1000000u,PROT_READ|PROT_WRITE,MAP_SHARED|MAP_FIXED_NOREPLACE,fileno(backing),0)==at);
     }
     photographed_case_and_retarget();frame_admission();immutable_admission();
-    early_pair_return_and_retarget();failed_publication();
+    early_pair_return_and_retarget();early_compact_return_and_retarget();firmware_check_return_and_retarget();failed_publication();
     CHECK(!munmap((void *)(uintptr_t)UINT32_C(0x8c000000),0x1000000u));
     CHECK(!munmap((void *)(uintptr_t)UINT32_C(0xac000000),0x1000000u));CHECK(!fclose(backing));
     printf("Physical-disc entry return binder: %u checks; photographed4F22, exactframePR, checked prearm and owned retarget, invalid windows and publication faults\n",checks);

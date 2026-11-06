@@ -25,7 +25,7 @@ P1, P2, SPAN = 0x8C100000, 0xAC100000, 0x10000
 ENTRY, TOP, CONFIG, RESULT = 0xAC38A8C0, 0xAC39A880, 0x8CE80000, 0x8CE80100
 
 
-def read_elf(path):
+def read_elf(path, *, allow_tls=False):
     data = Path(path).read_bytes()
     h = EH.unpack(region(data, 0, EH.size, "ELF header"))
     if (h[0][:7] != b"\x7fELF\x01\x01\x01" or h[1:4] != (2, 42, 1) or
@@ -35,8 +35,9 @@ def read_elf(path):
     segments = [PH.unpack(region(data, h[5] + i * PH.size, PH.size, "program header")) for i in range(h[10])]
     sections = [SH.unpack(region(data, h[6] + i * SH.size, SH.size, "section header")) for i in range(h[12])]
     symbols = {}
+    bindings = {}
     for s in sections:
-        if s[1] in (6, 11) or s[2] & 0x400:
+        if s[1] in (6, 11) or (s[2] & 0x400 and not allow_tls):
             raise ValueError("dynamic or TLS sections are forbidden")
         if s[1] != 2:
             continue
@@ -56,9 +57,20 @@ def read_elf(path):
             if owner in (0, 0xFFF2) or (owner < 0xFF00 and owner >= len(sections)):
                 raise ValueError("undefined or unallocated symbol: " + name)
             record = value, size, info & 15, owner
+            # KOS also links local C names that coincide with unrelated
+            # global assembly labels. Keep the global namespace when reading
+            # the GUI; standalone worker admission retains its strict rule.
+            if allow_tls and name in symbols:
+                if bindings[name] and not info >> 4:
+                    continue
+                if not bindings[name] and info >> 4:
+                    symbols[name] = record
+                    bindings[name] = info >> 4
+                    continue
             if name in symbols and symbols[name] != record and info >> 4:
                 raise ValueError("conflicting global symbols: " + name)
             symbols[name] = record
+            bindings[name] = info >> 4
     if not symbols:
         raise ValueError("missing symbol table")
     return data, h, segments, sections, symbols

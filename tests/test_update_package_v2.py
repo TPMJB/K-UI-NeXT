@@ -184,6 +184,50 @@ class ProducerV2Tests(unittest.TestCase):
                 shutil.rmtree(self.stage)
                 self.stage.mkdir()
 
+    def test_shared_app_records_are_not_packaged_pinned_or_removed(self):
+        paths=("apps/games/selection-a.bin", "apps/games/selection-b.bin",
+               "apps/games/launch-settings-a.bin", "apps/games/launch-settings-b.bin",
+               "apps/games/vc2-vmu-session.bin", "apps/games/smash-vc2-vmu-session.bin",
+               "apps/games/smash-swirl-vmu-session.bin", "apps/disc/future-loader-session.bin",
+               "apps/music/player-settings-a.bin", "apps/music/session-b.bin",
+               "apps/disc/future-selection-a.bin", "apps/games/settings-a.bin",
+               "apps/games/custom-software.bin", "apps/games/binarysettings-a.bin",
+               "apps/games/selection-c.bin")
+        for name in paths:
+            with self.subTest(name=name):
+                self.assertFalse(update.software_path_v2(name))
+                self.put(name,b"shared mutable data")
+                with self.assertRaises(ValueError):
+                    self.build()
+                shutil.rmtree(self.stage);self.stage.mkdir();self.reader()
+                with self.assertRaises(ValueError):
+                    self.build(remove=[name])
+                with self.assertRaises(ValueError):
+                    self.build(keep=[name])
+                shutil.rmtree(self.stage);self.stage.mkdir()
+        for name in ("apps/disc/loader-session.bin.kui",
+                     "apps/games/vc2-vmu-helper.bin", "apps/games/smash-vc2-vmu-helper.bin",
+                     "apps/games/smash-swirl-vmu-helper.bin", "assets/selection-a.bin"):
+            with self.subTest(immutable=name):
+                self.assertTrue(update.software_path_v2(name))
+
+    def test_current_c_consumer_refuses_a_forged_mutable_software_path(self):
+        self.put("apps/games/custom-software-helper.bin",b"software bytes")
+        self.build()
+        original=self.output.read_bytes()
+        for name in ("apps/games/launch-settings-a.bin", "apps/games/smash-vc2-vmu-session.bin",
+                     "apps/disc/future-loader-session.bin"):
+            with self.subTest(name=name):
+                data=bytearray(original)
+                data[128:208]=name.encode()+bytes(80-len(name))
+                data[64:96]=hashlib.sha256(data[128:288]).digest()
+                struct.pack_into("<I",data,124,zlib.crc32(data[:124]))
+                self.output.write_bytes(data)
+                with self.assertRaises(ValueError):
+                    update.verify(self.output)
+                with self.assertRaises(ValueError):
+                    update.current_consumer_check(self.output)
+
     def test_symlink_stage_members_are_refused(self):
         reader = self.reader()
         real = self.base / "external.kui"

@@ -63,8 +63,10 @@ static bool native_sdk_coherence_literal(uint32_t pc,unsigned reg,uint32_t *slot
 static bool __attribute__((noipa)) native_sdk_coherence_slot(uint32_t *out) {
     if(!out || !native_sdk_coherence_window_valid()) return false;
     bool variable=passive_layout.rx_layout==KUI_VMU_NATIVE_RX_EXPLICIT48;
+    bool early=native_driver.family==KUI_VMU_NATIVE_FAMILY_EARLY_P2_V1;
+    if(early && variable) return false;
     uint32_t wrapper=passive_layout.initializer_wrapper;
-    unsigned length=variable?56u:52u;
+    unsigned length=early?44u:variable?56u:52u;
     if(!native_sdk_coherence_span(wrapper,length,2u)) return false;
     const uint16_t *op=(const void *)(uintptr_t)wrapper;
     static const uint16_t uniform[26]={0x4f22,0x7ff4,0x0002,0,0x2f42,0x4009,0x1f51,0x4009,
@@ -73,21 +75,22 @@ static bool __attribute__((noipa)) native_sdk_coherence_slot(uint32_t *out) {
     static const uint16_t alternate[28]={0x4f22,0x7fec,0x0002,0,0x1f43,0x4009,0x1f52,0x4009,
         0x1f61,0xc90f,0x2f72,0x1f04,0x0002,0x2039,0xcbf0,0x400e,0,0,0x6242,0x223b,0,
         0x2422,0x55f2,0,0x67f2,0x56f1,0x430b,0x54f3};
-    const uint16_t *expected=variable?alternate:uniform;
+    static const uint16_t early_uniform[22]={0x4f22,0x7ff4,0x0002,0,0x2f42,0x4009,0x1f51,0x4009,
+        0xc90f,0x1f02,0x0002,0x2039,0xcbf0,0x400e,0,0x0009,0,0,0x66f2,0x6573,0x430b,0x54f1};
+    const uint16_t *expected=early?early_uniform:variable?alternate:uniform;
     for(unsigned i=0;i<length/2u;i++) if(expected[i] && op[i]!=expected[i]) return false;
     if((op[3]&0xff00u)!=0x9300u) return false;
     uint32_t mask_at=wrapper+10u+2u*(op[3]&255u);
     if(!native_sdk_coherence_span(mask_at,2u,2u) ||
        *(const uint16_t *)(uintptr_t)mask_at!=0xff0fu) return false;
-    unsigned lock_at=variable?32u:28u,call_at=variable?46u:42u;
-    unsigned bsr_at=variable?40u:36u;
+    unsigned lock_at=variable?32u:28u,call_at=early?34u:variable?46u:42u;
+    unsigned bsr_at=early?28u:variable?40u:36u;
     if((op[bsr_at/2u]&0xf000u)!=0xb000u) return false;
     uint32_t value,slot;
-    if(!native_sdk_coherence_literal(wrapper+lock_at,4u,NULL,&value) ||
-       value!=native_driver.lock_cell ||
-       !native_sdk_coherence_literal(wrapper+lock_at+2u,3u,NULL,&value) ||
-       value!=UINT32_C(0xa0000000) ||
-       (!variable && (!native_sdk_coherence_literal(wrapper+40u,7u,NULL,&value) || value!=0xc000u)) ||
+    if((!early && (!native_sdk_coherence_literal(wrapper+lock_at,4u,NULL,&value) ||
+        value!=native_driver.lock_cell ||
+        !native_sdk_coherence_literal(wrapper+lock_at+2u,3u,NULL,&value) || value!=UINT32_C(0xa0000000))) ||
+       (!variable && (!native_sdk_coherence_literal(wrapper+(early?32u:40u),7u,NULL,&value) || value!=0xc000u)) ||
        !native_sdk_coherence_literal(wrapper+call_at,3u,&slot,&value) ||
        !native_sdk_coherence_span(value,12u,2u) ||
        (value&UINT32_C(0x1fffffff))!=(passive_layout.initializer&UINT32_C(0x1fffffff))) return false;
@@ -112,6 +115,9 @@ static bool __attribute__((noipa)) native_sdk_coherence_slot(uint32_t *out) {
  * retire, so no gate is admitted or installed for it. */
 static bool __attribute__((noipa)) native_sdk_coherence_cached_admit(void) {
     if(native_driver.family==KUI_VMU_NATIVE_FAMILY_EARLY_V1) return true;
+    if(native_driver.family==KUI_VMU_NATIVE_FAMILY_EARLY_P2_V1 &&
+       !kui_vmu_native_early_p2_calls_valid((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
+           exec_bytes,&native_driver,native_call.call,passive_layout.initializer_call)) return false;
     uint32_t slot;return native_sdk_coherence_slot(&slot);
 }
 
@@ -129,6 +135,11 @@ static int __attribute__((noipa)) native_sdk_coherence_install(
     if(!e || bytes<80u+40u || e->bss_begin!=dest+bytes ||
        e->bss_end<e->bss_begin || e->bss_end>e->stack_bottom ||
        !native_sdk_coherence_window_valid()) return -1;
+    /* The source predicate ran before publication. At this live boundary
+     * its one heap-target literal is intentionally the owned low hook; never
+     * reclassify that modified image as an immutable startup. */
+    if(native_driver.family==KUI_VMU_NATIVE_FAMILY_EARLY_P2_V1 &&
+       (!native_heap.initializer_slot || native_word(native_heap.initializer_slot)!=NATIVE_LOW_HEAP_HOOK)) return -1;
     uint32_t slot;
     if(!native_sdk_coherence_slot(&slot)) return -1;
     uint32_t table=(e->trace_exports&UINT32_C(0x1fffffff))|UINT32_C(0xa0000000);

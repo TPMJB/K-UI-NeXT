@@ -27,6 +27,9 @@ extern uint32_t kui_vmu_native_readonly_release_resume;
 #endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
 #include "kui/vmu_durable.h"
+#if KUI_SMASH_NATIVE_MENU
+#include "kui/smash_native_return.h"
+#endif
 #include "kui/vmu_native_live.h"
 #include "kui/vmu_native_terminal_dispatch.h"
 #include "kui/vmu_native_patch.h"
@@ -36,6 +39,11 @@ extern uint32_t kui_vmu_native_readonly_release_resume;
 #include "vmu_native_fault_capture.h"
 #include "vmu_native_sdk_coherence.h"
 #include "sd_reader.h"
+#if KUI_VMU_NATIVE_VIRTUAL_ADDRESS == 1u
+__asm__(".global __kui_native_virtual_slot_worker\n.set __kui_native_virtual_slot_worker,1\n");
+#else
+__asm__(".global __kui_native_virtual_slot_worker\n.set __kui_native_virtual_slot_worker,2\n");
+#endif
 #if KUI_NATIVE_SESSION_CONTROLS
 _Static_assert(KUI_VMU_READONLY_OVERLAY_STAGED_FRAMES==1u,
     "Session controls owns one virtual receive slot per bank");
@@ -245,15 +253,22 @@ static struct {
     uint32_t snapshot[CONTROLLER_WORDS];
     struct {uint32_t rx,header;} frames[CONTROLLER_FRAMES];
 } controller_pair;
-#if KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION
 enum native_controller_pending {
-    NATIVE_CONTROLLER_IDLE=0u,NATIVE_CONTROLLER_PREPARED=1u,NATIVE_CONTROLLER_CAPTURED=2u
+    NATIVE_CONTROLLER_IDLE=0u,NATIVE_CONTROLLER_PREPARED=1u,NATIVE_CONTROLLER_CAPTURED=2u,
+    NATIVE_CONTROLLER_STOPPED=3u
 };
-#endif
 static struct kui_vmu_native_lifetime_range protected_ranges[KUI_VMU_NATIVE_LIFETIME_RANGES];
 static unsigned protected_count;
 static struct kui_vmu_native_lifetime_plan lifetime_plan NATIVE_METADATA_OBJECT(lifetime);
+#if KUI_SMASH_NATIVE_MENU
+/* Exact MDE owner: three aligned SDK heads (9 words), two pointer cells,
+ * three source-discovered exit heads (3+4+4 words), one coherence cell: 23.
+ * Keep one spare; larger plans fail closed. Other profiles retain 32. */
+_Static_assert(KUI_VMU_NATIVE_EXIT_ENTRIES==4u,"Menu hook witness capacity derivation");
+#define HOOK_WITNESSES 24u
+#else
 #define HOOK_WITNESSES 32u
+#endif
 #if KUI_NATIVE_METADATA_CACHE_ISOLATION
 struct native_hook_witness {uint32_t address,value,mask;};
 static struct native_hook_witness hook_witness[HOOK_WITNESSES] NATIVE_METADATA_OBJECT(hooks);
@@ -365,17 +380,16 @@ static uint32_t guard(uint32_t sp,unsigned i) {
 #endif
 }
 static uint32_t physical(uint32_t a) {return a&UINT32_C(0x1fffffff);}
-static inline __attribute__((always_inline)) bool ram(uint32_t a,unsigned bytes,unsigned alignment) {
+static bool ram(uint32_t a,unsigned bytes,unsigned alignment) {
     uint32_t area=a&UINT32_C(0xe0000000),p=physical(a);
     return (area==0u || area==UINT32_C(0x80000000) || area==UINT32_C(0xa0000000)) &&
         !(p&(alignment-1u)) && bytes && p>=UINT32_C(0x0c000000) &&
         p<UINT32_C(0x0d000000) && bytes<=UINT32_C(0x0d000000)-p;
 }
-/* Keep the exact address/width admission at every call site. Inlining lets
- * SH GCC fold literal widths/MMIO addresses without rebuilding a private
- * stack frame for each individual SDK word. Indirect callbacks retain the
- * same independently callable checked reader. */
-static inline __attribute__((always_inline)) bool read_value(void *unused,uint32_t a,unsigned width,uint32_t *v) {
+/* Preserve every address/width check while allowing the compiler to share
+ * this leaf reader. The complete controller lifecycle checks then fit the
+ * existing worker reservation without duplicating this admission gate. */
+static bool read_value(void *unused,uint32_t a,unsigned width,uint32_t *v) {
     (void)unused;
     if(width!=1u && width!=2u && width!=4u) return false;
     if(!ram(a,width,width) && !(width==4u &&
@@ -871,7 +885,8 @@ static bool prepare_sdk_coherence_hook(void) {
     if(config.driver.family==KUI_VMU_NATIVE_FAMILY_EARLY_V1) return true;
     const uint32_t *table=kui_vmu_native_trace_exports;
     unsigned kind=config.layout.rx_layout==KUI_VMU_NATIVE_RX_UNIFORM48?0u:1u;
-    uint32_t pc=config.layout.initializer_wrapper+(kind?46u:42u),op,word;
+    uint32_t pc=config.layout.initializer_wrapper+(kind?46u:
+        config.driver.family==KUI_VMU_NATIVE_FAMILY_EARLY_P2_V1?34u:42u),op,word;
     uint32_t begin=physical(config.driver.load_address),bytes=config.driver.image_bytes;
     if(table[0]!=UINT32_C(0x4b545231) || table[1]!=2u || table[2]!=40u ||
        !ram(pc,10u,2u) || physical(pc)<begin || bytes<10u ||
@@ -951,10 +966,16 @@ static uint8_t *readonly_rx(uint32_t address,unsigned bytes) {
 #endif
 static void report(void) __attribute__((noreturn));
 static void fail(uint32_t code) __attribute__((noreturn));
+#if KUI_SMASH_NATIVE_CHILD
+#include "smash_native_vmu_probe.inc"
+#endif
 #if KUI_NATIVE_SESSION_CONTROLS
 #include "native_session_worker.inc"
 #endif
 static void report(void) {
+#if KUI_SMASH_NATIVE_CHILD
+    smash_vmu_probe_report();
+#else
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(kui_vmu_native_trace_enabled()) {
         const struct kui_vmu_native_trace_failure failure={
@@ -965,7 +986,7 @@ static void report(void) {
         kui_vmu_native_trace_report(state.error,state.runtime_result,state.fault_at,state.fault_value);
     }
 #endif
-#ifdef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
+#if defined(KUI_VMU_NATIVE_PASSIVE_HOST_TEST) && !defined(KUI_VMU_NATIVE_REPORT_HOST_RENDER)
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     kui_vmu_native_passive_test_terminal(state.proof?15u:16u,state.error);
 #elif KUI_VMU_NATIVE_READONLY_PROBE
@@ -991,8 +1012,25 @@ static void report(void) {
         (uint32_t)durable_card.last_lease_result,durable_card.last_block},5u);
     retail_display_values("REQ REPLY RX OVL FLAGS",(uint32_t[5]){
         overlay.stats.last_request,overlay.stats.last_reply,overlay.stats.last_rx,state.overlay_result,overlay.stats.flags},5u);
-    retail_display_values("AT VALUE EXPECT CHECK LEASE",(uint32_t[5]){
-        state.fault_at,state.fault_value,state.fault_expect,state.runtime_result,config.lease.payload},5u);
+#if KUI_NATIVE_READAHEAD && KUI_NATIVE_READER_DIAGNOSTIC
+    /* The deliberate report has no failed instruction to diagnose.
+     * Show existing read-ahead observations in that fault row instead. This
+     * terminal-only lookup adds no polling work or clock sample. */
+    const struct kui_native_ra_exports *held_aux=state.error==0x4fu?
+        reader_readahead_exports(reader_capture_region()):NULL;
+    if(held_aux) {
+        const struct kui_native_ra_public *ra=held_aux->context;
+        const uint32_t *pio=ra->diagnostics.stage_result[KUI_NATIVE_RA_STAGE_NONE];
+        retail_display_values("PIO N EVT ONE OVER AUX",(uint32_t[5]){
+            pio[KUI_NATIVE_RA_PIO_ATTEMPTS],pio[KUI_NATIVE_RA_AUX_MAX_CONTEXT],
+            pio[KUI_NATIVE_RA_PIO_MAX_SINGLE_TICKS],pio[KUI_NATIVE_RA_PIO_WINDOW_OVERRUNS],
+            ra->stats.max_visit_ticks},5u);
+    } else
+#endif
+    {
+        retail_display_values("AT VALUE EXPECT CHECK LEASE",(uint32_t[5]){
+            state.fault_at,state.fault_value,state.fault_expect,state.runtime_result,config.lease.payload},5u);
+    }
     retail_display_values("FRAME PR SR COPY PR SR",(uint32_t[5]){
         state.frame_address,state.frame_pr,state.frame_sr,completion_frame.pr,completion_frame.sr},5u);
     retail_display_line("PHOTO / POWER OFF");
@@ -1035,8 +1073,11 @@ static void report(void) {
 #endif
     for(;;) __asm__ volatile("nop");
 #endif
+
+#endif
 }
 static void fail(uint32_t code) __attribute__((noreturn));
+
 #if KUI_NATIVE_MAPLE_DELAY_ISOLATION
 #include "vmu_native_maple_delay.inc"
 #endif
@@ -1119,7 +1160,9 @@ int kui_vmu_native_passive_arm(const struct kui_vmu_native_passive_config *c,voi
 #if KUI_NATIVE_METADATA_CACHE_ISOLATION
     native_metadata_ready=0u;
 #endif
+
     memcpy(&config,c,sizeof(config));
+
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     memset(&live_plan,0,sizeof(live_plan));
     memset(&controller_pair,0,sizeof(controller_pair));
@@ -1453,14 +1496,11 @@ static bool context_reject(unsigned code,uint32_t address,uint32_t value,uint32_
      * comparison instead of leaving a stale successful chain read on screen. */
     return failure_witness(UINT32_C(0x20000)|code,address,value,expected);
 }
-static bool transfer_context_valid(const struct kui_vmu_native_passive_frame *f,
-    unsigned bank,unsigned phase,uint32_t dma) {
+static bool transfer_frame_valid(const struct kui_vmu_native_passive_frame *f,
+    unsigned bank,unsigned phase) {
 #if KUI_NATIVE_METADATA_CACHE_ISOLATION
     const struct kui_vmu_native_passive_config *const cfg=native_cached_config();
 #endif
-    const uint32_t address[4]={UINT32_C(0xa05f6c04),UINT32_C(0xa05f6c10),
-        UINT32_C(0xa05f6c14),UINT32_C(0xa05f6c18)};
-    const uint32_t expected[4]={dma,0u,1u,0u};
     unsigned mask=(f->sr>>4)&15u;
     if(!stack_valid()) {
         uint32_t sr=current_sr(),sp=current_sp(),low=active_stack_low();
@@ -1478,7 +1518,7 @@ static bool transfer_context_valid(const struct kui_vmu_native_passive_frame *f,
     if(phase>1u) return context_reject(7u,0u,phase,1u);
     /* An early server runs at its caller's level, holding the TAS lock
      * witnessed below instead. */
-    if(mask!=6u && mask!=15u && NATIVE_HOT_CONFIG.driver.family!=KUI_VMU_NATIVE_FAMILY_EARLY_V1)
+    if(mask!=6u && mask!=15u && !kui_vmu_native_early_server(NATIVE_HOT_CONFIG.driver.family))
         return context_reject(8u,0u,f->sr,0xf0u);
     uint32_t source=physical(NATIVE_HOT_CONFIG.tx_base)+bank*KUI_VMU_NATIVE_TX_BANK_BYTES;
     if(state.source!=source) return context_reject(9u,0u,state.source,source);
@@ -1492,12 +1532,12 @@ static bool transfer_context_valid(const struct kui_vmu_native_passive_frame *f,
         return context_reject(13u,0u,kui_vmu_native_passive_resume,NATIVE_HOT_CONFIG.driver.resume);
     if(kui_vmu_native_passive_consumer!=NATIVE_HOT_CONFIG.driver.consumer)
         return context_reject(14u,0u,kui_vmu_native_passive_consumer,NATIVE_HOT_CONFIG.driver.consumer);
-    for(unsigned i=0;i<4u;i++) {
-        uint32_t value;
-        if(!read_value(NULL,address[i],4u,&value))
-            return context_reject(0xa0u+i,address[i],UINT32_MAX,expected[i]);
-        if(value!=expected[i]) return context_reject(0x20u+i,address[i],value,expected[i]);
-    }
+    return true;
+}
+static bool transfer_sdk_context_valid(unsigned bank,unsigned phase) {
+#if KUI_NATIVE_METADATA_CACHE_ISOLATION
+    const struct kui_vmu_native_passive_config *const cfg=native_cached_config();
+#endif
     /* Recheck live selectors and the lock around an MDSTAR change or scoped
      * storage call. The full geometry proof belongs to this same IMASK15
      * scope; these operations cannot resume game code between witnesses. */
@@ -1522,6 +1562,20 @@ static bool transfer_context_valid(const struct kui_vmu_native_passive_frame *f,
     }
     return true;
 }
+static bool transfer_context_valid(const struct kui_vmu_native_passive_frame *f,
+    unsigned bank,unsigned phase,uint32_t dma) {
+    const uint32_t address[4]={UINT32_C(0xa05f6c04),UINT32_C(0xa05f6c10),
+        UINT32_C(0xa05f6c14),UINT32_C(0xa05f6c18)};
+    const uint32_t expected[4]={dma,0u,1u,0u};
+    if(!transfer_frame_valid(f,bank,phase)) return false;
+    for(unsigned i=0;i<4u;i++) {
+        uint32_t value;
+        if(!read_value(NULL,address[i],4u,&value))
+            return context_reject(0xa0u+i,address[i],UINT32_MAX,expected[i]);
+        if(value!=expected[i]) return context_reject(0x20u+i,address[i],value,expected[i]);
+    }
+    return transfer_sdk_context_valid(bank,phase);
+}
 static bool persistent_context_guard(void) {
     unsigned bank=state.source==physical(config.tx_base)?0u:1u;
     if(!state.armed) return context_reject(0x50u,0u,state.armed,1u);
@@ -1544,25 +1598,26 @@ static bool persistent_context_guard(void) {
 #define CONTROLLER_FAIL(reason,index,address,value,expected) do { \
     (void)controller_reject((reason),(index),(address),(value),(expected));fail(0x47u); \
 } while(0)
-static bool controller_context_valid(const struct kui_vmu_native_passive_frame *f,unsigned phase) {
-#if KUI_NATIVE_METADATA_CACHE_ISOLATION
-    const struct kui_vmu_native_passive_config *const cfg=native_cached_config();
-#endif
+static bool controller_pair_valid(void) {
     if(live_plan.self!=(uintptr_t)&live_plan || live_plan.ready!=UINT32_C(0x4e4c5031) ||
-       live_plan.input_count>24u || controller_pair.bank>1u || !controller_pair.count ||
-       controller_pair.count>CONTROLLER_FRAMES || controller_pair.parent>=controller_pair.count) {
+       live_plan.input_count>24u || controller_pair.bank>1u ||
+       (controller_pair.pending!=NATIVE_CONTROLLER_STOPPED && (!controller_pair.count ||
+        controller_pair.count>CONTROLLER_FRAMES || controller_pair.parent>=controller_pair.count))) {
         uint32_t bad=(live_plan.self!=(uintptr_t)&live_plan) |
             ((live_plan.ready!=UINT32_C(0x4e4c5031))<<1) | ((live_plan.input_count>24u)<<2) |
-            ((controller_pair.bank>1u)<<3) | ((!controller_pair.count)<<4) |
-            ((controller_pair.count>CONTROLLER_FRAMES)<<5) |
-            ((controller_pair.parent>=controller_pair.count)<<6);
+            ((controller_pair.bank>1u)<<3) |
+            ((controller_pair.pending!=NATIVE_CONTROLLER_STOPPED)*
+             (((!controller_pair.count)<<4) | ((controller_pair.count>CONTROLLER_FRAMES)<<5) |
+              ((controller_pair.parent>=controller_pair.count)<<6)));
         return controller_reject(0x20u,0u,(uint32_t)(uintptr_t)&live_plan,bad,0u);
     }
+    return true;
+}
+static bool controller_layout_valid(void) {
 #if KUI_NATIVE_METADATA_CACHE_ISOLATION
+    const struct kui_vmu_native_passive_config *const cfg=native_cached_config();
     const struct kui_vmu_native_live *const metadata=native_cached_live();
 #endif
-    /* Preserve the existing, more specific 0x200xx transfer witness. */
-    if(!transfer_context_valid(f,controller_pair.bank,phase,controller_pair.source)) return false;
     uint32_t value,manager;
     if(!read_value(NULL,NATIVE_HOT_CONFIG.driver.manager_cell,4u,&manager))
         return controller_reject(0x21u,0u,NATIVE_HOT_CONFIG.driver.manager_cell,UINT32_MAX,NATIVE_HOT_CONFIG.driver.manager_initial);
@@ -1589,13 +1644,20 @@ static bool controller_context_valid(const struct kui_vmu_native_passive_frame *
     }
     for(unsigned i=0;i<live_plan.input_count;i++)
         CONTROLLER_EXPECT(8u+i,NATIVE_HOT_LIVE.input_address[i],NATIVE_HOT_LIVE.input_value[i]);
-    for(unsigned i=0;i<controller_pair.count;i++) {
-        unsigned port=(controller_pair.frames[i].header>>14)&3u;
-        unsigned slot=controller_pair.bank*24u+port*6u;
+    unsigned stopped=controller_pair.pending==NATIVE_CONTROLLER_STOPPED;
+    unsigned count=stopped?KUI_VMU_NATIVE_RX_SLOTS:controller_pair.count;
+    for(unsigned i=0;i<count;i++) {
+        unsigned slot=i;
+        if(!stopped) slot=controller_pair.bank*24u+((controller_pair.frames[i].header>>14)&3u)*6u;
         CONTROLLER_EXPECT(32u+slot,manager+0xfe8u+slot*4u,NATIVE_HOT_CONFIG.runtime.rx_slots[slot]);
     }
 #undef CONTROLLER_EXPECT
     return true;
+}
+static bool controller_context_valid(const struct kui_vmu_native_passive_frame *f,unsigned phase) {
+    return controller_pair_valid() &&
+        transfer_context_valid(f,controller_pair.bank,phase,controller_pair.source) &&
+        controller_layout_valid();
 }
 static bool controller_prepare(const struct kui_vmu_native_passive_frame *f) {
 #if KUI_NATIVE_METADATA_CACHE_ISOLATION
@@ -1651,8 +1713,9 @@ static bool controller_prepare(const struct kui_vmu_native_passive_frame *f) {
     }
     return false;
 }
+#include "vmu_native_controller_shutdown.inc"
 #include "vmu_native_split_controller.inc"
-static void controller_complete(const struct kui_vmu_native_passive_frame *f) {
+static bool controller_complete(const struct kui_vmu_native_passive_frame *f) {
 #if KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION
     if(controller_pair.pending!=NATIVE_CONTROLLER_PREPARED)
         CONTROLLER_FAIL(1u,0u,(uint32_t)(uintptr_t)&controller_pair.pending,
@@ -1729,7 +1792,7 @@ static void controller_complete(const struct kui_vmu_native_passive_frame *f) {
 #if KUI_NATIVE_SESSION_CONTROLS
             if(command==9u) {
 #else
-            if(NATIVE_HOT_CONFIG.driver.family==KUI_VMU_NATIVE_FAMILY_EARLY_V1 && command==9u) {
+            if(kui_vmu_native_early_server(NATIVE_HOT_CONFIG.driver.family) && command==9u) {
 #endif
                 uint32_t controls;
                 if(!read_value(NULL,address+8u,4u,&controls))
@@ -1743,7 +1806,13 @@ static void controller_complete(const struct kui_vmu_native_passive_frame *f) {
         if(!i) state.first_response=response;
         state.last_response=response;
     }
-    if(!controller_context_valid(f,1u)) fail(0x47u);
+    if(!controller_context_valid(f,1u)) {
+        if(!controller_shutdown_valid(f)) fail(0x47u);
+        /* The stopped SDK owns no publishable DMA. Retire only our capture;
+         * the unchanged assembly still forwards its original consumer. */
+        controller_pair.pending=NATIVE_CONTROLLER_STOPPED;state.pending=0u;++state.completed;
+        return false;
+    }
     held_report=held?held_report+1u:0u;
     if(held_report>=HELD_REPORT_FRAMES) {
 #if KUI_NATIVE_SESSION_CONTROLS
@@ -1767,15 +1836,22 @@ static void controller_complete(const struct kui_vmu_native_passive_frame *f) {
 #endif
     ++overlay.stats.completed;
     controller_pair.pending=0u;state.pending=0u;++state.completed;state.error=0u;
+#if KUI_SMASH_NATIVE_CHILD && !KUI_SMASH_NATIVE_MENU
+    smash_vmu_probe_complete();
+#endif
     state.proof=durable_card.commits!=0u;
 #if KUI_NATIVE_SESSION_CONTROLS
     native_session_controller_complete(session_controls);
 #endif
+    return true;
 }
 #undef CONTROLLER_FAIL
 #undef controller_reject
 #endif
 void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *f) {
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    if(controller_pair.pending==NATIVE_CONTROLLER_STOPPED && controller_suspended(f,0u)) return;
+#endif
 #if KUI_NATIVE_METADATA_CACHE_ISOLATION
     const struct kui_vmu_native_passive_config *const cfg=native_cached_config();
 #endif
@@ -1820,6 +1896,18 @@ void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *f)
        !ram(source,KUI_VMU_NATIVE_TX_BANK_BYTES,32u)) fail(4u);
     state.source=source;
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    /* Finish may land between completed transfers, so no canceled capture
+     * exists to mark the paused lifecycle. Only this warm slow fallback can
+     * nominate it; all stopped-owner proofs precede any overlay or storage. */
+    if(live_plan.ready && controller_pair.pending==NATIVE_CONTROLLER_IDLE &&
+       !overlay.pending && state.submitted==state.completed) {
+        uint32_t enabled;
+        if(!controller_shutdown_mmio_read(1u,&enabled)) fail(0x46u);
+        if(!enabled) {
+            controller_pair.pending=NATIVE_CONTROLLER_STOPPED;
+            if(controller_suspended(f,0u)) return;
+        }
+    }
     if(controller_prepare(f)) {
         if((!KUI_NATIVE_E1_WAIT_CAPTURE && !KUI_NATIVE_METADATA_CACHE_ISOLATION && !KUI_NATIVE_SPLIT_CONTROLLER_ISOLATION && NATIVE_HOT_CONFIG.diagnostics==KUI_VMU_NATIVE_DIAGNOSTICS_PROFILE)) {
             ++diagnostic.fast_submit;diagnostic_end(KUI_VMU_NATIVE_PROFILE_SUBMIT,&span);
@@ -1893,6 +1981,9 @@ void kui_vmu_native_passive_submit(const struct kui_vmu_native_passive_frame *f)
 #endif
 }
 void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *f) {
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    if(controller_pair.pending==NATIVE_CONTROLLER_STOPPED && controller_suspended(f,1u)) return;
+#endif
 #if KUI_NATIVE_METADATA_CACHE_ISOLATION
     const struct kui_vmu_native_passive_config *const cfg=native_cached_config();
 #endif
@@ -1920,14 +2011,14 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
             controller_pair.pending!=NATIVE_CONTROLLER_PREPARED) fail(0x47u);
 #endif
     if(controller_pair.pending) {
-        controller_complete(f);
+        if(!controller_complete(f)) return;
 #if KUI_NATIVE_COOP_PUMP
         /* Early main-unit INFO/ALLINFO previously took full overlay completion,
          * which never runs a prefetch TICK. Their new split eligibility must
          * not add optional masked PIO/CRC windows during discovery/polling.
          * Keep the early GETCOND opportunities and other drivers' established
          * scheduling. The private parent/header survives completion intact. */
-        if(NATIVE_HOT_CONFIG.driver.family!=KUI_VMU_NATIVE_FAMILY_EARLY_V1 ||
+        if(!kui_vmu_native_early_server(NATIVE_HOT_CONFIG.driver.family) ||
            (controller_pair.frames[controller_pair.parent].header&255u)==9u)
             reader_cooperative_service();
 #endif
@@ -2062,6 +2153,9 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
        !boundary(f,1u,state.bytes,&snapshot)) fail(24u);
 #endif
     state.pending=0u;++state.completed;state.error=0u;
+#if KUI_SMASH_NATIVE_CHILD && !KUI_SMASH_NATIVE_MENU
+    smash_vmu_probe_complete();
+#endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     /* A durable commit remains visible to the game. Power-off/reboot readback
      * is a hardware test, never inferred from this in-session counter. */
@@ -2082,3 +2176,39 @@ void kui_vmu_native_passive_complete(const struct kui_vmu_native_passive_frame *
     state.pending=0u;state.completed=1u;state.error=0u;report();
 #endif
 }
+
+#if KUI_SMASH_NATIVE_MENU
+/* A menu return grants no additional VMU/SDK ownership. The pre-GIN caller
+ * enters through the worker's private-stack gateway and never resumes the
+ * old image after success. Completed SYNC replies are already durable; an
+ * accepted but unfinished write must remain live for its original sender.
+ * There is deliberately no store checkpoint, I/O, reset or free here. */
+int kui_smash_native_return_preflight(void) {
+    if((current_sr()&UINT32_C(0x100000f0))!=UINT32_C(0x100000f0) ||
+       !state.armed || state.error || !overlay.admitted ||
+       !durable_card.ready || durable_card.self!=&durable_card || durable_card.faulted)
+        return -1;
+    if((state.pending | controller_pair.pending | overlay.pending | durable_card.handling |
+        durable_card.inflight | durable_card.protocol.active) || state.submitted!=state.completed)
+        return 0;
+    return 1;
+}
+int kui_smash_native_return_retire(void) {
+    int ready=kui_smash_native_return_preflight();
+    if(ready!=1)return ready;
+    uint32_t dma;
+    if(durable_card.store.io.context ||
+       !read_value(NULL,UINT32_C(0xa05f6c18),4u,&dma))return -1;
+    if(dma&1u)return 0;
+    if(!lease_valid() || !stack_valid() || !installed_hooks_valid() ||
+       kui_vmu_native_passive_consumer!=config.driver.consumer ||
+       !read_value(NULL,UINT32_C(0xa05f6c18),4u,&dma))return -1;
+    if(dma&1u)return 0;
+    /* Disable both entry authority and reply publication. Keep the backend
+     * and its current CRCs untouched: only a fresh cold stage may recover,
+     * checkpoint and bind the next independent worker to the shared card. */
+    state.armed=0u;overlay.admitted=0u;
+    __asm__ volatile("":::"memory");
+    return 1;
+}
+#endif

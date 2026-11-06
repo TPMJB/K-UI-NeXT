@@ -54,22 +54,58 @@ static bool heap_bottom_halfword(kui_vmu_native_heap_read read,void *context,
 }
 bool kui_vmu_native_heap_bottom_code_valid(const struct kui_vmu_native_heap *h,
     kui_vmu_native_heap_read read,void *context) {
+    bool direct=h && h->family==KUI_VMU_NATIVE_HEAP_DIRECT32;
     if(!h || !read || !metadata(h) || (h->initializer&3u) ||
-       !heap_bottom_code_span(h,h->allocate,0xceu) ||
-       !heap_bottom_code_span(h,h->release,0xb8u)) return false;
-    for(unsigned i=0u;i<sizeof(heap_bottom_allocate_words)/sizeof(heap_bottom_allocate_words[0]);i++) {
+       !heap_bottom_code_span(h,h->allocate,direct?0xb2u:0xceu) ||
+       !heap_bottom_code_span(h,h->release,direct?0x108u:0xb8u)) return false;
+    unsigned allocate_words=direct?77u:sizeof(heap_bottom_allocate_words)/sizeof(heap_bottom_allocate_words[0]);
+    for(unsigned i=0u;i<allocate_words;i++) {
         unsigned offset=2u*i;
-        if(offset==0x44u || (offset>=0x46u && offset<0x62u)) continue;
-        if(!heap_bottom_halfword(read,context,h->allocate+offset,
-            heap_bottom_allocate_words[i])) return false;
+        uint16_t expected;
+        if(direct) {
+            /* The direct body omits the later family's inline pool and two
+             * dispatch thunks. Its arithmetic/free-list operations match;
+             * these exact branch and PC-relative operands bind its layout. */
+            expected=heap_bottom_allocate_words[i<33u?i:i+16u];
+            switch(offset) {
+            case 0x06u:expected=0x9348u;break;
+            case 0x18u:expected=0xde25u;break;
+            case 0x34u:expected=0x8b1cu;break;
+            case 0x3au:expected=0x8b02u;break;
+            case 0x3eu:expected=0xa008u;break;
+            case 0x54u:expected=0x9321u;break;
+            case 0x78u:expected=0x920fu;break;
+            case 0x90u:expected=0xafceu;break;
+            default:break;
+            }
+        } else {
+            if(offset==0x44u || (offset>=0x46u && offset<0x62u)) continue;
+            expected=heap_bottom_allocate_words[i];
+        }
+        if(!heap_bottom_halfword(read,context,h->allocate+offset,expected)) return false;
     }
     const uint32_t roles[7]={h->begin_cell,h->begin_copy_cell,h->bytes_cell,
         h->sentinel,h->cursor_cell,h->dispatch_cell,h->dispatch_table};
-    for(unsigned i=0u;i<7u;i++)
-        if(!read_is(read,context,h->allocate+0x46u+4u*i,roles[i])) return false;
-    for(unsigned i=0u;i<sizeof(heap_bottom_release_words)/sizeof(heap_bottom_release_words[0]);i++)
-        if(!heap_bottom_halfword(read,context,h->release+2u*i,
-            heap_bottom_release_words[i])) return false;
+    for(unsigned i=0u;i<(direct?5u:7u);i++)
+        if(!read_is(read,context,h->allocate+(direct?0x9eu:0x46u)+4u*i,roles[i])) return false;
+    for(unsigned i=0u;i<sizeof(heap_bottom_release_words)/sizeof(heap_bottom_release_words[0]);i++) {
+        uint16_t expected=heap_bottom_release_words[i];
+        if(direct) switch(2u*i) {
+        case 0x02u:expected=0x937eu;break;
+        case 0x18u:expected=0xd33au;break;
+        case 0x80u:expected=0xd220u;break;
+        case 0x88u:expected=0x923bu;break;
+        default:break;
+        }
+        if(!heap_bottom_halfword(read,context,h->release+2u*i,expected)) return false;
+    }
+    if(direct) {
+        /* The shared direct pool follows allocate, with the release mask
+         * and cursor literal in its original later pool. No dispatch exists. */
+        return heap_bottom_halfword(read,context,h->allocate+0x9au,0xff0fu) &&
+            heap_bottom_halfword(read,context,h->release+0x102u,0xff0fu) &&
+            read_is(read,context,h->release+0x104u,h->cursor_cell);
+    }
     /* Exact PC-relative consumers are already pinned by the complete bodies:
      * allocate+06 -> allocate+42; allocate+74/+98 -> release+AE;
      * release+02/+88 -> release+AE; release+18/+80 -> release+B4.

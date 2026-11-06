@@ -2,13 +2,14 @@
 #ifndef KUI_ARMADA_CE_VMU_READONLY_H
 #define KUI_ARMADA_CE_VMU_READONLY_H
 #include "kui/vmu_readonly.h"
+#include "kui/ce_vmu_target.h"
 
 #ifndef KUI_ARMADA_CE_VMU_READONLY_HOST_TEST
 #define KUI_ARMADA_CE_VMU_READONLY_HOST_TEST 0
 #endif
 
-#if KUI_VMU_READONLY_ADDRESS != 2
-#error "The Armada CE read-only experiment requires the virtual A2 address"
+#if KUI_VMU_READONLY_ADDRESS != KUI_CE_VMU_ADDRESS
+#error "The CE read-only endpoint must match its source-selected virtual address"
 #endif
 
 /* An allocation-free protocol adapter, not a transport/SD hook. Native
@@ -43,7 +44,8 @@ int kui_armada_ce_vmu_readonly_init_reader(struct kui_armada_ce_vmu_readonly *,
 #endif
 
 /* Native readonly return codes and CPU/DMA packet representation. Exactly
- * A2 destination02 and host00. DEVINFO/ALLINFO/MEMINFO/BLOCKREAD retain their
+ * the source-selected destination (default A2, Swirl A1) and host00.
+ * DEVINFO/ALLINFO/MEMINFO/BLOCKREAD retain their
  * strict native shapes. CMD13 additionally requires partition0, phase0/1,
  * and the last successful read's block. Repeated matching finalizations are
  * idempotent. A failed/malformed addressed read or rejected mutating request

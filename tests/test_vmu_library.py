@@ -4,8 +4,6 @@
 import os
 from pathlib import Path
 import shlex
-import shutil
-import struct
 import subprocess
 import tempfile
 import unittest
@@ -26,14 +24,17 @@ SOURCES = (
 )
 
 
-@unittest.skipUnless(shutil.which('mkfs.fat') and shutil.which('mkfs.exfat'),
-                     'needs mkfs.fat and mkfs.exfat')
 class VmuLibrary(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.work = tempfile.TemporaryDirectory(prefix='kui-vmu-library-')
         cls.root = Path(cls.work.name)
         cls.binary = cls.root/'library'
+        config = (ROOT/'config/ffconf.h').read_text()
+        old = '#define FF_USE_MKFS 0'
+        assert config.count(old) == 1
+        header = cls.root/'ffconf-test.h'
+        header.write_text(config.replace(old, '#define FF_USE_MKFS 1'))
         subprocess.run([
             *shlex.split(os.environ.get('CC', 'cc')), '-std=c11', '-O1', '-g',
             '-Wall', '-Wextra', '-Werror', '-Wpedantic',
@@ -41,6 +42,7 @@ class VmuLibrary(unittest.TestCase):
             '-fno-pie', '-no-pie', '-ffunction-sections', '-fdata-sections',
             '-Wl,--gc-sections', '-I', str(ROOT/'include'),
             '-I', str(ROOT/'.deps/fatfs/source'),
+            '-include', str(header),
             *[str(ROOT/name) for name in SOURCES], '-o', str(cls.binary),
         ], check=True)
 
@@ -49,19 +51,11 @@ class VmuLibrary(unittest.TestCase):
         cls.work.cleanup()
 
     def check_volume(self, kind, cluster=None):
-        filesystem = self.root/'volume.fs'
-        with filesystem.open('wb') as out:
-            out.truncate(64*1024*1024)
-        command = ['mkfs.fat', '-F', '32', '-s', '1', '-h', '2048'] if kind == 'fat32' else [
-            'mkfs.exfat', '-c', cluster]
-        subprocess.run([*command, str(filesystem)], check=True, capture_output=True)
-        payload = filesystem.read_bytes()
-        mbr = bytearray(512)
-        struct.pack_into('<B3xB3xII', mbr, 446, 0, 0x0c if kind == 'fat32' else 7,
-                         2048, len(payload)//512)
-        mbr[510:512] = b'\x55\xaa'
         image = self.root/'disk.img'
-        image.write_bytes(mbr+bytes(2048*512-512)+payload+bytes(1024*1024))
+        cluster_bytes = 512 if kind == 'fat32' else {'4K': 4096, '128K': 131072}[cluster]
+        subprocess.run([str(self.binary), '--format', kind, str(cluster_bytes), str(image)],
+                       check=True, capture_output=True,
+                       env=dict(os.environ, ASAN_OPTIONS='detect_leaks=0', UBSAN_OPTIONS='halt_on_error=1'))
         result = subprocess.run([str(self.binary), str(image)], capture_output=True,
                                 text=True, timeout=45,
                                 env=dict(os.environ, ASAN_OPTIONS='detect_leaks=0'))

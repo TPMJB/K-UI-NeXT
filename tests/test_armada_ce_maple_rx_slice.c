@@ -3,7 +3,8 @@
 #include <stdio.h>
 #include <string.h>
 #include "kui/armada_ce_maple_rx_slice.h"
-static const uint32_t TTB=0x8c1458a0u,PROC=0x8c14e8b4u,EXT=0x08030a60u;
+static const uint32_t TTB=KUI_CE_MAPLE_CURRENT_PROCESS+0x10u,
+    PROC=KUI_CE_MAPLE_PROCESS_BASE+3u*KUI_CE_MAPLE_PROCESS_STRIDE,EXT=0x08030a60u;
 static const uint32_t TX=0x0cfd3000u,RX=0x0cfd1000u,UNIT=0x08034000u,FN=0x08035000u;
 struct fixture {struct {uint32_t at,value,visits;} cell[256];
     unsigned cells,calls,table,coherent,packet,fail,mutate,mutate_visit;uint32_t replacement;} f;
@@ -88,7 +89,7 @@ static void function(unsigned i,uint32_t capacity,unsigned command,unsigned expe
 static void prepare(bool generic) {
     memset(&f,0,sizeof(f));memset(&capture,0,sizeof(capture));memset(&traffic,0,sizeof(traffic));
     memset(&scratch,0,sizeof(scratch));memset(&out,0,sizeof(out));
-    put(0xff000008u,TTB);put(0xff00001cu,0x105u);put(0x8c145890u,PROC);
+    put(0xff000008u,TTB);put(0xff00001cu,0x105u);put(KUI_CE_MAPLE_CURRENT_PROCESS,PROC);
     put(TTB,0x8c100000u);put(TTB+16u,0x8c100000u);
     mapping(EXT,0x8c110000u,0x0cf93000u,0x17du);
     mapping(UNIT,0x8c110000u,0x0cf94000u,0x17du);

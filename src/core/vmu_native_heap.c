@@ -20,6 +20,15 @@ static const struct heap_word heap_words[]={
     {0x1b0,0x0002},{0x1b4,0x4009},{0x1b6,0x4009},{0x1b8,0xc90f},
     {0x1c0,0xcbf0},{0x1c2,0x400e},{0x1c4,0x2448},{0x1cc,0x75e0}
 };
+/* Direct syMalloc1.35 initializer. The branch tail-calls its own release;
+ * pointer literals are decoded below, never supplied by a synthetic table. */
+static const struct heap_word direct_words[]={
+    {0x00,0x741f},{0x04,0xe6e0},{0x08,0x2469},{0x0c,0x2569},{0x0e,0x2fe6},
+    {0x10,0x2742},{0x12,0x2342},{0x18,0x2252},{0x1a,0xe200},{0x1c,0x4509},
+    {0x1e,0x6143},{0x20,0x4509},{0x22,0x2342},{0x24,0x2412},{0x26,0x4501},
+    {0x28,0x1421},{0x2a,0x6e72},{0x2c,0x64e3},{0x2e,0x7420},
+    {0x30,0x1e51},{0x32,0xa095},{0x34,0x6ef6}
+};
 #if KUI_NATIVE_STAGE_FAST_SCAN
 #include "kui/native_scan_bytes.h"
 #define h16 kui_native_scan_le16
@@ -58,29 +67,37 @@ static bool literal(const uint8_t *p,size_t n,uint32_t base,size_t at,
     size_t slot;if(!index(address,base,n,4u,&slot)) return false;
     *value=h32(p+slot);return true;
 }
+struct heap_shape {int16_t extent,allocate,release,initializer_mask;};
+static const struct heap_shape heap_shapes[2]={
+    {0x1d0u,0xe2u,0x1b0u,1u},{0x268u,0xaeu,0x160u,3u}
+};
 static bool metadata(const struct kui_vmu_native_heap *h) {
-    if(!h || h->version!=KUI_VMU_NATIVE_HEAP_VERSION || h->bytes!=sizeof(*h) ||
-       h->family!=KUI_VMU_NATIVE_HEAP_TAIL32 || h->layout!=KUI_VMU_NATIVE_HEAP_DISPATCH2 ||
-       h->image_bytes<2u || h->image_bytes>0xc00000u || (h->load&3u) ||
+    if(!h || h->layout-1u>1u || h->family+1u!=2u*h->layout) return false;
+    const struct heap_shape *shape=&heap_shapes[h->layout-1u];
+    bool direct=h->layout==KUI_VMU_NATIVE_HEAP_DIRECT;
+    if(h->version!=KUI_VMU_NATIVE_HEAP_VERSION || h->bytes!=sizeof(*h) ||
+       h->image_bytes<(uint32_t)shape->extent || h->image_bytes>0xc00000u || (h->load&3u) ||
        !span(h->load,h->image_bytes) || !span(h->sentinel,0x30u) ||
-       !span(h->dispatch_table,8u) || ((h->sentinel|h->dispatch_table)&3u) ||
-       (h->initializer&1u) || h->initializer<h->load ||
-       h->initializer-h->load>h->image_bytes ||
-       h->image_bytes-(h->initializer-h->load)<0x1d0u) return false;
+       (h->sentinel&3u) || (h->initializer&shape->initializer_mask) ||
+       h->initializer-h->load>h->image_bytes-shape->extent) return false;
     size_t at;
-    if(!index(h->dispatch_table,h->load,h->image_bytes,8u,&at) ||
+    /* The admitted image span and bounded initializer offset already prove
+     * its complete code extent fits RAM. index independently includes the
+     * dispatch table's alias, alignment and complete in-image span. */
+    if((direct?(h->dispatch_cell || h->dispatch_table):
+           !index(h->dispatch_table,h->load,h->image_bytes,8u,&at)) ||
        (h->initializer_slot &&
         (!index(h->initializer_slot,h->load,h->image_bytes,4u,&at) ||
          !span(h->initializer_target,2u) || phys(h->initializer_target)!=phys(h->initializer))) ||
        (!h->initializer_slot && h->initializer_target)) return false;
     return h->cursor_cell==h->sentinel+0x20u && h->begin_cell==h->sentinel+0x24u &&
         h->bytes_cell==h->sentinel+0x28u && h->begin_copy_cell==h->sentinel+0x2cu &&
-        h->dispatch_cell==h->sentinel-4u &&
-        span(h->dispatch_cell,4u) && !(h->allocate&1u) && !(h->release&1u) &&
-        phys(h->allocate)==phys(h->initializer)+0xe2u &&
-        phys(h->release)==phys(h->initializer)+0x1b0u &&
-        span(h->initializer,0x1d0u) && span(h->allocate,2u) && span(h->release,2u);
+        (direct || (h->dispatch_cell==h->sentinel-4u && phys(h->sentinel)>UINT32_C(0x0c000000))) &&
+        phys(h->allocate)==phys(h->initializer)+shape->allocate &&
+        phys(h->release)==phys(h->initializer)+shape->release &&
+        span(h->allocate,2u) && span(h->release,2u);
 }
+bool kui_vmu_native_heap_metadata_valid(const struct kui_vmu_native_heap *h) {return metadata(h);}
 static bool candidate(const uint8_t *p,size_t n,uint32_t base,size_t at,
     struct kui_vmu_native_heap *h) {
     if(n-at<0x1d0u) return false;
@@ -103,6 +120,29 @@ static bool candidate(const uint8_t *p,size_t n,uint32_t base,size_t at,
     h->image_bytes=(uint32_t)n;h->load=base;h->initializer=base+(uint32_t)at;
     return metadata(h);
 }
+struct heap_image {const uint8_t *bytes;size_t count;uint32_t base;};
+static bool image_word(void *context,uint32_t address,uint32_t *out) {
+    const struct heap_image *image=context;size_t at;
+    if(!index(address,image->base,image->count,4u,&at)) return false;
+    *out=h32(image->bytes+at);return true;
+}
+static bool direct_candidate(const uint8_t *p,size_t n,uint32_t base,size_t at,
+    struct kui_vmu_native_heap *h) {
+    if((at&3u) || n-at<0x268u) return false;
+    for(unsigned i=0;i<sizeof(direct_words)/sizeof(direct_words[0]);i++)
+        if(h16(p+at+direct_words[i].offset)!=direct_words[i].value) return false;
+    if(!literal(p,n,base,at+2u,3u,&h->begin_copy_cell) ||
+       !literal(p,n,base,at+6u,7u,&h->begin_cell) ||
+       !literal(p,n,base,at+0xau,2u,&h->bytes_cell) ||
+       !literal(p,n,base,at+0x14u,4u,&h->sentinel) ||
+       !literal(p,n,base,at+0x16u,3u,&h->cursor_cell)) return false;
+    h->version=KUI_VMU_NATIVE_HEAP_VERSION;h->bytes=sizeof(*h);
+    h->family=KUI_VMU_NATIVE_HEAP_DIRECT32;h->layout=KUI_VMU_NATIVE_HEAP_DIRECT;
+    h->image_bytes=(uint32_t)n;h->load=base;h->initializer=base+(uint32_t)at;
+    h->allocate=h->initializer+0xaeu;h->release=h->initializer+0x160u;
+    struct heap_image image={p,n,base};
+    return metadata(h) && kui_vmu_native_heap_bottom_code_valid(h,image_word,&image);
+}
 static int call_discover(const void *,size_t,const struct kui_vmu_native_heap *,
     struct kui_vmu_native_heap_call *);
 enum kui_vmu_native_heap_result kui_vmu_native_heap_discover(
@@ -114,9 +154,12 @@ enum kui_vmu_native_heap_result kui_vmu_native_heap_discover(
        (base&3u) || !span(base,(uint32_t)n)) return KUI_VMU_NATIVE_HEAP_INVALID;
     const uint8_t *p=image;struct kui_vmu_native_heap found={0};unsigned count=0;
     for(size_t at=0;at<n && n-at>=0x1d0u;at+=2u) {
-        if(h16(p+at)!=0x2fe6u || h16(p+at+2u)!=0x6e53u) continue;
         struct kui_vmu_native_heap h={0};
-        if(!candidate(p,n,base,at,&h)) continue;
+        if(h16(p+at)==0x2fe6u && h16(p+at+2u)==0x6e53u) {
+            if(!candidate(p,n,base,at,&h)) continue;
+        } else if(h16(p+at)==0x741fu) {
+            if(!direct_candidate(p,n,base,at,&h)) continue;
+        } else continue;
         if(++count>1u) return KUI_VMU_NATIVE_HEAP_AMBIGUOUS;
         found=h;
     }
@@ -313,6 +356,63 @@ bool kui_vmu_native_heap_call_discover(const void *image,size_t n,
     const struct kui_vmu_native_heap *h,struct kui_vmu_native_heap_call *out) {
     return call_discover(image,n,h,out)==1;
 }
+int kui_vmu_native_heap_preclear_plan(const void *image,size_t n,const uint8_t sha256[32],
+    const struct kui_vmu_native_heap *h,const struct kui_vmu_native_heap_call *call,
+    struct kui_vmu_native_heap_preclear *out) {
+    /* Time Stalkers US MK-51011. Its original memset is followed only by
+     * three literal loads, JSR and NOP before the allocator runs. None reads
+     * the deferred heap bytes. This source identity is an additional gate,
+     * never a substitute for checking the actual call/helper/literal roles. */
+    static const uint8_t digest[32]={
+        0xa9,0xfa,0x66,0xb6,0xbc,0xc4,0x82,0xdf,0xaa,0x47,0x68,0x3d,0x55,0x2e,0x42,0xf2,
+        0x4a,0x82,0x00,0xc8,0xef,0xa5,0xed,0x90,0x5d,0x81,0x84,0xee,0xde,0xba,0x3a,0xc0};
+    static const uint16_t path[10]={
+        0xd32a,0xd428,0xd627,0x430b,0xe500,0xd228,0xd426,0xd524,0x420b,0x0009};
+    static const uint16_t helper[12]={
+        0xe700,0x6373,0x3362,0x8d05,0x6043,0x7701,0x2050,0x3762,0x8ffb,0x7001,0x000b,0x6043};
+    if(!h) return -1;
+    bool owner_digest=sha256 && !memcmp(sha256,digest,sizeof(digest));
+    if(!owner_digest &&
+       (h->family!=KUI_VMU_NATIVE_HEAP_DIRECT32 || phys(h->initializer)!=UINT32_C(0x0c025840)))
+        return 0;
+    if(!image || !sha256 || !call || !out || n!=661056u ||
+       n>UINTPTR_MAX-(uintptr_t)image || !metadata(h) ||
+       h->image_bytes!=n || h->family!=KUI_VMU_NATIVE_HEAP_DIRECT32 ||
+       h->load!=UINT32_C(0x8c010000) || h->initializer!=UINT32_C(0x8c025840) ||
+       h->initializer_slot!=UINT32_C(0x8c0102d4) || h->initializer_target!=h->initializer ||
+       h->allocate!=h->initializer+0xaeu || h->release!=h->initializer+0x160u ||
+       call->load!=UINT32_C(0x8c010230) || call->call!=UINT32_C(0x8c010236) ||
+       call->return_pr!=UINT32_C(0x8c01023a) || call->entry_begin!=UINT32_C(0x8c3b0000) ||
+       call->entry_bytes!=UINT32_C(0x00c50000) || !owner_digest ||
+       overlaps((uintptr_t)image,n,(uintptr_t)out,sizeof(*out)) ||
+       overlaps((uintptr_t)sha256,32u,(uintptr_t)out,sizeof(*out)) ||
+       overlaps((uintptr_t)h,sizeof(*h),(uintptr_t)out,sizeof(*out)) ||
+       overlaps((uintptr_t)call,sizeof(*call),(uintptr_t)out,sizeof(*out))) return -1;
+    const uint8_t *p=image;
+    for(unsigned i=0;i<sizeof(path)/sizeof(path[0]);i++)
+        if(h16(p+0x226u+2u*i)!=path[i]) return -1;
+    for(unsigned i=0;i<sizeof(helper)/sizeof(helper[0]);i++)
+        if(h16(p+0xc6e8u+2u*i)!=helper[i]) return -1;
+    if(h32(p+0x2d0u)!=UINT32_C(0x8c01c6e8) ||
+       h32(p+0x2ccu)!=call->entry_begin || h32(p+0x2c8u)!=call->entry_bytes ||
+       h32(p+0x2d4u)!=h->initializer_target || h32(p+0x15998u)!=h->sentinel ||
+       h32(p+0x1599cu)!=h->cursor_cell || h32(p+0x1598cu)!=h->begin_cell ||
+       h32(p+0x15994u)!=h->bytes_cell || h32(p+0x15990u)!=h->begin_copy_cell) return -1;
+    unsigned consumers=0;
+    for(size_t at=0;at+2u<=n;at+=2u) {
+        if(!(at&3u) && at+4u<=n && span(h32(p+at),4u) &&
+           phys(h32(p+at))==UINT32_C(0x0c0102d0)) return -1;
+        uint16_t op=h16(p+at);
+        if((op&0xf000u)==0xd000u &&
+           phys(((h->load+(uint32_t)at+4u)&~3u)+4u*(op&255u))==UINT32_C(0x0c0102d0)) {
+            if(at!=0x226u || ++consumers>1u) return -1;
+        }
+    }
+    if(consumers!=1u) return -1;
+    *out=(struct kui_vmu_native_heap_preclear){UINT32_C(0x8c0102d0),UINT32_C(0x8c01c6e8),
+        UINT32_C(0x8c010230),call->entry_begin,call->entry_bytes};
+    return 1;
+}
 struct fixed_plan {
     uint32_t image_bytes;uint8_t sha256[32];
     uint32_t load,call,slot,target,begin,bytes;
@@ -461,12 +561,13 @@ static bool read_is(kui_vmu_native_heap_read read,void *ctx,uint32_t at,uint32_t
 static bool tail_geometry(const struct kui_vmu_native_heap_lease *l) {
     return l->payload==l->begin+l->heap_bytes-l->lease_bytes && l->header==l->payload-32u;
 }
-static bool bottom_geometry(const struct kui_vmu_native_heap_lease *l) {
+static inline __attribute__((always_inline)) bool bottom_geometry(const struct kui_vmu_native_heap_lease *l) {
     return l->header==l->begin && l->payload==l->begin+32u;
 }
 static bool identity(const struct kui_vmu_native_heap_lease *l,
     kui_vmu_native_heap_read read,void *ctx,uint32_t initializations) {
     const struct kui_vmu_native_heap *h=&l->owner;
+    uint32_t control=phys(h->sentinel)-(h->family==KUI_VMU_NATIVE_HEAP_DIRECT32?0u:4u);
     return metadata(h) && l->version==KUI_VMU_NATIVE_HEAP_VERSION && l->bytes==sizeof(*l) &&
         initializations==1u && l->initializations==1u && !(l->begin&31u) &&
         !(l->heap_bytes&31u) && span(l->begin,l->heap_bytes) &&
@@ -474,20 +575,23 @@ static bool identity(const struct kui_vmu_native_heap_lease *l,
         l->lease_bytes<=l->heap_bytes-64u && l->units==l->lease_bytes/32u+1u &&
         l->remaining==l->heap_bytes/32u-l->units &&
         (tail_geometry(l) || bottom_geometry(l)) &&
-        /* Allocator control must not live inside its own managed arena. */
-        !(phys(h->sentinel)<phys(l->begin)+l->heap_bytes &&
+        /* The old routing cell immediately precedes sentinel, so one span
+         * excludes their exact union. Direct control starts at sentinel.
+         * metadata also proves the old dispatch table lies inside the image,
+         * whose complete exclusion below already protects that table. */
+        !(control<phys(l->begin)+l->heap_bytes &&
           phys(l->begin)<phys(h->sentinel)+0x30u) &&
-        !(phys(h->dispatch_cell)>=phys(l->begin) &&
-          phys(h->dispatch_cell)<phys(l->begin)+l->heap_bytes) &&
-        !(phys(h->dispatch_table)<phys(l->begin)+l->heap_bytes &&
-          phys(l->begin)<phys(h->dispatch_table)+8u) &&
         !(phys(h->load)<phys(l->begin)+l->heap_bytes &&
           phys(l->begin)<phys(h->load)+h->image_bytes) &&
         read_is(read,ctx,h->begin_cell,l->begin) && read_is(read,ctx,h->begin_copy_cell,l->begin) &&
         read_is(read,ctx,h->bytes_cell,l->heap_bytes) &&
-        read_is(read,ctx,h->dispatch_cell,h->dispatch_table) &&
-        read_is(read,ctx,h->dispatch_table,h->allocate) &&
-        read_is(read,ctx,h->dispatch_table+4u,h->release) &&
+        (h->family==KUI_VMU_NATIVE_HEAP_DIRECT32?
+         (read_is(read,ctx,h->initializer+0x14cu,h->begin_cell) &&
+          read_is(read,ctx,h->initializer+0x150u,h->begin_copy_cell) &&
+          read_is(read,ctx,h->initializer+0x154u,h->bytes_cell)):
+         (read_is(read,ctx,h->dispatch_cell,h->dispatch_table) &&
+          read_is(read,ctx,h->dispatch_table,h->allocate) &&
+          read_is(read,ctx,h->dispatch_table+4u,h->release))) &&
         read_is(read,ctx,h->sentinel+4u,0u);
 }
 static bool fresh(const struct kui_vmu_native_heap_lease *l,

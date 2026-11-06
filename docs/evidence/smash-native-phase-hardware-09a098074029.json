@@ -1,0 +1,337 @@
+{
+  "schema": "kui.smash.native-phase-hardware.v1",
+  "observed_date": "2026-11-05",
+  "build": "09a098074029",
+  "selection": "SHINING FORCE",
+  "report_sha256": "21a02acae8c05afa8cee8b2f8aa8f373e591059b939043b7e3e95b5bca9081a5",
+  "report_bytes": 4096,
+  "owner_baseline_seconds": {
+    "VMU_off": 8,
+    "VMU_on": 30
+  },
+  "worker_bytes": 73728,
+  "worker_install_completed": true,
+  "clock_configurations_match": true,
+  "raw_endpoints_monotonic": true,
+  "intervals": {
+    "MDE first payload callback to post-GIN": {
+      "nominal_ms": 6896,
+      "rtc_seconds": 7,
+      "flags": 7
+    },
+    "Capsule gate": {
+      "nominal_ms": 24,
+      "rtc_seconds": 0,
+      "flags": 7
+    },
+    "Capsule SD load": {
+      "nominal_ms": 2091,
+      "rtc_seconds": 2,
+      "flags": 7
+    },
+    "Capsule validation": {
+      "nominal_ms": 669,
+      "rtc_seconds": 1,
+      "flags": 7
+    },
+    "Cold entry and SD init": {
+      "nominal_ms": 99,
+      "rtc_seconds": 0,
+      "flags": 7
+    },
+    "Filesystem ownership": {
+      "nominal_ms": 5667,
+      "rtc_seconds": 5,
+      "flags": 7
+    },
+    "Journal recovery and first image validation": {
+      "nominal_ms": 214,
+      "rtc_seconds": 1,
+      "flags": 7
+    },
+    "Checkpoint": {
+      "nominal_ms": 3,
+      "rtc_seconds": 0,
+      "flags": 7
+    },
+    "Second image validation and final identity": {
+      "nominal_ms": 213,
+      "rtc_seconds": 0,
+      "flags": 7
+    },
+    "IP load": {
+      "nominal_ms": 36,
+      "rtc_seconds": 0,
+      "flags": 7
+    },
+    "MDE restore/load": {
+      "nominal_ms": 1377,
+      "rtc_seconds": 1,
+      "flags": 7
+    },
+    "Pre-BOOT2 setup": {
+      "nominal_ms": 671,
+      "rtc_seconds": 1,
+      "flags": 7
+    },
+    "BOOT2": {
+      "nominal_ms": 296,
+      "rtc_seconds": 0,
+      "flags": 7
+    },
+    "Base relay validation": {
+      "nominal_ms": 1125,
+      "rtc_seconds": 1,
+      "flags": 7
+    },
+    "Native SDK/allocator proof": {
+      "nominal_ms": 1289,
+      "rtc_seconds": 2,
+      "flags": 7
+    },
+    "Hook/argument preparation": {
+      "nominal_ms": 15,
+      "rtc_seconds": 0,
+      "flags": 7
+    },
+    "MDE CRT and original allocator init": {
+      "nominal_ms": 776,
+      "rtc_seconds": 0,
+      "flags": 7
+    },
+    "Worker allocation and relocation": {
+      "nominal_ms": 82,
+      "rtc_seconds": 1,
+      "flags": 7
+    },
+    "Worker arm and hook publication": {
+      "nominal_ms": 24,
+      "rtc_seconds": 0,
+      "flags": 7
+    },
+    "TOTAL first payload callback to installed worker": {
+      "nominal_ms": 21576,
+      "rtc_seconds": 22,
+      "flags": 7
+    },
+    "CHILD entry to installed worker": {
+      "nominal_ms": 11893,
+      "rtc_seconds": 12,
+      "flags": 7
+    }
+  },
+  "metrics": {
+    "filesystem_logical_reads": 6340,
+    "filesystem_chain_steps": 396503,
+    "filesystem_fat_entries": 396503,
+    "filesystem_directory_sectors": 2469,
+    "vmu_prep_logical_reads": 7395,
+    "vmu_prep_single_commands": 2329,
+    "vmu_prep_run_commands": 341,
+    "vmu_prep_crc_checked_sectors": 8048,
+    "vmu_prep_writes": 1,
+    "vmu_prep_syncs": 2
+  },
+  "raw_endpoints": [
+    {
+      "phase": 1,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 85873522187,
+      "rtc": 2425023109
+    },
+    {
+      "phase": 2,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 87252921919,
+      "rtc": 2425023116
+    },
+    {
+      "phase": 3,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 87257889631,
+      "rtc": 2425023116
+    },
+    {
+      "phase": 4,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 87676250743,
+      "rtc": 2425023118
+    },
+    {
+      "phase": 5,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 87810155205,
+      "rtc": 2425023119
+    },
+    {
+      "phase": 10,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 87827232419,
+      "rtc": 2425023119
+    },
+    {
+      "phase": 11,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 87829973787,
+      "rtc": 2425023119
+    },
+    {
+      "phase": 12,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 87831330159,
+      "rtc": 2425023119
+    },
+    {
+      "phase": 13,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 88963488755,
+      "rtc": 2425023124
+    },
+    {
+      "phase": 14,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 89006350707,
+      "rtc": 2425023125
+    },
+    {
+      "phase": 15,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 89007141263,
+      "rtc": 2425023125
+    },
+    {
+      "phase": 16,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 89049524951,
+      "rtc": 2425023125
+    },
+    {
+      "phase": 17,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 89049838031,
+      "rtc": 2425023125
+    },
+    {
+      "phase": 18,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 89057143219,
+      "rtc": 2425023125
+    },
+    {
+      "phase": 19,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 89332581872,
+      "rtc": 2425023126
+    },
+    {
+      "phase": 20,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 89466814879,
+      "rtc": 2425023127
+    },
+    {
+      "phase": 21,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 89526137786,
+      "rtc": 2425023127
+    },
+    {
+      "phase": 22,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 89713129092,
+      "rtc": 2425023128
+    },
+    {
+      "phase": 23,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 89751144514,
+      "rtc": 2425023128
+    },
+    {
+      "phase": 24,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 90009060590,
+      "rtc": 2425023130
+    },
+    {
+      "phase": 25,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 90012145298,
+      "rtc": 2425023130
+    },
+    {
+      "phase": 26,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 90167473891,
+      "rtc": 2425023130
+    },
+    {
+      "phase": 27,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 90183993959,
+      "rtc": 2425023131
+    },
+    {
+      "phase": 28,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 90188828799,
+      "rtc": 2425023131
+    }
+  ],
+  "limits": [
+    "Initial wait before first MDE payload callback excluded",
+    "Subsequent SGA/BUP/options work excluded",
+    "Report file I/O excluded",
+    "This is one Shining Force run; no Phantasy StarII timing capture",
+    "Raw counter modes agree and RTC broadly corroborates; no exhaustive reset exclusion"
+  ],
+  "interpretation": "Repeated native launch/admission work has measured multi-second costs. The journal/image-validation intervals alone total427ms. Do not attribute all21.576s to VMU image hashing or claim whole internal load explained."
+}

@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Production packet endpoint and publisher with modeled RX ownership only.
+# This does not certify SH4 cache/exception timing or persistent saving.
+BUILD ?= build/vc2-write-host
+HOST_CC ?= cc
+VC2_WRITE_SANITIZERS := -fsanitize=address,undefined
+VC2_WRITE_FLAGS := -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic \
+ $(VC2_WRITE_SANITIZERS) -fno-sanitize-recover=all -fno-pie -no-pie \
+ -DKUI_ARMADA_CE_MAPLE_WRITE_STAGING=1 -DKUI_VC2_VMU_WRITE_PROBE=1 -Iinclude
+VC2_WRITE_SOURCES := src/core/vc2_ce_vmu_write_probe.c src/core/armada_ce_vmu_write.c \
+ src/core/vmu_emulation.c src/core/vmu_image.c
+.PHONY: all probe-backend-tests publication-tests check-no-storage stop-tests
+all: probe-backend-tests publication-tests stop-tests
+stop-tests:
+	@mkdir -p $(BUILD)
+	# This exact32-bit process-global address overlaps ASAN shadow memory.
+	# Keep the production address and MAP_FIXED_NOREPLACE; use UBSAN here.
+	$(HOST_CC) $(filter-out $(VC2_WRITE_SANITIZERS),$(VC2_WRITE_FLAGS)) -fsanitize=undefined -ffunction-sections -fdata-sections \
+	 -DKUI_VC2_CE_VMU=1 -DKUI_ARMADA_CE_MAPLE_WRITE_LAYOUT=1 \
+	 -DKUI_ARMADA_CE_MAPLE_FENCE=1 -DKUI_ARMADA_CE_MAPLE_A2=1 \
+	 -DKUI_ARMADA_CE_MAPLE_AUTO_STOP=7 -DKUI_ARMADA_CE_MAPLE_AUTO_PHASE=2 \
+	 -DKUI_ARMADA_CE_MAPLE_AUTO_LIMIT=1200 -DKUI_ARMADA_CE_CACHE_SNAPSHOT_NATIVE=1 \
+	 tests/test_vc2_ce_vmu_write_stop.c $(VC2_WRITE_SOURCES) -Wl,--gc-sections -o $(BUILD)/stop
+	UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/stop
+probe-backend-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(VC2_WRITE_FLAGS) -DKUI_VMU_READONLY_ADDRESS=2 \
+	 tests/test_vc2_ce_vmu_write_probe.c $(VC2_WRITE_SOURCES) \
+	 src/core/armada_ce_vmu_readonly.c src/core/vmu_readonly.c -o $(BUILD)/probe-backend
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/probe-backend
+publication-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(VC2_WRITE_FLAGS) tests/test_vc2_ce_vmu_write_publish.c $(VC2_WRITE_SOURCES) \
+	 src/loader/armada_ce_vmu_a2_publish.c -o $(BUILD)/publication
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/publication
+	@$(MAKE) --no-print-directory -f Makefile.vc2-write-tests BUILD=$(BUILD) check-no-storage
+check-no-storage:
+	@python3 -c 'import subprocess; s=subprocess.check_output(["nm","$(BUILD)/publication"],text=True); banned=("kui_sci_sd_","kui_loader_sd_","kui_vmu_store_","kui_armada_ce_vmu_sd_","kui_vmu_deferred_io_"); bad=[n for n in s.splitlines() if any(x in n for x in banned)]; assert not bad,bad; print("PASS linked host publication endpoint has no SD, store, loan or deferred worker backend")'

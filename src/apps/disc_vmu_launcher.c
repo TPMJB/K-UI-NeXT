@@ -94,6 +94,8 @@ static const char *probe_refusal(uint32_t stage) {
         return "Virtual VMU unsupported: allocator initializer. R: Save Log; disable VMU in Options.";
     case KUI_DISC_VMU_PROBE_HEAP_CALL:
         return "Virtual VMU unsupported: allocator startup call. R: Save Log; disable VMU in Options.";
+    case KUI_DISC_VMU_PROBE_STARTUP_CLEAR:
+        return "Virtual VMU unsupported: startup RAM clear. R: Save Log; disable VMU in Options.";
     default:
         return "Virtual VMU unsupported: executable format. R: Save Log; disable VMU in Options.";
     }
@@ -132,14 +134,18 @@ static bool selected_card(const char *product,const void *executable,uint32_t ex
         KUI_DISC_LAUNCH_EXEC_ADDRESS,&program_bytes) &&
         kui_vmu_native_resolution_cache_build(executable,program_bytes,KUI_DISC_LAUNCH_EXEC_ADDRESS,
             preflight->wire,sizeof(preflight->wire),&resolution) &&
-        resolution.heap.family==KUI_VMU_NATIVE_HEAP_TAIL32 && resolution.heap.initializer_slot;
+        kui_vmu_native_heap_metadata_valid(&resolution.heap) && resolution.heap.initializer_slot;
     if(compatible) {
         probe.version=KUI_DISC_VMU_PROBE_VERSION;probe.bytes=sizeof(probe);
         probe.stage=KUI_DISC_VMU_PROBE_READY;probe.file_bytes=executable_bytes;
         probe.program_bytes=(uint32_t)program_bytes;probe.file_crc32=kui_stage_crc32(0u,executable,executable_bytes);
         probe.driver_result=KUI_VMU_NATIVE_RESOLVED;probe.heap_result=KUI_VMU_NATIVE_HEAP_FOUND;
         probe.driver=resolution.driver;probe.layout=resolution.layout;probe.heap=resolution.heap;probe.call=resolution.call;
-        preflight->ready=true;
+        struct kui_vmu_native_heap_preclear clear;
+        if(kui_vmu_native_heap_preclear_plan(executable,program_bytes,resolution.driver.image_sha256,
+           &resolution.heap,&resolution.call,&clear)!=0) {
+            probe.stage=KUI_DISC_VMU_PROBE_STARTUP_CLEAR;compatible=false;
+        } else preflight->ready=true;
     } else {
         /* Re-run partial discovery only on refusal, to retain the useful
          * Maple/layout/allocator diagnosis without slowing successful boots. */

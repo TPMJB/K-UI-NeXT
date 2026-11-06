@@ -21,6 +21,8 @@ RESIDENT_FLAGS = $(FLAGS) -DKUI_RETAIL_TRANSPORT=1 -DKUI_RETAIL_ASYNC=1 \
  -flto -mrelax -fcallgraph-info=su
 STAGE_FLAGS = $(FLAGS) -DKUI_NATIVE_STANDALONE_STAGE=1
 LINK = $(CPU) -nostdlib -Wl,--gc-sections -Wl,--build-id=none
+NATIVE_SDK_CALLBACK_ROOT ?= -Wl,-u,_kui_retail_sdk_sci_entry
+NATIVE_IRQ_ROOT ?= -Wl,-u,_kui_retail_async_irq
 RESIDENT_SRC = src/loader/retail_resident.c src/core/retail_gd.c src/loader/minic.c \
  src/core/retail_image.c src/loader/retail_display.c src/loader/sci_sd_bus.c \
  src/core/retail_cursor.c src/loader/sci_stream.c src/loader/retail_async.c
@@ -37,7 +39,7 @@ all: $(BUILD)/retail-standalone-doa2.kui
 force-config:
 $(BUILD)/config: force-config
 	@mkdir -p $(BUILD)
-	@printf '%s\n' '$(BUILD_ID)' '$(FLAGS)' > $@.tmp
+	@printf '%s\n' '$(BUILD_ID)' '$(FLAGS)' '$(RESIDENT_FLAGS)' '$(STAGE_FLAGS)' '$(NATIVE_RESIDENT_LINKER_SCRIPT)' '$(NATIVE_SDK_CALLBACK_ROOT)' '$(NATIVE_IRQ_ROOT)' > $@.tmp
 	@cmp -s $@.tmp $@ || cp $@.tmp $@
 	@rm -f $@.tmp
 $(RESIDENT_OBJ) $(STAGE_OBJ) $(BUILD)/entry_asm.o: $(BUILD)/config
@@ -46,15 +48,16 @@ $(BUILD)/resident/%.o: %.c
 	$(CC) $(RESIDENT_FLAGS) -MMD -MP -c $< -o $@
 $(BUILD)/resident_asm.o: src/loader/retail_resident.S
 	$(CC) $(RESIDENT_FLAGS) -MMD -MP -c $< -o $@
-$(BUILD)/resident-sci.elf: $(RESIDENT_OBJ) src/loader/retail_resident_async_low.ld
+NATIVE_RESIDENT_LINKER_SCRIPT ?= src/loader/retail_resident_async_low.ld
+$(BUILD)/resident-sci.elf: $(RESIDENT_OBJ) $(NATIVE_RESIDENT_LINKER_SCRIPT)
 	$(CC) -fno-tree-scev-cprop $(filter-out -ffunction-sections -fdata-sections,$(RESIDENT_FLAGS)) $(LINK) -save-temps=obj -Wl,--relax \
 	 -Wl,-u,_memcpy -Wl,-u,_memset -Wl,-u,_kui_retail_resident_init \
 	 -Wl,-u,_kui_retail_resident_dispatch -Wl,-u,_kui_retail_gd_dispatch \
-	 -Wl,-u,_kui_retail_async_irq -Wl,-u,_kui_retail_sdk_sci_entry \
-	 -Tsrc/loader/retail_resident_async_low.ld -Wl,-Map,$(BUILD)/resident-sci.map \
+	 $(NATIVE_IRQ_ROOT) $(NATIVE_SDK_CALLBACK_ROOT) \
+ -T$(NATIVE_RESIDENT_LINKER_SCRIPT) -Wl,-Map,$(BUILD)/resident-sci.map \
 	 -o $@ $(RESIDENT_OBJ) -lgcc
 $(BUILD)/resident-sci.bin: $(BUILD)/resident-sci.elf
-	$(OBJCOPY) -O binary $< $@
+	$(OBJCOPY) $(NATIVE_RESIDENT_OBJCOPY_FLAGS) -O binary $< $@
 $(BUILD)/standalone_symbols.h: $(BUILD)/resident-sci.elf tools/native_standalone_symbols.py
 	python3 tools/native_standalone_symbols.py $< $@
 $(BUILD)/stage/%.o: %.c $(BUILD)/standalone_symbols.h

@@ -457,7 +457,9 @@ BAM4_STAGE_LINKED_TARGETS = (
     (0x1e0, 0x8ce1642c, None, 'BOOT SR'),
     (0x1e4, 0x8ce16434, None, 'BOOT CACHE'),
     (0x1e8, 0x8ce14b8a, '_memcpy', None),
-    (0x1f4, 0x8ce15054, '_kui_retail_crc32', None),
+    # Shared cold verification now uses the full byte table. Keep the call
+    # pinned to that exact helper; the resident's compact CRC is separate.
+    (0x1f4, 0x8ce15054, '_kui_stage_crc32', None),
     (0x200, 0x8ce16440, None, 'BOOTSTRAP ALTERED EXECUTABLE'),
     (0x204, 0x8ce14bd2, '_memcmp', None),
     (0x220, 0x8ce10a80, '_armada_stream_controller_valid', None),

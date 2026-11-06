@@ -4,11 +4,23 @@ BUILD ?= build/vmu-native-compat
 include Makefile.vmu-native-performance
 override TEST_ZIP := K-UI-Native-Compatibility-Test.zip
 override TEST_GUIDE := docs/vmu-native-compat-test.md
-FLAGS += -DKUI_VMU_NATIVE_CACHE_PROBE=1
+FLAGS += -DKUI_VMU_NATIVE_CACHE_PROBE=1 \
+ -DKUI_NATIVE_STAGE_FAST_CRC=1 -DKUI_NATIVE_STAGE_FAST_SCAN=1 \
+ -DKUI_NATIVE_CACHED_EXTENT=1 -DKUI_NATIVE_CACHED_RESOLUTION=1
+# Every compatible SDK family inherits the same immutable-proof policy.
+# These optimize temporary-stage work; reader policy and owned resources stay
+# unchanged. Console elapsed time remains a separate measurement.
+$(BUILD)/stage_asm.o: src/loader/native_proof_cache_scope.inc
+# Use the already validated foreground compile policy for every New low
+# reader. Apply it at both compile and LTO link; keep Legacy and workers on
+# their existing policies and preserve all manifest slots and stack guards.
+$(RESIDENT_OBJ): private RESIDENT_FLAGS += -fno-guess-branch-probability -mbranch-cost=1 -fno-caller-saves
+$(BUILD)/resident-sci.elf: private LINK += -fno-guess-branch-probability -mbranch-cost=1 -fno-caller-saves
 override STAGE_SRC += src/core/vmu_native_resolution_cache.c src/core/vmu_native_cache_seed.c src/core/vmu_native_mode.c
 # Included profiles append objects after the base Makefile's prerequisite
 # expansion. Bind the final object sets to the reader/revision stamp as well.
 $(RESIDENT_OBJ) $(STAGE_OBJ) $(NATIVE_OBJ): $(BUILD)/readonly-config
+$(RESIDENT_OBJ) $(STAGE_OBJ): Makefile.vmu-native-compat
 $(BUILD)/stage.elf: $(STAGE_OBJ)
 
 COMPAT_WORKER_HOST_SRC = src/core/vmu_native_heap.c src/core/vmu_native_runtime.c \
@@ -24,6 +36,50 @@ COMPAT_CACHE_HOST_SRC = src/core/vmu_native_program.c src/core/vmu_native_resolu
 .PHONY: compat-host-tests native-placement-host-tests native-lease-alias-host-tests native-lifetime-prepared-host-tests native-layout-root-host-tests native-layout-leaf-host-tests native-layout-tail-host-tests native-heap-fixed-host-tests native-heap-arena-host-tests native-evolution-context-host-tests native-evolution-fault-host-tests
 .PHONY: native-evolution-trace-host-tests native-evolution-trace-persistent-host-tests
 .PHONY: native-exception-capture-host-tests
+.PHONY: native-patch-pool-host-tests native-early-compact-host-tests native-allocator-stage-host-tests
+.PHONY: native-exit-shape-host-tests native-firmware-exit-host-tests
+.PHONY: native-preclear-host-tests native-resume-symbol-host-tests
+native-preclear-host-tests:
+	python3 tests/test_vmu_native_heap_preclear.py '$(TIMESTALKERS_STARTUP)' '$(EGG_STARTUP)'
+
+native-resume-symbol-host-tests:
+	KUI_NATIVE_ARTIFACT_DIR='$(abspath $(BUILD))' python3 tests/test_vmu_native_resume_symbols.py
+
+compat-host-tests: native-patch-pool-host-tests native-early-compact-host-tests native-exit-shape-host-tests native-firmware-exit-host-tests native-allocator-stage-host-tests
+native-allocator-stage-host-tests:
+	python3 tests/test_vmu_native_heap_execution_isa.py
+	python3 tests/test_vmu_native_allocator_stage.py
+
+native-patch-pool-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_patch_literal_pool.c \
+	 src/core/vmu_native_patch.c -o $(BUILD)/test-patch-pool
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-patch-pool $(if $(EGG_STARTUP),'$(EGG_STARTUP)',)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_patch_pool_dag.c \
+	 src/core/vmu_native_patch.c -o $(BUILD)/test-patch-pool-dag
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-patch-pool-dag $(if $(SONIC_ADVENTURE_STARTUP),'$(SONIC_ADVENTURE_STARTUP)',)
+
+native-early-compact-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_early_compact.c \
+	 src/core/vmu_native_exit.c src/core/vmu_native_patch.c src/core/vmu_native_heap.c \
+	 -o $(BUILD)/test-early-compact
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-early-compact
+ifneq ($(strip $(SONIC_ADVENTURE_STARTUP)),)
+	python3 tests/test_vmu_native_early_compact_execution.py --sonic-adventure '$(SONIC_ADVENTURE_STARTUP)'
+endif
+
+native-exit-shape-host-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) tests/test_vmu_native_exit_shape.c -o $(BUILD)/test-exit-shape
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-exit-shape
+
+native-firmware-exit-host-tests:
+	@mkdir -p $(BUILD)
+	CC='$(HOST_CC)' python3 tests/test_vmu_native_firmware_exit.py \
+	 $(if $(FIRMWARE_EXIT_MANIFEST),--original-manifest '$(FIRMWARE_EXIT_MANIFEST)',) \
+	 --report $(BUILD)/firmware-exit-host.json
+
 .PHONY: native-sdk-coherence-install-host-tests
 native-sdk-coherence-install-host-tests:
 	@test -f '$(EVOLUTION1_STARTUP)' && test -f '$(STARTUP)' && test -f '$(SKIES_STARTUP)' && \
@@ -38,7 +94,7 @@ native-sdk-coherence-install-host-tests:
 	 $(if $(EVOLUTION2_STARTUP),tests/fixtures/native-cache/evolution2.nvr,)
 	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -fsanitize=undefined -Iinclude -Isrc/loader \
 	 tests/test_vmu_native_sdk_coherence_install.c src/core/vmu_native_program.c src/core/vmu_native_heap.c \
-	 src/core/vmu_native_exit.c src/core/vmu_native_patch.c src/core/hash.c src/core/data.c \
+	 src/core/vmu_native_exit.c src/core/vmu_native_patch.c src/core/vmu_native_discovery.c src/core/hash.c src/core/data.c \
 	 -o $(BUILD)/test-sdk-coherence-install
 	$(BUILD)/test-sdk-coherence-install '$(EVOLUTION1_STARTUP)' '$(STARTUP)' '$(SKIES_STARTUP)' '$(SA2_STARTUP)' '$(GRANDIA2_STARTUP)' $(if $(EVOLUTION2_STARTUP),'$(EVOLUTION2_STARTUP)',)
 
@@ -258,7 +314,8 @@ native-program-host-tests:
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-program $(if $(EVOLUTION2_STARTUP),'$(EVOLUTION2_STARTUP)',) \
 	 $(if $(EVOLUTION1_STARTUP),'$(EVOLUTION1_STARTUP)',) $(if $(STARTUP),'$(STARTUP)',) \
 	 $(if $(SKIES_STARTUP),'$(SKIES_STARTUP)',) $(if $(SA2_STARTUP),'$(SA2_STARTUP)',) \
-	 $(if $(GRANDIA2_STARTUP),'$(GRANDIA2_STARTUP)',) $(if $(RECV_STARTUP),'$(RECV_STARTUP)',)
+	 $(if $(GRANDIA2_STARTUP),'$(GRANDIA2_STARTUP)',) $(if $(RECV_STARTUP),'$(RECV_STARTUP)',) \
+	 $(if $(SILVER_STARTUP),--direct-suffix '$(SILVER_STARTUP)',)
 
 .PHONY: native-infile-buffers-host-tests
 native-infile-buffers-host-tests:

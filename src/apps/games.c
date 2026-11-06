@@ -2,6 +2,7 @@
 #include "kui/games.h"
 #include "kui/game_image.h"
 #include "kui/game_metadata.h"
+#include "kui/smash_native_child.h"
 #include "kui/games_cdda_status.h"
 #include "kui/games_storage.h"
 #include "kui/hash.h"
@@ -858,8 +859,10 @@ static bool metadata_range(void *ctx,uint32_t lba,uint32_t count) {
  * repeats its own detached executable/runtime checks. */
 static enum kui_game_result tested_audio_status(const struct kui_game_image *image,
         struct image_files *files,const struct kui_game_metadata *metadata,
-        enum kui_game_cdda_compatibility *out,struct kui_game_profile_match *profile,kui_log_fn log) {
-    *out=KUI_GAME_CDDA_UNTESTED;
+        enum kui_game_cdda_compatibility *out,struct kui_game_profile_match *profile,bool *smash_child,kui_log_fn log) {
+    *out=KUI_GAME_CDDA_UNTESTED;*smash_child=false;
+    const bool smash_candidate=image->format==KUI_GAME_IMAGE_GDI && kui_storage_active()==KUI_STORAGE_SCI &&
+        !image->compressed && !image->scrambled && !image->cd_image && kui_smash_native_child_candidate(metadata);
     memset(profile,0,sizeof(*profile));
     unsigned candidate=kui_games_cdda_test_candidate(image,metadata);
     struct kui_game_profile_identity identity={.transport=kui_storage_active(),.format=image->format,
@@ -870,7 +873,7 @@ static enum kui_game_result tested_audio_status(const struct kui_game_image *ima
     snprintf(identity.region,sizeof(identity.region),"%s",metadata->region);
     struct kui_game_profile_pack *pack=malloc(sizeof(*pack));
     if(pack)(void)kui_game_profile_pack_load(pack,log);
-    if(!candidate && !kui_game_profile_candidate(&identity,pack)) {free(pack);return KUI_GAME_OK;}
+    if(!candidate && !smash_candidate && !kui_game_profile_candidate(&identity,pack)) {free(pack);return KUI_GAME_OK;}
     FIL cached;files->identity_reader=&cached;files->identity_open=false;
     struct kui_sha256 hash;kui_sha256_init(&hash);
     uint8_t sector[2048],digest[32];uint32_t ip_crc=0;
@@ -892,6 +895,7 @@ static enum kui_game_result tested_audio_status(const struct kui_game_image *ima
     if(result==KUI_GAME_OK) {
         kui_sha256_digest(&hash,digest);
         *out=kui_games_cdda_test_status(candidate,ip_crc,digest);
+        *smash_child=smash_candidate && kui_smash_native_child_menu_owner(ip_crc,metadata->boot_bytes,digest);
         identity.ip_crc32=ip_crc;memcpy(identity.boot_sha256,digest,sizeof(digest));
         (void)kui_game_profile_query(&identity,pack,profile);
         if(profile->matched && log)log("Game profile: %s; %s. %s",profile->name,
@@ -902,6 +906,63 @@ static enum kui_game_result tested_audio_status(const struct kui_game_image *ima
 }
 bool kui_games_inspect(const char *path,struct kui_games_detail *out,kui_log_fn log,kui_cancel_fn cancel) {
     return kui_games_inspect_with(path,out,NULL,NULL,log,cancel);
+}
+static bool identity_field(const char *text) {
+    if(!text[0])return false;
+    for(const unsigned char *p=(const unsigned char *)text;*p;p++)
+        if(*p<32u || *p>126u || *p=='?')return false;
+    return true;
+}
+struct disc_identity_work {
+    struct image_files files;
+    char descriptor[KUI_DEST_NAME_CAP];
+    uint8_t sector[2048];
+    struct kui_game_metadata metadata;
+    struct kui_game_image image;
+};
+enum kui_games_identity_result kui_games_disc_identity_read(const char *path,
+    struct kui_games_disc_identity *out,kui_log_fn log,kui_cancel_fn cancel) {
+    if(!out)return KUI_GAMES_IDENTITY_ERROR;
+    memset(out,0,sizeof(*out));
+    /* The catalogue page and image decoder remain live on this call path.
+     * Heap-own its IP sector and metadata instead of stacking another large
+     * scratch frame on the bounded storage worker. */
+    struct disc_identity_work *work=calloc(1,sizeof(*work));
+    if(!work)return KUI_GAMES_IDENTITY_ERROR;
+    work->files.cancel=cancel;work->files.log=log;
+    if(!split_file(path,work->files.root,work->descriptor) || stopped(cancel) ||
+       kui_games_storage_open(log)!=KUI_GAMES_STORAGE_OK) {free(work);return KUI_GAMES_IDENTITY_ERROR;}
+    enum kui_games_identity_result result=KUI_GAMES_IDENTITY_UNKNOWN;
+    struct kui_game_image *image=&work->image;
+    const char *descriptor=work->descriptor;
+    /* A compressed selector needs the owner's explicit codec choice. A scan
+     * must not guess a dialect or turn that choice into an I/O failure. */
+    if(!extension(descriptor,".cso") && !extension(descriptor,".chd") && !extension(descriptor,".zso")) {
+        struct kui_game_file_ops ops={&work->files,image_stat,image_read};
+        enum kui_game_result opened=kui_game_image_open_named_codec(descriptor,&ops,KUI_ZSO_LZ4,image);
+        if(opened==KUI_GAME_OK) {
+            struct kui_game_metadata *metadata=&work->metadata;
+            opened=kui_game_image_read(image,image->data_lba,1,KUI_GAME_SECTOR_MODE1,work->sector,sizeof(work->sector));
+            if(opened==KUI_GAME_OK && kui_game_metadata_ip(work->sector,metadata) &&
+               (metadata->native_gd || metadata->native_cd) && metadata->disc_number &&
+               metadata->disc_number<=metadata->disc_total && metadata->disc_total>1u && metadata->disc_total<=9u &&
+               identity_field(metadata->title) && identity_field(metadata->product) &&
+               identity_field(metadata->version) && identity_field(metadata->region)) {
+                strcpy(out->title,metadata->title);strcpy(out->product,metadata->product);
+                strcpy(out->version,metadata->version);strcpy(out->region,metadata->region);
+                out->number=metadata->disc_number;out->total=metadata->disc_total;
+                out->format=(unsigned)image->format;out->media=metadata->native_gd?1u:2u;
+                result=KUI_GAMES_IDENTITY_FOUND;
+            }
+        }
+        if(opened==KUI_GAME_IO || opened==KUI_GAME_NOT_FOUND || opened==KUI_GAME_CANCELLED)
+            result=KUI_GAMES_IDENTITY_ERROR;
+    }
+    free(work);
+    if(stopped(cancel) || !kui_games_storage_done(result!=KUI_GAMES_IDENTITY_ERROR))
+        result=KUI_GAMES_IDENTITY_ERROR;
+    if(result!=KUI_GAMES_IDENTITY_FOUND)memset(out,0,sizeof(*out));
+    return result;
 }
 bool kui_games_inspect_with(const char *path,struct kui_games_detail *out,
     kui_games_mounted_fn mounted,void *ctx,kui_log_fn log,kui_cancel_fn cancel) {
@@ -974,6 +1035,7 @@ bool kui_games_inspect_with_codec(const char *path,enum kui_zso_codec codec,stru
         out->native_gd=metadata.native_gd;
         out->native_cd=metadata.native_cd;
         out->windows_ce=metadata.windows_ce;
+        out->disc_number=metadata.disc_number;out->disc_total=metadata.disc_total;
     }
     if(status!=KUI_GAME_METADATA_OK) {
         problem=status==KUI_GAME_METADATA_IO?kui_game_result_name(files.last):kui_game_metadata_status_text(status);
@@ -985,7 +1047,7 @@ bool kui_games_inspect_with_codec(const char *path,enum kui_zso_codec codec,stru
         problem="Boot executable and full IP must be in boot-session data tracks";goto done;
     }
     out->valid=true;
-    result=tested_audio_status(image,&files,&metadata,&out->cdda_compatibility,&out->profile,log);
+    result=tested_audio_status(image,&files,&metadata,&out->cdda_compatibility,&out->profile,&out->smash_native_child,log);
     if(result!=KUI_GAME_OK) {out->valid=false;problem=kui_game_result_name(result);goto done;}
     out->zso_launch=image->compressed && !out->windows_ce && (out->native_gd || out->native_cd) &&
         kui_storage_active()==KUI_STORAGE_SCI && out->boot_bytes>=KUI_RETAIL_TRAMPOLINE_BYTES &&

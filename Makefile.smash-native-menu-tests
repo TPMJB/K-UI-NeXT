@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/smash-native-menu-host
+HOST_CC ?= cc
+MENU_ENGINE ?=
+MENU_MODULE ?=
+.DEFAULT_GOAL := smash-native-menu-tests
+.PHONY: smash-native-menu-tests
+smash-native-menu-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic \
+	 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-pie -no-pie \
+	 -ffunction-sections -fdata-sections -Iinclude tests/test_smash_native_menu.c \
+	 src/core/smash_native_menu.c src/core/retail_image.c -Wl,--gc-sections -o $(BUILD)/test-menu
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-menu $(MENU_ENGINE) $(MENU_MODULE)

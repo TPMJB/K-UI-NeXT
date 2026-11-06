@@ -73,6 +73,52 @@ GAME_STARTUP_WORKER_PINS={
     '_reader_readahead_visit':(56, 'c44759200e43937665b2987281e995b4f39675f1e05180371aad4078cc02dbf3'),
 }
 
+# Authored from the pristine3a6ae064 session-A1/A2 workers, whose complete
+# five-function TICK closure is identical in both slots. The session getter
+# outlines the address proof and the compiler inlines reader_readahead_visit.
+# Historical General/compact maps above remain exact and unchanged.
+SESSION_READER_WORKER_PINS={
+    '_kui_vmu_native_background_map_address':(92,'431865c1e385488b2c6be9c59219f826be4803aa55d5a8b3e06748a6c9fb3536'),
+    '_reader_capture_region':(64,'b0d90790d2670411cf368b740c55ce3fd994df77f61d9031a681598421cf92fe'),
+    '_reader_readahead_exports':(200,'6cf131abeaf89e6122c3003ddff1b5ff55cc27cdb366c4baddf0895f50df906f'),
+    '_reader_cooperative_service':(100,'e525c8e10f7fb4114bcb6360228f82eaa05ce9867df88a2770629e18cbdc92b2'),
+    '_reader_streaming':(120,'c52e5c8a480339dddc97988974287c96904b6234ca6d5eef2f86ab97a5497e54'),
+}
+ORDINARY_READER_WORKER_PINS={
+    '_reader_capture_region':(100,'f9aed3364566456ed43c326afe080216e07d05d19101f1671f8389a9e47bc7b4'),
+    '_reader_readahead_exports':(200,'9b7231ece11fdec0aebd75b074246625b21147aafedccb6ffdb253e045d9b134'),
+    '_reader_cooperative_service':(100,'b1bfec153bdfb4111eaa74fe0c87bdef4fcb77817ba228ba109dfd5c3605b7f0'),
+    '_reader_streaming':(120,'43c8bf8b3e00375b8479f392e6db5c780fa3d27e5c4e63581bb5a0bdef8c5bce'),
+}
+
+
+def session_worker_pins(worker):
+    from check_native_session_witness_profile import profile,signatures,PINS
+    slot=profile(worker)
+    if slot is None:return None
+    actual=signatures(worker,SESSION_READER_WORKER_PINS)
+    for name,(digest,count,_) in actual.items():
+        require((digest,count)==PINS[slot][name],
+                'Session read-ahead closure changed its authored typed target: '+name)
+    pin(worker,SESSION_READER_WORKER_PINS,'session read-ahead worker')
+    return SESSION_READER_WORKER_PINS
+
+def ordinary_worker_pins(worker):
+    from native_runtime_layout import GENERAL
+    if layout_for(worker[4]) is not GENERAL:return None
+    from check_native_ordinary_general_profile import profile,signatures,aliases,PINS
+    slot=profile(worker)
+    if slot is None:return None
+    actual=signatures(aliases(worker),ORDINARY_READER_WORKER_PINS)
+    for name,(digest,count,_) in actual.items():
+        require((digest,count)==PINS[slot][name],
+                'Ordinary read-ahead closure changed its authored typed target: '+name)
+    pin(worker,ORDINARY_READER_WORKER_PINS,'ordinary read-ahead worker')
+    return ORDINARY_READER_WORKER_PINS
+
+def reviewed_worker_pins(worker):
+    return session_worker_pins(worker) or ordinary_worker_pins(worker)
+
 def profile_pins(worker,stage=None):
     from check_native_game_startup_profile import game_startup_profile
     from check_native_followup_profile import stage_pins,worker_pins
@@ -86,8 +132,13 @@ def profile_pins(worker,stage=None):
             historical_stage,historical_worker=WITNESS_STAGE_PINS,WITNESS_WORKER_PINS
         else:
             historical_stage,historical_worker=STAGE_PINS,WORKER_PINS
-    return (stage_pins(stage,'dual',historical_stage) if stage is not None else historical_stage,
-            worker_pins(worker,'dual',historical_worker))
+    session=reviewed_worker_pins(worker)
+    selected_stage=stage_pins(stage,'dual',historical_stage) if stage is not None else historical_stage
+    if stage is not None:
+        from check_native_general_dual_profile import profile,raw_pins
+        if profile(stage):selected_stage=raw_pins(stage)
+    return (selected_stage,
+            session if session is not None else worker_pins(worker,'dual',historical_worker))
 
 
 def require(test,message):
@@ -96,7 +147,7 @@ def require(test,message):
 
 def low_callback_companion(artifacts, proof):
     """A blob selector alone cannot prove its cold callback entry points."""
-    from check_native_dual_callbacks import SCHEMA, FIELDS
+    from check_native_dual_callbacks import SCHEMA, FIELDS, PINS, ARM, PRECLEAR_ARM_PIN, LITERAL_ROLES, PRECLEAR_ARM_ROLES
     require(isinstance(proof,dict) and proof.get('schema')==SCHEMA and
             proof.get('enabled') is True and proof.get('actual_linked_stage_executed') is True,
             'dual reader requires the executed selected low-callback proof')
@@ -111,11 +162,28 @@ def low_callback_companion(artifacts, proof):
                 for value in row.values()) for row in roles.values()),
             'dual low-callback proof omits a typed selected-reader role')
     selector=proof.get('selector',{});consumer=proof.get('consumers',{})
+    if proof.get('session_controls') is True:
+        from check_native_session_callbacks import require_companion
+        return require_companion(proof)
+    # The two arming matrices belong to exact reviewed callback variants.
+    # Historical artifacts still require 24 cases; the preclear publisher
+    # additionally executes all 24 cases with its typed tail installer active.
+    pins=proof.get('exact_named_role_instruction_pins',{})
+    arm=pins.get(ARM,{})
+    preclear=(arm.get('bytes'),arm.get('named_role_canonical_sha256'))==PRECLEAR_ARM_PIN
+    expected_pins={**PINS,ARM:PRECLEAR_ARM_PIN} if preclear else PINS
+    require(set(pins)==set(expected_pins) and all(
+        pins[name].get('bytes')==count and pins[name].get('named_role_canonical_sha256')==digest and
+        pins[name].get('exact_named_literal_words')==len(PRECLEAR_ARM_ROLES if preclear and name==ARM else LITERAL_ROLES[name])
+        for name,(count,digest) in expected_pins.items()),
+        'dual low-callback proof lacks its exact reviewed publisher variant')
+    require(not preclear or consumer.get('both_preheap_and_normal_installer_targets_checked') is True,
+        'dual preclear publisher lacks both installer branch executions')
     require(selector.get('actual_linked_selector_cases')==210 and
             selector.get('unsupported_mode_refusals')==198 and
             all(selector.get(key) is True for key in ('all_six_roles_from_selected_actual_elf',
                 'exact_immutable_row_pointer','c_abi_preserved','no_interrupt_register_or_nonstack_writes')) and
-            consumer.get('actual_linked_arming_cases')==24 and
+            consumer.get('actual_linked_arming_cases')==(48 if preclear else 24) and
             consumer.get('actual_linked_configuration_cases')==24 and
             consumer.get('actual_linked_manifest_binding_cases')==96 and
             consumer.get('arming_ownership_refusals')==48 and
@@ -222,6 +290,35 @@ def capability(stage,module):
     return dict(address=hex(address),bytes=32,sha256=sha(body),exactly_one_in_stage_and_module=True)
 
 
+def controller_slot_binding(stage,module,worker):
+    """Tie the reviewed worker address to this exact stage's normal/Off mode.
+
+    Compact A1 predates a slot scalar, so its paired whole-function pins and
+    executed response semantics establish the slot. The stage must carry the
+    matching immutable captions and its unique typed canonical mode0 record;
+    a filename or caller-selected slot cannot authorize another worker.
+    """
+    from check_native_controller_failure_witness import slot_instructions
+    slot=slot_instructions(worker)
+    if not slot.get('compact'):return slot
+    require(layout_for(stage[4]) is BACKGROUND_COMPACT,'Compact virtual-slot worker needs its matching stage')
+    address,body,section=symbol_bytes(stage,'__native_runtime_mode_start',1)
+    expected=struct.pack('<8s6I',b'KUINVM01',1,32,0,0,0,0)
+    payload=b''.join(stage[0][p[1]:p[1]+p[4]] for p in stage[2] if p[0]==1 and p[4])
+    require(section[2]&7==2 and not address&3 and body==expected and
+            payload.count(body)==module.count(body)==1,
+            'Compact slot mode must be its unique immutable typed32B normal-mode descriptor')
+    selected=slot['virtual_slot'];other=3-selected
+    for mode in ('ON','OFF'):
+        caption=('NEW READER / VIRTUAL A%d %s\0'%(selected,mode)).encode()
+        foreign=('VIRTUAL A%d %s'%(other,mode)).encode()
+        require(payload.count(caption)==module.count(caption)==1 and foreign not in payload and foreign not in module,
+                'Compact controller slot differs from its immutable stage/module caption')
+    return {**slot,'descriptor_address':hex(address),'normal_mode':0,'off_mode':7,
+            'descriptor_sha256':sha(body),'exactly_one_mode_descriptor':True,
+            'paired_on_off_captions':True}
+
+
 def embedded_blobs(stage,resident,legacy,directory):
     result={}
     for role,image,filename,prefix in (
@@ -302,6 +399,7 @@ def dual_companion(worker,proof):
             visits.get('only_private_stream_history_and_caller_stack_written') is True and
             visits.get('c_abi_preserved') is True and visits.get('actual_stream_guard_cases',0)>=164 and
             visits.get('actual_busy_refusal_cases',0)>=12 and visits.get('actual_imask_and_bank_cases',0)>=128)
+        compact_budget_family_companion(worker,visits)
     else:worker_events=visits.get('heartbeat_and_capture_start_checked') is True
     require(selected.get('actual_linked_selector_cases',0)>=1600 and
             selected.get('actual_capability_bit_mutations_before_mode_reads')==256 and
@@ -375,7 +473,8 @@ def tail_contract(directory,stage,resident,worker,proof=None):
                    progress='__kui_native_cold_progress_stage' in stage[4],
                    owned_timers=game_startup_profile(worker,resident))
     if proof is None:
-        proof=check_stage(stage,resident,read_elf(directory/'native-ra-aux.elf'),self_test=False,worker=worker)
+        proof=check_stage(stage,resident,read_elf(directory/'native-ra-aux.elf'),self_test=False,worker=worker,
+                          legacy=read_elf(directory/'resident-legacy.elf'))
     actual=proof.get('exact_instruction_literal_pins',{})
     require(proof.get('actual_linked_cold_binder_executed') is True and
             proof.get('actual_auxiliary_c_initializer_executed') is True and
@@ -541,10 +640,10 @@ class DualWorkerCPU(ScalarOps,BoundExecution,WorkerCPU):
 
 
 class GeneralWorkerCPU(DualWorkerCPU):
-    """The actual General cooperative service, including its inlined getter.
+    """The actual General cooperative service, including its guarded getter.
 
-    Only its final auxiliary gateway is an ABI substitute. The three complete
-    pinned functions execute; unknown code, dependent reads after a rejected
+    Only its final auxiliary gateway is an ABI substitute. The complete pinned
+    closure executes; unknown code, dependent reads after a rejected
     payload, and writes outside stream history/private stack are refused.
     """
     def __init__(self,resident,worker,payload,variant,layout,pins):
@@ -567,6 +666,22 @@ class GeneralWorkerCPU(DualWorkerCPU):
                 self.durable[0]<=v<=self.durable[0]+self.durable[1]-4 for v in self.busy_fields),
                 'General durable busy fields escape their SH-compiled object layout')
         self.initial=self.snapshot();self.writes=[];self.durable_reads=set()
+        self.reviewed_pins=pins
+        if '__kui_native_readahead_tick_budget_worker' in worker[4]:
+            self.set_family(1,layout)
+
+    def set_family(self,family,layout):
+        if family==3:
+            reviewed=reviewed_worker_pins(self.worker)
+            from check_native_compact_background_profile import worker_profile,worker_pins
+            require(reviewed is not None or worker_profile(self.worker),
+                    'early-P2 budget fixture requires an exact reviewed 100-byte closure')
+            selected=reviewed if reviewed is not None else worker_pins(self.worker,'dual')
+            require(self.reviewed_pins==selected,'early-P2 fixture lacks the complete selected compact pins')
+            pin(self.worker,selected,'compact early-P2 cooperative worker')
+        else:require(family in (1,2),'worker budget fixture requires an admitted family')
+        self.write(self.worker[4]['_config'][0]+layout['config_driver_family'],family)
+        self.expected_arg=int(family in (2,3))
 
     def read(self,address,count=4):
         if getattr(self,'no_dependent_reads',False):
@@ -600,27 +715,57 @@ class GeneralWorkerCPU(DualWorkerCPU):
         return self.calls-calls
 
 
+def compact_budget_family_companion(worker,proof):
+    from check_native_compact_background_profile import worker_profile,worker_pins
+    if not worker_profile(worker):return False
+    pin(worker,worker_pins(worker,'dual'),'compact early-P2 budget companion')
+    require(worker[4].get('__kui_native_readahead_tick_budget_worker')==(1,0,0,0xfff1) and
+            proof.get('early_budget_driver_families')==[2,3] and
+            proof.get('early_p2_family_one_block_argument_checked') is True and
+            type(proof.get('actual_early_p2_budget_worker_cases')) is int and
+            proof['actual_early_p2_budget_worker_cases']>0,
+            'Compact budget companion lacks actual early-P2 family3 execution')
+    return True
+
+
 def general_worker_cases(resident,worker,layout,*,expected_pins=None):
     """Execute General's real TICK path, never a synthesized capture callback."""
     from check_native_general_lean_profile import worker_profile,worker_pins
     require(worker_profile(worker),'General cooperative proof requires its complete marked profile')
-    selected=worker_pins(worker,'dual',{})
+    session_pins=session_worker_pins(worker)
+    session=session_pins is not None
+    ordinary_pins=ordinary_worker_pins(worker)
+    ordinary=ordinary_pins is not None
+    selected=session_pins if session else ordinary_pins if ordinary else worker_pins(worker,'dual',{})
+    from check_native_compact_background_profile import worker_profile as compact_worker
+    compact=compact_worker(worker)
+    budget_marker=worker[4].get('__kui_native_readahead_tick_budget_worker')
+    budget=budget_marker is not None
+    require(not budget or budget_marker==(1,0,0,0xfff1),
+            'General TICK budget marker is not absolute one')
+    require(not (session or ordinary) or budget and not compact,
+            'Session read-ahead requires its exact full General TICK-budget profile')
     require(expected_pins is None or expected_pins==selected,
             'General read-ahead and dual companions selected different immutable worker functions')
-    require(set(selected)=={'_reader_capture_region','_reader_cooperative_service','_reader_streaming'} and
-            selected['_reader_capture_region'][0]==100 and
-            selected['_reader_cooperative_service'][0]==248 and
-            selected['_reader_streaming'][0]==120,
-            'General cooperative service lacks its closed three-function instruction map')
+    names={'_reader_capture_region','_reader_cooperative_service','_reader_streaming'}
+    if session:names.add('_kui_vmu_native_background_map_address')
+    if budget:names.add('_reader_readahead_exports')
+    require(set(selected)==names and
+            selected['_reader_capture_region'][0]==(64 if session else 100) and
+            selected['_reader_cooperative_service'][0]==(100 if session or ordinary else (100 if compact else 96) if budget else 248) and
+            selected['_reader_streaming'][0]==120 and
+            (not budget or selected['_reader_readahead_exports'][0]==200),
+            'General cooperative service lacks its closed reviewed instruction map')
     pinned=pin(worker,selected,'General cooperative worker')
-    require(all(name not in worker[4] for name in
-                ('_reader_readahead_exports','_reader_readahead_visit','_reader_capture_start')),
-            'General proof cannot substitute a separately emitted getter or PROFILE capture path')
+    absent=('_reader_readahead_visit','_reader_capture_start')
+    if not budget:absent=('_reader_readahead_exports',*absent)
+    require(all(name not in worker[4] for name in absent),
+            'General proof cannot substitute an unreviewed getter or PROFILE capture path')
     g=layout_for(worker[4]);maximum=0x0d000000-g.LEASE_BYTES
     payloads=(0x0c400000,0x8c400000,0xac400000,maximum)
     variants=('valid','magic','version','bytes','image_low','image_high','entry_low','entry_high',
               'bound_entry','bound_context','context_low','context_at_public_limit','context_high')
-    cases=refusals=stream_cases=busy_cases=abi_cases=0
+    cases=refusals=stream_cases=busy_cases=abi_cases=budget_cases=p2_budget_cases=0
     for payload in payloads:
         for variant in variants:
             c=GeneralWorkerCPU(resident,worker,payload,variant,layout,selected)
@@ -684,7 +829,47 @@ def general_worker_cases(resident,worker,layout,*,expected_pins=None):
             assert c.execute(name)==0 and not c.aux_reads and not c.map_reads and not c.vector_reads
             if name=='_reader_capture_region':assert c.r[0]==0
             cases+=1;refusals+=1
-    return dict(actual_linked_worker_cases=cases,actual_worker_binding_cases=cases,
+    if budget:
+        # Family1 keeps arg0. Replay every existing early-family admission,
+        # IRQ/bank, busy, stream and alias case for family2, and additionally
+        # family3 only after the exact current compact100-byte closure passes.
+        for family in ((2,3) if compact or session or ordinary else (2,)):
+            before_family=budget_cases
+            for payload in payloads:
+                for variant in variants:
+                    c=GeneralWorkerCPU(resident,worker,payload,variant,layout,selected)
+                    c.set_family(family,layout)
+                    accepted=variant in ('valid','context_at_public_limit')
+                    assert c.execute()==int(accepted)
+                    cases+=1;budget_cases+=1;refusals+=not accepted
+                for mask in range(16):
+                    for bank in (0,1):
+                        c=GeneralWorkerCPU(resident,worker,payload,'valid',layout,selected)
+                        c.set_family(family,layout);c.set_sr((c.sr&~0x200000f0)|(bank<<29)|(mask<<4))
+                        assert c.execute()==1
+                        cases+=1;budget_cases+=1;abi_cases+=1
+                for handling,inflight in ((1,0),(0,1),(MASK,MASK)):
+                    c=GeneralWorkerCPU(resident,worker,payload,'valid',layout,selected)
+                    c.set_family(family,layout)
+                    for address,value in zip(c.busy_fields,(handling,inflight)):c.write(address,value)
+                    c.forbid_aux=True
+                    assert c.execute()==0 and not c.aux_reads and not c.vector_reads
+                    assert c.durable_reads==set(c.busy_fields)
+                    cases+=1;budget_cases+=1;refusals+=1
+                for total,called in ((0,1),(96,1),(97,0),(256,0)):
+                    c=GeneralWorkerCPU(resident,worker,payload,'valid',layout,selected)
+                    c.set_family(family,layout);c.set_stream(last=0,primed=1);c.set_blocks(layout,total)
+                    assert c.execute()==called
+                    cases+=1;budget_cases+=1;stream_cases+=1
+            for payload in invalid_payloads:
+                c=GeneralWorkerCPU(resident,worker,0x8c400000,'valid',layout,selected)
+                c.set_family(family,layout)
+                c.write(worker[4]['_config'][0]+layout['config_payload'],payload)
+                c.forbid_aux=c.forbid_map=c.no_dependent_reads=True
+                assert c.execute()==0 and not c.aux_reads and not c.map_reads and not c.vector_reads
+                cases+=1;budget_cases+=1;refusals+=1
+            if family==3:p2_budget_cases=budget_cases-before_family
+    result=dict(actual_linked_worker_cases=cases,actual_worker_binding_cases=cases,
         refusal_cases=refusals,modeled_worker_entry='_reader_cooperative_service',
         actual_stream_guard_cases=stream_cases,actual_busy_refusal_cases=busy_cases,
         actual_imask_and_bank_cases=abi_cases,all_three_lease_aliases_and_highest_lease=True,
@@ -693,11 +878,23 @@ def general_worker_cases(resident,worker,layout,*,expected_pins=None):
         null_region_and_invalid_config_payloads_refused_before_dependent_reads=True,
         malformed_aux_headers_and_public_context_bounds_refused=True,
         both_durable_writer_busy_fields_refused=True,actual_tick_arguments_checked=True,
+        tick_budget_profile=budget,actual_early_budget_worker_cases=budget_cases,
+        early_family_one_block_argument_checked=budget,
+        later_family_default_pair_argument_checked=budget,
+        early_budget_keeps_stream_busy_payload_and_header_guards=budget,
         capture_start_not_present_in_general_profile=True,
         rolling_stream_threshold_saturation_reset_and_resume_checked=True,
         only_private_stream_history_and_caller_stack_written=True,c_abi_preserved=True,
         immutable_function_pins=pinned,
         c_auxiliary_target='ABI substitute; complete auxiliary gateway proved separately')
+    if session:result.update(session_read_ahead_profile=True,
+        complete_five_function_tick_closure=True,
+        baseline_source='3a6ae064bb3f456da8d71587a8db0ce974f139cf')
+    if (compact or session or ordinary) and budget:
+        result.update(early_budget_driver_families=[2,3],
+            actual_early_p2_budget_worker_cases=p2_budget_cases,
+            early_p2_family_one_block_argument_checked=True)
+    return result
 
 
 def worker_cases(resident,worker,layout):
@@ -813,6 +1010,16 @@ def check(directory,*,self_test=False,cold_binder_proof=None,witness_proof=None)
                 changed=copy.deepcopy(low_callbacks)
                 changed[category][key]=False if type(value) is bool else 0
                 malformed.append(changed)
+        for name in low_callbacks['exact_named_role_instruction_pins']:
+            for field in ('bytes','named_role_canonical_sha256','exact_named_literal_words'):
+                changed=copy.deepcopy(low_callbacks)
+                changed['exact_named_role_instruction_pins'][name][field]=0
+                malformed.append(changed)
+        changed=copy.deepcopy(low_callbacks);changed['exact_named_role_instruction_pins']={};malformed.append(changed)
+        # A current publisher cannot reuse the historical one-branch matrix.
+        if low_callbacks['consumers']['actual_linked_arming_cases']==48:
+            changed=copy.deepcopy(low_callbacks);changed['consumers']['actual_linked_arming_cases']=24
+            malformed.append(changed)
         for changed in malformed:
             try:low_callback_companion(low_artifacts,changed)
             except (ValueError,KeyError,TypeError):callback_refusals+=1
@@ -826,10 +1033,13 @@ def check(directory,*,self_test=False,cold_binder_proof=None,witness_proof=None)
         witness_proof=check_witness(directory,self_test=self_test) if witness_profile(worker) else {'enabled':False}
     witness_companion(worker,{'controller_failure_witness':witness_proof})
     module=(directory/'retail-maple-observe.kui').read_bytes()
-    cap=capability(stage,module);blobs=embedded_blobs(stage,resident,legacy,directory)
+    cap=capability(stage,module);slot_binding=controller_slot_binding(stage,module,worker)
+    blobs=embedded_blobs(stage,resident,legacy,directory)
     geometry=layout_for(stage[4])
+    from check_native_session_witness_profile import profile as session_profile
     layouts=console_layouts(general=geometry.WORKER_BYTES in (0x1c000,0x12000),
-                            compact=geometry is BACKGROUND_COMPACT);layout=layouts['layouts']['x']
+                            compact=geometry is BACKGROUND_COMPACT,
+                            session=session_profile(worker) is not None);layout=layouts['layouts']['x']
     tail=tail_contract(directory,stage,resident,worker,cold_binder_proof)
     selection=selector_cases(resident,stage);binding=binding_cases(resident,stage,worker)
     binding.update(tail)
@@ -899,7 +1109,7 @@ def check(directory,*,self_test=False,cold_binder_proof=None,witness_proof=None)
         compact_background=compact,
         artifact_sha256={name:sha(image[0]) for name,image in
                          (('resident',resident),('legacy',legacy),('stage',stage),('worker',worker))},
-        capability=cap,embedded_engines=blobs,immutable_stage_pins=stage_pins,immutable_worker_pins=worker_pins,
+        capability=cap,virtual_card_slot=slot_binding,embedded_engines=blobs,immutable_stage_pins=stage_pins,immutable_worker_pins=worker_pins,
         controller_failure_witness=witness_proof,
         selected_low_callbacks=low_callbacks,
         selected_low_callback_companion_mutation_rejections=callback_refusals,

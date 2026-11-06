@@ -46,6 +46,7 @@ enum kui_scan_result kui_recovery_scan(const char *directory,
 struct kui_scan_manifest {
     struct kui_capture_plan plan;
     uint8_t identity[32];
+    unsigned disc_number,disc_total; /* Optional IP presentation fields, or 0/0. */
     bool crc_only;
     enum kui_capture_format format;
     char gdi[KUI_DEST_TITLE_CAP+5u];

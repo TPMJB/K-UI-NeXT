@@ -70,12 +70,14 @@ static void normalized_mutations(uint8_t *p,const uint8_t *original,size_t n,siz
     }
     /* A second initializer remains ambiguous even if only the first has a
      * startup call; a counterfeit replacement with the old call fails too. */
-    size_t old=h.initializer-load,copy=0x1000u;CHECK(old+0x260u<prefix && copy+0x400u<prefix);
-    memcpy(p,original,n);memcpy(p+copy,p+old,0x260u);
-    size_t pool=literal_slot(copy+0x4eu,u16(p+copy+0x4eu));CHECK(pool+4u<copy+0x260u);
-    put32(p+pool,load+(uint32_t)copy+0x300u);
-    put32(p+copy+0x300u,load+(uint32_t)copy+0xe2u);
-    put32(p+copy+0x304u,load+(uint32_t)copy+0x1b0u);
+    size_t old=h.initializer-load,copy=0x1000u;CHECK(old+0x268u<prefix && copy+0x400u<prefix);
+    memcpy(p,original,n);memcpy(p+copy,p+old,h.family==KUI_VMU_NATIVE_HEAP_DIRECT32?0x268u:0x260u);
+    if(h.family!=KUI_VMU_NATIVE_HEAP_DIRECT32) {
+        size_t pool=literal_slot(copy+0x4eu,u16(p+copy+0x4eu));CHECK(pool+4u<copy+0x260u);
+        put32(p+pool,load+(uint32_t)copy+0x300u);
+        put32(p+copy+0x300u,load+(uint32_t)copy+0xe2u);
+        put32(p+copy+0x304u,load+(uint32_t)copy+0x1b0u);
+    }
     refused(p,n,load);
     p[old]^=1u;refused(p,n,load);
     /* Two independently complete startup calls cannot choose the reclaimed
@@ -195,7 +197,46 @@ static void actual(const char *path) {
     printf("  Program extent: %s source=%zu program=%zu\n",path,n,prefix);
     free(original);free(p);
 }
+/* Direct reclamation is specific to the independently verified trailing IP.
+ * The ordinary short-tail path must retain its dispatch-only policy. */
+static void direct_suffix_verified(const char *path) {
+    FILE *f=fopen(path,"rb");CHECK(f);CHECK(!fseek(f,0,SEEK_END));long length=ftell(f);
+    CHECK(length>0x8300 && length<=0xc00000);rewind(f);size_t n=(size_t)length;
+    uint8_t *p=malloc(n),*original=malloc(n);CHECK(p && original);
+    CHECK(fread(p,1,n,f)==n);CHECK(!fclose(f));memcpy(original,p,n);
+    struct kui_vmu_native_heap h;struct kui_vmu_native_heap_call call;
+    CHECK(kui_vmu_native_heap_discover(p,n,load,&h)==KUI_VMU_NATIVE_HEAP_FOUND);
+    CHECK(h.family==KUI_VMU_NATIVE_HEAP_DIRECT32 && h.layout==KUI_VMU_NATIVE_HEAP_DIRECT);
+    CHECK(kui_vmu_native_heap_call_discover(p,n,&h,&call));
+    CHECK(!memcmp(p+n-0x8000u,"SEGA SEGAKATANA SEGA ENTERPRISES",32u));
+    CHECK((call.entry_begin&0x1fffffffu)==(load&0x1fffffffu)+(uint32_t)n-0x8000u+32u);
+    size_t prefix=n-0x8000u,got=SIZE_MAX;
+    CHECK(kui_vmu_native_program_extent(p,n,load,&got) && got==prefix);
+    CHECK(!memcmp(p,original,n));
+    normalized_mutations(p,original,n,prefix);
+    memcpy(p,original,n);unsigned ends=0;
+    for(size_t at=0;at+4u<=prefix;at+=4u) {
+        uint32_t value=(uint32_t)u16(p+at)|(uint32_t)u16(p+at+2u)<<16;
+        if((value&0x1fffffffu)==(load&0x1fffffffu)+prefix) {
+            put32(p+at,value-32u);++ends;
+        }
+    }
+    CHECK(ends==1u);
+    for(size_t tail=1u;tail<=8u;tail++) {
+        struct kui_vmu_native_heap owner;struct kui_vmu_native_heap_call caller;
+        CHECK(kui_vmu_native_heap_discover(p,prefix+tail,load,&owner)==KUI_VMU_NATIVE_HEAP_FOUND);
+        CHECK(kui_vmu_native_heap_call_discover(p,prefix+tail,&owner,&caller));
+        CHECK((caller.entry_begin&0x1fffffffu)==(load&0x1fffffffu)+prefix);
+        CHECK(kui_vmu_native_program_extent(p,prefix+tail,load,&got) && got==prefix+tail);
+    }
+    printf("  Direct-family verified IP suffix; ordinary short tails retained: %s\n",path);
+    free(original);free(p);
+}
 int main(int argc,char **argv) {
-    scalar_tests();for(int i=1;i<argc;i++) actual(argv[i]);
+    scalar_tests();for(int i=1;i<argc;i++) {
+        if(!strcmp(argv[i],"--direct-suffix")) {
+            CHECK(i+1<argc);direct_suffix_verified(argv[++i]);
+        } else actual(argv[i]);
+    }
     printf("Native program extent: %u checks passed\n",checks);return 0;
 }

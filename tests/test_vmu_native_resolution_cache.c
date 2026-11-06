@@ -27,6 +27,13 @@ static bool strict(const void *image,size_t n,uint32_t address,const void *wire,
     if(!result) CHECK(!memcmp(out,&before,sizeof(before)));
     return result;
 }
+static bool replay_hashed(const void *image,size_t n,uint32_t address,const void *wire,size_t bytes,
+    const uint8_t expected[32],const uint8_t image_hash[32],struct kui_vmu_native_resolution *out) {
+    memset(out,0xa5,sizeof(*out));struct kui_vmu_native_resolution before=*out;
+    bool result=kui_vmu_native_resolution_cache_replay_hashed(image,n,address,wire,bytes,expected,image_hash,out);
+    if(!result)CHECK(!memcmp(out,&before,sizeof(before)));
+    return result;
+}
 static void mock(const uint8_t *image,size_t n,struct kui_vmu_native_resolution *r) {
     /* Test-only stand-in for the independently trusted complete proof. Its
      * nonsensical addresses deliberately cannot pass strict discovery: this
@@ -45,6 +52,32 @@ static void mock(const uint8_t *image,size_t n,struct kui_vmu_native_resolution 
     r->exits.family=KUI_VMU_NATIVE_EXIT_FAMILY;r->exits.load=load;
     r->exits.image_bytes=(uint32_t)n;r->exits.count=3u;r->exits.entries[3]=0u;
 }
+static void fresh_hash_replay_tests(void) {
+    uint8_t image[1024],wire[1024],pin[32],fresh[32],changed[32];
+    for(unsigned i=0;i<sizeof(image);i++)image[i]=(uint8_t)(i*17u+1u);
+    struct kui_vmu_native_resolution source,out;mock(image,sizeof(image),&source);
+    CHECK(kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
+    CHECK(kui_vmu_native_resolution_cache_record_digest(wire,sizeof(wire),pin));
+    digest(image,sizeof(image),fresh);
+    CHECK(replay_hashed(image,sizeof(image),load,wire,sizeof(wire),pin,fresh,&out));
+    CHECK(!memcmp(&source,&out,sizeof(out)));
+    for(unsigned i=0;i<sizeof(fresh);i++) {
+        memcpy(changed,fresh,sizeof(changed));changed[i]^=1u;
+        CHECK(!replay_hashed(image,sizeof(image),load,wire,sizeof(wire),pin,changed,&out));
+    }
+    image[400]^=1u;digest(image,sizeof(image),changed);
+    CHECK(!replay_hashed(image,sizeof(image),load,wire,sizeof(wire),pin,changed,&out));image[400]^=1u;
+    CHECK(!replay_hashed(image,sizeof(image)-1u,load,wire,sizeof(wire),pin,fresh,&out));
+    CHECK(!replay_hashed(image,sizeof(image),load+4u,wire,sizeof(wire),pin,fresh,&out));
+    CHECK(!replay_hashed(image,sizeof(image),load,wire,sizeof(wire),pin,wire+32u,&out));
+    CHECK(!replay_hashed(image,sizeof(image),load,wire,sizeof(wire),pin,image,&out));
+    CHECK(!replay_hashed(image,sizeof(image),load,wire,sizeof(wire),pin,pin,&out));
+    CHECK(!replay_hashed(image,sizeof(image),load,wire,sizeof(wire),wire+992u,fresh,&out));
+    CHECK(!replay_hashed(image,sizeof(image),load,wire,sizeof(wire),pin,NULL,&out));
+    CHECK(!kui_vmu_native_resolution_cache_replay_hashed(image,sizeof(image),load,wire,sizeof(wire),pin,(const uint8_t *)&out,&out));
+    wire[300]^=1u;
+    CHECK(!replay_hashed(image,sizeof(image),load,wire,sizeof(wire),pin,fresh,&out));
+}
 /* An arena lease's owner names only the image and the borrowed literal; its
  * call returns after the borrowed JSR/delay slot and names a nonempty arena. */
 static void arena_record(struct kui_vmu_native_resolution *r) {
@@ -52,6 +85,65 @@ static void arena_record(struct kui_vmu_native_resolution *r) {
         .family=KUI_VMU_NATIVE_HEAP_ARENA,.image_bytes=r->driver.image_bytes,.load=r->driver.load_address,
         .initializer_slot=r->driver.load_address+0x100u};
     r->call.return_pr=r->call.call+4u;
+}
+static void direct_record(struct kui_vmu_native_resolution *r) {
+    uint32_t initializer=r->driver.load_address+0x100u,sentinel=r->driver.load_address+0x1000u;
+    r->heap=(struct kui_vmu_native_heap){.version=KUI_VMU_NATIVE_HEAP_VERSION,.bytes=sizeof(r->heap),
+        .family=KUI_VMU_NATIVE_HEAP_DIRECT32,.layout=KUI_VMU_NATIVE_HEAP_DIRECT,
+        .image_bytes=r->driver.image_bytes,.load=r->driver.load_address,
+        .initializer=initializer,.initializer_slot=r->driver.load_address+0x40u,.initializer_target=initializer,
+        .allocate=initializer+0xaeu,.release=initializer+0x160u,.sentinel=sentinel,
+        .cursor_cell=sentinel+0x20u,.begin_cell=sentinel+0x24u,
+        .bytes_cell=sentinel+0x28u,.begin_copy_cell=sentinel+0x2cu};
+}
+static void direct_codec_tests(void) {
+    uint8_t image[1024]={0},wire[1024],original[1024],pin[32];
+    struct kui_vmu_native_resolution source,out;
+    mock(image,sizeof(image),&source);direct_record(&source);
+    CHECK(kui_vmu_native_heap_metadata_valid(&source.heap));
+    CHECK(kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
+    CHECK(get32(wire+20u)==1u && get32(wire+616u)==KUI_VMU_NATIVE_HEAP_DIRECT32 &&
+        get32(wire+620u)==KUI_VMU_NATIVE_HEAP_DIRECT && !get32(wire+652u) && !get32(wire+656u));
+    CHECK(kui_vmu_native_resolution_cache_record_digest(wire,sizeof(wire),pin));
+    CHECK(replay(image,sizeof(image),load,wire,sizeof(wire),pin,&out));CHECK(!memcmp(&source,&out,sizeof(out)));
+    CHECK(!strict(image,sizeof(image),load,wire,sizeof(wire),&out));
+    memcpy(original,wire,sizeof(wire));
+    /* Repaired integrity cannot give the direct family a dispatch table,
+     * change a decoded role, or disguise it as a fixed-arena record. */
+    const unsigned offsets[]={616u,620u,632u,636u,640u,644u,648u,652u,656u,660u,664u,668u,672u,676u};
+    for(unsigned i=0;i<sizeof(offsets)/sizeof(offsets[0]);i++) {
+        memcpy(wire,original,sizeof(wire));wire[offsets[i]]^=offsets[i]==636u?1u:4u;seal(wire);
+        CHECK(!kui_vmu_native_resolution_cache_record_digest(wire,sizeof(wire),pin));
+        memcpy(pin,wire+992u,sizeof(pin));CHECK(!replay(image,sizeof(image),load,wire,sizeof(wire),pin,&out));
+    }
+    mock(image,sizeof(image),&source);direct_record(&source);source.heap.initializer_slot=0u;
+    source.heap.initializer_target=0u;source.call.return_pr=source.call.call+4u;
+    CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
+    direct_record(&source);source.heap.dispatch_cell=source.heap.sentinel-4u;
+    CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
+    direct_record(&source);source.heap.dispatch_table=load+0x80u;
+    CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
+    /* Direct initializer pointers may retain a valid physical RAM alias. */
+    direct_record(&source);source.heap.initializer_target+=UINT32_C(0x20000000);
+    CHECK(kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
+    /* Tagging an authored record as the P2-lock early driver grants no
+     * source authority. Its scalar call ordering is mandatory even before
+     * the trusted replay re-proves the immutable public call body. */
+    mock(image,sizeof(image),&source);direct_record(&source);
+    source.driver.family=KUI_VMU_NATIVE_FAMILY_EARLY_P2_V1;
+    source.call.call=load+0x80u;source.call.load=source.call.call-12u;
+    source.call.return_pr=source.call.call+4u;
+    source.layout.initializer_call=source.call.call+26u;
+    CHECK(kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
+    CHECK(kui_vmu_native_resolution_cache_record_digest(wire,sizeof(wire),pin));
+    CHECK(!replay(image,sizeof(image),load,wire,sizeof(wire),pin,&out));
+    source.layout.initializer_call-=2u;
+    CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
+    source.layout.initializer_call=source.call.call+26u;
+    source.heap.family=KUI_VMU_NATIVE_HEAP_TAIL32;source.heap.layout=KUI_VMU_NATIVE_HEAP_DISPATCH2;
+    source.heap.initializer_slot=source.heap.initializer_target=0u;
+    source.call.return_pr=source.call.call+4u;source.call.entry_bytes=0x100u;
+    CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
 }
 static void codec_and_trust_tests(void) {
     uint8_t image[1024],wire[1024],original[1024],pin[32],changed[32];
@@ -149,12 +241,18 @@ static void codec_and_trust_tests(void) {
     CHECK(!kui_vmu_native_resolution_cache_encode(&source,&source,1024u));
     source.layout.inputs=24u;CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
     CHECK(!memcmp(wire,original,sizeof(wire)));
-    for(unsigned family=KUI_VMU_NATIVE_EXIT_FAMILY;family<=KUI_VMU_NATIVE_EXIT_EARLY_PAIR;family++) {
+    for(unsigned family=KUI_VMU_NATIVE_EXIT_FAMILY;family<=KUI_VMU_NATIVE_EXIT_EARLY_FIRMWARE_CHECK;family++) {
         mock(image,sizeof(image),&source);source.exits.family=family;
         if(family==KUI_VMU_NATIVE_EXIT_PAIR_ONLY || family==KUI_VMU_NATIVE_EXIT_EARLY_PAIR) {
             source.exits.count=2u;source.exits.entries[2]=0u;source.exits.exec_thunk=0u;
         }
-        if(family==KUI_VMU_NATIVE_EXIT_EARLY_PAIR) source.exits.entries[1]=source.exits.entries[0]+8u;
+        if(family==KUI_VMU_NATIVE_EXIT_EARLY_PAIR || family==KUI_VMU_NATIVE_EXIT_EARLY_COMPACT ||
+           family==KUI_VMU_NATIVE_EXIT_EARLY_FIRMWARE_CHECK)
+            source.exits.entries[1]=source.exits.entries[0]+8u;
+        if(family==KUI_VMU_NATIVE_EXIT_EARLY_COMPACT)
+            source.exits.exec_thunk=source.exits.entries[2]+76u;
+        if(family==KUI_VMU_NATIVE_EXIT_FIRMWARE_CHECK || family==KUI_VMU_NATIVE_EXIT_EARLY_FIRMWARE_CHECK)
+            source.exits.exec_thunk=0u;
         if(family==KUI_VMU_NATIVE_EXIT_CRT_BOOTSTRAP) {source.exits.count=4u;source.exits.entries[3]=load+0x300u;}
         source.layout.rx_layout=KUI_VMU_NATIVE_RX_UNIFORM48;source.layout.inputs=1u;
         CHECK(kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
@@ -176,6 +274,13 @@ static void codec_and_trust_tests(void) {
     source.exits.entries[1]=source.exits.entries[0]+8u;
     CHECK(kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
     source.exits.count=3u;CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
+    mock(image,sizeof(image),&source);source.exits.family=KUI_VMU_NATIVE_EXIT_EARLY_COMPACT;
+    source.exits.entries[1]=source.exits.entries[0]+8u;
+    source.exits.exec_thunk=source.exits.entries[2]+76u;
+    CHECK(kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
+    source.exits.count=2u;CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
+    source.exits.count=3u;source.exits.exec_thunk+=2u;
+    CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
     mock(image,sizeof(image),&source);source.exits.family=KUI_VMU_NATIVE_EXIT_TERMINAL_DISPATCH;
     source.exits.count=2u;CHECK(!kui_vmu_native_resolution_cache_encode(&source,wire,sizeof(wire)));
     source.exits.count=3u;source.exits.entries[2]=0u;
@@ -353,7 +458,7 @@ static void generic_actual_tests(const char *path) {
     }
     CHECK((fresh.layout.rx_layout==KUI_VMU_NATIVE_RX_UNIFORM48 && fresh.layout.inputs==1u) ||
         (fresh.layout.rx_layout==KUI_VMU_NATIVE_RX_EXPLICIT48 && fresh.layout.inputs==12u));
-    CHECK(fresh.exits.family>=KUI_VMU_NATIVE_EXIT_FAMILY && fresh.exits.family<=KUI_VMU_NATIVE_EXIT_EARLY_PAIR);
+    CHECK(fresh.exits.family>=KUI_VMU_NATIVE_EXIT_FAMILY && fresh.exits.family<=KUI_VMU_NATIVE_EXIT_EARLY_COMPACT);
     CHECK(fresh.exits.count==(fresh.exits.family==KUI_VMU_NATIVE_EXIT_PAIR_ONLY ||
         fresh.exits.family==KUI_VMU_NATIVE_EXIT_EARLY_PAIR?2u:
         fresh.exits.family==KUI_VMU_NATIVE_EXIT_CRT_BOOTSTRAP?4u:3u));
@@ -366,6 +471,18 @@ static void generic_actual_tests(const char *path) {
         CHECK(kui_vmu_native_heap_arena_plan(image,program_bytes,program_hash,load,&owner,&call,&hook));
         CHECK(!memcmp(&owner,&fresh.heap,sizeof(owner)) && !memcmp(&call,&fresh.call,sizeof(call)));
     }
+    if(fresh.heap.family==KUI_VMU_NATIVE_HEAP_DIRECT32) {
+        CHECK(fresh.heap.layout==KUI_VMU_NATIVE_HEAP_DIRECT && !fresh.heap.dispatch_cell && !fresh.heap.dispatch_table);
+        const uint32_t addresses[]={fresh.heap.initializer,fresh.heap.release,fresh.heap.initializer_slot};
+        for(unsigned i=0;i<sizeof(addresses)/sizeof(addresses[0]);i++) {
+            size_t at=(addresses[i]&UINT32_C(0x1fffffff))-(load&UINT32_C(0x1fffffff));CHECK(at<program_bytes);
+            image[at]^=1u;CHECK(!replay(image,program_bytes,load,wire,sizeof(wire),pin,&out));
+            memset(again,0xa5,sizeof(again));
+            CHECK(!kui_vmu_native_resolution_cache_build(image,program_bytes,load,again,sizeof(again),&out));
+            for(unsigned j=0;j<sizeof(again);j++) CHECK(again[j]==0xa5u);
+            image[at]^=1u;
+        }
+    }
     digest(image,n,after_hash);CHECK(!memcmp(source_hash,after_hash,32u));
     image[program_bytes-1u]^=1u;CHECK(!replay(image,program_bytes,load,wire,sizeof(wire),pin,&out));
     char source_hex[65],program_hex[65];kui_hex(source_hash,32u,source_hex);kui_hex(program_hash,32u,program_hex);
@@ -375,7 +492,7 @@ static void generic_actual_tests(const char *path) {
     free(image);
 }
 int main(int argc,char **argv) {
-    CHECK(argc>=1);codec_and_trust_tests();if(argc>=2) actual_tests(argv[1]);
+    CHECK(argc>=1);codec_and_trust_tests();direct_codec_tests();fresh_hash_replay_tests();if(argc>=2) actual_tests(argv[1]);
     for(int i=2;i<argc;i++) generic_actual_tests(argv[i]);
     printf("Native complete resolution cache: %u checks passed%s\n",checks,argc>=2?" including actual images, stale/forged records and first-build mutations":"");
     return 0;

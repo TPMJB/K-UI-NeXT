@@ -32,6 +32,10 @@ ifneq ($(strip $(NATIVE_STANDARD_MANIFEST)),)
 build/dc/src/core/native_vmu_standard.o: $(NATIVE_STANDARD_MANIFEST)
 build/dc/src/core/native_vmu_standard.o: CPPFLAGS += -DKUI_NATIVE_STANDARD_MANIFEST='"$(abspath $(NATIVE_STANDARD_MANIFEST))"'
 endif
+KUI_SMASH_LAUNCH_TIMING ?= 0
+ifneq ($(filter 0 1,$(KUI_SMASH_LAUNCH_TIMING)),$(KUI_SMASH_LAUNCH_TIMING))
+$(error KUI_SMASH_LAUNCH_TIMING must be 0 or 1)
+endif
 SOURCES := src/core/drive_controls.c src/core/command.c src/core/data.c src/core/diskio.c src/core/clock.c src/core/storage_error.c src/core/storage_probe.c \
            src/core/storage_policy.c src/core/ata.c src/dreamcast/ata_bus.c \
            src/loader/sd_reader.c src/loader/sci_sd_bus.c src/dreamcast/sci_sd_storage.c \
@@ -55,6 +59,14 @@ LOADER_OBJECTS += build/dc/src/core/recovery_manifest.o build/dc/src/core/recove
 LOADER_OBJECTS += build/dc/src/core/boot_ui.o build/dc/src/dreamcast/boot_draw.o \
     build/dc/src/dreamcast/shell_font.o build/dc/src/apps/boot_splash.o
 RUNTIME_OBJECTS := $(filter-out build/dc/src/dreamcast/main.o build/dc/src/dreamcast/sd.o,$(OBJECTS)) build/dc/main-runtime.o build/dc/sd-runtime.o
+RUNTIME_MODULE_BUNDLE ?=
+ifneq ($(strip $(RUNTIME_MODULE_BUNDLE)),)
+RUNTIME_OBJECTS += build/dc/src/core/runtime_module_bundle.o build/dc/runtime-module-bundle.o
+build/dc/src/core/runtime_module_bundle.o: CPPFLAGS += -Ithird_party/miniz
+build/dc/runtime-module-bundle.o: $(RUNTIME_MODULE_BUNDLE)/bundle.S $(RUNTIME_MODULE_BUNDLE)/bundle.bin
+	@mkdir -p $(@D)
+	kos-cc -c $(RUNTIME_MODULE_BUNDLE)/bundle.S -o $@
+endif
 RUNTIME_OBJECTS += build/dc/src/dreamcast/sci_async_probe.o build/dc/src/dreamcast/sci_async_heartbeat.o
 RUNTIME_OBJECTS += $(BENCH_OBJECTS)
 RUNTIME_OBJECTS += build/dc/src/core/storage_test_model.o build/dc/src/core/storage_test.o build/dc/src/core/storage_test_store.o
@@ -71,6 +83,7 @@ RUNTIME_OBJECTS += build/dc/src/core/vmu_native_cache_seed.o build/dc/src/core/v
     build/dc/src/core/vmu_native_discovery.o build/dc/src/core/vmu_native_layout.o \
     build/dc/src/core/vmu_native_heap.o build/dc/src/core/vmu_native_exit.o build/dc/src/core/vmu_native_patch.o \
     build/dc/src/core/vmu_native_program.o build/dc/src/core/native_sdk_sci_family.o
+RUNTIME_OBJECTS += build/dc/src/core/native_source_owner.o
 RUNTIME_OBJECTS += build/dc/src/core/game_image.o build/dc/src/core/game_metadata.o
 RUNTIME_OBJECTS += build/dc/src/core/games_group.o
 RUNTIME_OBJECTS += build/dc/src/core/screenshot.o build/dc/src/core/games_activity.o
@@ -85,7 +98,14 @@ RUNTIME_OBJECTS += build/dc/src/core/vmu_game_card.o build/dc/src/core/vmu_game_
     build/dc/src/core/vmu_game_assign.o build/dc/src/core/vmu_image_merge.o
 RUNTIME_OBJECTS += build/dc/src/core/vmu_emulation_settings.o
 RUNTIME_OBJECTS += build/dc/src/core/vmu_import_plan.o build/dc/src/core/vmu_game_candidates.o
-RUNTIME_OBJECTS += build/dc/src/core/native_vmu_standard.o
+RUNTIME_OBJECTS += build/dc/src/core/native_vmu_standard.o build/dc/src/core/smash_native_child.o
+RUNTIME_OBJECTS += build/dc/src/core/smash_native_menu.o build/dc/src/core/smash_menu_capsule.o \
+    build/dc/src/core/smash_menu_loader.o
+RUNTIME_OBJECTS += build/dc/src/core/smash_genesis_save_header.o
+RUNTIME_OBJECTS += build/dc/src/core/smash_card_session.o
+RUNTIME_OBJECTS += build/dc/src/core/smash_menu_return.o
+RUNTIME_OBJECTS += build/dc/src/core/smash_menu_collection.o build/dc/src/core/smash_ce_child.o \
+    build/dc/src/core/smash_ce_profile.o build/dc/src/core/smash_ce_helper.o
 RUNTIME_OBJECTS += build/dc/src/core/vmu_import_match.o
 RUNTIME_OBJECTS += build/dc/src/core/disc_boot.o build/dc/src/core/disc_launch.o
 RUNTIME_OBJECTS += build/dc/src/core/disc_vmu_probe.o
@@ -105,6 +125,7 @@ RUNTIME_OBJECTS += build/dc/firmware/kui-wifi/components/kwlink/kwlink.o build/d
 RUNTIME_OBJECTS += build/dc/src/core/runtime_image.o build/dc/src/core/runtime_file.o build/dc/src/core/loader_probe.o
 RUNTIME_OBJECTS += build/dc/src/core/update.o build/dc/src/core/update_file.o build/dc/src/core/update_boot.o
 RUNTIME_OBJECTS += build/dc/src/core/update_handoff.o
+RUNTIME_OBJECTS += build/dc/src/core/startup_report.o
 RUNTIME_OBJECTS += build/dc/src/core/update_browser.o build/dc/src/core/update_zip.o
 RUNTIME_OBJECTS += build/dc/src/core/update_software_file.o
 RUNTIME_OBJECTS += build/dc/src/core/resident_image.o
@@ -113,16 +134,38 @@ RUNTIME_OBJECTS += build/dc/src/core/shell.o build/dc/src/dreamcast/shell_draw.o
 RUNTIME_OBJECTS += build/dc/src/core/capture_display.o build/dc/src/core/viewport.o build/dc/src/core/salvage.o build/dc/src/core/salvage_display.o build/dc/src/core/recovery_crc.o
 APP_SOURCES := $(filter-out src/apps/boot_splash.c,$(wildcard src/apps/*.c))
 RUNTIME_OBJECTS += $(patsubst %.c,build/dc/%.o,$(APP_SOURCES))
+ifeq ($(KUI_SMASH_LAUNCH_TIMING),1)
+RUNTIME_OBJECTS += build/dc/src/core/smash_phase_clock.o build/dc/src/core/smash_phase_trace.o build/dc/src/core/smash_phase_video.o
+endif
 BUILD_ID ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo local)
 
 .PHONY: all force-build-id wince-cdda native-cdda
 all: $(TARGET) $(RUNTIME) build/loader/entry.elf build/loader/image_entry.elf build/retail/entry.elf build/retail-bench/entry.elf build/retail-ce/entry.elf wince-cdda
 all: native-zso native-lzo native-cdda
-build/dc/src/apps/games_retail.o: src/apps/games_native_cache.inc include/kui/vmu_native_cache_seed.h include/kui/vmu_native_resolution_cache.h
+$(RUNTIME_OBJECTS): CPPFLAGS += -DKUI_SMASH_LAUNCH_TIMING=$(KUI_SMASH_LAUNCH_TIMING)
+$(RUNTIME_OBJECTS): build/dc/smash-launch-timing.config
+.PHONY: force-smash-launch-timing-config
+force-smash-launch-timing-config:
+build/dc/smash-launch-timing.config: force-smash-launch-timing-config
+	@mkdir -p $(@D)
+	@printf 'KUI_SMASH_LAUNCH_TIMING=%s\n' '$(KUI_SMASH_LAUNCH_TIMING)' > $@.new
+	@cmp -s $@.new $@ && rm $@.new || mv $@.new $@
+build/dc/src/apps/games_retail.o: src/apps/games_native_cache.inc src/apps/games_native_cache_hint.inc src/apps/games_native_owner_cache.inc include/kui/native_source_owner.h include/kui/vmu_native_cache_seed.h include/kui/vmu_native_resolution_cache.h
+build/dc/src/apps/games_retail.o: include/kui/native_standard_route.h include/kui/native_standalone_foreground.h
 build/dc/src/core/repair_copy.o: src/core/repair_resume.inc include/kui/recovery_guard.h
 build/dc/src/core/salvage.o: src/core/salvage_files.inc src/core/salvage_control_trial.inc
 build/dc/src/apps/games_retail.o: src/apps/games_vmu_card.inc include/kui/vmu_game_card_service.h include/kui/vmu_game_card.h
-build/dc/src/apps/games_retail.o build/dc/sd-runtime.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
+build/dc/src/apps/games_retail.o: src/apps/vc2_ce_vmu_late_prepare.inc include/kui/vc2_ce_vmu_late_seed.h
+build/dc/src/apps/games_retail.o: src/apps/smash_native_child_prepare.inc include/kui/smash_native_child.h src/apps/vc2_ce_vmu_persist_prepare.inc include/kui/vc2_ce_vmu_persist.h
+build/dc/src/apps/games_retail.o: src/apps/smash_menu_capsule_prepare.inc src/apps/smash_menu_capsule_file_prepare.inc \
+    src/apps/smash_menu_capsule_pair_prepare.inc \
+    src/apps/smash_menu_collection_prepare.inc src/apps/smash_card_session_prepare.inc \
+    src/apps/smash_genesis_save_report.inc src/apps/smash_phase_text_prepare.inc \
+    include/kui/smash_genesis_save_header.h include/kui/smash_phase_file.h include/kui/smash_card_session.h \
+    include/kui/smash_menu_collection.h include/kui/smash_ce_child.h include/kui/smash_ce_profile.h include/kui/smash_ce_helper.h \
+    include/kui/smash_menu_capsule.h include/kui/smash_native_menu.h include/kui/smash_menu_loader.h \
+    include/kui/smash_menu_loader_capability.h include/kui/smash_menu_return.h
+build/dc/src/apps/games_retail.o build/dc/sd-runtime.o build/dc/main-runtime.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
 build/dc/src/apps/vmu_wizard.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
 build/dc/src/apps/vmu_game_info.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
 build/dc/src/apps/vmu_history.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
@@ -156,6 +199,10 @@ CPPFLAGS += -Ithird_party/miniz -Ithird_party/minilzo -DMINIZ_NO_ARCHIVE_APIS \
 # console guard explicit here rather than importing KOS into their headers.
 build/dc/src/dreamcast/ata_bus.o build/dc/src/loader/sci_sd_bus.o: CPPFLAGS += -DKUI_ON_CONSOLE=1
 build/dc/src/loader/sd_reader.o: CPPFLAGS += -DKUI_RETAIL_FAST_IO=1
+# Mounted GUI verification uses the shared byte CRC. Freestanding game
+# workers/residents keep their existing code, tables and memory layout.
+build/dc/src/core/data.o build/dc/src/core/retail_image.o: CPPFLAGS += -DKUI_GUI_FAST_CRC32=1
+build/dc/src/core/vmu_native_resolution_cache.o: CPPFLAGS += -DKUI_GUI_DIGEST_REUSE=1
 # Experimental, never-run-on-hardware code (the GD-ROM DMA probe and its competing thread) is NOT in
 # the default build. Opt in with: make diagnostic KUI_EXPERIMENTAL=1
 ifdef KUI_EXPERIMENTAL
@@ -194,6 +241,12 @@ $(TARGET): $(OBJECTS) $(LOADER_OBJECTS)
 $(RUNTIME): $(RUNTIME_OBJECTS)
 	kos-cc -o $@ $(RUNTIME_OBJECTS) -lm -Wl,--wrap=f_open,--wrap=f_stat -Wl,-Map,build/kui-runtime.map
 	python3 tools/record_build.py $@
+
+# Separate compiler-report objects; never alter the runtime's linked objects.
+.PHONY: check-games-scan-stack
+check-games-scan-stack: $(RUNTIME)
+	python3 tools/check_games_scan_stack.py --build --directory build/games-scan-stack
+	python3 tests/test_games_scan_stack.py build/games-scan-stack
 
 -include $(OBJECTS:.o=.d) $(LOADER_OBJECTS:.o=.d) $(RUNTIME_OBJECTS:.o=.d)
 
@@ -710,8 +763,5 @@ $(RETAIL_PHYSICAL_DIR)/retail-physical.kui: $(RETAIL_PHYSICAL_DIR)/entry.elf too
 	python3 tools/runtime_package.py build $< $@ --build-id $(BUILD_ID)
 -include $(RETAIL_PHYSICAL_DIR)/retail_stage.d $(RETAIL_PHYSICAL_DIR)/retail_stage_asm.d $(RETAIL_PHYSICAL_DIR)/retail_entry_asm.d
 
-# Separate compiler-report objects; never alter the runtime's linked objects.
-.PHONY: check-games-scan-stack
-check-games-scan-stack:
-	python3 tools/check_games_scan_stack.py --build --directory build/games-scan-stack
-	python3 tests/test_games_scan_stack.py build/games-scan-stack
+# Fixed collection inputs participate in launcher incremental rebuilds.
+build/dc/src/apps/games_retail.o: src/apps/smash_menu_collection_files.inc

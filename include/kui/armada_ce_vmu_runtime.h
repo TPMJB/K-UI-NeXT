@@ -54,5 +54,16 @@ bool kui_armada_ce_maple_runtime_owner(uint32_t owner_extension);
  * a pre-acquisition BUSY, never on the freestanding I/O stack. Waits 1 ms on
  * this worker's own admitted thread handle; only WAIT_TIMEOUT is accepted. */
 int kui_armada_ce_maple_runtime_wait(uint32_t owner_extension);
+#if KUI_VC2_VMU_PERSIST || defined(KUI_ARMADA_CE_VMU_RUNTIME_TEST)
+#define KUI_ARMADA_CE_VMU_RUNTIME_SNAPSHOT_WORDS 60u
+/* Terminal capture only, with the caller already masked. All words come
+ * from private static state; no guest pointer, card block, MMIO register or
+ * callback is followed. Partially initialized state is deliberately visible.
+ * Rows of five: runtime, endpoint, protocol, mailbox, mailbox counters,
+ * SD state, SD transfer, SD counters, SD cause, PIO cause, handoff geometry,
+ * and PIO/services/checkpoint. See the VC2 diagnostic legends for columns. */
+void kui_armada_ce_vmu_runtime_snapshot(
+    uint32_t out[KUI_ARMADA_CE_VMU_RUNTIME_SNAPSHOT_WORDS]);
+#endif
 #endif
 #endif

@@ -1,0 +1,300 @@
+{
+  "schema": "kui.vc2.warm-launch-review.v1",
+  "date": "2026-11-06",
+  "status": "KNOWN_CONSOLE_WARM_LAUNCH_FAILURE_NO_POST_CA966_PRODUCTION_FIX",
+  "reviewed_production_commit": "ca96612c27fc2e064e06ac990d4ca5ba4e9c3615",
+  "observation": {
+    "confirmed_sequence": [
+      "Sega Swirl",
+      "collection",
+      "Shining Force",
+      "collection",
+      "Phantasy Star II",
+      "collection",
+      "Virtua Cop 2"
+    ],
+    "failure": "Black display during VC2 startup before title; later Return action not reached.",
+    "latest_exact_logo_boundary_known": false,
+    "fresh_power_on_regression_established": false,
+    "e371_positive_scope": "Owner said the requested VC2-first/title/Return check actually worked; no after-Swirl or multi-game acceptance inferred."
+  },
+  "native_change": "ca966 removes the direct combo hijack so original Genesis options/Save Game and explicit Return remain available; the existing checked reset hook stays.",
+  "preservation": {
+    "CE_artifacts": {
+      "vc2": {
+        "ce-return.bin": {
+          "bytes": 7340,
+          "sha256": "250fe003178c56bfc1069591ca287e9291c23c9dd1acbea2229330ae6779a983",
+          "e371_ca966_byte_identical": true
+        },
+        "vc2-raw.bin": {
+          "bytes": 512,
+          "sha256": "7289dc76bd6ea1d3ddd4ae1f6f65aa1dbd1b31bc4e80f2345727bceb01d325c4",
+          "e371_ca966_byte_identical": true
+        },
+        "helper/helper.bin": {
+          "bytes": 41152,
+          "sha256": "85e864ae8d386b4b2d5cec731f788441367fdf9f2bef86f57ccd12a430e214e8",
+          "e371_ca966_byte_identical": true
+        },
+        "helper/prepared.bin": {
+          "bytes": 49152,
+          "sha256": "0f5f7a95fb7ac8913e0616e4f2bae3a2b0fb8d0964ff652a1ad19257b3afaf27",
+          "e371_ca966_byte_identical": true
+        },
+        "startup_slots": {
+          "__smash_ce_return_copy": "0xac0099a0",
+          "_kui_smash_ce_return_runtime": "0xac009d34",
+          "__smash_ce_return_binary_end": "0xac009fac",
+          "__smash_ce_return_bss_end": "0xac009fbc",
+          "_kui_smash_ce_return_previous_e0": "0xac009fac"
+        }
+      },
+      "swirl": {
+        "ce-return.bin": {
+          "bytes": 7500,
+          "sha256": "d001455dc243f570976ad50f27cbef0241f2a40777d0000dc18b813adca83486",
+          "e371_ca966_byte_identical": true
+        },
+        "vc2-raw.bin": {
+          "bytes": 512,
+          "sha256": "7289dc76bd6ea1d3ddd4ae1f6f65aa1dbd1b31bc4e80f2345727bceb01d325c4",
+          "e371_ca966_byte_identical": true
+        },
+        "helper/helper.bin": {
+          "bytes": 41152,
+          "sha256": "47b5687e400b25b43ffa378b2b04171e59c039c57e018e83ac4de6bf7a8719e8",
+          "e371_ca966_byte_identical": true
+        },
+        "helper/prepared.bin": {
+          "bytes": 49152,
+          "sha256": "1b3edb101a2446095c2100e4494ea8bd52290887629e40bbdb5d02c2c66b0e05",
+          "e371_ca966_byte_identical": true
+        },
+        "startup_slots": {
+          "__smash_ce_return_copy": "0xac009a40",
+          "_kui_smash_ce_return_runtime": "0xac009dd4",
+          "__smash_ce_return_binary_end": "0xac00a04c",
+          "__smash_ce_return_bss_end": "0xac00a05c",
+          "_kui_smash_ce_return_previous_e0": "0xac00a04c"
+        }
+      }
+    },
+    "native_worker_reservation_bytes": 73728,
+    "CE_immutable_helper_bytes": 41152,
+    "CE_prepared_transport_bytes": 49152
+  },
+  "outer_template": {
+    "payload_bytes": 103028,
+    "padded_bytes": 103424,
+    "sectors": 202,
+    "code_layout_delta": "Three12-byte build labels only",
+    "handoff_bytes": 12640,
+    "handoff_byte_identical": true,
+    "native_child_sectors": {
+      "e371": 533,
+      "ca966": 531
+    },
+    "actual_GUI_configured_console_LBAs_CRC_runtime_captured": false,
+    "dynamic_seal": "GUI-generated manifests, card config and collection plans change the configured snapshot. Full write/readback and padded CRC sealing precede publication; ROOT/video/receipt are injected after the controller validates the complete outer capsule."
+  },
+  "real_outer_replay": {
+    "status": "PASS",
+    "cases": [
+      {
+        "cohort": "e3714617ad28",
+        "status": "PASS",
+        "outer_payload_bytes": 103028,
+        "outer_padded_bytes": 103424,
+        "raw512_calls": 202,
+        "first_split": 1,
+        "second_run": 201,
+        "seed_offset": 68736,
+        "actual_instructions_to_outer": 15163885,
+        "actual_instructions_to_Cmain": 15922234,
+        "Cmain": "0x8ce00e3c",
+        "map_argument": "0x8c011000",
+        "full_ROOT_VID_receipt_carried": true,
+        "low_controller_preserved_by_prefix": true,
+        "incoming_capsule_preserved_by_prefix": true,
+        "controller_sha256": "250fe003178c56bfc1069591ca287e9291c23c9dd1acbea2229330ae6779a983",
+        "outer_entry_sha256": "33ecbae77f856c58b580c7fcd4c197e169d70d09f2db8dd9f48c2c7ba8bf148b"
+      },
+      {
+        "cohort": "ca96612c27fc",
+        "status": "PASS",
+        "outer_payload_bytes": 103028,
+        "outer_padded_bytes": 103424,
+        "raw512_calls": 202,
+        "first_split": 1,
+        "second_run": 201,
+        "seed_offset": 68736,
+        "actual_instructions_to_outer": 15163885,
+        "actual_instructions_to_Cmain": 15922234,
+        "Cmain": "0x8ce00e3c",
+        "map_argument": "0x8c011000",
+        "full_ROOT_VID_receipt_carried": true,
+        "low_controller_preserved_by_prefix": true,
+        "incoming_capsule_preserved_by_prefix": true,
+        "controller_sha256": "250fe003178c56bfc1069591ca287e9291c23c9dd1acbea2229330ae6779a983",
+        "outer_entry_sha256": "7c023b437b327eaa01c138c8177a0c118dfbab5af0268d6f502131e2db427457"
+      }
+    ],
+    "limits": [
+      "Actual linked VC2 controller, CRCs, quiesce, restore and complete real outer prefix execute.",
+      "Coherent RAM/MMIO and raw512 card data are authored boundaries; bulk RAM-clear effect applies its separately proved exact leaf interval.",
+      "Stops at Cmain; GUI-created native/CE capsule maps and returned card/profile rebind in Cmain are not executed here."
+    ]
+  },
+  "original_source_cleanup": {
+    "sample_sha256": "82bb1160814548f4656b273353fd6168a691fb5f215b77377860ff9fd2156c8a",
+    "shared_VC2_Swirl_SAMPLE": true,
+    "callsites": {
+      "SAMPLE_copy_call": "0x8c018d68",
+      "MAINANA_entry_jump": "0x8c018d82",
+      "MAINANA_hardware_table_call": "0x8ce08586",
+      "hardware_table_entry": "0x8ce08830"
+    },
+    "ASIC": {
+      "producer_prefix_instructions": 189,
+      "prefix_sha256": "22a4b5c369cee26bfea3611f9acb8207d30d7da1bbc4c1ea3ad263be77d4f913",
+      "pending_ack_instructions": 78,
+      "dispatcher_sha256": "9385eec7833a9e1835438815f6cd6b9b5be2115e7f9514e5afeb6273fffe9530",
+      "table_sha256": "8a1dd06675e0a9e46bfbfdd6dd23fdc2d75d1f29c181c7b161a1f7eb203da650",
+      "handler_sha256": "14591e9adaf7c5c6d5f6ae0b6e7cede0d923e60d3fcd752c122960bd3d0e0eba",
+      "effects": [
+        "Nine ASIC masks0",
+        "PVR soft reset3",
+        "Producer disable/poll list",
+        "ISTNRM6900=FFFFFFFF",
+        "ISTERR6908=FFFFFFFF"
+      ],
+      "ISTEXT_blanket_ack_claimed": false
+    },
+    "AICA": {
+      "actual_table_instructions": 120,
+      "writes": [
+        {
+          "address": "0xa0702800",
+          "value": "0x0",
+          "name": "MVOL/DAC control"
+        },
+        {
+          "address": "0xa070289c",
+          "value": "0x0",
+          "name": "SCIEB"
+        },
+        {
+          "address": "0xa07028a4",
+          "value": "0x7ff",
+          "name": "SCIRE"
+        },
+        {
+          "address": "0xa07028b4",
+          "value": "0x0",
+          "name": "MCIEB"
+        },
+        {
+          "address": "0xa07028bc",
+          "value": "0x7ff",
+          "name": "MCIRE"
+        }
+      ],
+      "source_windows": [
+        {
+          "name": "aica_interrupt_table",
+          "begin": "0x8ce08d2c",
+          "bytes": 48,
+          "sha256": "28b7b4cbc8f4cbb2bf35bb2238e5b20d988d31770d9aed9e14666ea47c1e25af"
+        },
+        {
+          "name": "zero_and_literal_handlers",
+          "begin": "0x8ce088a2",
+          "bytes": 12,
+          "sha256": "a72ee8978315aebc42b84497c30d9b69f1abecc2cfc472432f7cbe5bb8d5256b"
+        },
+        {
+          "name": "sound_reset_call_record",
+          "begin": "0x8ce08d74",
+          "bytes": 8,
+          "sha256": "910dfd005b2d30f9589659e63d59a07397d234d9ccfdd33f5961e3546a25fa2c"
+        },
+        {
+          "name": "sound_reset_function",
+          "begin": "0x8ce08976",
+          "bytes": 132,
+          "sha256": "3b842e17ea3bebda97e6ca1667c558d967e122b42cbffcf45a4705b67edc9a50"
+        }
+      ],
+      "full_SoundReset_evidence": "Static exact source only: voice register clears, ARM reset,2MiB sound RAM clear, dummy32-longword ARM upload, release reset."
+    },
+    "CPU": {
+      "actual_table_instructions": 902,
+      "table_sha256": "00f533220e01056624c984ba206aef03c46856d386c7bbc23ac1e5a549cc7752",
+      "MMIO_reads": 0,
+      "effects": [
+        "PTEH/PTEL/TTB/TEA/PTEA zero",
+        "QACR0/QACR1 zero",
+        "UBC BBRA/BBRB/BRCR zero",
+        "TMU0 configured and started before GD timed reset helper"
+      ],
+      "FPU_frame_evidence": "Static original opcode/literal/data-frame assertions; floating instructions were not replayed.",
+      "FPU_source_sha256": "052512f53a2a60440d20b35d3b97b2703fff20a77b76fde544212417e0953475"
+    },
+    "evidence_boundary": "Closed SH windows execute with authored hardware storage. Surrounding call ordering and full device initialization are static source evidence; no physical IRQ deassertion or complete driver/game startup claim."
+  },
+  "negative_findings": [
+    "No fixed original VC2 reset-wrapper or low-entry mismatch betweene371 andca966.",
+    "No changed CE controller/raw/helper transport or outer instruction/layout growth.",
+    "No missing original PVR reset, normal/error status acknowledgement, AICA enable/pending clear or basic CPU/QACR/UBC initialization identified.",
+    "Restored native postloop immediate SDK paths enqueue RAM commands34/37; no immediate MMIO/cache/CCR write occurs in that bounded replay. Later consumer/hardware effects are not established."
+  ],
+  "remaining_unproved": [
+    "Actual failing PC and latest exact logo/driver phase",
+    "Physical VMU/SD commit, recovery and allocation/card rebind after multiple selections",
+    "Physical DMA/interrupt/cache/bus timing and device-owned ISTEXT deassertion",
+    "Later CE/game RAM ownership and any specific retained producer or bad writer"
+  ],
+  "working_audit_refs": [
+    {
+      "name": "vc2-real-outer-e371-ca966.json",
+      "sha256": "183d48c2b303fdd35f4cb6201b975e8eb70346dd3a303990c931c45b137cfabd"
+    },
+    {
+      "name": "vc2-return-outer-capsule-e371-ca966-audit.json",
+      "sha256": "b8e7eacb61df14691dd920d2372f8b4dd57459a3acac6d3190bab9ecb1da44c7"
+    },
+    {
+      "name": "vc2-original-return-wrapper-audit.json",
+      "sha256": "108e341456c4837950fa2e7082a15c651b27532c023906c973ce65728c5e1d42"
+    },
+    {
+      "name": "vc2-mainana-asic-entry-audit.json",
+      "sha256": "31c30f45c0039cf688d5396a7bbda0fc8d1c8e4d7290ca845bc9d3fd87554042"
+    },
+    {
+      "name": "vc2-mainana-aica-ack-audit.json",
+      "sha256": "3fa512c34f28be958470486e753a917b2b2b515447665130a58e201fd41eec3e"
+    },
+    {
+      "name": "vc2-warm-cpu-state-audit.json",
+      "sha256": "e63c0700f4523ce5402e9667da0ae9d5a2eebf9a4016144f38f7509dd1096b2a"
+    },
+    {
+      "name": "vc2-oal-irq-admission-audit.json",
+      "sha256": "873a2214b014a8b24804daa188d9c617e797e0fe62cc2677c3ae73e6e0e2ba59"
+    },
+    {
+      "name": "native-postloop-queue-audit.json",
+      "sha256": "ff2ff05bb515b32cb0c2929061927c796128fb06448d357e1f952758ab2ae737"
+    }
+  ],
+  "correction": "The earlier bounded NK replay first unauthored ASIC operation at8C02C9D2 is a write toA05F68A0; its observer performed an internal read-before-write. The zero8300..C000-access finding is unaffected.",
+  "retail_instruction_bytes_included": false,
+  "post_ca966_production_fix": false,
+  "limits": [
+    "These are review metadata and bounded software results, not a warm-failure diagnosis or hardware acceptance.",
+    "The real202-sector replay stops at outer Cmain; current card/profile rebind and subsequent GUI-created capsule-map operations are not executed there.",
+    "Working audit names/hashes identify local investigation receipts; no private original executable or cartridge bytes are included."
+  ]
+}

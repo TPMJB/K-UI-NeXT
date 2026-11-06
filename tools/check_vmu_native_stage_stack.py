@@ -36,6 +36,13 @@ def canonical(address):
     return address
 
 
+def inspect_resident(resident,limit):
+    if '__kui_smash_native_menu_resident' in resident[4]:
+        from smash_native_menu_resident import inspect
+        return inspect(resident[0])['low']
+    return inspect_elf(resident[0],0x8c004000,limit)
+
+
 def allocation_helper(stage):
     from check_native_followup_profile import bottom_stage_profile
     return BOTTOM_HELPER if bottom_stage_profile(stage) else HELPER
@@ -236,9 +243,78 @@ class AllocationWrapper(Machine):
 class ArmRoute(Machine):
     """Execute the complete relay through publication of the low boot control."""
     def __init__(self, stage, resident, stack, seed, mask, *, body=None, helper_bodies=None,
-                 cache_hit=True, mode=0, sdk_admitted=True, normalized=False, crt_admitted=True):
+                 cache_hit=True, mode=0, sdk_admitted=True, normalized=False, crt_admitted=True,
+                 owner_admitted=True):
         super().__init__(stage, "_kui_retail_stage_relay", seed, mask, OLD_STACK, body=body)
         self.symbols, self.stack = stage[4], stack
+        self.smash_menu = '__smash_native_menu_seed' in self.symbols
+        self.timing = '_kui_smash_phase_stage_mark' in self.symbols
+        self.timing_text='__smash_phase_text_capability' in self.symbols
+        self.timing_marks=[];self.timing_stopped=False
+        require(not self.timing or self.smash_menu,'Timing route appears outside the menu child')
+        if self.timing_text:
+            require(self.timing and '_smash_phase_stage_text_write' in self.symbols and
+                    '_smash_phase_stage_report' not in self.symbols,
+                    'Text timing must continue the normal owner route without a photo terminal')
+            address,_,_,owner=self.symbols['__smash_phase_text_capability']
+            section=stage[3][owner];at=section[4]+address-section[3]
+            marker=b'KUISTXT1'+struct.pack('<2I',1,16)
+            require(section[1]==1 and section[2]&7==2 and not address&3 and
+                    section[3]<=address<address+16<=section[3]+section[5] and
+                    stage[0][at:at+16]==marker,
+                    'Text timing capability lacks its exact immutable bounded record')
+        self.smash_return = '_kui_smash_native_return_stage_publish' in self.symbols
+        require(not self.smash_return or self.smash_menu,
+                'Native return publisher appears outside its menu child profile')
+        self.return_publish_site=None
+        self.smash_child = '__smash_native_child_seed' in self.symbols or self.smash_menu
+        self.smash_gin = self.symbols.get('__kui_smash_native_gin_adoption')==(1,0,0,0xfff1)
+        require(not self.smash_gin or self.smash_menu,'Native GIN adoption escapes collection profile')
+        self.owner_admitted=owner_admitted
+        self.source_owner_helpers,self.source_owner_reads,self.source_owner_calls={},[],[]
+        self.source_owner_expected=bytes.fromhex('04f49d583b39bdc710cec6d0a434b5d710b9bccedd539bedda29755135f0fe61')
+        if self.smash_menu:
+            for name in ('_kui_smash_native_child_engine_owner','_memcmp'):
+                address,code,section=symbol_bytes(stage,name,2)
+                require(code and section[1]==1 and section[2]&7==6,
+                        'Complete-source owner lacks typed executable helper: '+name)
+                self.source_owner_helpers[address]=(name,code)
+            _,owner_body,_=symbol_bytes(stage,'_kui_smash_native_child_engine_owner',2)
+            # Admit exactly the actual helper's32-byte immutable expected SHA,
+            # never a blanket high-stage/image mapping to satisfy new loads.
+            for offset in range(0,len(owner_body)-3,4):
+                address=struct.unpack_from('<I',owner_body,offset)[0]
+                for section in stage[3]:
+                    if (section[1]==1 and section[2]&7==2 and
+                            section[3]<=address<address+32<=section[3]+section[5]):
+                        at=section[4]+address-section[3]
+                        if stage[0][at:at+32]==self.source_owner_expected:
+                            self.source_owner_reads.append((address,self.source_owner_expected))
+            require(len(self.source_owner_reads)==1,
+                    'Complete-source owner SHA literal is absent/ambiguous')
+        require(not self.smash_menu or '__smash_native_child_seed' not in self.symbols,
+                'Smash menu module also exposes a fixed developer child seed')
+        self.smash_child_id = seed%(10 if self.smash_menu else 2)+1
+        self.smash_publish = []
+        if self.smash_child:
+            seed_name='__smash_native_menu_seed' if self.smash_menu else '__smash_native_child_seed'
+            seed_bytes=304 if self.smash_menu else 32
+            address, size, kind, owner = self.symbols[seed_name]
+            section=stage[3][owner]
+            require(not address&3 and kind==0 and size==0 and section[1]==1 and section[2]&7==2 and
+                    section[3]<=address<address+seed_bytes<=section[3]+section[5],
+                    'Smash child seed lacks its exact immutable aligned section owner')
+            offset=section[4]+address-section[3]
+            expected=struct.pack('<8I',0x5349554b,0x31554e4d if self.smash_menu else 0x31444843,
+                                 1,seed_bytes,0,0,0,0)+bytes(seed_bytes-32)
+            require(stage[0][offset:offset+seed_bytes]==expected,
+                    'Smash child linked seed differs from the exact blank v1 child capsule')
+            callbacks=(('_smash_native_gin_restore_arguments','_kui_smash_native_gin_resume') if self.smash_gin else
+                ('_smash_native_stage_child','_kui_smash_native_child_frame',
+                 '_kui_smash_native_menu_arguments' if self.smash_menu else '_kui_smash_native_child_arguments'))
+            for name in callbacks:
+                require(name in self.symbols and self.symbols[name][2]==2,
+                        'Smash child seed lacks its source-selected typed callback: '+name)
         self.callback_helpers, self.callback_helper_calls = {}, []
         self.callback_table = None
         self.selected_reader = None
@@ -247,13 +323,13 @@ class ArmRoute(Machine):
                 'Native stack selected-callback marker differs')
         self.selected_callbacks=marker is not None
         if self.selected_callbacks:
-            from check_native_dual_callbacks import (SELECTOR,ARM,TABLE,PINS,
+            from check_native_dual_callbacks import (SELECTOR,ARM,TABLE,helper_pins,
                                                       canonical_helper,expected_entries)
             require(helper_bodies is None or set(helper_bodies)<={ARM,SELECTOR},
                     'Native stack helper override escapes the actual callback helpers')
             for name in (ARM,SELECTOR):
                 original,normalized=canonical_helper(stage,name)
-                require((len(original),hashlib.sha256(normalized).hexdigest())==PINS[name],
+                require((len(original),hashlib.sha256(normalized).hexdigest())==helper_pins(stage)[name],
                         'Native stack actual callback helper changed: '+name)
                 override=(helper_bodies or {}).get(name,original)
                 require(len(override)==len(original),'Native stack helper override changes its extent')
@@ -276,14 +352,15 @@ class ArmRoute(Machine):
         self.heap_hook = resident[4]["_kui_vmu_observe_heap_hook"][0]
         self.return_hook = resident[4]["_kui_vmu_observe_return_hook"][0]
         self.frame, self.slot, self.original = 0x8C00ECAC, 0x8C0101BC, 0x8C011014
+        if self.smash_gin:self.frame=0x8c00f3ac
         self.r[4:6] = [self.frame, 0x105]
         self.before = self.r.copy(), self.pr, self.mach, self.macl, self.gbr, self.sr, self.fpscr, self.fr.copy()
         self.mem.update({self.control + 4 * i: 0 for i in range(16)})
         self.mem.update({self.cell + 4 * i: 0 for i in range(8)})
         self.mem[self.slot] = self.original
-        self.mem[self.frame + 20] = 0x8C010000
+        self.mem[self.frame + 20] = 0 if self.smash_gin else 0x8C010000
         self.exec_address=self.symbols["_exec_bytes"][0]
-        self.source_bytes=0x200000
+        self.source_bytes=1848288 if self.smash_menu else 0x200000
         self.program_bytes=self.source_bytes-(0x8000 if normalized else 0)
         self.mem[self.exec_address] = self.source_bytes
         manifest = self.symbols["_manifest"][0]
@@ -295,6 +372,7 @@ class ArmRoute(Machine):
                          manifest + 48: (self.selected_reader if self.selected_callbacks else
                                          1 if '_native_background_boot_region' in self.symbols else 0),
                          manifest + 52: 0})
+        if self.smash_menu:self.mem[manifest+40]=self.source_bytes
         for name, count in (("_native_heap", 18), ("_native_call", 5), ("_native_driver", 26)):
             self.mem.update({self.symbols[name][0] + 4 * i: 0 for i in range(count)})
         # An initializer-call record leaves the fixed-arena flag clear; that
@@ -305,6 +383,9 @@ class ArmRoute(Machine):
         # arena route's dispatch is executed by check_native_fixed_arena.py.
         if "_native_arena" in self.symbols:
             self.mem[self.symbols["_native_arena"][0]] = 0
+        if '_native_preclear' in self.symbols:
+            self.mem.update({self.symbols['_native_preclear'][0]+4*i:0 for i in range(5)})
+            self.mem[self.symbols['_kui_native_preclear_deferred'][0]]=0
         heap, call = self.symbols["_native_heap"][0], self.symbols["_native_call"][0]
         self.mem.update({heap + 24: self.original, heap + 28: self.slot, heap + 32: self.original,
                          call + 8: 0x8C0100C6, call + 12: 0x8CC00000, call + 16: 0x00400000})
@@ -321,18 +402,40 @@ class ArmRoute(Machine):
                   ("_native_sdk_coherence_cached_admit", "sdk-slot"),
                   ("_kui_vmu_native_exit_discover_guarded", "exits"),
                   ("_native_passive_capture_windows", "capture"), ("_native_runtime_mode", "mode"),
-                  ("_native_crt_bootstrap_prearm", "crt-prearm"))
+                  ("_native_crt_bootstrap_prearm", "crt-prearm"),
+                  ('_native_preclear_prepare','preclear-prepare'),('_native_preclear_arm','preclear-arm'))
         self.targets = {self.symbols[name][0]: label for name, label in labels if name in self.symbols}
+        if self.smash_child:
+            if self.smash_gin:
+                self.targets[self.symbols['_smash_native_gin_restore_arguments'][0]]='gin-arguments'
+            else:
+                for name,label in (('_smash_native_stage_child','child-owner'),
+                               ('_kui_smash_native_child_frame','child-frame'),
+                               ('_kui_smash_native_menu_arguments' if self.smash_menu else '_kui_smash_native_child_arguments','child-arguments'),
+                               ('_kui_native_passive_publish','child-publish')):
+                    self.targets[self.symbols[name][0]]=label
+            if self.smash_menu:
+                if not self.smash_gin:self.targets[self.symbols['_kui_smash_native_menu_name'][0]]='child-name'
+                self.targets[self.symbols['_kui_smash_native_menu_cached_full_source_owner'][0]]='complete-source-hash'
+            if self.smash_return:
+                self.targets[self.symbols['_kui_smash_native_return_stage_publish'][0]]='child-return-publish'
         self.armed = False
         self.nonstack_writes = []
 
     def code(self,address,size):
+        for base,(_,body) in getattr(self,'source_owner_helpers',{}).items():
+            if base<=address<address+size<=base+len(body):
+                return body[address-base:address-base+size]
         for base,(_,body) in self.callback_helpers.items():
             if base<=address<address+size<=base+len(body):
                 return body[address-base:address-base+size]
         return super().code(address,size)
 
     def read(self,address):
+        for base,body in getattr(self,'source_owner_reads',()):
+            if base<=address<address+4<=base+len(body):
+                require(not address&3,'Source owner immutable SHA read is unaligned')
+                return struct.unpack_from('<I',body,address-base)[0]
         if self.callback_table is not None:
             base,body=self.callback_table
             if base<=address<address+4<=base+len(body):
@@ -341,6 +444,17 @@ class ArmRoute(Machine):
         return super().read(address)
 
     def plain(self,word,pc):
+        if word&0xf00f==0x6004:  # MOV.B @Rm+,Rn (actual bounded memcmp)
+            n,m=word>>8&15,word>>4&15;address=self.r[m]
+            byte=(self.read(address&~3)>>((address&3)*8))&255
+            self.r[n]=(byte-256 if byte&128 else byte)&MASK
+            if n!=m:self.r[m]=(address+1)&MASK
+            return
+        if word&0xf00f==0x600c:  # EXTU.B Rm,Rn
+            n,m=word>>8&15,word>>4&15;self.r[n]=self.r[m]&255;return
+        if word&0xf00f==0x600a:  # NEGC Rm,Rn
+            n,m=word>>8&15,word>>4&15;value=self.r[m];carry=self.sr&1
+            self.r[n]=(-value-carry)&MASK;self.t(bool(value or carry));return
         if word&0xf00f==0x000e:  # MOV.L @(R0,Rm),Rn; capture both sources before Rn.
             n,m=word>>8&15,word>>4&15
             self.r[n]=self.read((self.r[0]+self.r[m])&MASK)
@@ -364,11 +478,49 @@ class ArmRoute(Machine):
             assert self.mem[self.control] == self.symbols["_kui_vmu_observe_stage_install"][0]
             assert self.mem[self.control + 4] == self.stack[2], "ARMED before publishing typed installer stack"
             assert [self.mem[self.cell + i * 4] for i in range(4)] == [self.original, 0x8CC00000, 0x00400000, 0x0C0100C6]
+            if '_native_preclear' in self.symbols:
+                assert self.calls.count('preclear-prepare')==1 and not self.calls.count('preclear-arm')
             self.armed = True
         self.mem[key] = value & MASK
 
     def call(self, target):
         if target == self.stop_pc:
+            return False
+        if self.timing and target==self.symbols['_kui_smash_phase_stage_mark'][0]:
+            phase=self.r[4]
+            expected=(21,22,23,24,25)
+            require(len(self.timing_marks)<len(expected) and phase==expected[len(self.timing_marks)],
+                    'Diagnostic relay changed its exact timing checkpoint order')
+            if phase==21:require(not self.calls,'Relay timing begins after an unmeasured callback')
+            if phase==22:require(self.calls.count('restore')==1,'Relay verification timing precedes base verification')
+            if phase==23:require(self.calls.count('extent')==1 and not self.calls.count('cache'),
+                                'Native resolution timing does not bracket the actual proof')
+            if phase==24:require(self.calls.count('sha')==1 and not self.armed,
+                                'Native resolution completion timing follows hook arming')
+            if phase==25:require(self.armed and self.calls.count('child-return-publish')==1,
+                                'Final timing checkpoint precedes return publication')
+            self.timing_marks.append(phase);self.abi_return();return True
+        if self.timing and not self.timing_text and target==self.symbols['_smash_phase_stage_report'][0]:
+            require(self.timing_marks==[21,22,23,24,25] and self.armed and
+                    self.calls[-1]=='child-return-publish',
+                    'Timing terminal does not follow complete native argument and hook publication')
+            self.timing_stopped=True;self.pc=self.stop_pc;return True
+        if target in self.source_owner_helpers:
+            label=self.source_owner_helpers[target][0];self.source_owner_calls.append(label)
+            require(not self.armed and not self.calls.count('sha') and
+                    self.calls.count('extent')==1 and
+                    (self.calls.count('cache')==1 if self.cache_hit else self.calls.count('driver')==1),
+                    'Actual source owner escaped the fresh-proof/before-hooks boundary')
+            if label=='_kui_smash_native_child_engine_owner':
+                require(self.program_bytes==self.source_bytes and
+                        self.r[4:6]==[self.source_bytes,self.symbols['_native_driver'][0]+72],
+                        'Full-source owner reused a reclaimed-prefix digest')
+            else:
+                require(self.r[4:7]==[self.symbols['_native_driver'][0]+72,
+                        self.source_owner_reads[0][0],32],
+                        'Actual owner memcmp changed its exact SHA spans')
+            return False
+        if any(base<=target<base+len(body) for base,(_,body) in self.source_owner_helpers.items()):
             return False
         if target in self.callback_helpers:
             self.callback_helper_calls.append(self.callback_helpers[target][0])
@@ -379,8 +531,61 @@ class ArmRoute(Machine):
             return False
         assert target in self.targets, "unexpected native relay callback"
         label = self.targets[target]; self.calls.append(label)
+        if label=='gin-arguments':
+            require(self.smash_gin and not any(value in self.calls for value in
+                ('child-owner','child-frame','child-arguments','child-publish')),
+                'Original GIN route invoked a cold frame/argument synthesizer')
+            if self.mode!=1:
+                require(self.armed and self.calls.count('crt-prearm')==1 and self.calls.count(label)==1,
+                    'Original GIN context restored before immutable proof and allocator arming')
+        if label=='child-owner':
+            require(self.smash_child and self.calls.count('restore')==1,
+                    'Child owner callback precedes complete immutable base verification')
+            if self.calls.count('child-owner')==1:
+                require(not self.armed and not self.calls.count('mode'),
+                        'Initial child owner callback follows native admission/arming')
+            else:
+                require(self.calls.count('child-owner')==2 and self.calls[-2]=='crt-prearm' and self.armed,
+                        'Child argument owner callback precedes complete immutable hook preparation')
+        if label=='child-frame':
+            require(self.calls[-2:]==['child-owner','child-frame'] and not self.armed and
+                    self.r[4:6]==[self.frame,self.frame],
+                    'Child frame normalization changed its exact original frame or order')
+            # The separately production-C-tested normalizer sets the child
+            # entry PR to zero. Hook installation subsequently replaces it.
+            self.mem[self.frame+20]=0
+        if label=='child-publish':
+            require(self.armed and self.calls.count('child-owner')==2 and
+                    self.calls.count('crt-prearm')==1 and not self.calls.count('child-arguments'),
+                    'Child argument cache publication precedes immutable preparation')
+            self.smash_publish.append(tuple(self.r[4:6]))
+            require(self.smash_publish in ([(0x8c19ee60,0x8c1a0e60)],
+                    [(0x8c19ee60,0x8c1a0e60),(0x8c0080e0,0x8c008100)]),
+                    'Child publisher touches a span other than the exact GINS context/IP tail')
+        if label=='child-arguments':
+            argument=self.symbols['__smash_native_menu_seed'][0] if self.smash_menu else self.smash_child_id
+            require(self.armed and self.calls.count('child-arguments')==1 and
+                    self.smash_publish==[(0x8c19ee60,0x8c1a0e60),(0x8c0080e0,0x8c008100)] and
+                    self.r[4:8]==[0xac19ee60,8192,0xac0080f0,argument],
+                    'Child argv mutation changed its exact P2 context/IP/child arguments or order')
+        if label=='child-name':
+            require(self.smash_menu and self.calls[-2]=='child-arguments' and
+                    self.r[4]==self.smash_child_id,
+                    'Menu metadata lookup precedes original-context argument installation')
+        if label=='child-return-publish':
+            ending=(['gin-arguments',label] if self.smash_gin else
+                ['child-arguments','child-name','line','line',label])
+            require(self.smash_return and self.armed and self.calls.count(label)==1 and
+                    self.calls.count('crt-prearm')==1 and
+                    self.calls[-len(ending):]==ending,
+                    'Return gate publication precedes complete child arguments and native hook arming')
+            self.return_publish_site=self.pc
         if label=="refused":
-            if self.calls[-2]=="crt-prearm":
+            if not self.owner_admitted:
+                require(self.smash_menu and not self.armed and not self.calls.count('sha') and
+                        self.r[4:6]==[2,0x534f5731] and self.source_owner_calls,
+                        'Invalid complete-source owner did not refuse before hooks')
+            elif self.calls[-2]=="crt-prearm":
                 assert not self.crt_admitted and self.sdk_admitted and self.armed
                 assert self.r[4:6]==[2,0x48],"cold CRT prearm refusal changed its exact terminal diagnostic"
             else:
@@ -401,6 +606,18 @@ class ArmRoute(Machine):
             self.write(self.r[7],self.program_bytes)
         if label in ("cache","driver","heap","call"):
             assert self.calls.count("extent")==1 and self.mem[self.exec_address]==self.program_bytes
+        if self.smash_menu and (label=='driver' or (label=='cache' and self.cache_hit)):
+            # Model only the independent fresh discovery/replay outputs; the
+            # relay's inlined geometry and actual owner/SHA comparison execute.
+            driver=self.symbols['_native_driver'][0]
+            self.mem[driver+12]=self.program_bytes;self.mem[driver+16]=0x8c010000
+            digest=bytearray(self.source_owner_expected)
+            if not self.owner_admitted:digest[0]^=1
+            for i in range(8):self.mem[driver+72+4*i]=struct.unpack_from('<I',digest,4*i)[0]
+        if label=='complete-source-hash':
+            require(self.smash_menu and self.program_bytes<self.source_bytes and not self.armed and
+                    not self.calls.count('sha'),'Whole-source SHA is not before prefix arming')
+            self.source_owner_calls.append(label)
         # With a cache-bearing stage use the hit path; without it exercise the
         # same common publisher after the reviewed full-discovery callbacks.
         if label in ("driver", "heap"):
@@ -414,32 +631,55 @@ class ArmRoute(Machine):
             assert all(self.calls.count(name)==1 for name in ("driver","heap","call","allocation","release","exits"))
         if label=="capture" and "_native_sdk_coherence_cached_admit" in self.symbols:
             assert self.sdk_admitted and self.calls[-2]=="sdk-slot","cold windows captured before SDK-slot admission"
+        if label=='preclear-prepare':
+            # This relay fixture is an unrelated allocator, whose immutable
+            # preheap plan is absent. Actual TS planning/arming and erasure
+            # run in test_vmu_native_preclear_execution.py.
+            assert not self.armed and not self.calls.count('sha') and self.calls.count('extent')==1
+            assert self.mem[self.exec_address]==self.program_bytes
+            assert not self.mem[self.symbols['_native_preclear'][0]]
+        if label=='preclear-arm':
+            assert self.calls.count('preclear-prepare')==1 and (self.armed or 'fixed-arm' in self.calls)
+            assert not self.mem[self.symbols['_native_preclear'][0]]
         if label=="crt-prearm":
             assert self.calls.count("sha")==1, "CRT entry patched before immutable proof completed"
             if "fixed-arm" in self.calls:
                 # This dispatch-only test models the fixed arm; its actual
                 # stores are proved by the separate fixed-arena CPU audit.
-                assert self.calls[-2]=="fixed-arm"
+                assert self.calls[-2]==('preclear-arm' if '_native_preclear' in self.symbols else 'fixed-arm')
             else:
                 assert self.armed and self.mem[self.control+8]==1
                 assert self.mem[self.slot]==self.heap_hook and self.mem[self.frame+20]==self.return_hook
             assert self.calls.count("crt-prearm")==1, "CRT entry prearm repeated during initial relay"
-        result = (self.mode if label == "mode" else int(self.cache_hit) if label == "cache"
+            if '_native_preclear' in self.symbols:
+                assert self.calls.count('preclear-arm')==1 and self.calls[-2]=='preclear-arm'
+        result = (self.smash_child_id if label=='child-owner' else
+                  1 if label in ('child-frame','child-arguments') else
+                  self.mode if label == "mode" else int(self.cache_hit) if label == "cache"
                   else int(self.sdk_admitted) if label=="sdk-slot"
                   else int(self.crt_admitted) if label=="crt-prearm"
+                  else int(self.owner_admitted) if label=='complete-source-hash'
                   else int(label in ("ip", "extent", "driver", "heap", "call", "allocation", "release", "exits")))
         self.abi_return(result)
         return True
 
     def check(self):
         registers, pr, _, _, _, sr, fpscr, fr = self.before
+        if not self.owner_admitted and self.mode!=1:
+            require(self.refused and not self.armed and not self.calls.count('sha') and
+                    not self.smash_publish and self.mem[self.slot]==self.original,
+                    'Rejected source owner published native hooks or arguments')
+            require(all(self.mem[self.control+4*i]==0 for i in range(16)) and
+                    all(self.mem[self.cell+4*i]==0 for i in range(8)),
+                    'Rejected source owner mutated low installation controls')
+            return
         if not self.crt_admitted and self.mode!=1:
             assert self.refused and self.armed and self.calls[-2:]==["crt-prearm","refused"]
             assert self.calls.count("sha")==1 and self.mem[self.slot]==self.heap_hook
             return
         if not self.sdk_admitted and self.mode!=1:
             assert self.refused and not self.armed and not any(label in self.calls for label in ("capture","sha"))
-            assert self.mem[self.slot]==self.original and self.mem[self.frame+20]==0x8C010000
+            assert self.mem[self.slot]==self.original and self.mem[self.frame+20]==(0 if self.smash_child else 0x8C010000)
             assert all(self.mem[self.control+4*i]==0 for i in range(16))
             assert all(self.mem[self.cell+4*i]==0 for i in range(8))
             assert not self.callback_helper_calls
@@ -451,20 +691,43 @@ class ArmRoute(Machine):
                 ("ip", "extent", "cache", "driver", "heap", "call", "allocation", "prepare", "sha", "release", "exits", "sdk-slot", "capture"))
             assert all(self.mem[self.control + 4 * i] == 0 for i in range(16))
             assert all(self.mem[self.cell + 4 * i] == 0 for i in range(8))
-            assert self.mem[self.slot] == self.original and self.mem[self.frame + 20] == 0x8C010000
+            assert self.mem[self.slot] == self.original and self.mem[self.frame + 20] == (0 if self.smash_gin else 0x8C010000)
             assert not self.callback_helper_calls
         else:
             assert self.armed and self.mem[self.control + 4] == self.stack[2]
+            if self.smash_menu:
+                require(self.source_owner_calls==(['_kui_smash_native_child_engine_owner','_memcmp']
+                        if self.program_bytes==self.source_bytes else ['complete-source-hash']),
+                        'Actual full-source owner or independent prefix proof was skipped')
             assert self.mem[self.slot] == self.heap_hook and self.mem[self.frame + 20] == self.return_hook
             assert self.mem[self.control + 8] == 1 and self.calls.count("sha") == 1
             if "_native_crt_bootstrap_prearm" in self.symbols:
-                assert self.calls[-1]=="crt-prearm" and self.calls.count("crt-prearm")==1
+                assert self.calls.count("crt-prearm")==1
+                if self.smash_child:
+                    ending=(['gin-arguments'] if self.smash_gin else
+                        ['child-arguments','child-name','line','line'] if self.smash_menu else ['child-arguments','line'])
+                    if self.smash_return:ending+=['child-return-publish']
+                    require((self.calls.count('gin-arguments')==1 and not any(value in self.calls for value in
+                                ('child-frame','child-owner','child-arguments')) if self.smash_gin else
+                            self.calls.count('child-frame')==1 and self.calls.count('child-owner')==2 and
+                            self.calls.count('child-arguments')==1) and
+                            self.calls[-len(ending):]==ending,
+                            'Child mutations do not bracket immutable native relay preparation')
+                else:
+                    assert self.calls[-1]=="crt-prearm"
             if not self.cache_hit and "_native_sdk_coherence_cached_admit" in self.symbols:
                 assert self.calls.count("sdk-slot")==1 and self.calls.index("sdk-slot")<self.calls.index("capture")
             if self.selected_callbacks:
                 assert self.callback_helper_calls==['_native_arm_heap_hook','_native_low_bindings'], \
                     'relay did not execute both actual selected callback helpers'
-        assert self.r[8:] == registers[8:] and (self.mode == 1 or self.pr == pr) and self.sr & ~1 == sr & ~1
+        if self.timing and not self.timing_text and self.mode!=1:
+            require(self.timing_stopped and self.timing_marks==[21,22,23,24,25],
+                    'Diagnostic native relay resumed the game instead of stopping for its report')
+        else:
+            if self.timing_text and self.mode!=1:
+                require(not self.timing_stopped and self.timing_marks==[21,22,23,24,25],
+                        'Text timing does not preserve all relay phases and normal owner resume')
+            assert self.r[8:] == registers[8:] and (self.mode == 1 or self.pr == pr) and self.sr & ~1 == sr & ~1
         assert self.fpscr == fpscr and self.fr == fr
 
 
@@ -485,7 +748,7 @@ class HeapHook(Machine):
                          self.cell: self.initializer, self.cell + 4: self.r[4], self.cell + 8: self.r[5],
                          self.cell + 12: self.pr & 0x1FFFFFFF})
         # Include the local publisher helper immediately after its typed caller.
-        payload = inspect_elf(resident[0], 0x8C004000,
+        payload = inspect_resident(resident,
             0x8c007ba0 if '_kui_vmu_native_background_manifest_bind' in resident[4] else 0x8C007800)["payload"]
         count = len(self.blob)
         self.blob += payload[self.base - 0x8C004000 + count:self.base - 0x8C004000 + count + 28]
@@ -572,6 +835,15 @@ def check(stage, resident, *, worker=None, self_test=False):
     stack = typed_stack(stage)
     if stack is None:
         return {"enabled": False}
+    from check_native_dual_callbacks import preclear_profile
+    preclear_resume=None
+    if preclear_profile(stage):
+        from check_vmu_native_heap_probe import heap_resume_offset
+        base,body,_=symbol_bytes(resident,'_kui_vmu_observe_heap_hook',2)
+        low_image=inspect_resident(resident,0x8c007ba0)
+        preclear_resume=heap_resume_offset(resident[0],low_image,base,body)
+        require(preclear_resume is not None and resident[4].get('__kui_native_heap_resume_offset')==
+                (preclear_resume,0,0,0xfff1),'Preheap stage lacks its exact surviving LOW continuation')
     if worker is not None:
         require(STACK_SYMBOL not in worker[4] and HELPER not in worker[4] and BOTTOM_HELPER not in worker[4],
                 "temporary installer stack/helper retained in gameplay worker")
@@ -615,6 +887,14 @@ def check(stage, resident, *, worker=None, self_test=False):
                     ArmRoute(stage,resident,stack,7,mask,cache_hit=hit,mode=mode,
                              crt_admitted=False).run().check()
                     crt_refusals+=1
+    source_owner_refusals=0
+    if '__smash_native_menu_seed' in stage[4]:
+        for mask in (0,15):
+            for hit in (False,True):
+                for normalized in (False,True):
+                    ArmRoute(stage,resident,stack,7,mask,cache_hit=hit,normalized=normalized,
+                             owner_admitted=False).run().check()
+                    source_owner_refusals+=1
     boundary_cases=0
     for seed in range(4):
         for mask in range(16):
@@ -643,6 +923,19 @@ def check(stage, resident, *, worker=None, self_test=False):
     selected_callbacks=stage[4].get('__kui_native_dual_low_callbacks_stage')==(1,0,0,0xfff1)
     scalar_cases=indexed_load_truth_cases() if selected_callbacks else 0
     if self_test:
+        if '_kui_smash_native_return_stage_publish' in stage[4]:
+            reference=ArmRoute(stage,resident,stack,7,15).run()
+            reference.check()
+            changed=bytearray(reference.blob)
+            require(reference.return_publish_site is not None,
+                    'Menu route never reaches its return gate publication')
+            at=reference.return_publish_site-reference.base
+            require(struct.unpack_from('<H',changed,at)[0]&0xf0ff==0x400b,
+                    'Return publication mutation site is not its actual JSR')
+            struct.pack_into('<H',changed,at,9)
+            try:ArmRoute(stage,resident,stack,7,15,body=bytes(changed)).run().check()
+            except (AssertionError,ValueError):mutations+=1
+            else:raise ValueError('Menu relay accepted missing return gate publication')
         mutation_symbol=('_native_arm_heap_hook' if selected_callbacks else '_kui_retail_stage_relay')
         relay_base, relay_body, _ = symbol_bytes(stage, mutation_symbol, 2)
         expected = struct.pack("<I", stack[2]); at = relay_body.find(expected)
@@ -690,6 +983,26 @@ def check(stage, resident, *, worker=None, self_test=False):
             address,body,_=symbol_bytes(stage,name,kind)
             callback_metadata[name]=dict(address=hex(address),bytes=len(body),sha256=hashlib.sha256(body).hexdigest())
     return {"enabled": True, "object_address": hex(stack[0]), "object_bytes": stack[1],
+            "smash_child_callbacks": {'enabled':any(name in stage[4] for name in ('__smash_native_child_seed','__smash_native_menu_seed')),
+                'menu_capture':'__smash_native_menu_seed' in stage[4],
+                'original_GIN_adoption':'__kui_smash_native_gin_adoption' in stage[4],
+                'child_ids_exercised':[] if '__kui_smash_native_gin_adoption' in stage[4] else
+                    list(range(1,11)) if '__smash_native_menu_seed' in stage[4] else
+                    [1,2] if '__smash_native_child_seed' in stage[4] else [],
+                'frame_after_immutable_base':'__kui_smash_native_gin_adoption' not in stage[4] and
+                    any(name in stage[4] for name in ('__smash_native_child_seed','__smash_native_menu_seed')),
+                'already_captured_GIN_frame_not_synthesized':'__kui_smash_native_gin_adoption' in stage[4],
+                'arguments_after_immutable_discovery_and_hooks':any(name in stage[4] for name in ('__smash_native_child_seed','__smash_native_menu_seed')),
+                'context_and_ip_p2_spans_exact':'__kui_smash_native_gin_adoption' not in stage[4] and
+                    any(name in stage[4] for name in ('__smash_native_child_seed','__smash_native_menu_seed')),
+                'original_GIN_context_restore_ABI_boundary':'__kui_smash_native_gin_adoption' in stage[4],
+                'return_publication_after_arguments_and_native_arming':
+                    '_kui_smash_native_return_stage_publish' in stage[4],
+                'phase_text_continues_normal_owner': '__smash_phase_text_capability' in stage[4],
+                'photo_terminal_profile': '_smash_phase_stage_report' in stage[4],
+                'callback_semantics_separately_production_c_tested':True,
+                'callback_callees_modeled_as_abi_adversaries':True},
+            'preheap_exact_low_resume_offset':preclear_resume,
             "installer_sp": hex(stack[2]), "stage_bss_end": hex(stack[4]),
             "ordinary_entry_and_relay_stack": hex(OLD_STACK), "package_stack_unchanged": True,
             "typed_zero_fill_object": True, "complete_bss_in_live_allocation_guard": True,
@@ -713,6 +1026,10 @@ def check(stage, resident, *, worker=None, self_test=False):
             "cold_sdk_slot_refusal_before_any_arming_cases":refusals,
             "cold_crt_prearm_after_low_arming_before_owner_entry":bool(crt_refusals),
             "cold_crt_prearm_result_refusal_cases":crt_refusals,
+            "complete_source_owner_refusal_cases":source_owner_refusals,
+            "complete_source_owner_actual_helper_and_memcmp":'__smash_native_menu_seed' in stage[4],
+            "complete_source_owner_geometry_and_current_SHA_bound":'__smash_native_menu_seed' in stage[4],
+            "prefix_complete_source_SHA_has_separate_core_execution_proof":'__smash_native_menu_seed' in stage[4],
             "full_source_verified_before_program_extent":True,
             "normal_and_shortened_extent_arming_routes":True,
             "runtime_modes": list(modes), "control_preserves_original_frame_and_allocator": 1 in modes,

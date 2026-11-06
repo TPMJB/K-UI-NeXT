@@ -1,0 +1,288 @@
+{
+  "schema": "kui.vc2.runtime.geometry.v1",
+  "status": "reviewed-source-metadata-matched",
+  "runtime_admitted": false,
+  "patching_admitted": false,
+  "source": {
+    "bytes": 1841152,
+    "sha256": "b728e8eaef03bd7cc5acbe3dc3363ec9fafcaca90916cf21781d2e72ff99b3bc"
+  },
+  "geometry": {
+    "KData": "0x8c1d5800",
+    "current_process": "0x8c1d5890",
+    "current_thread": "0x8c1d5894",
+    "process_table": "0x8c1de6e0",
+    "process_count": 32,
+    "process_stride": 156,
+    "process_slot_offset": 12,
+    "process_handle_offset": 8,
+    "TTB_register": "0xff000008",
+    "slot_shift": 25,
+    "block_shift": 16,
+    "block_mask": 511,
+    "page_shift": 12,
+    "page_mask": 15,
+    "MEMBLOCK_page_offset": 12,
+    "committed_page_mask": 1
+  },
+  "contracts": [
+    {
+      "name": "process_switch",
+      "module": "nk.exe",
+      "rva": "0x2118",
+      "bytes": 56,
+      "rom_storage_address": "0x8c012118",
+      "sha256": "ad46610b7e78c2d9a5b94e692fdf066aad2a2db694279fd12fd227eef412d6cc",
+      "crc32": "9268a29b"
+    },
+    {
+      "name": "current_thread_API_return",
+      "module": "nk.exe",
+      "rva": "0x2256",
+      "bytes": 102,
+      "rom_storage_address": "0x8c012256",
+      "sha256": "f76f6dde4a440acdc66a64543e9af75285ca9577313f9d70bd64b96b2c50a217",
+      "crc32": "603c6343"
+    },
+    {
+      "name": "ordinary_page_walk",
+      "module": "nk.exe",
+      "rva": "0x259c",
+      "bytes": 160,
+      "rom_storage_address": "0x8c01259c",
+      "sha256": "74ad1367042763b70c717d2affe46321fa592ef0584de2c9e02db47afe830d6d",
+      "crc32": "deb790ca"
+    },
+    {
+      "name": "process_geometry",
+      "module": "nk.exe",
+      "rva": "0x5c5e",
+      "bytes": 58,
+      "rom_storage_address": "0x8c015c5e",
+      "sha256": "d2cd54975cf371b99d0eede13132f2ad8d044dd7e4896d753bc87efe85579fec",
+      "crc32": "50019d5e"
+    },
+    {
+      "name": "MapPtrToProcess",
+      "module": "nk.exe",
+      "rva": "0x5c98",
+      "bytes": 144,
+      "rom_storage_address": "0x8c015c98",
+      "sha256": "d73fbdb1ab9d7c2e5eeead5c98374420513ea353355b6bc5ab70581a467a7701",
+      "crc32": "bddf0c6b"
+    },
+    {
+      "name": "SetKMode",
+      "module": "nk.exe",
+      "rva": "0xdcd0",
+      "bytes": 36,
+      "rom_storage_address": "0x8c01dcd0",
+      "sha256": "54ca089e7faffd4b04be8d1da41b352269b14ccaab76ee8ed88fda96ffc63f41",
+      "crc32": "32b07d85"
+    },
+    {
+      "name": "root_allocation",
+      "module": "maple.dll",
+      "rva": "0x16d8",
+      "bytes": 276,
+      "rom_storage_address": "0x8c0b16d8",
+      "sha256": "c69b56996c1d233f4e1210998e94bcbfc949ac625071b857c4263a1643035a68",
+      "crc32": "0f34d307"
+    },
+    {
+      "name": "root_initialization",
+      "module": "maple.dll",
+      "rva": "0x1a38",
+      "bytes": 204,
+      "rom_storage_address": "0x8c0b1a38",
+      "sha256": "6e77973703f7f0bf6cccac4449d8eaa2e267c5e8048041d5f65778b20439b543",
+      "crc32": "9613c8bd"
+    },
+    {
+      "name": "DMA_initialization",
+      "module": "maple.dll",
+      "rva": "0x1dd0",
+      "bytes": 608,
+      "rom_storage_address": "0x8c0b1dd0",
+      "sha256": "31b5fd112494d4e225a2cd7355c94e7d905b4cbf8a3feb942b8f8afd8f8f13d1",
+      "crc32": "5b12dce0"
+    },
+    {
+      "name": "list_builder",
+      "module": "maple.dll",
+      "rva": "0x6c84",
+      "bytes": 512,
+      "rom_storage_address": "0x8c0b6c84",
+      "sha256": "7d036c7f177199949a8d8130d7d1cef5e9d98f9af01a6dcdee94a0d31cfe7b99",
+      "crc32": "e21ee258"
+    },
+    {
+      "name": "RX_allocator",
+      "module": "maple.dll",
+      "rva": "0x72f4",
+      "bytes": 100,
+      "rom_storage_address": "0x8c0b72f4",
+      "sha256": "3b33c67b9abf1c59ea5a34bb3bffced91bad62612b4c5350df09b0ddebd895a9",
+      "crc32": "a13e12ac"
+    },
+    {
+      "name": "completion",
+      "module": "maple.dll",
+      "rva": "0x6f64",
+      "bytes": 616,
+      "rom_storage_address": "0x8c0b6f64",
+      "sha256": "029e36a7dd7e72eda9c9b216e62c684c52f70c2b30028b275161d7965ba8be93",
+      "crc32": "c3d92882"
+    },
+    {
+      "name": "raw_active_request",
+      "module": "maple.dll",
+      "rva": "0x2f18",
+      "bytes": 96,
+      "rom_storage_address": "0x8c0b2f18",
+      "sha256": "c5565d319fcec40d12bdbb741aa1bc06530aaf93f06086309b629a4f0069ad15",
+      "crc32": "b2234344"
+    },
+    {
+      "name": "raw_request_queue",
+      "module": "maple.dll",
+      "rva": "0x3198",
+      "bytes": 144,
+      "rom_storage_address": "0x8c0b3198",
+      "sha256": "2138bc53a8f941432a87130a3765620f5e1f5db29d4d3855e2e232c72dabb023",
+      "crc32": "5a9f0b51"
+    },
+    {
+      "name": "generic_completion_and_queue_advance",
+      "module": "maple.dll",
+      "rva": "0x2e64",
+      "bytes": 180,
+      "rom_storage_address": "0x8c0b2e64",
+      "sha256": "29b4a8d31a0ecfa341ff3a445f973c2459eb780bf19d9901d4de88e77f010c3d",
+      "crc32": "cd6623bf"
+    },
+    {
+      "name": "unit_function_factory",
+      "module": "maple.dll",
+      "rva": "0x38d8",
+      "bytes": 372,
+      "rom_storage_address": "0x8c0b38d8",
+      "sha256": "ade481ca21f753be126146472e658030de7790c3254597566a1a9d958c5da783",
+      "crc32": "fe56adc6"
+    },
+    {
+      "name": "device_info_transition",
+      "module": "maple.dll",
+      "rva": "0x3d2c",
+      "bytes": 384,
+      "rom_storage_address": "0x8c0b3d2c",
+      "sha256": "cd4cb53f650ca3bcb52af4d545bbb921717b8382b064eb9667a8379ddabe1617",
+      "crc32": "92a11b63"
+    },
+    {
+      "name": "attached_unit_discovery",
+      "module": "maple.dll",
+      "rva": "0x6e84",
+      "bytes": 224,
+      "rom_storage_address": "0x8c0b6e84",
+      "sha256": "355fccc07bf033682e42895e088f0a6a49fbd0795a52c40c3caf9fcf090dac19",
+      "crc32": "e068d1e2"
+    },
+    {
+      "name": "RX_buckets",
+      "module": "maple.dll",
+      "rva": "0x740c",
+      "bytes": 496,
+      "rom_storage_address": "0x8c0b740c",
+      "sha256": "dac9202672e86dd78c372c325f561812c039cda3598284bb613372d0a791acba",
+      "crc32": "8c09f028"
+    },
+    {
+      "name": "RX_free",
+      "module": "maple.dll",
+      "rva": "0x75fc",
+      "bytes": 268,
+      "rom_storage_address": "0x8c0b75fc",
+      "sha256": "4d832860fb1f70505051a87530cb032e1dda6e10e50fe51306e36c4ec518a0d0",
+      "crc32": "8d1604b9"
+    },
+    {
+      "name": "RX_pages",
+      "module": "maple.dll",
+      "rva": "0x7708",
+      "bytes": 64,
+      "rom_storage_address": "0x8c0b7708",
+      "sha256": "ac945cba310f4fee582169eb05782efdf017306c6ccd0847196bd1d3609f92e2",
+      "crc32": "a41200f1"
+    }
+  ],
+  "maple_static_geometry": {
+    "extension_bytes": 416,
+    "extension_allocation_import": "COREDLL ordinal1095 operator new(unsigned int)",
+    "extension_allocation_size_load_rva": "0x16e6",
+    "root_holder_rva": "0x82b8",
+    "shutdown_word": 0,
+    "TX_physical": 132,
+    "TX_virtual": 136,
+    "final_descriptor": 140,
+    "descriptor_end": 144,
+    "mapped_Maple_base": 256,
+    "RX_allocator_context": 168,
+    "RX_physical_low": 192,
+    "RX_physical_high": 196,
+    "RX_virtual": 204,
+    "RX_physical_minus_virtual": 216,
+    "RX_pool_bytes": 8192,
+    "TX_pool_bytes": 4096,
+    "completion_notification": 348,
+    "completion_event": 352,
+    "unit_function_static_contract_review_complete": true
+  },
+  "maple_RX_ownership": {
+    "unit_bytes": 28,
+    "function_bytes": 336,
+    "unit_pointer_offset": "4+port*32+unit_index*4",
+    "function_count_byte": 8,
+    "function_count_max": 3,
+    "function_pointer_offset": "12+function_index*4",
+    "function_fields": {
+      "dispatch": 0,
+      "RX_virtual": 12,
+      "requested_capacity": 16,
+      "command": 20,
+      "expected_response": 21,
+      "payload_words": 22,
+      "included": 23,
+      "pending_IRP": 28,
+      "explicit_RX_physical": 32,
+      "queued_requests": 304
+    },
+    "bucket_sizes": [
+      32,
+      64,
+      256,
+      512,
+      1024
+    ],
+    "strict_greater_than_thresholds": [
+      32,
+      64,
+      256,
+      512
+    ],
+    "initial_discovery_capacity": 116,
+    "initial_discovery_excluded": true,
+    "generic_request_capacity": "zero_extend(request_byte7)*4",
+    "active_raw_request_RVA": "0x2f18",
+    "completion_RVA": "0x2e64",
+    "completion_can_advance_queued_request": true,
+    "requires_publication_before_original_completion": true,
+    "pointer_may_survive_original_completion": false,
+    "runtime_lifetime_admitted": false
+  },
+  "limits": [
+    "Exact-owner static geometry only; no live mappings or source memory is changed.",
+    "A translated physical address does not prove current owner, lifetime, native permissions, coherent cache data or a DMA lease.",
+    "No retail bytes or disassembly are emitted. No VMU card is advertised or read."
+  ]
+}

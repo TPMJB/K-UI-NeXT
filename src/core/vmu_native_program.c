@@ -97,16 +97,26 @@ static bool prefix_references(const uint8_t *p,size_t prefix,size_t total,uint32
     }
     return true;
 }
-/* The unique supported startup allocator, discovered identically with and
+/* The verified trailing-IP form also admits the direct32-byte allocator:
+ * both complete original bodies and the unique startup call must resolve
+ * identically with and without the discarded bootstrap. Ordinary short-tail
+ * trimming remains limited to the dispatch-table family.
+ * The unique supported startup allocator, discovered identically with and
  * without the suffix, begins its arena at begin and spans the rest of RAM;
  * the prefix alone keeps its complete firmware exits. */
-static bool reclaimed(const void *image,size_t n,size_t prefix,uint32_t load,uint32_t begin) {
+static bool reclaimed_heap(const struct kui_vmu_native_heap *heap,bool bootstrap) {
+    return (heap->family==KUI_VMU_NATIVE_HEAP_TAIL32 && heap->layout==KUI_VMU_NATIVE_HEAP_DISPATCH2) ||
+        (bootstrap && heap->family==KUI_VMU_NATIVE_HEAP_DIRECT32 && heap->layout==KUI_VMU_NATIVE_HEAP_DIRECT);
+}
+static bool reclaimed(const void *image,size_t n,size_t prefix,uint32_t load,uint32_t begin,bool bootstrap) {
     struct kui_vmu_native_heap raw,program;struct kui_vmu_native_heap_call before,after;
     if(kui_vmu_native_heap_discover(image,n,load,&raw)!=KUI_VMU_NATIVE_HEAP_FOUND ||
+       !reclaimed_heap(&raw,bootstrap) ||
        !kui_vmu_native_heap_call_discover(image,n,&raw,&before) ||
        physical(before.entry_begin)!=begin ||
        before.entry_bytes!=UINT32_C(0x0d000000)-begin ||
        kui_vmu_native_heap_discover(image,prefix,load,&program)!=KUI_VMU_NATIVE_HEAP_FOUND ||
+       !reclaimed_heap(&program,bootstrap) ||
        !kui_vmu_native_heap_call_discover(image,prefix,&program,&after)) return false;
     raw.image_bytes=(uint32_t)prefix;
     struct kui_vmu_native_exit exits;
@@ -132,7 +142,7 @@ static size_t arena_tail(const void *image,size_t n,uint32_t load) {
         end_word=direct(value) && physical(value)<=cut && physical(value)+32u>=cut;
     }
     unsigned boundaries;
-    return end_word && reclaimed(image,n,prefix,load,cut) &&
+    return end_word && reclaimed(image,n,prefix,load,cut,false) &&
         prefix_references(p,prefix,n,load,&boundaries)?prefix:n;
 }
 bool kui_vmu_native_program_extent(const void *image,size_t n,uint32_t load,size_t *out) {
@@ -146,6 +156,6 @@ bool kui_vmu_native_program_extent(const void *image,size_t n,uint32_t load,size
     size_t prefix=n-IP_BYTES;unsigned boundaries;
     if((prefix&31u) || !bootstrap(p+prefix) || !prefix_references(p,prefix,n,load,&boundaries) ||
        boundaries!=1u ||
-       !reclaimed(image,n,prefix,load,physical(load)+(uint32_t)prefix+32u)) return false;
+       !reclaimed(image,n,prefix,load,physical(load)+(uint32_t)prefix+32u,true)) return false;
     *out=prefix;return true;
 }

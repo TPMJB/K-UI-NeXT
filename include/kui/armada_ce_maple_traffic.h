@@ -7,6 +7,8 @@
 #include "kui/armada_ce_cache_word.h"
 #include "kui/armada_ce_cache_line.h"
 #include "kui/armada_ce_vmu_layout.h"
+#include "kui/ce_maple_owner_profile.h"
+#include "kui/ce_vmu_target.h"
 /* Pure, bounded sampler for the actual live completion argument. read_p1 is
  * also used for the fixed TTB/CCR CPU registers. read_cache executes pinned
  * read-only cache-array/P2 loads in P2, with interrupts masked and the required
@@ -126,7 +128,7 @@ static inline bool kui_armada_ce_maple_traffic_meta(struct kui_armada_ce_maple_t
 }
 static inline bool kui_armada_ce_maple_traffic_witness(struct kui_armada_ce_maple_traffic_io *io,
     uint32_t ttb,uint32_t process,uint32_t ccr,uint32_t slot,uint32_t expected_root,bool final) {
-    static const uint32_t at[3]={0xff000008u,0x8c145890u,0xff00001cu};
+    static const uint32_t at[3]={0xff000008u,KUI_CE_MAPLE_CURRENT_PROCESS,0xff00001cu};
     const uint32_t expected[3]={ttb,process,ccr};uint32_t root,owner;
     for(unsigned i=0;i<3u;i++) {uint32_t v;
         if(!kui_armada_ce_maple_traffic_table(io,at[i],&v)) return false;
@@ -142,18 +144,19 @@ static inline bool kui_armada_ce_maple_traffic_body(struct kui_armada_ce_maple_t
     uint32_t raw,uint32_t ttb,uint32_t process,uint32_t ccr,unsigned *records) {
     struct kui_armada_ce_maple_traffic_scratch *w=io->w;
     uint32_t p1,ext,slot,root,txva,rxva;
-    if(process<0x8c14e6e0u || process>0x8c14e6e0u+31u*0x9cu ||
-       (process-0x8c14e6e0u)%0x9cu || (ccr&0xa1u)!=1u ||
+    if(process<KUI_CE_MAPLE_PROCESS_BASE || process>KUI_CE_MAPLE_PROCESS_BASE+31u*KUI_CE_MAPLE_PROCESS_STRIDE ||
+       (process-KUI_CE_MAPLE_PROCESS_BASE)%KUI_CE_MAPLE_PROCESS_STRIDE || (ccr&0xa1u)!=1u ||
        !kui_armada_ce_ram_table_p1(ttb,&p1) || kui_armada_ce_maple_traffic_owned(ttb,128u))
         return kui_armada_ce_maple_traffic_fail(w,KUI_ARMADA_CE_MAPLE_TRAFFIC_CONTEXT,process,ttb,ccr,0);
-    slot=(((process-0x8c14e6e0u)/0x9cu)+1u)<<25;
-    if(!kui_armada_ce_maple_owner_pointer(raw,slot,0x198u,&ext) || (ext&0xfffu)>0xe68u)
-        return kui_armada_ce_maple_traffic_fail(w,KUI_ARMADA_CE_MAPLE_TRAFFIC_ARGUMENT,raw,slot,0x198u,0);
+    slot=(((process-KUI_CE_MAPLE_PROCESS_BASE)/KUI_CE_MAPLE_PROCESS_STRIDE)+1u)<<25;
+    if(!kui_armada_ce_maple_owner_pointer(raw,slot,KUI_CE_MAPLE_EXTENSION_BYTES,&ext) ||
+       (ext&0xfffu)>0x1000u-KUI_CE_MAPLE_EXTENSION_BYTES)
+        return kui_armada_ce_maple_traffic_fail(w,KUI_ARMADA_CE_MAPLE_TRAFFIC_ARGUMENT,raw,slot,KUI_CE_MAPLE_EXTENSION_BYTES,0);
     if(!kui_armada_ce_maple_traffic_witness(io,ttb,process,ccr,slot,0,false) ||
        !kui_armada_ce_maple_traffic_table(io,ttb,&root) ||
        !kui_armada_ce_maple_traffic_map(io,ttb,ext,&w->map[0])) return false;
-    if(kui_armada_ce_maple_traffic_owned(w->map[0].physical_address,0x198u))
-        return kui_armada_ce_maple_traffic_fail(w,KUI_ARMADA_CE_MAPLE_TRAFFIC_MAPPING,ext,w->map[0].physical_address,0,0x198u);
+    if(kui_armada_ce_maple_traffic_owned(w->map[0].physical_address,KUI_CE_MAPLE_EXTENSION_BYTES))
+        return kui_armada_ce_maple_traffic_fail(w,KUI_ARMADA_CE_MAPLE_TRAFFIC_MAPPING,ext,w->map[0].physical_address,0,KUI_CE_MAPLE_EXTENSION_BYTES);
     if(!kui_armada_ce_maple_traffic_meta(io,ext,ccr,false)) return false;
     uint32_t tx=w->word[1],rx=w->word[6];
     if(w->word[0] || tx<0x0c010000u || tx>0x0cfff000u || (tx&0xfffu) ||
@@ -166,9 +169,11 @@ static inline bool kui_armada_ce_maple_traffic_body(struct kui_armada_ce_maple_t
        w->word[9]+w->word[8]!=rx)
         return kui_armada_ce_maple_traffic_fail(w,KUI_ARMADA_CE_MAPLE_TRAFFIC_METADATA,ext,tx,rx,1);
     p1=w->map[0].physical_address&0x1fffffffu;
-    if((p1<tx+0x1000u && tx<p1+0x198u) || (p1<rx+0x2000u && rx<p1+0x198u) ||
-       (ext<txva+0x1000u && txva<ext+0x198u) ||
-       (ext<rxva+0x2000u && rxva<ext+0x198u) || (txva<rxva+0x2000u && rxva<txva+0x1000u))
+    if((p1<tx+0x1000u && tx<p1+KUI_CE_MAPLE_EXTENSION_BYTES) ||
+       (p1<rx+0x2000u && rx<p1+KUI_CE_MAPLE_EXTENSION_BYTES) ||
+       (ext<txva+0x1000u && txva<ext+KUI_CE_MAPLE_EXTENSION_BYTES) ||
+       (ext<rxva+0x2000u && rxva<ext+KUI_CE_MAPLE_EXTENSION_BYTES) ||
+       (txva<rxva+0x2000u && rxva<txva+0x1000u))
         return kui_armada_ce_maple_traffic_fail(w,KUI_ARMADA_CE_MAPLE_TRAFFIC_METADATA,ext,p1,tx,2);
     for(unsigned i=0;i<3u;i++) {
         uint32_t va=i?rxva+(i-1u)*0x1000u:txva;

@@ -1,0 +1,291 @@
+{
+  "schema": "kui.smash-menu.return-runtime.v1",
+  "passed": true,
+  "elf_sha256": "866ad5498bab45b10b70c74186dc85e15a4b178699908b096dd0507c7c0a0b42",
+  "original_mde_sha256": "04f49d583b39bdc710cec6d0a434b5d710b9bccedd539bedda29755135f0fe61",
+  "source_reset_entry": "0x8c0117f0",
+  "cases": [
+    {
+      "case": "sf_return",
+      "instructions": 229365,
+      "reason": 0,
+      "retirement_calls": 1,
+      "irq_wait_visits": 0,
+      "original_helpers": [
+        "0x8c1598c0",
+        "0x8c1ad2c8",
+        "0x8c1ad31a"
+      ],
+      "raw_calls": [
+        {
+          "lba": 100,
+          "destination": "0xac0090a0",
+          "blocks": 1
+        },
+        {
+          "lba": 101,
+          "destination": "0xac010200",
+          "blocks": 1
+        },
+        {
+          "lba": 200,
+          "destination": "0xac010400",
+          "blocks": 2
+        }
+      ],
+      "private_min_sp": "0xac00bdf0",
+      "observed_private_stack_bytes": 528,
+      "private_stack_guard_unchanged": true,
+      "fresh_outer_cold_entry": true,
+      "exact_current_return_context": true,
+      "old_native_argv_not_reused": true,
+      "firmware_restored": true
+    },
+    {
+      "case": "psii_return",
+      "instructions": 229365,
+      "reason": 0,
+      "retirement_calls": 1,
+      "irq_wait_visits": 0,
+      "original_helpers": [
+        "0x8c1598c0",
+        "0x8c1ad2c8",
+        "0x8c1ad31a"
+      ],
+      "raw_calls": [
+        {
+          "lba": 100,
+          "destination": "0xac0090a0",
+          "blocks": 1
+        },
+        {
+          "lba": 101,
+          "destination": "0xac010200",
+          "blocks": 1
+        },
+        {
+          "lba": 200,
+          "destination": "0xac010400",
+          "blocks": 2
+        }
+      ],
+      "private_min_sp": "0xac00bdf0",
+      "observed_private_stack_bytes": 528,
+      "private_stack_guard_unchanged": true,
+      "fresh_outer_cold_entry": true,
+      "exact_current_return_context": true,
+      "old_native_argv_not_reused": true,
+      "firmware_restored": true
+    },
+    {
+      "case": "sf_return_again",
+      "instructions": 229365,
+      "reason": 0,
+      "retirement_calls": 1,
+      "irq_wait_visits": 0,
+      "original_helpers": [
+        "0x8c1598c0",
+        "0x8c1ad2c8",
+        "0x8c1ad31a"
+      ],
+      "raw_calls": [
+        {
+          "lba": 100,
+          "destination": "0xac0090a0",
+          "blocks": 1
+        },
+        {
+          "lba": 101,
+          "destination": "0xac010200",
+          "blocks": 1
+        },
+        {
+          "lba": 200,
+          "destination": "0xac010400",
+          "blocks": 2
+        }
+      ],
+      "private_min_sp": "0xac00bdf0",
+      "observed_private_stack_bytes": 528,
+      "private_stack_guard_unchanged": true,
+      "fresh_outer_cold_entry": true,
+      "exact_current_return_context": true,
+      "old_native_argv_not_reused": true,
+      "firmware_restored": true
+    },
+    {
+      "case": "busy_irq_progress",
+      "instructions": 359081,
+      "reason": 0,
+      "retirement_calls": 2,
+      "irq_wait_visits": 1,
+      "original_helpers": [
+        "0x8c1598c0",
+        "0x8c1ad2c8",
+        "0x8c1ad31a"
+      ],
+      "raw_calls": [
+        {
+          "lba": 100,
+          "destination": "0xac0090a0",
+          "blocks": 1
+        },
+        {
+          "lba": 101,
+          "destination": "0xac010200",
+          "blocks": 1
+        },
+        {
+          "lba": 200,
+          "destination": "0xac010400",
+          "blocks": 2
+        }
+      ],
+      "private_min_sp": "0xac00bdf0",
+      "observed_private_stack_bytes": 528,
+      "private_stack_guard_unchanged": true,
+      "fresh_outer_cold_entry": true,
+      "exact_current_return_context": true,
+      "old_native_argv_not_reused": true,
+      "firmware_restored": true
+    },
+    {
+      "case": "busy_timeout",
+      "instructions": 256388,
+      "reason": 13,
+      "retirement_calls": 2,
+      "irq_wait_visits": 1,
+      "original_helpers": [],
+      "raw_calls": [],
+      "private_min_sp": "0xac00bf78",
+      "observed_private_stack_bytes": 136,
+      "private_stack_guard_unchanged": true,
+      "no_old_cleanup_resumed": true,
+      "busy_state_preserved": true,
+      "refused_without_firmware_restore": true
+    },
+    {
+      "case": "busy_bl_masked",
+      "instructions": 126661,
+      "reason": 12,
+      "retirement_calls": 1,
+      "irq_wait_visits": 0,
+      "original_helpers": [],
+      "raw_calls": [],
+      "private_min_sp": "0xac00bf78",
+      "observed_private_stack_bytes": 136,
+      "private_stack_guard_unchanged": true,
+      "no_old_cleanup_resumed": true,
+      "busy_state_preserved": true,
+      "refused_without_firmware_restore": true
+    },
+    {
+      "case": "busy_imask_masked",
+      "instructions": 126666,
+      "reason": 12,
+      "retirement_calls": 1,
+      "irq_wait_visits": 0,
+      "original_helpers": [],
+      "raw_calls": [],
+      "private_min_sp": "0xac00bf78",
+      "observed_private_stack_bytes": 136,
+      "private_stack_guard_unchanged": true,
+      "no_old_cleanup_resumed": true,
+      "busy_state_preserved": true,
+      "refused_without_firmware_restore": true
+    },
+    {
+      "case": "bad_worker",
+      "instructions": 126660,
+      "reason": 6,
+      "retirement_calls": 1,
+      "irq_wait_visits": 0,
+      "original_helpers": [],
+      "raw_calls": [],
+      "private_min_sp": "0xac00bf78",
+      "observed_private_stack_bytes": 136,
+      "private_stack_guard_unchanged": true,
+      "refused_without_firmware_restore": true
+    },
+    {
+      "case": "bad_capsule_crc",
+      "instructions": 211722,
+      "reason": 10,
+      "retirement_calls": 1,
+      "irq_wait_visits": 0,
+      "original_helpers": [
+        "0x8c1598c0",
+        "0x8c1ad2c8",
+        "0x8c1ad31a"
+      ],
+      "raw_calls": [
+        {
+          "lba": 100,
+          "destination": "0xac0090a0",
+          "blocks": 1
+        },
+        {
+          "lba": 101,
+          "destination": "0xac010200",
+          "blocks": 1
+        },
+        {
+          "lba": 200,
+          "destination": "0xac010400",
+          "blocks": 2
+        }
+      ],
+      "private_min_sp": "0xac00bdf0",
+      "observed_private_stack_bytes": 528,
+      "private_stack_guard_unchanged": true,
+      "refused_without_firmware_restore": true
+    },
+    {
+      "case": "bad_return_seed",
+      "instructions": 222,
+      "reason": 2,
+      "retirement_calls": 0,
+      "irq_wait_visits": 0,
+      "original_helpers": [],
+      "raw_calls": [],
+      "private_min_sp": "0xac00bf9c",
+      "observed_private_stack_bytes": 100,
+      "private_stack_guard_unchanged": true,
+      "no_untrusted_diagnostic_callback": true,
+      "refused_without_firmware_restore": true
+    },
+    {
+      "case": "changed_retire_pointer",
+      "instructions": 212248,
+      "reason": 4,
+      "retirement_calls": 0,
+      "irq_wait_visits": 0,
+      "original_helpers": [],
+      "raw_calls": [],
+      "private_min_sp": "0xac00bf78",
+      "observed_private_stack_bytes": 136,
+      "private_stack_guard_unchanged": true,
+      "no_untrusted_diagnostic_callback": true,
+      "refused_without_firmware_restore": true
+    },
+    {
+      "case": "changed_stop_pointer",
+      "instructions": 212248,
+      "reason": 4,
+      "retirement_calls": 0,
+      "irq_wait_visits": 0,
+      "original_helpers": [],
+      "raw_calls": [],
+      "private_min_sp": "0xac00bf78",
+      "observed_private_stack_bytes": 136,
+      "private_stack_guard_unchanged": true,
+      "no_untrusted_diagnostic_callback": true,
+      "refused_without_firmware_restore": true
+    }
+  ],
+  "limits": [
+    "The production worker retirement gateway and raw SD hardware are substituted by explicit return values and a four-block fixture; separate production worker/raw tests establish those bodies.",
+    "Observed private-stack usage includes actual return C and original parser/setter helpers; substituted raw-reader and worker-gateway stack closure comes from their separate linked audits.",
+    "DMA and cache MMIO execute against idle register models; cache timing, register banking and actual downstream menu/game/VMU execution remain hardware checks."
+  ]
+}

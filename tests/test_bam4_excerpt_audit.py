@@ -76,6 +76,13 @@ class Bam4OwnerAudit(unittest.TestCase):
             struct.pack_into('<I', code, offset, target)
         image = {'payload': payload, 'symbols': symbols}
         audit.audit_bam4_stage_literals(bytearray(code), image)
+        self.assertEqual(next(symbol for offset, _, symbol, _ in
+            audit.BAM4_STAGE_LINKED_TARGETS if offset == 0x1f4), '_kui_stage_crc32')
+        symbols['_kui_retail_crc32'] = audit.STAGE + 512
+        legacy_crc = bytearray(code)
+        struct.pack_into('<I', legacy_crc, 0x1f4, symbols['_kui_retail_crc32'])
+        with self.assertRaises(ValueError):
+            audit.audit_bam4_stage_literals(legacy_crc, image)
         for offset, _, _, _ in audit.BAM4_STAGE_LINKED_TARGETS:
             broken = bytearray(code)
             value = struct.unpack_from('<I', broken, offset)[0]

@@ -44,6 +44,88 @@ def sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def smash_native_profile(stage,low,worker,self_test=True):
+    """Child-only linked facts; ordinary A2 packages keep their own audit."""
+    menu='__smash_native_menu_seed' in stage[4]
+    if '__smash_native_child_seed' not in stage[4] and not menu:
+        return {'enabled':False}
+    require(low[4]['_manifest'][1]==252+48*12,
+            'Smash child low manifest is not the exact 48-slot object')
+    # Stage retains the full wire ABI. Only the retained resident is compact.
+    require(stage[4]['_manifest'][1]==2172,
+            'Smash child temporary stage changed the full 160-slot wire ABI')
+    base,body,_=symbol_bytes(worker,'_kui_vmu_native_passive_arm',2)
+    sites={}
+    for name in ('_kui_vmu_durable_init_address',
+                 '_kui_vmu_readonly_overlay_init_backend_address'):
+        target=worker[4][name][0]
+        found=[]
+        for offset in range(0,len(body)-1,2):
+            word=struct.unpack_from('<H',body,offset)[0]
+            if word&0xff00!=0xd000:continue  # exact MOV.L @(disp,PC),R0
+            literal=((base+offset+4)&~3)+4*(word&255)
+            if base<=literal<=base+len(body)-4 and struct.unpack_from('<I',body,literal-base)[0]==target:
+                found.append(base+offset)
+        require(len(found)==1,'Smash child A1 initializer target lacks one linked load site: '+name)
+        load=found[0];start=load;success=None
+        at=load-base
+        # The menu-only compiler policy keeps72KiB but hoists MOV #1,R5
+        # into the preceding successful-call branch's executed delay slot.
+        # Enter before that actual TST/BT.S, with the independently modeled
+        # preceding helper's success result, instead of inventing R5=1.
+        if menu and at>=6 and struct.unpack_from('<H',body,at-2)[0]==0xe501:
+            prefix=struct.unpack_from('<3H',body,at-6)
+            require(name=='_kui_vmu_durable_init_address' and prefix[0]==0x2008 and
+                    prefix[1]&0xff00==0x8d00,
+                    'Unexpected hoisted durable A1 initialization prefix')
+            start=load-6;success=1  # lifetime_prepare returns bool true.
+        elif menu and at>=10 and struct.unpack_from('<H',body,at-6)[0]==0xe501:
+            prefix=struct.unpack_from('<5H',body,at-10)
+            require(name=='_kui_vmu_readonly_overlay_init_backend_address' and
+                    prefix[:3]==(0x2008,0x8d02,0xe501) and prefix[3]&0xf000==0xa000 and prefix[4]==9,
+                    'Unexpected hoisted overlay A1 initialization prefix')
+            start=load-10;success=0  # durable_init_address returns zero.
+        sites[name]=(load,target,start,success)
+
+    class Init(Machine):
+        def __init__(self,seed,name,override=None):
+            super().__init__(worker,'_kui_vmu_native_passive_arm',seed,15,0x8c61bfc0,body=override)
+            self.r[15]-=16  # Callsite executes within arm's existing C frame.
+            _,self.target,self.pc,success=sites[name]
+            if success is not None:self.r[0]=success
+        def call(self,target):
+            if self.base<=target<self.base+len(self.blob):return False
+            require(target==self.target and self.r[5]==1,
+                    'Smash child persistent backend is not initialized at virtual A1')
+            self.calls.append(target);self.pc=self.stop_pc;return True
+
+    cases=mutations=0
+    for name in sites:
+        for seed in range(8):
+            model=Init(seed,name).run()
+            require(model.calls==[sites[name][1]],'Smash child initializer was not called exactly once')
+            cases+=1
+        if self_test:
+            start=sites[name][2]-base
+            # Each exact call sequence must explicitly select A1, including
+            # the durable initializer's branch delay slot.
+            candidates=[at for at in range(start,min(sites[name][0]-base+16,len(body)-1),2)
+                        if struct.unpack_from('<H',body,at)[0]==0xe501]
+            require(len(candidates)==1,'A1 callsite lacks one explicit MOV #1,R5')
+            changed=bytearray(body);struct.pack_into('<H',changed,candidates[0],0xe502)
+            try:Init(7,name,bytes(changed)).run()
+            except (ValueError,AssertionError):mutations+=1
+            else:raise ValueError('Smash child A1 audit accepted A2 initializer mutation')
+    return {'enabled':True,'menu_capture':menu,'virtual_slot':1,'low_manifest_slots':48,
+            'stage_manifest_wire_slots':160,'existing_card_key':'KUIVC2TEST',
+            'card_binding_semantics_separately_production_c_tested':True,
+            'actual_backend_initializer_instruction_cases':cases,
+            'a2_initializer_mutation_rejections':mutations,
+            'low_bss_end':hex(low[4]['__retail_resident_bss_end'][0]),
+            'low_stack_bottom':hex(low[4]['__retail_hook_stack_bottom'][0]),
+            'low_bss_stack_gap':low[4]['__retail_hook_stack_bottom'][0]-low[4]['__retail_resident_bss_end'][0]}
+
+
 def publisher_body(stage):
     """Bind the actual P2 cache publisher without inventing install ordering."""
     address = stage[4]['_kui_native_passive_publish'][0]
@@ -325,6 +407,21 @@ def terminal_guard_model(low, self_test=True, span=SPAN):
             'lease_bytes':span,'worker_bytes':span}
 
 
+def smash_probe_callback_prefix(address, data, tick, reader, state):
+    """Bind the only callback passed by the actual linked child wrapper."""
+    require(len(data)>=12, 'Truncated Smash probe caller')
+    words=struct.unpack_from('<6H',data)
+    require(tuple(op>>8 for op in words[:3])==(0xd0,0xd5,0xd4) and
+            words[3:]==(0x4f22,0x400b,0xe600), 'Unexpected Smash probe callback setup')
+    def literal(index):
+        at=(((address+index*2+4)&~3)+(words[index]&255)*4)-address
+        require(0<=at<=len(data)-4, 'Smash probe callback literal outside caller')
+        return struct.unpack_from('<I',data,at)[0]
+    require((literal(0),literal(1),literal(2))==(tick,reader,state),
+            'Smash probe caller changed its finite callback or private state')
+    return True
+
+
 def callgraph_stacks(directory, worker, resident, transport, coherence):
     """Walk actual source-qualified graphs; every indirect site is finite.
 
@@ -409,7 +506,56 @@ def callgraph_stacks(directory, worker, resident, transport, coherence):
         'vmu_store.c': {'write_sync', 'kui_vmu_store_open', 'kui_vmu_store_read', 'kui_vmu_store_sync'},
         'vmu_readonly_overlay.c': {'kui_vmu_readonly_overlay_prepare', 'kui_vmu_readonly_overlay_complete'},
     }
+    smash_probe_callback=None
+    if '__kui_smash_native_vmu_probe_worker' in worker[4]:
+        require(worker[4]['__kui_smash_native_vmu_probe_worker']==ONE,
+                'Unexpected Smash probe worker marker')
+        if '_smash_vmu_probe_complete' not in worker[4]:
+            # The separately typed menu-return worker retains the failure
+            # page but omits the startup completion sampler to keep72KiB.
+            # No ordinary/direct child may silently select that policy.
+            stage_symbols=read_elf(directory/'stage.elf')[4]
+            require('__smash_native_menu_seed' in stage_symbols and '__smash_menu_return_seed' in stage_symbols and
+                    resident['symbols'].get('__kui_smash_native_menu_resident')==1,
+                    'Missing startup probe outside the exact menu-return profile')
+            _,descriptor,section=symbol_bytes(worker,'_kui_smash_native_return_exports',1)
+            entry=worker[4]['_kui_smash_native_return_entry']
+            require(len(descriptor)==16 and section[2]&7==2 and
+                    struct.unpack('<4I',descriptor)==(0x4b535254,1,16,entry[0]) and
+                    entry[2]==2 and entry[1] and
+                    all(name not in worker[4] for name in ('_kui_smash_native_vmu_probe_tick','_smash_vmu_probe')) and
+                    not any(_function_base(target)=='kui_smash_native_vmu_probe_tick'
+                            for edges in calls.values() for target,_ in edges),
+                    'Menu diagnostic-only probe policy or typed return gateway differs')
+        else:
+            at,body,_=symbol_bytes(worker,'_smash_vmu_probe_complete',2)
+            tick=worker[4]['_kui_smash_native_vmu_probe_tick'][0]
+            reader=worker[4]['_smash_vmu_probe_read'][0]
+            state=worker[4]['_smash_vmu_probe'][0]
+            smash_probe_callback_prefix(at,body,tick,reader,state)
+            # A different arbitrary function is never an admissible read target.
+            try:
+                smash_probe_callback_prefix(at,body,tick,reader+2,state)
+            except ValueError:
+                pass
+            else:
+                raise ValueError('Smash callback mutation was not refused')
+            callers=[name for name,edges in calls.items() for target,_ in edges
+                     if _function_base(target)=='kui_smash_native_vmu_probe_tick']
+            require(len(callers)==1 and _function_base(callers[0])=='smash_vmu_probe_complete',
+                    'Smash probe has a new or ambiguous callback owner')
+            smash_probe_callback=resolve('worker','smash_vmu_probe_read','smash_native_vmu_probe.inc')
+
     indirect_sites, null_sites = set(), set()
+
+    def source_site(label, expression):
+        # Main can move this call without changing its source-qualified
+        # callback owner. Admit the exact unique expression, not a range of
+        # old/new line numbers or every indirect call in the dispatcher.
+        lines=(ROOT/'src/core/retail_gd.c').read_text().splitlines()
+        matches=[index+1 for index,line in enumerate(lines) if line.strip()==expression]
+        require(len(matches)==1,'GD callback source expression is absent or ambiguous')
+        return label==f'retail_gd.c:{matches[0]}:16'
 
     def indirect(name, label):
         domain, function = name.split(':', 1)[0], _function_base(name)
@@ -420,9 +566,10 @@ def callgraph_stacks(directory, worker, resident, transport, coherence):
             if (function,source) == ('guest','retail_gd.c'):
                 return resolve('low','observe_map','vmu_maple_observe_resident.c')
             if (function,source) == ('kui_retail_gd_dispatch','retail_gd.c'):
-                if label.endswith(':233:16'):
+                if source_site(label,'if(s->ops.check(s->ops.context, lba + done, n, s->sector_bytes))'):
                     return resolve('low','check_sectors','retail_resident.c')
-                require(label.endswith(':387:16'),'Unexpected GD service callback site')
+                require(source_site(label,'if(s->ops.read(s->ops.context, s->lba + done, n, s->sector_bytes, out))'),
+                        'Unexpected GD service callback site')
                 return resolve('low','read_sectors','retail_resident.c')
             if (function,source) == ('file_read','retail_image.c'):
                 return [node for target in ('read_block','read_run')
@@ -432,6 +579,15 @@ def callgraph_stacks(directory, worker, resident, transport, coherence):
                     if not transport:
                         null_sites.add((name,label));return []
                     return bus('transfer_block')
+                if function=='kui_retail_sd_read_run':
+                    # LTO shares the original stream-start call between
+                    # ordinary GD and the menu's bounded raw run entry.
+                    lines=(ROOT/'src/loader/sd_reader.c').read_text().splitlines()
+                    line=int(label.rsplit(':',2)[1])
+                    require(1<=line<=len(lines) and
+                            lines[line-1].strip()=='card->bus.select(card->bus.ctx, true);',
+                            'Unexpected shared raw/GD stream-start callback')
+                    return bus('select_card')
                 mapping = {'transfer':'transfer','ticks':'ticks','release':'select_card',
                            'read_run':'select_card'}
                 require(function in mapping,'Unexpected low SD callback site: '+name)
@@ -444,6 +600,18 @@ def callgraph_stacks(directory, worker, resident, transport, coherence):
             if (function,source) == ('kui_retail_menu_return','retail_resident.c'):
                 return []  # Separately bound sole boot-ROM target never returns.
             raise ValueError('Unexpected indirect low callback on VMU stack: '+name+' at '+label)
+        if (function,source)==('kui_smash_native_vmu_probe_tick','smash_native_vmu_probe.c'):
+            require(smash_probe_callback is not None, 'Smash probe callback without child capability')
+            lines=(ROOT/'src/core/smash_native_vmu_probe.c').read_text().splitlines()
+            expressions={
+                'if(!read(context,KUI_SMASH_SRAM_BYTES,4u,&bytes) || !bytes || bytes>65536u)return false;',
+                'if(read(context,KUI_SMASH_BUP_APP,2u,&status) && status) {p->ready=1u;return false;}',
+            }
+            line=int(label.rsplit(':',2)[1])
+            require(1<=line<=len(lines) and lines[line-1].strip() in expressions and
+                    all(sum(text.strip()==expression for text in lines)==1 for expression in expressions),
+                    'Unexpected source-qualified Smash probe read site')
+            return smash_probe_callback
         if source in fixed:
             require(function in owners[source], 'Unexpected callback source owner: '+name)
             return high(*fixed[source])
@@ -501,6 +669,11 @@ def callgraph_stacks(directory, worker, resident, transport, coherence):
              'kui_vmu_native_passive_split_submit', 'kui_vmu_native_passive_complete',
              'kui_vmu_native_readonly_release_check', 'kui_vmu_native_passive_report',
              'kui_vmu_native_runtime_fault', 'kui_vmu_native_trace_game')
+    menu_return='_kui_smash_native_return_retire' in worker[4]
+    if menu_return:
+        require(resident['symbols'].get('__kui_smash_native_menu_resident')==1,
+                'Return retirement root appears outside the exact menu reader profile')
+        roots+=('kui_smash_native_return_retire',)
     paths = {}
     for root in roots:
         answer = max((depth(node) for node in resolve('worker', root)), key=lambda item: item[0])
@@ -520,10 +693,21 @@ def callgraph_stacks(directory, worker, resident, transport, coherence):
     low_bytes = max(path['conservative_bytes'] for path in low_paths.values())
     low_available = 0x500-STACK_GUARD_BYTES-STACK_ALIGNMENT_GAP
     require(low_bytes <= low_available, 'Low synchronous stack sum exceeds guarded stack: '+str(low_bytes))
+    return_gate_low_paths={}
+    if menu_return:
+        # These callbacks run on the return gate's separately owned2KiB
+        # stack. Do not charge them to the ordinary1280-byte GD stack, or
+        # include the high return caller here: its combined sum is audited
+        # independently against the actual return-gate instruction model.
+        for root in ('kui_smash_menu_return_read_card','kui_smash_menu_return_stop'):
+            answer=max((depth(node) for node in resolve('low',root)),key=lambda item:item[0])
+            return_gate_low_paths[root]={'c_frame_bytes':answer[0],'path':answer[1],
+                'worst_path':answer[1],'stack_domain':'return_gate_private_2048'}
     return {'worker_paths': paths, 'worker_available_bytes': STACK_BYTES,
             'worst_worker_bytes': max(path['conservative_bytes'] for path in paths.values()),
             'ordinary_low_conservative_bytes': low_bytes, 'ordinary_low_available_bytes': low_available,
             'ordinary_low_paths':low_paths,
+            'return_gate_low_paths':return_gate_low_paths,
             'low_lease_frame_on_worker_stack_only': lease[0], 'indirect_sites': len(indirect_sites),
             'null_callback_sites': [list(site) for site in sorted(null_sites)],
             'source_qualified_callbacks': True, 'selected_bus_source': provider}
@@ -591,7 +775,11 @@ def audit(directory, *, transport, allow_dirty=False, self_test=True):
     images = {}
     for name,base,limit in (('resident-sci',0x8c004000,0x8c007800),
                             ('stage',0x8ce00000,0x8cfe0000),('entry',0x8c010000,0x8c112000)):
-        images[name] = inspect_elf((directory/(name+'.elf')).read_bytes(),base,limit)
+        if name=='resident-sci' and '__kui_smash_native_menu_resident' in low[4]:
+            from smash_native_menu_resident import inspect as inspect_native_menu
+            images[name]=inspect_native_menu(low[0])['low']
+        else:
+            images[name] = inspect_elf((directory/(name+'.elf')).read_bytes(),base,limit)
         if name != 'entry':
             require(images[name]['payload'] == (directory/(name+'.bin')).read_bytes(), name+' binary differs from ELF')
     stage_binary = images['stage']['payload']
@@ -646,6 +834,7 @@ def audit(directory, *, transport, allow_dirty=False, self_test=True):
     from check_native_vmu_only_install import audit as audit_install
     installation = audit_install(stage,low,worker,binary,wire,span)
     stacks = callgraph_stacks(directory,worker,images['resident-sci'],transport,coherence)
+    smash_profile=smash_native_profile(stage,low,worker,self_test)
     return {'schema':'kui.native.vmu-only.linked.v1','transport':transport,
             'variant':'vmu-lite' if layout is VMU_LITE else 'vmu-only','lease_bytes':span,
             'controller_submit':submit_mode['controller_submit'],'controller_submit_audit':submit_mode,
@@ -662,7 +851,8 @@ def audit(directory, *, transport, allow_dirty=False, self_test=True):
             'resume_cache_publication':publication,'worker_cache_publisher':publisher,
             'pio_writer_adapters':pio,'stage_gateway_model_cases':stage_cases,'maple_hook_model_cases':hook_cases,
             'cold_installer_stack':installer,'actual_worker_installation':installation,
-            'stack_audit':stacks,'console_execution_verified':False}
+            'stack_audit':stacks,'smash_native_child_profile':smash_profile,
+            'console_execution_verified':False}
 
 
 def main():

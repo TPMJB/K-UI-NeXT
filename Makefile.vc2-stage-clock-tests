@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/vc2-stage-clock-host
+HOST_CC ?= cc
+.DEFAULT_GOAL := vc2-stage-clock-tests
+.PHONY: vc2-stage-clock-tests
+vc2-stage-clock-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic \
+	 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-pie -no-pie \
+	 -Iinclude -DKUI_VC2_STAGE_CLOCK_TEST=1 tests/test_vc2_ce_vmu_stage_clock.c \
+	 src/loader/vc2_ce_vmu_stage_clock.c -o $(BUILD)/clock
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/clock

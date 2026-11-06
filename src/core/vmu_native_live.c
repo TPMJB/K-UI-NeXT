@@ -61,7 +61,7 @@ enum kui_vmu_native_runtime_result kui_vmu_native_live_check(
     /* As in the full proof, a pd 1.46 server may run at its caller's level;
      * it holds the TAS lock instead, whose byte is read below. */
     unsigned mask=(b->inherited_sr>>4)&15u;
-    bool masked=mask==6u || mask==15u || d->family==KUI_VMU_NATIVE_FAMILY_EARLY_V1;
+    bool masked=mask==6u || mask==15u || kui_vmu_native_early_server(d->family);
     if(((b->worker_sr>>4)&15u)!=15u || !masked ||
        (b->phase==KUI_VMU_NATIVE_BEFORE_CONSUMER &&
         (!alias(b->inherited_pr) || physical(b->inherited_pr)!=p->completion_return)))

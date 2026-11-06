@@ -48,7 +48,22 @@ bool kui_native_ra_cache_append(struct kui_native_ra_cache *c,uint32_t lba,const
     uintptr_t from=(uintptr_t)checked,meta=(uintptr_t)c;
     if(from>UINTPTR_MAX-KUI_NATIVE_RA_CACHE_BLOCK_BYTES ||
        (from<meta+sizeof(*c) && meta<from+KUI_NATIVE_RA_CACHE_BLOCK_BYTES))return false;
-    if((uintptr_t)to>from && (uintptr_t)to-from<KUI_NATIVE_RA_CACHE_BLOCK_BYTES) {
+    bool backward=(uintptr_t)to>from && (uintptr_t)to-from<KUI_NATIVE_RA_CACHE_BLOCK_BYTES;
+    if(!(((uintptr_t)to|from)&3u)) {
+        /* Both normal stream buffers and cache slots are word aligned. Copy
+         * checked data with integer words, retaining memmove's direction for
+         * overlapping cache sources. Unaligned inputs keep the exact byte
+         * path below; validity is published only after the complete block. */
+        typedef uint32_t cache_word __attribute__((__may_alias__));
+        cache_word *destination=(cache_word *)(void *)to;
+        const cache_word *source=(const cache_word *)(const void *)checked;
+        const unsigned words=KUI_NATIVE_RA_CACHE_BLOCK_BYTES/sizeof(*destination);
+        if(backward) {
+            for(unsigned i=words;i;i--)destination[i-1u]=source[i-1u];
+        } else {
+            for(unsigned i=0u;i<words;i++)destination[i]=source[i];
+        }
+    } else if(backward) {
         for(unsigned i=KUI_NATIVE_RA_CACHE_BLOCK_BYTES;i;i--)to[i-1u]=checked[i-1u];
     } else {
         for(unsigned i=0;i<KUI_NATIVE_RA_CACHE_BLOCK_BYTES;i++)to[i]=checked[i];
@@ -117,12 +132,17 @@ uint32_t kui_native_ra_extent_end(const struct kui_retail_manifest *m,uint32_t l
         next+=t->extent_count;
     }
     if(next!=used)return 0;
-    for(uint32_t i=m->track_count;i<used;i++) {
+    /* The first extent has no preceding pair; the full pass above already
+     * validated it. Starting at the second retains every unordered pair. */
+    for(uint32_t i=m->track_count+1u;i<used;i++) {
         const struct kui_retail_extent *a=&m->slots[i].extent;
+        /* Every extent above passed the full 64-bit end/partition proof.
+         * Serialized callers retain an immutable map, so these sums now fit
+         * uint32_t. Hoist this endpoint without changing any pair check. */
+        uint32_t first=a->card_lba,end=first+a->blocks;
         for(uint32_t j=m->track_count;j<i;j++) {
             const struct kui_retail_extent *b=&m->slots[j].extent;
-            if((uint64_t)a->card_lba<(uint64_t)b->card_lba+b->blocks &&
-               (uint64_t)b->card_lba<(uint64_t)a->card_lba+a->blocks &&
+            if(first<b->card_lba+b->blocks && b->card_lba<end &&
                !shared_boundary(m,i,j,owners[i],owners[j]))return 0;
         }
     }

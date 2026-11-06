@@ -6,8 +6,10 @@ the complete free-list proof, which remains mandatory at arm, every original
 release, and before and after every external SCI storage loan. The identity
 witness is not sufficient to admit a release or a storage transaction.
 
-The reviewed tail32 allocator obtains the worker lease from the end of its
-arena. Its allocated header and payload remain at the same raw U0/P1/P2 alias
+The reviewed tail32 allocators retain an ordinary allocation, either at the
+arena's tail or through the checked bottom-reservation transaction used by
+the compact Background module. This includes the direct syMalloc 1.35 family.
+Its allocated header and payload remain at the same raw U0/P1/P2 alias
 returned by the allocator. The lifetime argument is inductive:
 
 1. Postallocation and arm perform a coherent complete ownership proof. No
@@ -24,10 +26,19 @@ returned by the allocator. The lifetime argument is inductive:
    to the startup pointer cell. Supported terminal entries also stop rather
    than resuming an unobserved lifetime.
 5. Each controller boundary freshly checks these installed hooks, the original
-   heap arena/dispatch identity and the lease's allocated size word. DMA/RX
+   heap arena/control identity and the lease's allocated size word. DMA/RX
    geometry, live controller context and physical-chain checks remain separate
    and are still performed. A scoped storage loan continues to renew the full
    ownership proof independently before and after the external call.
+
+The dispatch family witnesses its three arena values, dispatch cell and two
+table entries, sentinel size and retained-header size. Direct syMalloc 1.35
+has no dispatch cell or table. Its corresponding eight words are the three
+arena values, three reviewed original allocator literals naming those control
+cells, sentinel size and retained-header size. The literals lie outside both
+patched entry heads. Descriptor admission requires absent dispatch roles to
+be zero; no fake table is created. The prepared runtime plan and its eight-read
+identity loop retain their existing layout.
 
 This relies on the existing reviewed SDK/caller contract: the allocator code
 remains the reviewed implementation; allocations enter that implementation;

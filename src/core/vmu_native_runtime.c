@@ -59,7 +59,7 @@ enum kui_vmu_native_runtime_result kui_vmu_native_runtime_check(
     /* An early server does not mask interrupts; its API wrappers may run it
      * at their own level. It holds the TAS lock instead, checked below. */
     unsigned mask=(b->inherited_sr>>4)&15u;
-    bool masked=mask==6u || mask==15u || d->family==KUI_VMU_NATIVE_FAMILY_EARLY_V1;
+    bool masked=mask==6u || mask==15u || kui_vmu_native_early_server(d->family);
     struct span returnsite;
     if(((b->worker_sr>>4)&15u)!=15u || !masked ||
        (b->phase==KUI_VMU_NATIVE_BEFORE_CONSUMER &&

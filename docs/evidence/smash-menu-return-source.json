@@ -1,0 +1,37 @@
+{
+  "schema": "kui.smash-menu.return-source.v1",
+  "passed": true,
+  "original_sha256": {
+    "IP.BIN": "33c9cf893ead0b7bd001f85d4ee1197c35ef7eeef4093fed3a5877eebcb2246e",
+    "GINXFER.BIN": "fa12196993a7c757a78565963e257cd33443f80b3f226729fdc1cf7da51ed5b3",
+    "MDE_US.BIN": "04f49d583b39bdc710cec6d0a434b5d710b9bccedd539bedda29755135f0fe61",
+    "1ST_READ.BIN": "3a311b189a4870ccbefc4fcd306e2d38e5ae810ae5edd225af6b9aa6d5df5f10"
+  },
+  "reset_entry": "0x8c0117f0",
+  "reset_source_bytes": 42,
+  "reset_source_crc32": "d71c4066",
+  "cleanup_calls_before_gins": [
+    "0x8c1a99ac",
+    "0x8c1a99ac",
+    "0x8c1a650a",
+    "0x8c1a5b04",
+    "0x8c010154"
+  ],
+  "original_return_helper": "0x8c1599ee",
+  "later_gins_executor": "0x8c159ab8",
+  "original_return_helper_instructions": 146,
+  "original_return_parser_input": "\\manifest.bin",
+  "original_return_folder": "",
+  "original_return_mode": 4,
+  "original_gbr_preserved": true,
+  "scalar_menu_bss_clear": [
+    "0x8c043d80",
+    "0x8c06e760"
+  ],
+  "old_high_ram_canary_unchanged_by_scalar_crt": true,
+  "limits": [
+    "Cleanup callees are ABI substitutions in the reset-wrapper ordering probe. The original return helper and its memcpy execute.",
+    "The original scalar CRT does not zero the old high worker bytes in this test; this grants no ownership across the fresh SDK heap initialization.",
+    "No game, filesystem, DMA or real hardware execution claim is made."
+  ]
+}

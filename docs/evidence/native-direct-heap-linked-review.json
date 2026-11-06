@@ -1,0 +1,243 @@
+{
+  "schema": "kui.native.direct-heap.linked-review.v1",
+  "comparison_build_label": "33db22c6d386",
+  "scope": "Offline source and linked-code review for fixed compact profile expectations; the clean release build is verified separately.",
+  "immutable_baseline": "33db22c6d386 A1/A2 artifacts snapshotted before rebuilding",
+  "worker_geometry": {
+    "span": 73728,
+    "private_stack_bytes": 3072,
+    "bss_end": "0xac111400",
+    "stack_bottom": "0xac111400",
+    "gap_bytes": 0,
+    "geometry_changed": false
+  },
+  "unchanged_heap_abi": {
+    "owner_bytes": 72,
+    "lease_bytes": 116,
+    "lifetime_identity_witnesses": 8
+  },
+  "linked_comparisons": {
+    "worker": {
+      "baseline_elf_sha256": "5d6817a6270f7ac5ddc9786708f792f0dc98856ec3ab35e701e88074764a04e1",
+      "candidate_elf_sha256": "9b390169b648e3497a2c3281917d0aec09efc2f35d35895a6adb489028d438c9",
+      "byte_identical_functions": 62,
+      "relocated_functions": 109,
+      "typed_pointer_relocations": 518,
+      "complete_constant_bytes_compared": 1200,
+      "complete_constant_pointer_relocations": 7,
+      "authored_readonly_additions": {
+        "_heap_shapes@vmu_native_heap.c": {
+          "bytes": 16,
+          "sha256": "fcf8e4fc85390977b00ad86a99a683d47e5e633fff6d62b0cb5d93837803e2c0"
+        }
+      },
+      "added_functions": [],
+      "removed_functions": [
+        "_bottom_geometry@vmu_native_heap.c"
+      ],
+      "semantic_changes": {
+        "_metadata@vmu_native_heap.c": {
+          "baseline_bytes": 416,
+          "candidate_bytes": 436,
+          "baseline_sha256": "f47fc689adc353213b9d6cc84d3852b7e07f744c1d2d46d233fe6de44c4425db",
+          "candidate_sha256": "9cb0812c4ae935aea353a04cb8897dc0303f1af1fd2865becc3313bedd8ab19f"
+        },
+        "_identity@vmu_native_heap.c": {
+          "baseline_bytes": 412,
+          "candidate_bytes": 444,
+          "baseline_sha256": "423cef189919c03bbe1b020bd4435dee3329bd2ce341273bcbd611b01ffae929",
+          "candidate_sha256": "f70dcfabcaa195deae911e698a8f7c772096864325dcfe05f4a9e35b0942d7d0"
+        },
+        "_kui_vmu_native_lifetime_prepare": {
+          "baseline_bytes": 744,
+          "candidate_bytes": 752,
+          "baseline_sha256": "748b191a9d25a373922a53e5c794e278c90f471ba9815f487a286233b70573d2",
+          "candidate_sha256": "80d8bc9dcaf3f950035aa08c01ceb4c46554946c4b6121a54773f75352f74e25"
+        }
+      },
+      "unresolved": []
+    },
+    "stage": {
+      "baseline_elf_sha256": "acbf6ca480f53600a27b3231cc43b340592afefc428c2864274136fc8986fb6a",
+      "candidate_elf_sha256": "5f783d3518cfc449be143619102ad8d5e3a28f935f9c61653a0a58d8406638f7",
+      "byte_identical_functions": 110,
+      "relocated_functions": 275,
+      "typed_pointer_relocations": 1549,
+      "complete_constant_bytes_compared": 12096,
+      "complete_constant_pointer_relocations": 21,
+      "authored_readonly_additions": {
+        "_heap_shapes@vmu_native_heap.c": {
+          "bytes": 16,
+          "sha256": "fcf8e4fc85390977b00ad86a99a683d47e5e633fff6d62b0cb5d93837803e2c0"
+        },
+        "_direct_words@vmu_native_heap.c": {
+          "bytes": 88,
+          "sha256": "031e806151170ddf40f0677c91530957b5b5fa016a5be3bfcf74806da11609b3"
+        }
+      },
+      "added_functions": [
+        "_allocator_state_excludes_stage@vmu_native_stage_placement.c",
+        "_image_word@vmu_native_heap.c",
+        "_kui_vmu_native_heap_metadata_valid",
+        "_pointer@vmu_native_patch.c"
+      ],
+      "removed_functions": [
+        "_bottom_geometry@vmu_native_heap.c"
+      ],
+      "semantic_changes": {
+        "_code_sha@vmu_native_heap_probe_stage.c": {
+          "baseline_bytes": 88,
+          "candidate_bytes": 104,
+          "baseline_sha256": "54a69299dee0dfd4f9d53f8ff12eb58948eb3e5953b633e1263d82bc1539769c",
+          "candidate_sha256": "0145a93304f70ab2ee67fcc1847ce7b491ee4dc3bbde7c3c731428bee5fd42d7"
+        },
+        "_native_budget_prepare@vmu_native_heap_probe_stage.c": {
+          "baseline_bytes": 92,
+          "candidate_bytes": 144,
+          "baseline_sha256": "2d39f6b40c122aacba13589db89c520c02c7cc155221c867cf434eb63d8dc6b4",
+          "candidate_sha256": "3bcb80c30a83e354018ac7aa977d3ae0c4769935b44d7a2b7143b65d6e2e23e9"
+        },
+        "_reclaimed@vmu_native_program.c": {
+          "baseline_bytes": 228,
+          "candidate_bytes": 248,
+          "baseline_sha256": "925eb8213db806cb87434f0aa3e49822383e9621e59555b93f833601427bc1a3",
+          "candidate_sha256": "d5be1b7433936601717797fc01e513fe9b4bf950f8c0e250eedf68f122fddb17"
+        },
+        "_metadata@vmu_native_heap.c": {
+          "baseline_bytes": 416,
+          "candidate_bytes": 436,
+          "baseline_sha256": "2d4f8a8cb476de0f799ecaa1661b6c64539afb018b8f29026a3f7d4a544b6c20",
+          "candidate_sha256": "186ce8f56514ba0d6771176fb968eca72df82e4b56e82fba7016083ed758227d"
+        },
+        "_identity@vmu_native_heap.c": {
+          "baseline_bytes": 412,
+          "candidate_bytes": 444,
+          "baseline_sha256": "86a986dfc4f32474965a416cb593222d735dce55b9d5b1376f8c39df8daa6120",
+          "candidate_sha256": "6f077379b1c20ac6c49082f53c8321d20aa305a930629fbd9852dc28c6e5b1ea"
+        },
+        "_schema@vmu_native_resolution_cache.c": {
+          "baseline_bytes": 464,
+          "candidate_bytes": 476,
+          "baseline_sha256": "0c76b9a9d7d5e3712b306dcfe8e0bceee4766560f1c46a82a5b014ed96fc49c1",
+          "candidate_sha256": "6b33c445594092e036814bc5f257bafc7bb3953ed62f5955bcca34b96cd1be68"
+        },
+        "_decode@vmu_native_resolution_cache.c": {
+          "baseline_bytes": 352,
+          "candidate_bytes": 352,
+          "baseline_sha256": "91abbd7d12dca2f44397f89a6f3128172a20cf939d04f469a65124348855a13a",
+          "candidate_sha256": "47b740ac735dedbeb160b8eaf98b540332242cc23c1e870abd96df2766963bf0"
+        },
+        "_kui_vmu_native_heap_discover": {
+          "baseline_bytes": 1636,
+          "candidate_bytes": 2100,
+          "baseline_sha256": "da7fad323cc931cece190ca9b73fd729b76a19f9ba9a708f7f4ffe8836e351c1",
+          "candidate_sha256": "cac05670f98e67b74b7f08214e5aa8b278567dd8b10989cfb4ea77fbd509544f"
+        },
+        "_kui_vmu_native_heap_bottom_ready": {
+          "baseline_bytes": 144,
+          "candidate_bytes": 144,
+          "baseline_sha256": "c0803decc187dbce9ebc05df5f5c4fb3db3443df63a1bc87d6c5ee89183d81d8",
+          "candidate_sha256": "ac2015038fe146792806e1c403c55c3ec0c10e011c3c77bdcd5fb12b305d3737"
+        },
+        "_kui_vmu_native_heap_bottom_code_valid": {
+          "baseline_bytes": 360,
+          "candidate_bytes": 772,
+          "baseline_sha256": "45362e31a07b90806485fd4880277956c2ca80be22ecbc22d0daa49c12fe40d9",
+          "candidate_sha256": "1d6d88108535f9aa46b723d903e5601d73e68df8b1901f788a9a1528bd5ccdfc"
+        },
+        "_kui_vmu_native_heap_bottom_placeholder": {
+          "baseline_bytes": 196,
+          "candidate_bytes": 188,
+          "baseline_sha256": "b3ce4bb038c86339fb3552ebe2472282e2f804a0ef008ab256970396e7df29db",
+          "candidate_sha256": "f507ae80e21cad5aabec9d7804f23bc9c6c0d6f7bb02f75631f1d6146445cba9"
+        },
+        "_kui_vmu_native_patch_no_interiors": {
+          "baseline_bytes": 592,
+          "candidate_bytes": 1412,
+          "baseline_sha256": "ca9964c3983325b079adae07617892addd40840bc30fa8cff03742779a6a1421",
+          "candidate_sha256": "666ada4d0b14825839dc43a367aa02654d7537e5718c1c1989cf23942d314bcc"
+        },
+        "_kui_vmu_native_stage_bottom_allocation_safe": {
+          "baseline_bytes": 308,
+          "candidate_bytes": 292,
+          "baseline_sha256": "04cfb6c9d82461fcc8230ce8aa82c240245768935571ad379cf0f215effb1234",
+          "candidate_sha256": "005e935b8a70fadd156e8fbbc29a40118c587aa0908453d93127123c181fa43a"
+        },
+        "_kui_vmu_native_heap_bottom_allocated": {
+          "baseline_bytes": 172,
+          "candidate_bytes": 172,
+          "baseline_sha256": "ef57b4c32b6daac233742762dde5c38d95186b4aeb9e90e31624bf9bb608c453",
+          "candidate_sha256": "335bb323075183c7bb60fcf8c5ee2f1562bc46af187e0c5512b81721f5c2fe42"
+        }
+      },
+      "unresolved": []
+    }
+  },
+  "closure": {
+    "compact_worker_functions": 8,
+    "compact_worker_objects": 1,
+    "cold_functions": 44,
+    "cold_objects": 5,
+    "historical_noncompact_function_and_object_maps_unchanged": true,
+    "inlined_bottom_geometry_is_checked_in_callers": true
+  },
+  "validation": {
+    "fixed_A2_role_function_object_expectations": 167,
+    "historical_dispatch_cases": 312,
+    "direct_cases": 342,
+    "whole_guard_byte_mutants": 1776,
+    "whole_shape_object_bit_mutants": 128,
+    "actual_endpoint_semantic_counterfactuals": 2,
+    "companion_refusals": 14,
+    "actual_startup_derived_cases": 8,
+    "actual_startup_original_subsequent_calls": 256,
+    "actual_startup_linked_guard_calls": 704,
+    "actual_startup_linked_guard_refusals": 288,
+    "startup_titles": [
+      "Time Stalkers",
+      "Elemental Gimmick Gear"
+    ],
+    "exact_leases": [
+      290816,
+      81920
+    ],
+    "virtual_slots": [
+      "A1",
+      "A2"
+    ],
+    "stage_installer_stack_retained_header_worker_and_private_stack_canaries": true,
+    "focused_compiled_cold_cases": 58,
+    "focused_cold_cases_are_complete_corpus": false,
+    "compact_profile_tests": 7,
+    "A1_heap_kernel_and_table_bodies_equal_A2": true,
+    "A1_baseline_to_candidate_full_typed_comparisons_pass": true,
+    "A1_does_not_use_A2_only_rodata_pin": true
+  },
+  "limits": [
+    "Original allocator and software ownership proof; no whole-game or console-timing claim.",
+    "Full original eight-title bottom-heap audit remains refused while Grandia II and Lodoss originals are unavailable.",
+    "Silver direct allocator recognition does not grant executable-prefix reclamation; the reviewed reclamation proof remains dispatch-family-only."
+  ],
+  "unchanged_components": {
+    "resident-sci.elf": {
+      "byte_identical_to_baseline": true,
+      "sha256": "13410c41ef76c207982a48f67493ec94ea88876d6c4e4e75d3f3456791859b4a"
+    },
+    "resident-legacy.elf": {
+      "byte_identical_to_baseline": true,
+      "sha256": "9f3461570ad3dc8bc3fd645e8d7dfb3bbbd6c1951897c16111687bed694ea5b6"
+    },
+    "native-ra-aux.elf": {
+      "byte_identical_to_baseline": true,
+      "sha256": "649bd6c0a8b6b7ba68ff69b2a2113209833af6542ffd8cf7cf3110aaf6a5ad7b"
+    },
+    "native-ra-aux.bin": {
+      "byte_identical_to_baseline": true,
+      "sha256": "0825fad628962cb99889e523461cec871d91e8fb3bbe4760f24196fac163b8b3"
+    },
+    "native-ra-aux.reloc": {
+      "byte_identical_to_baseline": true,
+      "sha256": "180ef41aef79df7aaa6b8df944ce3136ebc194b60d900da6884d17ea81f73d6a"
+    }
+  }
+}

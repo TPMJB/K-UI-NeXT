@@ -22,5 +22,8 @@ SECTIONS {
   __retail_stage_bss_end = .;
  } :image
  ASSERT(.<=0x8cfe0000,"retail stage overlaps high stack")
+ /* A CE GIN continuation owns its original staged SAMPLE until the stage
+  * authenticates and restores it. Other cold profiles need no such bound. */
+ ASSERT(!DEFINED(__kui_smash_ce_gin_adoption) || .<=0x8cf90000,"CE adoption stage overlaps original SAMPLE")
  /DISCARD/ : { *(.comment) *(.note*) *(.eh_frame*) }
 }

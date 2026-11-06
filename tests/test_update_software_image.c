@@ -58,6 +58,41 @@ static void expect_file(const char *path,const void *data,size_t bytes) {
     CHECK(f_size(&file)==bytes && f_read(&file,buffer,sizeof(buffer),&got)==FR_OK && got==bytes);
     CHECK(!memcmp(buffer,data,bytes) && f_close(&file)==FR_OK);
 }
+/* Generated settings and launch capsules are shared data even when their
+ * physical location is beside immutable loader binaries. A FULL software
+ * snapshot must not mask them as omitted software, and a blocked software
+ * resolver must not block their ordinary readback. */
+static void shared_launch_data(const char *mode) {
+    static const char *const paths[]={
+        "0:/KUI/apps/games/selection-a.bin","0:/KUI/apps/games/selection-b.bin",
+        "0:/KUI/apps/games/launch-settings-a.bin","0:/KUI/apps/games/launch-settings-b.bin",
+        "0:/KUI/apps/games/vc2-vmu-session.bin",
+        "0:/KUI/apps/games/smash-vc2-vmu-session.bin",
+        "0:/KUI/apps/games/smash-swirl-vmu-session.bin",
+        "0:/KUI/apps/disc/future-loader-session.bin",
+        "0:/KUI/apps/music/player-settings-a.bin",
+        "0:/KUI/apps/music/session-b.bin"};
+    for(unsigned i=0u;i<sizeof(paths)/sizeof(paths[0]);i++) {
+        const uint8_t first[]={1u,2u,3u,4u},changed[]={5u,6u,7u,8u,9u};
+        write_file(paths[i],first,sizeof(first));
+        FIL file;FILINFO info;
+        CHECK(kui_update_physical_stat(paths[i],&info)==FR_OK && info.fsize==sizeof(first));
+        FRESULT opened=f_open(&file,paths[i],FA_READ),stated=f_stat(paths[i],&info);
+        if(opened!=FR_OK || stated!=FR_OK)
+            fprintf(stderr,"Shared launch data %s: %s physically exists, wrapped open=%u stat=%u\n",
+                mode,paths[i],(unsigned)opened,(unsigned)stated);
+        CHECK(opened==FR_OK && stated==FR_OK);
+        CHECK(f_close(&file)==FR_OK && info.fsize==sizeof(first));
+        CHECK(!kui_update_runtime_absent(paths[i]));
+        expect_file(paths[i],first,sizeof(first));
+        /* This is the generated capsule's write -> sync/close -> readback
+         * direction, not an immutable software replacement. */
+        write_file(paths[i],changed,sizeof(changed));
+        expect_file(paths[i],changed,sizeof(changed));
+        CHECK(f_unlink(paths[i])==FR_OK);
+        CHECK(f_open(&file,paths[i],FA_READ)==FR_NO_FILE && f_stat(paths[i],&info)==FR_NO_FILE);
+    }
+}
 static void bank_path(const char *bank,const char *relative,char out[192]) {
     CHECK(kui_update_bank_path(bank,relative,out,192u));
 }
@@ -236,6 +271,7 @@ static void production_context(const uint8_t gui[UF_FILE_BYTES],const uint8_t mo
     for(unsigned i=0;i<sizeof(omitted)/sizeof(omitted[0]);i++)write_file(omitted[i],raw,raw_bytes);
     seed_bank_flags("777777777777",22u,gui,module,raw,raw_bytes,KUI_UPDATE_FULL);
     chain_and_adopt("777777777777",&context);
+    shared_launch_data("FULL");
     FIL file;FILINFO info;
     for(unsigned i=0;i<sizeof(omitted)/sizeof(omitted[0]);i++) {
         CHECK(kui_update_runtime_absent(omitted[i]));
@@ -249,6 +285,7 @@ static void production_context(const uint8_t gui[UF_FILE_BYTES],const uint8_t mo
     CHECK(kui_update_effective_snapshot(bank,sha)==1 && !strcmp(bank,"777777777777"));
     expect_file(USER_PATH,"user",4u);
     kui_update_boot_block();CHECK(kui_update_effective_snapshot(bank,sha)==-1 && !bank[0] && all_zero(sha,sizeof(sha)));
+    shared_launch_data("blocked");
     kui_update_boot_reset();CHECK(kui_update_effective_snapshot(bank,sha)==1 && !bank[0] && all_zero(sha,sizeof(sha)));
 }
 static void boot_read_budgets(const uint8_t gui[UF_FILE_BYTES],const uint8_t module[UF_FILE_BYTES],
@@ -304,6 +341,7 @@ int main(int argc,char **argv) {
     parents("0:/KUI/apps/music/dummy.kui");
     seed_bank(BANK_A,10u,gui,module,raw,sizeof(raw));
     struct kui_update_handoff_context context;chain_and_adopt(BANK_A,&context);software_reads(module,raw,sizeof(raw));
+    shared_launch_data("partial");
     /* A same-build GUI with a different configuration is a distinct bank.
      * The prior RAM context cannot authorize it without another checked chain. */
     seed_bank(BANK_B,11u,gui2,module,raw,sizeof(raw));

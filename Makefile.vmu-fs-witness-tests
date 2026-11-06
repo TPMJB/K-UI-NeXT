@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/vmu-fs-witness-host
+HOST_CC ?= cc
+.DEFAULT_GOAL := vmu-fs-witness-tests
+WITNESS_FLAGS := -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic \
+ -fsanitize=address,undefined -fno-sanitize-recover=all -fno-pie -no-pie \
+ -ffunction-sections -fdata-sections -Iinclude
+.PHONY: vmu-fs-witness-tests
+vmu-fs-witness-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(WITNESS_FLAGS) tests/test_vmu_fs_witness.c src/core/vmu_fs_witness.c \
+	 src/core/vmu_fs_admission.c src/core/vmu_persist_profile.c src/core/hash.c \
+	 src/core/retail_image.c src/loader/vc2_ce_vmu_stage_cache.c \
+	 -Wl,--gc-sections -o $(BUILD)/test-witness
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-witness

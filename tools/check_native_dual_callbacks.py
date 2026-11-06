@@ -60,11 +60,44 @@ PINS = {
     CONFIGURE: (44,'1be99e2c822f827c1ade1c4000b30afb3b13fd306b5326009d03b9f431570ff1'),
     BIND_MAP: (28,'f6c3746a5cf57320d243a67b146e8af988e5da8e1d21e0cfa79b589a7d6db5c0'),
 }
+PRECLEAR_ARM_ROLES=((0xa8,(0x04,),SELECTOR,0),
+    (0xb0,(0x24,),'_native_report',0),
+    (0xb4,(0x4a,),'_native_heap',0),
+    (0xb8,(0x58,),'_native_call',0),
+    (0xc0,(0x6a,),'_native_preclear',0),
+    (0xc4,(0x70,),'_kui_vmu_observe_stage_install',0),
+    (0xc8,(0x74,),'_kui_native_preclear_stage_install',0),
+    (0xcc,(0x78,),'_native_installer_stack',0xffe0))
+# Reviewed preheap variant: the original publisher is unchanged apart from
+# selecting the typed tail wrapper when the separately proved plan is active.
+# Both branches execute below; historical normalized pins stay untouched.
+PRECLEAR_ARM_PIN=(208,'49e3ed55144e47389f220207e765a8ab45ce96cd37d5878c4f225a1c272ae9ec')
 
 
 def require(condition, message):
     if not condition:
         raise ValueError(message)
+
+
+def preclear_profile(stage):
+    markers=[stage[4].get(name) for name in ('__kui_native_preheap_clear_stage',
+        '__kui_native_preheap_clear_tail')]
+    if markers==[None,None]:
+        require(not any(name in stage[4] for name in ('_native_preclear_hook','_kui_native_preclear_stage_install',
+            '_kui_native_preclear_finish')),'Preheap code lost both explicit capability markers')
+        return False
+    require(markers==[(1,0,0,0xfff1)]*2,'Preheap C/assembly capability markers differ')
+    require(all(name in stage[4] for name in ('_native_preclear','_kui_native_preclear_stage_install',
+        '_kui_native_preclear_finish')),'Preheap marker lacks its complete typed stage roles')
+    return True
+
+
+def helper_pins(stage):
+    return {**PINS,ARM:PRECLEAR_ARM_PIN} if preclear_profile(stage) else PINS
+
+
+def literal_roles(stage,name):
+    return PRECLEAR_ARM_ROLES if name==ARM and preclear_profile(stage) else LITERAL_ROLES[name]
 
 
 def expected_entries(image):
@@ -115,7 +148,7 @@ def canonical_helper(stage,name):
     address,body,section=symbol_bytes(stage,name,2)
     require(section[2]&7 == 6,'Callback helper is not immutable executable code: '+name)
     normalized=bytearray(body)
-    for offset,refs,symbol,bias in LITERAL_ROLES[name]:
+    for offset,refs,symbol,bias in literal_roles(stage,name):
         require(not (address+offset)&3 and offset+4 <= len(body),
                 'Named callback literal escapes its complete function')
         record=stage[4][symbol]
@@ -138,18 +171,19 @@ def canonical_helper(stage,name):
 
 
 def pin_helpers(stage):
-    require(set(PINS) == set(LITERAL_ROLES),'Callback helper pins have not been independently reviewed')
+    pins=helper_pins(stage)
+    require(set(pins) == set(LITERAL_ROLES),'Callback helper pins have not been independently reviewed')
     _,message,section=symbol_bytes(stage,'_native_low_bindings_refused',1)
     require(message == b'DUAL LOW CALLBACK READER REFUSED\0' and section[2]&7 == 2,
             'Callback refusal is not its exact immutable named message')
     result={}
-    for name,(count,digest) in PINS.items():
+    for name,(count,digest) in pins.items():
         body,normalized=canonical_helper(stage,name)
         require(len(body) == count and hashlib.sha256(normalized).hexdigest() == digest,
                 'Reviewed callback helper instruction/constant pin changed: '+name)
         result[name]=dict(bytes=count,actual_sha256=hashlib.sha256(body).hexdigest(),
                           named_role_canonical_sha256=digest,
-                          exact_named_literal_words=len(LITERAL_ROLES[name]))
+                          exact_named_literal_words=len(literal_roles(stage,name)))
     return result
 
 
@@ -355,7 +389,7 @@ def bind_map_case(resident,stage,expected,reader,*,seed=0,bank=1,result=1):
     return cpu
 
 
-def arm_case(resident,stage,expected,reader,*,seed=0,bank=1,variant='ok'):
+def arm_case(resident,stage,expected,reader,*,seed=0,bank=1,variant='ok',preclear=False):
     cpu = CallbackCPU(resident,stage,reader,1,seed=seed,bank=bank)
     low = expected[reader-1]
     control,original = low[2]|0x20000000,low[3]|0x20000000
@@ -376,6 +410,9 @@ def arm_case(resident,stage,expected,reader,*,seed=0,bank=1,variant='ok'):
     cpu.write(call+12,0x0c400000)
     cpu.write(call+16,0x00600000)
     cpu.write(slot,target)
+    if preclear_profile(stage):
+        cpu.write(stage[4]['_native_preclear'][0],0x8c0102d0 if preclear else 0)
+    else:require(not preclear,'Historical arm cannot select a preheap installer')
     failure = None
     if isinstance(variant,tuple) and variant[0] == 'control':
         at=control+4*variant[1]
@@ -408,7 +445,7 @@ def arm_case(resident,stage,expected,reader,*,seed=0,bank=1,variant='ok'):
     else:
         require(failure is None,'Arming accepted a changed control, original target or readback')
         assert_c_abi(cpu,before)
-        installer=stage[4]['_kui_vmu_observe_stage_install'][0]
+        installer=stage[4]['_kui_native_preclear_stage_install' if preclear else '_kui_vmu_observe_stage_install'][0]
         stack=stage[4]['_native_installer_stack'][0]+0x10000-32
         require(tuple(cpu.read(control+4*i) for i in range(3)) == (installer,stack,1),
                 'Arming did not publish the selected control object and installer')
@@ -433,6 +470,8 @@ def consumer_cases(resident,stage,expected,layout):
         for bank in (0,1):
             for seed in range(6):
                 arm_case(resident,stage,expected,reader,seed=seed,bank=bank);arms+=1
+                if preclear_profile(stage):
+                    arm_case(resident,stage,expected,reader,seed=seed,bank=bank,preclear=True);arms+=1
                 configure_case(resident,stage,expected,layout,reader,seed=seed,bank=bank);configurations+=1
                 for result in (0,1,2,MASK):
                     bind_map_case(resident,stage,expected,reader,seed=seed,bank=bank,result=result);binders+=1
@@ -455,7 +494,7 @@ def consumer_cases(resident,stage,expected,layout):
                         'Invalid callback consumer touched ownership or configured an entry')
                 invalid_refusals+=1
             else:raise ValueError('Cold callback consumer accepted an unsupported reader/transport')
-    return dict(actual_linked_arming_cases=arms,actual_linked_configuration_cases=configurations,
+    result=dict(actual_linked_arming_cases=arms,actual_linked_configuration_cases=configurations,
                 actual_linked_manifest_binding_cases=binders,arming_ownership_refusals=refusals,
                 invalid_consumer_mode_refusals=invalid_refusals,
                 initializer_slot_and_owner_return_use_selected_reader=True,
@@ -468,6 +507,9 @@ def consumer_cases(resident,stage,expected,layout):
                 tail_binder_retains_actual_rts_pr_contract=True,
                 unsupported_modes_stop_before_control_or_callback_writes=True,
                 no_interrupt_register_writes=True)
+    if preclear_profile(stage):
+        result['both_preheap_and_normal_installer_targets_checked']=True
+    return result
 
 
 def changed_table_word(stage, address, value):
@@ -553,7 +595,7 @@ def instruction_truth():
 
 def pin_mutants(stage,expected):
     rejected=0
-    for name in PINS:
+    for name in helper_pins(stage):
         address,body,section=symbol_bytes(stage,name,2)
         begin=section[4]+address-section[3]
         for at in range(len(body)):
@@ -583,6 +625,20 @@ def pin_mutants(stage,expected):
         try:linked_table((*stage[:4],symbols),expected)
         except ValueError:rejected+=1
         else:raise ValueError('Callback table accepted an absent or changed capability marker')
+    if preclear_profile(stage):
+        names=('__kui_native_preheap_clear_stage','__kui_native_preheap_clear_tail')
+        for marker in names:
+            for value in (None,(0,0,0,0xfff1),(2,0,0,0xfff1),(1,4,1,1)):
+                symbols=dict(stage[4])
+                if value is None:symbols.pop(marker)
+                else:symbols[marker]=value
+                try:pin_helpers((*stage[:4],symbols))
+                except ValueError:rejected+=1
+                else:raise ValueError('Callback arm accepted a changed preheap capability')
+        symbols={name:value for name,value in stage[4].items() if name not in names}
+        try:pin_helpers((*stage[:4],symbols))
+        except ValueError:rejected+=1
+        else:raise ValueError('Callback arm accepted a preheap capability downgrade')
     return rejected
 
 
@@ -599,9 +655,22 @@ def hardcoded_selector_mutant(resident,stage,expected,table):
 
 def check(directory, *, self_test=False):
     directory = Path(directory)
+    from check_native_session_callbacks import profile as session_profile,check as session_check
+    if session_profile(read_elf(directory/'stage.elf')):
+        return session_check(directory,self_test=self_test)
     resident = read_elf(directory/'resident-sci.elf')
     legacy = read_elf(directory/'resident-legacy.elf')
     stage = read_elf(directory/'stage.elf')
+    if preclear_profile(stage):
+        from check_loader_layout import inspect_elf
+        from check_vmu_native_heap_probe import heap_resume_offset
+        offsets=[]
+        for low in (resident,legacy):
+            base,body,_=symbol_bytes(low,'_kui_vmu_observe_heap_hook',2)
+            value=heap_resume_offset(low[0],inspect_elf(low[0],0x8c004000,0x8c007ba0),base,body)
+            require(value is not None,'Preheap arm lacks a typed surviving LOW return')
+            offsets.append(value)
+        require(offsets[0]==offsets[1],'Preheap readers have different LOW continuation offsets')
     expected = (expected_entries(resident), expected_entries(legacy))
     table = linked_table(stage, expected)
     pins = pin_helpers(stage)

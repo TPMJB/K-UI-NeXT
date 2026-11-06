@@ -1,0 +1,75 @@
+{
+  "schema": "kui.smash.engine2-port.v1",
+  "updater_main_commit": "079261e422188e942bda44900c18f9f2a061b6cb",
+  "main_exact_source_tree": "75ce04248ac5de3992ad9328a65e05ccf9600ae1",
+  "smash_parent": "a6acffd55b4432fe8d4563fe8f6242eee0175341",
+  "current_main_identical": {
+    "src/core/update.c": "06bb565d1df0a2281a3c71d5cba986cd93e443f0d8dbe57985604486e5dd869b",
+    "src/core/update_file.c": "d5d234e1d0a9f6bbf3ce6370f821f81f25dbbe15ddce979d90490a9c67db883d",
+    "src/core/update_boot.c": "1e6ccb7c88ccde52a778b6b15cb90f7be659916ee9a92b840d7bb7de5d8cd102",
+    "src/core/update_software_file.c": "aecf57b11b1389bebea872ce36240c3b91b7d5b0a81748a07d0eb871a1e33b4d",
+    "src/core/update_zip.c": "8d6c6734bcd9c77b02138cd54532cd3ac933b4f5ecfe2ab9123d6968584c6d12",
+    "include/kui/update.h": "9c437a89d2008d1a5db74cd064ddb4724134c18c606c5ee415239a1257ed6862",
+    "include/kui/update_boot.h": "de698a24752b95c088e78d0d83d9239dc6d8f72175d3368e578d6cf108312c50",
+    "include/kui/update_software_file.h": "8d9b49b0a6241ab3d06dfc9403199d6777aaa0ec6b49ccb416e55ad44bd656d0",
+    "tools/make_update.py": "be3587a72cddde156f3c739247f822ae32420e5b45c636c39ae12af276ff7630",
+    "tools/update_package.py": "96ff1b5f6cfba1434c3e1bdf23d1278bbadec14f484f95783f2ead09607e9188",
+    "tools/update_consumer_check.c": "97a9572cafc219821a3ef5075b895a956a5b8c9baa74dd60e9be43f7d98b74d3"
+  },
+  "preserved_a6_files": {
+    "src/apps/games_retail.c": "c448ee3caf3c382ffca82d43867e7d4ab3a45c9681b6253812e19436bf314834",
+    "src/apps/games_native_owner_cache.inc": "f26125e9673d6453d41a522dd7151d8f05abe69be6c7baf0978264693ffd856d",
+    "src/apps/smash_menu_collection_prepare.inc": "70da6aae6f848532033b05111d7047266a3f2c42add548cefccd3e029ff2f0dc",
+    "src/core/runtime_module_bundle.c": "3c33067706afea8f639eeb5ddf038fc3667b14422af81489ecb857471f32abd0",
+    "src/core/runtime_image.c": "e2c25e03ada0ad5067d326817e0109da1665b7905de1e65d338056c222b3dd8a",
+    "src/core/native_vmu_standard.c": "41911c74bbea62c23f974d7c5ddb77c3811317803768f6ed091a08dd73986ddd",
+    "resources/updater-bindings/preserved-standard-manifest.h": "9f74bad8ba9937d41b18acab59df23d8e872f9b43648b504c893b398d8c9de00",
+    "resources/updater-bindings/native-cdda-manifest.h": "624a8d6a6661cae756c12bc913c7e21a1b73db1131b7eb7818bcd72ed4a84bc0"
+  },
+  "loader_sources_changed": false,
+  "worker_recipes_changed": false,
+  "producer": {
+    "format": 2,
+    "current_c_consumer": true,
+    "explicit_kui_replacements": 5,
+    "explicit_raw_helpers": 2,
+    "root_dispatcher_engine_minimum": 2
+  },
+  "host_validation": {
+    "codec_v1_checks": 2700,
+    "codec_v2_checks": 179,
+    "handoff_checks": 407711,
+    "v2_producer_cases": 25,
+    "payload_cases": 6,
+    "smash_producer_cases": 9,
+    "bundle_cases": 3,
+    "legacy_producer_cases": 29,
+    "smash_legacy_delivery_cases": 5,
+    "addon_cases": 13,
+    "repair_cases": 2,
+    "test_bundle_cases": 8,
+    "software_routing_fat32_checks": 591,
+    "software_routing_exfat_checks": 591,
+    "snapshot_fat32_checks": 44167,
+    "snapshot_exfat_checks": 18460,
+    "exact_existing_engine2_setup_fat32_checks": 7186,
+    "exact_existing_engine2_setup_exfat_checks": 7186,
+    "direct_restart_check": true,
+    "shell_check": true,
+    "native_gui_build": true
+  },
+  "native_gui_provisional": {
+    "delivery": false,
+    "source_dirty": true,
+    "payload_bytes": 3491108,
+    "memory_bytes": 7789296,
+    "engine2_marker_count": 1,
+    "bank_marker_count": 1
+  },
+  "hardware_gameplay_qualified": false,
+  "limits": [
+    "No new game compatibility claim.",
+    "Final new Smash artifacts must be rebuilt and validated after CE changes.",
+    "Exact existing setup qualification uses already-delivered 5300782c62f6 runtime/FULL package, not a new gameplay candidate."
+  ]
+}

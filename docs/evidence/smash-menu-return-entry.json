@@ -1,0 +1,17 @@
+{
+  "schema": "kui.smash-menu.return-entry.v1",
+  "passed": true,
+  "elf_sha256": "866ad5498bab45b10b70c74186dc85e15a4b178699908b096dd0507c7c0a0b42",
+  "busy_cases": 128,
+  "instructions": [
+    3122
+  ],
+  "actual_gbr_preserved": true,
+  "original_owner_frame_preserved": true,
+  "no_old_cleanup_caller_resumed": true,
+  "owner_irq_context_restored_between_retries": true,
+  "limits": [
+    "The C body is replaced with one ABI-conforming busy result and a second-entry stop; the separate runtime test executes C and its retry bound.",
+    "IRQ stack pushes are explicit fixtures; register banking and interrupt timing are not emulated. SR masks leave RB unchanged. No FPU instruction is used."
+  ]
+}

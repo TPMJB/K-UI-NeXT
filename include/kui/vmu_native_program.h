@@ -8,7 +8,8 @@
 /* Select the immutable executable extent after the caller has verified the
  * entire source file. Ordinary images retain source_bytes. A trailing 32 KiB
  * IP bootstrap is excluded only when its canonical linked domain, absence of
- * prefix references into it, and the unique supported startup allocator prove
+ * prefix references into it, and the unique supported dispatch or direct
+ * startup allocator prove
  * that the prefix boundary is reclaimed as heap before gameplay. This never
  * alters source bytes, loads another image, or grants live memory ownership.
  * Recognizable but malformed/truncated bootstrap tails and contradictory
@@ -17,7 +18,7 @@
  * verified full source independently of any cache of the effective prefix.
  *
  * An ordinary image also drops a final tail of at most eight bytes past a
- * 32-byte boundary when that same unique startup allocator begins its arena
+ * 32-byte boundary when the unique dispatch-table allocator begins its arena
  * exactly at the boundary: its initializer writes the first free block's two
  * header words over the tail before any allocation. The prefix must not
  * reference the tail, and allocator, call and exit discovery must be

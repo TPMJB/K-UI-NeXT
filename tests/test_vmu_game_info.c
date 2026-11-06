@@ -207,5 +207,17 @@ int main(void) {
     CHECK(saved.known && saved.choice_required && !saved.default_pair);
     selected.storage.cid[0]^=1u;prior=default_writes;
     CHECK(!kui_vmu_game_info_default(&selected,false,&saved,NULL,cancel) && default_writes==prior);
+    clear();card(5,"ALPHA-1",true);assignment(0,10,5,5,false);
+    candidate_result=KUI_VMU_GAME_CANDIDATES_OK;
+    candidate_view=(struct kui_vmu_game_candidates_view){.present=true,.sequence=11,
+        .default_index=KUI_VMU_GAME_CANDIDATES_NO_DEFAULT};
+    unsigned directories_before=directory_reads,labels_before=labels;
+    run("ALPHA-1",true);
+    CHECK(result.known && !result.count && !result.choice_required && !result.default_pair);
+    CHECK(!strcmp(result.label,"No matching cards") && strstr(result.notice,"Card deleted; assign or import"));
+    CHECK(directory_reads==directories_before && labels==labels_before && result.candidates_sequence==11);
+    CHECK(!kui_vmu_game_info_choose(&result,0,&selected));
+    candidate_view.default_index=0;run("ALPHA-1",true);
+    CHECK(!result.known && strstr(result.notice,"unavailable"));
     CHECK(opens==releases+1);clear();printf("VMU game information: %u checks passed; metadata reads %u, names %u, writes %u\n",checks,metadata_reads,labels,writes);return 0;
 }

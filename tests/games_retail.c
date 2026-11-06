@@ -12,6 +12,9 @@
 #include "kui/native_sdk_sci_family.h"
 #include "kui/vmu_emulation_settings.h"
 #include "kui/native_session_prepare.h"
+#include "kui/native_session.h"
+#include "kui/native_return.h"
+#include "kui/storage_policy.h"
 #include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -32,6 +35,7 @@ static struct {
     unsigned native_source_passes,direct_crc_passes;
     unsigned vmu_package_opens,dual_package_opens,ordinary_package_opens;
     unsigned standalone_package_opens,family_calls,dual_a1_package_opens;
+    unsigned session_package_opens,session_a1_package_opens;
     uint64_t hash_begin[2],hash_end[2];
     bool hash_bounded;
     uint32_t first_sector;
@@ -44,7 +48,16 @@ static FATFS fs;
 static const char *const selected = "/Games/Reader Test/disc.gdi";
 static const char *const package = "0:/KUI/apps/games/retail-boot.kui";
 static const char *const dual_package = "0:/KUI/apps/games/retail-native-dual.kui";
+static const char *const session_package = "0:/KUI/apps/games/retail-native-session.kui";
+static const char *const session_a1_package = "0:/KUI/apps/games/retail-native-session-a1.kui";
 static bool native_dual_case(void) {return !strncmp(test.fault,"native-dual-",12);}
+static bool native_optional_session_case(void) {
+    return (!strncmp(test.fault,"native-dual-session-",strlen("native-dual-session-")) &&
+            strcmp(test.fault,"native-dual-session-absent")) ||
+        !strcmp(test.fault,"native-dual-y-session") ||
+        !strcmp(test.fault,"native-dual-runtime-absent") || !strcmp(test.fault,"native-dual-runtime-bad-crc") ||
+        !strcmp(test.fault,"native-dual-runtime-marker-absent") || !strcmp(test.fault,"native-dual-runtime-marker-duplicate");
+}
 static bool native_standard_case(void) {return !strncmp(test.fault,"native-standard-",16);}
 static bool native_dual_report(void) {return native_dual_case() && strstr(test.fault,"-report");}
 /* A game whose virtual card answers as A1 asks for the A1 build of the module. */
@@ -194,6 +207,8 @@ FRESULT __wrap_f_open(FIL *file, const TCHAR *path, BYTE flags) {
         ++test.files;
         if(!strcmp(path,dual_package))++test.dual_package_opens;
         if(!strcmp(path,dual_a1_package))++test.dual_a1_package_opens;
+        if(!strcmp(path,session_package))++test.session_package_opens;
+        if(!strcmp(path,session_a1_package))++test.session_a1_package_opens;
         if(!strcmp(path,standalone_package))++test.standalone_package_opens;
         if(!strcmp(path,package))++test.ordinary_package_opens;
         if(!strcmp(path,KUI_GAMES_RETAIL_VMU_SILVER_PACKAGE)) ++test.vmu_package_opens;
@@ -222,8 +237,8 @@ FRESULT __wrap_f_read(FIL *file, void *buffer, UINT bytes, UINT *got) {
                     assert(before>=test.hash_begin[phase] && before<=test.hash_end[phase] &&
                         bytes<=test.hash_end[phase]-before);
                 }
-                if(phase==1u && test.hash_reads[phase]==2u && fault("native-dual-retry-report")) {test.injected=true;return FR_DISK_ERR;}
-                if(phase==1u && test.hash_reads[phase]==2u && fault("native-dual-cancel-source"))test.cancelled=test.injected=true;
+                if(phase==1u && test.hash_reads[phase]==1u && fault("native-dual-retry-report")) {test.injected=true;return FR_DISK_ERR;}
+                if(phase==1u && test.hash_reads[phase]==1u && fault("native-dual-cancel-source"))test.cancelled=test.injected=true;
                 if(phase==1u && native_standard_case()) {
                     if(test.hash_reads[phase]==2u && (fault("native-standard-retry-report") || fault("native-standard-crc-fail"))) {test.injected=true;return FR_DISK_ERR;}
                     if(test.hash_reads[phase]==4u && fault("native-standard-crc-fail")) {test.injected=true;return FR_DISK_ERR;}
@@ -420,9 +435,18 @@ static void seed(const char *directory) {
         data=host_file(directory,"retail-native-dual.kui",&size);
         write_file(dual_package,data,size);free(data);
     }
+    {
+        data=host_file(directory,"retail-native-session.kui",&size);
+        write_file(session_package,data,size);free(data);
+    }
     if(native_dual_a1_case()) {
         data=host_file(directory,"retail-native-dual-a1.kui",&size);
         write_file(dual_a1_package,data,size);free(data);
+        data=host_file(directory,"retail-native-session-a1.kui",&size);
+        write_file(session_a1_package,data,size);free(data);
+    }
+    if(strcmp(test.fault,"native-dual-runtime-absent") && strcmp(test.fault,"native-dual-y-runtime-absent")) {
+        data=host_file(directory,"runtime.kui",&size);write_file(KUI_RUNTIME_PATH,data,size);free(data);
     }
     if(native_standalone_case() && !strstr(test.fault,"-absent")) {
         data=host_file(directory,"retail-native-standalone.kui",&size);
@@ -781,7 +805,10 @@ static void export_launch_files(const char *directory) {
     export_file(directory,ce_package,"after-ce-probe.kui",false);
     if(native_standard_case())export_file(directory,KUI_VMU_EMULATION_SETTINGS_PATH_A,"after-emulation-a.bin",false);
     if(native_dual_case())export_file(directory,dual_package,"after-retail-native-dual.kui",false);
+    if(native_dual_case())export_file(directory,session_package,"after-retail-native-session.kui",false);
     if(native_dual_a1_case())export_file(directory,dual_a1_package,"after-retail-native-dual-a1.kui",false);
+    if(native_dual_a1_case())export_file(directory,session_a1_package,"after-retail-native-session-a1.kui",false);
+    if(native_dual_case())export_file(directory,KUI_RUNTIME_PATH,"after-runtime.kui",false);
     if(native_standalone_case() && !strstr(test.fault,"-absent"))
         export_file(directory,standalone_package,"after-retail-native-standalone.kui",false);
     char gdi_path[256];assert(snprintf(gdi_path,sizeof(gdi_path),"%s/disc.gdi",game_root())<(int)sizeof(gdi_path));
@@ -941,10 +968,37 @@ static void check_launch(const char *directory) {
     export_launch_files(directory);
     puts("Launch preparation PASS: only report writes admitted; original game/package bytes exported for independent comparison");
 }
+static bool native_return_block(void *context,uint32_t lba,uint8_t sector[512]) {
+    return detached_block(context,lba,sector)==0;
+}
+static uint32_t native_session_word(const uint8_t *p) {
+    return p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24;
+}
+static void check_native_session_return(const char *directory,const struct kui_runtime_image *image) {
+    const uint8_t *payload=image->data;size_t found=SIZE_MAX;
+    for(size_t at=0;at+KUI_NATIVE_SESSION_WIRE_BYTES<=image->info.payload_bytes;at++) {
+        if(memcmp(payload+at,KUI_NATIVE_SESSION_MAGIC,8u))continue;
+        assert(found==SIZE_MAX && kui_native_session_wire_valid(payload+at,KUI_NATIVE_SESSION_WIRE_BYTES,true));found=at;
+    }
+    assert(found!=SIZE_MAX);
+    const uint8_t *wire=payload+found;
+    assert(native_session_word(wire+KUI_NATIVE_SESSION_FLAGS_OFFSET)==KUI_NATIVE_SESSION_FLAG_RETURN);
+    struct kui_native_return_plan plan;
+    assert(kui_native_return_decode(&plan,wire+KUI_NATIVE_SESSION_RETURN_OFFSET,KUI_NATIVE_RETURN_WIRE_BYTES));
+    size_t bytes;uint8_t *expected=host_file(directory,"runtime.kui",&bytes);
+    assert(bytes==plan.file_bytes && !memcmp(expected,plan.header,64u));
+    uint32_t payload_bytes=native_session_word(expected+16u);uint8_t *loaded=malloc(payload_bytes);assert(loaded);
+    assert(kui_native_return_load(&plan,0x8cc00000u,0x51000u,loaded,payload_bytes,
+        native_return_block,NULL)==KUI_NATIVE_RETURN_OK);
+    assert(kui_storage_patch_boot(expected+64u,payload_bytes,KUI_STORAGE_SCI) && !memcmp(loaded,expected+64u,payload_bytes));
+    free(loaded);free(expected);
+    puts("Native session return PASS: complete configured descriptor, exact runtime header/extents, detached CRC and storage binding");
+}
 static void check_native_dual(const char *directory) {
     test.hash_begin[0]=0u;test.hash_end[0]=16u*track_stride(2);
     test.hash_begin[1]=21u*track_stride(2);test.hash_end[1]=23u*track_stride(2);test.hash_bounded=true;
-    const bool success=!strcmp(test.fault,"native-dual-x") || !strcmp(test.fault,"native-dual-y") || native_dual_report();
+    const bool success=!strcmp(test.fault,"native-dual-x") || !strcmp(test.fault,"native-dual-y") ||
+        !strcmp(test.fault,"native-dual-y-runtime-absent") || !strcmp(test.fault,"native-dual-session-absent") || native_dual_report();
     const bool standalone=native_standalone_selected();
     const uint32_t reader=strstr(test.fault,"-y")?KUI_RETAIL_READER_ASYNC_EAGER:KUI_RETAIL_READER_ASYNC;
     const bool a1=native_dual_a1_case();
@@ -960,10 +1014,13 @@ static void check_native_dual(const char *directory) {
     if(native_standalone_case() && !fault("native-dual-standalone-badcap"))
         assert(test.family_calls==(reader==KUI_RETAIL_READER_ASYNC?1u:0u));
     if(reader!=KUI_RETAIL_READER_ASYNC)assert(!test.family_calls);
-    /* The A1 choice selects the module only: the launch still reaches the
-     * combined proof once and never opens the A2 build. */
-    if(a1)assert(test.family_calls==1u && test.dual_a1_package_opens==1u && !test.dual_package_opens);
-    else assert(!test.dual_a1_package_opens);
+    /* Both readers use the exact selected compact dual path. A stale112 KiB
+     * session sidecar is present, and neither reader may even open it. */
+    assert(!test.session_package_opens && !test.session_a1_package_opens);
+    if(a1) {
+        assert(test.dual_a1_package_opens==1u && !test.dual_package_opens);
+        assert(test.family_calls==(reader==KUI_RETAIL_READER_ASYNC?1u:0u));
+    } else assert(!test.dual_a1_package_opens);
     assert(test.standalone_package_opens==(standalone || fault("native-dual-standalone-badcap")?1u:0u));
     if(result && standalone) {
         assert(test.dual_package_opens==1u &&
@@ -972,18 +1029,21 @@ static void check_native_dual(const char *directory) {
     } else if(result) {
         assert((a1?test.dual_a1_package_opens:test.dual_package_opens)==1u &&
             kui_native_dual_descriptor_find(image.data,image.info.payload_bytes,NULL)==1);
+        if(native_optional_session_case())check_native_session_return(directory,&image);
+        else assert(!kui_native_session_descriptor_find(image.data,image.info.payload_bytes,NULL));
     }
     if(result) {
         if(native_dual_report()) {
-            assert(test.hash_reads[0]==16u && test.hash_reads[1]==(fault("native-dual-retry-report")?4u:2u));
+            assert(test.hash_reads[0]==1u && test.hash_reads[1]==(fault("native-dual-retry-report")?2u:1u));
             printf("Native dual exact source: %u raw/cooked reads; max %u bytes; CRC plus native proof share source when available\n",test.hash_reads[1],test.hash_max[1]);
         }
         check_mapping(directory,&image);host_write(directory,"dual-payload.bin",image.data,image.info.payload_bytes);
         printf("Native dual prepared: package=%s reader=%u\n",
-            standalone?"retail-native-standalone.kui":a1?"retail-native-dual-a1.kui":"retail-native-dual.kui",reader);
+            standalone?"retail-native-standalone.kui":
+                (a1?"retail-native-dual-a1.kui":"retail-native-dual.kui"),reader);
     } else assert(!image.data && !image.info.payload_bytes && !test.writes);
     if(fault("native-dual-cancel") || fault("native-dual-patches"))assert(!test.connects && !test.read_calls);
-    if(fault("native-dual-cancel-source"))assert(test.cancelled && test.injected && test.hash_reads[1]==2u);
+    if(fault("native-dual-cancel-source"))assert(test.cancelled && test.injected && test.hash_reads[1]==1u);
     kui_runtime_free(&image);
     if(native_dual_report()) {
         export_launch_files(directory);
@@ -1093,10 +1153,10 @@ static void check(const char *directory) {
         else assert(!image.data && !image.info.payload_bytes && !image.info.memory_bytes);
         if(checksum_case()) {
             unsigned stride=expected.track[expected.count-1u].stride;
-            assert(test.hash_max[0]<=stride && test.hash_max[1]<=stride);
+            assert(test.hash_max[0]<=16u*stride && test.hash_max[1]<=16u*stride);
             if(result) {
-                assert(test.hash_reads[0]==16u && test.hash_max[0]==stride);
-                if(expected.flags & KUI_RETAIL_IMAGE_BOOT_CRC) assert(test.hash_reads[1]==33u && test.hash_max[1]==stride);
+                assert(test.hash_reads[0]==1u && test.hash_max[0]==16u*stride);
+                if(expected.flags & KUI_RETAIL_IMAGE_BOOT_CRC) assert(test.hash_reads[1]==3u && test.hash_max[1]==16u*stride);
                 else assert(!test.hash_reads[1]);
                 printf("Checksum direct reads PASS: IP %u reads, exact 66537-byte boot %u reads; max FatFs read %u bytes; bounded physical spans\n",
                     test.hash_reads[0],test.hash_reads[1],test.hash_max[0]>test.hash_max[1]?test.hash_max[0]:test.hash_max[1]);

@@ -49,6 +49,10 @@ BUDGET_PUBLISH_REFUSALS = ('budget-old-reserve', 'budget-lease-header',
                            'budget-initializer-hook', 'budget-lost-publish')
 BUDGET_FIELDS = ('reserve_address', 'reserve_before', 'reserve_after',
                  'child_bytes_before', 'child_bytes_after')
+CORPUS_MUTATIONS=('missing_input','extra_input','source_identity','record_identity','missing_result',
+    'extra_result','result_identity','missing_case','extra_case','duplicate_case','case_family',
+    'case_geometry','case_safety','missing_minimum','extra_minimum','minimum_admission',
+    'reported_case_count','reported_cohort','selected_owner','source_strategy')
 PIN_FUNCTIONS = {'_alias@vmu_native_stage_placement.c': (32,
                                          '5d5b341944aa4da08467cfca39b78f276224218bd3ed9fd094c99456668b974d'),
  '_allocation_safe@vmu_native_heap_probe_stage.c': (52,
@@ -306,6 +310,16 @@ def budget_stage(stage):
 
 
 def pin_sets(stage):
+    from check_native_session_preclear_profile import stage_profile as session_profile,cold_closure
+    from check_native_ordinary_preclear_profile import stage_profile as ordinary_profile,cold_closure as ordinary_cold
+    modern=cold_closure if session_profile(stage) else (ordinary_cold if ordinary_profile(stage) else None)
+    if modern is not None:
+        require(stage[4].get('__kui_native_dispatch_read_gate_stage')==ABSOLUTE_ONE and budget_stage(stage),
+                'Modern General bottom closure requires its exact dispatch/budget capabilities')
+        from check_native_compact_background_profile import COLD_FUNCTIONS as names,COLD_OBJECTS as data_names
+        verified=modern(stage)
+        return ({name:(verified[name]['bytes'],verified[name]['sha256']) for name in names},
+                {name:(verified[name]['bytes'],verified[name]['sha256']) for name in data_names})
     gate=stage[4].get('__kui_native_dispatch_read_gate_stage')
     if stage_profile(stage):
         require(gate==ABSOLUTE_ONE and budget_stage(stage),
@@ -313,11 +327,16 @@ def pin_sets(stage):
         from check_native_compact_background_profile import stage_profile as compact_profile
         if compact_profile(stage):
             from check_native_compact_background_profile import COLD_FUNCTIONS as functions, COLD_OBJECTS as objects
+            require(set(functions)==set(DISPATCH_GATE_PIN_FUNCTIONS)-{'_bottom_geometry@vmu_native_heap.c'}|{
+                '_allocator_state_excludes_stage@vmu_native_stage_placement.c',
+                '_kui_vmu_native_heap_metadata_valid'} and
+                set(objects)==set(DISPATCH_GATE_PIN_OBJECTS)|{'_heap_shapes@vmu_native_heap.c'},
+                'Direct compact cold closure differs from its reviewed functions/data')
         else:
             functions,objects=COLD_FUNCTIONS,COLD_OBJECTS
-        require(set(functions)==set(DISPATCH_GATE_PIN_FUNCTIONS) and
-                set(objects)==set(DISPATCH_GATE_PIN_OBJECTS),
-                'Lean heap stage must retain the complete historical closure')
+            require(set(functions)==set(DISPATCH_GATE_PIN_FUNCTIONS) and
+                    set(objects)==set(DISPATCH_GATE_PIN_OBJECTS),
+                    'Lean heap stage must retain the complete historical closure')
         return functions,objects
     if gate is not None:
         require(gate==ABSOLUTE_ONE and budget_stage(stage), 'Dispatch gate stage lacks its exact budget capability')
@@ -354,6 +373,13 @@ def records(image):
 
 
 def pinned_records(stage):
+    from check_native_session_preclear_profile import stage_profile as session_profile,cold_closure
+    from check_native_ordinary_preclear_profile import stage_profile as ordinary_profile,cold_closure as ordinary_cold
+    modern=cold_closure if session_profile(stage) else (ordinary_cold if ordinary_profile(stage) else None)
+    if modern is not None:
+        require(stage[4].get('__kui_native_dispatch_read_gate_stage')==ABSOLUTE_ONE and budget_stage(stage),
+                'Modern General bottom closure requires its exact dispatch/budget capabilities')
+        return modern(stage)
     available = records(stage)
     result = {}
     functions, objects = pin_sets(stage)
@@ -433,7 +459,7 @@ def paired(stage, worker):
     return a
 
 
-def require_companion(stage, worker, proof, corpus=None):
+def require_companion(stage, worker, proof, corpus=None,*,cohort_expected=None):
     require(paired(stage, worker), 'Bottom companion requires both exact capabilities')
     require(isinstance(proof,dict) and layout_for(stage[4])==layout_for(worker[4]) and
             proof.get('lease_bytes')==layout_for(stage[4]).LEASE_BYTES,
@@ -448,26 +474,44 @@ def require_companion(stage, worker, proof, corpus=None):
         'actual_linked_installer_executed', 'actual_c_ownership_predicates_executed',
         'actual_original_allocate_and_release_executed')),
         'Bottom cold companion did not execute a mandatory guard/owner scope')
+    summary = proof.get('source_corpus_summary', {})
+    from prove_vmu_native_bottom_corpus_heap import validate_corpus
+    try: cohort_expected=validate_corpus(summary,full_rows=False,expected=cohort_expected)
+    except (AssertionError,KeyError,TypeError,ValueError,OSError) as error:
+        raise ValueError('Bottom companion has incomplete/tampered structural cohort') from error
+    require((cohort_expected[1]['stage_begin'],cohort_expected[1]['stage_end'])==
+            (0x8ce00000,stage[4]['__retail_stage_bss_end'][0]),
+            'Bottom corpus placement does not cover this complete linked stage')
+    identities=summary['inputs'];count=len(identities)
+    classes={(r['heap_family'],r['heap_layout']) for r in identities}
     positive = proof.get('positive_cases', [])
-    require(len(positive) == 16 and len({(p.get('slug'), p.get('reader')) for p in positive}) == 16 and
+    require(len(positive) == count*2 and len({(p.get('slug'), p.get('reader')) for p in positive}) == count*2 and
             all(p.get('reader') in (1, 2) and isinstance(p.get('instructions'), int) and
                 p['instructions'] > 0 for p in positive),
             'Bottom cold companion lacks both selected readers for every owner')
-    require(len(proof.get('refusal_cases', [])) == len(REFUSALS) and
-            {row.get('mutation') for row in proof.get('refusal_cases', [])} == set(REFUSALS) and
+    require(len(proof.get('refusal_cases', [])) == len(REFUSALS)*len(classes) and
+            {(row.get('heap_family'),row.get('heap_layout'),row.get('mutation')) for row in proof.get('refusal_cases', [])} ==
+                {(family,layout,mutation) for family,layout in classes for mutation in REFUSALS} and
             len(proof.get('actual_placement_cases', [])) == 18 and
             proof.get('extra_scalar_truth_cases') == scalar_truth(),
             'Bottom cold companion refusal/geometry/scalar coverage differs')
-    summary = proof.get('source_corpus_summary', {})
     require(summary.get('placement') == 'bottom' and summary.get('full_structural_selection') is True and
-            summary.get('case_count') == 72 and summary.get('minimum_case_count') == 96 and
+            summary.get('case_count') == count*9 and summary.get('minimum_case_count') == count*12 and
             summary.get('artifacts', {}).get('stage.elf') == sha(stage[0]) and
             summary.get('artifacts', {}).get('native-worker.elf') == sha(worker[0]),
             'Bottom cold companion is detached from the complete original allocator proof')
-    require(len(summary.get('slugs', [])) == len(set(summary.get('slugs', []))) == 8 and
+    require(len(summary.get('slugs', [])) == len(set(summary.get('slugs', []))) == count and
             {(p['slug'], p['reader']) for p in positive} ==
             {(slug, reader) for slug in summary['slugs'] for reader in (1, 2)},
             'Bottom cold companion owner/reader case matrix differs')
+    expected={r['slug']:r for r in identities}
+    require(all(all(row.get(key)==expected[row['slug']][key] for key in
+                    ('resolution_kind','heap_family','heap_layout')) for row in positive),
+            'Bottom companion reader case changed its source allocation strategy')
+    fixed=[row for row in positive if row['resolution_kind']==2]
+    require(all(row.get('fixed_hook')==expected[row['slug']]['fixed_hook'] and
+                row.get('fixed_return_matches_stage') is True for row in fixed),
+            'Bottom companion omits its actual kind2 hook/trampoline return context')
     if corpus is not None:
         require(proof.get('source_corpus_sha256') == sha(json.dumps(
                     corpus, sort_keys=True, separators=(',', ':')).encode()) and
@@ -482,6 +526,8 @@ def require_companion(stage, worker, proof, corpus=None):
         require_private_pool_companion(stage, proof)
     tests = proof.get('self_tests', {})
     require(tests.get('whole_closure_mutations', 0) >= 35 and tests.get('marker_refusals', 0) >= 6 and
+            tests.get('corpus_row_mutation_refusals',0)==len(CORPUS_MUTATIONS) and
+            proof.get('corpus_coverage_refusals')==list(CORPUS_MUTATIONS) and
             tests.get('companion_refusals', 0) >= 8,
             'Bottom cold companion has no negative proof checks')
     return True
@@ -497,6 +543,9 @@ SOURCES = ('tools/native_runtime_layout.py', 'tools/check_native_general_lean_pr
            'include/kui/vmu_native_heap.h', 'include/kui/vmu_native_stage_placement.h',
            'src/core/vmu_native_heap_budget.c', 'include/kui/vmu_native_heap_budget.h',
            'tools/prove_native_private_pool_budget.py')
+SOURCES += ('tools/check_native_session_preclear_profile.py','tools/check_native_ordinary_preclear_profile.py',
+            'tools/prove_vmu_native_bottom_corpus_heap.py',
+            'tools/audit_vmu_native_corpus.py')
 
 
 def require_private_pool_companion(stage, proof):
@@ -515,9 +564,13 @@ def require_private_pool_companion(stage, proof):
             plans[0]['plan'] == plans[1]['plan'],
             'Private-pool proof lacks both actual selected-reader plans')
     coverage = proof.get('private_pool_budget_execution', {})
-    require(coverage.get('actual_helper_calls') == 16 and
-            coverage.get('actual_prepare_calls') == coverage.get('actual_publish_calls') == 16 and
-            coverage.get('unchanged_unrelated_callers') == 14 and
+    inputs=proof['source_corpus_summary']['inputs'];count=len(inputs)*2
+    tail=sum(row['heap_family']==1 for row in inputs)*2
+    direct=sum(row['heap_family']==3 for row in inputs)*2
+    require(coverage.get('actual_helper_calls') == tail and
+            coverage.get('actual_prepare_calls') == coverage.get('actual_publish_calls') == count and
+            coverage.get('direct_zero_plan_cases')==direct and
+            coverage.get('unchanged_unrelated_callers') == count-2 and
             coverage.get('single_word_publications') == coverage.get('full_source_scans') == 2 and
             coverage.get('dirty_p1_ocbp_p2_readback_executed') is True and
             coverage.get('publication_refusals_reuse_actual_executed_prefix') is True,
@@ -704,6 +757,45 @@ class Refused(Exception):
     pass
 
 
+def corpus_row_mutations(corpus,expected):
+    """Each mutation preserves external originals; none may alter coverage."""
+    from prove_vmu_native_bottom_corpus_heap import validate_corpus
+    def strategy(c):
+        fixed=next((r for r in c['inputs'] if r['resolution_kind']==2),None)
+        if fixed is not None:fixed['fixed_hook']['slot']=0
+        else:c['inputs'][0]['allocation_strategy']='unknown'
+    mutations=(
+        ('missing_input',lambda c:c['inputs'].pop()),
+        ('extra_input',lambda c:c['inputs'].append(copy.deepcopy(c['inputs'][0]))),
+        ('source_identity',lambda c:c['inputs'][0].update(source_sha256='0'*64)),
+        ('record_identity',lambda c:c['inputs'][0].update(record_sha256='0'*64)),
+        ('missing_result',lambda c:c['results'].pop()),
+        ('extra_result',lambda c:c['results'].append(copy.deepcopy(c['results'][0]))),
+        ('result_identity',lambda c:c['results'][0].update(image_sha256='0'*64)),
+        ('missing_case',lambda c:c['cases'].pop()),
+        ('extra_case',lambda c:c['cases'].append(copy.deepcopy(c['cases'][0]))),
+        ('duplicate_case',lambda c:c['cases'].__setitem__(-1,copy.deepcopy(c['cases'][0]))),
+        ('case_family',lambda c:c['cases'][0].update(heap_family=0)),
+        ('case_geometry',lambda c:c['cases'][0].update(payload=c['cases'][0]['payload']+32)),
+        ('case_safety',lambda c:c['cases'][0].update(stage_and_installer_preserved=False)),
+        ('missing_minimum',lambda c:c['minimum_cases'].pop()),
+        ('extra_minimum',lambda c:c['minimum_cases'].append(copy.deepcopy(c['minimum_cases'][0]))),
+        ('minimum_admission',lambda c:c['minimum_cases'][0].update(stage_transaction_admitted=not c['minimum_cases'][0]['stage_transaction_admitted'])),
+        ('reported_case_count',lambda c:c.update(case_count=c['case_count']-1)),
+        ('reported_cohort',lambda c:c['cohort_policy']['allocator_families'].update({'1':0})),
+        ('selected_owner',lambda c:c['selected_slugs'].pop()),
+        ('source_strategy',strategy),
+    )
+    refused=[]
+    require(tuple(name for name,_ in mutations)==CORPUS_MUTATIONS,'Corpus mutation coverage changed')
+    for name,mutate in mutations:
+        changed=copy.deepcopy(corpus);mutate(changed)
+        try: validate_corpus(changed,expected=expected)
+        except (AssertionError,KeyError,TypeError,ValueError):refused.append(name)
+        else:raise ValueError('Bottom corpus accepted tampered coverage/identity row: '+name)
+    return refused
+
+
 class Cold(ReleaseSH):
     """Actual stage and original SDK code share one physically aliased RAM."""
     def __init__(self, directory, row, *, reader=1, alias=None, seed=0,
@@ -734,7 +826,20 @@ class Cold(ReleaseSH):
         self.store_block(0x8c010000, self.image)
         wire = Path(row['record']).read_bytes()
         self.owner = list(struct.unpack_from('<18I', wire, 608))
+        require(self.owner[2:4] in ([1,1],[3,2]),'Cold original owner has unknown family/layout')
+        self.resolution_kind=struct.unpack_from('<I',wire,20)[0]
+        require(self.resolution_kind in (1,2),'Cold bottom fixture lacks an SDK allocation strategy')
+        self.code_bytes=0x268 if self.owner[2:4]==[3,2] else 0x1d0
         self.owner_call = list(struct.unpack_from('<5I', wire, 680))
+        self.fixed_hook=None
+        if self.resolution_kind==2:
+            from prove_vmu_native_bottom_corpus_heap import fixed_binding
+            slot,target=fixed_binding(self.image,tuple(self.owner),tuple(self.owner_call))
+            self.fixed_hook=(slot,target)
+            # Actual native_fixed_plan_bind publishes these two metadata
+            # roles before its borrowed-call trampoline invokes the same SDK
+            # initializer and returns into this bottom installer.
+            self.owner[7:9]=[slot,self.owner[6]]
         self.begin, self.count = self.owner_call[3:5]
         if alias is not None:
             self.begin = (self.begin & 0x1fffffff) | alias
@@ -749,9 +854,16 @@ class Cold(ReleaseSH):
         self.store_block(self.heap_at, struct.pack('<18I', *self.owner))
         self.owner_call[3] = self.begin
         self.store_block(self.call_at, struct.pack('<5I', *self.owner_call))
+        if '_native_fixed' in self.symbols or '_native_arena' in self.symbols:
+            require('_native_fixed' in self.symbols and '_native_arena' in self.symbols,
+                    'Bottom SDK fixture has incomplete strategy dispatch flags')
+            self.write(self.symbols['_native_fixed'][0],int(self.fixed_hook is not None))
+            self.write(self.symbols['_native_arena'][0],0)
+        else:
+            require(self.fixed_hook is None,'Single initializer profile cannot accept kind2')
         self.write(self.symbols['_exec_bytes'][0], len(self.image))
         self.store_block(self.symbols['_native_heap_code_sha'][0],
-                         hashlib.sha256(self.block(self.owner[6], 0x1d0)).digest())
+                         hashlib.sha256(self.block(self.owner[6], self.code_bytes)).digest())
         manifest = self.symbols['_manifest'][0]
         self.write(manifest + 44, 1)
         self.write(manifest + 48, reader)
@@ -768,6 +880,14 @@ class Cold(ReleaseSH):
                     'Invalid explicit Standard low tuple')
             low = standard_low
         self.control_at = low[2] | 0x20000000
+        if self.fixed_hook is not None:
+            require('_kui_native_fixed_call_return' in self.symbols and
+                    '_native_fixed_hook' in self.symbols and '_native_fixed_call' in self.symbols,
+                    'Kind2 fixture lacks its complete fixed startup roles')
+            slot,target=self.fixed_hook
+            self.store_block(self.symbols['_native_fixed_hook'][0],struct.pack('<2I',slot,target))
+            self.store_block(self.symbols['_native_fixed_call'][0],
+                struct.pack('<5I',low[0],self.begin,self.count,target,slot))
         if self.has_budget:
             # The real first-initializer hook remains installed while its
             # returned callback runs. Reproduce that live literal rather than
@@ -778,7 +898,8 @@ class Cold(ReleaseSH):
         self.write(self.control_at + 8, 2)
         self.write(self.control_at + 20, self.begin)
         self.write(self.control_at + 24, self.count)
-        self.write(self.control_at + 36, self.owner_call[2])
+        self.write(self.control_at + 36,self.symbols['_kui_native_fixed_call_return'][0]
+                   if self.fixed_hook is not None else self.owner_call[2])
         self.write(self.control_at + 28, 0x8c00ed00)
         self.stack_low, stack_bytes = self.symbols['_native_installer_stack'][:2]
         self.stack = self.stack_low + stack_bytes - 32
@@ -847,8 +968,12 @@ class Cold(ReleaseSH):
             elif name == 'bad-allocate-callback': self.write(self.heap_at + 36, self.owner[9] ^ 2)
             elif name == 'bad-release-callback': self.write(self.heap_at + 40, self.owner[10] ^ 2)
             elif name == 'cold-release-code':
-                at = self.owner[10] + 0x96
-                self.write(at & ~3, self.read(at & ~3) ^ (1 << ((at & 2) * 8)))
+                # Direct's larger initial SHA span already covers this
+                # release word. Its mutation is injected at the next whole
+                # code-proof entry so that guard is independently exercised.
+                if self.owner[2]!=3:
+                    at = self.owner[10] + 0x96
+                    self.write(at & ~3, self.read(at & ~3) ^ (1 << ((at & 2) * 8)))
             elif name in BUDGET_PREPARE_REFUSALS:
                 parent = self.owner_call[2] - 0x2c
                 def literal(pc):
@@ -867,6 +992,9 @@ class Cold(ReleaseSH):
             if name == f'digest-{at}':
                 dest = self.symbols['_native_heap_code_sha'][0]
                 self.write(dest, self.read(dest) ^ 1)
+        if event=='code-proof' and name=='cold-release-code' and self.owner[2]==3 and self.code_calls==1:
+            at=self.owner[10]+0x96
+            self.write(at&~3,self.read(at&~3)^(1<<((at&2)*8)))
         if event == 'placeholder':
             if name == 'placeholder-header':
                 at = self.begin + self.lease_bytes + 36
@@ -1015,13 +1143,13 @@ class Cold(ReleaseSH):
             self.abi_return(); return
         if name == '_kui_sha256_update':
             context, at, count = self.r[4:7]
-            require(context in self.hash_contexts and at == self.owner[6] and count == 0x1d0,
+            require(context in self.hash_contexts and at == self.owner[6] and count == self.code_bytes,
                     'Cold digest changed its exact source and byte count')
             self.hash_contexts[context] += self.block(at, count)
             self.abi_return(); return
         if name == '_kui_sha256_digest':
             context, at = self.r[4:6]
-            require(context in self.hash_contexts and len(self.hash_contexts[context]) == 0x1d0,
+            require(context in self.hash_contexts and len(self.hash_contexts[context]) == self.code_bytes,
                     'Cold digest does not follow exact update')
             digest = hashlib.sha256(self.hash_contexts.pop(context)).digest()
             for i, value in enumerate(digest): self.write(at + i, value, 1)
@@ -1105,7 +1233,9 @@ class Cold(ReleaseSH):
                     elif event == '_native_allocator_unchanged':
                         self.unchanged_calls += 1
                         self.change(f'unchanged:{self.unchanged_calls}')
-                    elif event == '_kui_vmu_native_heap_bottom_code_valid': self.code_calls += 1
+                    elif event == '_kui_vmu_native_heap_bottom_code_valid':
+                        self.code_calls += 1
+                        self.change('code-proof')
                     elif event.endswith('_bottom_placeholder'): self.change('placeholder')
                     elif event.endswith('_bottom_allocated'): self.change('allocated')
                     elif event.endswith('_bottom_ready'): self.change('ready')
@@ -1164,9 +1294,13 @@ def check(directory, *, self_test=False, corpus=None, development=False):
         for name in ('stage.elf', 'native-worker.elf', 'native-worker.bin', 'native-ra-aux.bin'):
             require(corpus.get('artifacts', {}).get(name) == sha((directory / name).read_bytes()),
                     'Bottom original-corpus proof does not bind this artifact: ' + name)
-        require(corpus.get('case_count') == 72 and corpus.get('minimum_case_count') == 96 and
-                len(corpus.get('results', [])) == len(corpus.get('inputs', [])) == 8,
-                'Bottom cold proof lacks complete original source cases')
+        from prove_vmu_native_bottom_corpus_heap import validate_corpus
+        try: corpus_expected=validate_corpus(corpus)
+        except (AssertionError,KeyError,TypeError,ValueError,OSError) as error:
+            raise ValueError('Bottom cold proof lacks the complete verified structural cohort') from error
+        require((corpus_expected[1]['stage_begin'],corpus_expected[1]['stage_end'])==
+                (0x8ce00000,stage[4]['__retail_stage_bss_end'][0]),
+                'Bottom corpus placement omits the complete current stage')
         for name, expected in corpus.get('source_sha256', {}).items():
             require(sha((ROOT / name).read_bytes()) == expected,
                     'Bottom original-corpus source changed: ' + name)
@@ -1179,6 +1313,7 @@ def check(directory, *, self_test=False, corpus=None, development=False):
     scan_dispatch_tests = []
     budget_counts = dict(actual_helper_calls=0, actual_prepare_calls=0,
                          actual_publish_calls=0, unchanged_unrelated_callers=0,
+                         direct_zero_plan_cases=0,
                          single_word_publications=0, full_source_scans=0,
                          dirty_p1_ocbp_p2_readback_executed=False,
                          publication_refusals_reuse_actual_executed_prefix=True)
@@ -1194,9 +1329,13 @@ def check(directory, *, self_test=False, corpus=None, development=False):
             require(cpu.unchanged_calls == 3 and cpu.code_calls == 2 and cpu.passive_calls == 1,
                     'Compiled bottom installer omitted a mandatory complete guard')
             if cpu.has_budget:
-                require(cpu.budget_prepare_calls == cpu.budget_core_calls ==
-                        cpu.budget_publish_calls == 1,
+                require(cpu.budget_prepare_calls == cpu.budget_publish_calls == 1 and
+                        cpu.budget_core_calls==int(cpu.owner[2]==1),
                         'Actual budget helper omitted or repeated prepare/publish')
+                if cpu.owner[2]==3:
+                    require(cpu.budget_slot is None and not cpu.budget_writes and not cpu.budget_purges and not cpu.budget_scans,
+                            'Direct allocator did not retain its exact empty private-pool plan')
+                    budget_counts['direct_zero_plan_cases']+=1
                 budget_counts['actual_helper_calls'] += cpu.budget_core_calls
                 budget_counts['actual_prepare_calls'] += cpu.budget_prepare_calls
                 budget_counts['actual_publish_calls'] += cpu.budget_publish_calls
@@ -1218,10 +1357,19 @@ def check(directory, *, self_test=False, corpus=None, development=False):
                     budget_counts['unchanged_unrelated_callers'] += 1
             entered |= cpu.entered
             executed |= cpu.executed
-            positive.append(dict(slug=row['slug'], reader=reader, instructions=cpu.instructions))
+            positive.append(dict(slug=row['slug'], reader=reader, instructions=cpu.instructions,
+                resolution_kind=cpu.resolution_kind,heap_family=cpu.owner[2],heap_layout=cpu.owner[3],
+                fixed_hook=dict(slot=cpu.fixed_hook[0],target=cpu.fixed_hook[1]) if cpu.fixed_hook else None,
+                fixed_return_matches_stage=cpu.fixed_hook is not None and
+                    (cpu.read(cpu.control_at+36)&0x1fffffff)==(cpu.symbols['_kui_native_fixed_call_return'][0]&0x1fffffff)))
     if self_test:
-        generic_row = next((row for row in rows if row['slug'] != 'lodoss'), rows[0])
-        for name in REFUSALS:
+        classes=sorted({(row['heap_family'],row['heap_layout']) for row in rows})
+        budget_sources={row['source_sha256'] for row in budget_plans}
+        for family,layout in classes:
+          candidates=[row for row in rows if (row['heap_family'],row['heap_layout'])==(family,layout)]
+          generic_row=next((row for row in candidates if row['resolution_kind']==1 and
+                            row['source_sha256'] not in budget_sources),candidates[0])
+          for name in REFUSALS:
             cpu = Cold(directory, generic_row, mutation=name)
             require(not cpu.run_cold() and cpu.refusal is not None,
                     'Actual bottom installer accepted mutation: ' + name)
@@ -1240,7 +1388,8 @@ def check(directory, *, self_test=False, corpus=None, development=False):
                         'Invalid placeholder/release proof reached original free: ' + name)
             entered |= cpu.entered
             executed |= cpu.executed
-            refusals.append(dict(mutation=name, phase=cpu.refusal[0], detail=cpu.refusal[1],
+            refusals.append(dict(mutation=name,heap_family=family,heap_layout=layout,
+                                 phase=cpu.refusal[0], detail=cpu.refusal[1],
                                  original_calls=cpu.owner_calls))
         if budget_stage(stage):
             source_row = next(row for row in rows if
@@ -1293,6 +1442,7 @@ def check(directory, *, self_test=False, corpus=None, development=False):
         require(all(any(begin <= pc < end for begin, end in spans) for pc in executed),
                 'Actual bottom cold control flow escaped its complete pinned closure')
     from check_native_bottom_heap_worker import check as check_worker
+    from prove_vmu_native_bottom_corpus_heap import METADATA_KEYS
     report = dict(schema=SCHEMA, enabled=True, development=development,
                 artifact_sha256=dict(stage=sha(stage[0]), worker=sha(worker[0])),
                 lease_bytes=selected_layout.LEASE_BYTES,
@@ -1304,11 +1454,8 @@ def check(directory, *, self_test=False, corpus=None, development=False):
                 actual_placement_cases=placement_cases, extra_scalar_truth_cases=scalar_truth(),
                 entered_stage_functions=sorted(entered), exact_linked_kernels=kernels,
                 source_corpus_sha256=sha((json.dumps(corpus, sort_keys=True, separators=(',', ':'))).encode()),
-                source_corpus_summary=dict(placement=corpus.get('placement'),
-                    full_structural_selection=corpus.get('full_structural_selection'),
-                    slugs=sorted(row['slug'] for row in rows),
-                    case_count=corpus.get('case_count'), minimum_case_count=corpus.get('minimum_case_count'),
-                    artifacts=corpus.get('artifacts')),
+                source_corpus_summary=dict(**{key:corpus.get(key) for key in METADATA_KEYS},
+                    slugs=sorted(row['slug'] for row in rows)),
                 worker_heap_predicates=check_worker(directory, self_test=self_test),
                 source_sha256={name: sha((ROOT / name).read_bytes()) for name in SOURCES})
     if budget_stage(stage):
@@ -1348,8 +1495,10 @@ def check(directory, *, self_test=False, corpus=None, development=False):
                 else: raise ValueError('Bottom cold accepted a missing/changed paired marker')
         # This local candidate cannot escape before every refusal below is
         # exercised. Seed the expected count solely to validate other fields.
+        report['corpus_coverage_refusals']=corpus_row_mutations(corpus,corpus_expected)
         report['self_tests'] = dict(whole_closure_mutations=whole_mutants,
-                                   marker_refusals=marker_refusals, companion_refusals=8)
+                                   marker_refusals=marker_refusals, companion_refusals=8,
+                                   corpus_row_mutation_refusals=len(report['corpus_coverage_refusals']))
         companion_refusals = 0
         for name, value in (('schema', 'bad'), ('enabled', False), ('development', True),
                             ('artifact_sha256', {}), ('positive_cases', []),
@@ -1357,11 +1506,11 @@ def check(directory, *, self_test=False, corpus=None, development=False):
                             ('worker_heap_predicates', {}), ('exact_linked_kernels', {}),
                             ('source_sha256', {}), ('source_corpus_summary', {})):
             changed = {**report, name: value}
-            try: require_companion(stage, worker, changed, corpus)
+            try: require_companion(stage, worker, changed, corpus,cohort_expected=corpus_expected)
             except ValueError: companion_refusals += 1
             else: raise ValueError('Bottom cold companion accepted changed field: ' + name)
         report['self_tests']['companion_refusals'] = companion_refusals
-        require_companion(stage, worker, report, corpus)
+        require_companion(stage, worker, report, corpus,cohort_expected=corpus_expected)
     return report
 
 

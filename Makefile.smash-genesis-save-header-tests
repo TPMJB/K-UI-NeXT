@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/smash-genesis-save-header-host
+HOST_CC ?= cc
+.DEFAULT_GOAL := smash-genesis-save-header-tests
+.PHONY: smash-genesis-save-header-tests
+smash-genesis-save-header-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic \
+	 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-pie -no-pie \
+	 -ffunction-sections -fdata-sections -Iinclude tests/test_smash_genesis_save_header.c \
+	 src/core/smash_genesis_save_header.c src/core/smash_native_menu.c \
+	 -Wl,--gc-sections -o $(BUILD)/test-save-header
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-save-header

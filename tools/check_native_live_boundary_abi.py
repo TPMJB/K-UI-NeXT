@@ -67,6 +67,17 @@ def layout():
 
 def pinned(worker):
     _, body, section = symbol_bytes(worker, '_live_boundary', 2)
+    from check_native_session_witness_profile import profile as session_profile, binary
+    from check_native_ordinary_general_profile import profile as ordinary_profile
+    if session_profile(worker) is not None or ordinary_profile(worker) is not None:
+        from check_vmu_native_persistent import prepared_signature
+        from vmu_native_relocations import generate
+        flat=binary(worker);wire=generate(worker[0],flat,0x8c100000,0x1c000)
+        actual=prepared_signature(worker,flat,wire,'_live_boundary')[:2]
+        require(section[2]&7==6 and actual==
+                ('73b14f62db52df70862faf3938b134343b14d54fb89558ba38d5867138106a1e',216),
+                'Modern General live-boundary code or typed targets changed')
+        return body
     from check_native_followup_profile import worker_pins
     expected=worker_pins(worker,'live_boundary',PIN)
     require(section[2] & 7 == 6 and (len(body), hashlib.sha256(body).hexdigest()) == expected,

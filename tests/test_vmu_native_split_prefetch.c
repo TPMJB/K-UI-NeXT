@@ -20,7 +20,9 @@ static unsigned tick_visits;
  * exact owned entry address the production getter validates before calling. */
 static uint32_t __attribute__((section(".isolation_tick"),noinline))
 tick_visit(uint32_t event,uint32_t arg,kui_retail_async_region_type *region,uint32_t reserved) {
-    CHECK(event==KUI_NATIVE_RA_TICK && !arg && !reserved && region==&observed_region);
+    uint32_t expected=config.driver.family==KUI_VMU_NATIVE_FAMILY_EARLY_V1?
+        KUI_NATIVE_RA_TICK_ONE_BLOCK:KUI_NATIVE_RA_TICK_DEFAULT;
+    CHECK(event==KUI_NATIVE_RA_TICK && arg==expected && !reserved && region==&observed_region);
     CHECK(state.armed && !state.pending && state.submitted==state.completed);
     CHECK(controller_pair.pending==NATIVE_CONTROLLER_IDLE && live_plan.ready);
     CHECK(!durable_card.handling && !durable_card.inflight);
@@ -93,12 +95,29 @@ static void early_query_prefetch_suite(void) {
                 CHECK(!state.pending && !controller_pair.pending && !durable_card.inflight &&
                       !durable_card.handling && !lease_calls && !sd.bytes && !sd.writes);
             }
+    /* Presentation Off keeps the same early reader pacing. No virtual
+     * attachment byte or card/backend state is changed by that visit. */
+    for(unsigned absent=0u;absent<2u;absent++) {
+        reader_bind();
+        split_early_setup_mode(1u,1u,absent?KUI_VMU_NATIVE_DIAGNOSTICS_READER_ONLY:
+            KUI_VMU_NATIVE_DIAGNOSTICS_NORMAL);
+        submit_sr=complete_sr=0x60000101u;
+        split_batch(1u,0u,0u);split_submit_ok();split_done(1u,0u,0x01000000u);
+        uint8_t before[4][1024];
+        for(unsigned port=0u;port<4u;port++) memcpy(before[port],rx_bytes(port*6u),1024u);
+        unsigned ticks=tick_visits;complete_return();
+        if(!absent) before[0][2]|=VIRTUAL;
+        for(unsigned port=0u;port<4u;port++) CHECK(!memcmp(before[port],rx_bytes(port*6u),1024u));
+        CHECK(tick_visits==ticks+1u && !durable_card.requests && !durable_card.reads &&
+            !durable_card.commits && !lease_calls && !sd.bytes && !sd.writes);
+        CHECK(absent?!overlay.stats.advertisements:overlay.stats.advertisements==1u);
+    }
 }
 #if KUI_NATIVE_SPLIT_CONTROLLER_STREAM_GUARD
 /* One proved split completion after the game received `blocks` more blocks. */
 static void guard_frame(unsigned blocks) {
     observed_region.engine.stats.call_blocks+=blocks;
-    split_batch(0u,0u,0u);split_submit_ok();split_done(0u,0u,0x01000000u);complete_return();
+    split_batch(1u,0u,0u);split_submit_ok();split_done(1u,0u,0x01000000u);complete_return();
     CHECK(live_plan.ready && controller_pair.pending==NATIVE_CONTROLLER_IDLE);
 }
 static unsigned guard_run(unsigned frames,unsigned blocks) {
@@ -111,17 +130,22 @@ static unsigned guard_run(unsigned frames,unsigned blocks) {
  * twenty frames after the stream ends. A counter that starts again from zero
  * is a new count, never a stream. */
 static unsigned stream_guard_suite(void) {
-    reader_bind();split_setup();memset(&reader_stream,0,sizeof(reader_stream));
-    CHECK(guard_run(1u,0u)==1u);
-    CHECK(guard_run(64u,2u)==64u);                     /* ~60 KB/s: music-like */
-    CHECK(guard_run(64u,8u)==5u);                      /* ~240 KB/s: FMV-like */
-    CHECK(reader_stream.sum>READER_STREAM_BLOCKS);
-    CHECK(guard_run(32u,0u)==13u);                     /* Visits from frame 20. */
-    CHECK(guard_run(32u,0u)==32u && reader_stream.sum==0u);
-    CHECK(guard_run(8u,25u)==3u);                      /* A load burst pauses too. */
-    observed_region.engine.stats.call_blocks=0u;       /* A new count, not a stream. */
-    observed_region.engine.stats.irq_blocks=0u;
-    CHECK(guard_run(40u,0u)==12u);                     /* Only the burst drains. */
+    for(unsigned early=0u;early<2u;early++) {
+        reader_bind();
+        if(early) {split_early_setup(1u,1u);submit_sr=complete_sr=0x60000101u;}
+        else split_setup();
+        memset(&reader_stream,0,sizeof(reader_stream));
+        CHECK(guard_run(1u,0u)==1u);
+        CHECK(guard_run(64u,2u)==64u);                 /* ~60 KB/s: music-like */
+        CHECK(guard_run(64u,8u)==5u);                  /* ~240 KB/s: FMV-like */
+        CHECK(reader_stream.sum>READER_STREAM_BLOCKS);
+        CHECK(guard_run(32u,0u)==13u);                 /* Visits from frame 20. */
+        CHECK(guard_run(32u,0u)==32u && reader_stream.sum==0u);
+        CHECK(guard_run(8u,25u)==3u);                  /* A load burst pauses too. */
+        observed_region.engine.stats.call_blocks=0u;   /* A new count, not a stream. */
+        observed_region.engine.stats.irq_blocks=0u;
+        CHECK(guard_run(40u,0u)==12u);                 /* Only the burst drains. */
+    }
     return 1u;
 }
 #endif
@@ -147,7 +171,7 @@ int KUI_SPLIT_PREFETCH_TEST_MAIN(void) {
     }
     CHECK(tick_visits==464u);
     early_query_prefetch_suite();
-    CHECK(tick_visits==480u);
+    CHECK(tick_visits==482u);
 #if KUI_NATIVE_SPLIT_CONTROLLER_STREAM_GUARD
     printf("Split controller stream guard host checks: %u; %u TICK visits, none after a refusal; "
         "%u guarded-frame visits, paused while streaming\n",checks,tick_visits,guard_visits);

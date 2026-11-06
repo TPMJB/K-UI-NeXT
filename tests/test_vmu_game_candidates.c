@@ -14,9 +14,12 @@ static uint8_t wire[KUI_VMU_GAME_CANDIDATES_WIRE_BYTES],bad[KUI_VMU_GAME_CANDIDA
 /* Public preflight runs against a small read-only filesystem model. This keeps
  * legacy migration/counting in the production path; it does not model media
  * durability (the separate real FAT32/exFAT suite does). */
-struct test_record {const char *path;const uint8_t *data;size_t bytes;BYTE attributes;};
-static struct test_record records[8];
+struct test_record {const char *path;uint8_t *data;size_t bytes;BYTE attributes;};
+static struct test_record records[32];
+static char writable_paths[32][96];
+static uint8_t writable_data[32][KUI_VMU_GAME_CANDIDATES_WIRE_BYTES];
 static unsigned record_count,read_opens;
+static unsigned write_calls;
 static const char *fault_path;
 static char fault_operation,diagnostics[4096];
 static size_t diagnostic_bytes;
@@ -33,10 +36,46 @@ FRESULT f_stat(const TCHAR *path,FILINFO *info) {
     memset(info,0,sizeof(*info));info->fsize=records[i].bytes;info->fattrib=records[i].attributes;return FR_OK;
 }
 FRESULT f_open(FIL *file,const TCHAR *path,BYTE mode) {
-    CHECK(mode==FA_READ);++read_opens;
+    if(mode==FA_READ)++read_opens;
     if(fault_path && fault_operation=='o' && !strcmp(path,fault_path))return FR_DISK_ERR;
-    int i=record_index(path);if(i<0)return FR_NO_FILE;
+    int i=record_index(path);
+    if(mode&FA_CREATE_NEW) {
+        if(i>=0)return FR_EXIST;
+        CHECK(record_count<32u);i=(int)record_count++;
+        snprintf(writable_paths[i],sizeof(writable_paths[i]),"%s",path);
+        memset(writable_data[i],0,sizeof(writable_data[i]));
+        records[i]=(struct test_record){writable_paths[i],writable_data[i],0,0};
+    }
+    if(i<0)return FR_NO_FILE;
     memset(file,0,sizeof(*file));file->obj.sclust=(DWORD)i+1u;file->obj.objsize=records[i].bytes;return FR_OK;
+}
+FRESULT f_write(FIL *file,const void *data,UINT bytes,UINT *done) {
+    CHECK(file->obj.sclust && file->obj.sclust<=record_count);++write_calls;
+    struct test_record *record=records+file->obj.sclust-1u;*done=0;
+    if(fault_path && fault_operation=='w' && !strcmp(record->path,fault_path)) {
+        if(bytes)memcpy(record->data,data,bytes/2u);
+        return FR_DISK_ERR;
+    }
+    CHECK(record->data && (size_t)file->fptr+bytes<=KUI_VMU_GAME_CANDIDATES_WIRE_BYTES);
+    memcpy(record->data+(size_t)file->fptr,data,bytes);file->fptr+=bytes;
+    if((size_t)file->fptr>record->bytes)record->bytes=(size_t)file->fptr;
+    file->obj.objsize=record->bytes;*done=bytes;return FR_OK;
+}
+FRESULT f_sync(FIL *file) {
+    CHECK(file->obj.sclust && file->obj.sclust<=record_count);
+    return fault_path && fault_operation=='y' && !strcmp(records[file->obj.sclust-1u].path,fault_path)?FR_DISK_ERR:FR_OK;
+}
+FRESULT f_unlink(const TCHAR *path) {
+    int i=record_index(path);if(i<0)return FR_NO_FILE;
+    memmove(records+i,records+i+1u,(record_count-(unsigned)i-1u)*sizeof(records[0]));--record_count;return FR_OK;
+}
+FRESULT f_rename(const TCHAR *from,const TCHAR *to) {
+    int i=record_index(from);if(i<0)return FR_NO_FILE;
+    if(record_index(to)>=0)return FR_EXIST;
+    snprintf(writable_paths[i],sizeof(writable_paths[i]),"%s",to);records[i].path=writable_paths[i];return FR_OK;
+}
+int kui_vmu_library_check_allocation(kui_cancel_fn cancel) {
+    return cancel && cancel()?KUI_VMU_LIBRARY_CANCELLED:KUI_VMU_LIBRARY_OK;
 }
 FRESULT f_read(FIL *file,void *out,UINT bytes,UINT *got) {
     CHECK(file->obj.sclust && file->obj.sclust<=record_count);
@@ -248,7 +287,100 @@ static void shared_legacy_preflight(void) {
     CHECK(zero(&repair_bad,sizeof(repair_bad)));records[2]=saved_records[2];
     CHECK(!memcmp(bad,legacy_wire,sizeof(legacy_wire)));
 }
+static uint8_t retained_identity[16],retained_import[64],reference_hash[32],legacy_saved[KUI_VMU_GAME_ASSIGN_WIRE_BYTES];
+static char binding_key[12];
+static void deletion_fixture(void) {
+    fault_path=NULL;fault_operation=0;write_calls=0;record_count=0;initialize(&fixture);fixture.sequence=10u;
+    struct kui_vmu_game_assignment selected=entry(1u,5u),retained=entry(1u,8u);
+    CHECK(!add(&fixture,&selected));CHECK(!add(&fixture,&retained));fixture.entries[0].flags=DEFAULT_FLAG;
+    selected=entry(2u,5u);CHECK(!add(&fixture,&selected));fixture.entries[2].flags=DEFAULT_FLAG;
+    retained=entry(3u,8u);CHECK(!add(&fixture,&retained));fixture.entries[3].flags=DEFAULT_FLAG;
+    CHECK(encode(&fixture,wire));fixture.sequence=9u;CHECK(encode(&fixture,bad));fixture.sequence=10u;
+    memset(&legacy_fixture,0,sizeof(legacy_fixture));legacy_fixture.sequence=7u;legacy_fixture.count=3u;
+    legacy_fixture.entries[0]=entry(1u,5u);legacy_fixture.entries[1]=entry(4u,5u);legacy_fixture.entries[2]=entry(5u,8u);
+    CHECK(kui_vmu_game_assign_encode(&legacy_fixture,legacy_wire));memcpy(legacy_saved,legacy_wire,sizeof(legacy_wire));
+    selected=entry(1u,5u);memcpy(identity_fixture,selected.identity,16u);memcpy(retained_identity,retained.identity,16u);
+    memset(retained_import,0,sizeof(retained_import));memcpy(retained_import,"KUIVMUI1",8u);memcpy(retained_import+16u,retained_identity,16u);
+    put32(retained_import+60u,independent_crc(0,retained_import,60u));
+    records[0]=(struct test_record){candidate_paths[0],wire,sizeof(wire),0};
+    records[1]=(struct test_record){candidate_paths[1],bad,sizeof(wire),0};
+    records[2]=(struct test_record){legacy_paths[0],legacy_wire,sizeof(legacy_wire),0};
+    records[3]=(struct test_record){"0:/KUI/vmu-test/p0005/identity.bin",identity_fixture,16u,0};
+    records[4]=(struct test_record){"0:/KUI/vmu-test/p0008/identity.bin",retained_identity,16u,0};
+    records[5]=(struct test_record){"0:/KUI/vmu-test/p0008/import.bin",retained_import,64u,0};
+    records[6]=(struct test_record){"0:/KUI/vmu-test/p0008/card.vmd",NULL,131072u,0};
+    records[7]=(struct test_record){"0:/KUI/vmu-test/p0008/card.journal",NULL,1024u,0};record_count=8u;
+    struct kui_vmu_game_assignment binding=entry(6u,5u);memcpy(binding_key,binding.key,12u);
+    unsigned users=0;CHECK(!kui_vmu_game_candidates_card_references(5u,identity_fixture,binding_key,NULL,reference_hash,&users,NULL,NULL));
+    CHECK(users==4u && !zero(reference_hash,32u) && !write_calls);
+}
+static unsigned empty_visits,retained_visits;
+static bool deletion_visit(void *context,const char key[12],const struct kui_vmu_game_candidate_target *target,bool is_default) {
+    (void)context;(void)key;
+    if(!target) {CHECK(!is_default);++empty_visits;}
+    else {CHECK(target->pair==8u);++retained_visits;}
+    return true;
+}
+static void deletion_references(void) {
+    deletion_fixture();uint8_t other_hash[32];unsigned users=0;
+    CHECK(!kui_vmu_game_candidates_card_references(5u,identity_fixture,binding_key,&fixture.storage,other_hash,&users,NULL,NULL));
+    CHECK(users==4u && !memcmp(reference_hash,other_hash,32u));
+    struct kui_vmu_game_assignment overridden=entry(5u,5u);
+    CHECK(!kui_vmu_game_candidates_card_references(5u,identity_fixture,overridden.key,&fixture.storage,other_hash,&users,NULL,NULL));
+    CHECK(users==3u && memcmp(reference_hash,other_hash,32u));
+    struct kui_vmu_game_candidates_storage foreign=fixture.storage;foreign.cid[0]^=1u;
+    CHECK(kui_vmu_game_candidates_remove_card(5u,identity_fixture,binding_key,reference_hash,&foreign,NULL,NULL)==KUI_VMU_GAME_CANDIDATES_STALE);
+    CHECK(!write_calls && !memcmp(legacy_saved,legacy_wire,sizeof(legacy_wire)));
+    identity_fixture[0]^=1u;
+    CHECK(kui_vmu_game_candidates_remove_card(5u,legacy_fixture.entries[0].identity,binding_key,reference_hash,&fixture.storage,NULL,NULL)==KUI_VMU_GAME_CANDIDATES_STALE);
+    identity_fixture[0]^=1u;CHECK(!write_calls);
+    fixture.sequence=11u;CHECK(encode(&fixture,wire));
+    CHECK(kui_vmu_game_candidates_remove_card(5u,identity_fixture,binding_key,reference_hash,&fixture.storage,NULL,NULL)==KUI_VMU_GAME_CANDIDATES_STALE);
+    CHECK(!write_calls);deletion_fixture();
+    /* An uncertain inactive write admits only a complete old or complete new
+     * generation. No image, journal, legacy or identity is a write target. */
+    fault_path=candidate_paths[1];fault_operation='w';
+    CHECK(kui_vmu_game_candidates_remove_card(5u,identity_fixture,binding_key,reference_hash,&fixture.storage,NULL,NULL)==KUI_VMU_GAME_CANDIDATES_IO);
+    CHECK(write_calls==1u && !memcmp(legacy_saved,legacy_wire,sizeof(legacy_wire)));
+    fault_path=NULL;fault_operation=0;struct kui_vmu_game_candidates_view view;
+    CHECK(!kui_vmu_game_candidates_list("T-0001",&fixture.storage,&view,NULL,NULL));
+    CHECK((view.count==2u && view.default_index==0u && view.targets[0].pair==5u) ||
+          (view.count==1u && view.default_index==KUI_VMU_GAME_CANDIDATES_NO_DEFAULT && view.targets[0].pair==8u));
+    bool detached=view.count==1u;
+    CHECK(!kui_vmu_game_candidates_list("T-0002",&fixture.storage,&view,NULL,NULL));
+    CHECK(detached?(view.present && !view.count):(view.count==1u && view.targets[0].pair==5u));
+    deletion_fixture();
+    CHECK(!kui_vmu_game_candidates_remove_card(5u,identity_fixture,binding_key,reference_hash,&fixture.storage,NULL,NULL));
+    CHECK(write_calls==1u && !memcmp(legacy_saved,legacy_wire,sizeof(legacy_wire)));
+    CHECK(!kui_vmu_game_candidates_list("T-0001",&fixture.storage,&view,NULL,NULL));
+    CHECK(view.count==1u && view.targets[0].pair==8u && view.default_index==KUI_VMU_GAME_CANDIDATES_NO_DEFAULT);
+    static const char *const empty_products[]={"T-0002","T-0004","T-0006"};
+    for(unsigned i=0;i<3u;i++) {
+        CHECK(!kui_vmu_game_candidates_list(empty_products[i],&fixture.storage,&view,NULL,NULL));
+        CHECK(view.present && !view.count && view.default_index==KUI_VMU_GAME_CANDIDATES_NO_DEFAULT);
+    }
+    unsigned before_writes=write_calls;
+    CHECK(!kui_vmu_game_candidates_set_default("T-0002",NULL,view.sequence,&fixture.storage,NULL,NULL));
+    CHECK(write_calls==before_writes);
+    CHECK(!kui_vmu_game_candidates_list("T-0003",&fixture.storage,&view,NULL,NULL));
+    CHECK(view.count==1u && view.targets[0].pair==8u && view.default_index==0u);
+    CHECK(kui_vmu_game_candidates_list("T-0005",&fixture.storage,&view,NULL,NULL)==KUI_VMU_GAME_CANDIDATES_ABSENT);
+    empty_visits=retained_visits=0;CHECK(!kui_vmu_game_candidates_visit(&fixture.storage,deletion_visit,NULL,NULL,NULL));
+    CHECK(empty_visits==3u && retained_visits==2u);
+    /* A covered-empty wire record cannot carry an identity/default or share
+     * its product group with a live target. */
+    CHECK(decode(bad,sizeof(wire),&back));
+    unsigned empty_at=first(&back,"T-0002\0\0\0\0\0\0");CHECK(empty_record(back.entries+empty_at));
+    before=back;back.entries[empty_at].target.identity[0]=1u;CHECK(!valid_table(&back));
+    back=before;back.entries[empty_at].flags=3u;CHECK(!valid_table(&back));
+    struct kui_vmu_game_candidates_plan plan={.additional=32u};CHECK(kui_vmu_game_card_key("T-0002",plan.key));
+    CHECK(!kui_vmu_game_candidates_preflight(&plan,1u,&fixture.storage,NULL,NULL));
+    struct kui_vmu_game_assignment replacement=entry(2u,8u);
+    CHECK(!kui_vmu_game_candidates_apply_selected(&replacement,1u,&fixture.storage,NULL,NULL));
+    CHECK(!kui_vmu_game_candidates_list("T-0002",&fixture.storage,&view,NULL,NULL));
+    CHECK(view.count==1u && view.targets[0].pair==8u && view.default_index==0u);
+}
 int main(void) {
-    roundtrip();corruption();limits();shared_legacy_preflight();
+    roundtrip();corruption();limits();shared_legacy_preflight();deletion_references();
     printf("VMU game candidates codec/bounds: %u checks passed\n",checks);return 0;
 }

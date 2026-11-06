@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Forward bootstrap step on the accepted native foreground reader.
+# The native SCI engine and guarded stack size are retained. PIO uses its
+# separate firmware-area placement below the owner's IP/bootstrap.
+BUILD ?= build/native-ocram-bootstrap
+NATIVE_RESIDENT_LINKER_SCRIPT := src/loader/retail_resident_native_pio.ld
+include Makefile.native-standalone-foreground
+FLAGS += -DKUI_NATIVE_OCRAM_BOOTSTRAP=1 -DKUI_NATIVE_GD_LEGACY_STREAM=1 -DKUI_NATIVE_GD_MMU_BUFFERS=1 -DKUI_NATIVE_GD_DMA_STREAM=1 -DKUI_NATIVE_GD_PIO_STREAM=1 -DKUI_NATIVE_GD_VRAM_DMA=1
+RESIDENT_FLAGS += -fno-guess-branch-probability -mbranch-cost=1
+# Foreground never publishes SDK callbacks. Omit their dormant entry/exports;
+# the native SCI engine retains its existing SDK-route compile-time policy.
+NATIVE_SDK_CALLBACK_ROOT :=
+NATIVE_IRQ_ROOT :=
+
+.PHONY: ocram-host-tests ocram-diagnostic-tests ocram-legacy-core-tests ocram-legacy-reader-tests ocram-mmu-buffer-tests ocram-dma-stream-tests
+ocram-host-tests:
+	python3 tools/run_native_ocram_bootstrap.py --output $(abspath $(BUILD))/ocram-host-proof
+
+ocram-diagnostic-tests:
+	python3 tools/run_native_ocram_diagnostic.py --pio-stream 1 --vram-dma 1 --output $(abspath $(BUILD))/diagnostic-render
+
+ocram-legacy-core-tests:
+	python3 tools/run_native_legacy_stream.py --output $(abspath $(BUILD))/legacy-core-host-proof
+
+ocram-legacy-reader-tests:
+	python3 tools/run_native_standalone_foreground.py --legacy-stream --mmu-buffers 1 --dma-stream 1 --pio-stream 1 --vram-dma 1 --output $(abspath $(BUILD))/legacy-reader-host-proof
+
+ocram-mmu-buffer-tests:
+	python3 tools/run_native_mmu_buffers.py --output $(abspath $(BUILD))/mmu-buffers-host-proof
+
+ocram-dma-stream-tests:
+	python3 tools/run_native_dma_stream.py --output $(abspath $(BUILD))/dma-stream-host-proof
+
+.PHONY: ocram-pio-stream-tests
+ocram-pio-stream-tests:
+	python3 tools/run_native_pio_stream.py --output $(abspath $(BUILD))/pio-stream-host-proof

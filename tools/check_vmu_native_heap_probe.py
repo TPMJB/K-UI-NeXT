@@ -12,7 +12,7 @@ from pathlib import Path
 import struct
 import subprocess
 
-from check_loader_layout import inspect_elf, padded, region
+from check_loader_layout import EH, SH, SYM, inspect_elf, padded, region
 from check_retail_instructions import audit as audit_instructions
 from check_retail_loader_layout import check_bss
 from runtime_package import verify
@@ -82,6 +82,30 @@ def startup_guard(ops, call):
                   ops[i + 1:i + 3] == [0x5031, 0x3040]]
     require(len(candidates) == 1, "Missing unique initializer argument guard")
     return candidates[0]
+
+
+def heap_resume_offset(elf,image,address,body):
+    """Optional zero-byte ABS role at the exact surviving low continuation."""
+    name='__kui_native_heap_resume_offset'
+    marker=_linked_symbols(elf,{name}).get(name)
+    if marker is None:return None
+    header=EH.unpack_from(elf)
+    sections=[SH.unpack_from(elf,header[6]+i*header[11]) for i in range(header[12])]
+    raw=[]
+    for table in sections:
+        if table[1]!=2:continue
+        strings=sections[table[6]];names=elf[strings[4]:strings[4]+strings[5]]
+        for at in range(table[4],table[4]+table[5],table[9]):
+            label,value,size,info,_,owner=SYM.unpack_from(elf,at)
+            if names[label:].split(b'\0',1)[0].decode('ascii')==name:
+                raw.append((value,size,info&15,owner))
+    offset=marker[0]
+    require(raw==[(offset,0,0,0xfff1)] and 4<=offset<=len(body)-4 and not offset&1 and
+            body[offset-4:offset+4]==struct.pack('<4H',0x400b,9,0x6f83,0x4f26),
+            'Native heap resume offset is not the exact ABS low call/restore seam')
+    require(image['symbols'].get('_kui_vmu_observe_heap_hook')==address,
+            'Native heap resume lacks its linked low hook')
+    return offset
 
 
 def inspect_dynamic_hook(elf, image, *, low_limit=0x8C007800):
@@ -197,6 +221,9 @@ def inspect_dynamic_hook(elf, image, *, low_limit=0x8C007800):
         [0x4F16, 0x4F06, 0x4F07, 0x000B, 0x0009]
     require(len(sequence(ops, restores)) == 1,
             "Caller SP, PR, integer and MAC state must restore before original SR")
+    resume=heap_resume_offset(elf,image,address,body)
+    require(resume is None or resume==2*sequence(ops,restores)[0],
+            'Deferred clear continuation differs from the exact complete low restoration')
     require(0x591B in ops[publish[0]:] and 0x5A1C in ops[publish[0]:],
             "Original R9/R10 must be recovered from low control")
     return {"hook": f"0x{address:08x}", "hook_bytes": len(body),
@@ -211,6 +238,7 @@ def inspect_dynamic_hook(elf, image, *, low_limit=0x8C007800):
             "ip_owner_stack_capability": marker is not None,
             "inherited_frame_above_retained_reservation": True,
             "inherited_frame_bytes": 52,
+            "post_installer_low_resume_offset": resume,
             "mask_before_frame": True}
 
 

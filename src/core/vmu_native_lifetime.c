@@ -80,12 +80,25 @@ bool kui_vmu_native_lifetime_prepare(struct kui_vmu_native_lifetime_plan *out,
         p.begin=physical(lease->begin);p.end=p.begin+lease->heap_bytes;
         p.lease_begin=physical(lease->header);p.lease_end=physical(lease->payload)+lease->lease_bytes;
         p.sentinel=lease->owner.sentinel;p.cursor=lease->owner.cursor_cell;
-        const uint32_t addresses[8]={lease->owner.begin_cell,lease->owner.begin_copy_cell,
-            lease->owner.bytes_cell,lease->owner.dispatch_cell,lease->owner.dispatch_table,
-            lease->owner.dispatch_table+4u,lease->owner.sentinel+4u,lease->header+4u};
-        const uint32_t values[8]={lease->begin,lease->begin,lease->heap_bytes,lease->owner.dispatch_table,
-            lease->owner.allocate,lease->owner.release,0u,lease->units};
-        for(unsigned i=0;i<8u;i++) p.identity[i]=(struct kui_vmu_native_lifetime_witness){addresses[i],values[i]};
+        const struct kui_vmu_native_heap *h=&lease->owner;
+        /* Direct 1.35 has no dispatch roles. Its three original allocator
+         * literal-pool words bind the same control cells and remain outside
+         * both entry hooks. Fill the existing plan directly: two temporary
+         * arrays would duplicate these eight witnesses on the cold stack. */
+        p.identity[0]=(struct kui_vmu_native_lifetime_witness){h->begin_cell,lease->begin};
+        p.identity[1]=(struct kui_vmu_native_lifetime_witness){h->begin_copy_cell,lease->begin};
+        p.identity[2]=(struct kui_vmu_native_lifetime_witness){h->bytes_cell,lease->heap_bytes};
+        if(h->family==KUI_VMU_NATIVE_HEAP_DIRECT32) {
+            p.identity[3]=(struct kui_vmu_native_lifetime_witness){h->initializer+0x14cu,h->begin_cell};
+            p.identity[4]=(struct kui_vmu_native_lifetime_witness){h->initializer+0x150u,h->begin_copy_cell};
+            p.identity[5]=(struct kui_vmu_native_lifetime_witness){h->initializer+0x154u,h->bytes_cell};
+        } else {
+            p.identity[3]=(struct kui_vmu_native_lifetime_witness){h->dispatch_cell,h->dispatch_table};
+            p.identity[4]=(struct kui_vmu_native_lifetime_witness){h->dispatch_table,h->allocate};
+            p.identity[5]=(struct kui_vmu_native_lifetime_witness){h->dispatch_table+4u,h->release};
+        }
+        p.identity[6]=(struct kui_vmu_native_lifetime_witness){h->sentinel+4u,0u};
+        p.identity[7]=(struct kui_vmu_native_lifetime_witness){lease->header+4u,lease->units};
     }
     for(size_t i=0;i<count;i++) {
         uint32_t area=ranges[i].begin&UINT32_C(0xe0000000),at=physical(ranges[i].begin);

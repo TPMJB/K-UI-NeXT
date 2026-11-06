@@ -48,13 +48,24 @@ NATIVE_DUAL_CASES = ("native-dual-x", "native-dual-y", "native-dual-x-report", "
     "native-dual-scif", "native-dual-too-many", "native-dual-patches",
     "native-dual-fallback-report", "native-dual-retry-report", "native-dual-x-cooked-report", "native-dual-cancel-source",
     "native-dual-standalone-report", "native-dual-standalone-y-report", "native-dual-standalone-absent-report",
-    "native-dual-standalone-nofamily-report", "native-dual-standalone-badcap", "native-dual-x-a1-report")
+    "native-dual-standalone-nofamily-report", "native-dual-standalone-badcap", "native-dual-x-a1-report",
+    "native-dual-y-a1-report", "native-dual-y-runtime-absent",
+    "native-dual-session-absent", "native-dual-session-duplicate", "native-dual-session-malformed",
+    "native-dual-runtime-absent", "native-dual-runtime-bad-crc",
+    "native-dual-runtime-marker-absent", "native-dual-runtime-marker-duplicate",
+    "native-dual-session-report", "native-dual-session-a1-report", "native-dual-y-session",
+    "native-dual-stale-session-report", "native-dual-y-stale-session-report",
+    "native-dual-stale-session-a1-report", "native-dual-y-stale-session-a1-report")
 # Only the first standalone case is a New launch whose combined proof refuses,
 # whose executable has the SDK family and whose standalone module is installed.
 NATIVE_STANDALONE_SELECTED = "native-dual-standalone-report"
 NATIVE_DUAL_SUCCESS = NATIVE_DUAL_CASES[:4] + ("native-dual-fallback-report", "native-dual-retry-report", "native-dual-x-cooked-report",
     "native-dual-standalone-report", "native-dual-standalone-y-report", "native-dual-standalone-absent-report",
-    "native-dual-standalone-nofamily-report", "native-dual-x-a1-report")
+    "native-dual-standalone-nofamily-report", "native-dual-x-a1-report", "native-dual-y-a1-report",
+    "native-dual-y-runtime-absent", "native-dual-session-absent",
+    "native-dual-session-report", "native-dual-session-a1-report",
+    "native-dual-stale-session-report", "native-dual-y-stale-session-report",
+    "native-dual-stale-session-a1-report", "native-dual-y-stale-session-a1-report")
 NATIVE_STANDARD_CASES = ("native-standard-report", "native-standard-cooked-report",
     "native-standard-retry-report", "native-standard-short-report", "native-standard-cancel-source",
     "native-standard-crc-fail", "native-standard-seed-absent-report",
@@ -183,7 +194,18 @@ def synthetic_package(ce=False, ram_seed=False, zso=False, lzo=False, dual=None)
     return envelope(payload, len(payload), "0123456789ab")
 
 
-def dual_package(case, lease_bytes=0x51000):
+def optional_session_case(case):
+    return (case.startswith("native-dual-session-") and case != "native-dual-session-absent") or case in (
+        "native-dual-y-session", "native-dual-runtime-absent", "native-dual-runtime-bad-crc",
+        "native-dual-runtime-marker-absent", "native-dual-runtime-marker-duplicate")
+
+
+def installed_dual_package(case, lease_bytes):
+    session = optional_session_case(case)
+    return dual_package(case, 0x51000 if session else lease_bytes, session=session)
+
+
+def dual_package(case, lease_bytes=0x47000, session=False):
     cap = struct.pack("<8I", 0x3152444B, 0x4C415544, 1, 32, 1, 2, lease_bytes, 0)
     if case == "native-dual-cap-absent": cap = b""
     if case == "native-dual-cap-duplicate": cap += b"x" + cap
@@ -193,7 +215,31 @@ def dual_package(case, lease_bytes=0x51000):
     if (case in NATIVE_DUAL_SUCCESS and case != "native-dual-fallback-report") or case == "native-dual-cancel-source" or "-standalone" in case:
         from vmu_native_cache_seed import template_seed
         cap += template_seed()
+    if session and case != "native-dual-session-absent":
+        descriptor = bytearray(18432)
+        descriptor[:8] = b"KUISES01"
+        struct.pack_into("<II", descriptor, 8, 1, len(descriptor))
+        if case == "native-dual-session-malformed": descriptor[32] = 1
+        cap += descriptor
+        if case == "native-dual-session-duplicate": cap += descriptor
     return synthetic_package(dual=cap)
+
+
+def session_files(folder, case, lease_bytes):
+    # Valid stale 112 KiB session sidecars must never override the compact dual paths.
+    stale = dual_package("native-dual-session-report", 0x51000, session=True)
+    (folder / "retail-native-session.kui").write_bytes(stale)
+    if "-a1" in case:
+        (folder / "retail-native-session-a1.kui").write_bytes(stale)
+    if case in ("native-dual-runtime-absent", "native-dual-y-runtime-absent"):
+        return
+    payload = bytearray(64)
+    marker = struct.pack("<5I", 0x5349554B, 0x544F4F42, 1, 3, 0xFFFFFFFC)
+    if case != "native-dual-runtime-marker-absent": payload[16:36] = marker
+    if case == "native-dual-runtime-marker-duplicate": payload[40:60] = marker
+    runtime = bytearray(envelope(payload, len(payload), "0123456789ab"))
+    if case == "native-dual-runtime-bad-crc": runtime[-1] ^= 1
+    (folder / "runtime.kui").write_bytes(runtime)
 
 
 def standalone_package(case):
@@ -202,7 +248,7 @@ def standalone_package(case):
     return synthetic_package(dual=cap)
 
 
-def make_retail_fixture(folder, case, dual_lease=0x51000):
+def make_retail_fixture(folder, case, dual_lease=0x47000):
     if case in ZSO_CASES:
         make_zso_fixture(folder, case)
         for name, package_bytes in (("retail-boot.kui", synthetic_package()),
@@ -210,7 +256,8 @@ def make_retail_fixture(folder, case, dual_lease=0x51000):
                                     ("zso-boot.kui", synthetic_package(zso=True)),
                                     ("lzo-boot.kui", synthetic_package(zso=True, lzo=case != "zso-lzo-wrong-package"))):
             (folder / name).write_bytes(package_bytes)
-        (folder / "retail-native-dual.kui").write_bytes(dual_package(case, dual_lease))
+        (folder / "retail-native-dual.kui").write_bytes(installed_dual_package(case, dual_lease))
+        session_files(folder, case, dual_lease)
         return
     if (case in LAUNCH_CASES or case in NATIVE_DUAL_CASES or case in NATIVE_STANDARD_CASES) and folder.exists():
         shutil.rmtree(folder)
@@ -221,7 +268,8 @@ def make_retail_fixture(folder, case, dual_lease=0x51000):
             make_format_fixture(folder, case)
         (folder / "retail-boot.kui").write_bytes(synthetic_package())
         (folder / "ce-probe.kui").write_bytes(synthetic_package(ce=True))
-        (folder / "retail-native-dual.kui").write_bytes(dual_package(case, dual_lease))
+        (folder / "retail-native-dual.kui").write_bytes(installed_dual_package(case, dual_lease))
+        session_files(folder, case, dual_lease)
         return
     make_fixture(folder)
     track = folder / "track03.bin"
@@ -292,9 +340,10 @@ def make_retail_fixture(folder, case, dual_lease=0x51000):
     (folder / "retail-boot.kui").write_bytes(synthetic_package(
         ram_seed=case in LAUNCH_CASES and case != "launch-patch-old-package", dual=cache_seed))
     (folder / "ce-probe.kui").write_bytes(synthetic_package(ce=True))
-    (folder / "retail-native-dual.kui").write_bytes(dual_package(case, dual_lease))
+    (folder / "retail-native-dual.kui").write_bytes(installed_dual_package(case, dual_lease))
+    session_files(folder, case, dual_lease)
     if "-a1" in case:
-        (folder / "retail-native-dual-a1.kui").write_bytes(dual_package(case, dual_lease))
+        (folder / "retail-native-dual-a1.kui").write_bytes(installed_dual_package(case, dual_lease))
     if "-standalone" in case and "-absent" not in case:
         (folder / "retail-native-standalone.kui").write_bytes(standalone_package(case))
 
@@ -409,6 +458,35 @@ def check_zso_outputs(folder, case):
     assert next_file_block == (physical_bytes + 511) // 512
 
 
+def assert_native_background_payload(folder, module, payload):
+    """Only the manifest and one admitted session descriptor may change."""
+    original = (folder / module).read_bytes()[64:]
+    changed = bytearray(payload)
+    if b"KUISES01" in original:
+        header = b"KUISES01" + struct.pack("<II", 1, 18432)
+        assert original.count(header) == 1
+        at = original.index(header)
+        wire = bytearray(payload[at:at + 18432])
+        crc, flags, count, selected = struct.unpack_from("<4I", wire, 16)
+        assert flags == 2 and count == selected == 0
+        struct.pack_into("<I", wire, 16, 0)
+        assert zlib.crc32(wire) == crc and not any(wire[32:128]) and not any(wire[1152:])
+        ret = bytearray(wire[128:1152])
+        assert ret[:8] == b"KUINRT01" and struct.unpack_from("<II", ret, 8) == (1, 1024)
+        ret_crc, = struct.unpack_from("<I", ret, 16)
+        struct.pack_into("<I", ret, 16, 0)
+        assert zlib.crc32(ret) == ret_crc
+        runtime = (folder / "runtime.kui").read_bytes()
+        file_bytes, extents = struct.unpack_from("<II", ret, 24)
+        assert file_bytes == len(runtime) and 0 < extents <= 32 and ret[64:128] == runtime[:64]
+        assert not any(ret[128 + 12 * extents:])
+        changed[at:at + 18432] = original[at:at + 18432]
+    else:
+        assert b"KUISES01" not in payload
+    changed[0x1000:0x2000] = original[0x1000:0x2000]
+    assert bytes(changed) == original
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--native-standard-only", action="store_true", help="Only SCI/Standard complete-source CRC reuse and fallback guards")
@@ -425,18 +503,28 @@ def main():
                         help="Only pre-handoff reports and native RAM patches, on MBR FAT32/exFAT")
     parser.add_argument("--zso-only", action="store_true",
                         help="Only direct standard-LZ4 ZSO launch/physical-map cases, on MBR FAT32/exFAT")
+    parser.add_argument("--private-fatfs", action="store_true",
+                        help="Use the private real-FatFs formatter; independent mkfs/fsck is not claimed")
     args = parser.parse_args()
-    for binary in ("mkfs.fat", "mkfs.exfat", "fsck.fat", "fsck.exfat"):
-        if not shutil.which(binary):
-            raise SystemExit(f"Missing test prerequisite: {binary}")
+    if not args.private_fatfs:
+        for binary in ("mkfs.fat", "mkfs.exfat", "fsck.fat", "fsck.exfat"):
+            if not shutil.which(binary):
+                raise SystemExit(f"Missing test prerequisite: {binary}")
     with tempfile.TemporaryDirectory(prefix="kui-retail-prep-") as temp:
         base = Path(temp)
         fixture = base / "original-gdi"
+        if args.private_fatfs:
+            from test_games_library_images import private_formatter
+            formatter = private_formatter(base)
+            print("Private FatFs formatting enabled; no independent mkfs/fsck claim", flush=True)
         for kind in ("fat32", "exfat"):
             volume = base / f"{kind}-volume.img"
-            with volume.open("wb") as out:
-                out.truncate(96 * 1024 * 1024)
-            run("mkfs.fat", "-F", "32", str(volume)) if kind == "fat32" else run("mkfs.exfat", str(volume))
+            if args.private_fatfs:
+                run(str(formatter), kind, str(volume))
+            else:
+                with volume.open("wb") as out:
+                    out.truncate(96 * 1024 * 1024)
+                run("mkfs.fat", "-F", "32", str(volume)) if kind == "fat32" else run("mkfs.exfat", str(volume))
             partitioned_clean = base / f"{kind}-mbr.img"
             partition_image(volume, partitioned_clean, kind)
             layouts = ((True, NATIVE_STANDARD_CASES),) if args.native_standard_only else ((True, NATIVE_DUAL_CASES),) if args.native_dual_only or args.compact_background_only else ((True, ZSO_CASES),) if args.zso_only else ((True, LAUNCH_CASES),) if args.launch_only else ((True, CHECKSUM_CASES),) if args.checksums_only else ((True, FORMAT_CASES),) if args.formats_only else ((True, RC_CASES),) if args.rc_only else (
@@ -445,7 +533,7 @@ def main():
                 clean = partitioned_clean if partitioned else volume
                 layout = "MBR" if partitioned else "superfloppy"
                 for case in cases:
-                    make_retail_fixture(fixture, case, 0x47000 if args.compact_background_only else 0x51000)
+                    make_retail_fixture(fixture, case, 0x47000)
                     image = base / "working.img"
                     shutil.copyfile(clean, image)
                     run(BINARY, str(image), str(fixture), "seed", case)
@@ -485,7 +573,7 @@ def main():
                             assert int(fields["source executable crc32"], 16) == expected_crc
                         else:
                             assert digest(image) == before and not (fixture / "standard-payload.bin").exists()
-                        check_fs(image, base / "check-volume.img", kind, partitioned)
+                        if not args.private_fatfs: check_fs(image, base / "check-volume.img", kind, partitioned)
                         image.unlink()
                         print(f"PASS {kind} {case}; source reads={expected_reads}; exact CRC and source/package bytes preserved", flush=True)
                         continue
@@ -493,27 +581,35 @@ def main():
                         reasons = {"native-dual-absent": "module missing or unreadable",
                             "native-dual-scif": "require SCI microSD", "native-dual-too-many": "map exceeds 64 slots",
                             "native-dual-patches": "requires RAM patches Off", "native-dual-cancel": "cancelled",
-                            "native-dual-standalone-badcap": "standalone New module unreadable or capability missing"}
+                            "native-dual-standalone-badcap": "standalone New module unreadable or capability missing",
+                            "native-dual-y-session": "Background module does not match",
+                            "native-dual-session-duplicate": "Background module does not match",
+                            "native-dual-session-malformed": "Background module does not match",
+                            "native-dual-runtime-absent": "return to K-UI needs a readable",
+                            "native-dual-runtime-bad-crc": "return runtime changed",
+                            "native-dual-runtime-marker-absent": "return runtime changed",
+                            "native-dual-runtime-marker-duplicate": "return runtime changed"}
                         if "-cap-" in case: assert "module capability missing or ambiguous" in output
                         if case in reasons: assert reasons[case] in output
                         selected = case == NATIVE_STANDALONE_SELECTED
                         module = ("retail-native-standalone.kui" if selected else
-                            "retail-native-dual-a1.kui" if "-a1" in case else "retail-native-dual.kui")
+                            "retail-native-dual" +
+                            ("-a1.kui" if "-a1" in case else ".kui"))
                         assert ("Virtual card in A1 for this game" in output) == ("-a1" in case)
                         if case in NATIVE_DUAL_SUCCESS:
                             assert f"Native dual prepared: package={module}" in output
                             assert ("using standalone New without virtual VMU" in output) == selected
                             payload = (fixture / "dual-payload.bin").read_bytes()
                             original = (fixture / module).read_bytes()[64:]
-                            assert payload[:0x1000] == original[:0x1000] and payload[0x2000:] == original[0x2000:]
+                            assert_native_background_payload(fixture, module, payload)
                             assert struct.unpack_from("<I", payload, 0x1000 + 264)[0] == (2 if "-y" in case else 1)
                         if case.endswith("-report"):
                             count = re.search(r"Native dual exact source: (\d+) raw/cooked reads; max (\d+) bytes", output)
-                            assert count and tuple(map(int, count.groups())) == (4 if case == "native-dual-retry-report" else 2, 2048 if "cooked" in case else 2352)
+                            assert count and tuple(map(int, count.groups())) == (2 if case == "native-dual-retry-report" else 1, 2*(2048 if "cooked" in case else 2352))
                             print(f"Native source I/O {kind} {case}: reads={count[1]}, max={count[2]} bytes", flush=True)
-                            names = ["retail-boot.kui", "ce-probe.kui", "retail-native-dual.kui", "disc.gdi", "track01.bin", "music track02.raw", "track03.bin"]
+                            names = ["retail-boot.kui", "ce-probe.kui", "retail-native-dual.kui", "retail-native-session.kui", "runtime.kui", "disc.gdi", "track01.bin", "music track02.raw", "track03.bin"]
                             if "-standalone" in case and "-absent" not in case: names.append("retail-native-standalone.kui")
-                            if "-a1" in case: names.append("retail-native-dual-a1.kui")
+                            if "-a1" in case: names.extend(("retail-native-dual-a1.kui", "retail-native-session-a1.kui"))
                             for name in names:
                                 assert (fixture / ("after-" + name)).read_bytes() == (fixture / name).read_bytes()
                             data = (fixture / "after-last-launch-a.txt").read_bytes()
@@ -532,7 +628,7 @@ def main():
                                 "Background Legacy (Y)" if "-y" in case else "Background New (X)")
                         else:
                             assert digest(image) == before, "native X/Y prep changed card"
-                        check_fs(image, base / "check-volume.img", kind, partitioned)
+                        if not args.private_fatfs: check_fs(image, base / "check-volume.img", kind, partitioned)
                         image.unlink()
                         print(f"PASS {kind} {case}; native X/Y package, descriptor, map and report checks", flush=True)
                         continue
@@ -551,7 +647,7 @@ def main():
                             assert "needs native Standard reader, CD music Off and RAM patches Off" in output
                         if case == "zso-scif":
                             assert "needs SCI microSD" in output
-                        check_fs(image, base / "check-volume.img", kind, partitioned)
+                        if not args.private_fatfs: check_fs(image, base / "check-volume.img", kind, partitioned)
                         image.unlink()
                         print(f"PASS {kind} {layout} {case}; source/package unchanged; independent ZSO/report/wire checks", flush=True)
                         continue
@@ -571,7 +667,7 @@ def main():
                             assert "outside the selected boot executable" in output
                         if case in ("launch-patch-ce", "launch-patch-cdda"):
                             assert "RAM patches require a native game with CD music Off" in output
-                        check_fs(image, base / "check-volume.img", kind, partitioned)
+                        if not args.private_fatfs: check_fs(image, base / "check-volume.img", kind, partitioned)
                         image.unlink()
                         print(f"PASS {kind} {layout} {case}; original files unchanged; independent report/seed checks", flush=True)
                         continue
@@ -583,13 +679,13 @@ def main():
                                              r"max FatFs read (\d+) bytes", output)
                         assert counters, "missing actual FatFs checksum counters"
                         ip_calls, boot_calls, largest = map(int, counters.groups())
-                        assert ip_calls == 16 and largest in (2048, 2336, 2352, 2448)
-                        assert boot_calls == (0 if case.endswith("gdi-raw") else 33)
+                        assert ip_calls == 1 and largest in (16*2048, 16*2336, 16*2352, 16*2448)
+                        assert boot_calls == (0 if case.endswith("gdi-raw") else 3)
                         print(f"Checksum I/O {kind} {case}: IP={ip_calls}, boot={boot_calls}, max={largest} bytes", flush=True)
                     if case in SUCCESS_CASES or (case in FORMAT_CASES and "-async" not in case and not any(
                             word in case for word in ("bad", "read-fail", "short-read", "cancel-"))):
                         assert "full IP CRC, exact boot bytes and headers" in output
-                        check_fs(image, base / "check-volume.img", kind, partitioned)
+                        if not args.private_fatfs: check_fs(image, base / "check-volume.img", kind, partitioned)
                     if case == "cdda-warning":
                         assert "CD audio playback is unsupported" in output
                     if case in ("async-on-sci", "async-cooked-2048"):

@@ -35,13 +35,31 @@ update:
 	python3 tools/make_update.py "$(KUI_UPDATE_STAGE)" "$(KUI_UPDATE_OUTPUT)" --channel testing
 update-release:
 	python3 tools/make_update.py "$(KUI_UPDATE_STAGE)" "$(KUI_UPDATE_OUTPUT)" --channel stable --full
+.PHONY: test-smash-ce-gin
+test-smash-ce-gin:
+	@mkdir -p build/smash-ce-gin-tests
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie -ffunction-sections -fdata-sections -Wl,--gc-sections $(INCLUDES) \
+	 tests/test_smash_ce_gin.c src/core/smash_ce_gin.c src/core/retail_image.c -o build/smash-ce-gin-tests/seed
+	ASAN_OPTIONS=detect_leaks=0 build/smash-ce-gin-tests/seed
+	python3 tests/test_smash_ce_gin_display.py
+
+# Historical GUI-only add-on preservation profile: compare protected reader
+# sources with the recorded baseline. Explicit reader integrations run the
+# functional updater checks below without invoking this separate profile.
+.PHONY: test-updater-source-preservation
+test-updater-source-preservation:
+	python3 -c "import sys; sys.path.insert(0,'tools'); import update_addon as a; r=a.check_sources(a.source_state()); print('PASS updater-only main source preservation:',len(r['checked_paths']),'protected paths')"
+
 .PHONY: test-updater
 test-updater: build/test-update build/test-update-v2 build/test-update-handoff build/update-image build/update-boot
-	python3 -c "import sys; sys.path.insert(0,'tools'); import update_addon as a; r=a.check_sources(a.source_state()); print('PASS updater-only main source preservation:',len(r['checked_paths']),'protected paths')"
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-update
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-update-v2
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-update-handoff
 	python3 tests/test_update_package.py
+	python3 tests/test_smash_update_delivery.py
+	python3 tests/test_smash_collection_update.py
+	python3 tests/test_runtime_module_bundle.py
+	python3 tests/test_vmu_maple_observe_package.py
 	python3 tests/test_update_package_v2.py
 	python3 tests/test_update_software_images.py
 	python3 tests/test_update_v2_images.py
@@ -195,7 +213,7 @@ build/test-armada-ce-excerpt-pool: tests/test_armada_ce_excerpt_pool.c include/k
 build/test-armada-ce-live-sound: tests/test_armada_ce_live_sound.c include/kui/armada_ce_live_sound.h include/kui/armada_ce_ram_bind.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $< -o $@
-ARMADA_PREPARE_TEST_SOURCES := src/core/vmu_launch_package.c src/core/retail_zso.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c src/core/hash.c src/core/data.c src/core/destination.c src/core/retail_image.c src/core/vmu_emulation_settings.c
+ARMADA_PREPARE_TEST_SOURCES := src/core/smash_native_child.c src/core/vmu_launch_package.c src/core/retail_zso.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c src/core/hash.c src/core/data.c src/core/destination.c src/core/retail_image.c src/core/vmu_emulation_settings.c
 NATIVE_CACHE_SOURCES := src/core/vmu_native_program.c src/core/vmu_native_cache_seed.c src/core/vmu_native_resolution_cache.c \
     src/core/vmu_native_discovery.c src/core/vmu_native_layout.c src/core/vmu_native_heap.c \
     src/core/vmu_native_exit.c src/core/vmu_native_patch.c src/core/native_sdk_sci_family.c
@@ -206,7 +224,31 @@ ARMADA_PREPARE_TEST_SOURCES += src/apps/native_session_prepare.c src/core/native
     src/core/native_return.c src/core/storage_policy.c src/core/runtime_image.c
 build/test-games-native-cache: tests/test_games_native_cache.c tests/test_vmu_native_resolution_cache.c src/apps/games_native_cache.inc $(NATIVE_CACHE_SOURCES) src/core/hash.c src/core/data.c
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie -Iinclude tests/test_games_native_cache.c $(NATIVE_CACHE_SOURCES) src/core/hash.c src/core/data.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie -Wl,--wrap=kui_sha256_update -Iinclude tests/test_games_native_cache.c $(NATIVE_CACHE_SOURCES) src/core/hash.c src/core/data.c -o $@
+build/test-games-native-cache-hint: tests/test_games_native_cache_hint.c tests/test_vmu_native_resolution_cache.c src/apps/games_native_cache_hint.inc $(NATIVE_CACHE_SOURCES) src/core/hash.c src/core/data.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude tests/test_games_native_cache_hint.c $(NATIVE_CACHE_SOURCES) src/core/hash.c src/core/data.c -o $@
+.PHONY: test-games-native-cache-hint
+test-games-native-cache-hint: build/test-games-native-cache-hint
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-games-native-cache-hint $(if $(STARTUP),'$(STARTUP)',)
+build/test-games-native-owner-cache: tests/test_games_native_owner_cache.c tests/test_games_native_cache.c src/apps/games_native_owner_cache.inc $(NATIVE_CACHE_SOURCES) src/core/native_source_owner.c src/core/smash_native_child.c src/core/runtime_image.c src/core/retail_image.c src/core/hash.c src/core/data.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie -Wl,--wrap=kui_sha256_update -Iinclude -I.deps/fatfs/source tests/test_games_native_owner_cache.c $(NATIVE_CACHE_SOURCES) src/core/native_source_owner.c src/core/smash_native_child.c src/core/runtime_image.c src/core/retail_image.c src/core/hash.c src/core/data.c -o $@
+.PHONY: test-games-native-owner-cache
+test-games-native-owner-cache: build/test-games-native-owner-cache
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-games-native-owner-cache $(if $(NATIVE_OWNER_MODULE),'$(NATIVE_OWNER_MODULE)',)
+.PHONY: test-cold-image
+build/test-cold-image: tests/test_cold_image.c src/core/cold_image.c include/kui/cold_image.h src/core/hash.c src/core/retail_image.c src/core/data.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude tests/test_cold_image.c src/core/cold_image.c src/core/hash.c src/core/retail_image.c src/core/data.c -o $@
+test-cold-image: build/test-cold-image
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-cold-image
+.PHONY: test-smash-complete-source-owner
+build/test-smash-complete-source-owner: tests/test_smash_complete_source_owner.c src/loader/smash_source_owner_stage.inc src/core/hash.c src/core/data.c
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude -Wl,--wrap=kui_sha256_update tests/test_smash_complete_source_owner.c src/core/hash.c src/core/data.c -o $@
+test-smash-complete-source-owner: build/test-smash-complete-source-owner
+	ASAN_OPTIONS=detect_leaks=0 ./build/test-smash-complete-source-owner
 .PHONY: test-games-native-cache
 test-games-native-cache: build/test-games-native-cache
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-games-native-cache $(if $(STARTUP),'$(STARTUP)',) $(if $(EVOLUTION2_STARTUP),'$(EVOLUTION2_STARTUP)',) $(if $(HOTD2_STARTUP),'$(HOTD2_STARTUP)',)
@@ -234,7 +276,7 @@ test: build/test-game-image build/test-game-metadata build/test-loader-probe bui
 test: build/test-pvr-texture build/test-game-cover build/test-cover-image build/test-files
 test: build/test-w5500 build/test-network-w5500 build/test-network-wifi build/test-wifi-pacing build/test-wifi-update build/test-ftp build/test-ftp-cleanup
 test: build/test-resident-image build/test-gd-service build/test-image-client
-test: build/test-retail-image build/test-retail-gd build/test-retail-pace build/test-retail-sd build/test-ce-load-plan build/test-retail-boot
+test: build/test-retail-image build/test-retail-gd build/test-retail-gd-subcode build/test-retail-pace build/test-retail-sd build/test-ce-load-plan build/test-retail-boot
 test: build/test-retail-relay build/test-retail-relay-ce build/test-retail-startup-trace build/test-retail-gd-trace build/test-retail-mount-trace build/test-sonic-stack
 test: build/test-retail-cursor build/test-sci-stream build/test-sci-stream-ce build/test-retail-gd-async build/test-retail-gd-ce build/test-retail-async build/test-retail-async-native-resume build/test-retail-async-ce
 test: build/test-retail-async-native-bounds build/test-retail-async-native-hybrid
@@ -266,6 +308,7 @@ test: build/test-storage-errors build/test-cd-audio build/test-network-probe bui
 	./build/test-retail-async-native-hybrid
 	./build/test-retail-async-ce
 	./build/test-retail-gd
+	./build/test-retail-gd-subcode
 	./build/test-retail-gd-async
 	./build/test-retail-gd-ce
 	./build/test-retail-pace
@@ -588,6 +631,10 @@ build/test-retail-gd: tests/test_retail_gd.c src/core/retail_gd.c include/kui/re
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/retail_gd.c tests/test_retail_gd.c -o $@
 
+build/test-retail-gd-subcode: tests/test_retail_gd_subcode.c src/core/retail_gd.c include/kui/retail_gd.h include/kui/retail_image.h
+	@mkdir -p $(@D)
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $< -o $@
+
 .PHONY: test-retail-observe
 test-retail-observe: build/test-retail-observe build/test-retail-observe-fault
 	./build/test-retail-observe
@@ -635,8 +682,9 @@ build/games-image-probe: tests/games_image_probe.c $(GAMES_IMAGE_PROBE) $(CORE) 
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast tests/games_image_probe.c $(GAMES_IMAGE_PROBE) $(CORE) $(FATFS) $(GAMES_IMAGE_PROBE_WRAP) -o $@
 
-GAMES_RETAIL = src/core/vmu_launch_package.c src/core/retail_zso.c src/apps/game_launch_report.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/apps/games_retail.c src/core/hash.c src/core/retail_image.c src/core/retail_cursor.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c src/core/game_metadata.c $(DESTINATION) src/core/runtime_image.c src/core/runtime_file.c src/core/storage_probe.c src/core/vmu_emulation_settings.c
+GAMES_RETAIL = src/core/smash_native_child.c src/core/vmu_launch_package.c src/core/retail_zso.c src/apps/game_launch_report.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/apps/games_retail.c src/core/hash.c src/core/retail_image.c src/core/retail_cursor.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c src/core/game_metadata.c $(DESTINATION) src/core/runtime_image.c src/core/runtime_file.c src/core/storage_probe.c src/core/vmu_emulation_settings.c
 GAMES_RETAIL += $(NATIVE_CACHE_SOURCES)
+GAMES_RETAIL += src/core/smash_menu_collection.c src/core/smash_ce_child.c src/core/smash_ce_profile.c src/core/smash_ce_helper.c
 GAMES_RETAIL += src/apps/native_session_prepare.c src/core/native_session.c src/core/native_return.c src/core/storage_policy.c
 
 NATIVE_SESSION_CORE = src/core/native_session.c src/core/native_return.c src/core/storage_policy.c
@@ -654,6 +702,7 @@ test-native-session-controls: build/test-native-return build/test-native-session
 	python3 tests/test_native_session_cold_bind.py
 	python3 tests/test_native_session_switch.py
 	python3 tests/test_retail_async_session.py
+	python3 tests/test_native_session_config.py
 build/test-native-return: tests/test_native_return.c src/core/native_return.c src/core/storage_policy.c src/core/data.c
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) $^ -o $@
@@ -1071,7 +1120,7 @@ build/test-cd-audio: tests/test_cd_audio.c src/apps/cd_audio.c src/core/command.
 # Games uses a read-only image backend separate from the accepted optical reader.
 build/test-game-image: tests/test_game_image.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c include/kui/game_image.h include/kui/zso.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/game_image.c src/core/zso.c src/core/lzo1x.c tests/test_game_image.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/game_image.c src/core/zso.c src/core/lzo1x.c tests/test_game_image.c -Wl,--wrap=calloc -o $@
 
 build/test-game-image-workspace: tests/test_game_image_workspace.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c include/kui/game_image.h include/kui/zso.h
 	@mkdir -p $(@D)
@@ -1098,7 +1147,7 @@ build/test-cover-image: tests/test_cover_image.c src/apps/cover_image.c include/
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Itests src/apps/cover_image.c tests/test_cover_image.c -o $@
 
-GAMES = src/apps/games.c src/apps/games_storage.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c src/core/game_metadata.c src/core/destination.c src/core/storage_probe.c src/core/hash.c src/core/game_profile.c src/apps/game_profile_file.c src/core/game_launch_settings.c src/core/game_ram_patches.c
+GAMES = src/core/smash_native_child.c src/core/retail_image.c src/apps/games.c src/apps/games_storage.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c src/core/game_metadata.c src/core/destination.c src/core/storage_probe.c src/core/hash.c src/core/game_profile.c src/apps/game_profile_file.c src/core/game_launch_settings.c src/core/game_ram_patches.c
 GAMES_COVERS = $(sort $(GAMES) src/apps/game_launch_settings_file.c src/apps/games_covers.c src/apps/cover_image.c src/core/game_cover.c src/core/pvr_texture.c src/core/retail_image.c)
 GAMES_ACTIVITY = src/core/games_activity.c src/apps/games_activity_file.c
 GAMES_LIBRARY_EXTRA = src/core/games_query.c src/core/games_metadata.c src/apps/games_metadata_file.c src/apps/games_identity.c src/apps/games_scan_log.c
@@ -1335,7 +1384,7 @@ test-games-cdda-identity-io: build/test-games-cdda-identity-io
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-games-cdda-identity-io
 build/test-games-cdda-identity-io: tests/test_games_cdda_identity_io.c tests/test_games_cdda_status.c src/apps/games.c include/kui/games_cdda_status.h src/core/game_image.c src/core/zso.c src/core/lzo1x.c src/core/hash.c src/core/data.c src/core/destination.c src/core/game_profile.c src/apps/game_profile_file.c src/core/game_launch_settings.c src/core/game_ram_patches.c include/kui/game_profile.h
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast -ffunction-sections -fdata-sections tests/test_games_cdda_identity_io.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c src/core/hash.c src/core/data.c src/core/destination.c src/core/game_profile.c src/apps/game_profile_file.c src/core/game_launch_settings.c src/core/game_ram_patches.c -Wl,--gc-sections -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) -Isrc/dreamcast -ffunction-sections -fdata-sections tests/test_games_cdda_identity_io.c src/core/smash_native_child.c src/core/retail_image.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c src/core/hash.c src/core/data.c src/core/destination.c src/core/game_profile.c src/apps/game_profile_file.c src/core/game_launch_settings.c src/core/game_ram_patches.c -Wl,--gc-sections -o $@
 
 test-native-cdda-compat: build/test-native-cdda-compat
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-native-cdda-compat
@@ -1485,6 +1534,8 @@ test-vmu-menu: build/test-shell build/test-ui-rate build/test-vmu-app build/test
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-music-thread
 	ASAN_OPTIONS=detect_leaks=0 python3 tests/test_vmu_images.py
 	ASAN_OPTIONS=detect_leaks=0 python3 tests/test_vmu_library.py
+	ASAN_OPTIONS=detect_leaks=0 python3 tests/test_vmu_delete.py
+	ASAN_OPTIONS=detect_leaks=0 python3 tests/test_vmu_delete_dispatch.py
 	ASAN_OPTIONS=detect_leaks=0 python3 tests/test_vmu_wizard.py
 	ASAN_OPTIONS=detect_leaks=0 python3 tests/test_vmu_game_info.py
 	ASAN_OPTIONS=detect_leaks=0 python3 tests/test_menu_lookup_dispatch.py
@@ -1618,9 +1669,9 @@ test-vmu-per-game: build/test-shell build/test-vmu-game-candidates
 	python3 tests/test_vmu_wizard_filesystems.py
 	python3 tests/test_vmu_wizard_installer.py
 
-build/test-vmu-game-candidates: tests/test_vmu_game_candidates.c src/core/vmu_game_candidates.c src/core/vmu_game_assign.c include/kui/vmu_game_candidates.h src/core/vmu_game_card.c src/core/retail_image.c
+build/test-vmu-game-candidates: tests/test_vmu_game_candidates.c src/core/vmu_game_candidates.c src/core/vmu_game_assign.c include/kui/vmu_game_candidates.h src/core/vmu_game_card.c src/core/retail_image.c src/core/hash.c
 	@mkdir -p build
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) -ffunction-sections -fdata-sections $(INCLUDES) tests/test_vmu_game_candidates.c src/core/vmu_game_card.c src/core/retail_image.c -Wl,--gc-sections -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) -ffunction-sections -fdata-sections $(INCLUDES) tests/test_vmu_game_candidates.c src/core/vmu_game_card.c src/core/retail_image.c src/core/hash.c -Wl,--gc-sections -o $@
 
 DISC_BOOT_CORE = src/core/disc_boot.c src/core/game_metadata.c src/core/hash.c src/core/data.c
 DISC_LAUNCH_CORE = src/core/disc_launch.c src/core/hash.c src/core/data.c
@@ -1695,10 +1746,23 @@ build/test-disc-launch-vmu: tests/test_disc_launch_vmu.c $(DISC_LAUNCH_CORE) inc
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) tests/test_disc_launch_vmu.c $(DISC_LAUNCH_CORE) -o $@
 
 DISC_VMU_PROBE_CORE = src/core/disc_vmu_probe.c src/core/vmu_native_program.c src/core/vmu_native_discovery.c src/core/vmu_native_layout.c src/core/vmu_native_heap.c src/core/vmu_native_exit.c src/core/vmu_native_patch.c src/core/hash.c src/core/data.c
-DISC_VMU_PROBE_WRAPS = -Wl,--wrap=kui_vmu_native_program_extent,--wrap=kui_vmu_native_discover_layout,--wrap=kui_vmu_native_discover,--wrap=kui_vmu_native_heap_discover,--wrap=kui_vmu_native_heap_call_discover
+DISC_VMU_PROBE_WRAPS = -Wl,--wrap=kui_vmu_native_program_extent,--wrap=kui_vmu_native_discover_layout,--wrap=kui_vmu_native_discover,--wrap=kui_vmu_native_heap_discover,--wrap=kui_vmu_native_heap_call_discover,--wrap=kui_vmu_native_heap_preclear_plan
 .PHONY: test-disc-vmu-probe
 test-disc-vmu-probe: build/test-disc-vmu-probe
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-disc-vmu-probe $(if $(STARTUP),'$(STARTUP)',)
 build/test-disc-vmu-probe: tests/test_disc_vmu_probe.c $(DISC_VMU_PROBE_CORE) include/kui/disc_vmu_probe.h include/kui/vmu_native_program.h include/kui/vmu_native_discovery.h include/kui/vmu_native_layout.h include/kui/vmu_native_heap.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie $(INCLUDES) tests/test_disc_vmu_probe.c $(DISC_VMU_PROBE_CORE) $(DISC_VMU_PROBE_WRAPS) -o $@
+
+# Shared disc-number parsing and Games detail/storage headers affect these
+# host binaries even when their immediate C source timestamps are unchanged.
+build/capture-image build/test-game-metadata build/test-disc-identity: include/kui/disc_number.h
+build/capture-image build/test-disc-identity build/games-library-image: include/kui/game_metadata.h
+build/test-shell: include/kui/games.h
+build/games-library-image: include/kui/games_storage.h include/kui/disc_number.h include/kui/games.h include/kui/games_activity.h include/kui/native_session_prepare.h
+
+.PHONY: test-multidisc-capture
+test-multidisc-capture: build/capture-image
+	ASAN_OPTIONS=detect_leaks=0 python3 tests/test_multidisc_capture_images.py
+
+test-images: test-multidisc-capture

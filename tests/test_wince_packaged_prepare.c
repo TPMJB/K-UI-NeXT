@@ -39,13 +39,15 @@ static enum kui_runtime_result shipped_runtime(const char *path,struct kui_runti
 static void owner_sector(const char *name,uint64_t offset,void *out,size_t bytes) {
     if(!owner_kernel || strcmp(name,image.tracks[image.count-1u].name)) return;
     const struct kui_game_image_track *track=&image.tracks[image.count-1u];
-    CHECK(bytes==track->sector_bytes && !(offset%track->sector_bytes));
+    CHECK(bytes && bytes<=16u*track->sector_bytes && !(bytes%track->sector_bytes) && !(offset%track->sector_bytes));
     uint64_t lba=track->start_lba+offset/track->sector_bytes;
-    if(lba<metadata.boot_lba) return;
-    uint64_t at=(lba-metadata.boot_lba)*2048u;
-    if(at>=owner_bytes) return;
-    size_t take=owner_bytes-at;if(take>2048u) take=2048u;
-    memcpy((uint8_t *)out+track->data_offset,owner_kernel+at,take);
+    for(unsigned n=0;n<bytes/track->sector_bytes;n++) {
+        if(lba+n<metadata.boot_lba)continue;
+        uint64_t at=(lba+n-metadata.boot_lba)*2048u;
+        if(at>=owner_bytes)continue;
+        size_t take=owner_bytes-at;if(take>2048u)take=2048u;
+        memcpy((uint8_t *)out+n*track->sector_bytes+track->data_offset,owner_kernel+at,take);
+    }
 }
 static void packaged_disc(bool cooked) {
     launch_setup();launch.stream=launch.variant=true;launch.kernel_profile=packaged_profile;

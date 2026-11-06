@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/vc2-exfat-large-host
+HOST_CC ?= cc
+.DEFAULT_GOAL := vc2-exfat-large-tests
+.PHONY: vc2-exfat-large-tests
+vc2-exfat-large-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic \
+	 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-pie -no-pie \
+	 -ffunction-sections -fdata-sections -Iinclude tests/test_vc2_exfat_large_ownership.c \
+	 src/core/vmu_fs_admission.c src/core/vmu_persist_profile.c src/core/hash.c \
+	 src/core/retail_image.c src/loader/vc2_ce_vmu_stage_cache.c \
+	 -Wl,--gc-sections -o $(BUILD)/test-exfat-large
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-exfat-large

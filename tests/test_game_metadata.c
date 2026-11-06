@@ -90,8 +90,117 @@ static void expect(enum kui_game_metadata_status want) {
 static uint8_t *pvd(void) {return fixture.sectors[16];}
 static uint8_t *root(void) {return pvd() + 156;}
 static uint8_t *boot(void) {return fixture.sectors[ROOT] + 68;}
+static void disc_numbers(void) {
+    for(unsigned disc=1u;disc<=9u;disc++)for(unsigned total=disc;total<=9u;total++) {
+        setup(45000u);uint8_t *ip=fixture.sectors[0];
+        memcpy(ip+32u,"0000 GD-ROM1/1  ",16u);ip[43]=(uint8_t)('0'+disc);ip[45]=(uint8_t)('0'+total);
+        struct kui_game_metadata header;
+        assert(kui_game_metadata_ip(ip,&header));
+        assert(header.ip_valid && !header.boot_valid && header.disc_number==disc && header.disc_total==total);
+        assert(!header.sectors_read && !header.session_lba && !header.root_lba && !header.boot_lba);
+        expect(KUI_GAME_METADATA_OK);assert(meta.disc_number==disc && meta.disc_total==total);
+        assert(meta.sectors_read==3u && meta.session_lba==45000u);
+    }
+    const char *const malformed[]={"0/4","5/4","2/0","2x4","A/4","2/A"};
+    for(unsigned i=0u;i<sizeof(malformed)/sizeof(malformed[0]);i++) {
+        setup(45000u);memcpy(fixture.sectors[0]+32u,"0000 GD-ROM1/4  ",16u);
+        memcpy(fixture.sectors[0]+43u,malformed[i],3u);
+        expect(KUI_GAME_METADATA_OK);assert(!meta.disc_number && !meta.disc_total);
+    }
+    const unsigned bytes[]={36u,37u,42u,46u,47u};
+    for(unsigned i=0u;i<sizeof(bytes)/sizeof(bytes[0]);i++) {
+        setup(45000u);memcpy(fixture.sectors[0]+32u,"0000 GD-ROM2/4  ",16u);fixture.sectors[0][bytes[i]]='?';
+        expect(KUI_GAME_METADATA_OK);assert(!meta.disc_number && !meta.disc_total);
+    }
+    setup(45000u);memcpy(fixture.sectors[0]+32u,"0000 CD-ROM2/4  ",16u);
+    expect(KUI_GAME_METADATA_OK);assert(meta.native_cd && meta.disc_number==2u && meta.disc_total==4u);
+    memset(&meta,0xa5,sizeof(meta));assert(!kui_game_metadata_ip(NULL,&meta) && !meta.ip_valid && !meta.disc_number);
+    assert(!kui_game_metadata_ip(fixture.sectors[0],NULL));
+}
+static uint8_t *child_directory(void) {return fixture.sectors[ROOT]+116u;}
+static void setup_child_directory(void) {
+    setup(45000u);
+    entry(child_directory(),45030u,2048u,2u,(const uint8_t *)"SHFORCE",7u);
+    const uint8_t dot=0,parent=1;
+    uint8_t *directory=fixture.sectors[30];
+    unsigned pos=entry(directory,45030u,2048u,2u,&dot,1u);
+    pos+=entry(directory+pos,45020u,2048u,2u,&parent,1u);
+    entry(directory+pos,45040u,4096u,0u,(const uint8_t *)"SHFORCE.SGA;1",13u);
+    expect(KUI_GAME_METADATA_OK);
+}
+static void child_directories(void) {
+    uint32_t lba,bytes;setup_child_directory();
+    unsigned reads=fixture.reads,before=meta.sectors_read;
+    assert(kui_game_metadata_find_directory(&ops,&meta,"SHFORCE",&lba,&bytes)==KUI_GAME_METADATA_OK);
+    assert(lba==45030u && bytes==2048u && fixture.reads==reads+1u &&
+           meta.sectors_read==before+1u && fixture.read_lba[reads]==45020u);
+    assert(meta.boot_lba==45021u && meta.boot_bytes==3000u && meta.root_lba==45020u);
+    assert(kui_game_metadata_find_directory(&ops,&meta,"shforce",&lba,&bytes)==KUI_GAME_METADATA_OK);
+    struct kui_game_metadata original=meta,child=meta;
+    child.root_lba=lba;child.root_bytes=bytes;reads=fixture.reads;
+    assert(kui_game_metadata_find(&ops,&child,"SHFORCE.SGA",1u<<20,&lba,&bytes)==KUI_GAME_METADATA_OK);
+    assert(lba==45040u && bytes==4096u && fixture.read_lba[reads]==45030u && fixture.reads==reads+1u);
+    assert(!memcmp(&meta,&original,sizeof(meta)) && child.boot_lba==45021u);
+    assert(kui_game_metadata_find_directory(&ops,&child,"SHFORCE.SGA",&lba,&bytes)==KUI_GAME_METADATA_UNSUPPORTED);
+    assert(kui_game_metadata_find(&ops,&meta,"SHFORCE",1u<<20,&lba,&bytes)==KUI_GAME_METADATA_UNSUPPORTED);
+    assert(kui_game_metadata_find_directory(&ops,&meta,"MISSING",&lba,&bytes)==KUI_GAME_METADATA_BOOT_NOT_FOUND && !lba && !bytes);
+
+    /* The new API shares the same single-record ISO validation as files,
+     * while requiring a directory and its smaller bounded extent. */
+    for(unsigned fault=0;fault<15u;fault++) {
+        setup_child_directory();uint8_t *record=child_directory();
+        enum kui_game_metadata_status wanted=KUI_GAME_METADATA_ISO;
+        switch(fault) {
+        case 0:record[25]=0;wanted=KUI_GAME_METADATA_UNSUPPORTED;break;
+        case 1:record[25]|=128u;wanted=KUI_GAME_METADATA_UNSUPPORTED;break;
+        case 2:record[1]=1;wanted=KUI_GAME_METADATA_UNSUPPORTED;break;
+        case 3:record[26]=1;wanted=KUI_GAME_METADATA_UNSUPPORTED;break;
+        case 4:record[27]=1;wanted=KUI_GAME_METADATA_UNSUPPORTED;break;
+        case 5:record[6]^=1;break;case 6:record[14]^=1;break;
+        case 7:record[30]^=1;break;
+        case 8:dual32(record+2,UINT32_MAX);break;
+        case 9:dual32(record+10,0);break;
+        case 10:dual32(record+10,KUI_GAME_METADATA_MAX_DIRECTORY_BYTES+1u);wanted=KUI_GAME_METADATA_LIMIT;break;
+        case 11:dual32(record+2,45159u);dual32(record+10,4096u);break;
+        case 12:fixture.denied_lba=45030u;break;
+        case 13:memcpy(record+record[0],record,record[0]);break;
+        default:dual32(record+2,30u);break; /* no session-relative fallback */
+        }
+        assert(kui_game_metadata_find_directory(&ops,&meta,"SHFORCE",&lba,&bytes)==wanted);
+    }
+    setup_child_directory();dual32(child_directory()+10,KUI_GAME_METADATA_MAX_DIRECTORY_BYTES);
+    assert(kui_game_metadata_find_directory(&ops,&meta,"SHFORCE",&lba,&bytes)==KUI_GAME_METADATA_OK);
+    assert(bytes==KUI_GAME_METADATA_MAX_DIRECTORY_BYTES);
+    setup_child_directory();entry(child_directory(),45030u,2048u,2u,(const uint8_t *)"SHFORCE;1",9u);
+    assert(kui_game_metadata_find_directory(&ops,&meta,"SHFORCE",&lba,&bytes)==KUI_GAME_METADATA_OK);
+    setup_child_directory();fixture.fail_read=fixture.reads;
+    assert(kui_game_metadata_find_directory(&ops,&meta,"SHFORCE",&lba,&bytes)==KUI_GAME_METADATA_IO);
+    setup_child_directory();fixture.cancel_read=fixture.reads;
+    assert(kui_game_metadata_find_directory(&ops,&meta,"SHFORCE",&lba,&bytes)==KUI_GAME_METADATA_CANCELLED);
+    setup_child_directory();boot()[33]='X';expect(KUI_GAME_METADATA_BOOT_NOT_FOUND);
+    assert(kui_game_metadata_find_directory(&ops,&meta,"SHFORCE",&lba,&bytes)==KUI_GAME_METADATA_OK);
+
+    setup_child_directory();
+    const char *bad_names[]={"",".","..","../SHFORCE","SHFORCE/SHFORCE.SGA","\\SHFORCE","SHFORCE;1","SH FORCE"};
+    reads=fixture.reads;
+    for(unsigned i=0;i<sizeof(bad_names)/sizeof(bad_names[0]);i++)
+        assert(kui_game_metadata_find_directory(&ops,&meta,bad_names[i],&lba,&bytes)==KUI_GAME_METADATA_ARGUMENT);
+    assert(kui_game_metadata_find_directory(NULL,&meta,"SHFORCE",&lba,&bytes)==KUI_GAME_METADATA_ARGUMENT);
+    assert(kui_game_metadata_find_directory(&ops,NULL,"SHFORCE",&lba,&bytes)==KUI_GAME_METADATA_ARGUMENT);
+    assert(kui_game_metadata_find_directory(&ops,&meta,NULL,&lba,&bytes)==KUI_GAME_METADATA_ARGUMENT);
+    assert(kui_game_metadata_find_directory(&ops,&meta,"SHFORCE",NULL,&bytes)==KUI_GAME_METADATA_ARGUMENT);
+    assert(kui_game_metadata_find_directory(&ops,&meta,"SHFORCE",&lba,NULL)==KUI_GAME_METADATA_ARGUMENT);
+    struct kui_game_metadata_ops bad_ops=ops;bad_ops.read_sector=NULL;
+    assert(kui_game_metadata_find_directory(&bad_ops,&meta,"SHFORCE",&lba,&bytes)==KUI_GAME_METADATA_ARGUMENT);
+    bad_ops=ops;bad_ops.data_range=NULL;
+    assert(kui_game_metadata_find_directory(&bad_ops,&meta,"SHFORCE",&lba,&bytes)==KUI_GAME_METADATA_ARGUMENT);
+    child=meta;child.root_bytes=0;
+    assert(kui_game_metadata_find_directory(&ops,&child,"SHFORCE",&lba,&bytes)==KUI_GAME_METADATA_ARGUMENT);
+    assert(fixture.reads==reads);
+}
 
 int main(void) {
+    disc_numbers();child_directories();
     setup(45000); expect(KUI_GAME_METADATA_OK);
     assert(meta.ip_valid && meta.boot_valid);
     assert(meta.native_gd && !meta.windows_ce);

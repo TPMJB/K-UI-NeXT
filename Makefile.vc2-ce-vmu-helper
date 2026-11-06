@@ -1,0 +1,133 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Dedicated experimental helper. This does not change the ordinary CE or
+# native loader targets. Source the existing KOS environment before building.
+VC2_VMU_DIR ?= build/vc2-ce-vmu-helper
+VC2_WRITE_PROBE ?= 0
+VC2_PERSIST ?= 0
+VC2_DIAGNOSTIC_MODE ?= 0
+VC2_TEXTURE_PROBE ?= 0
+VC2_SWIRL ?= 0
+ifneq ($(words $(VC2_DIAGNOSTIC_MODE)),1)
+$(error VC2_DIAGNOSTIC_MODE must be 0, 1, 3 or 4)
+endif
+ifneq ($(filter $(VC2_DIAGNOSTIC_MODE),0 1 3 4),$(VC2_DIAGNOSTIC_MODE))
+$(error VC2_DIAGNOSTIC_MODE must be 0, 1, 3 or 4)
+endif
+ifneq ($(VC2_DIAGNOSTIC_MODE),0)
+ifneq ($(VC2_PERSIST),1)
+$(error VC2 diagnostic controls require the complete persistent helper profile)
+endif
+endif
+BUILD_ID ?= $(shell git rev-parse --short=12 HEAD)
+# The normal collection helper is an unchanged accepted component. Reproduce
+# its actual identity and require the complete pinned bytes below. Stamping a
+# GUI commit into it can change GCC string pooling and instruction addresses,
+# even when no helper implementation changed. Diagnostic helpers remain new
+# components and retain their own current source build.
+ifeq ($(SMASH_CE_CHILD):$(VC2_PERSIST):$(VC2_DIAGNOSTIC_MODE):$(VC2_TEXTURE_PROBE),1:1:0:0)
+VC2_HELPER_COMPONENT_BUILD := ab1b145b33b4
+else
+VC2_HELPER_COMPONENT_BUILD := $(BUILD_ID)
+endif
+CROSS_COMPILE ?= sh-elf-
+VC2_VMU_CC := $(CROSS_COMPILE)gcc
+VC2_VMU_OBJCOPY := $(CROSS_COMPILE)objcopy
+VC2_VMU_CPU := -m4-single -ml -mdiv=call-div1 -mfixed-range=fr0-fr15,fpul-fpul
+VC2_VMU_FLAGS := -std=c11 -Os -g -Wall -Wextra -Werror $(VC2_VMU_CPU) \
+ -ffreestanding -fno-builtin -fno-stack-protector -fno-pic \
+ -ffunction-sections -fdata-sections -fno-jump-tables -fstack-usage \
+ -fcallgraph-info=su -Iinclude -Isrc/loader -DKUI_RETAIL_FAST_IO=1 -DKUI_BUILD_ID='"$(VC2_HELPER_COMPONENT_BUILD)"' \
+ -DKUI_ON_CONSOLE=1 -DKUI_VC2_CE_VMU=1 -DKUI_ARMADA_CE_MAPLE_WRITE_LAYOUT=1 \
+ -DKUI_ARMADA_CE_MAPLE_WRITE_STAGING=$(if $(filter 1,$(VC2_PERSIST)),1,$(VC2_WRITE_PROBE)) -DKUI_ARMADA_CE_VMU_WRITE_RUNTIME=$(VC2_PERSIST) \
+ -DKUI_VC2_VMU_PERSIST=$(VC2_PERSIST) \
+ -DKUI_VC2_VMU_WRITE_PROBE=$(VC2_WRITE_PROBE) \
+ -DKUI_ARMADA_CE_MAPLE_FENCE=1 -DKUI_ARMADA_CE_MAPLE_A2=1 \
+ -DKUI_ARMADA_CE_MAPLE_AUTO_STOP=$(if $(filter 1,$(VC2_PERSIST)),8,$(if $(filter 1,$(VC2_WRITE_PROBE)),7,4)) -DKUI_ARMADA_CE_MAPLE_AUTO_PHASE=2 \
+ -DKUI_ARMADA_CE_MAPLE_AUTO_LIMIT=$(if $(filter 1,$(VC2_PERSIST)),0,1200) -DKUI_ARMADA_CE_MAPLE_DIAGNOSTIC_MODE=$(VC2_DIAGNOSTIC_MODE) \
+ -DKUI_SMASH_SWIRL_VMU=$(VC2_SWIRL) \
+ -DKUI_VMU_READONLY_ADDRESS=$(if $(filter 1,$(VC2_SWIRL)),1,2) -DKUI_ARMADA_CE_CACHE_SNAPSHOT_NATIVE=1
+VC2_VMU_C_SRC := src/loader/vc2_ce_vmu_prepare.c \
+ src/loader/vc2_ce_vmu_service.c \
+ src/loader/vc2_ce_vmu_diagnostic.c src/loader/retail_display.c \
+ src/loader/armada_ce_maple_traffic.c src/loader/armada_ce_vmu_a2_publish.c \
+ src/loader/minic.c src/core/armada_ce_vmu_readonly.c src/core/vmu_readonly.c \
+ src/core/vmu_emulation.c src/core/vmu_image.c
+ifeq ($(VC2_TEXTURE_PROBE),1)
+VC2_VMU_FLAGS += -DKUI_VC2_TEXTURE_PROBE=1
+VC2_VMU_C_SRC := $(filter-out src/loader/vc2_ce_vmu_diagnostic.c,$(VC2_VMU_C_SRC)) src/loader/vc2_texture_probe.c
+endif
+ifeq ($(VC2_WRITE_PROBE),1)
+VC2_VMU_C_SRC += src/core/armada_ce_vmu_write.c src/core/vc2_ce_vmu_write_probe.c
+endif
+ifeq ($(VC2_PERSIST),1)
+ifneq ($(VC2_WRITE_PROBE),0)
+$(error Persistent VC2 runtime and volatile write probe are distinct profiles)
+endif
+VC2_VMU_C_SRC += src/core/armada_ce_vmu_write.c src/loader/armada_ce_vmu_runtime.c \
+ src/loader/armada_ce_vmu_sd.c src/loader/armada_ce_vmu_sd_pio.c \
+ src/core/vmu_deferred_io.c src/core/armada_ce_vmu_runtime_contract.c \
+ src/core/vmu_durable.c src/core/vmu_store.c \
+ src/loader/sd_reader.c src/dreamcast/sci_sd_storage.c src/core/hash.c \
+ src/core/retail_image.c src/loader/vc2_ce_vmu_loan.c src/loader/vc2_ce_vmu_gd_wait.c
+endif
+VC2_VMU_ASM_SRC := src/loader/vc2_ce_maple_bridge.S \
+ src/loader/vc2_ce_vmu_prepare_entry.S \
+ src/loader/armada_ce_maple_traffic_entry.S src/loader/armada_ce_maple_array.S \
+ src/loader/armada_ce_cache_snapshot.S
+ifeq ($(VC2_PERSIST),1)
+VC2_VMU_ASM_SRC += src/loader/vc2_ce_vmu_gd_wait.S
+endif
+ifeq ($(VC2_TEXTURE_PROBE),1)
+VC2_VMU_ASM_SRC += src/loader/vc2_texture_probe_entry.S
+endif
+VC2_VMU_C_OBJ := $(patsubst %.c,$(VC2_VMU_DIR)/%.o,$(VC2_VMU_C_SRC))
+VC2_VMU_ASM_OBJ := $(patsubst %.S,$(VC2_VMU_DIR)/%_asm.o,$(VC2_VMU_ASM_SRC))
+.PHONY: all clean force-vc2-helper-config
+all: $(VC2_VMU_DIR)/helper.bin $(VC2_VMU_DIR)/bridge.bin $(VC2_VMU_DIR)/vc2_ce_vmu_symbols.h
+force-vc2-helper-config:
+$(VC2_VMU_DIR)/helper-config: force-vc2-helper-config
+	@mkdir -p $(@D)
+	@printf '%s\n' '$(VC2_VMU_FLAGS)' '$(VC2_VMU_NATIVE_FLAGS)' > $@.tmp
+	@cmp -s $@.tmp $@ || cp $@.tmp $@
+	@rm -f $@.tmp
+$(VC2_VMU_C_OBJ) $(VC2_VMU_ASM_OBJ): $(VC2_VMU_DIR)/helper-config
+VC2_VMU_NATIVE_FLAGS := -DKUI_RETAIL_ASYNC=1 -DKUI_RETAIL_GD_ASYNC=1 \
+ -DKUI_RETAIL_TRANSPORT=1 -DKUI_SCI_SD_NO_BLOCK=1 -DKUI_RETAIL_LOW_RESIDENT=1 \
+ -DKUI_RETAIL_NATIVE_HYBRID=1 -DKUI_NATIVE_STANDALONE_READER=1 \
+ -DKUI_NATIVE_STANDALONE_STRUCTURAL=1 -DKUI_NATIVE_STANDALONE_FOREGROUND=1 \
+ -DKUI_NATIVE_OCRAM_BOOTSTRAP=1 -DKUI_NATIVE_REQUEST_TIMING=1 \
+ -DKUI_NATIVE_GD_LEGACY_STREAM=1 -DKUI_NATIVE_GD_MMU_BUFFERS=1 \
+ -DKUI_NATIVE_GD_DMA_STREAM=1 -DKUI_NATIVE_GD_PIO_STREAM=1 \
+ -DKUI_NATIVE_GD_VRAM_DMA=1 -DKUI_RETAIL_MANIFEST_SLOTS=48
+$(VC2_VMU_DIR)/src/loader/vc2_ce_vmu_service.o: src/loader/vc2_ce_vmu_service.c
+	@mkdir -p $(@D)
+	$(VC2_VMU_CC) $(filter-out -DKUI_ARMADA_CE_VMU_WRITE_RUNTIME=%,$(VC2_VMU_FLAGS)) -DKUI_ARMADA_CE_VMU_WRITE_RUNTIME=0 $(VC2_VMU_NATIVE_FLAGS) -MMD -MP -c $< -o $@
+$(VC2_VMU_DIR)/src/loader/vc2_ce_vmu_loan.o: src/loader/vc2_ce_vmu_loan.c
+	@mkdir -p $(@D)
+	$(VC2_VMU_CC) $(filter-out -DKUI_ARMADA_CE_VMU_WRITE_RUNTIME=%,$(VC2_VMU_FLAGS)) -DKUI_ARMADA_CE_VMU_WRITE_RUNTIME=0 $(VC2_VMU_NATIVE_FLAGS) -MMD -MP -c $< -o $@
+$(VC2_VMU_DIR)/src/loader/retail_display.o: src/loader/retail_display.c
+	@mkdir -p $(@D)
+	$(VC2_VMU_CC) $(VC2_VMU_FLAGS) -DKUI_NATIVE_OCRAM_BOOTSTRAP=1 -MMD -MP -c $< -o $@
+$(VC2_VMU_DIR)/%.o: %.c
+	@mkdir -p $(@D)
+	$(VC2_VMU_CC) $(VC2_VMU_FLAGS) -MMD -MP -c $< -o $@
+$(VC2_VMU_DIR)/%_asm.o: %.S
+	@mkdir -p $(@D)
+	$(VC2_VMU_CC) $(VC2_VMU_FLAGS) -MMD -MP -c $< -o $@
+$(VC2_VMU_DIR)/helper.ld: src/loader/vc2_ce_vmu.ld.S include/kui/armada_ce_vmu_layout.h $(VC2_VMU_DIR)/helper-config
+	$(VC2_VMU_CC) $(VC2_VMU_FLAGS) -E -P -x c $< -o $@
+$(VC2_VMU_DIR)/helper.elf: $(VC2_VMU_C_OBJ) $(VC2_VMU_ASM_OBJ) $(VC2_VMU_DIR)/helper.ld
+	$(VC2_VMU_CC) $(VC2_VMU_CPU) -nostdlib -Wl,--gc-sections -Wl,--build-id=none \
+	 -T$(VC2_VMU_DIR)/helper.ld -Wl,-Map,$(@:.elf=.map) -o $@ $(filter %.o,$^) -lgcc
+$(VC2_VMU_DIR)/helper.bin: $(VC2_VMU_DIR)/helper.elf tools/check_smash_helper_body.py
+	$(VC2_VMU_OBJCOPY) -O binary --only-section=.uncached --only-section=.hook --only-section=.vc2_maple_bridge $(if $(filter 1,$(VC2_PERSIST)),--only-section=.gd_wait) $< $@
+ifeq ($(VC2_HELPER_COMPONENT_BUILD),ab1b145b33b4)
+	python3 tools/check_smash_helper_body.py $@ --kind $(if $(filter 1,$(VC2_SWIRL)),2,1) --build $(VC2_HELPER_COMPONENT_BUILD) --output $(VC2_VMU_DIR)/accepted-component.json
+endif
+$(VC2_VMU_DIR)/bridge.bin: $(VC2_VMU_DIR)/helper.elf
+	$(VC2_VMU_OBJCOPY) -O binary --only-section=.vc2_maple_bridge $< $@
+$(VC2_VMU_DIR)/vc2_ce_vmu_symbols.h: $(VC2_VMU_DIR)/helper.bin tools/vc2_ce_vmu_blob.py
+	python3 tools/vc2_ce_vmu_blob.py $< $@ --prepared-output $(VC2_VMU_DIR)/prepared.bin $(if $(filter 1,$(SMASH_CE_RETURN)),--return-bin $(BUILD)/ce-return.bin --return-elf $(BUILD)/ce-return.elf)
+clean:
+	rm -rf $(VC2_VMU_DIR)
+-include $(VC2_VMU_C_OBJ:.o=.d) $(VC2_VMU_ASM_OBJ:.o=.d)

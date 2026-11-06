@@ -102,6 +102,11 @@ static bool heap_schema(const struct kui_vmu_native_resolution *r) {
                  h->dispatch_cell|h->dispatch_table|h->sentinel|h->cursor_cell|h->begin_cell|
                  h->bytes_cell|h->begin_copy_cell) && h->initializer_slot &&
             r->call.return_pr==r->call.call+4u && r->call.entry_bytes;
+    /* The earlier direct allocator has no dispatch pointer or table. Its
+     * descriptor keeps the same wire size, but all role addresses and the
+     * absent dispatch words must have the direct family's exact geometry. */
+    if(h->family==KUI_VMU_NATIVE_HEAP_DIRECT32)
+        return kui_vmu_native_heap_metadata_valid(h) && h->initializer_slot;
     return h->family==KUI_VMU_NATIVE_HEAP_TAIL32 && h->layout==KUI_VMU_NATIVE_HEAP_DISPATCH2 &&
         (h->initializer_slot || (!h->initializer_target &&
          r->call.return_pr==r->call.call+4u && r->call.entry_bytes));
@@ -116,7 +121,12 @@ static bool schema(const struct kui_vmu_native_resolution *r) {
          r->layout.version==KUI_VMU_NATIVE_LAYOUT_INFILE_VERSION) && r->layout.bytes==sizeof(r->layout) &&
         ((r->layout.rx_layout==KUI_VMU_NATIVE_RX_EXPLICIT48 && r->layout.inputs==12u) ||
          (r->layout.rx_layout==KUI_VMU_NATIVE_RX_UNIFORM48 && r->layout.inputs==1u)) &&
-        heap_schema(r) && kui_vmu_native_exit_shape_valid(&r->exits) &&
+        heap_schema(r) &&
+        (d->family!=KUI_VMU_NATIVE_FAMILY_EARLY_P2_V1 ||
+         (r->heap.initializer_slot && r->call.call>=d->load_address+82u &&
+          r->call.call-d->load_address<=d->image_bytes-30u && r->call.load==r->call.call-12u &&
+          r->call.return_pr==r->call.call+4u && r->call.call+26u==r->layout.initializer_call)) &&
+        kui_vmu_native_exit_shape_valid(&r->exits) &&
         r->exits.load==d->load_address && r->exits.image_bytes==d->image_bytes &&
         r->exits.count<=KUI_VMU_NATIVE_EXIT_ENTRIES;
 }
@@ -156,6 +166,16 @@ bool kui_vmu_native_resolution_cache_record_digest(const void *wire,size_t n,uin
     if(!decode(wire,n,&decoded,result)) return false;
     memcpy(digest,result,32u);return true;
 }
+/* Keep GUI hint inspection out of the unchanged detached-stage binaries. */
+#if !KUI_ON_CONSOLE || KUI_GUI_DIGEST_REUSE
+bool kui_vmu_native_resolution_cache_inspect_config(const void *wire,size_t n,
+    struct kui_vmu_native_resolution *out) {
+    if(!object(out,sizeof(*out)) || overlap(wire,n,out,sizeof(*out)))return false;
+    struct kui_vmu_native_resolution decoded;uint8_t digest[32];
+    if(!decode(wire,n,&decoded,digest))return false;
+    *out=decoded;return true;
+}
+#endif
 static bool release_window(const void *image,size_t n,uint32_t load,uint32_t release) {
     uint32_t address=physical(release),base=physical(load);
     if(address<base || address-base>n || n-(address-base)<20u) return false;
@@ -184,6 +204,8 @@ static bool discover(const void *image,size_t n,uint32_t load,struct kui_vmu_nat
        (r->heap.initializer_slot?!kui_vmu_native_heap_call_discover(image,n,&r->heap,&r->call):
         !kui_vmu_native_heap_fixed_plan(image,n,r->driver.image_sha256,&r->heap,&r->call,NULL)) ||
        ((r->heap.initializer|r->heap.release)&3u) || !release_window(image,n,load,r->heap.release)) return false;
+    if(r->driver.family==KUI_VMU_NATIVE_FAMILY_EARLY_P2_V1 &&
+       !kui_vmu_native_early_p2_calls_valid(image,n,&r->driver,r->call.call,r->layout.initializer_call)) return false;
     const struct kui_vmu_native_patch_window windows[]={
         {r->driver.submit,12u},{r->heap.initializer,12u},{r->heap.release,20u}};
     return kui_vmu_native_exit_discover_guarded(image,n,load,windows,3u,&r->exits) && schema(r);
@@ -215,8 +237,38 @@ bool kui_vmu_native_resolution_cache_replay(const void *image,size_t n,uint32_t 
        decoded.driver.image_bytes!=n || decoded.driver.load_address!=load) return false;
     hash(image,n,digest);
     if(memcmp(digest,decoded.driver.image_sha256,32u)) return false;
+    if(decoded.driver.family==KUI_VMU_NATIVE_FAMILY_EARLY_P2_V1) {
+        struct kui_vmu_native_heap_call call;
+        if(!kui_vmu_native_early_p2_calls_valid(image,n,&decoded.driver,decoded.call.call,decoded.layout.initializer_call) ||
+           !kui_vmu_native_heap_call_discover(image,n,&decoded.heap,&call) ||
+           memcmp(&call,&decoded.call,sizeof(call))) return false;
+    }
     *out=decoded;return true;
 }
+/* The ordinary console stage/worker translation units retain precisely
+ * their old function set and static call counts. Only the GUI opts in. */
+#if !KUI_ON_CONSOLE || KUI_GUI_DIGEST_REUSE
+bool kui_vmu_native_resolution_cache_replay_hashed(const void *image,size_t n,uint32_t load,
+    const void *wire,size_t wire_bytes,const uint8_t expected[32],
+    const uint8_t fresh_image_digest[32],struct kui_vmu_native_resolution *out) {
+    if(!replay_arguments(image,n,load,wire,wire_bytes,out) || !object(expected,32u) ||
+       overlap(expected,32u,wire,wire_bytes) || overlap(expected,32u,image,n) ||
+       overlap(expected,32u,out,sizeof(*out)) || !object(fresh_image_digest,32u) ||
+       overlap(fresh_image_digest,32u,image,n) || overlap(fresh_image_digest,32u,wire,wire_bytes) ||
+       overlap(fresh_image_digest,32u,expected,32u) || overlap(fresh_image_digest,32u,out,sizeof(*out))) return false;
+    struct kui_vmu_native_resolution decoded;uint8_t digest[32];
+    if(!decode(wire,wire_bytes,&decoded,digest) || memcmp(digest,expected,32u) ||
+       decoded.driver.image_bytes!=n || decoded.driver.load_address!=load ||
+       memcmp(fresh_image_digest,decoded.driver.image_sha256,32u)) return false;
+    if(decoded.driver.family==KUI_VMU_NATIVE_FAMILY_EARLY_P2_V1) {
+        struct kui_vmu_native_heap_call call;
+        if(!kui_vmu_native_early_p2_calls_valid(image,n,&decoded.driver,decoded.call.call,decoded.layout.initializer_call) ||
+           !kui_vmu_native_heap_call_discover(image,n,&decoded.heap,&call) ||
+           memcmp(&call,&decoded.call,sizeof(call))) return false;
+    }
+    *out=decoded;return true;
+}
+#endif
 bool kui_vmu_native_resolution_cache_validate_untrusted(const void *image,size_t n,uint32_t load,
     const void *wire,size_t wire_bytes,struct kui_vmu_native_resolution *out) {
     if(!replay_arguments(image,n,load,wire,wire_bytes,out)) return false;

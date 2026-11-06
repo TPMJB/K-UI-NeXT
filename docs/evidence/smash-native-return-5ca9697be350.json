@@ -1,0 +1,15 @@
+{
+  "schema": "kui.smash.native-return-hardware.v1",
+  "date": "2026-11-05",
+  "candidate": "5ca9697be350",
+  "candidate_from": "conversation; build not visible in photograph",
+  "image_sha256": "3aa7efb19df0ced48b1148cf11104a9520f1e9402756c1ce7bd1e98a26b0677d",
+  "observed_banner": {
+    "reason_hex": "00000105",
+    "detail_hex": "00000000"
+  },
+  "screen": "Genesis game internal menu, Return to Menu selected",
+  "startup_feedback": "marginally better overall; no exact time reported",
+  "acceptance": "native menu return failed; startup target not established",
+  "interpretation": "105 is a progress checkpoint after worker retirement, context capture and quiescence; it remains through raw reads, CRC, return publication and outer re-entry. It cannot isolate the first raw read. Later outer-stage errors may be hidden by inherited framebuffer mismatch."
+}

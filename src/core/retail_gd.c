@@ -14,8 +14,21 @@
  */
 #include "kui/retail_gd.h"
 #include "kui/retail_image.h"
+#include "kui/retail_ocram.h"
+#include "kui/retail_vram_dma.h"
 #include <stddef.h>
 #include <string.h>
+#if KUI_NATIVE_GD_LEGACY_STREAM && !defined(KUI_RETAIL_GD_ASYNC)
+#error "Legacy native stream pieces require the native async payload engine"
+#endif
+/* This constrained foreground profile displays the assembly capture plus
+ * last_result/last_error. Keep the other diagnostic fields in the ABI, but
+ * omit their unobserved bookkeeping to fund the actual stream protocol. */
+#if KUI_NATIVE_GD_LEGACY_STREAM
+#define DIAG_OBSERVE(statement) ((void)0)
+#else
+#define DIAG_OBSERVE(statement) do { statement; } while(0)
+#endif
 
 #if KUI_RETAIL_GD_REJECTION_DETAILS
 #define REJECT_REQUEST(reason) do { rejected_reason = (reason); goto rejected; } while(0)
@@ -50,6 +63,15 @@ static void put32(uint8_t *p, uint32_t n) {
 static uint8_t *guest(struct kui_retail_gd *s, uint32_t address,
                       uint32_t bytes, uint32_t align, int writing) {
     uint32_t area = address & 0xff000000u;
+#if KUI_NATIVE_GD_MMU_BUFFERS
+    /* CPU parameters/results follow the caller's address space. In
+     * particular, 0x0c... is a virtual process slot with translation on;
+     * DMA destinations instead use dma_guest's physical-RAM contract. */
+    if(s->cpu_mmu && area != 0x8c000000u && area != 0xac000000u) {
+        if(!bytes || bytes > UINT32_MAX-address || (address & (align-1u))) return NULL;
+        return s->ops.map(s->ops.context,address,bytes,writing);
+    }
+#endif
 #ifdef KUI_RETAIL_CE
     /* Windows CE runs with its MMU on: an address its CPU uses (parameters,
      * status, PIO and TOC destinations) outside P1/P2 is virtual, 0x0c...
@@ -60,6 +82,14 @@ static uint8_t *guest(struct kui_retail_gd *s, uint32_t address,
         return s->ops.map(s->ops.context, address, bytes, writing);
     }
 #else
+#if KUI_NATIVE_OCRAM_BOOTSTRAP
+    /* Cache-RAM bootstrap parameters/results keep their CPU address. The
+     * resident separately checks live OCRAM mode and the complete span. */
+    if(kui_retail_ocram_address(address)) {
+        if(!bytes || (address & (align - 1u))) return NULL;
+        return s->ops.map(s->ops.context, address, bytes, writing);
+    }
+#endif
     if(area != 0x0c000000u && area != 0x8c000000u && area != 0xac000000u) return NULL;
 #endif
     uint32_t p1 = (address & 0x00ffffffu) | 0x8c000000u;
@@ -67,11 +97,17 @@ static uint8_t *guest(struct kui_retail_gd *s, uint32_t address,
        p1 >= s->guest_end || bytes > s->guest_end - p1) return NULL;
     return s->ops.map(s->ops.context, p1, bytes, writing);
 }
-#ifdef KUI_RETAIL_CE
-/* A DMA destination: a physical RAM address (as the G1 DMA takes it) or
- * its P1/P2 alias, never virtual. */
+#if defined(KUI_RETAIL_CE) || KUI_NATIVE_GD_MMU_BUFFERS
+/* A DMA destination: physical RAM or its P1/P2 alias, never CPU virtual.
+ * The opt-in native profile also admits bounded PVR memory via dedicated
+ * DMA-only mapper access; it never changes CPU/PIO guest() semantics. */
 static uint8_t *dma_guest(struct kui_retail_gd *s, uint32_t address,
                           uint32_t bytes, uint32_t align, int writing) {
+#if KUI_NATIVE_GD_VRAM_DMA
+    uint32_t vram=kui_retail_vram_dma_map(address,bytes,align);
+    if(vram)return s->ops.map(s->ops.context,vram,bytes,
+        writing==KUI_RETAIL_MAP_VALIDATE?KUI_RETAIL_MAP_DMA_VALIDATE:KUI_RETAIL_MAP_DMA_WRITE);
+#endif
     uint32_t area = address & 0xff000000u;
     if(area == 0x0c000000u) address |= 0x80000000u;
     else if(area != 0x8c000000u && area != 0xac000000u) return NULL;
@@ -88,6 +124,9 @@ static void reset(struct kui_retail_gd *s) {
 #endif
 #ifdef KUI_RETAIL_CE
     s->xfer_left = 0; s->pio_callback = 0; s->callback_due = 0;
+#endif
+#if KUI_NATIVE_GD_PIO_STREAM
+    s->pio_callback=0;s->pio_argument=0;s->callback_due=0;
 #endif
 }
 #if defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_GD_ASYNC)
@@ -215,10 +254,28 @@ static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) 
 #ifdef KUI_RETAIL_CE
     const int stream = cmd == KUI_RETAIL_GD_DMAREAD_STREAM || cmd == KUI_RETAIL_GD_PIOREAD_STREAM;
     if(stream && !s->read_part) REJECT_REQUEST(KUI_RETAIL_GD_REJECT_UNSUPPORTED);
+#elif KUI_NATIVE_GD_LEGACY_STREAM
+    const int stream = cmd == KUI_RETAIL_GD_DMAREAD_LEGACY_STREAM
+#if KUI_NATIVE_GD_DMA_STREAM
+        || cmd == KUI_RETAIL_GD_DMAREAD_STREAM
+#endif
+#if KUI_NATIVE_GD_PIO_STREAM
+        || cmd == KUI_RETAIL_GD_PIOREAD_STREAM
+#endif
+        ;
 #else
     const int stream = 0;
 #endif
     switch(cmd) {
+#if KUI_NATIVE_GD_LEGACY_STREAM
+    case KUI_RETAIL_GD_DMAREAD_LEGACY_STREAM: nparams = 2; break;
+#endif
+#if KUI_NATIVE_GD_DMA_STREAM
+    case KUI_RETAIL_GD_DMAREAD_STREAM: nparams = 3; break;
+#endif
+#if KUI_NATIVE_GD_PIO_STREAM
+    case KUI_RETAIL_GD_PIOREAD_STREAM: nparams = 3; break;
+#endif
 #ifdef KUI_RETAIL_CE
     case KUI_RETAIL_GD_DMAREAD_STREAM: case KUI_RETAIL_GD_PIOREAD_STREAM: nparams = 3; break;
 #endif
@@ -239,6 +296,16 @@ static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) 
         if(!params) REJECT_REQUEST(KUI_RETAIL_GD_REJECT_PARAMETERS);
         for(uint32_t i = 0; i < nparams; ++i) p[i] = get32(params + i * 4u);
     }
+#if KUI_NATIVE_GD_LEGACY_STREAM
+    /* 0x1ff is an older open-ended mode, not a finite 511-sector promise.
+     * This profile supports only explicitly finite streams. */
+#if KUI_NATIVE_GD_DMA_STREAM
+    if(cmd==KUI_RETAIL_GD_DMAREAD_LEGACY_STREAM && p[1]==0x1ffu)
+        REJECT_REQUEST(KUI_RETAIL_GD_REJECT_UNSUPPORTED);
+#else
+    if(stream && p[1]==0x1ffu) REJECT_REQUEST(KUI_RETAIL_GD_REJECT_UNSUPPORTED);
+#endif
+#endif
 #if KUI_NATIVE_SESSION_CONTROLS
     const int unavailable=s->disc_lid!=KUI_RETAIL_DISC_READY &&
         cmd!=KUI_RETAIL_GD_REQ_MODE && cmd!=KUI_RETAIL_GD_SET_MODE &&
@@ -246,15 +313,29 @@ static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) 
     if(unavailable)goto accept_request;
 #endif
     if(cmd == KUI_GD_PIOREAD || cmd == KUI_GD_DMAREAD || stream) {
-        s->diag.last_lba = p[0] >= 150 ? p[0] - 150 : UINT32_MAX;
-        s->diag.last_count = p[1]; s->diag.last_destination = p[2];
+        DIAG_OBSERVE(s->diag.last_lba = p[0] >= 150 ? p[0] - 150 : UINT32_MAX;
+            s->diag.last_count = p[1]; s->diag.last_destination = p[2]);
         READ_FLAGS(p[3]);
+#if KUI_NATIVE_GD_PIO_STREAM
+        /* The supplied CE driver's ordinary16/17 packets pass their queued
+         * lookahead FAD in word3. Native AT0 callers keep the test=0 ABI. */
+        const uint32_t read_flags=s->cpu_mmu &&
+            (cmd==KUI_GD_PIOREAD || cmd==KUI_GD_DMAREAD)?0u:p[3];
+#endif
 #if KUI_RETAIL_GD_REJECTION_DETAILS
         if(p[0] < 150 || p[0] >= 720000u) REJECT_REQUEST(KUI_RETAIL_GD_REJECT_READ_FAD);
         if(!p[1]) REJECT_REQUEST(KUI_RETAIL_GD_REJECT_READ_COUNT);
+#if KUI_NATIVE_GD_PIO_STREAM
+        if(read_flags) REJECT_REQUEST(KUI_RETAIL_GD_REJECT_READ_FLAGS);
+#else
         if(p[3]) REJECT_REQUEST(KUI_RETAIL_GD_REJECT_READ_FLAGS);
+#endif
+#else
+#if KUI_NATIVE_GD_PIO_STREAM
+        if(p[0] < 150 || p[0] >= 720000u || !p[1] || read_flags)
 #else
         if(p[0] < 150 || p[0] >= 720000u || !p[1] || p[3])
+#endif
             return 0;
 #endif
         lba = p[0] - 150;
@@ -263,7 +344,7 @@ static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) 
         bytes = p[1] * s->sector_bytes; destination = p[2];
         /* A stream's destinations arrive with each transfer. */
         if(stream) destination = 0;
-#ifdef KUI_RETAIL_CE
+#if defined(KUI_RETAIL_CE) || KUI_NATIVE_GD_MMU_BUFFERS
         else if(!(cmd == KUI_GD_DMAREAD ? dma_guest(s, destination, bytes, 32, KUI_RETAIL_MAP_VALIDATE) :
                   guest(s, destination, bytes, 2, KUI_RETAIL_MAP_VALIDATE)))
             REJECT_REQUEST(KUI_RETAIL_GD_REJECT_DESTINATION);
@@ -280,8 +361,8 @@ static int32_t request(struct kui_retail_gd *s, uint32_t cmd, uint32_t address) 
             done += n;
         }
     } else if(cmd == KUI_RETAIL_GD_GETSCD) {
-        s->diag.last_lba = p[0]; /* Format, not a read LBA. */
-        s->diag.last_count = p[1]; s->diag.last_destination = p[2];
+        DIAG_OBSERVE(s->diag.last_lba = p[0]; /* Format, not a read LBA. */
+            s->diag.last_count = p[1]; s->diag.last_destination = p[2]);
         if(p[0] > 2 || !p[1]) REJECT_REQUEST(KUI_RETAIL_GD_REJECT_COMMAND_PARAMETERS);
         bytes = p[0] == 0 ? 100 : p[0] == 1 ? 14 : 24;
         if(bytes > p[1]) bytes = p[1];
@@ -322,6 +403,33 @@ accept_request:
     memcpy(s->outputs, p, sizeof(p));
     s->completed_bytes = 0; s->error = 0;
     s->status = KUI_GD_PROCESSING; s->pending = 1;
+#if KUI_NATIVE_GD_LEGACY_STREAM
+    if(
+#if KUI_NATIVE_GD_DMA_STREAM
+       cmd==KUI_RETAIL_GD_DMAREAD_LEGACY_STREAM
+#else
+       stream
+#endif
+       ) {
+        s->count=0;s->outputs[0]=0;s->pending=0;
+        s->status=KUI_RETAIL_GD_LEGACY_STREAMING;
+    }
+#endif
+#if KUI_NATIVE_GD_DMA_STREAM
+    if(cmd==KUI_RETAIL_GD_DMAREAD_STREAM
+#if KUI_NATIVE_GD_PIO_STREAM
+       || cmd==KUI_RETAIL_GD_PIOREAD_STREAM
+#endif
+      ) {
+        /* Word2 is the driver's opaque lookahead FAD, not a destination.
+         * Native stream38 keeps its whole-request LBA and byte cursor;
+         * 32-byte DMA pieces may start or stop within a disc sector. */
+        s->outputs[0]=0;s->status=KUI_RETAIL_GD_STREAMING;
+#if KUI_NATIVE_GD_PIO_STREAM
+        s->callback_due=0;
+#endif
+    }
+#endif
 #if KUI_NATIVE_SESSION_CONTROLS
     if(unavailable) {
         s->request_bytes=0;s->pending=0;s->status=KUI_GD_FAILED;
@@ -332,7 +440,7 @@ accept_request:
     if(stream) s->status = KUI_RETAIL_GD_STREAMING;
     s->xfer_left = 0;
 #endif
-    ++s->diag.requests;
+    DIAG_OBSERVE(++s->diag.requests);
     return (int32_t)s->token;
 #if KUI_RETAIL_GD_REJECTION_DETAILS
 rejected:
@@ -356,7 +464,7 @@ static void toc(struct kui_retail_gd *s, uint8_t *out) {
     put32(out + 400, (uint32_t)kui_retail_track_control(l) << 28 | 0x01000000u | (last + 1u) << 16);
     put32(out + 404, (uint32_t)kui_retail_track_control(l) << 28 | 0x01000000u | (l->end_lba + 150u));
 }
-static uint8_t bcd(uint32_t n) { return (uint8_t)((n / 10u) * 16u + n % 10u); }
+static uint8_t bcd(uint32_t n) { return (uint8_t)(n + (n / 10u) * 6u); }
 static void msf(uint8_t *out, uint32_t frames) {
     out[2] = bcd(frames % 75u); frames /= 75u;
     out[1] = bcd(frames % 60u); out[0] = bcd(frames / 60u);
@@ -367,7 +475,9 @@ static void subcode(const struct kui_retail_gd *s, uint8_t *out) {
      * no subchannels: synthesize only ordinary index-1 Q and unavailable MCN.
      * Raw Q uses BCD MSF + complemented CCITT CRC; formatted Q uses binary
      * track/index and 24-bit sector counts. Never read SD or claim CDDA play. */
-    uint8_t data[100] = {0};
+    /* The formatted/MCN replies need at most 24 bytes; raw Q remains packed
+     * here and expands into the already validated caller output below. */
+    uint8_t data[24] = {0};
     data[1] = 0x15; /* Audio status unavailable. */
     data[3] = s->area == 0 ? 100 : s->area == 1 ? 14 : 24;
     if(s->area == 2) {
@@ -397,16 +507,32 @@ static void subcode(const struct kui_retail_gd *s, uint8_t *out) {
             }
             crc = (uint16_t)~crc;
             data[14] = (uint8_t)(crc >> 8); data[15] = (uint8_t)crc;
-            /* Expand backwards so the packed Q bytes can share this buffer. */
-            for(unsigned bit = 96; bit-- > 0;)
-                data[4 + bit] = (uint8_t)(((data[4 + bit / 8] >> (7 - bit % 8)) & 1u) << 6);
+            /* Capture the length before publishing any guest byte, just as
+             * the final memcpy does for the other formats. Truncated raw
+             * replies are exact prefixes of the same 100-byte wire reply. */
+            const uint32_t bytes = s->request_bytes;
+            for(uint32_t at = 0; at < bytes; ++at) {
+                uint32_t bit = at - 4u;
+                out[at] = at < 4u ? data[at] :
+                    (uint8_t)(((data[4u + bit / 8u] >> (7u - bit % 8u)) & 1u) << 6);
+            }
+            return;
         }
     }
     memcpy(out, data, s->request_bytes);
 }
 static int32_t execute(struct kui_retail_gd *s) {
-    ++s->diag.exec_calls;
+    DIAG_OBSERVE(++s->diag.exec_calls);
     if(!s->pending) return 0;
+#if KUI_NATIVE_GD_LEGACY_STREAM
+    if(s->command==KUI_RETAIL_GD_DMAREAD_LEGACY_STREAM) return 0;
+#endif
+#if KUI_NATIVE_GD_DMA_STREAM
+    if(s->command==KUI_RETAIL_GD_DMAREAD_STREAM) return 0;
+#endif
+#if KUI_NATIVE_GD_PIO_STREAM
+    if(s->command==KUI_RETAIL_GD_PIOREAD_STREAM) return 0;
+#endif
 #ifdef KUI_RETAIL_CE
     /* A stream's bytes move only within DMA transfers (in the background
      * reader, by the adapter: kui_retail_gd_stream_progress). */
@@ -428,7 +554,7 @@ static int32_t execute(struct kui_retail_gd *s) {
 #endif
         uint32_t done = s->completed_bytes / s->sector_bytes;
         uint32_t n = step_count(s, s->count - done), bytes = n * s->sector_bytes;
-#ifdef KUI_RETAIL_CE
+#if defined(KUI_RETAIL_CE) || KUI_NATIVE_GD_MMU_BUFFERS
         uint32_t at = s->destination + s->completed_bytes;
         uint8_t *out = s->command == KUI_GD_DMAREAD ? dma_guest(s, at, bytes, 2, 1) :
             guest(s, at, bytes, 2, 1);
@@ -437,11 +563,11 @@ static int32_t execute(struct kui_retail_gd *s) {
 #endif
         if(!out) s->error = KUI_GD_ERROR_MEMORY;
         else {
-            ++s->diag.read_steps;
+            DIAG_OBSERVE(++s->diag.read_steps);
             if(s->ops.read(s->ops.context, s->lba + done, n, s->sector_bytes, out))
                 s->error = KUI_GD_ERROR_IO;
             else {
-                s->completed_bytes += bytes; s->diag.sectors_read += n;
+                s->completed_bytes += bytes; DIAG_OBSERVE(s->diag.sectors_read += n);
                 s->position_lba = s->lba + done + n - 1u; s->drive_status = 1;
             }
         }
@@ -503,6 +629,10 @@ static int32_t check(struct kui_retail_gd *s, uint32_t token, uint32_t address) 
     if(!out) return KUI_GD_FAILED;
     if(!token || token != s->token || !s->command) {
         memset(out, 0, 16);
+        /* MAINANA probes CHECK(0) after acknowledging its initialization
+         * request. With no command owned, report idle, not a failed request.
+         * Zero still cannot acknowledge or inspect an active command. */
+        if(!token && !s->command) return KUI_GD_NOT_FOUND;
         if(!token || token != s->token) {
             put32(out, 5u); /* BIOS illegal-request error; never consume the valid handle. */
             return KUI_GD_FAILED;
@@ -517,13 +647,25 @@ static int32_t check(struct kui_retail_gd *s, uint32_t token, uint32_t address) 
     put32(out + 12, !s->pending ? 0u : s->command == KUI_GD_PIOREAD ||
           s->command == KUI_GD_DMAREAD ? 1u : 4u);
 #else
-    put32(out + 8, s->completed_bytes); put32(out + 12, s->pending ? 4u : 0u);
+    uint32_t total=s->completed_bytes;
+#if KUI_NATIVE_GD_LEGACY_STREAM
+    if(s->command==KUI_RETAIL_GD_DMAREAD_LEGACY_STREAM) total+=s->outputs[0];
+#endif
+    put32(out + 8, total); put32(out + 12, s->pending ? 4u : 0u);
 #endif
     int32_t result = s->status;
-    if(!s->pending) s->command = 0;
+    if(!s->pending
+#if KUI_NATIVE_GD_LEGACY_STREAM
+       && !(s->command==KUI_RETAIL_GD_DMAREAD_LEGACY_STREAM &&
+            s->status==KUI_RETAIL_GD_LEGACY_STREAMING)
+#endif
+      ) s->command = 0;
     return result;
 }
 static int32_t datatype(struct kui_retail_gd *s, uint32_t address) {
+#if KUI_NATIVE_GD_LEGACY_STREAM
+    if(s->command==KUI_RETAIL_GD_DMAREAD_LEGACY_STREAM) return -1;
+#endif
     if(s->pending) return -1;
     uint8_t *p = guest(s, address, 16, 4, 0);
     if(!p) return -1;
@@ -539,6 +681,83 @@ static int32_t datatype(struct kui_retail_gd *s, uint32_t address) {
     s->sector_part = part; s->track_type = type; s->sector_bytes = bytes;
     return 0;
 }
+#if KUI_NATIVE_GD_DMA_STREAM
+/* Native command38 uses the existing service words, without CE's extra
+ * queue or staging allocation. total is cumulative request bytes, while
+ * outputs[0] owns only the current physical DMA piece. */
+void kui_retail_gd_native_dma_progress(struct kui_retail_gd *s,uint32_t total,uint32_t error) {
+#if KUI_NATIVE_GD_PIO_STREAM
+    const int pio=s->command==KUI_RETAIL_GD_PIOREAD_STREAM;
+    if(!s->pending || (!pio && s->command!=KUI_RETAIL_GD_DMAREAD_STREAM))return;
+#else
+    if(!s->pending || s->command!=KUI_RETAIL_GD_DMAREAD_STREAM)return;
+#endif
+    if(total>s->completed_bytes && total-s->completed_bytes<=s->outputs[0]) {
+        uint32_t n=total-s->completed_bytes;
+        s->completed_bytes=total;s->destination+=n;s->outputs[0]-=n;
+        uint32_t after=total/s->sector_bytes;
+        if(after)s->position_lba=s->lba+after-1u;
+        s->drive_status=1;
+#if KUI_NATIVE_GD_PIO_STREAM
+        if(!s->outputs[0]) {
+            if(pio) {s->callback_due=1;s->outputs[3]|=KUI_RETAIL_GD_IRQ_DRIVE;}
+            else
+            s->outputs[3]|=KUI_RETAIL_GD_IRQ_DMA_END;
+        }
+#else
+        if(!s->outputs[0])s->outputs[3]|=KUI_RETAIL_GD_IRQ_DMA_END;
+#endif
+    }
+    if(error)s->error=error;
+    else if(s->completed_bytes<s->request_bytes)return;
+    s->status=s->error?KUI_GD_FAILED:KUI_GD_COMPLETED;
+    s->pending=0;s->outputs[0]=0;s->diag.last_error=s->error;
+    s->outputs[3]|=KUI_RETAIL_GD_IRQ_DRIVE;
+#if KUI_NATIVE_GD_PIO_STREAM
+    if(s->error) {
+        if(pio)s->callback_due=1;
+        else
+        s->outputs[3]|=KUI_RETAIL_GD_IRQ_DMA_END;
+    }
+#else
+    if(s->error)s->outputs[3]|=KUI_RETAIL_GD_IRQ_DMA_END;
+#endif
+}
+uint32_t kui_retail_gd_native_dma_events(struct kui_retail_gd *s) {
+    if(s->command!=KUI_RETAIL_GD_DMAREAD_STREAM
+#if KUI_NATIVE_GD_PIO_STREAM
+       && s->command!=KUI_RETAIL_GD_PIOREAD_STREAM
+#endif
+      )return 0;
+    uint32_t raised=s->outputs[3];s->outputs[3]=0;return raised;
+}
+#endif
+#if KUI_NATIVE_GD_PIO_STREAM
+/* PIO pieces complete synchronously in the adapter. An outstanding piece
+ * offers zero bytes, preventing overlap before its writer has returned. */
+static int32_t native_pio_check(struct kui_retail_gd *s,uint32_t token,uint32_t address) {
+    uint8_t *out=guest(s,address,4u,4u,1);
+    if(!out)return -1;
+    uint32_t bytes=0;
+    if(token && token==s->token && s->pending &&
+       s->command==KUI_RETAIL_GD_PIOREAD_STREAM && !s->outputs[0]) {
+        bytes=KUI_RETAIL_GD_STEP_SECTORS*s->sector_bytes;
+        if(bytes>s->request_bytes-s->completed_bytes)bytes=s->request_bytes-s->completed_bytes;
+    }
+    put32(out,bytes);return 0;
+}
+static int32_t native_pio_transfer(struct kui_retail_gd *s,uint32_t token,uint32_t address) {
+    if(!token || token!=s->token || !s->pending ||
+       s->command!=KUI_RETAIL_GD_PIOREAD_STREAM || s->outputs[0])return -1;
+    const uint8_t *p=guest(s,address,8u,4u,0);
+    if(!p)return -1;
+    uint32_t destination=get32(p),bytes=get32(p+4u);
+    if(!bytes || bytes>KUI_RETAIL_GD_STEP_SECTORS*s->sector_bytes ||
+       bytes>s->request_bytes-s->completed_bytes ||
+       !guest(s,destination,bytes,2u,KUI_RETAIL_MAP_VALIDATE))return -1;
+    s->destination=destination;s->outputs[0]=bytes;return 0;
+}
+#endif
 #if defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_GD_ASYNC)
 /* One step of the stream's current DMA transfer: the next 4 KiB (two
  * sectors' bytes) or what is left of it, from the user data after the bytes
@@ -555,14 +774,14 @@ static void stream_step(struct kui_retail_gd *s) {
     if(n > s->xfer_left) n = s->xfer_left;
     uint8_t *out = dma_guest(s, s->xfer_destination, n, 32, 1);
     uint32_t before = s->completed_bytes / s->sector_bytes;
-    ++s->diag.read_steps;
+    DIAG_OBSERVE(++s->diag.read_steps);
     if(!out) s->error = KUI_GD_ERROR_MEMORY;
     else if(s->read_part(s->ops.context, s->lba, s->sector_bytes, s->completed_bytes, n, out))
         s->error = KUI_GD_ERROR_IO;
     else {
         s->completed_bytes += n; s->xfer_destination += n; s->xfer_left -= n;
         uint32_t after = s->completed_bytes / s->sector_bytes;
-        s->diag.sectors_read += after - before;
+        DIAG_OBSERVE(s->diag.sectors_read += after - before);
         if(after) s->position_lba = s->lba + after - 1u;
         s->drive_status = 1;
     }
@@ -586,7 +805,7 @@ static int32_t transfer(struct kui_retail_gd *s, uint32_t token, uint32_t addres
     const uint8_t *p = guest(s, address, 8, 4, 0);
     if(!p) return -1;
     uint32_t destination = get32(p), bytes = get32(p + 4);
-    s->diag.last_destination = destination;
+    DIAG_OBSERVE(s->diag.last_destination = destination);
     if(!bytes || (bytes & 31u) || bytes > s->request_bytes - s->completed_bytes ||
        !dma_guest(s, destination, bytes, 32, KUI_RETAIL_MAP_VALIDATE)) return -1;
     s->xfer_destination = destination; s->xfer_left = bytes;
@@ -641,19 +860,19 @@ static int32_t pio_transfer(struct kui_retail_gd *s, uint32_t token, uint32_t ad
     const uint8_t *p = guest(s, address, 8, 4, 0);
     if(!p) return -1;
     uint32_t destination = get32(p), bytes = get32(p + 4);
-    s->diag.last_destination = destination;
+    DIAG_OBSERVE(s->diag.last_destination = destination);
     uint32_t offered = KUI_RETAIL_GD_STEP_SECTORS * s->sector_bytes;
     if(!bytes || bytes > offered || bytes > s->request_bytes - s->completed_bytes) return -1;
     uint8_t *out = guest(s, destination, bytes, 2, 1);
     if(!out) return -1;
     uint32_t before = s->completed_bytes / s->sector_bytes;
-    ++s->diag.read_steps;
+    DIAG_OBSERVE(++s->diag.read_steps);
     if(s->read_part(s->ops.context, s->lba, s->sector_bytes, s->completed_bytes, bytes, out))
         s->error = KUI_GD_ERROR_IO;
     else {
         s->completed_bytes += bytes;
         uint32_t after = s->completed_bytes / s->sector_bytes;
-        s->diag.sectors_read += after - before;
+        DIAG_OBSERVE(s->diag.sectors_read += after - before);
         if(after) s->position_lba = s->lba + after - 1u;
         s->drive_status = 1;
     }
@@ -674,9 +893,9 @@ void kui_retail_gd_stream_progress(struct kui_retail_gd *s, uint32_t total, uint
         uint32_t n = total - s->completed_bytes, before = s->completed_bytes / s->sector_bytes;
         s->completed_bytes = total; s->xfer_destination += n; s->xfer_left -= n;
         uint32_t after = total / s->sector_bytes;
-        s->diag.sectors_read += after - before;
+        DIAG_OBSERVE(s->diag.sectors_read += after - before);
         if(after) s->position_lba = s->lba + after - 1u;
-        s->drive_status = 1; ++s->diag.read_steps;
+        s->drive_status = 1; DIAG_OBSERVE(++s->diag.read_steps);
         if(!s->xfer_left) s->interrupts |= KUI_RETAIL_GD_IRQ_DMA_END;
     }
     if(error) s->error = error;
@@ -687,18 +906,26 @@ void kui_retail_gd_stream_progress(struct kui_retail_gd *s, uint32_t total, uint
 }
 #endif
 void kui_retail_gd_progress(struct kui_retail_gd *s, uint32_t sectors, uint32_t error) {
-    if(!s->pending || (s->command != KUI_GD_PIOREAD && s->command != KUI_GD_DMAREAD)) return;
+    if(!s->pending || (s->command != KUI_GD_PIOREAD && s->command != KUI_GD_DMAREAD
+#if KUI_NATIVE_GD_LEGACY_STREAM
+       && s->command!=KUI_RETAIL_GD_DMAREAD_LEGACY_STREAM
+#endif
+      )) return;
     uint32_t done = s->completed_bytes / s->sector_bytes;
     if(sectors > s->count) sectors = s->count;
     if(sectors > done) {
         s->completed_bytes = sectors * s->sector_bytes;
-        s->diag.sectors_read += sectors - done;
-        ++s->diag.read_steps;
+        DIAG_OBSERVE(s->diag.sectors_read += sectors - done; ++s->diag.read_steps);
         s->position_lba = s->lba + sectors - 1u; s->drive_status = 1;
     }
     if(error) s->error = error;
     else if(sectors < s->count) return;
     s->status = s->error ? KUI_GD_FAILED : KUI_GD_COMPLETED;
+#if KUI_NATIVE_GD_LEGACY_STREAM
+    if(s->command==KUI_RETAIL_GD_DMAREAD_LEGACY_STREAM && !s->error) {
+        s->lba+=s->count;s->count=0;s->status=KUI_RETAIL_GD_LEGACY_STREAMING;
+    }
+#endif
     s->pending = 0;
     s->diag.last_error = s->error;
 #ifdef KUI_RETAIL_CE
@@ -714,11 +941,113 @@ void kui_retail_gd_progress_epoch(struct kui_retail_gd *s,uint32_t generation,
 }
 #endif
 #endif
+#if KUI_NATIVE_GD_LEGACY_STREAM
+/* Existing fields are reused only while command28 owns the token:
+ * outputs[0] is bytes in prior pieces; completed_bytes is this piece's
+ * delivered bytes; count is the active piece's sectors, zero between them.
+ * request_bytes remains the finite whole-stream byte limit. */
+static int legacy_owned(const struct kui_retail_gd *s,uint32_t token) {
+    return token && token==s->token && s->command==KUI_RETAIL_GD_DMAREAD_LEGACY_STREAM && !s->error;
+}
+#if KUI_NATIVE_GD_DMA_STREAM
+/* Share the packet and mapping checks while keeping the two byte-cursor
+ * protocols separate. A failed38 remains pollable until CHECK acknowledges
+ * it; a failed28 retains its original FN7 refusal. */
+static int native_stream_owned(const struct kui_retail_gd *s,uint32_t token) {
+    return token && token==s->token &&
+        (s->command==KUI_RETAIL_GD_DMAREAD_STREAM ||
+         (s->command==KUI_RETAIL_GD_DMAREAD_LEGACY_STREAM && !s->error));
+}
+#if KUI_NATIVE_GD_MMU_BUFFERS
+void __attribute__((weak)) kui_retail_gd_native_transfer_refused(
+    uint32_t reason,uint32_t destination,uint32_t bytes) {
+    (void)reason;(void)destination;(void)bytes;
+}
+#endif
+static int32_t legacy_transfer(struct kui_retail_gd *s,uint32_t token,uint32_t address) {
+    const int extended=s->command==KUI_RETAIL_GD_DMAREAD_STREAM;
+    uint32_t destination=0u,bytes=0u,sectors=0u;
+#if KUI_NATIVE_GD_MMU_BUFFERS
+    uint32_t reject_reason;
+#define TRANSFER_REFUSE(reason) do {reject_reason=(reason);goto refused;} while(0)
+#else
+#define TRANSFER_REFUSE(reason) return -1
+#endif
+    if(!native_stream_owned(s,token))TRANSFER_REFUSE(KUI_RETAIL_GD_TRANSFER_OWNERSHIP);
+    if(extended?(!s->pending || s->outputs[0]):
+       (s->pending || s->count || s->status!=KUI_RETAIL_GD_LEGACY_STREAMING))
+        TRANSFER_REFUSE(KUI_RETAIL_GD_TRANSFER_STATE);
+    const uint8_t *p=guest(s,address,8u,4u,0);
+    if(!p)TRANSFER_REFUSE(KUI_RETAIL_GD_TRANSFER_PACKET);
+    destination=get32(p);bytes=get32(p+4u);
+    uint32_t done=s->completed_bytes+(extended?0u:s->outputs[0]);
+    if(!bytes)TRANSFER_REFUSE(KUI_RETAIL_GD_TRANSFER_EMPTY);
+    if(done>s->request_bytes)TRANSFER_REFUSE(KUI_RETAIL_GD_TRANSFER_CURSOR);
+    if(bytes>s->request_bytes-done)TRANSFER_REFUSE(KUI_RETAIL_GD_TRANSFER_REMAINING);
+    if(extended) {if(bytes&31u)TRANSFER_REFUSE(KUI_RETAIL_GD_TRANSFER_BYTE_ALIGNMENT);}
+    else {
+        sectors=bytes/s->sector_bytes;
+        if(sectors*s->sector_bytes!=bytes)TRANSFER_REFUSE(KUI_RETAIL_GD_TRANSFER_SECTOR_ALIGNMENT);
+    }
+    if(!dma_guest(s,destination,bytes,32u,KUI_RETAIL_MAP_VALIDATE))
+        TRANSFER_REFUSE(KUI_RETAIL_GD_TRANSFER_DESTINATION);
+    if(extended)s->outputs[0]=bytes;
+    else {s->outputs[0]=done;s->completed_bytes=0;s->count=sectors;}
+    s->destination=destination;s->pending=1;return 0;
+#if KUI_NATIVE_GD_MMU_BUFFERS
+refused:
+    kui_retail_gd_native_transfer_refused(reject_reason,destination,bytes);
+    return -1;
+#endif
+#undef TRANSFER_REFUSE
+}
+static int32_t legacy_dma_check(struct kui_retail_gd *s,uint32_t token,uint32_t address) {
+    if(!native_stream_owned(s,token))return -1;
+    const int extended=s->command==KUI_RETAIL_GD_DMAREAD_STREAM;
+    uint32_t left=extended?s->outputs[0]:s->pending?s->count*s->sector_bytes-s->completed_bytes:0u;
+    if(address || extended) {
+        uint8_t *out=guest(s,address,4u,4u,1);
+        if(!out)return -1;
+        put32(out,left);
+    }
+    return extended?(left?1:0):(s->pending?1:0);
+}
+#else
+static int32_t legacy_transfer(struct kui_retail_gd *s,uint32_t token,uint32_t address) {
+    if(!legacy_owned(s,token) || s->pending || s->count ||
+       s->status!=KUI_RETAIL_GD_LEGACY_STREAMING)return -1;
+    const uint8_t *p=guest(s,address,8u,4u,0);
+    if(!p)return -1;
+    uint32_t destination=get32(p),bytes=get32(p+4u);
+    uint32_t done=s->outputs[0]+s->completed_bytes;
+    if(!bytes || done>s->request_bytes || bytes>s->request_bytes-done)return -1;
+    uint32_t sectors=bytes/s->sector_bytes;
+    if(sectors*s->sector_bytes!=bytes ||
+#if KUI_NATIVE_GD_MMU_BUFFERS
+       !dma_guest(s,destination,bytes,32u,KUI_RETAIL_MAP_VALIDATE))return -1;
+#else
+       !guest(s,destination,bytes,32u,KUI_RETAIL_MAP_VALIDATE))return -1;
+#endif
+    s->outputs[0]=done;s->completed_bytes=0;s->count=sectors;
+    s->destination=destination;s->pending=1;
+    return 0;
+}
+static int32_t legacy_dma_check(struct kui_retail_gd *s,uint32_t token,uint32_t address) {
+    if(!legacy_owned(s,token))return -1;
+    if(address) {
+        uint8_t *out=guest(s,address,4u,4u,1);
+        if(!out)return -1;
+        put32(out,s->pending?s->count*s->sector_bytes-s->completed_bytes:0u);
+    }
+    return s->pending?1:0;
+}
+#endif
+#endif
 int32_t kui_retail_gd_dispatch(struct kui_retail_gd *s, uint32_t r4,
                               uint32_t r5, uint32_t r6, uint32_t r7) {
     if(!s || !s->initialized) return -1;
-    ++s->diag.calls; s->diag.last_function = r7;
-    if(r7 == KUI_GD_REQUEST) s->diag.last_command = r4;
+    DIAG_OBSERVE(++s->diag.calls; s->diag.last_function = r7;
+        if(r7 == KUI_GD_REQUEST) s->diag.last_command = r4);
     int32_t result = -1;
     if(r6) {
         if(r7 == KUI_GD_REQUEST) {
@@ -757,7 +1086,25 @@ int32_t kui_retail_gd_dispatch(struct kui_retail_gd *s, uint32_t r4,
         break;
     }
     case KUI_GD_ABORT:
+#if KUI_NATIVE_GD_LEGACY_STREAM
+        if(legacy_owned(s,r4)) {
+            s->pending=0;s->count=0;s->status=KUI_GD_COMPLETED;result=0;
+            break;
+        }
+#endif
         if(r4 && s->pending && r4 == s->token) {
+#if KUI_NATIVE_GD_DMA_STREAM
+            if(s->command==KUI_RETAIL_GD_DMAREAD_STREAM) {
+                s->outputs[0]=0;
+                s->outputs[3]|=KUI_RETAIL_GD_IRQ_DMA_END|KUI_RETAIL_GD_IRQ_DRIVE;
+            }
+#endif
+#if KUI_NATIVE_GD_PIO_STREAM
+            if(s->command==KUI_RETAIL_GD_PIOREAD_STREAM) {
+                s->outputs[0]=0;s->callback_due=0;
+                s->outputs[3]|=KUI_RETAIL_GD_IRQ_DRIVE;
+            }
+#endif
 #ifdef KUI_RETAIL_CE
             s->xfer_left = 0;
 #endif
@@ -765,8 +1112,16 @@ int32_t kui_retail_gd_dispatch(struct kui_retail_gd *s, uint32_t r4,
             s->diag.last_error = s->error; s->status = KUI_GD_FAILED; result = 0;
         }
         break;
-#ifdef KUI_RETAIL_CE
+#if KUI_NATIVE_GD_LEGACY_STREAM
+    case KUI_GD_DMA_TRANSFER: result=legacy_transfer(s,r4,r5);break;
+    case KUI_GD_DMA_CHECK: result=legacy_dma_check(s,r4,r5);break;
+#endif
+#if defined(KUI_RETAIL_CE) || KUI_NATIVE_GD_PIO_STREAM
     case KUI_GD_PIO_CALLBACK: /* Function and its argument; 0 removes it. */
+#if KUI_NATIVE_GD_PIO_STREAM
+        if(r4 && !guest(s,r4,2u,2u,0))break;
+        if(!r4)s->callback_due=0;
+#endif
         s->pio_callback = r4; s->pio_argument = r5; result = 0;
         break;
     case KUI_GD_DMA_CALLBACK:
@@ -775,6 +1130,10 @@ int32_t kui_retail_gd_dispatch(struct kui_retail_gd *s, uint32_t r4,
 #endif
         if(!r4) result = 0;
         break;
+#if KUI_NATIVE_GD_PIO_STREAM
+    case KUI_GD_PIO_TRANSFER: result=native_pio_transfer(s,r4,r5);break;
+    case KUI_GD_PIO_CHECK: result=native_pio_check(s,r4,r5);break;
+#endif
 #ifdef KUI_RETAIL_CE
     case KUI_GD_DMA_TRANSFER: result = transfer(s, r4, r5); break;
     case KUI_GD_PIO_TRANSFER: result = pio_transfer(s, r4, r5); break;
@@ -785,6 +1144,6 @@ int32_t kui_retail_gd_dispatch(struct kui_retail_gd *s, uint32_t r4,
     }
 done:
     s->diag.last_result = result;
-    if(result < 0 || (r7 == KUI_GD_REQUEST && result == 0)) ++s->diag.rejected;
+    DIAG_OBSERVE(if(result < 0 || (r7 == KUI_GD_REQUEST && result == 0)) ++s->diag.rejected);
     return result;
 }

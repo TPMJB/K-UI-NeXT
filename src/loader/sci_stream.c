@@ -44,6 +44,11 @@
 #define TEND 0x04u
 #define DMA_BYTES 513u
 #define AREA_BYTES KUI_SCI_STREAM_AREA_BYTES
+#if KUI_NATIVE_GD_DMA_STREAM
+#define STREAM_OBSERVE(...) do {} while(0)
+#else
+#define STREAM_OBSERVE(...) __VA_ARGS__
+#endif
 
 #ifdef KUI_SCI_STREAM_TEST
 extern uint32_t kui_sci_stream_test_read(uint32_t address, unsigned width);
@@ -266,7 +271,7 @@ static enum kui_sci_stream_result token(uint32_t limit) {
         if(value != 0xff) break;
     }
 #endif
-    ++s.stats.token_errors;
+    STREAM_OBSERVE(++s.stats.token_errors);
     return healthy() ? KUI_SCI_STREAM_TOKEN : KUI_SCI_STREAM_RESET;
 }
 /* R1, or 0xff if none came within the response window. */
@@ -315,7 +320,7 @@ static enum kui_sci_stream_result start(uint32_t lba, uint32_t limit) {
     for(uint32_t n = 0; byte(0xff) != 0xffu;)
         if(++n >= START_IDLE_LIMIT || !healthy()) return KUI_SCI_STREAM_COMMAND;
     s.state = LOST; /* from here on, CMD18 may be running */
-    ++s.stats.starts;
+    STREAM_OBSERVE(++s.stats.starts);
     uint8_t r1 = command(packet, false);
     if(!healthy()) return KUI_SCI_STREAM_RESET;
 #if KUI_SCI_STREAM_TOKEN_SLICED
@@ -506,7 +511,7 @@ static enum kui_sci_stream_result finish(bool later) {
     enum kui_sci_stream_result result = handoff(status & ORER);
     if(result != KUI_SCI_STREAM_OK) return result;
     if(!ours) {
-        ++s.stats.foreign;
+        STREAM_OBSERVE(++s.stats.foreign);
         return KUI_SCI_STREAM_BUSY;
     }
     if(count || !(control & 2u) || !(status & RDRF)) {
@@ -532,9 +537,9 @@ static enum kui_sci_stream_result finish(bool later) {
             s.lost[area] = (uint16_t)(lost + 1u);
             s.hold[area] = (uint8_t)held;
             s.held[area] = tail;
-            ++s.stats.repaired;
+            STREAM_OBSERVE(++s.stats.repaired);
             if(later) {
-                ++s.stats.deferred;
+                STREAM_OBSERVE(++s.stats.deferred);
                 s.state = RESUME;
                 return KUI_SCI_STREAM_PENDING;
             }
@@ -542,7 +547,7 @@ static enum kui_sci_stream_result finish(bool later) {
             result = start_dma(area, lost + 1u);
             return result == KUI_SCI_STREAM_OK ? KUI_SCI_STREAM_PENDING : result;
         }
-        ++s.stats.overruns;
+        STREAM_OBSERVE(++s.stats.overruns);
         return KUI_SCI_STREAM_OVERRUN;
     }
     s.ready[area] = 1;
@@ -550,7 +555,7 @@ static enum kui_sci_stream_result finish(bool later) {
     s.arrived = s.position;
     s.rdr[area] = tail;
     s.state = PAUSED;
-    ++s.stats.blocks;
+    STREAM_OBSERVE(++s.stats.blocks);
     return KUI_SCI_STREAM_OK;
 }
 enum kui_sci_stream_result kui_sci_stream_poll(bool interrupt) {
@@ -617,7 +622,7 @@ const uint8_t *kui_sci_stream_take(uint32_t lba, enum kui_sci_stream_result *res
         if(crc != sent && lost) {
             /* The gap byte (0xff) or the next token (0xfe) where the second
              * CRC byte belongs: the resumed reception ran a byte ahead. */
-            if((low | 1u) == 0xffu) ++s.stats.ahead;
+            if((low | 1u) == 0xffu) STREAM_OBSERVE(++s.stats.ahead);
             else {
                 int x = rebuild((uint32_t)(crc ^ sent), 512u - lost);
                 if(x >= 0) {area[lost - 1u] = (uint8_t)x; crc = sent;}
@@ -625,7 +630,7 @@ const uint8_t *kui_sci_stream_take(uint32_t lba, enum kui_sci_stream_result *res
             }
         }
         if(crc != sent) {
-            ++s.stats.crc_errors;
+            STREAM_OBSERVE(++s.stats.crc_errors);
             *result = KUI_SCI_STREAM_CRC;
             return NULL;
         }
@@ -635,7 +640,7 @@ const uint8_t *kui_sci_stream_take(uint32_t lba, enum kui_sci_stream_result *res
         return area;
     }
     if(s.kept && s.kept_lba == lba) {
-        ++s.stats.kept;
+        STREAM_OBSERVE(++s.stats.kept);
         *result = KUI_SCI_STREAM_OK;
         return s.area[s.kept - 1u];
     }

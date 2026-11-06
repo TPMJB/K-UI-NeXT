@@ -256,7 +256,7 @@ int kui_vmu_game_candidates_visit(const struct kui_vmu_game_candidates_storage *
     for(unsigned i=0;i<candidate_count;i++) {
         struct kui_vmu_game_candidate_target target={.pair=candidate_saved[i].pair};
         memcpy(target.identity,candidate_saved[i].identity,16u);
-        if(!visit(context,candidate_saved[i].key,&target,false)) return KUI_VMU_GAME_CANDIDATES_CANCELLED;
+        if(!visit(context,candidate_saved[i].key,target.pair?&target:NULL,false)) return KUI_VMU_GAME_CANDIDATES_CANCELLED;
     }
     return candidate_count?KUI_VMU_GAME_CANDIDATES_OK:KUI_VMU_GAME_CANDIDATES_ABSENT;
 }
@@ -648,6 +648,12 @@ int main(void) {
     strcpy(request.card_path,"0:/KUI/vmu-test/p0042/card.vmd");unsigned previous_visits=candidate_visits;
     run(KUI_VMU_WIZARD_USE_CARD);
     CHECK(!result.status.errors && result.total==2 && candidate_visits==previous_visits+1);
+    CHECK(!strcmp(result.games[0].title,"Gamma") && !strcmp(result.games[1].title,"Unknown title: MISSING-1"));
+    /* A deleted product remains covered without any target. It must suppress
+     * its old v1 assignment and must not dereference the NULL visitor target. */
+    candidate_saved[0].pair=0;memset(candidate_saved[0].identity,0,16u);
+    run(KUI_VMU_WIZARD_USE_CARD);
+    CHECK(!result.status.errors && result.total==2);
     CHECK(!strcmp(result.games[0].title,"Gamma") && !strcmp(result.games[1].title,"Unknown title: MISSING-1"));
     candidate_visit_error=true;run(KUI_VMU_WIZARD_USE_CARD);candidate_visit_error=false;
     CHECK(result.status.errors && !result.total);candidate_count=0;

@@ -17,6 +17,10 @@ enum kui_games_storage_result {
  * session another mount or unmount invalidated is replaced by a new one. A
  * mount failure disconnects again; nothing is left open on failure. */
 enum kui_games_storage_result kui_games_storage_open(kui_log_fn log);
+/* Explicit scan boundary, with no open files/directories: discard a still
+ * owned warm mount and reopen. A cleared FatFs object already belonged to a
+ * completed external job, so do not disconnect that stale session twice. */
+enum kui_games_storage_result kui_games_storage_refresh(kui_log_fn log);
 /* End one job. The session stays open when held and `keep` (the job met no
  * storage error; a stop is not an error); otherwise unmount and disconnect.
  * False only when an unmount this call performed failed. */

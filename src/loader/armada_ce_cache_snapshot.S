@@ -247,7 +247,13 @@ C(kui_armada_ce_cache_snapshot):
 .Ljob: .long C(kui_armada_ce_cache_snapshot_job)
 .Lp1_low: .long 0x8c010000
 .Lp1_high: .long 0x8cffffe0
+#if KUI_SMASH_SWIRL_VMU
 .Lprivate_low: .long KUI_ARMADA_CE_VMU_RESERVE_BEGIN
+#elif KUI_VC2_VMU_PERSIST
+.Lprivate_low: .long 0x8cfc0000
+#else
+.Lprivate_low: .long KUI_ARMADA_CE_VMU_RESERVE_BEGIN
+#endif
 .Lprivate_high: .long 0x8cfd0000
 .Loffset_mask: .long 0x00000fff
 .Lpage_mask: .long 0xfffff000

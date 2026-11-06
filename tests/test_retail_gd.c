@@ -539,7 +539,12 @@ static void prepared_initialization(void) {
         kui_retail_gd_init_validated(&expected,m.slots,m.track_count,&ops,BEGIN,END);
         kui_retail_gd_set_disc_type(&expected,cd?0x10:0x80,m.session_lba);
         memset(&service,0,sizeof(service)); /* The resident's _start contract. */
-        kui_retail_gd_init_prepared(&service,&m,&ops,BEGIN,END);
+        struct kui_gd_ops cold_ops=ops;
+        kui_retail_gd_init_prepared(&service,&m,&cold_ops,BEGIN,END);
+        /* The VC2 cold callback table is later overwritten by SCI receive.
+         * Its owned service copy must still service the following GD calls. */
+        memset(&cold_ops,0xa5,sizeof(cold_ops));
+        CHECK(!memcmp(&service.ops,&ops,sizeof(ops)));
         CHECK(!memcmp(&service,&expected,sizeof(service)));
         CHECK(call(KUI_GD_DRIVE,STATUS,0)==0 && get(STATUS+4)==(cd?0x10u:0x80u));
         CHECK(call(KUI_GD_INIT,0,0)==0 && call(KUI_GD_RESET,0,0)==0);
@@ -643,6 +648,23 @@ static void subcode_query(void) {
             CHECK(call(KUI_GD_CHECK,(uint32_t)token,STATUS)==KUI_GD_NOT_FOUND);
             if(!short_read) CHECK(ram[dest-BEGIN+bytes]==0xa5);
         }
+    }
+    /* Every raw reply length is the same independently authored prefix.
+     * Also overwrite the original parameter packet: EXEC must use the
+     * request already captured by REQUEST, with no output before EXEC and
+     * no byte written outside the accepted output span. */
+    for(uint32_t bytes=1u;bytes<=sizeof(raw);++bytes) for(unsigned overlap=0;overlap<2;overlap++) {
+        uint32_t dest=overlap?PARAM:OUTPUT+1u;uint8_t before[sizeof(raw)+2u];
+        memset(ram+dest-BEGIN-1u,0xa5,bytes+2u);
+        put(PARAM,0u);put(PARAM+4u,bytes);put(PARAM+8u,LOW_ALIAS(dest));
+        memcpy(before,ram+dest-BEGIN-1u,bytes+2u);
+        int32_t token=call(KUI_GD_REQUEST,KUI_RETAIL_GD_GETSCD,PARAM);
+        CHECK(token>0 && !memcmp(before,ram+dest-BEGIN-1u,bytes+2u));
+        CHECK(call(KUI_GD_EXEC,0,0)==0);
+        CHECK(!memcmp(ram+dest-BEGIN,raw,bytes));
+        CHECK(ram[dest-BEGIN-1u]==before[0] && ram[dest-BEGIN+bytes]==before[bytes+1u]);
+        CHECK(call(KUI_GD_CHECK,(uint32_t)token,STATUS)==KUI_GD_COMPLETED && get(STATUS+8u)==bytes);
+        CHECK(call(KUI_GD_CHECK,(uint32_t)token,STATUS)==KUI_GD_NOT_FOUND);
     }
     put(PARAM,1);put(PARAM+4,14);put(PARAM+8,END-13);
     CHECK(call(KUI_GD_REQUEST,KUI_RETAIL_GD_GETSCD,PARAM)==0);

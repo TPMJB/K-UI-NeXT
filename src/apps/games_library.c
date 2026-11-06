@@ -366,6 +366,28 @@ static int member_order(const void *left,const void *right) {
     if(am->group!=bm->group)return am->group<bm->group?-1:1;
     return am->disc<bm->disc?-1:am->disc>bm->disc?1:0;
 }
+/* A rip may leave disc one unnumbered and mark only later discs as D2.
+ * Names select the bounded header-read candidates; only their real IP fields
+ * establish the disc numbers and release. Keep the original base for keys. */
+static bool group_candidate_base(const char *name,char base[KUI_DEST_NAME_CAP],unsigned *disc) {
+    *disc=0;
+    return kui_games_group_parse(name,base,disc) || kui_games_group_capture_base(name,base);
+}
+static bool group_family_equal(const char *a,const char *b) {
+    while(*a && *b) {
+        unsigned char x=(unsigned char)*a++,y=(unsigned char)*b++;
+        if(x=='_')x=' ';
+        if(y=='_')y=' ';
+        if(x>='A' && x<='Z')x+='a'-'A';
+        if(y>='A' && y<='Z')y+='a'-'A';
+        if(x!=y)return false;
+        if(x==' ') {
+            while(*a==' ' || *a=='_')++a;
+            while(*b==' ' || *b=='_')++b;
+        }
+    }
+    return !*a && !*b;
+}
 static void evidence_key(const char *base,const struct kui_games_group_evidence *e,char key[33]) {
     struct kui_sha256 hash;uint8_t digest[32];static const char domain[]="K-UI capture disc group v1";
     const char *fields[]={base,e->title,e->product,e->version,e->region};
@@ -406,21 +428,36 @@ static bool library_groups(struct library *lib) {
         lib->members[i]=(struct library_member){g+1,disc};++lib->groups[g].count;
     }
     for(unsigned i=0;i<lib->count;i++) {
-        if(lib->members[i].group)continue;
+        unsigned previous_group=lib->members[i].group;
+        if(previous_group && (lib->groups[previous_group-1u].metadata ||
+           lib->groups[previous_group-1u].count!=1u))continue;
         struct kui_games_entry entry;struct kui_games_group_evidence evidence;
         if(!decode_record(lib,i,&entry) || !record_evidence(lib,i,&evidence))return false;
-        char base[KUI_DEST_NAME_CAP],key[33];
-        if(entry.directory || entry.disabled || !evidence.disc || !kui_games_group_capture_base(entry.name,base))continue;
+        char base[KUI_DEST_NAME_CAP],key[33];unsigned named_disc;
+        if(entry.directory || entry.disabled || !evidence.disc ||
+           !group_candidate_base(entry.name,base,&named_disc) ||
+           (named_disc && named_disc!=evidence.disc))continue;
+        if(previous_group) {
+            lib->members[i].group=0;lib->groups[previous_group-1u].count=0;
+            lib->groups[previous_group-1u].valid=false;
+        }
         evidence_key(base,&evidence,key);
-        unsigned g=0;for(;g<lib->group_count;g++)if(lib->groups[g].metadata && fold_equal(base,lib->groups[g].name)) {
+        unsigned g=0;for(;g<lib->group_count;g++)if(lib->groups[g].metadata && group_family_equal(base,lib->groups[g].name)) {
             struct kui_games_group_evidence previous;
             if(!record_evidence(lib,lib->groups[g].representative,&previous))return false;
             if(kui_games_group_evidence_equal(&previous,&evidence))break;
         }
         if(g==lib->group_count) {
+            /* A lone explicit marker reserved one slot above. Reuse that
+             * retired slot so conflicting mixed-name releases stay bounded
+             * by the number of actual catalogue records. */
+            for(g=0;g<lib->group_count;g++)if(!lib->groups[g].count)break;
+            if(g==lib->group_count)++lib->group_count;
+            lib->groups[g]=(struct library_group){0};
             strcpy(lib->groups[g].key,key);strcpy(lib->groups[g].name,base);lib->groups[g].representative=i;
-            lib->groups[g].metadata=lib->groups[g].valid=true;++lib->group_count;
-            for(unsigned j=0;j<g;j++)if(!strcmp(lib->groups[j].key,key))lib->groups[g].valid=lib->groups[j].valid=false;
+            lib->groups[g].metadata=lib->groups[g].valid=true;
+            for(unsigned j=0;j<lib->group_count;j++)if(j!=g && lib->groups[j].count &&
+                !strcmp(lib->groups[j].key,key))lib->groups[g].valid=lib->groups[j].valid=false;
         }
         for(unsigned j=0;j<i;j++)if(lib->members[j].group==g+1 && lib->members[j].disc==evidence.disc)lib->groups[g].valid=false;
         lib->members[i]=(struct library_member){g+1,evidence.disc};++lib->groups[g].count;
@@ -429,13 +466,13 @@ static bool library_groups(struct library *lib) {
     /* Distinct proven releases may share a capture title. Give each actual
      * set a release qualifier; unknown/conflicting singleton rows stay real. */
     for(unsigned i=0;i<lib->group_count;i++)if(lib->groups[i].valid && lib->groups[i].metadata) {
-        struct kui_games_entry representative;char base[KUI_DEST_NAME_CAP];bool qualify=false;
+        struct kui_games_entry representative;char base[KUI_DEST_NAME_CAP];bool qualify=false;unsigned named_disc;
         if(!decode_record(lib,lib->groups[i].representative,&representative) ||
-           !kui_games_group_capture_base(representative.name,base))return false;
+           !group_candidate_base(representative.name,base,&named_disc))return false;
         for(unsigned j=0;j<lib->group_count && !qualify;j++)if(j!=i && lib->groups[j].valid && lib->groups[j].metadata) {
             struct kui_games_entry other;char other_base[KUI_DEST_NAME_CAP];
             if(!decode_record(lib,lib->groups[j].representative,&other))return false;
-            qualify=kui_games_group_capture_base(other.name,other_base) && fold_equal(base,other_base);
+            qualify=group_candidate_base(other.name,other_base,&named_disc) && group_family_equal(base,other_base);
         }
         if(qualify) {
             struct kui_games_group_evidence e;if(!record_evidence(lib,lib->groups[i].representative,&e))return false;
@@ -453,9 +490,9 @@ static bool library_groups(struct library *lib) {
         if(collision)lib->groups[i].label_set=rank;
     }
     for(unsigned i=0;i<lib->group_count;i++)if(lib->groups[i].label_set) {
-            struct kui_games_entry entry;struct kui_games_group_evidence e;char base[KUI_DEST_NAME_CAP],suffix[80];
+            struct kui_games_entry entry;struct kui_games_group_evidence e;char base[KUI_DEST_NAME_CAP],suffix[80];unsigned named_disc;
             if(!decode_record(lib,lib->groups[i].representative,&entry) ||
-               !record_evidence(lib,lib->groups[i].representative,&e) || !kui_games_group_capture_base(entry.name,base))return false;
+               !record_evidence(lib,lib->groups[i].representative,&e) || !group_candidate_base(entry.name,base,&named_disc))return false;
             snprintf(suffix,sizeof(suffix)," [%s %s %s %u discs set %u]",e.region,e.version,e.product,e.total,lib->groups[i].label_set);
             group_label(lib->groups[i].name,base,suffix);
     }
@@ -530,23 +567,26 @@ static bool append_record(struct library *lib,const struct kui_games_entry *entr
 /* Capture's " (2)" suffix is only a collision counter. Read one real IP
  * header for each matching name family before considering it a disc set. */
 static bool build_group_evidence(struct library *lib,kui_log_fn log,kui_cancel_fn cancel) {
-    char (*families)[KUI_DEST_NAME_CAP]=calloc(lib->count?lib->count:1u,sizeof(*families));
+    struct family {char name[KUI_DEST_NAME_CAP];unsigned named_disc;};
+    struct family *families=calloc(lib->count?lib->count:1u,sizeof(*families));
     lib->offsets=calloc(lib->count?lib->count:1u,sizeof(*lib->offsets));
     if(!families || !lib->offsets) {free(families);return false;}
     size_t at=LIBRARY_HEADER+strlen(lib->root);bool ok=true;
     for(unsigned i=0;i<lib->count;i++) {
         lib->offsets[i]=(uint32_t)at;at+=record_bytes(lib,lib->wire+at);
-        struct kui_games_entry entry;char explicit_base[KUI_DEST_NAME_CAP];unsigned disc;
+        struct kui_games_entry entry;
         if(!decode_record(lib,i,&entry)) {ok=false;break;}
-        if(!entry.directory && !entry.disabled && !kui_games_group_parse(entry.name,explicit_base,&disc))
-            (void)kui_games_group_capture_base(entry.name,families[i]);
+        if(!entry.directory && !entry.disabled)
+            (void)group_candidate_base(entry.name,families[i].name,&families[i].named_disc);
     }
     for(unsigned i=0;i<lib->count && ok;i++) {
         if(stopped(cancel)) {ok=false;break;}
-        if(!families[i][0])continue;
-        unsigned matches=0;
-        for(unsigned j=0;j<lib->count;j++)if(families[j][0] && fold_equal(families[i],families[j]))++matches;
-        if(matches<2u)continue;
+        if(!families[i].name[0])continue;
+        unsigned matches=0;bool unnumbered=false;
+        for(unsigned j=0;j<lib->count;j++)if(families[j].name[0] && group_family_equal(families[i].name,families[j].name)) {
+            ++matches;if(!families[j].named_disc)unnumbered=true;
+        }
+        if(matches<2u || !unnumbered)continue;
         struct kui_games_entry entry;if(!decode_record(lib,i,&entry)) {ok=false;break;}
         if(kui_games_storage_open(log)!=KUI_GAMES_STORAGE_OK) {ok=false;break;}
         struct kui_games_group_evidence evidence={0};
@@ -562,20 +602,36 @@ static bool build_group_evidence(struct library *lib,kui_log_fn log,kui_cancel_f
             if(log)log("Disc grouping: %.72s: no usable multi-disc IP header; kept separate",entry.name);
             continue;
         }
+        if(families[i].named_disc && families[i].named_disc!=evidence.disc) {
+            if(log)log("Disc grouping: %.72s: name says disc %u but IP says %u; kept separate",
+                entry.name,families[i].named_disc,evidence.disc);
+            continue;
+        }
         uint8_t *header=lib->wire+lib->offsets[i],*fields=header+record_bytes(lib,header)-GROUP_EVIDENCE_BYTES;
         header[11]=(uint8_t)evidence.disc;header[12]=(uint8_t)evidence.total;
         memcpy(fields,evidence.product,11);memcpy(fields+11,evidence.version,7);memcpy(fields+18,evidence.title,129);memcpy(fields+147,evidence.region,9);
         if(log)log("Disc grouping: %.72s: IP disc %u/%u product %s version %s region %s title %.72s",
             entry.name,evidence.disc,evidence.total,evidence.product,evidence.version,evidence.region,evidence.title);
-        for(unsigned j=0;j<i;j++)if(families[j][0] && fold_equal(families[i],families[j])) {
+        for(unsigned j=0;j<i;j++)if(families[j].name[0] && group_family_equal(families[i].name,families[j].name)) {
             struct kui_games_group_evidence previous;if(!record_evidence(lib,j,&previous)) {ok=false;break;}
             if(!previous.disc || !kui_games_group_evidence_equal(&previous,&evidence)) {
-                if(log)log("Disc grouping: %.72s: incomplete or differing release metadata; separate release bucket",families[i]);
+                if(log)log("Disc grouping: %.72s: incomplete or differing release metadata; separate release bucket",families[i].name);
             } else if(previous.disc==evidence.disc && log)
-                log("Disc grouping: %.72s: duplicate IP disc %u; kept separate",families[i],evidence.disc);
+                log("Disc grouping: %.72s: duplicate IP disc %u; kept separate",families[i].name,evidence.disc);
         }
     }
     free(families);free(lib->offsets);lib->offsets=NULL;return ok;
+}
+/* Keep empty rip remnants out of the saved launcher after a successful
+ * enumeration. They remain reachable in the raw file browser. */
+static bool folder_member(void *ctx,const char *name,bool directory) {
+    (void)name;(void)directory;*(bool *)ctx=true;return true;
+}
+static bool folder_has_members(const char *root,bool *present,kui_log_fn log,kui_cancel_fn cancel) {
+    *present=false;
+    if(kui_games_storage_open(log)!=KUI_GAMES_STORAGE_OK)return false;
+    bool ok=kui_games_visit_images(root,folder_member,present,cancel);
+    return kui_games_storage_done(ok || stopped(cancel)) && ok;
 }
 static bool build_catalogue(struct library *out,const char *root,const uint8_t identity[32],uint64_t epoch,kui_log_fn log,kui_cancel_fn cancel) {
     memset(out,0,sizeof(*out));out->version=4;strcpy(out->root,root);memcpy(out->identity,identity,32);out->epoch=epoch;
@@ -592,6 +648,11 @@ static bool build_catalogue(struct library *out,const char *root,const uint8_t i
         (void)kui_games_prefetch_titles(page,log,cancel);
         if(stopped(cancel) || !kui_games_list_rows(root,offset,KUI_GAMES_VIEW_SAVED,page,log,cancel)) {ok=false;break;}
         for(unsigned i=0;i<page->count;i++) {
+            if(page->entries[i].directory && !page->entries[i].disabled) {
+                bool present;
+                if(!folder_has_members(page->entries[i].path,&present,log,cancel)) {ok=false;break;}
+                if(!present)continue;
+            }
             (void)kui_games_cached_region(&page->entries[i],page->entries[i].region);
             if(out->count==LIBRARY_ROWS || !append_record(out,&page->entries[i])) {ok=false;break;}
         }
@@ -668,8 +729,9 @@ bool kui_games_library_scan(const char *root,bool rebuild,kui_log_fn log,kui_can
     char normalized[KUI_DEST_ROOT_CAP];
     if(!root || !kui_destination_normalize(normalized,root) || strcmp(root,normalized) || stopped(cancel))return false;
     (void)ensure_edits(log);
-    free(activity);activity=NULL;activity_attempted=false;
-    if(kui_games_storage_open(log)!=KUI_GAMES_STORAGE_OK)return false;
+    free(activity);activity=NULL;activity_attempted=false;saved.filtered_ready=false;saved.query_ready=false;
+    /* Explicit scans must discard old FAT/directory windows after host edits. */
+    if(kui_games_storage_refresh(log)!=KUI_GAMES_STORAGE_OK)return false;
     uint8_t identity[32];uint64_t epoch=0;unsigned slot=0;bool corrupt=false;
     bool ok=volume_identity(identity);
     if(ok && !epoch_load(identity,&epoch,&slot,&corrupt)) {
@@ -904,21 +966,24 @@ bool kui_games_library_find_query(const char *root,const char *group,const char 
     if(!root || !name || !offset || !kui_destination_normalize(normalized,root) || strcmp(root,normalized) ||
        (group && strlen(group)>32) || filter>=KUI_GAMES_FILTER_COUNT || !kui_destination_name_valid(name) || !ensure_library(root,log,cancel))return false;
     if(!ensure_activity(log) && filter!=KUI_GAMES_FILTER_ALL)return false;
+    struct kui_games_page *page=calloc(1,sizeof(*page));if(!page)return false;
+    bool found=false;
     for(unsigned at=0;at<=LIBRARY_ROWS;at+=KUI_GAMES_ROWS) {
-        struct kui_games_page page={0};if(!fill_page_query(group,at,query,&page,cancel))return false;
-        for(unsigned i=0;i<page.count;i++) {
-            const struct kui_games_entry *entry=&page.entries[i];bool match=fold_equal(entry->name,name);
+        memset(page,0,sizeof(*page));if(!fill_page_query(group,at,query,page,cancel))goto done;
+        for(unsigned i=0;i<page->count;i++) {
+            const struct kui_games_entry *entry=&page->entries[i];bool match=fold_equal(entry->name,name);
             if(!match && (!group || !group[0]) && entry->group[0]) {
                 for(unsigned j=0;j<saved.count;j++)if(active_group(&saved,j)) {
                     unsigned g=active_group(&saved,j);struct kui_games_entry member;
                     if(!strcmp(saved.groups[g-1].key,entry->group) && decode_record(&saved,j,&member) && fold_equal(member.name,name)) {match=true;break;}
                 }
             }
-            if(match) {*offset=at+i;return true;}
+            if(match) {*offset=at+i;found=true;goto done;}
         }
-        if(!page.has_more)break;
+        if(!page->has_more)break;
     }
-    return false;
+done:
+    free(page);return found;
 }
 bool kui_games_library_jump_query(const char *root,const char *group,char letter,const struct kui_games_query *query,unsigned *offset,kui_log_fn log,kui_cancel_fn cancel) {
     if(!offset || (letter!='#' && !(letter>='A' && letter<='Z')))return false;
@@ -1122,7 +1187,10 @@ bool kui_games_library_record_played(const struct kui_games_activity_entry *key,
 }
 bool kui_games_library_session_request(const char *root,const char *path,
     struct kui_native_session_request *out,kui_log_fn log,kui_cancel_fn cancel) {
-    if(!root || !path || !out || stopped(cancel) || !ensure_library(root,log,cancel))return false;
+    char normalized[KUI_DEST_ROOT_CAP];size_t path_bytes=0;
+    if(!root || !path || !out || !kui_destination_normalize(normalized,root) || strcmp(root,normalized))return false;
+    while(path_bytes<KUI_GAMES_FILE_CAP && path[path_bytes])++path_bytes;
+    if(!path_bytes || path_bytes==KUI_GAMES_FILE_CAP || stopped(cancel) || !ensure_library(root,log,cancel))return false;
     struct kui_native_session_request result={0};
     for(unsigned i=0;i<saved.count;i++) {
         struct kui_games_entry selected;
@@ -1133,6 +1201,7 @@ bool kui_games_library_session_request(const char *root,const char *path,
         unsigned group=active_group(&saved,i);
         if(!group) {
             snprintf(result.paths[0],sizeof(result.paths[0]),"%s",path);
+            if(stopped(cancel))return false;
             result.count=1u;*out=result;return true;
         }
         const struct library_group *g=&saved.groups[group-1u];
@@ -1148,12 +1217,13 @@ bool kui_games_library_session_request(const char *root,const char *path,
             snprintf(result.paths[disc],sizeof(result.paths[disc]),"%s",member);
             if(index==i) {result.selected=disc;found=true;}
         }
-        if(!found)return false;
+        if(!found || stopped(cancel))return false;
         result.count=g->count;*out=result;return true;
     }
     /* Non-catalogue launches do not invent a family from names or titles. */
     struct kui_games_activity_entry key;
     if(!kui_games_activity_key(&key,path,""))return false;
     snprintf(result.paths[0],sizeof(result.paths[0]),"%s",path);
+    if(stopped(cancel))return false;
     result.count=1u;*out=result;return true;
 }

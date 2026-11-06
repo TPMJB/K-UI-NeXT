@@ -39,11 +39,18 @@ struct kui_game_metadata {
      * media or malformed flags; metadata inspection can still succeed. */
     bool native_gd, native_cd, windows_ce;
     char title[129], product[11], version[7], region[9], bootfile[17];
+    /* Actual IP device-info ordinal and total, or 0/0 when absent/malformed.
+     * These describe presentation/grouping only, never optical identity. */
+    unsigned disc_number,disc_total;
     /* volume_blocks is the recorded volume size, NOT an absolute end LBA.
      * Multisession writers may exclude the session lead-in from that count. */
     uint32_t session_lba, volume_blocks, root_lba, root_bytes;
     uint32_t boot_lba, boot_bytes, sectors_read;
 };
+/* Parse just the first 256 bytes of a Dreamcast IP header, resetting out.
+ * No filesystem access or executable admission. A recognized header may have
+ * unsupported media/boot flags or unknown disc-number fields. */
+bool kui_game_metadata_ip(const uint8_t ip[256],struct kui_game_metadata *out);
 /* Inspects IP header, volume descriptor(s), bounded root directory and the
  * boot-file extent. No executable is launched and no whole-file hash occurs.
  * Output is reset on entry. Directory lookup supports a single root filename,
@@ -62,6 +69,11 @@ enum kui_game_metadata_status kui_game_metadata_read(
 enum kui_game_metadata_status kui_game_metadata_find(const struct kui_game_metadata_ops *ops,
     struct kui_game_metadata *metadata, const char *name, uint32_t max_bytes,
     uint32_t *lba, uint32_t *bytes);
+/* Same bounded single-component lookup, requiring a directory. The caller may
+ * use its returned extent in a copied metadata record for one further lookup;
+ * neither this function nor find traverses a path or changes the root record. */
+enum kui_game_metadata_status kui_game_metadata_find_directory(const struct kui_game_metadata_ops *,
+    struct kui_game_metadata *,const char *name,uint32_t *lba,uint32_t *bytes);
 const char *kui_game_metadata_status_text(enum kui_game_metadata_status status);
 
 #endif

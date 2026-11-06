@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/vc2-native-engine-host
+HOST_CC ?= cc
+ENGINE_ORIGINALS ?=
+GIN_ORIGINALS ?= ../vc2-runtime-originals
+GIN_RESIDENT ?= build/vc2-ce-vmu-persist/resident-sci.elf
+COMBO_STAGE ?= build/smash-native-menu/stage.elf
+.DEFAULT_GOAL := vc2-native-engine-tests
+ENGINE_FLAGS := -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic \
+ -fsanitize=address,undefined -fno-sanitize-recover=all -fno-pie -no-pie -Iinclude
+ENGINE_SOURCES := tests/test_vmu_native_patch_mixed_pool.c src/core/vmu_native_patch.c \
+ src/core/vmu_native_program.c src/core/vmu_native_resolution_cache.c \
+ src/core/vmu_native_discovery.c src/core/vmu_native_layout.c src/core/vmu_native_runtime.c \
+ src/core/vmu_native_heap.c src/core/vmu_native_exit.c src/core/hash.c src/core/data.c
+.PHONY: vc2-native-engine-tests
+vc2-native-engine-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(ENGINE_FLAGS) $(ENGINE_SOURCES) -o $(BUILD)/test-native-engine
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-native-engine $(ENGINE_ORIGINALS)
+.PHONY: vc2-native-engine-gin-tests
+vc2-native-engine-gin-tests:
+	python3 tests/test_smashpack_native_engine_gin.py --resident $(GIN_RESIDENT) --originals $(GIN_ORIGINALS) --report $(BUILD)/gin-preservation.json
+.PHONY: smash-native-child-tests
+smash-native-child-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(ENGINE_FLAGS) -ffunction-sections -fdata-sections tests/test_smash_native_child.c src/core/smash_native_child.c src/core/retail_image.c src/core/hash.c -Wl,--gc-sections -o $(BUILD)/test-smash-child
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-smash-child "$(GIN_ORIGINALS)"
+
+.PHONY: smash-native-combo-tests
+smash-native-combo-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(ENGINE_FLAGS) -ffunction-sections -fdata-sections tests/test_smash_native_combo.c \
+	 src/core/smash_native_combo.c src/core/smash_native_child.c src/core/vmu_native_discovery.c \
+	 src/core/vmu_native_layout.c src/core/vmu_native_heap.c src/core/vmu_native_exit.c \
+	 src/core/vmu_native_patch.c src/core/hash.c src/core/retail_image.c \
+	 -Wl,--gc-sections -o $(BUILD)/test-smash-combo
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-smash-combo "$(GIN_ORIGINALS)/MDE_US.BIN"
+	python3 tests/test_smash_original_combo_return.py --original-mde "$(GIN_ORIGINALS)/MDE_US.BIN" \
+	 --stage "$(COMBO_STAGE)" --report "$(BUILD)/smash-combo-return-linked.json"
+
+.PHONY: smash-native-vmu-source-tests
+smash-native-vmu-source-tests:
+	python3 tests/test_smash_native_vmu_source.py --startup "$(GIN_ORIGINALS)/MDE_US.BIN" --report $(BUILD)/smash-native-vmu-source.json
+
+.PHONY: smash-native-vmu-probe-tests
+smash-native-vmu-probe-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(ENGINE_FLAGS) tests/test_smash_native_vmu_probe.c src/core/smash_native_vmu_probe.c -o $(BUILD)/test-smash-vmu-probe
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-smash-vmu-probe

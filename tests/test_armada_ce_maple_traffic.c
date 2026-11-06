@@ -3,7 +3,9 @@
 #include <stdio.h>
 #include <string.h>
 #include "kui/armada_ce_maple_traffic.h"
-static const uint32_t TTB=0x8c1458a0u,PROC=0x8c14e8b4u,EXT=0x08030a60u,TX=0x0cfd3000u,RX=0x0cfd1000u;
+static const uint32_t TTB=KUI_CE_MAPLE_CURRENT_PROCESS+0x10u,
+    PROC=KUI_CE_MAPLE_PROCESS_BASE+3u*KUI_CE_MAPLE_PROCESS_STRIDE,
+    EXT=0x08030a60u,TX=0x0cfd3000u,RX=0x0cfd1000u;
 struct fixture {
     struct {uint32_t at,value,visits;} cell[128];
     unsigned cells,calls,p1,cache,p2,fail,mutate,mutate_visit;
@@ -14,7 +16,7 @@ static struct kui_armada_ce_maple_traffic_snapshot out;
 static unsigned checks;
 #define CHECK(c) do {++checks;assert(c);} while(0)
 static unsigned put(uint32_t at,uint32_t value) {
-    if(at>=EXT && at<EXT+0x198u) at=0xacf93a60u+(at-EXT);
+    if(at>=EXT && at<EXT+KUI_CE_MAPLE_EXTENSION_BYTES) at=0xacf93a60u+(at-EXT);
     for(unsigned i=0;i<f.cells;i++) if(f.cell[i].at==at) {f.cell[i].value=value;return i;}
     assert(f.cells<128u);unsigned i=f.cells++;f.cell[i].at=at;f.cell[i].value=value;return i;
 }
@@ -23,7 +25,7 @@ static bool read_cell(void *context,uint32_t at,uint32_t *value,unsigned kind) {
     if(kind==0) {++f.p1;CHECK((at>=0x8c010000u && at<0x8d000000u) || at==0xff000008u || at==0xff00001cu);}
     if(kind==1) {++f.cache;
         CHECK((at&0xffffc01fu)==0xf4000000u || (at&0xffffc003u)==0xf5000000u ||
-            (at>=0xacf93a60u && at<0xacf93a60u+0x198u));}
+            (at>=0xacf93a60u && at<0xacf93a60u+KUI_CE_MAPLE_EXTENSION_BYTES));}
     if(kind==2) {++f.p2;CHECK((at>=0xacfd3000u && at<0xacfd4000u) || (at>=0xacfd1000u && at<0xacfd3000u));}
     if(f.calls==f.fail) return false;
     for(unsigned i=0;i<f.cells;i++) if(f.cell[i].at==at) {
@@ -49,7 +51,7 @@ static void descriptor(unsigned index,uint32_t off,unsigned words,bool last,unsi
 }
 static void prepare(unsigned records) {
     memset(&f,0,sizeof(f));memset(&scratch,0,sizeof(scratch));memset(&out,0,sizeof(out));
-    put(0xff000008u,TTB);put(0xff00001cu,0x105u);put(0x8c145890u,PROC);
+    put(0xff000008u,TTB);put(0xff00001cu,0x105u);put(KUI_CE_MAPLE_CURRENT_PROCESS,PROC);
     put(TTB,0x8c100000u);put(TTB+16u,0x8c100000u);
     mapping(EXT,0x8c110000u,0x0cf93000u,0x17du);
     mapping(0x08130000u,0x8c120000u,TX,0x175u);
@@ -173,7 +175,7 @@ static void rejected(void) {
         {0x8c10004cu,0u},{0x8c12000cu,0x0cfd317du}, /* missing table, cached TX */
         {0x8c130010u,0x0cfd4175u}, /* RX physical disagreement */
         {0x8c11000cu,0x0cfcf17du}, /* reserved extension */
-        {0x8c1458b0u,0x8c200000u}, /* owner/slot0 mismatch */
+        {KUI_CE_MAPLE_CURRENT_PROCESS+0x20u,0x8c200000u}, /* owner/slot0 mismatch */
         {0xacfd3000u,0x80000201u},{0xacfd3000u,1u}, /* special/missing last */
         {0xacfd3004u,0x0cfd0ffcu},{0xacfd3004u,0x0cfd3000u},{0xacfd3004u,0x8cfd1000u},
         {0xacfd3008u,0x0100030bu},{0xacfd3008u,0x0100600bu},{0xacfd3008u,0x0000200bu}

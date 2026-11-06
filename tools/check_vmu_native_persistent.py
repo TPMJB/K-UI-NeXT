@@ -367,11 +367,12 @@ class AbsentCompletion(Machine):
         from native_runtime_layout import layout_for,BACKGROUND_COMPACT
         geometry=layout_for(worker[4])
         compact=geometry is BACKGROUND_COMPACT
-        self.single_staging=compact
+        from check_native_session_witness_profile import profile as session_profile
+        self.single_staging=compact or session_profile(worker) is not None
         # These are independently compiled SH32 object layouts, selected only
         # by the complete reviewed worker profile. Never infer a new layout
         # from the object being checked or widen the historical profile.
-        self.overlay_bytes = 1452 if compact else 17172 if self.lean else 17824
+        self.overlay_bytes = 1452 if self.single_staging else 17172 if self.lean else 17824
         self.frame_stride = 24 if self.lean else 28
         self.staging_offset = 928 if self.lean else 1056
         self.reply_lengths_offset = 864 if self.lean else 992
@@ -558,10 +559,12 @@ def audit_absent_completion(worker, *, self_test=False):
                      words[i+4:i+7]==(0x71fe,0x3126,0x8b00) and words[i+8:i+10]==(0x400b,9)]
     require(len(positions) == 1, 'missing unique actual hooks-only completion selector')
     i = positions[0]; config, size, kind, _ = worker[4]['_config']
-    require((size, kind) == (2304, 1), 'hooks-only config word escaped its versioned ABI')
+    session='__kui_native_session_controls_worker' in worker[4]
+    require((size, kind) == (2316 if session else 2304, 1), 'hooks-only config word escaped its versioned ABI')
+    diagnostic_offset=size-(16 if session else 4)
     config_register=1 if lean else (words[i+2]>>4)&15
     config_load=i-1 if toggle else i+1 if lean else i-1
-    config_base=config+size-(4 if lean else 64)
+    config_base=config+diagnostic_offset-(0 if lean else 60)
     selector_end=i+(11 if lean and not toggle else 10)
     subtract=i+(5 if lean and not toggle else 4)
     require(words[config_load]&0xff00==0xd000|(config_register<<8),
@@ -574,7 +577,7 @@ def audit_absent_completion(worker, *, self_test=False):
         for mode in (0, 1, 2, 3, 4):
             m = Machine(worker, '_kui_vmu_native_passive_complete', seed, 15, 0xAC11FFE0)
             m.pc = base + 2 * i; m.r[config_register] = config_base
-            m.mem[(config & ~0x20000000) + size - 4] = mode
+            m.mem[(config & ~0x20000000) + diagnostic_offset] = mode
             m.stop_pc = base + 2 * selector_end
             def call(target, m=m, mode=mode):
                 name = '_kui_vmu_readonly_overlay_complete_absent' if mode in (2,3) else '_kui_vmu_readonly_overlay_complete'
@@ -795,7 +798,8 @@ def audit_retry_completion(worker,*,self_test=False):
     full_batches=full_targets=0
     if worker_profile(worker):
         from native_runtime_layout import layout_for,BACKGROUND_COMPACT
-        targets=1 if layout_for(worker[4]) is BACKGROUND_COMPACT else 31
+        from check_native_session_witness_profile import profile as session_profile
+        targets=1 if layout_for(worker[4]) is BACKGROUND_COMPACT or session_profile(worker) is not None else 31
         full_targets=targets
         for parent in range(32):
             for command in (11,12,13):
@@ -807,7 +811,18 @@ def audit_retry_completion(worker,*,self_test=False):
     if self_test:
         _,original,_=symbol_bytes(worker,RetryCompletion.helper,2)
         from check_native_compact_background_profile import worker_profile as compact_profile
-        if compact_profile(worker):
+        from check_native_session_witness_profile import profile as session_profile
+        if session_profile(worker) is not None:
+            # Invert the actual host/source branches on otherwise valid
+            # packets. Removing one check can leave a redundant refusal;
+            # valid completion must also retain its exact success path.
+            mutations=[(struct.pack('<H',0x88fc),struct.pack('<H',0x8800),'again'),
+                (struct.pack('<4H',0x8491,0x2008,0x8f60,0x51f9),
+                 struct.pack('<4H',0x8491,0x2008,0x8d60,0x51f9),'success'),
+                (struct.pack('<5H',0x8492,0x600c,0x3010,0x8b5b,0x8493),
+                 struct.pack('<5H',0x8492,0x600c,0x3010,0x895b,0x8493),'success'),
+                (struct.pack('<2H',0x60a3,0x8804),struct.pack('<2H',0x60a3,0x8808),'length')]
+        elif compact_profile(worker):
             # Separately reviewed 72 KiB allocation uses R9 for staging and
             # R10 for reply length; retain the complete actual predicates.
             mutations=[(struct.pack('<H',0x88fc),struct.pack('<H',0x8800),'again'),
@@ -969,6 +984,15 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
         return {"prepared": False, "legacy_full_release_admission": True}
     if build is None:
         build = verify((directory / "retail-maple-observe.kui").read_bytes())["build"]
+    session_prepared = '__kui_native_session_controls_worker' in worker[4]
+    from check_native_ordinary_general_profile import profile as ordinary_general_profile
+    ordinary_prepared = ordinary_general_profile(worker) is not None
+    if session_prepared:
+        from check_native_session_prepared_profile import image as session_prepared_image
+        worker = session_prepared_image(worker)
+    elif ordinary_prepared:
+        from check_native_ordinary_prepared_profile import image as ordinary_prepared_image
+        worker = ordinary_prepared_image(worker)
     stall_marker=worker[4].get('__kui_native_reader_stall_capture')
     if stall_marker is not None:
         require(stall_marker==(1,0,0,0xfff1),'invalid reader stall diagnostic marker')
@@ -1034,6 +1058,12 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
           **(OWNED_TIMER_PREPARED_PINS if owned_timers else {})}
     from check_native_followup_profile import worker_pins as followup_worker_pins
     pins=followup_worker_pins(worker,'prepared',pins)
+    if session_prepared:
+        from check_native_session_prepared_profile import pins as session_prepared_pins
+        pins = session_prepared_pins(worker)
+    elif ordinary_prepared:
+        from check_native_ordinary_prepared_profile import pins as ordinary_prepared_pins
+        pins = ordinary_prepared_pins(worker)
     from check_native_general_lean_profile import (worker_profile as lean_worker_profile,
         prepared_objects as lean_prepared_objects, stage_profile as lean_stage_profile,
         low_profile as lean_low_profile, profile_mutation_checks as lean_profile_mutations)
@@ -1086,7 +1116,7 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
     # Retain those real emitted calls rather than guessing a source location.
     edges += re.findall(r'edge: \{ sourcename: "([^"]+)" targetname: "([^"]+)" \}', graph)
     local = "src/loader/vmu_native_passive.c:"
-    for caller, required in (
+    required_calls = [
             ("kui_vmu_native_passive_arm", ("kui_vmu_native_lifetime_prepare", local + "prepare_hook_entry", local + "hook_word")),
             ("kui_vmu_native_passive_submit", (local + "installed_hooks_valid", local + "poll_lease_valid",
                 "kui_vmu_volatile_chain_build_address", "kui_vmu_volatile_chain_verify")),
@@ -1096,7 +1126,26 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
             (local + "transfer_context_valid", (local + "stack_valid",)),
             (local + "persistent_storage_guard", ("kui_vmu_native_heap_lease_valid", local + "stack_valid",
                 local + "installed_hooks_valid", "kui_vmu_native_layout_bind_checked", "kui_vmu_native_runtime_check",
-                local + "chain", "kui_vmu_volatile_chain_verify"))):
+                local + "chain", "kui_vmu_volatile_chain_verify"))]
+    if session_prepared or ordinary_prepared:
+        # The full General compiler outlines these predicates. Require their
+        # actual named edges and complete separately pinned bodies; the
+        # compact/historical direct-call requirements above stay unchanged.
+        required_calls = [(caller, targets) for caller, targets in required_calls
+            if caller not in (local + 'transfer_context_valid', local + 'persistent_storage_guard')]
+        required_calls += [
+            (local + 'controller_context_valid', (local + 'controller_layout_valid', local + 'controller_pair_valid')),
+            (local + 'transfer_context_valid', (local + 'transfer_frame_valid', local + 'transfer_sdk_context_valid')),
+            (local + 'transfer_frame_valid', (local + 'stack_valid', local + 'ram')),
+            (local + 'transfer_sdk_context_valid', (local + 'read_value.part.0',)),
+            (local + 'read_value', (local + 'read_value.part.0',)),
+            (local + 'read_value.part.0', (local + 'ram',)),
+            (local + 'persistent_storage_guard', (local + 'lease_valid', local + 'stack_valid',
+                local + 'installed_hooks_valid', 'kui_vmu_native_layout_bind_checked',
+                'kui_vmu_native_runtime_check', local + 'chain', 'kui_vmu_volatile_chain_verify')),
+            (local + 'lease_valid', ('kui_vmu_native_heap_lease_valid',)),
+        ]
+    for caller, required in required_calls:
         require(all((caller, target) in edges for target in required),
                 "prepared admission loses required emitted call: " + caller)
     # The address/width/alias checks are compiled into these two complete
@@ -1104,7 +1153,7 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
     # predicates outside their reviewed byte signatures and restore the
     # measured call/spill cost. The linked reader model below independently
     # executes the same full predicate for4B RAM/MMIO boundaries.
-    for caller in (local+"controller_context_valid",local+"transfer_context_valid"):
+    for caller in (() if session_prepared or ordinary_prepared else (local+"controller_context_valid",local+"transfer_context_valid")):
         require(not any(a==caller and b.startswith((local+"read_value",local+"ram"))
                         for a,b in edges),"prepared context address checks are not inlined")
     if SDK_COHERENCE_STATE in worker[4]:
@@ -1162,6 +1211,8 @@ def check_prepared_lifetime(directory, worker, binary, wire, self_test=False, *,
         raw_owner_terminal=check_raw_owner_terminal(directory,self_test=self_test)
         require(raw_owner_companion(worker,raw_owner_terminal),'Raw owner terminal proof does not bind this worker')
     return {"prepared": True, "exact_linked_kernels": functions, "build_identity": build,
+            "full_session_outlined_guards": session_prepared,
+            "ordinary_general_outlined_guards": ordinary_prepared,
             "live_boundary_call_abi":live_boundary_abi,
             "raw_owner_terminal":raw_owner_terminal,
             "lean_mutable_inventory":lean_inventory,
@@ -1384,6 +1435,9 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
     lean_stage=stage_profile(stage)
     from check_native_compact_background_profile import stage_profile as compact_profile
     compact_stage=compact_profile(stage)
+    from check_native_general_sdk_profile import profile as general_sdk_profile
+    modern_installer=general_sdk_profile(stage,'stage') is not None
+    session_installer=modern_installer and '__native_session_descriptor' in stage[4]
     span = layout_for(stage[4]).WORKER_BYTES
     image = inspect_elf(stage[0], HIGH, LIMIT)
     symbols = stage[4]
@@ -1432,9 +1486,12 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
         selected_callbacks=callbacks is not None
         require(not lean_stage or selected_callbacks,
                 'Lean General publication requires its selected low callbacks')
-        # The compact stage's arena-lease branches (The House of the Dead 2)
-        # moved this unchanged block from +0x49a to +0x498.
-        i=(0x498 if compact_stage else 0x480 if lean_stage else 0x464 if callbacks is not None else 0x46c)//2
+        # Modern General has a separately pinned complete installer. Its
+        # SP+64 config/SP+36 result and R8=P1/R9=P2 allocation are a distinct
+        # family, not a permissive variant of the historical compact block.
+        # Compact arena-lease branches moved its own block to +0x498.
+        i=((0x4bc if session_installer else 0x498) if modern_installer else
+           0x498 if compact_stage else 0x480 if lean_stage else 0x464 if callbacks is not None else 0x46c)//2
         prior=words[i-4:i]
         # The selected low-reader accessors move this complete block by8B.
         # Keep its actual refusal branch tied to the original phase/detail
@@ -1442,15 +1499,24 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
         branch=prior[2]
         displacement=branch&0xfff
         if displacement&0x800:displacement-=0x1000
-        selected_prior=(prior[:2]==[0x8d02,0x6483 if compact_stage else 0x6493] and prior[3]==0xe503 and
+        selected_prior=(prior[:2]==[0x8d02,0x6483 if compact_stage or modern_installer else 0x6493] and prior[3]==0xe503 and
                         branch&0xf000==0xa000 and
-                        begin+2*(i-2)+4+2*displacement==begin+(0x46 if compact_stage else 0x3e if lean_stage else 0x28))
+                        begin+2*(i-2)+4+2*displacement==begin+(0x46 if compact_stage or modern_installer else 0x3e if lean_stage else 0x28))
         if callbacks is not None:
-            configure=(0x138 if compact_stage else 0x12a if lean_stage else 0x114)//2
+            configure=(0x138 if compact_stage or modern_installer else 0x12a if lean_stage else 0x114)//2
             require(words[configure]&0xff00==0xd100 and
                     literal(configure)==symbols['_native_low_configure'][0] and
-                    words[configure+1:configure+4]==[0x64f3,0x410b,0x7444],
-                    'selected low callbacks were not configured into the actual SP+68 worker config')
+                    words[configure+1:configure+4]==[0x64f3,0x410b,0x7440 if modern_installer else 0x7444],
+                    'selected low callbacks were not configured into the exact worker config')
+        modern_setup=(modern_installer and background and mode_config and
+            words[i]&0xff00==0xdc00 and literal(i)==symbols['_native_driver'][0] and
+            words[i+1]&0xff00==0xdd00 and literal(i+1)==address and
+            words[i+2:i+8]==[0x53c7,0x55f6,0x2232,0x53ce,0x358c,0x529d] and
+            words[i+8]&0xff00==0xd800 and literal(i+8)==symbols['_retail_display_line'][0] and
+            words[i+9:i+11]==[0x4d0b,0x2232] and words[i+11]&0xff00==0xd400 and
+            words[i+12:i+14]==[0x480b,0x1fb9] and words[i+14]&0xff00==0xd000 and
+            literal(i+14)==symbols['_kui_vmu_native_worker_call'][0] and
+            words[i+15:i+22]==[0x67f3,0x559a,0x7724,0x5493,0x66f3,0x400b,0x7640] and selected_prior)
         compact_setup=(compact_stage and background and mode_config and words[i]&0xff00==0xde00 and
             literal(i)==symbols['_native_driver'][0] and words[i+1]&0xff00==0xdd00 and literal(i+1)==address and
             words[i+2:i+8]==[0x53e7,0x55f6,0x2232,0x53ee,0x358c,0x529d] and
@@ -1469,13 +1535,16 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
             words[i+15:i+22]==[0x67f3,0x558a,0x7728,0x5483,0x66f3,0x400b,0x7644] and
             (selected_prior if callbacks is not None else
              prior==[0x8d02,0x6493,0xadde,0xe503]))
-        require(compact_setup or historical_setup,
+        require(modern_setup or compact_setup or historical_setup,
             'witness worker-publication exact setup/first-arm block differs')
         report.update(selected_low_callback_profile=callbacks is not None,
                       first_arm_setup_offset=hex(2*i),
                       selected_callback_refusal_branch_target_checked=callbacks is not None,
                       selected_low_configure_receives_actual_arm_config=callbacks is not None)
-        candidates.append((i,9,21,6) if compact_stage else (i,9,20,5))
+        candidates.append((i,9,20,7) if modern_installer else
+                          (i,9,21,6) if compact_stage else (i,9,20,5))
+    require(not modern_installer or witness and selected_callbacks and lean_stage and background,
+            'Modern publication requires its whole-body pinned General installer and selected callbacks')
     for i in (() if witness else range(len(words) - 20)):
         # Original configuration layout: the publisher uses callee-saved R14.
         old = (words[i] & 0xff00 == 0xde00 and literal(i) == address and
@@ -1602,6 +1671,13 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
             words[i+5]&0xff00==0xd400 and literal(i+5)==symbols['__native_worker_blob_begin'][0] and
             words[i+6:i+10]==[0x1f82,0x1fe1,0x400b,0x2f92]):
             relocations.append((i,i+8,6,True))
+        if (modern_installer and i==(0x2b6 if session_installer else 0x29c)//2 and
+            words[i+1]==0x37b8 and words[i+2]&0xff00==0xde00 and literal(i+2)==span and
+            words[i+3]==0x55f6 and words[i+4]&0xff00==0xd600 and
+            literal(i+4)==symbols['__native_worker_blob_end'][0] and
+            words[i+5]&0xff00==0xd400 and literal(i+5)==symbols['__native_worker_blob_begin'][0] and
+            words[i+6:i+10]==[0x1f82,0x1fe1,0x400b,0x2f92]):
+            relocations.append((i,i+8,7,True))
         if (witness and not compact_stage and i==(0x28a if lean_stage else 0x26e if selected_callbacks else 0x272)//2 and words[i+1]==0x37b8 and
             words[i+2]&0xff00==(0xde00 if selected_callbacks else 0xdd00) and literal(i+2)==span and words[i+3]==0x55f7 and
             words[i+4]&0xff00==0xd600 and literal(i+4)==symbols['__native_worker_blob_end'][0] and
@@ -1617,23 +1693,26 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
         [0x5bf7,0xe500,0x51f7,0x66a3,0x3b8c,0x3618,0x4d0b,0x64b3],
         [0x5bf7,0xe500,0x52f7,0x66d3,0x3b8c,0x3628,0x4e0b,0x64b3],
         [0x5bf7,0xe500,0x51f7,0x66e3,0x3b8c,0x3618,0x4d0b,0x64b3],
-        [0x5bf6,0xe500,0x51f6,0x66e3,0x3b9c,0x3618,0x4d0b,0x64b3])
-    zero_families = (0, 1, 1, 2, 3, 4, 5, 5, 6)
+        [0x5bf6,0xe500,0x51f6,0x66e3,0x3b9c,0x3618,0x4d0b,0x64b3],
+        [0x5bf6,0xe500,0x51f6,0x66e3,0x3b9c,0x3618,0x4d0b,0x64b3],
+        [0x5bf6,0xe500,0x52f6,0x66e3,0x3b9c,0x3628,0x4d0b,0x64b3])
+    zero_families = (0, 1, 1, 2, 3, 4, 5, 5, 6, 7, 7)
     zeroes = [(i,zero_families[j],j) for j,pattern in enumerate(zero_patterns)
               for i in range(len(words)-len(pattern)) if words[i:i+len(pattern)]==pattern and
               (j!=5 or background) and (j!=6 or witness and not selected_callbacks) and
-              (j!=7 or selected_callbacks and not compact_stage) and (j!=8 or compact_stage)]
+              (j!=7 or selected_callbacks and not compact_stage) and (j!=8 or compact_stage) and
+              (j!=9 or modern_installer and not session_installer) and (j!=10 or session_installer)]
     releases = [i for i in range(len(words) - 3) if words[i:i + 3] ==
-                ([0x52aa,0x7214,0x2022] if register_family in (4,5,6) else
+                ([0x52aa,0x7214,0x2022] if register_family in (4,5,6,7) else
                  [0x52ba, 0x7214, 0x2022] if register_family in (2,3) else [0x53ca, 0x7314, 0x2032])]
     require(len(relocations) == len(zeroes) == len(releases) == 1,
             "missing linked relocation/BSS/release-cell initialization witnesses")
     require(relocations[0][2] == zeroes[0][1] == register_family,
             "installer relocation/BSS/publication use inconsistent load/length registers")
-    require(relocations[0][3] == mode_config and (zeroes[0][2] in (2, 3, 4, 5, 6, 7, 8)) == mode_config,
+    require(relocations[0][3] == mode_config and (zeroes[0][2] in (2, 3, 4, 5, 6, 7, 8, 9, 10)) == mode_config,
             "installer mode configuration uses an unreviewed relocation/zero-fill ABI")
     relocate_pc = begin + relocations[0][1] * 2
-    zero_pc = begin + (zeroes[0][0] + (6 if register_family in (4,5,6) else 5)) * 2
+    zero_pc = begin + (zeroes[0][0] + (6 if register_family in (4,5,6,7) else 5)) * 2
     release_pc = begin + (releases[0] + 2) * 2
     # The compiler keeps memset in callee-saved R12 until this BSS call.
     # Pin its initializer and reject any intervening write to R12.
@@ -1688,10 +1767,10 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
     # v3 puts the consumer-cell store in the publisher JSR delay slot.
     # The exact block above pins that store; the JSR node represents both
     # instructions in this CFG, before control reaches the publisher.
-    dynamic_stores = (4,9) if register_family in (5,6) else (4,8) if register_family==4 else (5, 8) if register_family in (2, 3) else (4, 7)
+    dynamic_stores = (4,9) if register_family in (5,6,7) else (4,8) if register_family==4 else (5, 8) if register_family in (2, 3) else (4, 7)
     witnesses = {relocate_pc, zero_pc, release_pc,
                  *(begin + (first + offset) * 2 for offset in dynamic_stores)}
-    if register_family in (2, 3, 4, 5, 6):witnesses.add(begin + (first - 4) * 2)
+    if register_family in (2, 3, 4, 5, 6, 7):witnesses.add(begin + (first - 4) * 2)
     require(witnesses <= dom[publish] and publish in dom[arm],
             "installer can enter P1 arm before initialization/publication")
     require(begin + 2 * memset_loads[0] in dom[zero_pc],
@@ -1705,9 +1784,10 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
         # clobber R0. Both getter and store must dominate the first arm.
         config_start, config_base = (0x48, 0x904) if register_family in (3,4) else (0x44, 0x900)
         if lean_stage:
-            require(register_family in (5,6) and selected_callbacks,
+            require(register_family in (5,6,7) and selected_callbacks,
                     'Lean General diagnostics requires its exact selected-callback installer')
             config_base=0x940
+        if modern_installer:config_start,config_base=0x40,0x93c
         alias_add = 0x38AC if register_family == 3 else 0x389C
         choices = [j for j in range(len(words) - 9) if
             words[j] & 0xFF00 == 0xD000 and literal(j) == symbols['_native_runtime_diagnostics'][0] and
@@ -1717,7 +1797,20 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
             words[j + 5] & 0xFF00 == 0xD100 and literal(j + 5) == symbols['_retail_display_restore'][0] and
             words[j + 6] & 0xFF00 == 0xD400 and literal(j + 6) == symbols['_display'][0] and
             words[j + 7:j + 9] == [0x410B, 0x1D0F]]
-        if register_family==4:
+        if modern_installer:
+            j=0x14a//2
+            modern_diagnostics=(words[j]&0xff00==0xd000 and
+                literal(j)==symbols['_native_runtime_diagnostics'][0] and words[j+1:j+3]==[0x400b,0x0009])
+            if session_installer:
+                modern_diagnostics=modern_diagnostics and words[j+3]&0xff00==0xd100 and \
+                    literal(j+3)==symbols['_native_session_stage_configure'][0] and \
+                    words[j+4]==0x64f3 and words[j+5]&0xff00==0x9200 and \
+                    words[j+6:j+10]==[0x7440,0x32fc,0x410b,0x1200]
+            else:
+                modern_diagnostics=modern_diagnostics and words[j+3]&0xff00==0x9100 and \
+                    words[j+4:j+8]==[0x5ef7,0x31fc,0x7e40,0x2102]
+            choices=[j] if modern_diagnostics else []
+        elif register_family==4:
             choices=[j for j in range(len(words)-7) if
                 words[j]&0xff00==0xd000 and literal(j)==symbols['_native_runtime_diagnostics'][0] and
                 words[j+1:j+7]==[0x400b,0x0009,0x51c8,0x31a0,0x8f09,0x1b0f]]
@@ -1739,8 +1832,9 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
         require(len(choices) == 1, 'missing exact runtime diagnostics return-to-config store')
         diagnostics_getter = choices[0]
         bases = []
-        config_register=1 if selected_callbacks else 12 if register_family==5 else 11 if register_family==4 else 13
-        for j in ((diagnostics_getter+3,) if selected_callbacks else range(diagnostics_getter - 3)):
+        config_register=(2 if session_installer else 1) if modern_installer else \
+            1 if selected_callbacks else 12 if register_family==5 else 11 if register_family==4 else 13
+        for j in ((diagnostics_getter+(5 if session_installer else 3),) if selected_callbacks else range(diagnostics_getter - 3)):
             if not selected_callbacks and (words[j] & 0xFF00 != 0x9000|(config_register<<8) or
                     words[j + 1] != 0xE630 or words[j + 3] != 0x300c|(config_register<<8)|0xf0):continue
             at = begin + 2 * j + 4 + 2 * (words[j] & 255)
@@ -1749,9 +1843,10 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
         require(len(bases) == 1 and
                 config_base+(0 if lean_stage else 60)-config_start==(0x8fc if lean_stage else 0x8f8),
                 'diagnostics store no longer names exact final config word')
-        getter_pc = begin + 2 * (diagnostics_getter + (1 if register_family in (4,5,6) else 3))
-        store_call_pc = begin + 2 * (diagnostics_getter + (7 if compact_stage else 5 if register_family in (4,5) else 7))
-        base_pc = begin + 2 * (bases[0] + (2 if compact_stage else 1 if selected_callbacks else 3))
+        getter_pc = begin + 2 * (diagnostics_getter + (1 if register_family in (4,5,6,7) else 3))
+        store_call_pc = begin + 2 * (diagnostics_getter +
+            ((8 if session_installer else 7) if modern_installer else 7 if compact_stage else 5 if register_family in (4,5) else 7))
+        base_pc = begin + 2 * (bases[0] + (2 if compact_stage or modern_installer else 1 if selected_callbacks else 3))
         base_dominates=(getter_pc in dom[base_pc] if selected_callbacks else base_pc in dom[getter_pc])
         require(base_dominates and base_pc in dom[store_call_pc] and
                 getter_pc in dom[store_call_pc] and store_call_pc in dom[arm],
@@ -1783,7 +1878,18 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
             words[j+2]==0x64f3 and words[j+4]==0x2919 and
             words[j+5]&0xff00==0xd100 and literal(j+5)==0x80000000 and
             words[j+6:j+11]==[0x7448,0x6683,0xeb01,0x4d0b,0x291b]]
-        if witness:
+        if modern_installer:
+            normalizers=[j for j in (0x6e//2,) if
+                words[j]&0xff00==0xd100 and literal(j)==0x1fffffff and
+                words[j+1]&0xff00==0xdd00 and literal(j+1)==symbols['_memset'][0] and
+                words[j+2]==0x64f3 and words[j+3]&0xff00==0x9900 and words[j+4]==0x2819 and
+                words[j+5]&0xff00==0xd100 and literal(j+5)==0x80000000 and
+                words[j+6:j+11]==[0x7440,0x6693,0xea01,0x4d0b,0x281b]]
+            if normalizers:
+                cfg_word=begin+2*(normalizers[0]+3)+4+2*(words[normalizers[0]+3]&255)
+                require(struct.unpack('<h',region(body,cfg_word-begin,2,'modern config bytes'))[0]==
+                        (0x90c if session_installer else 0x900),'Modern config zero-fill length changed')
+        elif witness:
             normalizers=[j for j in ((0x6e if compact_stage else 0x66 if lean_stage else 0x50)//2,) if
                 words[j]&0xff00==0xd100 and literal(j)==0x1fffffff and
                 words[j+1]&0xff00==(0xdd00 if selected_callbacks else 0xde00) and literal(j+1)==symbols['_memset'][0] and
@@ -1794,20 +1900,20 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
                                   [0x7444,0x6683,0xec01,0x4e0b,0x291b])]
         require(len(normalizers)==1,'Background prefix lacks its exact P1 payload normalization')
         normal=normalizers[0]
-        require(words[normal-12]==(0x5bf7 if compact_stage else 0x5af8 if witness else 0x5cf8) and words[normal-10]&0xff00==0xd000 and
+        require(words[normal-12]==(0x5bf7 if compact_stage or modern_installer else 0x5af8 if witness else 0x5cf8) and words[normal-10]&0xff00==0xd000 and
                 literal(normal-10)==symbols['_kui_vmu_native_heap_lease_valid'][0] and
-                words[normal-9:normal-7]==[0xe600,0x7b40 if compact_stage else 0x7a40 if witness else 0x7c40] and
+                words[normal-9:normal-7]==[0xe600,0x7b40 if compact_stage or modern_installer else 0x7a40 if witness else 0x7c40] and
                 words[normal-7]&0xff00==0xd500 and literal(normal-7)==symbols['_native_read'][0] and
-                words[normal-6:normal]==[0x58ba if compact_stage else 0x59aa if witness else 0x59ca,
-                                        0x400b,0x54f7 if compact_stage else 0x54f8,0x2008,0x8deb,0xe500],
+                words[normal-6:normal]==[0x58ba if compact_stage or modern_installer else 0x59aa if witness else 0x59ca,
+                                        0x400b,0x54f7 if compact_stage or modern_installer else 0x54f8,0x2008,0x8deb,0xe500],
                 'Background prefix does not bind the loaded payload to its admitted native lease')
         memcpy_loads=[j for j in range(normal,(tail_entry-begin)//2) if
-            words[j]&0xff00==(0xd900 if compact_stage else 0xd800) and literal(j)==symbols['_memcpy'][0]]
+            words[j]&0xff00==(0xd900 if compact_stage or modern_installer else 0xd800) and literal(j)==symbols['_memcpy'][0]]
         selected_lease=layout_for(symbols).LEASE_BYTES if '__kui_native_readahead_stage' in symbols else 0x30000
         require(background_tail.get('lease_bytes')==selected_lease,
                 'Background tail replay selected a different owned lease size')
         lease_constants=[j for j in range(normal,(tail_entry-begin)//2) if
-            words[j]&0xff00==(0xd300 if compact_stage else 0xdb00 if witness else 0xda00) and literal(j)==selected_lease]
+            words[j]&0xff00==(0xd300 if compact_stage or modern_installer else 0xdb00 if witness else 0xda00) and literal(j)==selected_lease]
         require(len(memcpy_loads)==len(lease_constants)==1,
                 'Background prefix needs exact unique memcpy/lease-size register initializers')
         memcpy_pc=begin+2*memcpy_loads[0];lease_pc=begin+2*lease_constants[0]
@@ -1834,7 +1940,7 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
                 # the final configuration word. The linked tail starts after
                 # that store and no longer assumes a callee-saved R12 base.
                 stable=tuple(row for row in stable if row[0]!=12)
-            if compact_stage:
+            if compact_stage or modern_installer:
                 # Compact uses the source-pinned runtime field store rather
                 # than carrying the lease constant in a preserved register.
                 # The tail independently executes its own exact lease load,
@@ -1842,11 +1948,11 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
                 runtime_base=0xd6//2
                 runtime_word=begin+2*runtime_base+4+2*(words[runtime_base]&255)
                 runtime_store=begin+0xfe
-                owner_load=begin+2*(diagnostics_getter+4)
-                owner_add=begin+2*(diagnostics_getter+6)
+                owner_load=begin+2*(diagnostics_getter+(10 if session_installer else 4))
+                owner_add=begin+2*(diagnostics_getter+(12 if session_installer else 6))
                 require(memcpy_loads==[0x8e//2] and lease_constants==[0xec//2] and
                         words[runtime_base]&0xff00==0x9700 and
-                        struct.unpack('<h',region(body,runtime_word-begin,2,'compact runtime base'))[0]==0x2c0 and
+                        struct.unpack('<h',region(body,runtime_word-begin,2,'runtime base'))[0]==(0x2bc if modern_installer else 0x2c0) and
                         words[0xdc//2]==0x37fc and words[0xfe//2]==0x173e and
                         begin+2*runtime_base in dom[begin+0xdc] and
                         lease_pc in dom[runtime_store] and begin+0xdc in dom[runtime_store] and
@@ -1863,8 +1969,8 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
                         (7,begin+2*runtime_base+2,begin+0xdc),
                         (7,begin+0xde,runtime_store))
                 background_prefix_mutations.extend([((0xfe//2,0x173d),),
-                    ((runtime_base,0x9700),),((diagnostics_getter+4,0x5ef8),),
-                    ((diagnostics_getter+6,0x7e44),)])
+                    ((runtime_base,0x9700),),((diagnostics_getter+(10 if session_installer else 4),0x5ef8),),
+                    ((diagnostics_getter+(12 if session_installer else 6),0x7e44),)])
         for register,first_pc,last_pc in stable:
             for pc,(_,mnemonic,operands) in decoded.items():
                 if first_pc<=pc<last_pc and mnemonic not in ('cmp/eq','cmp/hi','cmp/hs','tst'):
@@ -1883,6 +1989,14 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
                   runtime_diagnostics_return_stored_in_exact_config=diagnostics_getter is not None,
                   runtime_diagnostics_store_dominates_arm=diagnostics_getter is not None,
                   linked_installer_cfg_nodes=len(seen))
+    if modern_installer:
+        report['modern_general_publication']={
+            'profile':'session' if session_installer else 'ordinary',
+            'complete_installer_independent_typed_roles_pinned':True,
+            'configuration_stack_offset':64,'result_stack_offset':36,
+            'worker_bytes_stack_offset':24,'diagnostics_stack_offset':0x93c,
+            'diagnostics_config_offset':0x8fc,
+            'session_configure_delay_store_before_call':session_installer}
     if witness:
         # Execute the new display-bearing block, including the real publisher
         # and every first-arm argument instruction. The worker-call boundary
@@ -1924,9 +2038,9 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
                 self.values=(0x8c123456,0x8c234568)
                 self.write(self.driver+28,self.values[0]);self.write(self.driver+56,self.values[1])
                 self.sp=0x8cdd0000;self.r[15]=self.sp
-                self.write(self.sp+(24 if compact_stage else 28),worker_bytes)
+                self.write(self.sp+(24 if compact_stage or modern_installer else 28),worker_bytes)
                 self.r[8],self.r[9],self.r[11],self.r[2]=\
-                    (self.load,self.header,0,self.resume) if compact_stage else (self.header,self.load,0,self.resume)
+                    (self.load,self.header,0,self.resume) if compact_stage or modern_installer else (self.header,self.load,0,self.resume)
                 self.pc=begin+2*(first-4);self.flag(True)
                 self.ccr,self.owner_ccr=ccr,ccr
                 self.purges=[];self.ccr_writes=[];self.cells=[]
@@ -1947,7 +2061,8 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
                         require(self.inside and count==4 and value==self.owner_ccr|0x800,
                                 'publication changed owner CCR or lost its exact ICI command')
                         self.ccr_writes.append(value);self.ccr=value;return
-                    require(not self.inside and count==4 and at in (self.resume,self.consumer,self.sp+40),
+                    require(not self.inside and count==4 and at in
+                            (self.resume,self.consumer,self.sp+(36 if modern_installer else 40)),
                             'publication slice writes outside its exact dynamic cells/result word')
                     self.cells.append((at,value))
                 super().write(at,value,count)
@@ -1968,19 +2083,22 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
                 elif target==symbols['_retail_display_line'][0]:
                     text=b'COLD 34 WORKER ARM BEGIN\0'
                     require(self.published and not self.displayed and self.block(self.r[4],len(text))==text and
-                            self.cells==[(self.resume,self.values[0]),(self.consumer,self.values[1]),(self.sp+40,0)],
+                            self.cells==[(self.resume,self.values[0]),(self.consumer,self.values[1]),
+                                         (self.sp+(36 if modern_installer else 40),0)],
                             'worker arm progress call/order/result word differs')
                     self.displayed=True
                     for index in range(8):self.r[index]=(0x71350001+index*0x10203)&MASK
                     self.flag(False);self.pc=self.pr
                 elif target==symbols['_kui_vmu_native_worker_call'][0]:
                     require(self.published and self.displayed and self.r[15]==self.sp and
-                            self.r[4:8]==[self.read(self.header+12),self.read(self.header+40),self.sp+68,self.sp+40] and
+                            self.r[4:8]==[self.read(self.header+12),self.read(self.header+40),
+                                         self.sp+(64 if modern_installer else 68),self.sp+(36 if modern_installer else 40)] and
                             self.read(self.resume)==self.values[0] and self.read(self.consumer)==self.values[1] and
-                            self.read(self.sp+40)==0,
+                            self.read(self.sp+(36 if modern_installer else 40))==0,
                             'first worker-call ABI loses its published entries/stack/config/result')
-                    require(not compact_stage or self.r[12]==symbols['_retail_display_line'][0],
-                            'Compact first-arm setup loses the preserved later display target')
+                    require(not (compact_stage or modern_installer) or
+                            self.r[8 if modern_installer else 12]==symbols['_retail_display_line'][0],
+                            'First-arm setup loses the preserved later display target')
                     self.called=True
                 else:raise ValueError('unadmitted call in actual worker publication slice: '+hex(target))
 
@@ -2024,7 +2142,7 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
                      ((begin+2*(first-3),0x6483),),((begin+2*(first+6),0x358c),),
                      ((begin+2*(first+12),9),),((arm+2,0x7648),),
                      ((address+12+8,9),),((address+12+24,9),))
-            if compact_stage:
+            if compact_stage or modern_installer:
                 changes=(((publish,9),),((begin+2*(first+4),9),),((publish+2,9),),
                          ((begin+2*(first-3),0x6493),),((begin+2*(first+6),0x359c),),
                          ((begin+2*(first+12),9),),((begin+2*(first+13),9),),
@@ -2041,15 +2159,19 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
         # An individually recognized register-family block must not be mixed
         # with the other family's relocation/zero-fill/publication. Mutate the
         # actual ELF instruction bytes, keeping its typed geometry unchanged.
-        alternate = 0 if register_family in (2, 3, 4, 5, 6) else 1 - register_family
+        alternate = 0 if register_family in (2, 3, 4, 5, 6, 7) else 1 - register_family
         mutations = [((zeroes[0][0] + 2, zero_patterns[alternate][2]),
                       (zeroes[0][0] + 3, zero_patterns[alternate][3])),
                      ((relocations[0][0] + 1, 0x0009),)]
         mutations.extend(background_prefix_mutations)
         if selected_callbacks:
-            configure=(0x138 if compact_stage else 0x12a if lean_stage else 0x114)//2
+            configure=(0x138 if compact_stage or modern_installer else 0x12a if lean_stage else 0x114)//2
             mutations.extend([((configure+2,0x0009),),((configure+3,0x7448),)])
-        if register_family==6:
+        if register_family==7:
+            mutations.extend([((first+3,0x55f7),),((first+4,0x0009),),((first+6,0x359c),),
+                              ((first+10,0x0009),),((first-3,0x6493),),((first-2,0x0009),),
+                              ((first+12,0x0009),),((first+13,0x0009),),((first+21,0x7644),)])
+        elif register_family==6:
             mutations.extend([((first+3,0x0009),),((first+6,0x359c),),
                               ((first+10,0x0009),),((first-3,0x6493),),((first-2,0x0009),),
                               ((first+12,0x0009),),((first+13,0x0009),),((first+22,0x7648),)])
@@ -2073,7 +2195,8 @@ def check_worker_publication(stage, cached, disassembly, self_test=False, *, bac
             getter_literal = (((begin + 2 * diagnostics_getter + 4) & ~3) +
                               4 * (words[diagnostics_getter] & 255) - begin) // 2
             wrong_getter = symbols['_native_runtime_mode'][0]
-            store_index=diagnostics_getter+(7 if compact_stage else 5 if selected_callbacks else 6 if register_family in (4,5) else 8)
+            store_index=diagnostics_getter+((9 if session_installer else 7) if modern_installer else
+                7 if compact_stage else 5 if selected_callbacks else 6 if register_family in (4,5) else 8)
             mutations.extend([((store_index, 0x0009),),
                               ((store_index, 0x110e if selected_callbacks else 0x1C0E if register_family==5 else 0x1B0E if register_family==4 else 0x1D0E),),
                               ((diagnostics_getter, 0xE000),),
@@ -2332,6 +2455,231 @@ class CompiledHeapAdapter(Machine):
                 (mach,macl,gbr,sr&~1,fpscr,fr),'heap adapter loses its C ABI')
 
 
+def session_heap_reader_pins(worker):
+    """Strict outlined reader variants authored from pristine3a6 workers."""
+    from check_native_session_witness_profile import profile, signatures, PINS
+    from check_native_controller_failure_witness import pinned as witness_pinned
+    from check_native_bottom_heap import records
+    slot=profile(worker)
+    if slot is None:
+        from check_native_ordinary_general_profile import profile, PINS
+        slot=profile(worker)
+    require(slot in (1,2) and worker[4].get('__kui_native_dispatch_read_gate_worker')==(1,0,0,0xfff1),
+            'Session heap reader requires the complete witnessed dispatch-gate profile')
+    require('_read_heap_raw' not in worker[4], 'Session heap reader contains a mixed historical raw wrapper')
+    reviewed=witness_pinned(worker)
+    expected={'_read_heap':('98154596efda0b82f86e858c35201c19f6d8773459cfc703474205cf1c2a998f',48),
+        **{name:PINS[slot][name] for name in ('_read_value','_read_value.part.0',
+                                            '_normalize_heap_dispatch_if_routing')}}
+    actual=signatures(worker,expected)
+    fragments={};proof={}
+    for name,(digest,count) in expected.items():
+        value,size,references=actual[name]
+        address,body,section=symbol_bytes(worker,name,2)
+        require(section[2]&7==6 and (value,size)==(digest,count),
+                'Session heap reader instructions/typed targets changed: '+name)
+        fragments[name]=(address,body)
+        proof[name]=dict(bytes=count,normalized_sha256=digest,typed_references=references)
+    # Duplicate _ram names in other source files are not interchangeable.
+    # This leaf contains no relocatable pointers; retain every byte exactly.
+    name='_ram@vmu_native_passive.c';available=records(worker)
+    require(name in available,'Session heap reader lacks its source-owned RAM admission leaf')
+    address,body,kind,section=available[name]
+    require(kind==2 and section[1]==1 and section[2]&7==6 and
+            (len(body),hashlib.sha256(body).hexdigest())==
+            (88,'2075c76a568a60083ee3b9de7aa25600ff9b3ce0ff32393f78091662b52ec6f9'),
+            'Session heap reader RAM predicate differs from pristine3a6')
+    fragments['ram']=(address,body)
+    proof[name]=dict(bytes=len(body),sha256=hashlib.sha256(body).hexdigest())
+    require('_read_value' in reviewed and '_read_value.part.0' in reviewed,
+            'Session heap reader lacks its complete actual witness companion closure')
+    return fragments,proof
+
+
+class SessionCompiledHeapReader(Machine):
+    """Execute the public/outlined reader, RAM predicate and actual leaf gate.
+
+    The complete tagged normalizer retains the existing ABI-adversary boundary;
+    its exact matching witness companion is mandatory before this model runs.
+    """
+    def __init__(self,worker,fragments,address,valid,*,width=4,mask=15,heap=False,
+                 normalized=False,family=5,dispatch=None,layout=None,edits=None):
+        root='_read_heap' if heap else '_read_value'
+        changed=dict(fragments)
+        for name,body in (edits or {}).items():changed[name]=(changed[name][0],body)
+        super().__init__(worker,root,mask+31,mask,0x8c11ffe0,body=changed[root][1])
+        self.fragments=changed;self.address=address;self.valid=valid;self.width=width;self.heap=heap
+        self.source_value=((0x5a73c129 if width==4 else 0x5a73c1a9)&((1<<(8*width))-1)) if width in (1,2,4) else None
+        self.normalized=normalized;self.dispatch=0x8c220000 if dispatch is None else dispatch
+        self.family=family;self.output=self.start_sp-128
+        self.source_reads=[];self.output_writes=[];self.gate_reads=[];self.gate_writes=[]
+        self.normalizer_active=False;self.normalizer=worker[4]['_normalize_heap_dispatch'][0]
+        self.eligible=heap and address==self.dispatch and family==5
+        self.raw=changed['_read_value.part.0'][0];self.ram=changed['ram'][0]
+        self.gate=changed['_normalize_heap_dispatch_if_routing'][0]
+        require(layout is not None,'Session heap reader requires independently compiled config offsets')
+        config=worker[4]['_config'][0]
+        self.dispatch_at=config+layout['config.lease.owner.dispatch_cell']
+        self.family_at=config+layout['config.exits.family']
+        self.gate_config={self.dispatch_at:self.dispatch,self.family_at:family}
+        self.r[4:7]=[0,address,self.output] if heap else [0,address,width]
+        if not heap:self.r[7]=self.output
+
+    def code(self,address,size):
+        for start,body in self.fragments.values():
+            if start<=address<address+size<=start+len(body):
+                return body[address-start:address-start+size]
+        return super().code(address,size)
+
+    def source(self,address,width):
+        require(self.valid and address==self.address and width==self.width,
+                'Session reader loaded an unadmitted address or width')
+        self.source_reads.append((address,width))
+        return self.source_value
+
+    def read(self,address):
+        if address==self.address:return self.source(address,4)
+        if address in self.gate_config:
+            self.gate_reads.append(address);return self.gate_config[address]
+        return super().read(address)
+
+    def write(self,address,value):
+        if address==self.output:
+            require(self.valid,'Session reader changed output after a refused read')
+            self.output_writes.append((address,value&MASK))
+        gate_bytes=len(self.fragments['_normalize_heap_dispatch_if_routing'][1])
+        if not self.normalizer_active and self.gate<=self.pc<self.gate+gate_bytes:
+            self.gate_writes.append((address,value))
+        return super().write(address,value)
+
+    def plain(self,word,pc):
+        n,m=(word>>8)&15,(word>>4)&15
+        if word&0xf00f in (0x6000,0x6001):
+            width=1 if word&15==0 else 2
+            value=self.source(self.r[m],width)
+            self.r[n]=(value-(1<<(8*width)) if value&(1<<(8*width-1)) else value)&MASK;return
+        if word&0xf00f in (0x600c,0x600d):
+            self.r[n]=self.r[m]&(0xff if word&15==12 else 0xffff);return
+        return super().plain(word,pc)
+
+    def call(self,target):
+        if target==self.stop_pc:return False
+        if target==self.raw:
+            require(not self.calls and self.r[4:7]==[self.address,self.width,self.output],
+                    'Session wrapper changed its actual outlined raw-reader arguments')
+            self.calls.append('raw');return False
+        if target==self.ram:
+            require(self.calls==['raw'] and self.r[4:7]==[self.address,self.width,self.width],
+                    'Session raw reader bypassed or changed its actual full RAM predicate')
+            self.calls.append('ram');return False
+        if target==self.gate:
+            require(self.heap and self.valid and self.calls==['raw','ram'] and
+                    self.r[4:6]==[self.address,self.output],
+                    'Session wrapper normalized a refused read or changed its leaf-gate arguments')
+            self.calls.append('gate');return False
+        if target==self.normalizer:
+            require(self.heap and self.valid and self.eligible and self.calls==['raw','ram','gate'] and
+                    self.r[4:6]==[self.address,self.output] and self.read(self.output)==0x5a73c129,
+                    'Session heap adapter changed its exact conditional tagged-normalizer call')
+            self.calls.append('normalizer');self.normalizer_active=True
+            if self.normalized:self.write(self.output,0x8c110000)
+            self.normalizer_active=False
+            self.abi_return(0xa37b0000|len(self.calls));return True
+        return False
+
+    def check(self):
+        self.run()
+        expected=['raw','ram'] if self.heap or self.width in (1,2,4) else []
+        if self.heap and self.valid:
+            expected.append('gate')
+            if self.eligible:expected.append('normalizer')
+        require(self.calls==expected and self.r[0]==int(self.valid),
+                'Session reader lost width admission, raw boolean or gate selection')
+        require(self.source_reads==([(self.address,self.width)] if self.valid else []),
+                'Session reader source-load coverage differs from full admission')
+        raw=self.source_value if self.valid else None
+        writes=[(self.output,raw)] if self.valid else []
+        if self.valid and self.eligible and self.normalized:writes.append((self.output,0x8c110000))
+        require(self.output_writes==writes,'Session reader changed refused output or normalized the wrong word')
+        reads=([self.dispatch_at]+([self.family_at] if self.address==self.dispatch else [])) if self.heap and self.valid else []
+        require(self.gate_reads==reads and not self.gate_writes,
+                'Session leaf gate lost short-circuit order or wrote owned state')
+        regs,pr,mach,macl,gbr,sr,fpscr,fr=self.before
+        require(self.r[8:]==regs[8:] and self.pr==pr and
+                (self.mach,self.macl,self.gbr,self.sr&~1,self.fpscr,self.fr)==
+                (mach,macl,gbr,sr&~1,fpscr,fr),'Session reader lost its C/FPU/IRQ ABI')
+
+
+def check_session_compiled_heap_reader(worker,addresses,self_test):
+    from check_native_controller_failure_witness import console_layout
+    fragments,pins=session_heap_reader_pins(worker);layout_=console_layout()
+    mmio={0xa05f6c04,0xa05f6c10,0xa05f6c14,0xa05f6c18}
+    def admitted(address,width):
+        return width in (1,2,4) and (width==4 and address in mmio or
+            address&0xe0000000 in (0,0x80000000,0xa0000000) and
+            not address&(width-1) and 0xc000000<=physical(address) and
+            physical(address)+width<=0xd000000)
+    width_cases=0
+    for width in (0,1,2,3,4,8,0xffffffff):
+        for address in sorted(addresses):
+            SessionCompiledHeapReader(worker,fragments,address,admitted(address,width),
+                width=width,layout=layout_).check();width_cases+=1
+    cases=0
+    for mask in range(16):
+        for valid in (False,True):
+            base=0x8c220000 if valid else 0x4c220000
+            for normalized in (False,True):
+                for family in (0,1,2,3,4,5,6,0xffffffff):
+                    for address in (base,base+4,base+0x20000000):
+                        # The other alias of an invalid area can itself be a
+                        # valid alias; use the independent predicate for it.
+                        allowed=admitted(address,4)
+                        SessionCompiledHeapReader(worker,fragments,address,allowed,mask=mask,heap=True,
+                            normalized=normalized,family=family,dispatch=base,layout=layout_).check();cases+=1
+    raw_mutants=adapter_mutants=0
+    if self_test:
+        def refused(edits,address,width=4,heap=False,dispatch=None):
+            try:SessionCompiledHeapReader(worker,fragments,address,admitted(address,width),width=width,
+                heap=heap,normalized=True,family=5,dispatch=dispatch,layout=layout_,edits=edits).check()
+            except (ValueError,AssertionError,KeyError,struct.error):return
+            raise ValueError('Session compiled reader accepted weakened admission/gate instructions')
+        ram=fragments['ram'][1]
+        require(ram[24:26]==bytes.fromhex('4826') and ram.count(struct.pack('<I',0x60000000))==1,
+                'Session RAM reader lost its reviewed alignment/alias mutation sites')
+        refused({'ram':ram[:24]+bytes.fromhex('0900')+ram[26:]},0x8c200001);raw_mutants+=1
+        refused({'ram':ram.replace(struct.pack('<I',0x60000000),bytes(4))},0xec200000);raw_mutants+=1
+        outer=fragments['_read_value'][1]
+        require(outer[16:18]==bytes.fromhex('0488'),'Session public reader lost its exact width predicate')
+        refused({'_read_value':outer[:16]+bytes.fromhex('0388')+outer[18:]},0x8c200000,3);raw_mutants+=1
+        part=fragments['_read_value.part.0'][1]
+        require(part[28:30]==bytes.fromhex('0488'),'Session raw reader lost its MMIO width predicate')
+        refused({'_read_value.part.0':part[:28]+bytes.fromhex('0288')+part[30:]},0xa05f6c04,2);raw_mutants+=1
+        require(part[66:68]==bytes.fromhex('1c61') and part[94:96]==bytes.fromhex('1d61'),
+                'Session raw reader lost its unsigned byte/halfword extension sites')
+        for offset,width in ((66,1),(94,2)):
+            refused({'_read_value.part.0':part[:offset]+bytes.fromhex('0900')+part[offset+2:]},
+                    0x8c200000,width);raw_mutants+=1
+        wrapper=fragments['_read_heap'][1]
+        require(wrapper[18:20]==bytes.fromhex('0589'),'Session adapter lost its raw-failure branch')
+        refused({'_read_heap':wrapper[:18]+bytes.fromhex('058b')+wrapper[20:]},0x4c220000,heap=True,
+                dispatch=0x4c220000);adapter_mutants+=1
+        gate=fragments['_normalize_heap_dispatch_if_routing'][1]
+        require(gate[6:8]==bytes.fromhex('078b') and gate[12:14]==bytes.fromhex('0588'),
+                'Session leaf gate lost its exact routing/family predicate sites')
+        for changed in (gate[:6]+bytes.fromhex('0789')+gate[8:],gate[:12]+bytes.fromhex('0488')+gate[14:]):
+            refused({'_normalize_heap_dispatch_if_routing':changed},0x8c220000,heap=True);adapter_mutants+=1
+    return dict(instruction_cases=len(addresses),multi_width_instruction_cases=width_cases,
+        mutation_rejections=raw_mutants,width=4,source_loaded_only_after_full_predicate=True,
+        mmio_addresses=sorted(mmio),reader_symbol='_read_value + _read_value.part.0 + source-owned ram',
+        tagged_adapter_actual_companion_required=True,independently_reviewed_session_pins=pins,
+        normalization_adapter_gateway=dict(enabled=True,actual_wrapper_instruction_cases=cases,
+            mutation_rejections=adapter_mutants,all_imasks=True,actual_raw_predicate_executed=True,
+            typed_callees='Actual width/raw/RAM/leaf instructions; full tagged proof is matching companion ABI boundary',
+            actual_leaf_gate_executed=True,ordinary_and_other_alias_skip_full_proof=True,
+            all_exit_families_checked=True,leaf_performs_no_writes=True,
+            refused_raw_read_skips_normalization=True,raw_boolean_preserved_across_void_normalizer=True))
+
+
 def check_compiled_heap_reader(worker,self_test=False,*,read_ahead_proof=None):
     from check_native_controller_failure_witness import witness_companion
     witness=witness_companion(worker,read_ahead_proof)
@@ -2346,6 +2694,16 @@ def check_compiled_heap_reader(worker,self_test=False,*,read_ahead_proof=None):
                               0xcffffff,0xd000000,0x1ffffffc)}
     addresses|={base+offset for base in (0x005f6c00,0x805f6c00,0xa05f6c00,0xe05f6c00)
                 for offset in range(0,0x24)}
+    from check_native_session_witness_profile import profile as session_profile
+    from check_native_ordinary_general_profile import profile as ordinary_profile
+    ordinary=ordinary_profile(worker)
+    if session_profile(worker) is not None or ordinary is not None:
+        require(witness,'Outlined compiled reader requires the matching actual witness companion')
+        result=check_session_compiled_heap_reader(worker,addresses,self_test)
+        if ordinary is not None:
+            result['ordinary_general_profile']=True
+            result['independently_reviewed_ordinary_pins']=result.pop('independently_reviewed_session_pins')
+        return result
     for address in sorted(addresses):
         valid=(address in mmio or address&0xe0000000 in (0,0x80000000,0xa0000000) and
                not address&3 and 0xc000000<=physical(address)<=0xcfffffc)
@@ -2793,7 +3151,9 @@ def inspect_base(directory, *, self_test=False, objdump="sh-elf-objdump"):
         disassembly = subprocess.check_output([objdump, "-d", str(directory / (name + ".elf"))], text=True)
         instructions[name] = instruction_audit(name, disassembly)
     gateway = check_loan_gateway(directory, resident, elfs["resident-sci"])
-    map_refusal = audit_map_refusal(directory / "resident-sci.elf",self_test=self_test,objdump=objdump)
+    # Background's stack closure treats map refusal as a proved terminal
+    # escape. Its mutation evidence is mandatory even in normal/release mode.
+    map_refusal = audit_map_refusal(directory / "resident-sci.elf",self_test=self_test or background,objdump=objdump)
     report = {"schema": "kui.native.persistent.bootstrap.v1", "runtime": runtime,
               "module_sha256": hashlib.sha256(module).hexdigest(),
               "resident_memory_end": f"0x{resident['memory_end']:08x}",
@@ -3061,6 +3421,13 @@ def general_tick_stack_profile(worker,read_ahead_proof):
             read_ahead_proof.get('gateway',{}).get('parked_owner_stack_bytes')==20,
             'General inlined TICK lacks its matching executed read-ahead/stack proof')
     binding=read_ahead_proof.get('worker_binding',{})
+    return general_tick_stack_binding_profile(worker,binding)
+
+
+def general_tick_stack_binding_profile(worker,binding):
+    """The exact worker component of the TICK proof, without claiming a full RA audit."""
+    from check_native_general_lean_profile import worker_profile,worker_pins
+    require(worker_profile(worker),'General TICK component lacks its exact lean worker')
     require(binding.get('modeled_worker_entry')=='_reader_cooperative_service' and
             binding.get('actual_worker_binding_cases',0)>=446 and
             binding.get('actual_stream_guard_cases',0)>=168 and
@@ -3073,6 +3440,8 @@ def general_tick_stack_profile(worker,read_ahead_proof):
                  'only_private_stream_history_and_caller_stack_written','c_abi_preserved')),
             'General inlined TICK omits its complete actual worker proof')
     selected=worker_pins(worker,'read_ahead',{})
+    from check_native_dual_readers import reviewed_worker_pins
+    selected=reviewed_worker_pins(worker) or selected
     actual={}
     for name,(count,digest) in selected.items():
         address,body,section=symbol_bytes(worker,name,2)
@@ -3089,9 +3458,43 @@ def general_tick_stack_profile(worker,read_ahead_proof):
                 complete_typed_closures=actual)
 
 
+def session_stack_paths(directory,worker,read_ahead_proof=None,*,terminal_proof=None,terminal_gateway_cases=0):
+    from check_native_session_controls import worker_geometry,stack_bounds,HARDWARE
+    geometry=worker_geometry(worker)
+    low=read_elf(directory/'resident-sci.elf');auxiliary=read_elf(directory/'native-ra-aux.elf')
+    if read_ahead_proof is None:
+        # A focused stack check executes the actual worker component rather
+        # than inventing/rebinding a complete read-ahead companion report.
+        from check_native_dual_readers import worker_cases,console_layouts
+        binding=worker_cases(low,worker,console_layouts(general=True,session=True)['layouts']['x'])
+        tick=general_tick_stack_binding_profile(worker,binding)
+    else:
+        tick=general_tick_stack_profile(worker,read_ahead_proof)
+    require(terminal_proof and terminal_proof.get('schema')=='kui.native.gd-map-refusal.v1' and
+            terminal_proof.get('cached_worker_terminal') and terminal_proof.get('mutation_rejections',0)>0 and
+            terminal_gateway_cases>=7680,'Session terminal escape lacks its exact gateway proof')
+    _,trace,section=symbol_bytes(worker,'_kui_vmu_native_trace_game',2)
+    require(trace==bytes.fromhex('0b000900') and section[2]&7==6,
+            'Session General trace root is not the exact inert leaf')
+    scoped=stack_bounds(directory,worker,low,auxiliary)
+    paths={name:dict(c_frame_bytes=row['c_bytes'],assembly_and_guard_margin=336,
+        conservative_bytes=row['total_bytes'],worst_path=row['path']) for name,row in scoped['worker_paths'].items()}
+    paths['kui_vmu_native_trace_game']=dict(c_frame_bytes=0,assembly_and_guard_margin=336,
+        conservative_bytes=336,worst_path=['worker:kui_vmu_native_trace_game(0)'])
+    return dict(paths=paths,source_qualified_calls=True,indirect_sites=scoped['indirect_sites'],
+        verified_zero_stack_assembly_leaves=['kui_vmu_native_trace_irq',*(name[1:] for name in HARDWARE)],
+        verified_general_inlined_tick=tick,verified_tick_off_inlined_capture_start={'enabled':False},
+        verified_stack_replacing_terminals=scoped['terminal_stack_escapes'],
+        session_controls=dict(geometry=geometry,complete_source_qualified_stack_closure=scoped),
+        ordinary_low=scoped['ordinary_low'])
+
+
 def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_proof=None,
                        *, terminal_proof=None,terminal_gateway_cases=0,read_ahead_proof=None):
     """Walk source-qualified emitted graphs with finite authored callbacks."""
+    if '__kui_native_session_controls_worker' in worker[4]:
+        return session_stack_paths(directory,worker,read_ahead_proof,
+            terminal_proof=terminal_proof,terminal_gateway_cases=terminal_gateway_cases)
     report_sets = {"worker": sorted((directory / "native").rglob("*.ci")),
                    "low": sorted(directory.glob("resident-sci.elf*.ltrans*.ci"))}
     if not report_sets["low"]:
@@ -3315,8 +3718,12 @@ def worker_stack_paths(directory, worker, resident, fault_proof=None, coherence_
 
 def check_stacks(directory, worker, fault_proof=None, coherence_proof=None, *, background_audit=None,
                  terminal_proof=None,terminal_gateway_cases=0,read_ahead_proof=None):
+    session='__kui_native_session_controls_worker' in worker[4]
+    if session:
+        from check_native_session_controls import worker_geometry,HARDWARE
+        worker_geometry(worker)
     resident = inspect_elf((directory / "resident-sci.elf").read_bytes(), LOW,
-                           0x8c007ba0 if background_audit else 0x8C007800)
+                           0x8c007ba0 if background_audit or session else 0x8C007800)
     low_rows = linked_stack_rows(sorted((directory / "resident/lto").glob("*.ltrans*.su")), resident["symbols"])
     high_rows = linked_stack_rows(sorted((directory / "native").rglob("*.su")), worker[4])
     reported = {_function_base(name) for name, _ in high_rows}
@@ -3325,6 +3732,8 @@ def check_stacks(directory, worker, fault_proof=None, coherence_proof=None, *, b
                 "kui_vmu_native_runtime_fault_hook", "kui_vmu_native_allocation_failure_hook",
                 "kui_vmu_native_trace_irq"}
     assembly.update(name[1:] for name, *_ in TRACE_GATES)
+    if session:
+        assembly.update(name[1:] for name in HARDWARE)
     if fault_proof is None:fault_proof=fault_capture_admission(worker)
     assembly.update(fault_proof.get("verified_zero_stack_assembly",[]))
     if coherence_proof is None:coherence_proof=sdk_coherence_admission(worker)
@@ -3348,6 +3757,9 @@ def check_stacks(directory, worker, fault_proof=None, coherence_proof=None, *, b
                  resident_layout.stack_bottom("sci", False, True) -
                  resident_layout.STACK_GUARD_BYTES - resident_layout.STACK_ALIGNMENT_GAP)
     ordinary = low_sum - lease[0][1] + resident_layout.ASSEMBLY_STACK_BYTES
+    if session:
+        ordinary=call_paths['ordinary_low']['conservative_bytes']
+        available=call_paths['ordinary_low']['available_bytes']
     if background_audit:
         # Async GD/IRQ paths are mutually exclusive and independently walked
         # by the typed Background proof. Keep worker loan+callbacks in the
@@ -3360,6 +3772,28 @@ def check_stacks(directory, worker, fault_proof=None, coherence_proof=None, *, b
             "conservative_worker_bytes": total, "available_worker_bytes": layout_for(worker[4]).WORKER_STACK_BYTES,
             "ordinary_low_stack_bytes": ordinary, "ordinary_low_available_bytes": available,
             "lease_only_frame_bytes": lease[0][1], "required_worker_frames": len(required), "callgraph": call_paths}
+
+
+def check_worker_privileged_instructions(worker,disassembly,hook_ranges):
+    """Keep SR ownership closed; only the exact session reset leaf is additional."""
+    ranges=list(hook_ranges);session={}
+    if '__kui_native_session_controls_worker' in worker[4]:
+        from check_native_session_controls import worker_geometry
+        geometry=worker_geometry(worker)
+        address,body,section=symbol_bytes(worker,'_kui_native_return_enter',2)
+        require(section[1]==1 and section[2]&7==6,'Session reset leaf has no immutable code owner')
+        ranges.append((address,body))
+        session=dict(geometry=geometry,name='_kui_native_return_enter',address=hex(address),bytes=len(body),
+            sha256=hashlib.sha256(body).hexdigest(),complete_hardware_body_pinned=True)
+    sr_writes=[]
+    for address,_,mnemonic,operands in literal_aware_instructions(disassembly):
+        require(mnemonic not in ('trapa','sleep','rte','ldtlb'),'unexpected privileged worker instruction')
+        if mnemonic in ('ldc','ldc.l') and operands.split('!',1)[0].strip().endswith(',sr'):
+            require(any(begin<=address<begin+len(body) for begin,body in ranges),
+                    'C worker changes SR outside audited gateways')
+            sr_writes.append(hex(address))
+    return dict(sr_write_addresses=sr_writes,session_reset_leaf=session,
+        arbitrary_C_SR_writes_allowed=False)
 
 
 def check(directory, *, self_test=False, trace_startup=None):
@@ -3526,9 +3960,16 @@ def check(directory, *, self_test=False, trace_startup=None):
     runtime_mode = audit_runtime_mode(stage[0], (directory / "entry.elf").read_bytes(),
         (directory / "retail-maple-observe.kui").read_bytes(), cached_code=cached,
         stage_image=stage,resident_image=read_elf(directory / "resident-sci.elf"),self_test=self_test)
-    cache_gateway = check_cache_gateway(stage, self_test=self_test) if seed["enabled"] else {"enabled": False}
-    require(bool(paced or irq_rearm)==bool(cache_gateway.get('pure_extent_cache_scope',{}).get('enabled')),
-            'paced profile/pure extent cache scope mismatch')
+    cache_gateway = check_cache_gateway(stage, self_test=self_test, preclear_directory=directory) if seed["enabled"] else {"enabled": False}
+    extent_marker=stage[4].get('__kui_native_cached_extent')
+    resolution_marker=stage[4].get('__kui_native_cached_resolution')
+    for marker,label in ((extent_marker,'extent'),(resolution_marker,'resolution')):
+        require(marker is None or marker==(1,0,0,0xfff1),'Invalid common '+label+' cache scope marker')
+    require(bool(extent_marker)==bool(cache_gateway.get('pure_extent_cache_scope',{}).get('enabled')) and
+            (not (paced or irq_rearm) or extent_marker is not None),
+            'Common extent marker/profile proof mismatch')
+    require(bool(resolution_marker)==bool(cache_gateway.get('pure_resolution_cache_scope',{}).get('enabled')),
+            'Common resolution marker/profile proof mismatch')
     installer_stack = check_stage_stack(stage, read_elf(directory / "resident-sci.elf"),
                                         worker=worker, self_test=self_test)
     require(not any(name.startswith(("__native_resolution_cache_seed_", "_kui_vmu_native_resolution_cache_",
@@ -3554,11 +3995,7 @@ def check(directory, *, self_test=False, trace_startup=None):
                    names[1:4] + (names[11], names[14]) + tuple(gate[0] for gate in TRACE_GATES)]
     if fault_capture["available"]:hook_ranges.append(symbol_bytes(worker,FAULT_GATEWAY,2)[:2])
     if coherence["available"]:hook_ranges.extend(symbol_bytes(worker,name,2)[:2] for name in SDK_COHERENCE_GATES)
-    for address, _, mnemonic, operands in literal_aware_instructions(disassembly):
-        require(mnemonic not in ("trapa", "sleep", "rte", "ldtlb"), "unexpected privileged worker instruction")
-        if mnemonic in ("ldc", "ldc.l") and operands.split("!", 1)[0].strip().endswith(",sr"):
-            require(any(begin <= address < begin + len(body) for begin, body in hook_ranges),
-                    "C worker changes SR outside audited gateways")
+    privilege_ownership=check_worker_privileged_instructions(worker,disassembly,hook_ranges)
     pio = check_pio_writers(directory, worker)
     stacks = check_stacks(directory, worker, fault_capture, coherence,
                           background_audit=base.get("background_reader"),
@@ -3612,6 +4049,7 @@ def check(directory, *, self_test=False, trace_startup=None):
               "evolution_consolidated_trace": trace_audit,
               "stage_cache_publication": publication,
               "worker_icache_publication": publisher,
+              "worker_privileged_instruction_ownership":privilege_ownership,
               "resolution_cache_seed": seed,
               "runtime_mode": runtime_mode,
               "resolution_cache_gateway": cache_gateway,

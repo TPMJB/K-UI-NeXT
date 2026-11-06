@@ -350,6 +350,9 @@ enum kui_game_result kui_game_image_read(const struct kui_game_image *image,
     unsigned char *destination = out;
     uint32_t cursor = lba, remaining = count;
     unsigned char raw[KUI_GAME_SUBCHANNEL_BYTES];
+    unsigned char *window = NULL;
+    unsigned window_sectors = count < KUI_GAME_READ_WINDOW_SECTORS ? count : KUI_GAME_READ_WINDOW_SECTORS;
+    bool allocation_tried = false;
     for(unsigned i = 0; i < image->count && remaining; ++i) {
         const struct kui_game_image_track *track = &image->tracks[i];
         if(track->end_lba <= cursor) continue;
@@ -361,24 +364,42 @@ enum kui_game_result kui_game_image_read(const struct kui_game_image *image,
            track->sector_bytes == KUI_GAME_DATA_BYTES) {
             size_t length = (size_t)take * bytes;
             result = logical_read(image, track->name, offset, destination, length);
-            if(result != KUI_GAME_OK) return result;
+            if(result != KUI_GAME_OK) goto finished;
             destination += length;
         } else {
-            for(uint32_t sector = 0; sector < take; ++sector) {
+            /* Keep the same per-sector format checks and exact source span,
+             * while allowing FatFs to retain multi-block SD sessions. There
+             * is no speculative read-ahead or state shared across requests. */
+            if(take > 1u && !allocation_tried) {
+                allocation_tried = true;
+                window = malloc((size_t)window_sectors * KUI_GAME_SUBCHANNEL_BYTES);
+            }
+            for(uint32_t sector = 0; sector < take;) {
+                uint32_t group = window ? window_sectors : 1u;
+                if(group > take - sector) group = take - sector;
+                unsigned char *source = window ? window : raw;
                 result = image->files.read(image->files.ctx, track->name, offset,
-                                           raw, track->sector_bytes);
-                if(result != KUI_GAME_OK) return result;
-                if(format == KUI_GAME_SECTOR_MODE1 && !sector_data(raw, track))
-                    return KUI_GAME_MODE;
-                memcpy(destination, raw + (format == KUI_GAME_SECTOR_RAW ? 0u : track->data_offset), bytes);
-                destination += bytes;
-                offset += track->sector_bytes;
+                                           source, (size_t)group * track->sector_bytes);
+                if(result != KUI_GAME_OK) goto finished;
+                for(uint32_t j = 0; j < group; ++j) {
+                    const unsigned char *current = source + (size_t)j * track->sector_bytes;
+                    if(format == KUI_GAME_SECTOR_MODE1 && !sector_data(current, track)) {
+                        result = KUI_GAME_MODE;
+                        goto finished;
+                    }
+                    memcpy(destination, current + (format == KUI_GAME_SECTOR_RAW ? 0u : track->data_offset), bytes);
+                    destination += bytes;
+                }
+                sector += group;
+                offset += (uint64_t)group * track->sector_bytes;
             }
         }
         remaining -= take;
         cursor += take;
     }
-    return KUI_GAME_OK;
+finished:
+    free(window);
+    return result;
 }
 
 /* The following parsers normalize containers into the same bounded track map.

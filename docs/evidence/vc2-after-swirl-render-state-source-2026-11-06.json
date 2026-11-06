@@ -1,0 +1,309 @@
+{
+  "schema": "kui.vc2.after-swirl.render-state-source.v1",
+  "date": "2026-11-06",
+  "repository_head": "3337e554b21cf77a001133317aa0fab127287649",
+  "status": "BOUNDED_SOURCE_AUDIT_NO_CAUSAL_DIAGNOSIS",
+  "reported_hardware_observation": "Selecting VC2 after a successful Swirl return in the same session loads the virtual memory card and company logo, then freezes on white before the main screen.",
+  "fresh_boot_comparison": "No cold VC2 result on the same3337 build has been reported; this audit does not establish that the symptom is warm-only.",
+  "source_identities": [
+    {
+      "path": "../original-evidence/SmashPack-Swirl-runtime/SWIRL/SAMPLE.BIN",
+      "bytes": 204576,
+      "sha256": "82bb1160814548f4656b273353fd6168a691fb5f215b77377860ff9fd2156c8a",
+      "title": "swirl"
+    },
+    {
+      "path": "../original-evidence/SmashPack-Swirl-runtime/SWIRL/MAIGO.BIN",
+      "bytes": 14856,
+      "sha256": "55d89bfb608806138f5c675ba2187a99a0b4e2f11f7f65048c3f406b8993826a",
+      "title": "swirl"
+    },
+    {
+      "path": "../original-evidence/SmashPack-VC2-runtime/VIRTCOP2/SAMPLE.BIN",
+      "bytes": 204576,
+      "sha256": "82bb1160814548f4656b273353fd6168a691fb5f215b77377860ff9fd2156c8a",
+      "title": "vc2"
+    },
+    {
+      "path": "../original-evidence/SmashPack-VC2-runtime/VIRTCOP2/MAIGO.BIN",
+      "bytes": 14856,
+      "sha256": "55d89bfb608806138f5c675ba2187a99a0b4e2f11f7f65048c3f406b8993826a",
+      "title": "vc2"
+    },
+    {
+      "path": "../original-evidence/SmashPack-Swirl-runtime/SWIRL/0WINCEOS.BIN",
+      "bytes": 1828864,
+      "sha256": "a19080f2e243c04e01a3a473c7a3caa36fb85a5a8fbb2163c8f7a1b2c8ed5ea8",
+      "title": "swirl"
+    },
+    {
+      "path": "../original-evidence/SmashPack-VC2-runtime/VIRTCOP2/0WINCEOS.BIN",
+      "bytes": 1841152,
+      "sha256": "b728e8eaef03bd7cc5acbe3dc3363ec9fafcaca90916cf21781d2e72ff99b3bc",
+      "title": "vc2"
+    }
+  ],
+  "original_cleanup": {
+    "windows": [
+      {
+        "file_offset": "0x00000018",
+        "bytes": 130,
+        "sha256": "56536373c72010bddc3d4946275bd60cfbbc20e5d1c7f0f3ecdf4dd22b37c4b0",
+        "crc32": "0x6ae90fa5",
+        "name": "privileged_cleanup_prefix",
+        "matching_sample_file_offset": "0x000250b4",
+        "matching_sample_sha256": "56536373c72010bddc3d4946275bd60cfbbc20e5d1c7f0f3ecdf4dd22b37c4b0"
+      },
+      {
+        "file_offset": "0x00000058",
+        "bytes": 48,
+        "sha256": "9ea47c3e8f17625c310e4ffe5b919c4117b3e684e7940d4b20f238a826eb9036",
+        "crc32": "0xd86361ab",
+        "name": "display_blank_and_reset_and_dma_loop",
+        "matching_sample_file_offset": "0x000250f4",
+        "matching_sample_sha256": "9ea47c3e8f17625c310e4ffe5b919c4117b3e684e7940d4b20f238a826eb9036"
+      },
+      {
+        "file_offset": "0x00000068",
+        "bytes": 32,
+        "sha256": "50e6d5fbd015ea67a1df34f07ea0ca0bd46ff44a343c8e3fafc788addb86dc6f",
+        "crc32": "0x9b86a02b",
+        "name": "dma_disable_loop",
+        "matching_sample_file_offset": "0x00025104",
+        "matching_sample_sha256": "50e6d5fbd015ea67a1df34f07ea0ca0bd46ff44a343c8e3fafc788addb86dc6f"
+      },
+      {
+        "file_offset": "0x000000f8",
+        "bytes": 48,
+        "sha256": "4894b2aef50a307dc9fd6b8d88cdaad3d7b1a15b82a8ab2a54eb44a3a5026caa",
+        "crc32": "0x8116d422",
+        "name": "dma_control_table",
+        "matching_sample_file_offset": "0x00025194",
+        "matching_sample_sha256": "4894b2aef50a307dc9fd6b8d88cdaad3d7b1a15b82a8ab2a54eb44a3a5026caa"
+      }
+    ],
+    "register_table": [
+      {
+        "name": "C2DST",
+        "address": "0xa05f6808"
+      },
+      {
+        "name": "SDST",
+        "address": "0xa05f6820"
+      },
+      {
+        "name": "MDEN",
+        "address": "0xa05f6c14"
+      },
+      {
+        "name": "GDEN",
+        "address": "0xa05f7414"
+      },
+      {
+        "name": "ADEN",
+        "address": "0xa05f7814"
+      },
+      {
+        "name": "E1EN",
+        "address": "0xa05f7834"
+      },
+      {
+        "name": "E2EN",
+        "address": "0xa05f7854"
+      },
+      {
+        "name": "D2EN",
+        "address": "0xa05f7874"
+      },
+      {
+        "name": "PDEN",
+        "address": "0xa05f7c14"
+      },
+      {
+        "name": "CHCR1",
+        "address": "0xffa0001c"
+      },
+      {
+        "name": "CHCR2",
+        "address": "0xffa0002c"
+      },
+      {
+        "name": "CHCR3",
+        "address": "0xffa0003c"
+      }
+    ],
+    "operation": "Original source clears bit0 in each of the12 controls, then polls that same control bit0 with a127-count bound; PDEN polling here is not a separate PDST drain.",
+    "display_operations": [
+      {
+        "maigo_file_offset": "0x00000058",
+        "address": "0xa05f8044",
+        "operation": "read-modify-write clears bit0"
+      },
+      {
+        "maigo_file_offset": "0x00000062",
+        "address": "0xa05f8008",
+        "operation": "writes3 (TA and ISP/TSP reset bits)"
+      }
+    ]
+  },
+  "fresh_sample_cleanup": {
+    "callsite": {
+      "file_offset": "0x00008d56",
+      "bytes": 96,
+      "sha256": "371e0d9723d4f4aa830f208fcf50d7559799540888746d1d28b6649c0b154ce1",
+      "crc32": "0x04a526b9"
+    },
+    "copy_source": "0x8c03509c",
+    "sample_file_offset": "0x0002509c",
+    "copy_bytes": 15012,
+    "destination": "0x8ce08300",
+    "entry_jump_instruction_address": "0x8c018d82",
+    "entry_jump_target": "0x8ce08300",
+    "effect": "The original SAMPLE copies its embedded loader and jumps to its entry. Its privileged prefix is byte-identical to MAIGO cleanup through the DMA-control loop. Next-title startup therefore performs this cleanup again before MAINANA loads NK.",
+    "copy_destination_load_instruction_address": "0x8c018d60",
+    "copy_source_load_instruction_address": "0x8c018d66",
+    "entry_target_load_instruction_address": "0x8c018d7c"
+  },
+  "ddhal_metadata": [
+    {
+      "title": "swirl",
+      "module": "ddhal.dll",
+      "nominal_virtual_base": "0x01c60000",
+      "text_section": {
+        "rva": "0x00001000",
+        "bytes": 144896,
+        "file_offset": "0x000cb800",
+        "rom_storage_address": "0x8c0db000",
+        "sha256": "ee4cdb78a587574f8c85bea1d98413d5f0c69b8b3a6793f6127bdb10344a8b28"
+      },
+      "contracts": [
+        {
+          "file_offset": "0x000d3508",
+          "bytes": 60,
+          "sha256": "74ad16601751bc4b9ef2b1c9b01ff331bab666360db10362972627d2e4a8a323",
+          "crc32": "0xfba148dc",
+          "name": "hardware_base_mapping",
+          "module_rva": "0x00008d08",
+          "nominal_virtual_address": "0x01c68d08",
+          "rom_storage_address": "0x8c0e2d08"
+        },
+        {
+          "file_offset": "0x000d36d0",
+          "bytes": 32,
+          "sha256": "c271cb5ffafd8b8039d9a99b3a3eed9f7ae2710048b11e13ec48722160a408fd",
+          "crc32": "0x7d83ea7c",
+          "name": "SH4_channel2_initial_state",
+          "module_rva": "0x00008ed0",
+          "nominal_virtual_address": "0x01c68ed0",
+          "rom_storage_address": "0x8c0e2ed0"
+        }
+      ]
+    },
+    {
+      "title": "vc2",
+      "module": "ddhal.dll",
+      "nominal_virtual_base": "0x01c60000",
+      "text_section": {
+        "rva": "0x00001000",
+        "bytes": 143872,
+        "file_offset": "0x000ca800",
+        "rom_storage_address": "0x8c0da000",
+        "sha256": "abcd32b488070808eaa85854be22cf4413a89e57b52d9b71ae24043bd66a9702"
+      },
+      "contracts": [
+        {
+          "file_offset": "0x000d236c",
+          "bytes": 312,
+          "sha256": "f9adeb9bba79765dcbe7634bce2ba7cea8e29f61234c1d591955fc59caa2a1f1",
+          "crc32": "0x22f03301",
+          "name": "hardware_mapping",
+          "module_rva": "0x00008b6c",
+          "nominal_virtual_address": "0x01c68b6c",
+          "rom_storage_address": "0x8c0e1b6c"
+        },
+        {
+          "file_offset": "0x000d25de",
+          "bytes": 64,
+          "sha256": "17fcbedeed35af3bf171fbab904ebf177aa6c111f19f8ef79991ef40e388af1e",
+          "crc32": "0xd62bc4e3",
+          "name": "display_blank_clear_vram_unblank",
+          "module_rva": "0x00008dde",
+          "nominal_virtual_address": "0x01c68dde",
+          "rom_storage_address": "0x8c0e1dde"
+        },
+        {
+          "file_offset": "0x000e07f8",
+          "bytes": 112,
+          "sha256": "b7a88b3f94b400cb05a565a8ecafd0933ef7e75442ae2fbbbbdd9d4a2d3dbfed",
+          "crc32": "0xdb2a76cf",
+          "name": "HALInit_entry",
+          "module_rva": "0x00016ff8",
+          "nominal_virtual_address": "0x01c76ff8",
+          "rom_storage_address": "0x8c0efff8"
+        }
+      ]
+    }
+  ],
+  "current_source_sha256": {
+    "src/loader/native_return_hardware.c": "594743e28515a4a430dfc5895d85d7765ba8ee72770d052fbd6be83196cec53d",
+    "src/loader/native_return_hardware.S": "634841890c7cb7b1e32eb95277b0e5a50e657c3def253b04695489852062bb29",
+    "src/loader/smash_ce_return_loader.c": "e617088b3ec38aaca9020958429dd31a0186e9f075409cbd15fa755b6571409e",
+    "src/loader/smash_ce_return_entry.S": "0ad1b176b9292e75014c02870f490c9311bed6a2ce78534de4a19e6467da1366",
+    "src/loader/retail_async.c": "e17b7517e5d442d01a3488ce0de322a10116c4c2c3332464d60ee237715fa4cf",
+    "src/loader/retail_vram_copy.h": "af25720148c8b61762035a882eeef76b5712143c89492d0879de5a1b47771185"
+  },
+  "current_return_comparison": {
+    "source": "src/loader/native_return_hardware.c:78",
+    "present": [
+      "Drains Maple state and GD state; rejects active SH4 channel1.",
+      "Disables each of the4 G2 channel enables before draining its state.",
+      "Drains C2DST0xA05F6808.",
+      "Disables Maple, masks9 ASIC interrupt masks, clears DE on all4 SH4 channels, asserts AICA ARM reset, retires cache."
+    ],
+    "source_omissions": [
+      {
+        "operation": "PVR-interface DMA producer exclusion",
+        "address": "0xa05f7c14",
+        "state_address": "0xa05f7c18",
+        "evidence": "Original MAIGO control table includesPDEN; current shared quiesce does not accessPDEN/PDST. C2DST6808 is a separate transfer path."
+      },
+      {
+        "operation": "Sort-DMA producer exclusion",
+        "address": "0xa05f6820",
+        "evidence": "Original MAIGO table includesSDST; current shared quiesce does not accessSDST. No active Swirl sort-DMA transfer was established."
+      },
+      {
+        "operation": "Original display blank/reset",
+        "address": "0xa05f8044 / 0xa05f8008",
+        "evidence": "Original MAIGO blanks framebuffer read and writes reset3. Current shared quiesce does neither. Next SAMPLE executes this cleanup again; absence alone does not diagnose the later freeze."
+      }
+    ]
+  },
+  "accepted_texture_route": {
+    "source": "src/loader/retail_async.c:544",
+    "halfword_writer": "src/loader/retail_vram_copy.h:13",
+    "contract": "Direct A4/A5 VRAM and MMU-enabled CPU-virtual mappings outside top-bits10 use aligned volatile16-bit RMW copies. Original CE CPU VA mapping and permissions are preserved. No store-queue or FPU dependency is introduced by that writer.",
+    "recommendation": "Preserve the accepted canonical helpers and this established texture route; white output is not evidence that this contract regressed."
+  },
+  "primary_register_semantics": {
+    "source": "Sega Dreamcast/Dev.Box System Architecture, Last Update1999-09-03, page81",
+    "url": "https://segaretro.org/images/7/78/DreamcastDevBoxSystemArchitecture.pdf",
+    "retrieval": "Search-indexed primary manual excerpt; direct PDF fetch returned403.",
+    "facts": [
+      "Normal PVR-interface DMA completion clearsPDST but leavesPDEN enabled.",
+      "WritingPDEN0 terminates DMA;PDST drops0 after any current access completes."
+    ],
+    "narrow_hardening_candidate": "Before overwriting old execution memory, writePDEN0 then bounded-waitPDST bit0 clear. This excludes an independent memory producer without changing TA/render state.",
+    "limit": "This is a producer-admission correctness candidate, not a verified explanation or fix for VC2 white-screen freezing."
+  },
+  "explicit_unknowns": [
+    "No hardware register snapshot at Swirl return, cold outer, or VC2 stall was obtained.",
+    "No proof was found that Swirl leaves7C hardware-triggered DMA armed or active at return. DDHAL maps7C00, but the audited DDHAL transfer routines useC2DMA6808.",
+    "No proof was found that sort-DMA is active at return.",
+    "VC2 DDHAL mapsPVR/VRAM, blanks display, clearsVRAM and unblanks during HAL initialization; merely inheritedVRAM contents are not established as a cause.",
+    "Parent source audit verified the examined VC2 DDHAL C2DMA routes write freshCHCR2=0x12c1 andDMAOR=0x8201 beforeC2DST=1; leavingDE cleared/TE inherited at return does not explain those routes.",
+    "The company-logo-to-white sequence does not distinguish rendering, file IO, audio, interrupt scheduling, or title-side progression."
+  ],
+  "next_discriminating_hardware_check": "Boot the same3337 card from power-on and selectVC2 first, then separately runSwirl\u2192collection\u2192VC2. Record both results before calling this a warm-only regression.",
+  "production_changes": "None made by this audit."
+}

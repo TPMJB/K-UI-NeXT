@@ -1,0 +1,114 @@
+{
+  "schema": "kui.smash.preserved-installation.v1",
+  "cohort_source_commit": "ab1b145b33b4b4cf252f61d7f5cfb06a55ac5f87",
+  "admitted_by_gui_source_commit": "26d61b435b484e5e48bdb96996b5a76e3e9a5a69",
+  "original_evidence_sha256": "71cf9c75d8566e0d1ce2a8508f5465a6d77a9875a2fad5a345a9e3809cbe5063",
+  "modules_or_helpers_rebuilt": false,
+  "installed_module_files": 26,
+  "files": {
+    "KUI/apps/disc/native-disc-vmu-a1.kui": {
+      "sha256": "76a7c418680fff149f3835a2d521c57a6cd9d6b54db54d4222a0a0240805b6f1",
+      "bytes": 173684
+    },
+    "KUI/apps/disc/native-disc-vmu.kui": {
+      "sha256": "5db64b110d6962950f9e104cb9de7323fbe3f0f4c3fd4fb6242e30d55e02e3f7",
+      "bytes": 173684
+    },
+    "KUI/apps/games/cdda-native-mdk2.kui": {
+      "sha256": "f3dba85b5a646c1400e4246b34651834f47d7d1ef3b2cc90491f041ad7fcda85",
+      "bytes": 67240
+    },
+    "KUI/apps/games/cdda-native-toy-cooked.kui": {
+      "sha256": "1a9adc8efa419c070c28d2ff0816b5d20f9dc155e2c5cf00115b98e9a105bd6e",
+      "bytes": 85252
+    },
+    "KUI/apps/games/cdda-native-toy-raw.kui": {
+      "sha256": "c5948934355c0f98bafbccf595ece4d78b99496db28ad01e6cf97ea6a2826b3f",
+      "bytes": 85220
+    },
+    "KUI/apps/games/cdda-toy-cooked.kui": {
+      "sha256": "1a9adc8efa419c070c28d2ff0816b5d20f9dc155e2c5cf00115b98e9a105bd6e",
+      "bytes": 85252
+    },
+    "KUI/apps/games/cdda-toy-raw.kui": {
+      "sha256": "c5948934355c0f98bafbccf595ece4d78b99496db28ad01e6cf97ea6a2826b3f",
+      "bytes": 85220
+    },
+    "KUI/apps/games/ce-cdda-armada.kui": {
+      "sha256": "53919dd91b8afb04ba945888c4d2ca6ee585e7634729e35583bcad89bdb15a35",
+      "bytes": 135116
+    },
+    "KUI/apps/games/ce-cdda-bam4.kui": {
+      "sha256": "ac7ea4093a4d1b7cd7672af010063a96b8f11a66ef6faa41923eb5e8e79789ea",
+      "bytes": 135100
+    },
+    "KUI/apps/games/ce-cdda-worms.kui": {
+      "sha256": "c54eadb39d6751d10d355489153a3c1cab925aa30177fb91bf9127af5f9657ca",
+      "bytes": 136028
+    },
+    "KUI/apps/games/ce-cdda-wwp.kui": {
+      "sha256": "fa6ed6580ffa49e6aa4d45f5613975a82d5f544be164a41561a0c9a3706f71e1",
+      "bytes": 135708
+    },
+    "KUI/apps/games/ce-probe.kui": {
+      "sha256": "c16c010d5d9d57834bb0a53d40a4b4438216f3cfcc254273f32176b87bd89c9f",
+      "bytes": 85188
+    },
+    "KUI/apps/games/lzo-boot.kui": {
+      "sha256": "a7ff899d04ee9e6c59834b1e4dc3fcfdba34b4679c6f1858366004e29edb861c",
+      "bytes": 38124
+    },
+    "KUI/apps/games/retail-boot.kui": {
+      "sha256": "d8eb11d3047c26a626beed43b0d403a65cb7b748f36434dff636c9e0a75f5b6d",
+      "bytes": 233964
+    },
+    "KUI/apps/games/retail-cdda-mdk2.kui": {
+      "sha256": "f3dba85b5a646c1400e4246b34651834f47d7d1ef3b2cc90491f041ad7fcda85",
+      "bytes": 67240
+    },
+    "KUI/apps/games/retail-native-dual-a1.kui": {
+      "sha256": "6c73126e1ef83335d972c90277fabad6574b1aba425aa6acaf74d5af17390eca",
+      "bytes": 286304
+    },
+    "KUI/apps/games/retail-native-dual.kui": {
+      "sha256": "6c30616508516294ace74a483aef94bfa474d0681901656e6fa8fb98c79d5153",
+      "bytes": 286272
+    },
+    "KUI/apps/games/retail-native-standalone.kui": {
+      "sha256": "6947eddc3739be43bb593db88be4b308113cfac0fabf5ceda19617b14fff2c38",
+      "bytes": 48552
+    },
+    "KUI/apps/games/retail-physical.kui": {
+      "sha256": "d1a1639f505aa4c4a0a1d4d6f87a190b55d7cb49bdd54d223c72e0b27af59d66",
+      "bytes": 76208
+    },
+    "KUI/apps/games/retail-smash-menu.kui": {
+      "sha256": "b667ce3e5e7fbee3a16cfe66049d7f59ed50df55221fb2cadbfaa39c08f7daad",
+      "bytes": 63496
+    },
+    "KUI/apps/games/retail-smash-native-menu.kui": {
+      "sha256": "f2ebb88b18d3aac3f0e9c2849def7dfdb856c81b1a0bc9ad6a74853d26cbc4ea",
+      "bytes": 245852
+    },
+    "KUI/apps/games/retail-smash-swirl.kui": {
+      "sha256": "f9bab66d5b5ae785295615a816a52a641f7dc284669774721e1ac3ce3ead55bd",
+      "bytes": 94428
+    },
+    "KUI/apps/games/retail-smash-vc2.kui": {
+      "sha256": "617faa9038c98fe7925fa30d58ce602f89b3bbb6fc9d6161d546e82baf34c9ed",
+      "bytes": 94368
+    },
+    "KUI/apps/games/smash-swirl-vmu-helper.bin": {
+      "sha256": "33d881582435029aa3d946c25bf51640381c1027da419f9d90e3adef558119a2",
+      "bytes": 49152
+    },
+    "KUI/apps/games/smash-vc2-vmu-helper.bin": {
+      "sha256": "50ba730a2cd00a31a6cd647e9d37515732b1907e5c6493728f1c7c5e1de3a3b1",
+      "bytes": 49152
+    },
+    "KUI/apps/games/zso-boot.kui": {
+      "sha256": "b21e0897967ebefc1d65e661539a532475f5d7625eb81571070886a2592e8aa8",
+      "bytes": 37352
+    }
+  }
+}

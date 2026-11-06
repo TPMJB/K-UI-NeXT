@@ -33,7 +33,7 @@ def function(source,name):
 
 
 selector=block(main,main.index('if(!action && vmu_history_resume_needed'))
-forced=block(main,main.index('if(action==58 && vmu_history_resume_needed'))
+forced=block(main,main.index('if((action==58 || action==121 || action==122) && vmu_history_resume_needed'))
 snapshot=block(main,main.rfind('if(',0,main.index('games_query_pending=shell.games_query')))
 cancel_dispatch=block(main,main.index('if(kui_cancelled()\n#ifdef KUI_SD_RUNTIME'))
 # This is the real early-cancel branch, not a simulated cleanup policy. Once
@@ -76,7 +76,7 @@ static void reset_selector(void){
 suffix=r'''
 #define BLOCKED(field,value) do {reset_selector();field=value;assert(select_history(0)==0u);assert(vmu_history_resume_needed && !worker_active_action);}while(0)
 int main(void){
-    reset_selector();assert(select_history(0)==117u && worker_active_action==117u && busy && !vmu_history_resume_needed);
+    reset_selector();assert(select_history(0)==120u && worker_active_action==120u && busy && !vmu_history_resume_needed);
     busy=false;assert(select_history(0)==0u); /* one-shot; no idle rerun */
     reset_selector();assert(select_history(58)==58u && !worker_active_action && vmu_history_resume_needed && !busy);
     BLOCKED(vmu_emulation_enabled,false); /* explicit Off must cause zero job/I/O */
@@ -89,6 +89,8 @@ int main(void){
     reset_selector();vmu_history_resume_needed=false;assert(select_history(0)==0);
     reset_selector();prepare_history(58);assert(resumed==1 && !vmu_history_resume_needed);
     prepare_history(58);assert(resumed==1);
+    reset_selector();prepare_history(121);assert(resumed==1 && !vmu_history_resume_needed);
+    reset_selector();prepare_history(122);assert(resumed==1 && !vmu_history_resume_needed);
     reset_selector();vmu_emulation_enabled=false;prepare_history(58);assert(!resumed && vmu_history_resume_needed);
     reset_selector();vmu_emulation_generation=0;prepare_history(58);assert(!resumed);
     reset_selector();vmu_emulation_ok=false;prepare_history(58);assert(!resumed);
@@ -128,7 +130,7 @@ int main(void){
     request.sequence=0;shell.page=KUI_SHELL_GAMES;kui_shell_set_vmu_history(&shell,11,&request,&view);assert(shell.vmu_history_loading);
     shell.page=KUI_SHELL_VMU_HISTORY;kui_shell_set_vmu_history(&shell,11,&request,&view);
     assert(!shell.vmu_history_loading && shell.games_vmu_selection.pair==77);
-    puts("PASS frontend job fences: actual automatic117/launch gates, VMUOff/no prefs, immutable query, stale prefetch/edit/history results");
+    puts("PASS frontend job fences: actual automatic120/launch gates, VMUOff/no prefs, immutable query, stale prefetch/edit/history results");
     return 0;
 }
 '''

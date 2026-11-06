@@ -192,7 +192,7 @@ static int has_line(const char *line) {
 }
 static void arm(uint32_t *frame) {
     kui_retail_stage_relay(frame,TEST_CCR);
-    assert(hooks.publications==7u && calls.pauses==1u);
+    assert(hooks.publications==7u && !calls.pauses);
     for(unsigned i=0;i<7u;i++) {
         assert(hooks.address[i]==sonic_stack_address[i] && hooks.bytes[i]==12u);
     }

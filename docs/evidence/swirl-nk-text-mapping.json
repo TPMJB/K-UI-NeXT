@@ -1,0 +1,92 @@
+{
+  "schema": "kui.swirl.original-nk-text-map.v1",
+  "status": "PASS",
+  "kernel_sha256": "a19080f2e243c04e01a3a473c7a3caa36fb85a5a8fbb2163c8f7a1b2c8ed5ea8",
+  "source_nk_text_sha256": "6f90e780f6e407ea89152332eef4137d64a12eed0d527934131de4ed56640e2a",
+  "original_rom_physlast": "0x8c1cda34",
+  "cases": [
+    {
+      "source": "0x8c0b1000",
+      "outside_original_rom": false,
+      "status": "PASS",
+      "original_virtual_copy_arguments": [
+        "0x3ce1000",
+        "0x8c0b1000",
+        "0x6e00",
+        "0x20"
+      ],
+      "page_physical_addresses": [
+        "0xc0b1000",
+        "0xc0b2000",
+        "0xc0b3000",
+        "0xc0b4000",
+        "0xc0b5000",
+        "0xc0b6000",
+        "0xc0b7000"
+      ],
+      "page_attribute_bits": "0x359",
+      "real_address_unchanged": "0x3ce1000",
+      "executed_instructions": 725,
+      "romhdr_physfirst_last_read": false,
+      "original_direct_source_path_executed": true
+    },
+    {
+      "source": "0x8cfb8000",
+      "outside_original_rom": true,
+      "status": "PASS",
+      "original_virtual_copy_arguments": [
+        "0x3ce1000",
+        "0x8cfb8000",
+        "0x6e00",
+        "0x20"
+      ],
+      "page_physical_addresses": [
+        "0xcfb8000",
+        "0xcfb9000",
+        "0xcfba000",
+        "0xcfbb000",
+        "0xcfbc000",
+        "0xcfbd000",
+        "0xcfbe000"
+      ],
+      "page_attribute_bits": "0x359",
+      "real_address_unchanged": "0x3ce1000",
+      "executed_instructions": 725,
+      "romhdr_physfirst_last_read": false,
+      "original_direct_source_path_executed": true
+    }
+  ],
+  "windows": [
+    {
+      "begin": "0x8c021378",
+      "end": "0x8c0216e4",
+      "bytes": 876,
+      "sha256": "80a1105214ba3cecc2b4e203f81d1dd33d2f13f7928ca288e016eae1888b9d79",
+      "meaning": "ROM O32 conversion and section mapper"
+    },
+    {
+      "begin": "0x8c0248bc",
+      "end": "0x8c024c94",
+      "bytes": 984,
+      "sha256": "cf4781704b5821195822e0c7e602a010c6307dec44ccec9df92b0e307f230603",
+      "meaning": "VirtualCopy direct source and page table publication"
+    },
+    {
+      "begin": "0x8c025600",
+      "end": "0x8c02574c",
+      "bytes": 332,
+      "sha256": "1afcc7eeda5e50ca3b84ae4370cd915c6e812da35211cb50cde2e2039f3dafe7",
+      "meaning": "Destination page block and empty-page admission"
+    }
+  ],
+  "conclusions": [
+    "Original ROM O32 mapping accepts both original and relocated aligned direct-RAM sources in this authored destination-page context.",
+    "Raw O32 data_address changes the mapped physical source; real_address and nominal virtual mapping remain unchanged.",
+    "The actual replayed ROM branch and direct-source VirtualCopy branch perform no ROMHDR physfirst/physlast read."
+  ],
+  "limits": [
+    "Original source-bound NK scalar instructions execute; no function bytes are embedded or emitted.",
+    "The ROM container kind, one-section runtime E32 record, process table, empty page block and critical-section callbacks are authored boundaries.",
+    "This is not a full NK startup/module-loader, allocator, cache, TLB, interrupt or hardware execution model."
+  ]
+}

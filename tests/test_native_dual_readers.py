@@ -278,24 +278,28 @@ LAYOUT_FIELDS={
     'manifest_reader':'offsetof(struct kui_retail_manifest,reader)',
     'manifest_transport':'offsetof(struct kui_retail_manifest,storage_transport)',
     'config_payload':'offsetof(struct kui_vmu_native_passive_config,lease.payload)',
+    'config_driver_family':'offsetof(struct kui_vmu_native_passive_config,driver.family)',
     'durable.handling':'offsetof(struct kui_vmu_durable,handling)',
     'durable.inflight':'offsetof(struct kui_vmu_durable,inflight)',
     'lease_bytes':'KUI_VMU_NATIVE_BACKGROUND_LEASE_BYTES',
     **{name:'offsetof(kui_retail_async_region_type,'+name+')' for name in
        ('vector100','area0','engine','vector400','shared','vector600','area1',
-        'engine.manifest','engine.token','engine.active','engine.hooked','engine.target',
+        'engine.manifest','engine.token','engine.active','engine.failed','engine.opened',
+        'engine.in_irq','engine.hooked','engine.target',
         'engine.native_loan_state','engine.cursor.block','engine.cursor.done',
         'engine.release.vbr','engine.release.sci','engine.release.armed','engine.release.depth',
         'engine.release.pending','engine.release.rehooks','engine.release.released',
         'engine.release.vbr_changes','engine.stats.irq_blocks','engine.stats.call_blocks',
         'engine.stats.waits','engine.stats.execs','engine.stats.exec_int','engine.stats.hooks',
         'engine.stats.releases','shared.service','shared.service.pending','shared.service.token',
+        'shared.service.initialized','shared.service.executing',
         'shared.service.command','shared.service.diag.last_function','shared.card','shared.display',
-        'shared.stream','shared.stream.stats.blocks','shared.stream.stats.polled',
+        'shared.stream','shared.stream.state','shared.stream.position','shared.stream.arrived',
+        'shared.stream.unrepaired','shared.stream.stats.blocks','shared.stream.stats.polled',
         'shared.stream.stats.starts','shared.stream.stats.kept','shared.stream.stats.overruns',
         'shared.stream.stats.crc_errors','shared.stream.stats.token_errors',
         'shared.stream.stats.foreign','shared.stream.stats.repaired','shared.stream.stats.ahead',
-        'shared.stream.stats.deferred','shared.port')},
+        'shared.stream.stats.deferred','shared.port','shared.port.acquired','shared.port.fault')},
 }
 
 
@@ -312,13 +316,16 @@ def object_section(path,wanted):
     return data[section[4]:section[4]+section[5]]
 
 
-def console_layouts(general=False,compact=False):
+def console_layouts(general=False,compact=False,session=False):
+    if session and (not general or compact):
+        raise ValueError('session console layout requires the complete112KiB General profile')
     compiler=shutil.which('sh-elf-gcc')
     if compiler is None:raise ValueError('sh-elf-gcc must be on PATH for the actual console layout proof')
     with tempfile.TemporaryDirectory(prefix='kui-dual-layout-') as temporary:
         directory=Path(temporary)
         make=directory/'flags.mk'
-        makefile='Makefile.vmu-native-background-compact' if compact else \
+        makefile='Makefile.vmu-native-session-controls' if session else \
+            'Makefile.vmu-native-background-compact' if compact else \
             'Makefile.vmu-native-split-controller-stream-guard' if general else 'Makefile.vmu-native-dual-readers'
         make.write_text('include '+str(ROOT/makefile)+'\n'+
             'dump-dual-flags:\n\t$(file >'+str(directory/'x.flags')+',$(RESIDENT_FLAGS))\n'+
@@ -330,11 +337,18 @@ def console_layouts(general=False,compact=False):
             original=shlex.split((directory/(role+'.flags')).read_text())
             flags=[flag for flag in original if flag.startswith(('-D','-I'))]
             extra={'engine.native_max_lba':'offsetof(kui_retail_async_region_type,engine.native_max_lba)',
-                   'engine.native_max_count':'offsetof(kui_retail_async_region_type,engine.native_max_count)'} if role=='x' else {}
+                   'engine.native_max_count':'offsetof(kui_retail_async_region_type,engine.native_max_count)'} if role=='x' and not session else {}
+            if session and role=='x':
+                extra.update({
+                    'session.engine_generation_bytes':'sizeof(((kui_retail_async_region_type *)0)->engine.disc_generation)',
+                    'session.service_state_bytes':'+'.join('sizeof(((kui_retail_async_region_type *)0)->shared.service.'+name+')'
+                        for name in ('disc_generation','disc_lid','disc_changed','disc_observed'))})
             fields={**LAYOUT_FIELDS,**extra}
             source=directory/(role+'.c');binary=directory/(role+'.o')
             source.write_text('#include "kui/native_dual_reader.h"\n#include "kui/vmu_native_background.h"\n'+
                 '#include "retail_async.h"\n#include "kui/vmu_native_passive.h"\n'+
+                (('#if KUI_NATIVE_SESSION_CONTROLS != 1 || KUI_NATIVE_REQUEST_TIMING\n#error Session X selectors changed\n#endif\n'
+                    if role=='x' else '#if KUI_NATIVE_SESSION_CONTROLS\n#error Session Legacy selectors changed\n#endif\n') if session else '')+
                 'const uint32_t kui_dual_layout[] __attribute__((section(".rodata.dual_layout"),used))={\n'+
                 ',\n'.join(fields.values())+'\n};\n')
             subprocess.run([compiler,'-std=c11','-Os','-m4-single','-ml','-ffreestanding',*flags,
@@ -343,15 +357,46 @@ def console_layouts(general=False,compact=False):
             if len(raw)!=4*len(fields):raise ValueError('console layout scalar count differs')
             reports[role]=dict(zip(fields,struct.unpack('<'+str(len(fields))+'I',raw)))
         differences=[name for name in LAYOUT_FIELDS if name!='engine_bytes' and reports['x'][name]!=reports['y'][name]]
-        if differences:raise ValueError('X/Y worker-visible console offsets differ: '+', '.join(differences))
         x,y=reports['x'],reports['y']
+        if session:
+            # Session X owns one engine generation and four service-state
+            # words. Its Legacy reader retains the historical layout. The
+            # producer's actual getter rejects that Y map before reading
+            # any auxiliary fields; its full instruction model checks this.
+            # Admit only these source-authored fields, with deltas computed
+            # from the actual compiled added members, never guessed offsets.
+            engine_shift={'engine.active','engine.failed','engine.opened','engine.in_irq',
+                'engine.hooked','engine.target','engine.native_loan_state','engine.stats.irq_blocks',
+                'engine.stats.call_blocks','engine.stats.waits','engine.stats.execs','engine.stats.exec_int',
+                'engine.stats.hooks','engine.stats.releases'}
+            shared_shift={'shared.service.diag.last_function','shared.card','shared.display','shared.stream',
+                'shared.stream.state','shared.stream.position','shared.stream.arrived','shared.stream.unrepaired',
+                'shared.stream.stats.blocks','shared.stream.stats.polled','shared.stream.stats.starts',
+                'shared.stream.stats.kept','shared.stream.stats.overruns','shared.stream.stats.crc_errors',
+                'shared.stream.stats.token_errors','shared.stream.stats.foreign','shared.stream.stats.repaired',
+                'shared.stream.stats.ahead','shared.stream.stats.deferred','shared.port',
+                'shared.port.acquired','shared.port.fault'}
+            generation=x['session.engine_generation_bytes'];service=x['session.service_state_bytes']
+            if (generation!=4 or service!=16 or set(differences)!=engine_shift|shared_shift or
+                    x['engine_bytes']-y['engine_bytes']!=generation or
+                    any(x[name]-y[name]!=generation for name in engine_shift) or
+                    any(x[name]-y[name]!=service for name in shared_shift)):
+                raise ValueError('Session X/Y layout differs from its exact source-authored generation/state fields')
+        elif differences:raise ValueError('X/Y worker-visible console offsets differ: '+', '.join(differences))
         if x['pointer_bytes']!=4 or x['region_bytes']!=0x760 or x['lease_bytes']!=(0x47000 if compact else 0x51000 if general else 0x55000) or x['manifest_bytes']!=1020:
             raise ValueError('dual console geometry differs from the existing lease/region/map ABI')
-        if not (x['engine']+y['engine_bytes']<=x['engine.native_max_lba'] and
-                x['engine.native_max_count']+4<=x['vector400']):
+        if session:
+            if not (x['engine']+x['engine_bytes']<=x['vector400'] and
+                    y['engine']+y['engine_bytes']<=y['vector400']):
+                raise ValueError('Session engine escapes its unchanged fixed vector gap')
+        elif not (x['engine']+y['engine_bytes']<=x['engine.native_max_lba'] and
+                  x['engine.native_max_count']+4<=x['vector400']):
             raise ValueError('X timing-only words do not fit the unused Y engine gap')
-        return dict(actual_sh_compiler_console_layout=True,worker_visible_equal_fields=len(LAYOUT_FIELDS)-1,
-                    x_timing_words_only_in_unused_y_gap=True,layouts=reports)
+        return dict(actual_sh_compiler_console_layout=True,
+                    worker_visible_equal_fields=len(LAYOUT_FIELDS)-1-len(differences),
+                    x_timing_words_only_in_unused_y_gap=not session,session_profile=session,
+                    session_x_only_generation_state_in_owned_vector_gaps=session,
+                    source_authored_session_difference_fields=sorted(differences) if session else [],layouts=reports)
 
 
 def dual_lease_guards():

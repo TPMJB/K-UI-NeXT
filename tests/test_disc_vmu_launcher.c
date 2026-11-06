@@ -26,6 +26,8 @@ struct scenario {
     bool cancel_after_preference,cancel_after_info,cancel_after_card;
     bool cancel_after_probe;
     bool extent_fail,proof_fail,proof_arena,proof_slot_missing,cancel_after_module;
+    bool proof_direct,proof_bad_layout,proof_direct_dispatch;
+    int preclear_result;
     bool seed_missing,seed_duplicate,seed_malformed,seed_outside_module,seed_retained,packet_bad;
     bool region_free,region_fail,cancel_after_region;
     char console;
@@ -35,7 +37,7 @@ struct scenario {
     struct kui_disc_launcher_region region_forwarded;
     unsigned connect_fail_at,mount_fail_at,unmount_fail_at;
     unsigned connections,mounts,unmounts,disconnects,preferences,identities,infos,baselines,modules,cards,probes,progress,logs;
-    unsigned extents,proofs,frees,metadatas;
+    unsigned extents,proofs,frees,preclears,metadatas;
     uint32_t probe_stage;
     int card_result;
     const struct kui_vmu_game_selection *expected_selection;
@@ -195,12 +197,30 @@ bool kui_vmu_native_resolution_cache_build(const void *executable,size_t bytes,u
     out->layout.initializer=0x8c012400u;out->layout.tx_base=0x8c200000u;out->layout.rx_base=0x8c210000u;
     out->heap.initializer=0x8c012500u;out->heap.initializer_slot=0x8c012600u;
     out->heap.family=mock.proof_arena?KUI_VMU_NATIVE_HEAP_ARENA:KUI_VMU_NATIVE_HEAP_TAIL32;
+    out->heap.layout=KUI_VMU_NATIVE_HEAP_DISPATCH2;
+    if(mock.proof_direct) {out->heap.family=KUI_VMU_NATIVE_HEAP_DIRECT32;out->heap.layout=KUI_VMU_NATIVE_HEAP_DIRECT;}
+    if(mock.proof_bad_layout)out->heap.layout=99u;
+    if(mock.proof_direct_dispatch)out->heap.dispatch_table=0x8c012400u;
     if(mock.proof_slot_missing)out->heap.initializer_slot=0u;
     out->heap.allocate=0x8c012700u;out->heap.release=0x8c012800u;
     out->call.load=0x8c012900u;out->call.call=0x8c012902u;out->call.return_pr=0x8c012906u;
     memcpy(wire,proof_wire,sizeof(proof_wire));
     if(mock.cancel_after_probe)mock.stop=true;
     return true;
+}
+int kui_vmu_native_heap_preclear_plan(const void *executable,size_t bytes,const uint8_t sha[32],
+    const struct kui_vmu_native_heap *heap,const struct kui_vmu_native_heap_call *call,
+    struct kui_vmu_native_heap_preclear *out) {
+    CHECK(!mock.connected && !mock.mounted && executable==launch_executable && bytes==launch_program_bytes && sha && out);
+    CHECK(heap->initializer==0x8c012500u && call->call==0x8c012902u);
+    ++mock.preclears;return mock.preclear_result;
+}
+/* Descriptor geometry is checked by the real heap/cache suites. This leaf
+ * isolates the frontdoor's supported allocator admission after its producer. */
+bool kui_vmu_native_heap_metadata_valid(const struct kui_vmu_native_heap *heap) {
+    return (heap->family==KUI_VMU_NATIVE_HEAP_TAIL32 && heap->layout==KUI_VMU_NATIVE_HEAP_DISPATCH2) ||
+        (heap->family==KUI_VMU_NATIVE_HEAP_DIRECT32 && heap->layout==KUI_VMU_NATIVE_HEAP_DIRECT &&
+         !heap->dispatch_cell && !heap->dispatch_table);
 }
 /* The complete proof builder/digest codec has independent real-code and
  * owner-executable tests. Here the producer is a bounded stub, while the
@@ -213,7 +233,7 @@ bool kui_vmu_native_resolution_cache_record_digest(const void *wire,size_t bytes
 }
 const char *kui_disc_vmu_probe_stage_text(uint32_t stage) {
     static const char *const text[]={"argument","executable extent","Maple driver","Maple buffer layout",
-        "allocator discovery","allocator initializer","allocator startup call","ready"};
+        "allocator discovery","allocator initializer","allocator startup call","startup RAM clear","ready"};
     return stage<sizeof(text)/sizeof(text[0])?text[stage]:"unknown";
 }
 bool kui_disc_launcher_prepare(struct kui_runtime_image *out,struct kui_app_status *view,
@@ -452,6 +472,11 @@ int main(void) {
     CHECK(kui_vmu_native_cache_seed_read(dummy_payload+SEED_OFFSET,KUI_VMU_NATIVE_CACHE_SEED_BYTES,&seed_wire,&seed_digest));
     CHECK(!memcmp(seed_wire,proof_wire,sizeof(proof_wire)) && seed_digest==dummy_payload+SEED_OFFSET+24u);
     CHECK(image.info.crc32==kui_crc32(0u,image.data,image.info.payload_bytes));
+    for(unsigned slot=0u;slot<KUI_GAME_VMU_SLOT_COUNT;slot++) {
+        setup();mock.proof_direct=true;mock.vmu_slot=slot;CHECK(prepare(&selected));released();
+        CHECK(mock.modules==1u && mock.cards==1u && mock.proofs==1u && !mock.probes && status.passed);
+        CHECK(!strcmp(mock.module_package,slot==KUI_GAME_VMU_SLOT_A1?KUI_DISC_LAUNCH_VMU_A1_PACKAGE:KUI_DISC_LAUNCH_VMU_PACKAGE));
+    }
     setup();mock.vmu_slot=KUI_GAME_VMU_SLOT_A1;CHECK(prepare(&selected));released();
     CHECK(mock.modules==1u && !mock.baselines && mock.cards==1u && !mock.probes && mock.proofs==1u && status.passed);
     CHECK(!strcmp(mock.module_package,KUI_DISC_LAUNCH_VMU_A1_PACKAGE));
@@ -478,6 +503,17 @@ int main(void) {
         CHECK(!prepare(&selected));released();
         CHECK(!image.data && !mock.cards && mock.probes==1u && mock.extents==1u && status.errors==1u);
         CHECK(mock.proofs==(mode?1u:0u) && strstr(status.message,"complete lifetime proof"));
+    }
+    for(unsigned bad=0u;bad<3u;bad++) {
+        setup();mock.proof_direct=bad!=0u;mock.proof_bad_layout=bad!=2u;mock.proof_direct_dispatch=bad==2u;
+        CHECK(!prepare(&selected));released();
+        CHECK(!image.data && !mock.cards && mock.probes==1u && mock.proofs==1u && status.errors==1u);
+    }
+    for(int hazard=-1;hazard<=1;hazard+=2) {
+        setup();mock.preclear_result=hazard;
+        CHECK(!prepare(&selected));released();
+        CHECK(!image.data && !mock.cards && !mock.probes && mock.proofs==1u && mock.preclears==1u);
+        CHECK(mock.connections==1u && status.errors==1u && strstr(status.message,"startup RAM clear"));
     }
     setup();mock.vmu_slot=KUI_GAME_VMU_SLOT_A1;mock.enabled=false;
     CHECK(prepare((const struct kui_vmu_game_selection *)(uintptr_t)1));released();

@@ -17,7 +17,12 @@
 #include <string.h>
 
 static unsigned checks,writes,metadata_watch_reads;
+static unsigned payload_single_reads,payload_multi_reads,payload_sectors;
+static unsigned fat_single_reads,fat_multi_reads,bitmap_reads;
 static uint64_t metadata_watch_lba=UINT64_MAX;
+static uint64_t payload_first=UINT64_MAX,payload_end;
+static uint64_t failed_read_lba=UINT64_MAX,first_metadata_lba=UINT64_MAX;
+static bool mutate_payload_after_first;
 static int fail_after=-1;
 static bool raw_open,cancelled_flag;
 static uint8_t *disk;
@@ -34,8 +39,26 @@ static bool cancelled(void) {return cancelled_flag;}
 static uint64_t blocks(void *context) {(void)context;return disk_bytes/512u;}
 static int read_media(void *context,uint32_t lba,size_t count,uint8_t *out) {
     (void)context;if((uint64_t)lba+count>disk_bytes/512u) return -1;
+    if(lba<=failed_read_lba && failed_read_lba<(uint64_t)lba+count)return -1;
     if(lba<=metadata_watch_lba && metadata_watch_lba<(uint64_t)lba+count) ++metadata_watch_reads;
-    memcpy(out,disk+(size_t)lba*512u,count*512u);return 0;
+    if(lba>=payload_first && (uint64_t)lba+count<=payload_end) {
+        if(count==1u)++payload_single_reads;else ++payload_multi_reads;
+        payload_sectors+=(unsigned)count;
+    }
+    uint64_t fat=(uint64_t)volume.start+fs.fatbase,bitmap=(uint64_t)volume.start+fs.bitbase;
+    if(fs.fsize && lba>=fat && (uint64_t)lba+count<=fat+fs.fsize) {
+        if(count==1u)++fat_single_reads;else ++fat_multi_reads;
+        if(first_metadata_lba==UINT64_MAX)first_metadata_lba=lba;
+    }
+    uint64_t bitmap_sectors=fs.n_fatent>2u?((uint64_t)fs.n_fatent-2u+4095u)/4096u:0u;
+    if(fs.fs_type==FS_EXFAT && bitmap_sectors && lba>=bitmap && (uint64_t)lba+count<=bitmap+bitmap_sectors) {
+        ++bitmap_reads;if(first_metadata_lba==UINT64_MAX)first_metadata_lba=lba;
+    }
+    memcpy(out,disk+(size_t)lba*512u,count*512u);
+    if(mutate_payload_after_first && payload_sectors==256u) {
+        disk[(size_t)payload_end*512u-1u]^=1u;mutate_payload_after_first=false;
+    }
+    return 0;
 }
 static int write_media(void *context,uint32_t lba,size_t count,const uint8_t *data) {
     (void)context;CHECK(!raw_open);
@@ -239,15 +262,26 @@ static void candidate_display_metadata(const char *game_path,const char *import_
     row=find_row(&view,paths[1]);CHECK(row && row->users==1u && strstr(row->titles,"T-00003") && !strstr(row->titles,"Sonic Adventure"));
     row=find_row(&view,game_path);CHECK(row && !row->users && !row->titles[0]);
     row=find_row(&view,import_path);CHECK(row && row->users==2u && strstr(row->titles,"Sonic Adventure") && strstr(row->titles,"Crazy Taxi"));
-    /* Metadata fails closed before advertising partial associations. */
+    /* Bootstrap retains an empty generation 1 in A and publishes the actual
+     * catalogue as generation 2 in B. One damaged predecessor must preserve
+     * the complete newest associations; only loss of both valid generations
+     * refuses the entire view before advertising partial associations. */
     uint8_t *wire=malloc(KUI_VMU_GAME_CANDIDATES_WIRE_BYTES);CHECK(wire);
+    uint8_t *newest=malloc(KUI_VMU_GAME_CANDIDATES_WIRE_BYTES);CHECK(newest);
     CHECK(file_read(KUI_VMU_GAME_CANDIDATES_PATH_A,wire,KUI_VMU_GAME_CANDIDATES_WIRE_BYTES)==KUI_VMU_GAME_CANDIDATES_WIRE_BYTES);
+    CHECK(file_read(KUI_VMU_GAME_CANDIDATES_PATH_B,newest,KUI_VMU_GAME_CANDIDATES_WIRE_BYTES)==KUI_VMU_GAME_CANDIDATES_WIRE_BYTES);
+    uint8_t sequence[8];put64(sequence,1u);CHECK(!memcmp(wire+16u,sequence,8u));
+    put64(sequence,2u);CHECK(!memcmp(newest+16u,sequence,8u));
+    struct kui_vmu_backup_view healthy=view;
     wire[100]^=1u;file_write(KUI_VMU_GAME_CANDIDATES_PATH_A,wire,KUI_VMU_GAME_CANDIDATES_WIRE_BYTES);writes=0;
+    CHECK(!kui_vmu_library_list(0u,&view,log_line,cancelled) && !writes && !memcmp(&view,&healthy,sizeof(view)));
+    newest[100]^=1u;file_write(KUI_VMU_GAME_CANDIDATES_PATH_B,newest,KUI_VMU_GAME_CANDIDATES_WIRE_BYTES);writes=0;
     CHECK(kui_vmu_library_list(0u,&view,log_line,cancelled)<0 && !view.count && !writes);
     wire[100]^=1u;file_write(KUI_VMU_GAME_CANDIDATES_PATH_A,wire,KUI_VMU_GAME_CANDIDATES_WIRE_BYTES);
+    newest[100]^=1u;file_write(KUI_VMU_GAME_CANDIDATES_PATH_B,newest,KUI_VMU_GAME_CANDIDATES_WIRE_BYTES);
     char path[96];pair_path(path,pairs[0],"identity.bin");uint8_t bad_id[16];memcpy(bad_id,ids[0],16u);bad_id[0]^=1u;
     file_write(path,bad_id,16u);writes=0;CHECK(kui_vmu_library_list(0u,&view,log_line,cancelled)<0 && !view.count && !writes);
-    file_write(path,ids[0],16u);file_write("0:/KUI/vmu-test/assign-a.bin",original,sizeof(original));free(wire);
+    file_write(path,ids[0],16u);file_write("0:/KUI/vmu-test/assign-a.bin",original,sizeof(original));free(wire);free(newest);
     protected_unchanged();
 }
 static void journal_make(uint8_t journal[1024],const struct kui_vmu_persist_profile *p,unsigned block,uint8_t byte) {
@@ -453,7 +487,90 @@ static void directory_alias_guard(unsigned aliased_pair,const char *protected_pa
     CHECK(kui_vmu_library_rename(protected_path,"Refuse directory alias into another card",rename_identity,log_line,cancelled)<0 && !writes);
     unmount();memcpy(disk+position,original,bytes);mount();protected_unchanged();
 }
+static void bulk_compare_budget(const char *path,const uint8_t expected[131072],uint8_t result[131072]) {
+    FIL file;DWORD table[8]={8u};CHECK(f_open(&file,path,FA_READ)==FR_OK);
+    file.cltbl=table;CHECK(f_lseek(&file,CREATE_LINKMAP)==FR_OK && table[0]==4u);
+    file.cltbl=NULL;CHECK(f_close(&file)==FR_OK);
+    payload_first=(uint64_t)volume.start+fs.database+(uint64_t)(table[2]-2u)*fs.csize;
+    payload_end=payload_first+256u;payload_single_reads=payload_multi_reads=payload_sectors=0u;writes=0u;
+    CHECK(!kui_vmu_library_read(path,result,log_line,cancelled) && !memcmp(result,expected,131072u) && !writes);
+    CHECK(payload_sectors==512u); /* Both complete image reads remain mandatory. */
+    if(fs.csize>=8u)CHECK(!payload_single_reads && payload_multi_reads<=64u);
+    printf("VMU library bulk read budget: single=%u multi=%u sectors=%u\n",payload_single_reads,payload_multi_reads,payload_sectors);
+    /* Changing the last byte after the first complete read must still be
+     * caught by the independent, now-batched comparison pass. */
+    payload_single_reads=payload_multi_reads=payload_sectors=0u;mutate_payload_after_first=true;
+    CHECK(kui_vmu_library_read(path,result,log_line,cancelled)<0 && !mutate_payload_after_first && !writes);
+    disk[(size_t)payload_end*512u-1u]^=1u;
+    payload_first=UINT64_MAX;payload_end=0u;
+}
+static void allocation_read_budget(void) {
+    enum { FILES=64 };char path[96];
+    CHECK(f_mkdir("0:/KUI/vmu/io-budget")==FR_OK);
+    for(unsigned i=0u;i<FILES;i++) {
+        snprintf(path,sizeof(path),"0:/KUI/vmu/io-budget/b%04u.bin",i);file_write(path,"b",1u);
+    }
+    fat_single_reads=fat_multi_reads=bitmap_reads=0u;first_metadata_lba=UINT64_MAX;writes=0u;
+    CHECK(!kui_vmu_library_check_allocation(cancelled) && !writes);
+    if(fs.fs_type==FS_EXFAT)CHECK(bitmap_reads<=2u);
+    else CHECK(fat_multi_reads && fat_multi_reads<=16u && fat_single_reads+fat_multi_reads<=2u*FILES);
+    printf("VMU library allocation read budget: fat-single=%u fat-multi=%u bitmap=%u\n",
+        fat_single_reads,fat_multi_reads,bitmap_reads);
+    /* A second call must read fresh metadata, not retain the first walk's
+     * window across a possible write or mutation between invocations. */
+    fat_single_reads=fat_multi_reads=bitmap_reads=0u;
+    CHECK(!kui_vmu_library_check_allocation(cancelled) && !writes);
+    CHECK(fs.fs_type==FS_EXFAT?bitmap_reads!=0u:fat_multi_reads!=0u);
+    CHECK(first_metadata_lba!=UINT64_MAX);failed_read_lba=first_metadata_lba;
+    CHECK(kui_vmu_library_check_allocation(cancelled)<0 && !writes);failed_read_lba=UINT64_MAX;
+    /* The production disk adapter poisons an I/O-failed session until an
+     * explicit reconnect; metadata caching must not hide that refusal. */
+    unmount();mount();
+    CHECK(!kui_vmu_library_check_allocation(cancelled) && !writes);
+    FIL file;CHECK(f_open(&file,"0:/KUI/vmu/io-budget/b0000.bin",FA_READ)==FR_OK);
+    uint32_t cluster=file.obj.sclust;CHECK(cluster>=2u && f_close(&file)==FR_OK);
+    size_t positions[2];uint8_t saved[2][4];unsigned copies;
+    if(fs.fs_type==FS_EXFAT) {
+        uint32_t bit=cluster-2u;positions[0]=((size_t)volume.start+fs.bitbase)*512u+bit/8u;
+        saved[0][0]=disk[positions[0]];disk[positions[0]]&=(uint8_t)~(1u<<(bit%8u));copies=1u;
+    } else {
+        copies=fs.n_fats;CHECK(copies && copies<=2u);
+        for(unsigned i=0u;i<copies;i++) {
+            positions[i]=((size_t)volume.start+fs.fatbase+(size_t)i*fs.fsize)*512u+(size_t)cluster*4u;
+            memcpy(saved[i],disk+positions[i],4u);memset(disk+positions[i],0u,4u);
+        }
+    }
+    CHECK(kui_vmu_library_check_allocation(cancelled)<0 && !writes);
+    for(unsigned i=0u;i<copies;i++)memcpy(disk+positions[i],saved[i],fs.fs_type==FS_EXFAT?1u:4u);
+    CHECK(!kui_vmu_library_check_allocation(cancelled) && !writes);
+    for(unsigned i=0u;i<FILES;i++) {
+        snprintf(path,sizeof(path),"0:/KUI/vmu/io-budget/b%04u.bin",i);CHECK(f_unlink(path)==FR_OK);
+    }
+    CHECK(f_unlink("0:/KUI/vmu/io-budget")==FR_OK);protected_unchanged();
+}
+#if FF_USE_MKFS
+static int format_fixture(const char *kind,const char *cluster_text,const char *path) {
+    BYTE format_kind=!strcmp(kind,"fat32")?FM_FAT32:FM_EXFAT;
+    char *tail;unsigned long cluster=strtoul(cluster_text,&tail,10);CHECK(!*tail && cluster && cluster<=131072u);
+    disk_bytes=(2048u+131072u+2048u)*512u;disk=calloc(1,disk_bytes);CHECK(disk);
+    disk[446u+4u]=format_kind==FM_FAT32?0x0cu:7u;
+    put32(disk+446u+8u,2048u);put32(disk+446u+12u,131072u);disk[510]=0x55;disk[511]=0xaa;
+    kui_media_set(&media);uint8_t scratch[8192];
+    MKFS_PARM parameters={.fmt=(BYTE)(format_kind|FM_SFD),.n_fat=format_kind==FM_FAT32?2u:1u,
+        .align=1u,.n_root=512u,.au_size=(DWORD)cluster};
+    CHECK(f_mkfs("0:",&parameters,scratch,sizeof(scratch))==FR_OK);
+    if(format_kind==FM_FAT32) {
+        uint8_t *boot=disk+2048u*512u;unsigned backup=boot[50u]|(unsigned)boot[51u]<<8;
+        CHECK(backup && backup<32u);put32(boot+28u,2048u);put32(boot+(size_t)backup*512u+28u,2048u);
+    }
+    FILE *output=fopen(path,"wb");CHECK(output && fwrite(disk,1u,disk_bytes,output)==disk_bytes && !fclose(output));
+    free(disk);return 0;
+}
+#endif
 int main(int argc,char **argv) {
+#if FF_USE_MKFS
+    if(argc==5 && !strcmp(argv[1],"--format"))return format_fixture(argv[2],argv[3],argv[4]);
+#endif
     CHECK(argc==2);FILE *input=fopen(argv[1],"rb");CHECK(input && !fseek(input,0,SEEK_END));
     long size=ftell(input);CHECK(size>0 && !fseek(input,0,SEEK_SET));disk_bytes=(size_t)size;disk=malloc(disk_bytes);
     CHECK(disk && fread(disk,1,disk_bytes,input)==disk_bytes && !fclose(input));mount();paths();
@@ -488,6 +605,7 @@ int main(int argc,char **argv) {
     CHECK(!kui_vmu_library_read(game_path,result,log_line,cancelled) && !memcmp(result,image,131072u) && !writes);
     CHECK(!kui_vmu_library_read(snapshot.path,result,log_line,cancelled) && !memcmp(result,image,131072u) && !writes);
     protected_unchanged();
+    bulk_compare_budget(game_path,image,result);allocation_read_budget();
 
     /* A durable redo record can name data not yet in card.vmd. The manager
      * displays it from RAM, never replays it to the card or journal file. */

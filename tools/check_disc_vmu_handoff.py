@@ -11,6 +11,9 @@ from pathlib import Path
 import struct
 
 from check_loader_layout import EH, SH, SYM, region
+from sh4_delay_slots import validate_delay_slot
+
+_EXTENT_SCOPE_PROOFS={}
 
 
 class Image:
@@ -23,6 +26,7 @@ class Image:
         self.sections = [SH.unpack(region(data, h[6]+i*SH.size, SH.size, 'section'))
                          for i in range(h[12])]
         self.symbols = {}
+        self.typed_symbols = {}
         for s in self.sections:
             if s[1] != 2:
                 continue
@@ -31,13 +35,16 @@ class Image:
             strings = self.sections[s[6]]
             names = region(data, strings[4], strings[5], 'symbol names')
             for at in range(s[4], s[4]+s[5], SYM.size):
-                n, value, _, info, _, section = SYM.unpack(region(data, at, SYM.size, 'symbol'))
-                if not info >> 4 or not n:
+                n, value, size, info, _, section = SYM.unpack(region(data, at, SYM.size, 'symbol'))
+                if not n:
                     continue
                 end = names.find(b'\0', n)
                 if n >= len(names) or end < 0:
                     raise ValueError('Invalid symbol name')
                 name = names[n:end].decode('ascii')
+                self.typed_symbols[name]=(value,size,info&15,section)
+                if not info >> 4:
+                    continue
                 if name in self.symbols and self.symbols[name] != value:
                     raise ValueError('Conflicting public symbol')
                 self.symbols[name] = value
@@ -227,12 +234,79 @@ def linked_call(image, caller, callee, witnesses):
     return call
 
 
-def snapshot_capture(image, helper, witnesses):
-    """Pin the bounded paired-window copy loop and its sole memcpy call.
+def snapshot_source_retained(image, helper, source_load, loop):
+    """Prove R13 receives the typed entry array before every first loop entry.
 
-    Unlike the scalar calls, this callee stays in R9 across a short loop.
-    Bind its actual literal and every argument/count/loop instruction rather
-    than widening linked_call's permissible target-load gap.
+    Follow actual control flow instead of skipping words named by arbitrary
+    literal loads. Both conditional successors matter; C calls preserve R13
+    by the existing callee-saved ABI. The exact copy loop separately owns its
+    one postincrement and its at-most-two iterations.
+    """
+    begin, size = typed(image, helper, 2)
+    end = begin+size
+    pending = [(begin, False)]
+    seen = set()
+    reached = False
+
+    def enqueue(pc, retained):
+        if not begin <= pc < end or pc & 1:
+            raise ValueError('Snapshot source flow escapes its exact helper')
+        pending.append((pc, retained))
+
+    def effect(op, retained):
+        return retained and not writes_gpr(op, 13)
+
+    while pending:
+        pc, retained = pending.pop()
+        if (pc, retained) in seen:
+            continue
+        seen.add((pc, retained))
+        if pc == loop:
+            if not retained:
+                raise ValueError('Snapshot loop loses its typed R13 entry-array source')
+            reached = True
+            continue
+        op = struct.unpack('<H', image.read(pc, 2))[0]
+        if pc == source_load:
+            retained = True  # Its exact literal/opcode is pinned by Cursor.
+        elif op in (0x002b, 0x001b) or op & 0xf0ff in (0x0003, 0x0023) or op >> 8 == 0xc3:
+            raise ValueError('Unsupported snapshot source control transfer')
+        if op >> 12 in (0xa, 0xb) or op & 0xf0ff in (0x400b, 0x402b) or op == 0x000b:
+            delay = struct.unpack('<H', image.read(pc+2, 2))[0]
+            validate_delay_slot(delay, pc)
+            post = effect(delay, retained)
+            if op == 0x000b:
+                continue
+            if op >> 12 == 0xb or op & 0xf0ff == 0x400b:
+                enqueue(pc+4, post)
+            elif op >> 12 == 0xa:
+                displacement = (op & 4095)^2048
+                enqueue(pc+4+2*(displacement-2048), post)
+            else:
+                raise ValueError('Unproved snapshot source tail jump')
+        elif op >> 8 in (0x89, 0x8b, 0x8d, 0x8f):
+            delayed = op >> 8 in (0x8d, 0x8f)
+            post = retained
+            if delayed:
+                delay = struct.unpack('<H', image.read(pc+2, 2))[0]
+                validate_delay_slot(delay, pc)
+                post = effect(delay, retained)
+            displacement = ((op & 255)^128)-128
+            enqueue(pc+4+2*displacement, post)
+            enqueue(pc+(4 if delayed else 2), post)
+        else:
+            enqueue(pc+2, retained if pc == source_load else effect(op, retained))
+    if not reached:
+        raise ValueError('Snapshot source proof never reaches its loop')
+
+
+def snapshot_capture(image, helper, witnesses):
+    """Pin either exact reviewed paired-window copy schedule.
+
+    The historical schedule spills its entry-array cursor at SP+8 and keeps
+    memcpy in R9. The ten-family compiler schedule retains that same typed
+    array in R13 and keeps memcpy in R10. Both pin every argument/count/edge;
+    the retained-pointer schedule additionally proves its source's liveness.
     """
     target, _ = typed(image, '_memcpy', 2)
     loads = []
@@ -240,20 +314,42 @@ def snapshot_capture(image, helper, witnesses):
         if op >> 12 == 0xd:
             literal = ((pc+4) & ~3)+(op & 255)*4
             if struct.unpack('<I', image.read(literal, 4))[0] == target:
-                loads.append(pc)
-    if len(loads) != 1:
-        raise ValueError('Requires one exact paired snapshot-copy callee load')
-    c = Cursor(image, loads[0]-2, witnesses)
+                loads.append((pc, op >> 8 & 15))
+    if len(loads) != 1 or loads[0][1] not in (9, 10):
+        raise ValueError('Requires one exact reviewed paired snapshot-copy callee load')
+    load, register = loads[0]
+    c = Cursor(image, load-2, witnesses)
     c.literal(12, 0x20000000, 'snapshot source P2 alias')
-    c.literal(9, target, 'snapshot copy callee')
+    c.literal(register, target, 'snapshot copy callee')
     loop = c.pc
-    for op in (0x50f4, 0xe10c, 0x52f2, 0xe60c, 0x201e, 0x6526):
-        c.op(op, 'snapshot index, twelve-byte span and source entry')
-    c.literal(1, typed(image, '_persistent_exit_windows', 1)[0], 'snapshot destination array')
-    for op in (0x041a, 0x1f22, 0x25cb):
-        c.op(op, 'snapshot destination index and uncached source')
+    if register == 9:
+        for op in (0x50f4, 0xe10c, 0x52f2, 0xe60c, 0x201e, 0x6526):
+            c.op(op, 'snapshot index, twelve-byte span and source entry')
+        c.literal(1, typed(image, '_persistent_exit_windows', 1)[0], 'snapshot destination array')
+        for op in (0x041a, 0x1f22, 0x25cb):
+            c.op(op, 'snapshot destination index and uncached source')
+    else:
+        base, size = typed(image, '_native_exits', 1)
+        if size != 52:
+            raise ValueError('Snapshot source requires the exact exit-descriptor ABI')
+        source = base+24
+        source_loads = []
+        for pc, op in function_ops(image, helper):
+            if op & 0xff00 == 0xdd00:
+                at = ((pc+4) & ~3)+(op & 255)*4
+                if struct.unpack('<I', image.read(at, 4))[0] == source:
+                    source_loads.append(pc)
+        if len(source_loads) != 1 or source_loads[0] >= load:
+            raise ValueError('Requires one typed R13 exit-entry-array source')
+        Cursor(image, source_loads[0], witnesses).literal(13, source, 'snapshot retained entry-array source')
+        for op in (0x50f4, 0xe10c, 0x65d6, 0xe60c, 0x201e):
+            c.op(op, 'snapshot index, twelve-byte span and source entry')
+        c.literal(1, typed(image, '_persistent_exit_windows', 1)[0], 'snapshot destination array')
+        for op in (0x25cb, 0x041a):
+            c.op(op, 'snapshot destination index and uncached source')
+        snapshot_source_retained(image, helper, source_loads[0], loop)
     call = c.pc
-    c.op(0x490b, 'snapshot exact memcpy call')
+    c.op(0x400b | register << 8, 'snapshot exact memcpy call')
     c.op(0x341c, 'snapshot destination argument delay')
     for op in (0x51f4, 0xe001, 0x52f5, 0x7101, 0x3216):
         c.op(op, 'snapshot bounded pair-loop increment and limit')
@@ -354,7 +450,32 @@ def audit_entry_return(image, witnesses):
               linked_call(image, relay, '_native_crt_bootstrap_prearm', witnesses))
     if cached:
         image_sha = linked_call(image, relay, '_kui_sha256_digest', witnesses)
-        extent = linked_call(image, relay, '_kui_vmu_native_program_extent', witnesses)
+        extent_name='_kui_vmu_native_program_extent'
+        marker=image.typed_symbols.get('__kui_native_cached_extent')
+        wrapper='_kui_vmu_native_cached_extent'
+        if bool(marker)!=(wrapper in image.typed_symbols):
+            raise ValueError('Physical extent cache marker/function mismatch')
+        if marker is not None:
+            if marker!=(1,0,0,0xfff1):
+                raise ValueError('Invalid physical extent cache marker')
+            from check_vmu_native_cache_gateway import check_extent_scope
+            from check_vmu_native_worker_gateway import symbol_bytes
+            stage=(image.data,None,None,image.sections,image.typed_symbols)
+            relevant=[]
+            for name in (wrapper,'_kui_vmu_native_program_extent'):
+                address,body,section=symbol_bytes(stage,name,2)
+                relevant.append((image.typed_symbols[name],section,bytes(body)))
+            key=tuple(relevant)
+            proof=_EXTENT_SCOPE_PROOFS.get(key)
+            if proof is None:
+                proof=check_extent_scope(stage,self_test=True)
+                if len(_EXTENT_SCOPE_PROOFS)>=32:_EXTENT_SCOPE_PROOFS.clear()
+                _EXTENT_SCOPE_PROOFS[key]=proof
+            if not proof.get('enabled') or proof.get('mutation_rejections')!=20:
+                raise ValueError('Physical cached extent lacks its linked cache/publication proof')
+            image.cached_extent_scope=proof
+            extent_name=wrapper
+        extent = linked_call(image, relay, extent_name, witnesses)
         mapping = linked_call(image, relay, '_native_disc_mapping_prepare', witnesses)
         if not image_sha < extent < mapping < before:
             raise ValueError('Disc mapping must follow the full-file SHA and program extent, before live prearm')
@@ -403,6 +524,9 @@ def audit_entry_return(image, witnesses):
         raise ValueError('Entry PR store must follow exit publication and capture update')
     pc, op = stores[0]
     base, value = op >> 8 & 15, op >> 4 & 15
+    copy_register = struct.unpack('<H', image.read(capture, 2))[0] >> 8 & 15
+    if value == copy_register:
+        raise ValueError('Entry PR value aliases the snapshot-copy callee instead of the selected game entry')
     prior = ops.get(pc-2, 0)
     source = prior >> 4 & 15
     if prior != 0x200b | base << 8 | source << 4:

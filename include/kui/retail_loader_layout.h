@@ -51,6 +51,23 @@
 #define KUI_RETAIL_LOW_STANDARD_LIMIT 0x8c007800
 #define KUI_RETAIL_LOW_ASYNC_LIMIT 0x8c007ba0
 #define KUI_RETAIL_LOW_HOOK_STACK 0x8c007d00
+#if KUI_NATIVE_GD_PIO_STREAM
+/* The native PIO bridge still reserves352 guarded stack bytes, entirely
+ * below IP.BIN. Its extra code/state uses another640 bytes of the firmware
+ * reservation; owner bootstrap, IP metadata and game RAM remain outside it. */
+#undef KUI_RETAIL_LOW_ASYNC_LIMIT
+#undef KUI_RETAIL_LOW_HOOK_STACK
+#define KUI_RETAIL_LOW_ASYNC_LIMIT 0x8c007e20
+#define KUI_RETAIL_LOW_HOOK_STACK 0x8c007f80
+#endif
+#if KUI_NATIVE_GD_VRAM_DMA
+/* The bounded PVR payload path consumes the remaining128 firmware bytes.
+ * The352-byte guarded stack ends at, and never includes, IP.BIN's start. */
+#undef KUI_RETAIL_LOW_ASYNC_LIMIT
+#undef KUI_RETAIL_LOW_HOOK_STACK
+#define KUI_RETAIL_LOW_ASYNC_LIMIT 0x8c007ea0
+#define KUI_RETAIL_LOW_HOOK_STACK 0x8c008000
+#endif
 #if KUI_RETAIL_MDK2_CDDA
 #include "kui/mdk2_cdda_layout.h"
 #undef KUI_RETAIL_LOW_STANDARD_LIMIT

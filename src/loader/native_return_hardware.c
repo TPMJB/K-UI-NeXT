@@ -7,6 +7,9 @@
 #define MAPLE_ENABLE UINT32_C(0xa05f6c14)
 #define MAPLE_STATE UINT32_C(0xa05f6c18)
 #define MAPLE_PROTECT UINT32_C(0xa05f6c8c)
+#define PVR_DMA_ENABLE UINT32_C(0xa05f7c14)
+#define PVR_DMA_STATE UINT32_C(0xa05f7c18)
+#define SORT_DMA_STATE UINT32_C(0xa05f6820)
 #define POLL_LIMIT 1000000u
 static _Alignas(32) volatile uint32_t controller_tx[8];
 static _Alignas(32) volatile uint32_t controller_rx[256];
@@ -85,7 +88,14 @@ bool kui_native_return_quiesce(void) {
         write_hw(base+20u,0u);
         if(!wait_clear(base+24u,1u))return false;
     }
-    if(!wait_clear(UINT32_C(0xa05f6808),1u))return false;
+    /* Retail MAIGO also excludes the independent PVR-interface and sort
+     * DMA engines before replacing RAM. PDEN remains armed after a normal
+     * completion; disarm it before draining PDST. Sort DMA has no separate
+     * hardware retrigger enable: let its current transfer finish rather
+     * than treating a write to its start bit as proof of retirement. */
+    write_hw(PVR_DMA_ENABLE,0u);
+    if(!wait_clear(PVR_DMA_STATE,1u) || !wait_clear(SORT_DMA_STATE,1u) ||
+       !wait_clear(UINT32_C(0xa05f6808),1u))return false;
     write_hw(MAPLE_ENABLE,0u);
     /* No game interrupt handler may run while its text is replaced. */
     for(unsigned bank=0u;bank<3u;++bank)

@@ -1,0 +1,738 @@
+{
+  "kernel_sha256": "a19080f2e243c04e01a3a473c7a3caa36fb85a5a8fbb2163c8f7a1b2c8ed5ea8",
+  "module": "wsegacd.dll",
+  "nominal_base": "0x1cf0000",
+  "windows": [
+    {
+      "name": "zero_token_to_io_device_error",
+      "rva": "0x19bc",
+      "bytes": 84,
+      "sha256": "24a93dc8bbd2a1a03ea0f9e641d93c312e9ff728fadc136775a7b0a07e42c840",
+      "crc32": "33d384a0"
+    },
+    {
+      "name": "read_command16_submit",
+      "rva": "0x3092",
+      "bytes": 38,
+      "sha256": "2414d3204f9a761d9eeaa96f6a6e64ceeeee7ba892b74b8d3ab0ae09f4e37d52",
+      "crc32": "4b5a646a"
+    },
+    {
+      "name": "read_command39_submit",
+      "rva": "0x30ea",
+      "bytes": 46,
+      "sha256": "5c5a7abf2c21cef42b994cdfbf60f6ea2ef6873988fdb555c46e9075b2f9d37c",
+      "crc32": "6826796e"
+    },
+    {
+      "name": "check_poll_status_dispatch",
+      "rva": "0x1a70",
+      "bytes": 64,
+      "sha256": "eb284b905fa514a3a7b5f33a95f9b45dab57c6d38e5d83a2d79795a29f30a403",
+      "crc32": "5753d98f"
+    },
+    {
+      "name": "check_zero_to_io_device_error",
+      "rva": "0x1c02",
+      "bytes": 10,
+      "sha256": "ba2c38060a314d1db80ab18d6ba38159b94babe67b2c00884e9a9426de857e1a",
+      "crc32": "9fdb3a69"
+    },
+    {
+      "name": "unknown_check_status_sleeps",
+      "rva": "0x1c0c",
+      "bytes": 10,
+      "sha256": "32bcdddfa400e53c9424a76a3b9245bbdb8d3b605d7e51a88809d2de51697a20",
+      "crc32": "bd2d0f24"
+    }
+  ],
+  "claims": [
+    "All eighteen original WSEGACD FN0 call windows, immediate request commands and return RVAs match the admitted VC2 source exactly.",
+    "The imported native Sleep entry remains WSEGACD RVA0x581c, COREDLL ordinal496 at IAT RVA0x6048. Its thunk and native44-byte body are identical to the audited VC2 source.",
+    "The existing production admission therefore permits the same exact FN0 caller/command/source/SR combinations and returns the correct mapped WSEGACD Sleep thunk for this independently admitted kernel.",
+    "Four larger caller/context windows differ. Their Swirl fingerprints are retained separately; module-wide ABI equivalence is not claimed.",
+    "The current GD wait gate yields Sleep(1) on the original ordinary CE caller stack while VMU storage holds the loan, then retries the original GD request. It does not synthesize a token or use a native thread HANDLE."
+  ],
+  "schema": "kui.swirl.gd-request-busy-source.v1",
+  "status": "PASS",
+  "source_kind": "Exact user-supplied original Sega Swirl CE kernel",
+  "original_bytes_or_disassembly_included": false,
+  "firmware_calls": [
+    {
+      "name": "gd_syscall",
+      "rva": "0x1514",
+      "bytes": 14,
+      "sha256": "769a8fad3852291558fdea267bfa35b9c63d86c28ca9ed082a4377674815e75f",
+      "crc32": "26560a5c",
+      "return_rva": "0x1522",
+      "function": 3,
+      "firmware_literal_rva": "0x15a0",
+      "firmware_address": "0x8c0010f0"
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x173e",
+      "bytes": 16,
+      "sha256": "a7854f9653b3fca051df0e3f428786c5fe367014419198e1fff7e677247f2f00",
+      "crc32": "cb3d61f2",
+      "return_rva": "0x174e",
+      "function": 7,
+      "firmware_literal_rva": "0x17ac",
+      "firmware_address": "0x8c0010f0"
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x1778",
+      "bytes": 16,
+      "sha256": "f1f14751a2da6f2839be416e1d2d1c77d146423f1c3d7e6dec2ae140c5df492e",
+      "crc32": "227131b1",
+      "return_rva": "0x1788",
+      "function": 6,
+      "firmware_literal_rva": "0x17ac",
+      "firmware_address": "0x8c0010f0"
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x1838",
+      "bytes": 14,
+      "sha256": "b74934832040f8c644e748ac6a6a12d728dc5c8bdf79e9249bcd5bbbdfefb3de",
+      "crc32": "b9cea9e1",
+      "return_rva": "0x1846",
+      "function": 8,
+      "firmware_literal_rva": "0x18c4",
+      "firmware_address": "0x8c0010f0"
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x1914",
+      "bytes": 16,
+      "sha256": "dfc7a1f1d721fb68cf6a9af6d969dfc091563c624c1b7f8d9a29117378880dae",
+      "crc32": "16f5ceac",
+      "return_rva": "0x1924",
+      "function": 13,
+      "firmware_literal_rva": "0x19b4",
+      "firmware_address": "0x8c0010f0"
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x193c",
+      "bytes": 14,
+      "sha256": "5e8381b0737722e0657b2f2a750b7a6ae318b60529a8b3eab540a8141385302b",
+      "crc32": "cd9648ec",
+      "return_rva": "0x194a",
+      "function": 11,
+      "firmware_literal_rva": "0x19b4",
+      "firmware_address": "0x8c0010f0"
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x1968",
+      "bytes": 16,
+      "sha256": "c6f0c8710a6d28eee9e540e7c80a9ca47c57e189bcd662905fbadc37e56250bf",
+      "crc32": "49315cd1",
+      "return_rva": "0x1978",
+      "function": 12,
+      "firmware_literal_rva": "0x19b4",
+      "firmware_address": "0x8c0010f0"
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x1a54",
+      "bytes": 14,
+      "sha256": "3c7bee2df66e2e4838f3f452544c85e5310650da0f6190033066c3c0f47b70df",
+      "crc32": "393c2afe",
+      "return_rva": "0x1a62",
+      "function": 2,
+      "firmware_literal_rva": "0x1b3c",
+      "firmware_address": "0x8c0010f0"
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x1a70",
+      "bytes": 16,
+      "sha256": "a0f90d7c90884e2b3c8841f2788a1faf87d20cce79669f05ef98090fb8d8f8d2",
+      "crc32": "1e7ddc88",
+      "return_rva": "0x1a80",
+      "function": 1,
+      "firmware_literal_rva": "0x1b3c",
+      "firmware_address": "0x8c0010f0"
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x1b9e",
+      "bytes": 18,
+      "sha256": "46020c114b456d493ea02cb0854f7b28abac53f327b3718eaab779c084d130b7",
+      "crc32": "526b2fb2",
+      "return_rva": "0x1bb0",
+      "function": 6,
+      "firmware_literal_rva": "0x1c38",
+      "firmware_address": "0x8c0010f0"
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x1bd8",
+      "bytes": 14,
+      "sha256": "d886d7af7eceef8a0384edd57271435d00746b19efafa66c3703c91d1d6e766d",
+      "crc32": "ff2846b6",
+      "return_rva": "0x1be6",
+      "function": 11,
+      "firmware_literal_rva": "0x1c38",
+      "firmware_address": "0x8c0010f0"
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x1ed2",
+      "bytes": 14,
+      "sha256": "97bf4bebec1cb7d808adf9ae5c8454862ddbf6d6bfeb3040260559ec78413bbf",
+      "crc32": "36650d9e",
+      "return_rva": "0x1ee0",
+      "function": 3,
+      "firmware_literal_rva": "0x1efc",
+      "firmware_address": "0x8c0010f0"
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x1f44",
+      "bytes": 14,
+      "sha256": "d1f0d2469c9146b3bb16007e0e28fdd71300bdcd2a7c1e6a6e99b934e774614d",
+      "crc32": "9f9275ab",
+      "return_rva": "0x1f52",
+      "function": 0,
+      "firmware_literal_rva": "0x205c",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 24
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x1f60",
+      "bytes": 14,
+      "sha256": "46d9cb7b56559685a4852978e036d6cbce9307a762f7e6e4bc9ddc278e9a88cb",
+      "crc32": "a14d74b8",
+      "return_rva": "0x1f6e",
+      "function": 2,
+      "firmware_literal_rva": "0x205c",
+      "firmware_address": "0x8c0010f0"
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x1f7a",
+      "bytes": 16,
+      "sha256": "bcd15049664cb85a31fdd66a871772b157a10369a0bd47e3c4ef202b9028558c",
+      "crc32": "e54d5260",
+      "return_rva": "0x1f8a",
+      "function": 1,
+      "firmware_literal_rva": "0x205c",
+      "firmware_address": "0x8c0010f0"
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x23be",
+      "bytes": 16,
+      "sha256": "cc38cae6dc4945c03d6a2070860acaea95a414ceaa5254028a5118c398ce7e41",
+      "crc32": "905e3bf7",
+      "return_rva": "0x23ce",
+      "function": 4,
+      "firmware_literal_rva": "0x2400",
+      "firmware_address": "0x8c0010f0"
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x2460",
+      "bytes": 14,
+      "sha256": "9e208813769f7d0483ac0e8f62e31e248d8a6979f38aaf35ad2593bd0bc2cd12",
+      "crc32": "28f77163",
+      "return_rva": "0x246e",
+      "function": 0,
+      "firmware_literal_rva": "0x249c",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 36
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x25ca",
+      "bytes": 14,
+      "sha256": "c7749589793c737a1d103e50ab5777fe15db598ee5c2601f3a6f4fc1cca895cb",
+      "crc32": "06daf958",
+      "return_rva": "0x25d8",
+      "function": 0,
+      "firmware_literal_rva": "0x25f8",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 20
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x2622",
+      "bytes": 14,
+      "sha256": "896053a9279a487aad9481e035f0b9eec12b2ea23ef1b73884bc1df04502dd4a",
+      "crc32": "71e2f04f",
+      "return_rva": "0x2630",
+      "function": 0,
+      "firmware_literal_rva": "0x264c",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 30
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x266e",
+      "bytes": 14,
+      "sha256": "d6d78c606e5eca60f372df73fac2fd253d01c81bb820cdfe8827e8a035b94e81",
+      "crc32": "36130f92",
+      "return_rva": "0x267c",
+      "function": 0,
+      "firmware_literal_rva": "0x2698",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 31
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x26fe",
+      "bytes": 14,
+      "sha256": "c22cb4c8fce1c608960414bf5958a7cba0f92c4078a711a966b26788336d680d",
+      "crc32": "fea7d412",
+      "return_rva": "0x270c",
+      "function": 0,
+      "firmware_literal_rva": "0x272c",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 21
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x274a",
+      "bytes": 14,
+      "sha256": "9e2ed20a9c4c2db35bef9e224cc3c5b12006ac9c70b55c6faf7662a4d992909a",
+      "crc32": "c9b4d838",
+      "return_rva": "0x2758",
+      "function": 0,
+      "firmware_literal_rva": "0x2774",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 33
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x2792",
+      "bytes": 14,
+      "sha256": "f7f8c41a4a4043aca17c01a7524d98e6281639fe92c3696d1c64ddccc3eb5413",
+      "crc32": "ac0f4a32",
+      "return_rva": "0x27a0",
+      "function": 0,
+      "firmware_literal_rva": "0x27bc",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 26
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x27da",
+      "bytes": 14,
+      "sha256": "16439e15d0bd0a15149fde4e1c8a63abb5217e831f85fdbbc60e985c3e0ea288",
+      "crc32": "a90507b3",
+      "return_rva": "0x27e8",
+      "function": 0,
+      "firmware_literal_rva": "0x2804",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 22
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x2822",
+      "bytes": 14,
+      "sha256": "f079d59f755264578ce97b64a98256d53d0856313e60b64778963793b6065641",
+      "crc32": "32a04bdc",
+      "return_rva": "0x2830",
+      "function": 0,
+      "firmware_literal_rva": "0x284c",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 23
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x2892",
+      "bytes": 14,
+      "sha256": "adc866a5d28a3370fd07e96f4ab59a9dff9655283996b9cc1a2b02774614f401",
+      "crc32": "205ee4fc",
+      "return_rva": "0x28a0",
+      "function": 0,
+      "firmware_literal_rva": "0x28c0",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 27
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x2930",
+      "bytes": 14,
+      "sha256": "707a170ae017ede87b11d221acdc3141f6126c99adf1ef5c57dc8a4647453630",
+      "crc32": "5e07006a",
+      "return_rva": "0x293e",
+      "function": 0,
+      "firmware_literal_rva": "0x2a74",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 19
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x2d88",
+      "bytes": 14,
+      "sha256": "3349179002a39fa7fb88a6b078728ee383aba8b0daf7b09242e730c451c63661",
+      "crc32": "7a7d17ac",
+      "return_rva": "0x2d96",
+      "function": 0,
+      "firmware_literal_rva": "0x2df0",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 17
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x2db4",
+      "bytes": 14,
+      "sha256": "747e7b5b7c7239b0f3b8862661b6d180f7c7ebf5c97f1d342f4b27c5647ddb6b",
+      "crc32": "7a6b3fae",
+      "return_rva": "0x2dc2",
+      "function": 0,
+      "firmware_literal_rva": "0x2df0",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 38
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x3098",
+      "bytes": 14,
+      "sha256": "310c4e104eb24f53febbd00accfaa6ed2ad7e246818f0ec13959bdeeaa11a711",
+      "crc32": "053e6712",
+      "return_rva": "0x30a6",
+      "function": 0,
+      "firmware_literal_rva": "0x31c4",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 16
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x30f0",
+      "bytes": 14,
+      "sha256": "4fc99a85d64e13a71750077cc7e303687d17882ef1b55e6484b53561d43bac24",
+      "crc32": "fbf78ccb",
+      "return_rva": "0x30fe",
+      "function": 0,
+      "firmware_literal_rva": "0x31c4",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 39
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x3184",
+      "bytes": 14,
+      "sha256": "740710f1c74be0c74e8be073358113cb524ba1298b5be9869281057e6734ef28",
+      "crc32": "1c704d3c",
+      "return_rva": "0x3192",
+      "function": 0,
+      "firmware_literal_rva": "0x31c4",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 16
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x3240",
+      "bytes": 14,
+      "sha256": "3c2c6abb9edfcee4787242ba8fc3ab9e1a260312e2e8eec1c36ad5e1288849c6",
+      "crc32": "60c18bca",
+      "return_rva": "0x324e",
+      "function": 0,
+      "firmware_literal_rva": "0x326c",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 34
+    }
+  ],
+  "sleep_import": {
+    "ordinal": 496,
+    "iat_rva": "0x6048",
+    "iat_nominal_va": "0x01cf6048",
+    "thunk": {
+      "name": "Sleep_thunk",
+      "rva": "0x581c",
+      "bytes": 12,
+      "sha256": "e87674c2a71cf8e6620c1547e05f86322450ccd2e018d08563f42e0c9bd76a3a",
+      "crc32": "5db32976"
+    },
+    "native_export": {
+      "name": "COREDLL_Sleep",
+      "rva": "0x8708",
+      "bytes": 44,
+      "sha256": "b93921b07ec7e6f77072c7d7e7f99c175653f1a944ee94ca7d78c6de850ebdac",
+      "crc32": "2c6853b1"
+    },
+    "native_own_frame_bytes": 24,
+    "argument_home_bytes": 16,
+    "source_own_call": {
+      "name": "GD_poll_sleep_5ms",
+      "rva": "0x1c0c",
+      "bytes": 10,
+      "sha256": "32bcdddfa400e53c9424a76a3b9245bbdb8d3b605d7e51a88809d2de51697a20",
+      "crc32": "bd2d0f24"
+    },
+    "kernel_entry_signed": "0xfffffd5d",
+    "current_thread_prepost_rvas": [
+      "0x8e30",
+      "0x8e40"
+    ]
+  },
+  "wait_import": {
+    "ordinal": 497,
+    "iat_rva": "0x6024",
+    "thunk": {
+      "name": "WaitForSingleObject_thunk",
+      "rva": "0x57b0",
+      "bytes": 12,
+      "sha256": "a1b3a25aa01485bd80d5de0fc657e8f93712bf7e85fa81383c4d2151cc022ee8",
+      "crc32": "2c4361cd"
+    }
+  },
+  "request_calls": [
+    {
+      "name": "gd_syscall",
+      "rva": "0x1f44",
+      "bytes": 14,
+      "sha256": "d1f0d2469c9146b3bb16007e0e28fdd71300bdcd2a7c1e6a6e99b934e774614d",
+      "crc32": "9f9275ab",
+      "return_rva": "0x1f52",
+      "function": 0,
+      "firmware_literal_rva": "0x205c",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 24
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x2460",
+      "bytes": 14,
+      "sha256": "9e208813769f7d0483ac0e8f62e31e248d8a6979f38aaf35ad2593bd0bc2cd12",
+      "crc32": "28f77163",
+      "return_rva": "0x246e",
+      "function": 0,
+      "firmware_literal_rva": "0x249c",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 36
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x25ca",
+      "bytes": 14,
+      "sha256": "c7749589793c737a1d103e50ab5777fe15db598ee5c2601f3a6f4fc1cca895cb",
+      "crc32": "06daf958",
+      "return_rva": "0x25d8",
+      "function": 0,
+      "firmware_literal_rva": "0x25f8",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 20
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x2622",
+      "bytes": 14,
+      "sha256": "896053a9279a487aad9481e035f0b9eec12b2ea23ef1b73884bc1df04502dd4a",
+      "crc32": "71e2f04f",
+      "return_rva": "0x2630",
+      "function": 0,
+      "firmware_literal_rva": "0x264c",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 30
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x266e",
+      "bytes": 14,
+      "sha256": "d6d78c606e5eca60f372df73fac2fd253d01c81bb820cdfe8827e8a035b94e81",
+      "crc32": "36130f92",
+      "return_rva": "0x267c",
+      "function": 0,
+      "firmware_literal_rva": "0x2698",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 31
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x26fe",
+      "bytes": 14,
+      "sha256": "c22cb4c8fce1c608960414bf5958a7cba0f92c4078a711a966b26788336d680d",
+      "crc32": "fea7d412",
+      "return_rva": "0x270c",
+      "function": 0,
+      "firmware_literal_rva": "0x272c",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 21
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x274a",
+      "bytes": 14,
+      "sha256": "9e2ed20a9c4c2db35bef9e224cc3c5b12006ac9c70b55c6faf7662a4d992909a",
+      "crc32": "c9b4d838",
+      "return_rva": "0x2758",
+      "function": 0,
+      "firmware_literal_rva": "0x2774",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 33
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x2792",
+      "bytes": 14,
+      "sha256": "f7f8c41a4a4043aca17c01a7524d98e6281639fe92c3696d1c64ddccc3eb5413",
+      "crc32": "ac0f4a32",
+      "return_rva": "0x27a0",
+      "function": 0,
+      "firmware_literal_rva": "0x27bc",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 26
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x27da",
+      "bytes": 14,
+      "sha256": "16439e15d0bd0a15149fde4e1c8a63abb5217e831f85fdbbc60e985c3e0ea288",
+      "crc32": "a90507b3",
+      "return_rva": "0x27e8",
+      "function": 0,
+      "firmware_literal_rva": "0x2804",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 22
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x2822",
+      "bytes": 14,
+      "sha256": "f079d59f755264578ce97b64a98256d53d0856313e60b64778963793b6065641",
+      "crc32": "32a04bdc",
+      "return_rva": "0x2830",
+      "function": 0,
+      "firmware_literal_rva": "0x284c",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 23
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x2892",
+      "bytes": 14,
+      "sha256": "adc866a5d28a3370fd07e96f4ab59a9dff9655283996b9cc1a2b02774614f401",
+      "crc32": "205ee4fc",
+      "return_rva": "0x28a0",
+      "function": 0,
+      "firmware_literal_rva": "0x28c0",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 27
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x2930",
+      "bytes": 14,
+      "sha256": "707a170ae017ede87b11d221acdc3141f6126c99adf1ef5c57dc8a4647453630",
+      "crc32": "5e07006a",
+      "return_rva": "0x293e",
+      "function": 0,
+      "firmware_literal_rva": "0x2a74",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 19
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x2d88",
+      "bytes": 14,
+      "sha256": "3349179002a39fa7fb88a6b078728ee383aba8b0daf7b09242e730c451c63661",
+      "crc32": "7a7d17ac",
+      "return_rva": "0x2d96",
+      "function": 0,
+      "firmware_literal_rva": "0x2df0",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 17
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x2db4",
+      "bytes": 14,
+      "sha256": "747e7b5b7c7239b0f3b8862661b6d180f7c7ebf5c97f1d342f4b27c5647ddb6b",
+      "crc32": "7a6b3fae",
+      "return_rva": "0x2dc2",
+      "function": 0,
+      "firmware_literal_rva": "0x2df0",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 38
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x3098",
+      "bytes": 14,
+      "sha256": "310c4e104eb24f53febbd00accfaa6ed2ad7e246818f0ec13959bdeeaa11a711",
+      "crc32": "053e6712",
+      "return_rva": "0x30a6",
+      "function": 0,
+      "firmware_literal_rva": "0x31c4",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 16
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x30f0",
+      "bytes": 14,
+      "sha256": "4fc99a85d64e13a71750077cc7e303687d17882ef1b55e6484b53561d43bac24",
+      "crc32": "fbf78ccb",
+      "return_rva": "0x30fe",
+      "function": 0,
+      "firmware_literal_rva": "0x31c4",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 39
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x3184",
+      "bytes": 14,
+      "sha256": "740710f1c74be0c74e8be073358113cb524ba1298b5be9869281057e6734ef28",
+      "crc32": "1c704d3c",
+      "return_rva": "0x3192",
+      "function": 0,
+      "firmware_literal_rva": "0x31c4",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 16
+    },
+    {
+      "name": "gd_syscall",
+      "rva": "0x3240",
+      "bytes": 14,
+      "sha256": "3c2c6abb9edfcee4787242ba8fc3ab9e1a260312e2e8eec1c36ad5e1288849c6",
+      "crc32": "60c18bca",
+      "return_rva": "0x324e",
+      "function": 0,
+      "firmware_literal_rva": "0x326c",
+      "firmware_address": "0x8c0010f0",
+      "request_command": 34
+    }
+  ],
+  "scope": "Source-specific WSEGACD FN0/Sleep source contracts; no console compatibility or persistence claim",
+  "kernel_bytes": 1828864,
+  "comparison_to_vc2": {
+    "all_firmware_call_windows_identical": true,
+    "firmware_call_windows": 33,
+    "fn0_sites_identical": 18,
+    "sleep_import_thunk_identical": true,
+    "native_sleep_body_identical": true,
+    "changed_context_windows": [
+      {
+        "name": "zero_token_to_io_device_error",
+        "rva": "0x19bc",
+        "bytes": 84
+      },
+      {
+        "name": "read_command16_submit",
+        "rva": "0x3092",
+        "bytes": 38
+      },
+      {
+        "name": "read_command39_submit",
+        "rva": "0x30ea",
+        "bytes": 46
+      },
+      {
+        "name": "check_poll_status_dispatch",
+        "rva": "0x1a70",
+        "bytes": 64
+      }
+    ],
+    "module_payload_identity_is_not_equal": true,
+    "production_admission_change_required": false
+  }
+}

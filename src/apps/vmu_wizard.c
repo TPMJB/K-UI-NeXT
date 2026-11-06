@@ -544,7 +544,7 @@ static bool wizard_candidate_user(void *context,const char key[KUI_VMU_GAME_CARD
         if(users->covered_count==KUI_VMU_GAME_CANDIDATES_PRODUCTS) {users->overflow=true;return false;}
         memcpy(users->covered[users->covered_count++],key,KUI_VMU_GAME_CARD_KEY_BYTES);
     }
-    if(target->pair!=wizard.source_pair) return true;
+    if(!target || target->pair!=wizard.source_pair) return true;
     if(memcmp(target->identity,wizard.source_identity,16u)) {++users->stale;return true;}
     if(users->count==KUI_VMU_WIZARD_GAMES) {users->overflow=true;return false;}
     memcpy(users->keys[users->count++],key,KUI_VMU_GAME_CARD_KEY_BYTES);return true;

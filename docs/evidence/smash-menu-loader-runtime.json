@@ -1,0 +1,243 @@
+{
+  "schema": "kui.smash-menu.loader-runtime.v1",
+  "passed": true,
+  "elf_sha256": "463ec385c233e4322c74d5149001dd932064f8492c28a0f70b735a8180dd58ed",
+  "cases": [
+    {
+      "case": "phantasy_star_ii",
+      "instructions": 2294277,
+      "reason": 0,
+      "raw_calls": [
+        {
+          "lba": 100,
+          "destination": "0xac009260"
+        },
+        {
+          "lba": 101,
+          "destination": "0xac010200"
+        },
+        {
+          "lba": 200,
+          "destination": "0xac010400"
+        },
+        {
+          "lba": 201,
+          "destination": "0xac010600"
+        }
+      ],
+      "ram_line_purges": 524728,
+      "ccr_writes": [
+        "0x808"
+      ],
+      "cold_entry_reached": true,
+      "captured_selection": 4,
+      "carried_argv_and_ip_exact": true,
+      "firmware_restored": true,
+      "original_c0_restored": "0x8c000120",
+      "only_blank_menu_seed_changed": true
+    },
+    {
+      "case": "shining_force",
+      "instructions": 2295605,
+      "reason": 0,
+      "raw_calls": [
+        {
+          "lba": 100,
+          "destination": "0xac009260"
+        },
+        {
+          "lba": 101,
+          "destination": "0xac010200"
+        },
+        {
+          "lba": 200,
+          "destination": "0xac010400"
+        },
+        {
+          "lba": 201,
+          "destination": "0xac010600"
+        }
+      ],
+      "ram_line_purges": 524728,
+      "ccr_writes": [
+        "0x808"
+      ],
+      "cold_entry_reached": true,
+      "captured_selection": 6,
+      "carried_argv_and_ip_exact": true,
+      "firmware_restored": true,
+      "original_c0_restored": "0x8c000120",
+      "only_blank_menu_seed_changed": true
+    },
+    {
+      "case": "phantasy_star_ii_c0_zero",
+      "instructions": 2294277,
+      "reason": 0,
+      "raw_calls": [
+        {
+          "lba": 100,
+          "destination": "0xac009260"
+        },
+        {
+          "lba": 101,
+          "destination": "0xac010200"
+        },
+        {
+          "lba": 200,
+          "destination": "0xac010400"
+        },
+        {
+          "lba": 201,
+          "destination": "0xac010600"
+        }
+      ],
+      "ram_line_purges": 524728,
+      "ccr_writes": [
+        "0x808"
+      ],
+      "cold_entry_reached": true,
+      "captured_selection": 4,
+      "carried_argv_and_ip_exact": true,
+      "firmware_restored": true,
+      "original_c0_restored": "0x0",
+      "only_blank_menu_seed_changed": true
+    },
+    {
+      "case": "phantasy_star_ii_c0_rom",
+      "instructions": 2294277,
+      "reason": 0,
+      "raw_calls": [
+        {
+          "lba": 100,
+          "destination": "0xac009260"
+        },
+        {
+          "lba": 101,
+          "destination": "0xac010200"
+        },
+        {
+          "lba": 200,
+          "destination": "0xac010400"
+        },
+        {
+          "lba": 201,
+          "destination": "0xac010600"
+        }
+      ],
+      "ram_line_purges": 524728,
+      "ccr_writes": [
+        "0x808"
+      ],
+      "cold_entry_reached": true,
+      "captured_selection": 4,
+      "carried_argv_and_ip_exact": true,
+      "firmware_restored": true,
+      "original_c0_restored": "0xa00000e0",
+      "only_blank_menu_seed_changed": true
+    },
+    {
+      "case": "malformed_argv",
+      "instructions": 121359,
+      "reason": 8,
+      "raw_calls": [],
+      "ram_line_purges": 440,
+      "ccr_writes": [],
+      "executable_unchanged": true,
+      "refusal_before_firmware_restore": true
+    },
+    {
+      "case": "raw_probe_busy",
+      "instructions": 131637,
+      "reason": 9,
+      "raw_calls": [
+        {
+          "lba": 100,
+          "destination": "0xac009260"
+        }
+      ],
+      "ram_line_purges": 440,
+      "ccr_writes": [],
+      "executable_unchanged": true,
+      "refusal_before_firmware_restore": true
+    },
+    {
+      "case": "bad_capsule_crc",
+      "instructions": 2280884,
+      "reason": 11,
+      "raw_calls": [
+        {
+          "lba": 100,
+          "destination": "0xac009260"
+        },
+        {
+          "lba": 101,
+          "destination": "0xac010200"
+        },
+        {
+          "lba": 200,
+          "destination": "0xac010400"
+        },
+        {
+          "lba": 201,
+          "destination": "0xac010600"
+        }
+      ],
+      "ram_line_purges": 524728,
+      "ccr_writes": [
+        "0x808"
+      ],
+      "blank_menu_seed_unmodified": true,
+      "refusal_before_firmware_restore": true
+    },
+    {
+      "case": "nonnative_fallback",
+      "instructions": 80,
+      "reason": 0,
+      "raw_calls": [],
+      "ram_line_purges": 0,
+      "ccr_writes": [],
+      "exact_original_registers_restored": true,
+      "executable_unchanged": true
+    }
+  ],
+  "gin_redirect_cases": [
+    {
+      "case": "matched_gin",
+      "instructions": 7991,
+      "accepted": true,
+      "target_redirected": true,
+      "only_target_literal_may_change": true,
+      "ram_line_purges": 8
+    },
+    {
+      "case": "wrong_code_crc",
+      "instructions": 6165,
+      "accepted": true,
+      "target_redirected": false,
+      "only_target_literal_may_change": true,
+      "ram_line_purges": 8
+    },
+    {
+      "case": "partial_range",
+      "instructions": 14,
+      "accepted": true,
+      "target_redirected": false,
+      "only_target_literal_may_change": true,
+      "ram_line_purges": 0
+    },
+    {
+      "case": "invalid_runtime",
+      "instructions": 6206,
+      "accepted": false,
+      "target_redirected": false,
+      "only_target_literal_may_change": true,
+      "ram_line_purges": 8
+    }
+  ],
+  "limits": [
+    "Actual linked loader C and assembly execute; the fixed raw SD shim is substituted with a four-block card fixture and an explicit busy response.",
+    "DMA/MMU status reads are modeled as idle, CCR reads/writes are recorded, and OCBP is counted without cache or timing simulation.",
+    "Register banking is not emulated; the separate linked-entry proof establishes capture before any SR bank change.",
+    "The final cold executable entry and resident diagnostic callback are stop boundaries. No downstream SDK, game, real media or VMU execution claim is made."
+  ]
+}

@@ -131,14 +131,15 @@ static bool descriptor(const char *s,const char *extension) {
 bool kui_recovery_manifest_parse(const void *data,size_t size,struct kui_scan_manifest *out) {
     static const char *const keys[]={"schema","complete","profile","identity","capture_build",
         "title","sector_bytes","audio","tracks","gdi_file","hashes","saved_data_verified","reference","output_format","cue_file",
-        "output_file","output_bytes","output_crc32","output_sha256","output_logical_bytes","output_data_track"};
+        "output_file","output_bytes","output_crc32","output_sha256","output_logical_bytes","output_data_track",
+        "disc_number","disc_total"};
     if(!data || !size || size>KUI_SCAN_MANIFEST_LIMIT || !out) return false;
     memset(out,0,sizeof(*out));memcpy(out->gdi,"disc.gdi",9);
     struct parser p={(const uint8_t *)data,(const uint8_t *)data+size};
     if(!take(&p,'{')) return false;
     uint32_t seen=0;uint64_t schema=0,sector_bytes=0;bool sha=false;char key[32],value[160];
     for(;;) {
-        int id;if(!next_key(&p,key,sizeof(key),&seen,keys,21,&id)) return false;
+        int id;if(!next_key(&p,key,sizeof(key),&seen,keys,23,&id)) return false;
         switch(id) {
         case 0: if(!number(&p,&schema)) return false;break;
         case 1: case 11: if(!yes(&p)) return false;break;
@@ -181,6 +182,8 @@ bool kui_recovery_manifest_parse(const void *data,size_t size,struct kui_scan_ma
         case 18:if(!hex_bytes(&p,out->output_sha256,32)) return false;break;
         case 19:if(!number(&p,&out->logical_bytes) || !out->logical_bytes) return false;break;
         case 20:{uint64_t track;if(!number(&p,&track) || track>99u) return false;out->data_track=(uint32_t)track;break;}
+        case 21:case 22:{uint64_t n;if(!number(&p,&n) || !n || n>9u)return false;
+            if(id==21)out->disc_number=(unsigned)n;else out->disc_total=(unsigned)n;break;}
         default: return false;
         }
         if(take(&p,'}')) break;
@@ -191,6 +194,7 @@ bool kui_recovery_manifest_parse(const void *data,size_t size,struct kui_scan_ma
        (schema!=1 && schema!=2) || sha!=(schema==1) ||
        ((seen&(1u<<10))!=0)!=(schema==2) || ((seen&(1u<<11))!=0)!=(schema==1) ||
        ((seen&(1u<<12)) && schema!=1)) return false;
+    if(((seen&(1u<<21))!=0)!=((seen&(1u<<22))!=0) || out->disc_number>out->disc_total)return false;
     out->crc_only=schema==2;
     const uint32_t exported=0x1f8000u; /* output_file through output_data_track. */
     if(out->format==KUI_CAPTURE_FORMAT_BIN_CUE) {

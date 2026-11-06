@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/vc2-diagnostic-mode-host
+HOST_CC ?= cc
+.PHONY: vc2-diagnostic-mode-tests
+vc2-diagnostic-mode-tests:
+	@mkdir -p $(BUILD)
+	python3 tests/test_vc2_ce_vmu_diagnostic_modes.py --cc "$(HOST_CC)" --json $(BUILD)/diagnostic-modes.json

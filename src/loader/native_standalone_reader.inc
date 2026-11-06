@@ -1,4 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
+#if KUI_NATIVE_STANDALONE_FOREGROUND
+/* This control never publishes an SDK callback or retains its default. */
+void kui_native_standalone_bind(void) {}
+#else
 #include "kui/native_standalone_reader.h"
 #if KUI_NATIVE_STANDALONE_STRUCTURAL
 #include "kui/retail_loader_layout.h"
@@ -83,3 +87,5 @@ void __attribute__((noipa)) kui_native_standalone_bind(void) {
     R.vector600[KUI_NATIVE_SDK_SCI_COOKIE_INDEX]=KUI_NATIVE_SDK_SCI_COOKIE;
     standalone_publish((uint32_t)(uintptr_t)&R.vector600[KUI_NATIVE_SDK_SCI_COOKIE_INDEX]);
 }
+
+#endif

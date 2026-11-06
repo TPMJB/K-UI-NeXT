@@ -5,6 +5,13 @@
 
 extern bool kui_update_runtime_resolve(const char *,char *,size_t,
     struct kui_update_runtime_stream *) __attribute__((weak));
+extern bool kui_runtime_module_bundle_contains(const char *) __attribute__((weak));
+bool kui_runtime_bundle_contains(const char *path) {
+    char resolved[KUI_UPDATE_BOOT_PATH_BYTES];
+    return kui_runtime_module_bundle_contains &&
+        kui_runtime_resolve_path(path,resolved,sizeof(resolved)) && !strcmp(path,resolved) &&
+        kui_runtime_module_bundle_contains(path);
+}
 bool kui_runtime_resolve_path(const char *path,char *out,size_t capacity) {
     if(kui_update_runtime_resolve)return kui_update_runtime_resolve(path,out,capacity,NULL);
     if(!path || !out || !capacity || strlen(path)>=capacity)return false;

@@ -17,6 +17,7 @@ DISC_FLAGS = $(NATIVE_FLAGS) -DKUI_ON_CONSOLE=1 -DKUI_RETAIL_LOW_RESIDENT=1 \
  -DKUI_VMU_MAPLE_OBSERVE=1 -DKUI_VMU_NATIVE_HEAP_PROBE=1 \
  -DKUI_VMU_NATIVE_CACHE_PROBE=1 \
  -DKUI_NATIVE_STAGE_FAST_SCAN=1 -DKUI_DISC_STAGE_FAST_CRC32=1 \
+ -DKUI_NATIVE_CACHED_RESOLUTION=1 -DKUI_NATIVE_CACHED_EXTENT=1 \
  -DKUI_NATIVE_WORKER_BIN='"$(BUILD)/native-worker.bin"' \
  -DKUI_NATIVE_WORKER_RELOC='"$(BUILD)/native-worker.reloc"' \
  -DKUI_DISC_SUPPORT_BIN='"$(BUILD)/support/support.bin"' \
@@ -30,7 +31,8 @@ DISC_SOURCES = src/loader/disc_vmu_stage.c src/core/disc_launch.c src/core/disc_
  src/core/vmu_native_heap.c src/core/vmu_native_program.c src/core/vmu_native_stage_placement.c \
  src/core/vmu_native_layout.c src/core/vmu_native_patch.c src/core/vmu_native_exit.c \
  src/core/vmu_native_resolution_cache.c src/core/vmu_native_cache_seed.c \
- src/core/vmu_native_relocate.c src/loader/vmu_native_trace.c src/core/retail_image.c
+ src/core/vmu_native_relocate.c src/loader/vmu_native_trace.c src/core/retail_image.c \
+ src/loader/smash_fat_read_cache.c src/loader/vc2_ce_vmu_stage_cache.c
 DISC_OBJECTS = $(patsubst %.c,$(BUILD)/disc/%.o,$(DISC_SOURCES)) \
  $(BUILD)/disc/stage_asm.o $(BUILD)/disc/heap_boot.o $(BUILD)/disc/worker_call.o
 $(DISC_OBJECTS): $(BUILD)/readonly-config
@@ -57,7 +59,7 @@ $(BUILD)/disc/src/loader/disc_vmu_stage.o: $(BUILD)/native-worker.bin $(BUILD)/n
 $(BUILD)/disc/%.o: %.c
 	@mkdir -p $(@D)
 	$(CC) $(DISC_FLAGS) -MMD -MP -c $< -o $@
-$(BUILD)/disc/stage_asm.o: src/loader/disc_vmu_stage_asm.S
+$(BUILD)/disc/stage_asm.o: src/loader/disc_vmu_stage_asm.S src/loader/native_proof_cache_scope.inc
 	@mkdir -p $(@D)
 	$(CC) $(DISC_FLAGS) -c $< -o $@
 $(BUILD)/disc/heap_boot.o: src/loader/vmu_maple_observe_boot.S

@@ -1,0 +1,230 @@
+{
+  "schema": "kui.smash-menu.gin-handoff-source.v1",
+  "passed": true,
+  "owner_sha256": {
+    "IP.BIN": "33c9cf893ead0b7bd001f85d4ee1197c35ef7eeef4093fed3a5877eebcb2246e",
+    "GINXFER.BIN": "fa12196993a7c757a78565963e257cd33443f80b3f226729fdc1cf7da51ed5b3",
+    "MDE_US.BIN": "04f49d583b39bdc710cec6d0a434b5d710b9bccedd539bedda29755135f0fe61",
+    "1ST_READ.BIN": "3a311b189a4870ccbefc4fcd306e2d38e5ae810ae5edd225af6b9aa6d5df5f10"
+  },
+  "original_menu_parser": "0x8c015a48",
+  "original_folder_setters": [
+    "0x8c03c9c0",
+    "0x8c03ca12"
+  ],
+  "gin_code_crc32": "0xa0fc2827",
+  "gin_code_bytes": 244,
+  "menu_selections": [
+    {
+      "folder": "ALTBEAST",
+      "tokens": [
+        "\\MDE_US.BIN",
+        "ALTBEAST.SGA",
+        "MODE2",
+        "SKIP0",
+        "SOUND0"
+      ],
+      "command_address": "0x8c027f31",
+      "parser_instructions": 2715,
+      "argv_sha256": "d28ca7c2ded5a5ffc5ef8e5d070b2b2e1860b2103b229971d41fc7a19aff7c84",
+      "argv_zero_padded": true,
+      "ip_folder_source_setters": true,
+      "ip_tail_preserved": true
+    },
+    {
+      "folder": "COLUMNS",
+      "tokens": [
+        "\\MDE_US.BIN",
+        "COLUMNS.SGA",
+        "MODE0",
+        "SKIP0",
+        "SOUND0"
+      ],
+      "command_address": "0x8c027f66",
+      "parser_instructions": 2708,
+      "argv_sha256": "b0da72d4cc1705e91f380a12441e8fdebe0e31fd0be4cf1f72c00d241e825f82",
+      "argv_zero_padded": true,
+      "ip_folder_source_setters": true,
+      "ip_tail_preserved": true
+    },
+    {
+      "folder": "GOLDAXE",
+      "tokens": [
+        "\\MDE_US.BIN",
+        "GOLDAXE.SGA",
+        "MODE0",
+        "SKIP0",
+        "SOUND0"
+      ],
+      "command_address": "0x8c027f9b",
+      "parser_instructions": 2708,
+      "argv_sha256": "6c28c3f15c5a672f34b99a5e5eab942e466c221dd1a4c8506c709173a4e1831e",
+      "argv_zero_padded": true,
+      "ip_folder_source_setters": true,
+      "ip_tail_preserved": true
+    },
+    {
+      "folder": "PHSTAR2",
+      "tokens": [
+        "\\MDE_US.BIN",
+        "PHSTAR2.SGA",
+        "MODE0",
+        "SKIP0",
+        "SOUND0"
+      ],
+      "command_address": "0x8c027fd0",
+      "parser_instructions": 2708,
+      "argv_sha256": "36437117ad2e115804704326dca4d9c7981e87978d65a4b9ee1361bf5f61ddd7",
+      "argv_zero_padded": true,
+      "ip_folder_source_setters": true,
+      "ip_tail_preserved": true
+    },
+    {
+      "folder": "REVSHIN",
+      "tokens": [
+        "\\MDE_US.BIN",
+        "REVSHIN.SGA",
+        "MODE0",
+        "SKIP1",
+        "SOUND0"
+      ],
+      "command_address": "0x8c028005",
+      "parser_instructions": 2708,
+      "argv_sha256": "35774069b04f63a55c7e6f9455178a1d0064620e4f81a12be03366d8cdc5879e",
+      "argv_zero_padded": true,
+      "ip_folder_source_setters": true,
+      "ip_tail_preserved": true
+    },
+    {
+      "folder": "SHFORCE",
+      "tokens": [
+        "\\MDE_US.BIN",
+        "SHFORCE.SGA",
+        "MODE0",
+        "SKIP0",
+        "SOUND1"
+      ],
+      "command_address": "0x8c02803a",
+      "parser_instructions": 2708,
+      "argv_sha256": "aae2272ca8974ad276da80e038659d90963cbb6e108dc6d739ca04d70e6965cc",
+      "argv_zero_padded": true,
+      "ip_folder_source_setters": true,
+      "ip_tail_preserved": true
+    },
+    {
+      "folder": "SONIC1",
+      "tokens": [
+        "\\MDE_US.BIN",
+        "SONIC1.SGA",
+        "MODE0",
+        "SKIP1",
+        "SOUND0"
+      ],
+      "command_address": "0x8c02806f",
+      "parser_instructions": 2701,
+      "argv_sha256": "0b76704e62a1691476dfea07ade986a769521272e82448e5029596cf504d2853",
+      "argv_zero_padded": true,
+      "ip_folder_source_setters": true,
+      "ip_tail_preserved": true
+    },
+    {
+      "folder": "STRAGE2",
+      "tokens": [
+        "\\MDE_US.BIN",
+        "STRAGE2.SGA",
+        "MODE0",
+        "SKIP1",
+        "SOUND0"
+      ],
+      "command_address": "0x8c0280a4",
+      "parser_instructions": 2708,
+      "argv_sha256": "c24606446184618df3bd0fd29d27100017531ce1d4a48b4fe5fbfc944996f2e3",
+      "argv_zero_padded": true,
+      "ip_folder_source_setters": true,
+      "ip_tail_preserved": true
+    },
+    {
+      "folder": "VECTORM",
+      "tokens": [
+        "\\MDE_US.BIN",
+        "VECTORM.SGA",
+        "MODE4",
+        "SKIP2",
+        "SOUND0"
+      ],
+      "command_address": "0x8c0280d9",
+      "parser_instructions": 2708,
+      "argv_sha256": "8dd66e207437143f308c21b45f60bd62ab8be371b98fe288d63aa0ad908b75fd",
+      "argv_zero_padded": true,
+      "ip_folder_source_setters": true,
+      "ip_tail_preserved": true
+    },
+    {
+      "folder": "WRESTWAR",
+      "tokens": [
+        "\\MDE_US.BIN",
+        "WRESTWAR.SGA",
+        "MODE0",
+        "SKIP0",
+        "SOUND0"
+      ],
+      "command_address": "0x8c02810e",
+      "parser_instructions": 2715,
+      "argv_sha256": "fa305aa05314d31321540811f91f7ae089bdc6e76119a916d5c69f977b234bd7",
+      "argv_zero_padded": true,
+      "ip_folder_source_setters": true,
+      "ip_tail_preserved": true
+    }
+  ],
+  "original_transfer_header": {
+    "original_span_begin": "0x8c015e12",
+    "original_span_end": "0x8c015e76",
+    "instructions": 28,
+    "staged_source": "0x8ce00000",
+    "sectors": 903,
+    "original_menu_mode": 4,
+    "transfer_flag": 1,
+    "original_header_transfer_flag": 0,
+    "literal_one_store": "0x8c015e74"
+  },
+  "post_copy_cases": [
+    {
+      "folder": "PHSTAR2",
+      "gin_entry": "0x8cfd2000",
+      "target_literal": "0x8cfd20e4",
+      "final_rte": "0x8cfd20c0",
+      "redirected_entry": "0xac008300",
+      "staging_begin": "0x8ce00000",
+      "staging_end": "0x8cfc3800",
+      "copied_context": "0x8c19ee60",
+      "original_image_preserved_except_gin_context": true,
+      "actual_argv_and_ip_preserved": true,
+      "instructions": 5564497,
+      "retained_raw_handoff_and_stack_begin": "0x8c008100",
+      "retained_raw_handoff_and_stack_end": "0x8c00c000",
+      "retained_raw_handoff_and_stack_unchanged": true,
+      "original_scalar_restart_state_preserved": true
+    },
+    {
+      "folder": "SHFORCE",
+      "gin_entry": "0x8cfd2000",
+      "target_literal": "0x8cfd20e4",
+      "final_rte": "0x8cfd20c0",
+      "redirected_entry": "0xac008300",
+      "staging_begin": "0x8ce00000",
+      "staging_end": "0x8cfc3800",
+      "copied_context": "0x8c19ee60",
+      "original_image_preserved_except_gin_context": true,
+      "actual_argv_and_ip_preserved": true,
+      "instructions": 5564497,
+      "retained_raw_handoff_and_stack_begin": "0x8c008100",
+      "retained_raw_handoff_and_stack_end": "0x8c00c000",
+      "retained_raw_handoff_and_stack_unchanged": true,
+      "original_scalar_restart_state_preserved": true
+    }
+  ],
+  "limits": [
+    "The hook sentinel is a stop boundary; replacement loader, media, SDK, game and VMU are not executed.",
+    "The scalar interpreter does not model register-bank switching; hardware post-RTE R0..R7 values are not established."
+  ]
+}

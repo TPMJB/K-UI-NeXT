@@ -8,8 +8,28 @@ image=read_elf(Path(sys.argv[1]));symbols=image[4]
 roles={'REGION':'_standalone_reader_region','REGION_POINTER':'_kui_retail_async_region_storage',
        'EXPORTS':'_kui_native_sdk_sci_route_exports','CALLBACK':'_kui_retail_sdk_sci_entry',
        'BSS_END':'__retail_resident_bss_end'}
-assert symbols['_standalone_reader_region'][1]==0x760
-assert symbols['__retail_resident_bss_end'][0]<=0x8c007ba0
+if symbols.get('__kui_native_ocram_bootstrap_resident')==(1,0,0,0xfff1):
+    assert symbols.get('__kui_native_standalone_foreground_resident')==(1,0,0,0xfff1)
+    # This foreground profile never publishes or rebinds an SDK callback.
+    # With its unused descriptor absent LTO may fold the private region pointer.
+    roles={key:roles[key] for key in ('REGION','BSS_END')}
+    for symbol in ('_kui_retail_sdk_sci_entry','_kui_native_sdk_sci_route_exports',
+                   '_kui_native_sdk_sci_route_entry'):
+        assert symbol not in symbols
+legacy=symbols.get('__kui_native_gd_legacy_stream')==(1,0,0,0xfff1)
+mmu=symbols.get('__kui_native_gd_mmu_buffers')==(1,0,0,0xfff1)
+dma=symbols.get('__kui_native_gd_dma_stream')==(1,0,0,0xfff1)
+pio=symbols.get('__kui_native_gd_pio_stream')==(1,0,0,0xfff1)
+transfer=symbols.get('__kui_native_transfer_diagnostic')==(1,0,0,0xfff1)
+vram=symbols.get('__kui_native_gd_vram_dma')==(1,0,0,0xfff1)
+if dma:
+    # Linker reservation shares receive-buffer lifetime with cold text; its
+    # absolute address has no ELF object size. The C ABI and linker span are
+    # separately pinned to this exact typed size.
+    assert symbols['__native_dma_region_bytes'][0]==0x640
+else:
+    assert symbols['_standalone_reader_region'][1]==(0x660 if mmu else 0x6a0 if legacy else 0x760)
+assert symbols['__retail_resident_bss_end'][0]<=(0x8c007ea0 if vram else 0x8c007e20 if pio and transfer else 0x8c007dc0 if pio else 0x8c007ba0)
 lines=['/* Generated from the linked standalone resident. */']
 for name,symbol in roles.items():
     lines.append('#define KUI_STANDALONE_'+name+' UINT32_C(0x%08x)'%symbols[symbol][0])

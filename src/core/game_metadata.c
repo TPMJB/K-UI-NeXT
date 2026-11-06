@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/game_metadata.h"
+#include "kui/disc_number.h"
 
 #include <stddef.h>
 #include <string.h>
@@ -68,6 +69,16 @@ static void boot_profile(const uint8_t *ip, struct kui_game_metadata *out) {
     out->native_gd = gd && !out->windows_ce;
     out->native_cd = cd && !out->windows_ce;
 }
+bool kui_game_metadata_ip(const uint8_t ip[256],struct kui_game_metadata *out) {
+    if(!out)return false;
+    memset(out,0,sizeof(*out));
+    if(!ip || memcmp(ip,"SEGA SEGAKATANA ",16u))return false;
+    field(out->title,ip+128,128);field(out->product,ip+64,10);
+    field(out->version,ip+74,6);field(out->region,ip+48,8);field(out->bootfile,ip+96,16);
+    out->ip_valid=true;boot_profile(ip,out);
+    (void)kui_disc_number_read(ip,&out->disc_number,&out->disc_total);
+    return true;
+}
 static unsigned fold(unsigned c) {
     return c >= 'a' && c <= 'z' ? c - ('a' - 'A') : c;
 }
@@ -118,7 +129,7 @@ static bool record_read(const uint8_t *p, size_t available, struct record *out) 
  * or without ";1". Duplicates, directories and extended records are refused. */
 static enum kui_game_metadata_status find(const struct kui_game_metadata_ops *ops,
     struct kui_game_metadata *out, uint8_t *data, const char *name, uint32_t max_bytes,
-    uint32_t *lba, uint32_t *bytes) {
+    uint32_t *lba, uint32_t *bytes,bool want_directory) {
     bool found = false;
     for(uint32_t done = 0; done < out->root_bytes;) {
         enum kui_game_metadata_status result = sector(ops, out->root_lba + done / 2048u, data, out);
@@ -135,7 +146,7 @@ static enum kui_game_metadata_status find(const struct kui_game_metadata_ops *op
             if(!record_read(data + pos, amount - pos, &entry)) return KUI_GAME_METADATA_ISO;
             if(boot_name(entry.name, entry.name_length, name)) {
                 if(found) return KUI_GAME_METADATA_ISO;
-                if((entry.flags & 2u) || entry.extended) return KUI_GAME_METADATA_UNSUPPORTED;
+                if(((entry.flags & 2u)!=0u)!=want_directory || entry.extended) return KUI_GAME_METADATA_UNSUPPORTED;
                 if(entry.bytes > max_bytes) return KUI_GAME_METADATA_LIMIT;
                 if(!extent_valid(ops, entry.lba, entry.bytes, out->volume_blocks))
                     return KUI_GAME_METADATA_ISO;
@@ -153,7 +164,7 @@ static enum kui_game_metadata_status directory(const struct kui_game_metadata_op
     struct kui_game_metadata *out, uint8_t *data) {
     uint32_t boot_lba = 0, boot_bytes = 0;
     enum kui_game_metadata_status result = find(ops, out, data, out->bootfile,
-        KUI_GAME_METADATA_MAX_BOOT_BYTES, &boot_lba, &boot_bytes);
+        KUI_GAME_METADATA_MAX_BOOT_BYTES, &boot_lba, &boot_bytes,false);
     if(result != KUI_GAME_METADATA_OK) return result;
     out->boot_lba = boot_lba;
     out->boot_bytes = boot_bytes;
@@ -167,7 +178,14 @@ enum kui_game_metadata_status kui_game_metadata_find(const struct kui_game_metad
        !name || !root_filename(name) || !lba || !bytes) return KUI_GAME_METADATA_ARGUMENT;
     *lba = *bytes = 0;
     uint8_t data[2048];
-    return find(ops, metadata, data, name, max_bytes, lba, bytes);
+    return find(ops, metadata, data, name, max_bytes, lba, bytes,false);
+}
+enum kui_game_metadata_status kui_game_metadata_find_directory(const struct kui_game_metadata_ops *ops,
+    struct kui_game_metadata *metadata,const char *name,uint32_t *lba,uint32_t *bytes) {
+    if(!ops || !ops->read_sector || !ops->data_range || !metadata || !metadata->root_bytes ||
+       !name || !root_filename(name) || !lba || !bytes)return KUI_GAME_METADATA_ARGUMENT;
+    *lba=*bytes=0u;uint8_t data[2048];
+    return find(ops,metadata,data,name,KUI_GAME_METADATA_MAX_DIRECTORY_BYTES,lba,bytes,true);
 }
 enum kui_game_metadata_status kui_game_metadata_read(
     const struct kui_game_metadata_ops *ops, uint32_t session_lba,
@@ -180,14 +198,9 @@ enum kui_game_metadata_status kui_game_metadata_read(
     uint8_t data[2048];
     enum kui_game_metadata_status result = sector(ops, session_lba, data, out);
     if(result != KUI_GAME_METADATA_OK) return result;
-    if(memcmp(data, "SEGA SEGAKATANA ", 16)) return KUI_GAME_METADATA_IP_HEADER;
-    field(out->title, data + 128, 128);
-    field(out->product, data + 64, 10);
-    field(out->version, data + 74, 6);
-    field(out->region, data + 48, 8);
-    field(out->bootfile, data + 96, 16);
-    out->ip_valid = true;
-    boot_profile(data, out);
+    bool ip_valid=kui_game_metadata_ip(data,out);
+    out->session_lba=session_lba;out->sectors_read=1u;
+    if(!ip_valid)return KUI_GAME_METADATA_IP_HEADER;
     if(!root_filename(out->bootfile)) return KUI_GAME_METADATA_UNSUPPORTED;
 
     bool primary = false;

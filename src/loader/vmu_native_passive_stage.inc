@@ -1,6 +1,11 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* Installer is temporary. The worker copies every retained object by value. */
 #include "kui/vmu_native_passive.h"
+#if KUI_VMU_NATIVE_VIRTUAL_ADDRESS == 1u
+__asm__(".global __kui_native_virtual_slot_stage\n.set __kui_native_virtual_slot_stage,1\n");
+#else
+__asm__(".global __kui_native_virtual_slot_stage\n.set __kui_native_virtual_slot_stage,2\n");
+#endif
 #include "kui/vmu_native_layout.h"
 #include "kui/vmu_native_patch.h"
 #include "kui/vmu_native_worker.h"
@@ -145,7 +150,7 @@ static void readonly_patch_entry(uint32_t address,uint32_t target) {
      * original bytes. The early pair's first entry is left for the second:
      * that one gets its veneer, then the first its head, so each exit keeps
      * working throughout and the second still compares unchanged. */
-    uint32_t early=native_exits.family==KUI_VMU_NATIVE_EXIT_EARLY_PAIR?
+    uint32_t early=kui_vmu_native_exit_window(&native_exits,0u)==8u?
         (native_exits.entries[0]&0x1fffffffu)|0x80000000u:0u;
     if(address==early) return;
 #endif
@@ -178,6 +183,9 @@ static void native_passive_capture_windows(void) {
 #include "vmu_native_crt_bootstrap_stage.inc"
 #endif
 static void native_passive_prepare(void) {
+    if(native_driver.family==KUI_VMU_NATIVE_FAMILY_EARLY_P2_V1 &&
+       !kui_vmu_native_early_p2_calls_valid((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
+           exec_bytes,&native_driver,native_call.call,passive_layout.initializer_call)) native_report(2u,0x76u);
 #if KUI_VMU_NATIVE_READONLY_PROBE
     const struct kui_vmu_native_patch_window windows[3]={{native_driver.submit,12u},
         {native_heap.initializer,12u},{native_heap.release,20u}};
@@ -209,11 +217,41 @@ __asm__(".section .rodata.native_resolution_seed,\"a\"\n.balign 32\n"
     ".global __native_resolution_cache_seed_end\n__native_resolution_cache_seed_end:\n.previous\n");
 extern const uint8_t native_resolution_seed[] __asm__("__native_resolution_cache_seed_start");
 static struct kui_vmu_native_resolution native_cached_resolution;
+#if KUI_SMASH_NATIVE_MENU
+#include "smash_source_owner_stage.inc"
+/* This immutable-image proof writes only its private resolution output.
+ * Its wrapper temporarily caches operands, publishes the P1 output/stack,
+ * then restores the relay's cache profile before any SDK or card activity. */
+bool __attribute__((noipa)) kui_smash_native_menu_resolution_replay(void) {
+    const uint8_t *wire,*digest;
+    return kui_vmu_native_cache_seed_read(native_resolution_seed,KUI_VMU_NATIVE_CACHE_SEED_BYTES,&wire,&digest) &&
+       kui_vmu_native_resolution_cache_replay((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
+       exec_bytes,KUI_RETAIL_EXEC_ADDRESS,wire,KUI_VMU_NATIVE_RESOLUTION_CACHE_BYTES,digest,&native_cached_resolution);
+}
+#endif
+#if KUI_NATIVE_CACHED_RESOLUTION
+/* Exact cache-replay ABI: four register arguments and three stack arguments.
+ * The shared assembly scope forwards them unchanged and publishes its private
+ * output/stack before returning to the operand-cache-off live checks. */
+extern bool kui_vmu_native_cached_resolution_replay(const void *,size_t,uint32_t,
+    const void *,size_t,const uint8_t [32],struct kui_vmu_native_resolution *);
+#endif
 static bool __attribute__((noipa)) native_resolution_replay(void) {
+#if KUI_SMASH_NATIVE_MENU
+    extern bool kui_smash_native_menu_cached_resolution_replay(void);
+    if(!kui_smash_native_menu_cached_resolution_replay())
+#else
     const uint8_t *wire,*digest;
     if(!kui_vmu_native_cache_seed_read(native_resolution_seed,KUI_VMU_NATIVE_CACHE_SEED_BYTES,&wire,&digest) ||
-       !kui_vmu_native_resolution_cache_replay((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
+       !
+#if KUI_NATIVE_CACHED_RESOLUTION
+       kui_vmu_native_cached_resolution_replay
+#else
+       kui_vmu_native_resolution_cache_replay
+#endif
+       ((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
        exec_bytes,KUI_RETAIL_EXEC_ADDRESS,wire,KUI_VMU_NATIVE_RESOLUTION_CACHE_BYTES,digest,&native_cached_resolution))
+#endif
         return false;
     native_driver=native_cached_resolution.driver;passive_layout=native_cached_resolution.layout;
     native_heap=native_cached_resolution.heap;native_call=native_cached_resolution.call;
@@ -223,7 +261,7 @@ static bool __attribute__((noipa)) native_resolution_replay(void) {
      * produced for another module kind must miss before any allocator entry
      * is dereferenced, even though the shared record codec also admits image
      * launches' reviewed fixed/arena plans. */
-    if(native_heap.family!=KUI_VMU_NATIVE_HEAP_TAIL32 || !native_heap.initializer_slot)
+    if(!kui_vmu_native_heap_metadata_valid(&native_heap) || !native_heap.initializer_slot)
         return false;
 #endif
     /* A replayed arena or fixed-arena record must name exactly the plan
@@ -404,6 +442,9 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     int relocated=kui_vmu_native_relocate(__native_worker_blob_begin,bytes,
         __native_worker_reloc_begin,reloc_bytes,(void *)(uintptr_t)dest,span,load);
     if(relocated) native_report(8u,(uint32_t)relocated);
+#if KUI_SMASH_PHASE_TEXT
+    kui_smash_phase_stage_mark(KUI_SMASH_PHASE_WORKER_RELOCATED);
+#endif
 #if KUI_NATIVE_COLD_PROGRESS_STAGE
     retail_display_line("COLD 33 WORKER RELOCATED");
 #endif
@@ -527,6 +568,9 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     c->sd_transaction=e->sd_transaction;
 #endif
     c->installer=0;c->stage_stack=0;c->status=KUI_VMU_OBS_BOOT_INSTALLED;
+#if KUI_SMASH_NATIVE_MENU
+    kui_smash_native_return_stage_bind(dest,bytes,span);
+#endif
 #if KUI_NATIVE_COLD_PROGRESS_STAGE
     retail_display_line("COLD 37 SDK HOOKS INSTALLED");
 #endif
@@ -630,5 +674,9 @@ static void native_passive_run(struct kui_vmu_native_heap_lease *lease) {
     retail_display_line("READ ONLY VIRTUAL " KUI_VMU_NATIVE_VIRTUAL_NAME " ARMED - STARTING GAME");
 #else
     retail_display_line("PASSIVE WORKER ARMED - STARTING GAME");
+#endif
+#if KUI_SMASH_PHASE_TEXT
+    kui_smash_phase_stage_mark(KUI_SMASH_PHASE_INSTALL_DONE);
+    smash_phase_stage_text_write();
 #endif
 }

@@ -314,7 +314,10 @@ static void trial(BYTE kind,DWORD cluster) {
     unmount();free(original);free(image);free(disk);disk=NULL;
     printf("VMU history %s cluster%u: redo, dedup, snapshot/restore cuts, identity/corrupt receipts, receipt publication/clear cuts, pre-raw resolved-card boundary, export and retention passed\n",kind==FM_FAT32?"FAT32":"exFAT",(unsigned)cluster);
 }
-int main(void) {
+#ifndef KUI_VMU_HISTORY_TEST_MAIN
+#define KUI_VMU_HISTORY_TEST_MAIN main
+#endif
+int KUI_VMU_HISTORY_TEST_MAIN(void) {
     trial(FM_FAT32,512u);trial(FM_EXFAT,4096u);trial(FM_EXFAT,131072u);
     allocation_before_create();
     printf("VMU history: %u checks passed on real FatFs images; private formatter, no independent fsck\n",checks);

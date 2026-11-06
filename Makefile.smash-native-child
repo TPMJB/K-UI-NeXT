@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Exact source-bound cold MDE children; existing shared Smash Pack card, A1.
+BUILD ?= build/smash-native-child
+include Makefile.vmu-native-vmu-lite-paced
+FLAGS += -DKUI_SMASH_NATIVE_CHILD=1 -DKUI_VMU_VIRTUAL_A1=1
+NATIVE_FLAGS += -DKUI_SMASH_NATIVE_CHILD=1 -DKUI_VMU_VIRTUAL_A1=1
+override NATIVE_SRC += src/core/smash_native_vmu_probe.c
+$(BUILD)/native/src/loader/vmu_native_passive.o: src/loader/smash_native_vmu_probe.inc include/kui/smash_native_vmu_probe.h
+RESIDENT_FLAGS = $(FLAGS) -fno-tree-scev-cprop -flto -mrelax -DKUI_RETAIL_TRANSPORT=1 -DKUI_RETAIL_MANIFEST_SLOTS=48
+override STAGE_SRC += src/core/smash_native_child.c
+$(RESIDENT_OBJ) $(STAGE_OBJ) $(NATIVE_OBJ): $(BUILD)/readonly-config
+$(BUILD)/stage.elf: $(STAGE_OBJ)
+$(BUILD)/native-worker.elf: $(NATIVE_OBJ)
+$(BUILD)/stage/src/loader/vmu_native_heap_probe_stage.o: src/loader/smash_native_child_stage.inc include/kui/smash_native_child.h
+$(BUILD)/retail-smash-native.kui: $(BUILD)/retail-maple-observe.kui
+	cp $< $@
+all: $(BUILD)/retail-smash-native.kui

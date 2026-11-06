@@ -37,6 +37,11 @@ REPAIR_DIAGNOSTIC_CODE_PIN=(6016,'46c8f355865297918df512b6053328fc88579d32fbb19b
 PIO_CODE_PIN=(5920,'e7973080e08364c228ef9ecade3ab09e9ab3fe5b6c2ce3ade2ef2879e4a218cd')
 PIO_PAIR_CODE_PIN=(6144,'aca49f1f0dd52d239166b5eeb765364a670db2c6db7e1c7a34a2da71579ce501')
 GENERAL_LEAN_PAIR_CODE_PIN=(6144,'f347cd6cf3003fd81815b8d885e950257d1fa4127fd3b44e6e22e3e2599b756e')
+# Authored from a clean3a6ae064 session-controls rebuild, independently of
+# the current candidate. Its engine has the existing disc_generation field;
+# it is not interchangeable with the older General engine layout.
+SESSION_PAIR_CODE_PIN=(6272,'d71532bf949a48356eef6abb1af741a6519d008c3091e516bb0507aa280bf26a')
+ORDINARY_PAIR_CODE_PIN=(6304,'bfcd792cf317f6af79e0aa151f5955f52e978ec69f08929f009b7deb37c1e437')
 PIO_PAIR_MARK='__kui_native_readahead_pio_pair_'
 PIO_MARK='__kui_native_readahead_pio_'
 REPAIR_DIAGNOSTIC_MARKER='__kui_native_readahead_repair_diagnostic_auxiliary'
@@ -153,8 +158,110 @@ def code_payload(aux):
     for at,data in parts:body[at-begin:at-begin+len(data)]=data
     return begin,bytes(body)
 
-def pinned_code(aux):
+_SESSION_REGION_OFFSETS=None
+
+def session_region_offsets(resident):
+    """Fixture projection authored from both actual SH source layouts.
+
+    This never rewrites an executed SH memory access. Only fixture seeding
+    and independent expected observations use the named field addresses.
+    """
+    global _SESSION_REGION_OFFSETS
+    if not session_low_profile(resident):return {}
+    if _SESSION_REGION_OFFSETS is None:
+        from test_native_dual_readers import console_layouts
+        old=console_layouts(general=True)['layouts']['x']
+        current=console_layouts(general=True,session=True)['layouts']['x']
+        fields={0x24c:'engine.release.depth',0x2bc:'engine.active',
+                0x2c0:'engine.failed',0x2c4:'engine.opened',0x2cc:'engine.in_irq',0x2d0:'engine.hooked',
+                0x2e4:'engine.stats.execs',0x2f4:'engine.native_loan_state',0x370:'shared.service.pending',
+                0x374:'shared.service.executing',0x378:'shared.service.initialized',
+                0x470:'shared.stream.state',0x474:'shared.stream.position',
+                0x498:'shared.stream.arrived',0x4ac:'shared.stream.unrepaired',
+                0x4eb:'shared.port.acquired',0x4ec:'shared.port.fault'}
+        require(all(old[name]==offset for offset,name in fields.items()),
+                'Historical read-ahead fixture differs from its actual SH named fields')
+        _SESSION_REGION_OFFSETS={offset:current[name] for offset,name in fields.items()}
+    return _SESSION_REGION_OFFSETS
+
+def session_low_profile(resident):
+    low=resident is not None and '_kui_retail_native_session_control' in resident[4]
+    if not low:return False
+    address,count,kind,owner=resident[4]['_kui_retail_native_session_control']
+    require(kind==2 and count==20 and owner<len(resident[3]) and resident[3][owner][2]&7==6 and
+            LOW<=address<address+count<=GUARD,
+            'Read-ahead session low control lacks its exact immutable code owner')
+    from check_native_session_readahead_low_profile import pinned
+    pinned(resident,('_kui_retail_native_session_control',))
+    from check_native_general_lean_profile import low_profile
+    require(low_profile(resident), 'Session low requires the complete General profile')
+    return True
+
+def session_aux_pair(aux,resident=None,worker=None):
+    low=session_low_profile(resident)
+    if worker is not None:
+        from check_native_session_witness_profile import profile
+        session=profile(worker) is not None
+        require(session==low,'Read-ahead session worker and low control capability differ')
+    if not low:return False
+    geometry=layout_for(aux[4])
+    require(geometry.WORKER_BYTES==0x1c000 and geometry.LEASE_BYTES==0x51000 and
+            aux[4].get('__kui_native_general_lean_auxiliary')==(1,0,0,0xfff1) and pio_pair_profile(aux),
+            'Session auxiliary requires the complete112KiB/324KiB paired General geometry')
+    return True
+
+def ordinary_aux_pair(aux,resident=None,worker=None):
+    from check_native_general_readahead_low_profile import profile as low_profile,pinned
+    low=resident is not None and low_profile(resident)
+    if worker is not None:
+        from check_native_ordinary_general_profile import profile
+        from native_runtime_layout import GENERAL
+        ordinary=layout_for(worker[4]) is GENERAL and profile(worker) is not None
+        require(ordinary==low,'Ordinary read-ahead worker and low compiler profile differ')
+    if not low:return False
+    pinned(resident)
+    geometry=layout_for(aux[4])
+    require(geometry.WORKER_BYTES==0x1c000 and geometry.LEASE_BYTES==0x51000 and
+            aux[4].get('__kui_native_general_lean_auxiliary')==(1,0,0,0xfff1) and pio_pair_profile(aux),
+            'Ordinary auxiliary requires its complete112KiB/324KiB paired General geometry')
+    return True
+
+def session_companion_mutations(resident,aux,worker):
+    """The new selection cannot silently cross to an old or malformed ABI."""
+    require(session_aux_pair(aux,resident,worker),'Session companion test needs an admitted pair')
+    rejected=0
+    def refuses(low,image,high):
+        nonlocal rejected
+        try:pinned_code(image,resident=low,worker=high)
+        except (ValueError,KeyError):rejected+=1
+        else:raise ValueError('Read-ahead accepted a changed session companion capability')
+    name='_kui_retail_native_session_control';original=resident[4][name]
+    for row in (None,(original[0],original[1]+2,*original[2:]),
+                (original[0],original[1],1,original[3]),
+                (original[0]+1,*original[1:]),
+                (original[0],original[1],original[2],0),
+                (0x8c007ba0,*original[1:])):
+        symbols=dict(resident[4])
+        if row is None:symbols.pop(name)
+        else:symbols[name]=row
+        refuses((*resident[:4],symbols),aux,worker)
+    for target in ('__kui_native_session_controls_worker','__kui_native_owned_timer_callbacks_worker'):
+        for row in (None,(0,0,0,0xfff1),(1,4,0,0xfff1)):
+            symbols=dict(worker[4])
+            if row is None:symbols.pop(target)
+            else:symbols[target]=row
+            refuses(resident,aux,(*worker[:4],symbols))
+    for row in (None,(0,0,0,0xfff1),(1,4,0,0xfff1)):
+        symbols=dict(aux[4]);target='__kui_native_general_lean_auxiliary'
+        if row is None:symbols.pop(target)
+        else:symbols[target]=row
+        refuses(resident,(*aux[:4],symbols),worker)
+    return rejected
+
+def pinned_code(aux,*,resident=None,worker=None):
     address,body=code_payload(aux)
+    session=session_aux_pair(aux,resident,worker)
+    ordinary=ordinary_aux_pair(aux,resident,worker)
     selected=PIO_PAIR_CODE_PIN if pio_pair_profile(aux) else PIO_CODE_PIN if pio_profile(aux) else \
         REPAIR_DIAGNOSTIC_CODE_PIN if repair_diagnostic_profile(aux) else \
         DIAGNOSTIC_CODE_PIN if diagnostic_profile(aux) else CODE_PIN
@@ -167,7 +274,7 @@ def pinned_code(aux):
     elif layout_for(aux[4]).WORKER_BYTES==0x1c000:
         require(aux[4].get('__kui_native_general_lean_auxiliary')==(1,0,0,0xfff1) and
                 pio_pair_profile(aux),'Lean auxiliary lacks its exact paired profile markers')
-        selected=GENERAL_LEAN_PAIR_CODE_PIN
+        selected=SESSION_PAIR_CODE_PIN if session else ORDINARY_PAIR_CODE_PIN if ordinary else GENERAL_LEAN_PAIR_CODE_PIN
     require(selected is not None and (len(body),sha(body))==selected,
             'read-ahead immutable code pin changed')
     return address,body
@@ -184,11 +291,19 @@ def pinned_loan_boundary(resident):
     selected=STRUCTURAL_LOAN_PIN if structural_profile(resident) else LOAN_PIN
     from check_native_general_lean_profile import low_pins
     selected=low_pins(resident,'loan_quiesce',selected)
+    session=session_low_profile(resident)
+    from check_native_general_readahead_low_profile import profile as general_low_profile,pinned as general_low_pins
+    ordinary=general_low_profile(resident)
+    if session:
+        from check_native_session_readahead_low_profile import pinned
+        selected=pinned(resident,('_kui_vmu_observe_sd_lease',))['_kui_vmu_observe_sd_lease']
+    elif ordinary:
+        selected=general_low_pins(resident,('_kui_vmu_observe_sd_lease',))['_kui_vmu_observe_sd_lease']
     require(selected is not None,'structural QUIESCE boundary has no reviewed pin')
     at,count,kind,owner=resident[4]['_kui_vmu_observe_sd_lease']
     sec=resident[3][owner]
     require(kind==2 and sec[1]==1 and sec[2]&7==6 and at==sec[3] and
-            count==selected[0]+8 and sec[5]==selected[0] and LOW<=at<at+sec[5]<=GUARD,
+            count==selected[0]+(16 if session or ordinary else 8) and sec[5]==selected[0] and LOW<=at<at+sec[5]<=GUARD,
             'read-ahead QUIESCE loan boundary shape changed')
     require(resident[4]['__vmu_sd_lease_begin'][0]==at and
             resident[4]['__vmu_sd_lease_end'][0]==at+sec[5],
@@ -373,6 +488,7 @@ class WorkerCPU(SDKCPU):
             self.write(self.region+0x504,self.context)
         self.targets={self.entry};self.event=event;self.calls=0
         self.r[4]=event;self.r[15]=0xac11ffe0
+        if '__kui_native_readahead_tick_budget_worker' in worker[4]:self.r[5]=0
         self.initial=self.snapshot();self.durable=worker[4]['_durable_card'];self.durable_reads=set()
         self.writes=[]
 
@@ -386,7 +502,7 @@ class WorkerCPU(SDKCPU):
         super().plain(op,pc)
 
     def callee(self):
-        assert self.r[4:8]==[self.event,0,self.region,0]
+        assert self.r[4:8]==[self.event,getattr(self,'expected_arg',0),self.region,0]
         self.calls+=1;continuation=self.pr
         for i in range(8):self.r[i]=(0x913579bd+i*0x13579bd)&MASK
         # This target represents the complete auxiliary gateway, whose own
@@ -402,6 +518,8 @@ def worker_bindings(resident,worker,*,diagnostic=False,pio=False,pio_pair=False,
         DIAGNOSTIC_WORKER_PINS if diagnostic else WORKER_PINS
     from check_native_followup_profile import worker_pins as followup_worker_pins
     selected=followup_worker_pins(worker,'read_ahead',selected)
+    from check_native_dual_readers import reviewed_worker_pins
+    selected=reviewed_worker_pins(worker) or selected
     require(selected,'read-ahead reviewed worker pins are missing')
     public=656 if diagnostic else 76
     for name,(count,digest) in selected.items():
@@ -417,7 +535,8 @@ def worker_bindings(resident,worker,*,diagnostic=False,pio=False,pio_pair=False,
         from test_native_dual_readers import console_layouts
         from native_runtime_layout import BACKGROUND_COMPACT
         proof=general_worker_cases(resident,worker,console_layouts(general=True,
-            compact=layout_for(worker[4]) is BACKGROUND_COMPACT)['layouts']['x'],
+            compact=layout_for(worker[4]) is BACKGROUND_COMPACT,
+            session=session_low_profile(resident))['layouts']['x'],
                                    expected_pins=selected)
         require(proof['immutable_function_pins']==pins,
                 'Lean General binding proof did not execute its complete selected pin map')
@@ -483,6 +602,105 @@ def worker_diagnostic_display(worker):
         row_word_counts=[5,5,5,4,5,5,5,3],typed_immutable_label_pointers=7,
         actual_display_execution_modelled=False)
 
+
+def tick_budget_companion_mutations(worker,proof):
+    """Reject incomplete producer/worker premises for the new paired policy."""
+    import copy
+    from check_vmu_native_sdk_sci_route import pio_companion
+    require(worker[4].get('__kui_native_readahead_tick_budget_worker')==(1,0,0,0xfff1),
+            'TICK budget companion mutations require its exact worker profile')
+    require(pio_companion(worker,proof),'TICK budget companion fixture is incomplete')
+    rejected=0
+    def refuse(image,value):
+        nonlocal rejected
+        try:pio_companion(image,value)
+        except ValueError:rejected+=1
+        else:raise ValueError('TICK budget companion accepted a missing or changed proof premise')
+    context=worker[4].get('__kui_native_readahead_max_context_worker') is not None
+    for key in ('tick_budget_candidate',*(('max_context_candidate',) if context else ())):
+        for value in (None,False):
+            changed=copy.deepcopy(proof)
+            if value is None:changed.pop(key)
+            else:changed[key]=value
+            refuse(worker,changed)
+    flags={'pio_producer':('tick_budget_profile','tick_zero_argument_preserves_pair',
+        'tick_one_argument_one_complete_block','one_block_budget_retains_all_ordinary_guards',
+        'invalid_budget_arguments_before_any_optional_work','budget_is_per_visit_and_deliver_wait_unchanged'),
+        'worker_binding':('tick_budget_profile','early_family_one_block_argument_checked',
+        'later_family_default_pair_argument_checked','early_budget_keeps_stream_busy_payload_and_header_guards')}
+    counts={'pio_producer':('actual_linked_one_block_budget_cases',
+        'actual_linked_one_block_guard_refusals','invalid_event_argument_refusals_before_reader_or_clock'),
+        'worker_binding':('actual_early_budget_worker_cases',)}
+    from check_native_compact_background_profile import worker_profile as compact_worker
+    compact=compact_worker(worker)
+    if compact:
+        flags['worker_binding']+=('early_p2_family_one_block_argument_checked',)
+        counts['worker_binding']+=('actual_early_p2_budget_worker_cases',)
+    if context:
+        flags['pio_producer']+=('max_context_profile','max_context_uses_event_argument_and_entry_irq',
+            'max_context_ties_bad_clocks_and_smaller_intervals_retain_previous',
+            'max_context_uses_existing_two_clock_samples_only','capture_start_clears_max_context',
+            'exact_cache_byte_coverage_before_each_validity_publication')
+        flags['cache_copy']=('enabled','actual_linked_auxiliary_executed',
+            'exact_source_reads_and_destination_writes','exact_overlap_wrap_and_byte_coverage',
+            'validity_published_after_complete_copy')
+        counts['pio_producer']+=('actual_linked_max_context_cases',)
+        counts['cache_copy']=('aligned_word_cases','unaligned_byte_cases')
+    for section,keys in flags.items():
+        for key in keys:
+            for value in (None,False):
+                changed=copy.deepcopy(proof)
+                if value is None:changed[section].pop(key)
+                else:changed[section][key]=value
+                refuse(worker,changed)
+    for section,keys in counts.items():
+        for key in keys:
+            for value in (None,0,True):
+                changed=copy.deepcopy(proof)
+                if value is None:changed[section].pop(key)
+                else:changed[section][key]=value
+                refuse(worker,changed)
+    if compact:
+        for value in (None,[],[2],[3],[3,2],[2,3,4]):
+            changed=copy.deepcopy(proof)
+            if value is None:changed['worker_binding'].pop('early_budget_driver_families')
+            else:changed['worker_binding']['early_budget_driver_families']=value
+            refuse(worker,changed)
+    marker='__kui_native_readahead_tick_budget_worker'
+    for value in (None,(0,0,0,0xfff1),(1,4,0,0xfff1),(1,0,1,0xfff1),(1,0,0,1)):
+        symbols=worker[4].copy()
+        if value is None:symbols.pop(marker)
+        else:symbols[marker]=value
+        refuse((*worker[:4],symbols),proof)
+    changed=copy.deepcopy(proof);changed['artifact_sha256']['worker']='0'*64
+    refuse(worker,changed)
+    if context:
+        marker='__kui_native_readahead_max_context_worker'
+        for value in (None,(0,0,0,0xfff1),(1,4,0,0xfff1),(1,0,1,0xfff1),(1,0,0,1)):
+            symbols=worker[4].copy()
+            if value is None:symbols.pop(marker)
+            else:symbols[marker]=value
+            refuse((*worker[:4],symbols),proof)
+        for section,key,values in (
+            ('cache_copy','auxiliary_sha256',(None,'0'*64)),
+            ('cache_copy','cases',(None,[])),
+            ('cache_copy','aligned_word_cases',(7,9)),
+            ('cache_copy','unaligned_byte_cases',(9,11)),
+            ('pio_producer','exact_cache_copy_access_bytes',(1,0)),
+            ('artifact_sha256','auxiliary',(None,'0'*64))):
+            for value in values:
+                changed=copy.deepcopy(proof)
+                if value is None:changed[section].pop(key)
+                else:changed[section][key]=value
+                refuse(worker,changed)
+        for variant in ('source_reads','publication','duplicate'):
+            changed=copy.deepcopy(proof);cases=changed['cache_copy']['cases']
+            if variant=='source_reads':cases[0]['source_reads']+=1
+            elif variant=='publication':cases[0]['publication_after_complete_copy']=False
+            else:cases[-1]=copy.deepcopy(cases[0])
+            refuse(worker,changed)
+    return rejected
+
 class LoanCPU(SDKCPU):
     """Actual low QUIESCE slice after separately checked outer admission.
 
@@ -495,15 +713,21 @@ class LoanCPU(SDKCPU):
     def __init__(self,resident,bank,blocked,variant,result):
         super().__init__(resident,seed=17,mask=15,bank=bank,blocked=blocked)
         self.lease_entry=resident[4]['_kui_vmu_observe_sd_lease'][0]
+        self.session=session_low_profile(resident)
+        from check_native_general_readahead_low_profile import profile as general_low_profile
+        self.optimized_low=self.session or general_low_profile(resident)
+        offsets=session_region_offsets(resident)
+        project=lambda offset:offsets.get(offset,offset)
         self.r[15]=0xac11ffe0
         self.region=0x8c420400
         self.write(self.pointer,self.region);self.write(self.active,0)
-        for offset in (0x24c,0x2bc,0x2cc,0x2f4,0x370,0x374):self.write(self.region+offset,0)
+        self.busy_offsets=tuple(project(offset) for offset in (0x370,0x374,0x2bc,0x2cc,0x24c,0x2f4))
+        for offset in self.busy_offsets:self.write(self.region+offset,0)
         self.write(self.region+0x378,1)
         self.write(self.region+0x500,0 if variant=='unbound' else self.TARGET)
         offsets={'uninitialized':0x378,'pending':0x370,'executing':0x374,
-                 'active_demand':0x2bc,'in_irq':0x2cc,'released_handler':0x24c,
-                 'loan_active':0x2f4}
+                 'active_demand':project(0x2bc),'in_irq':project(0x2cc),'released_handler':0x24c,
+                 'loan_active':project(0x2f4)}
         if variant in offsets:self.write(self.region+offsets[variant],0 if variant=='uninitialized' else 1)
         if variant=='hook_active':self.write(self.active,1)
         self.targets={self.TARGET};self.calls=0;self.result=result
@@ -512,7 +736,7 @@ class LoanCPU(SDKCPU):
     def callee(self):
         assert self.r[4:8]==[3,0,self.region,0]
         assert self.sr&0xf0==0xf0 and self.read(self.active)==1
-        assert not any(self.read(self.region+at) for at in (0x370,0x374,0x2bc,0x2cc,0x24c,0x2f4))
+        assert not any(self.read(self.region+at) for at in self.busy_offsets)
         self.calls+=1;continuation=self.pr
         for i in range(8):self.r[i]=(0x913579bd+i*0x13579bd)&MASK
         self.r[0]=self.result;self.sr^=1;self.pc=continuation
@@ -520,6 +744,8 @@ class LoanCPU(SDKCPU):
 
 def loan_cases(resident):
     require(__debug__,'read-ahead loan instruction proof requires Python assertions')
+    from check_native_general_readahead_low_profile import profile as general_low_profile
+    optimized_low=session_low_profile(resident) or general_low_profile(resident)
     base=resident[4]['_kui_vmu_observe_sd_lease'][0]
     cases=mask_refusals=0
     variants=('unbound','bound','uninitialized','pending','executing','active_demand',
@@ -532,8 +758,15 @@ def loan_cases(resident):
                     accepted=variant=='unbound' or (variant=='bound' and result!=0)
                     # Fixed offsets belong to the separately pinned complete
                     # executable lease section, never a permissive search.
-                    stop=base+(0xc2 if accepted else 0x82)
-                    c.run_to(base+0x52,stop)
+                    if c.optimized_low:
+                        # Clean3a6 session section compiled with the reviewed low
+                        # flags: enter after outer ownership/IMASK admission at
+                        # pointer load, stop before stream probe or owned clear.
+                        stop=base+(0xe6 if accepted else 0x6e)
+                        c.run_to(base+0x4e,stop)
+                    else:
+                        stop=base+(0xc2 if accepted else 0x82)
+                        c.run_to(base+0x52,stop)
                     assert c.calls==int(variant=='bound')
                     assert c.read(c.active)==(1 if accepted or variant=='hook_active' else 0)
                     assert c.r[15]==c.initial[0][15] and c.other==c.initial[1]
@@ -551,7 +784,7 @@ def loan_cases(resident):
                 assert all(before[0][15]-68<=address<before[0][15] for _,address,_,_ in c.writes)
                 mask_refusals+=1
     return dict(actual_linked_quiesce_boundary_cases=cases,outer_non_imask15_refusals=mask_refusals,
-        exact_section_offset_entry='0x52',typed_auxiliary_event_arg_region_reserved_checked=True,
+        exact_section_offset_entry='0x4e' if optimized_low else '0x52',typed_auxiliary_event_arg_region_reserved_checked=True,
         real_pending_demand_never_quiesced=True,refused_quiesce_clears_only_owned_low_lock=True,
         preexisting_active_low_lock_preserved=True,null_binding_is_quiesce_success=True,
         success_rejoins_before_stream_busy_check=True,
@@ -572,11 +805,17 @@ class SnapshotCPU(GatewayCPU):
     """
     def __init__(self,resident,aux,seed,bank=0,blocked=False):
         super().__init__(resident,aux,seed,15,bank,blocked,2,0,'ok')
-        self.targets=set();self.hw_reads=[];self.hw_seed=seed
+        self.targets=set();self.hw_reads=[];self.hw_seed=seed;self.session=session_low_profile(resident)
+        self.region_offsets=session_region_offsets(resident)
         self.r[15]=STACK_TOP-32;self.region=0x8c420400
         for at in range(0,904,4):self.write(self.context+at,0)
         for at in range(0,0x760,4):self.write(self.region+at,0)
         self.writes=[]
+
+    def reg(self,offset):
+        # Fixture-only projection of the independently compiled session
+        # engine layout. Actual SH load/store addresses remain unmodified.
+        return self.region+self.region_offsets.get(offset,offset)
 
     def run_to(self,entry,stop):
         # The shared cold replay has the same exact SH branch/delay-slot
@@ -729,14 +968,14 @@ def diagnostic_snapshots(resident,aux):
             for blocked in (False,True):
                 for loan,unrepaired in ((0,0),(1,1),(2,2),(0xabcd1234,255)):
                     c=SnapshotCPU(resident,aux,3,bank,blocked)
-                    c.write(c.region+0x2f4,loan)
-                    c.write(c.region+0x4ac,unrepaired,1)
+                    c.write(c.reg(0x2f4),loan)
+                    c.write(c.reg(0x4ac),unrepaired,1)
                     packed=(loan&0xffff)|(unrepaired<<16)
                     c.body('_snapshot_pre',[4,c.region,0x123456])
                     assert c.read(c.context+752+48)==packed
                     c.body('_snapshot_failure',[c.region,6])
                     assert c.read(c.context+360+48)==c.read(c.context+508+48)==packed
-                    assert c.read(c.region+0x2f4)==loan and c.read(c.region+0x4ac,1)==unrepaired
+                    assert c.read(c.reg(0x2f4))==loan and c.read(c.reg(0x4ac),1)==unrepaired
                     repair_cases+=2
     cases+=repair_cases
     truth=snapshot_instruction_truth(resident,aux)
@@ -872,6 +1111,17 @@ def check(directory,*,self_test=False):
     diagnostic=diagnostic_profile(aux)
     pio=pio_profile(aux)
     pio_pair=pio_pair_profile(aux)
+    from check_vmu_native_readahead_pio import tick_budget_profile,max_context_profile
+    tick_budget=tick_budget_profile(aux)
+    max_context=max_context_profile(aux)
+    budget_worker=worker[4].get('__kui_native_readahead_tick_budget_worker')
+    require(bool(budget_worker)==tick_budget and (not tick_budget or
+            budget_worker==(1,0,0,0xfff1)),
+            'read-ahead TICK budget worker/auxiliary markers differ')
+    context_worker=worker[4].get('__kui_native_readahead_max_context_worker')
+    require(bool(context_worker)==max_context and (not max_context or
+            context_worker==(1,0,0,0xfff1)),
+            'read-ahead maximum-context worker/auxiliary markers differ')
     diagnostic_worker=worker[4].get(DIAGNOSTIC_MARK+'worker')
     require(bool(diagnostic_worker)==diagnostic and (not diagnostic or
             diagnostic_worker==(1,0,0,0xfff1)),'read-ahead diagnostic worker/auxiliary markers differ')
@@ -894,9 +1144,15 @@ def check(directory,*,self_test=False):
     require(not witness or dual,'controller witness profile requires the complete dual architecture')
     witness_execution=check_witness(directory,self_test=self_test) if witness else {'enabled':False}
     low_pins=STRUCTURAL_LOW_PINS if structural else LOW_PINS
+    if session_aux_pair(aux,resident,worker):
+        from check_native_session_readahead_low_profile import pinned
+        low_pins=pinned(resident,('_deliver_work','_deliver'))
+    else:
+        from check_native_general_readahead_low_profile import profile as general_low_profile,pinned as general_low_pins
+        if general_low_profile(resident):low_pins=general_low_pins(resident,('_deliver_work','_deliver'))
     require(low_pins,'read-ahead low reviewed functions are not pinned')
     geometry=image_contract(directory,aux,resident)
-    code_at,code=pinned_code(aux)
+    code_at,code=pinned_code(aux,resident=resident,worker=worker)
     insns=instruction_audit('native-read-ahead',disassemble(directory/'native-ra-aux.elf'))
     pinned_functions(resident,low_pins,'read-ahead low binding')
     require(low_pins,'read-ahead low reviewed functions are not pinned')
@@ -907,11 +1163,27 @@ def check(directory,*,self_test=False):
     if pio:
         from check_vmu_native_readahead_pio import pio_cases
         producer=pio_cases(resident,aux,self_test=self_test)
+    cache_copy={'enabled':False}
+    if max_context:
+        from test_native_readahead_cache_execution import exercise
+        copies=exercise(directory/'native-ra-aux.elf',True)
+        require(len(copies)==18 and all(c['publication_after_complete_copy'] for c in copies),
+                'aligned read-ahead cache requires its complete linked copy proof')
+        require(sha((directory/'native-ra-aux.elf').read_bytes())==sha(aux[0]),
+                'read-ahead auxiliary changed during its linked cache-copy proof')
+        cache_copy=dict(enabled=True,actual_linked_auxiliary_executed=True,
+            auxiliary_sha256=sha(aux[0]),cases=copies,
+            aligned_word_cases=sum(c['access_bytes']==4 for c in copies),
+            unaligned_byte_cases=sum(c['access_bytes']==1 for c in copies),
+            exact_source_reads_and_destination_writes=True,
+            exact_overlap_wrap_and_byte_coverage=True,
+            validity_published_after_complete_copy=True)
     gateway=gateway_cases(resident,aux);stack=private_stack(directory,resident,self_test=self_test)
     bindings=worker_bindings(resident,worker,diagnostic=diagnostic,pio=pio,pio_pair=pio_pair,dual=dual,witness=witness)
     display=worker_diagnostic_display(worker) if diagnostic else {'enabled':False}
     from check_vmu_native_readahead_stage import check_stage
-    cold=check_stage(stage,resident,aux,self_test=self_test,worker=worker)
+    cold=check_stage(stage,resident,aux,self_test=self_test,worker=worker,
+                     legacy=read_elf(directory/'resident-legacy.elf'))
     dual_execution={'enabled':False}
     if dual:
         from check_native_dual_readers import check as check_dual
@@ -923,17 +1195,21 @@ def check(directory,*,self_test=False):
             if section[1]!=1 or not section[2]&2 or section[2]&1 or not code_at<=section[3]<code_at+len(code):continue
             for i in range(section[5]):
                 changed=bytearray(aux[0]);changed[section[4]+i]^=1
-                try:pinned_code((bytes(changed),*aux[1:]))
+                try:pinned_code((bytes(changed),*aux[1:]),resident=resident,worker=worker)
                 except ValueError:mutations+=1
                 else:raise ValueError('read-ahead auditor accepted changed immutable code/data')
         bindings_mutations+=byte_mutations(resident,[(n,2) for n in low_pins],
             lambda image:pinned_functions(image,low_pins,'read-ahead low binding'))
         bindings_mutations+=byte_mutations(resident,[('_kui_native_ra_reader_ops',1),('_kui_native_ra_reader_ops_entry',1)],typed_ops)
+        if session_low_profile(resident):
+            bindings_mutations+=byte_mutations(resident,[('_kui_retail_native_session_control',2)],session_low_profile)
         from check_native_game_startup_profile import game_startup_profile
         worker_pins=GAME_STARTUP_WORKER_PINS if game_startup_profile(worker,resident) else DUAL_WITNESS_WORKER_PINS if witness else DUAL_WORKER_PINS if dual else PIO_PAIR_WORKER_PINS if pio_pair else PIO_WORKER_PINS if pio else \
             DIAGNOSTIC_WORKER_PINS if diagnostic else WORKER_PINS
         from check_native_followup_profile import worker_pins as followup_worker_pins
         worker_pins=followup_worker_pins(worker,'read_ahead',worker_pins)
+        from check_native_dual_readers import reviewed_worker_pins
+        worker_pins=reviewed_worker_pins(worker) or worker_pins
         from check_native_general_lean_profile import worker_profile
         bindings_mutations+=byte_mutations(worker,[(n,2) for n in worker_pins],
             lambda image:pinned_functions(image,worker_pins,'read-ahead worker binding'))
@@ -957,9 +1233,11 @@ def check(directory,*,self_test=False):
             try:pinned_loan_boundary((bytes(changed),*resident[1:]))
             except ValueError:bindings_mutations+=1
             else:raise ValueError('read-ahead auditor accepted a changed QUIESCE boundary')
-    return dict(enabled=True,schema='kui.native.read-ahead.audit.v1',paired_markers=True,
+    result=dict(enabled=True,schema='kui.native.read-ahead.audit.v1',paired_markers=True,
         diagnostic_capture=diagnostic,repair_diagnostic_capture=repair_diagnostic_profile(aux),
         pio_candidate=pio,pio_pair_candidate=pio_pair,pio_producer=producer,
+        tick_budget_candidate=tick_budget,
+        max_context_candidate=max_context,cache_copy=cache_copy,
         structural_sdk_route=structural,dual_reader_candidate=dual,dual_reader=dual_execution,
         controller_failure_witness=witness_execution,
         artifact_sha256=dict(resident=sha(resident[0]),worker=sha(worker[0]),
@@ -971,6 +1249,13 @@ def check(directory,*,self_test=False):
         cold_binder=cold,worker_binding=bindings,linked_integer_instructions=insns,
         code_byte_mutation_rejections=mutations,typed_binding_mutation_rejections=bindings_mutations,
         console_boot_verified=False,console_performance_verified=False)
+    result['session_profile']=dict(enabled=session_aux_pair(aux,resident,worker),
+        source_compiled_fixture_offsets=session_region_offsets(resident),
+        companion_mutation_rejections=session_companion_mutations(resident,aux,worker)
+            if self_test and session_low_profile(resident) else 0)
+    result['tick_budget_companion_mutation_rejections']=tick_budget_companion_mutations(worker,result) \
+        if self_test and tick_budget else 0
+    return result
 
 def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('directory',type=Path)

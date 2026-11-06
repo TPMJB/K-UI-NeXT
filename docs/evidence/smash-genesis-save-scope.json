@@ -1,0 +1,109 @@
+{
+  "schema": "kui.smash-genesis-save-scope.v1",
+  "status": "reviewed-source-scalar-contracts",
+  "owner": {
+    "file": "MDE_US.BIN",
+    "bytes": 1848288,
+    "sha256": "04f49d583b39bdc710cec6d0a434b5d710b9bccedd539bedda29755135f0fe61"
+  },
+  "cartridge_save": {
+    "kind": "Original emulated cartridge SRAM",
+    "header_offset": "0x1b0",
+    "signature": "RA",
+    "attribute_low_byte": "0x20",
+    "accepted_attribute_high_bytes": [
+      "0xf0",
+      "0xf8",
+      "0xe0"
+    ],
+    "size_cell": "0x8c48f3e0",
+    "dirty_cell": "0x8c48f3e8",
+    "size_calculation": "(header[0x1ba] + 1) * 256; divide by 2 for F0/F8; unknown types produce 0",
+    "save_enabled_when": "size and dirty are both nonzero",
+    "general_emulator_savestate": false
+  },
+  "controller_settings": {
+    "filename": "SMASH_01.CFG",
+    "payload_bytes": 1024,
+    "buffer": "0x8c47ee40",
+    "blocks_required": 4,
+    "save_function": "0x8c018ee0",
+    "load_function": "0x8c019048",
+    "save_backend": "0x8c01bd20",
+    "load_backend": "0x8c01bd1a",
+    "bup_unit": 0,
+    "maple_slot": "A1",
+    "not_gated_by_cartridge_sram": true,
+    "source_label": "Sega Smash Pack Vol.1 Settings"
+  },
+  "available_ROM_headers": [
+    {
+      "path": "SHFORCE/SHFORCE.SGA",
+      "prefix_bytes": 512,
+      "header_sha256": "3dff62d96a7b61c2c8f6ce94eacf8865252d67bfde616bb3d74f7ed0e10620b0",
+      "declares_SRAM": true,
+      "engine_SRAM_bytes": 8192
+    }
+  ],
+  "missing_ROM_headers": [
+    "ALTBEAST/ALTBEAST.SGA",
+    "COLUMNS/COLUMNS.SGA",
+    "GOLDAXE/GOLDAXE.SGA",
+    "PHSTAR2/PHSTAR2.SGA",
+    "REVSHIN/REVSHIN.SGA",
+    "SONIC1/SONIC1.SGA",
+    "STRAGE2/STRAGE2.SGA",
+    "VECTORM/VECTORM.SGA",
+    "WRESTWAR/WRESTWAR.SGA"
+  ],
+  "source_windows": [
+    {
+      "role": "ROM save descriptor parser",
+      "address": "0x8c018066",
+      "bytes": 138,
+      "sha256": "23497f4082c54d5fa427d5f2d36a1aea83895b7a80bbf952a672673f45fa670f",
+      "crc32": "af9d3831"
+    },
+    {
+      "role": "Save Game SRAM and dirty enable gates",
+      "address": "0x8c01adb0",
+      "bytes": 14,
+      "sha256": "83d0f053c42596f49b40d9393ce09f8758d4c227b44c2a2b4088087fedea6ba5",
+      "crc32": "4099e60b"
+    },
+    {
+      "role": "Save Game selection recheck",
+      "address": "0x8c01ae8a",
+      "bytes": 22,
+      "sha256": "685b4e9d450fcea012b3f30c1f6836a72ea26e579800c8d32e50d1b98a7f2035",
+      "crc32": "63b0fbee"
+    },
+    {
+      "role": "settings VMS header and data descriptor",
+      "address": "0x8c018ee0",
+      "bytes": 152,
+      "sha256": "3da24cd31e887956d33e2d46caf79a1a0f72d046b1c6af3304c863c44cf37c82",
+      "crc32": "0531365e"
+    },
+    {
+      "role": "settings load and payload copy",
+      "address": "0x8c019048",
+      "bytes": 176,
+      "sha256": "c5ba04f0963fbc11a65818c31d3d258c0af26fda141412b8e01ae7de26febdf5",
+      "crc32": "6833e682"
+    }
+  ],
+  "high_score_scope": "No separate high-score VMU path was identified in the reviewed engine save/option paths. A particular ROM may still store scores in declared SRAM; unprovided ROM headers and actual dirty/save behavior remain to check.",
+  "limits": [
+    "Static source decoding and bounded scalar parser execution only; no hardware, filesystem jobs or actual save/load executed.",
+    "Controller settings are a real separate save path; their entire 1024-byte field semantics are not all decoded here.",
+    "Absence of a high-score-specific string is not proof no additional path exists."
+  ],
+  "scalar_parser_execution": {
+    "checker": "tests/check_smash_genesis_save_source.py",
+    "synthetic_cases": 1024,
+    "instructions": 42924,
+    "result": "Exact original parser matches header helper; only size/type cells written; dirty unchanged; no MMIO",
+    "scope": "All admitted type/size combinations, every rejected type, fixed signature checks"
+  }
+}

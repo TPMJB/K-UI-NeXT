@@ -22,6 +22,7 @@ static struct {
     bool extent,layout,slot,call;
     enum kui_vmu_native_discovery_result driver;
     enum kui_vmu_native_heap_result heap;
+    int preclear;
 } plan;
 
 bool __real_kui_vmu_native_program_extent(const void *,size_t,uint32_t,size_t *);
@@ -33,6 +34,9 @@ enum kui_vmu_native_heap_result __real_kui_vmu_native_heap_discover(
     const void *,size_t,uint32_t,struct kui_vmu_native_heap *);
 bool __real_kui_vmu_native_heap_call_discover(const void *,size_t,
     const struct kui_vmu_native_heap *,struct kui_vmu_native_heap_call *);
+int __real_kui_vmu_native_heap_preclear_plan(const void *,size_t,const uint8_t[32],
+    const struct kui_vmu_native_heap *,const struct kui_vmu_native_heap_call *,
+    struct kui_vmu_native_heap_preclear *);
 
 static void seen(char gate,const void *p,size_t n,uint32_t load) {
     CHECK(p==expected_image && load==expected_base);
@@ -82,11 +86,19 @@ bool __wrap_kui_vmu_native_heap_call_discover(const void *p,size_t n,
     memset(c,0,sizeof(*c));if(plan.call) c->call=expected_base+0x40u;
     return plan.call;
 }
+int __wrap_kui_vmu_native_heap_preclear_plan(const void *p,size_t n,const uint8_t sha[32],
+    const struct kui_vmu_native_heap *h,const struct kui_vmu_native_heap_call *c,
+    struct kui_vmu_native_heap_preclear *out) {
+    if(!doubles) return __real_kui_vmu_native_heap_preclear_plan(p,n,sha,h,c,out);
+    seen('P',p,n,expected_base);CHECK(sha && out && h->initializer==expected_base+0x200u);
+    CHECK(c->call==expected_base+0x40u);return plan.preclear;
+}
 static void reset(const void *p,size_t n,uint32_t load) {
     doubles=true;expected_image=p;expected_file=n;expected_program=n-32u;
     expected_base=load;sequence_bytes=0u;sequence[0]=0;
     plan.extent=true;plan.layout=true;plan.slot=true;plan.call=true;
     plan.driver=KUI_VMU_NATIVE_RESOLVED;plan.heap=KUI_VMU_NATIVE_HEAP_FOUND;
+    plan.preclear=0;
 }
 static bool empty(const void *p,size_t n) {
     const unsigned char *s=p;for(size_t i=0;i<n;i++) if(s[i]) return false;return true;
@@ -172,10 +184,17 @@ static void dispatch_tests(void) {
     reset(p,sizeof(p),base);plan.call=false;
     CHECK(!kui_disc_vmu_probe_run(p,sizeof(p),base,&r));header(&r,KUI_DISC_VMU_PROBE_HEAP_CALL);
     CHECK(!strcmp(sequence,"EDHC") && r.heap.initializer_slot && empty(&r.call,sizeof(r.call)));
+    for(int hazard=-1;hazard<=1;hazard+=2) {
+        reset(p,sizeof(p),base);plan.preclear=hazard;
+        CHECK(!kui_disc_vmu_probe_run(p,sizeof(p),base,&r));
+        header(&r,KUI_DISC_VMU_PROBE_STARTUP_CLEAR);
+        CHECK(!strcmp(sequence,"EDHCP") && r.call.call==base+0x40u);
+        CHECK(r.driver_result==KUI_VMU_NATIVE_RESOLVED && r.heap_result==KUI_VMU_NATIVE_HEAP_FOUND);
+    }
     const uint32_t aliases[]={0x8c010000u,0xac010000u,0x0c010000u};
     for(unsigned i=0;i<sizeof(aliases)/sizeof(aliases[0]);i++) {
         reset(p,sizeof(p),aliases[i]);CHECK(kui_disc_vmu_probe_run(p,sizeof(p),aliases[i],&r));
-        header(&r,KUI_DISC_VMU_PROBE_READY);CHECK(!strcmp(sequence,"EDHC"));
+        header(&r,KUI_DISC_VMU_PROBE_READY);CHECK(!strcmp(sequence,"EDHCP"));
         CHECK(r.driver_result==KUI_VMU_NATIVE_RESOLVED && r.heap_result==KUI_VMU_NATIVE_HEAP_FOUND);
         CHECK(r.driver.submit==aliases[i]+0x100u && r.layout.tx_base==aliases[i]+0x10000u);
         CHECK(r.heap.initializer==aliases[i]+0x200u && r.call.call==aliases[i]+0x40u);
@@ -223,7 +242,12 @@ static void actual(const char *path) {
         else if(!h.initializer_slot) CHECK(!passed && r.stage==KUI_DISC_VMU_PROBE_HEAP_SLOT);
         else if(!kui_vmu_native_heap_call_discover(p,extent,&h,&c))
             CHECK(!passed && r.stage==KUI_DISC_VMU_PROBE_HEAP_CALL);
-        else CHECK(passed && r.stage==KUI_DISC_VMU_PROBE_READY && !memcmp(&r.call,&c,sizeof(c)));
+        else {
+            struct kui_vmu_native_heap_preclear clear;
+            int hazard=kui_vmu_native_heap_preclear_plan(p,extent,d.image_sha256,&h,&c,&clear);
+            CHECK(passed==(hazard==0) && !memcmp(&r.call,&c,sizeof(c)));
+            CHECK(r.stage==(uint32_t)(hazard==0?KUI_DISC_VMU_PROBE_READY:KUI_DISC_VMU_PROBE_STARTUP_CLEAR));
+        }
     }
     CHECK(!memcmp(p,original,n));
     printf("  Immutable probe: %s stage=%u driver=%d file=%zu program=%u crc=%08x\n",

@@ -9,10 +9,11 @@ void *memset(void *out, int value, size_t bytes) {
     while(bytes--) *p++ = (uint8_t)value;
     return out;
 }
+#if !defined(KUI_RETAIL_COMPACT_WORD_COPY) || !KUI_RETAIL_COMPACT_WORD_COPY
 void *memcpy(void *out, const void *in, size_t bytes) {
     uint8_t *p = out;
     const uint8_t *q = in;
-#ifdef KUI_RETAIL_FAST_IO
+#if defined(KUI_RETAIL_FAST_IO) && !defined(KUI_RETAIL_BYTE_COPY)
     /* SH-4 requires aligned word accesses. Only the retail build uses this
      * path; keep byte tails and every unaligned combination exact. may_alias
      * allows copying arbitrary object representations under GCC's alias rules.
@@ -28,6 +29,7 @@ void *memcpy(void *out, const void *in, size_t bytes) {
     while(bytes--) *p++ = *q++;
     return out;
 }
+#endif
 void *memmove(void *out, const void *in, size_t bytes) {
     uint8_t *p = out;
     const uint8_t *q = in;

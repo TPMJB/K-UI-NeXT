@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/smash-genesis-save-report-host
+HOST_CC ?= cc
+.DEFAULT_GOAL := smash-genesis-save-report-tests
+.PHONY: smash-genesis-save-report-tests
+smash-genesis-save-report-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic \
+	 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-pie -no-pie \
+	 -ffunction-sections -fdata-sections -Iinclude -Ifatfs/source tests/test_smash_genesis_save_report.c \
+	 src/core/game_metadata.c src/core/game_launch_settings.c src/core/smash_native_menu.c \
+	 src/core/smash_genesis_save_header.c -Wl,--gc-sections -o $(BUILD)/test-report
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-report

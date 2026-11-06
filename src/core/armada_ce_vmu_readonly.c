@@ -54,7 +54,7 @@ int kui_armada_ce_vmu_readonly_handle(struct kui_armada_ce_vmu_readonly *s,
         s->faulted=1u;s->read_valid=0u;return KUI_VMU_READONLY_INTERNAL;
     }
 #endif
-    if(request_bytes<3u || request[1]!=2u || request[2]!=0u)
+    if(request_bytes<3u || request[1]!=KUI_CE_VMU_ADDRESS || request[2]!=0u)
         return ce_readonly_refused(s);
     unsigned command=request[0];
     if(command==13u) {
@@ -64,7 +64,7 @@ int kui_armada_ce_vmu_readonly_handle(struct kui_armada_ce_vmu_readonly *s,
             s->read_valid=0;return ce_readonly_refused(s);
         }
         if(capacity<4u) return KUI_VMU_READONLY_CAPACITY;
-        response[0]=7u;response[1]=0u;response[2]=2u;response[3]=0u;
+        response[0]=7u;response[1]=0u;response[2]=KUI_CE_VMU_ADDRESS;response[3]=0u;
         *response_bytes=4u;ce_readonly_increment(&s->requests);
         ce_readonly_increment(&s->read_finalizations);
         return KUI_VMU_READONLY_HANDLED;

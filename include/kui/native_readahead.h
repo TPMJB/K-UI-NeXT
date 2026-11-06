@@ -15,6 +15,12 @@ enum kui_native_ra_event {
     KUI_NATIVE_RA_RESET=5u,
     KUI_NATIVE_RA_CAPTURE_START=6u
 };
+/* TICK's argument limits optional work without changing the visit ABI or
+ * stopping a partial block. Zero retains the historical two-block policy;
+ * ONE permits at most one complete PIO/CRC block. Other TICK arguments refuse.
+ * DELIVER keeps its separate wait argument; other events require zero. */
+#define KUI_NATIVE_RA_TICK_DEFAULT 0u
+#define KUI_NATIVE_RA_TICK_ONE_BLOCK 1u
 struct kui_retail_cursor;
 /* Every pointer is proved against the immutable low resident by the stage.
  * The auxiliary code invokes these standard C entries on its own stack. */
@@ -74,7 +80,13 @@ enum kui_native_ra_pio_metric {
     KUI_NATIVE_RA_PIO_ATTEMPTS=0u,KUI_NATIVE_RA_PIO_MAX_TICKS,
     KUI_NATIVE_RA_PIO_CLOCK_BAD,KUI_NATIVE_RA_PIO_SECOND_ATTEMPTS,
     KUI_NATIVE_RA_PIO_SECOND_TIME_SKIPS,KUI_NATIVE_RA_PIO_MAX_SINGLE_TICKS,
-    KUI_NATIVE_RA_PIO_WINDOW_OVERRUNS
+    KUI_NATIVE_RA_PIO_WINDOW_OVERRUNS,
+    /* Context of stats.max_visit_ticks, recorded only when that maximum
+     * increases, using the same existing before/after samples. Bits0..7:
+     * event; bits8..23: low16 bits of event argument; bits24..31: entry in_irq.
+     * Equal/invalid intervals retain the previous context. This slot is
+     * diagnostic only; it never grants work or changes the visit ABI. */
+    KUI_NATIVE_RA_AUX_MAX_CONTEXT
 };
 #define KUI_NATIVE_RA_PIO_BLOCK_LIMIT 2u
 #define KUI_NATIVE_RA_PIO_WINDOW_TICKS 2344u

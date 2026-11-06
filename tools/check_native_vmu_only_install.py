@@ -213,6 +213,25 @@ class Install(Machine):
                     (0x8c027000,self.low[4]['_kui_vmu_observe_return_hook'][0])),'Unexpected SDK hook target')
             self.events.append(('patch_sdk',address,target))
         elif name in ('_native_evolution_fault_install','_native_evolution_trace_install'):result=0
+        elif name=='_kui_smash_native_return_stage_bind':
+            require(self.r[4:7]==[self.dest,len(self.binary),self.span],
+                    'Return gate binding differs from the exact relocated worker allocation')
+            require(self.armed and self.published_worker and self.read(self.control)==self.read(self.control+4)==0 and
+                    self.read(self.control+8)==4 and self.read(self.control+12)==self.payload and
+                    self.read(self.control+32)==self.dest+self.span and
+                    self.read(self.control+40)==self.read(self.dest+24) and
+                    self.read(self.control+52)==self.read(self.dest+64),
+                    'Return worker binding precedes complete installed live control publication')
+            require(self.read(0x0c030200)==self.read(self.dest+20) and
+                    len([e for e in self.events if e[0]=='patch_sdk'])==4 and
+                    len([e for e in self.events if e[0]=='publish_submit'])==1 and
+                    self.calls.count('_native_sdk_coherence_install')==1 and
+                    all(self.calls.count(hook)==1 for hook in
+                        ('_native_evolution_fault_install','_native_evolution_trace_install') if hook in self.stage[4]) and
+                    self.calls.count(name)==1,
+                    'Return worker binding precedes complete SDK hook installation')
+            self.events.append(('return_bind',self.dest,len(self.binary)))
+            self.sites['return_bind']=self.pc
         elif name=='_native_report':
             require(self.failure is not None,'Unmutated installer refused '+hex(self.r[4])+'/'+hex(self.r[5]))
             self.aborted=True;self.pc=self.stop_pc;return True
@@ -234,6 +253,10 @@ class Install(Machine):
                     self.read(self.control+40)==self.read(self.dest+24) and
                     self.read(self.control+52)==self.read(self.dest+64),'Installed control does not pin relocated VMU entries')
             require(self.read(0x0c030200)==self.read(self.dest+20),'SDK completion slot lacks relocated hook')
+            if '_kui_smash_native_return_stage_bind' in self.stage[4]:
+                require(len([e for e in self.events if e[0]=='return_bind'])==1 and
+                        len([e for e in self.events if e[0]=='patch_sdk'])==4,
+                        'Menu installer omitted its once-only return worker binding')
             registers,pr,sr,fpscr,fr=self.initial
             require(self.r[8:]==registers[8:] and self.pr==pr and self.sr&~1==sr&~1 and
                     self.fpscr==fpscr and self.fr==fr,'Compiled installer violates preserved caller ABI')
@@ -248,7 +271,7 @@ def audit(stage,low,worker,binary,wire,span=SPAN):
         Install(stage,low,worker,binary,wire,11,failure=failure,span=span).check();refusals+=1
     reference=Install(stage,low,worker,binary,wire,span=span).check()
     mutations=0
-    for site in ('zero','publish'):
+    for site in ('zero','publish')+(('return_bind',) if '_kui_smash_native_return_stage_bind' in stage[4] else ()):
         body=bytearray(reference.blob)
         at=reference.sites[site]-reference.base
         opcode=struct.unpack_from('<H',body,at)[0]
@@ -262,5 +285,6 @@ def audit(stage,low,worker,binary,wire,span=SPAN):
             'p1_purge_bytes':span,'exact_shipped_relocation_bytes_applied':True,
             'complete_worker_tail_zeroed_before_arm':True,'cache_publisher_before_arm':True,
             'sdk_hooks_after_arm':True,'live_control_pinned_after_hooks':True,
+            'return_worker_binding_after_hooks': '_kui_smash_native_return_stage_bind' in stage[4],
             'stage_pointers_absent_from_copied_config':True,'finite_authored_abi_callees':True,
             'console_execution_verified':False}

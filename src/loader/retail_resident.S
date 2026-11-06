@@ -3,9 +3,40 @@
 #include "kui/retail_native_disc.h"
 #include "kui/native_sci_priority.h"
 #include "kui/native_sdk_sci_runtime.h"
+#include "kui/native_ocram_diagnostic.h"
+#ifndef KUI_SMASH_CE_RETURN_PROBE
+#define KUI_SMASH_CE_RETURN_PROBE 0
+#endif
+#if KUI_SMASH_CE_CHILD
+    .global __kui_smash_ce_return_probe_mode
+    .set __kui_smash_ce_return_probe_mode,KUI_SMASH_CE_RETURN_PROBE
+#endif
+#if KUI_VC2_VMU_PERSIST
+#include "kui/vc2_ce_vmu_handoff.h"
+#endif
+#ifndef KUI_NATIVE_GD_MMU_BUFFERS
+#define KUI_NATIVE_GD_MMU_BUFFERS 0
+#endif
+#ifndef KUI_NATIVE_GD_DMA_STREAM
+#define KUI_NATIVE_GD_DMA_STREAM 0
+#endif
+#ifndef KUI_NATIVE_GD_PIO_STREAM
+#define KUI_NATIVE_GD_PIO_STREAM 0
+#endif
+#if KUI_NATIVE_GD_MMU_BUFFERS && (defined(KUI_RETAIL_CE) || KUI_TOY_PILOT_PRIVATE_P2)
+#error "The native MMU-buffer entry is a separate native profile"
+#endif
 #define JOIN_INNER(a,b) a##b
 #define JOIN(a,b) JOIN_INNER(a,b)
 #define C_SYMBOL(name) JOIN(__USER_LABEL_PREFIX__,name)
+#if KUI_NATIVE_OCRAM_BOOTSTRAP
+    .global __kui_native_ocram_bss_publish
+    .set __kui_native_ocram_bss_publish,1
+#endif
+#if KUI_NATIVE_GD_MMU_BUFFERS
+    .global __kui_native_gd_mmu_buffers_entry
+    .set __kui_native_gd_mmu_buffers_entry,1
+#endif
 #include "toy_pilot_frame.inc"
 #if KUI_NATIVE_SCI_PRIORITY7
     .global __kui_native_sci_priority7_rehook
@@ -20,6 +51,17 @@
     .align 2
     .global _start
 _start:
+#if KUI_NATIVE_GD_DMA_STREAM
+    mov.l .Lnative_cold_start,r0
+    jmp @r0
+    nop
+    .align 2
+.Lnative_cold_start: .long .Lnative_cold_clear
+    /* The clear loop also retires before SCI ever receives into this area. */
+    .section .native_dma_cold_init,"ax"
+    .align 2
+.Lnative_cold_clear:
+#endif
     mov.l .Lbss_begin,r0
     mov.l .Lbss_end,r1
     mov #0,r2
@@ -66,7 +108,7 @@ C_SYMBOL(kui_retail_ce_vmu_loan_descriptor):
     .long C_SYMBOL(kui_retail_async_vmu_loan_begin)
     .long C_SYMBOL(kui_retail_async_vmu_loan_end)
 #endif
-#elif KUI_NATIVE_SDK_SCI_ROUTE
+#elif KUI_NATIVE_SDK_SCI_ROUTE && !(KUI_NATIVE_OCRAM_BOOTSTRAP && KUI_NATIVE_STANDALONE_FOREGROUND)
     .global C_SYMBOL(kui_native_sdk_sci_route_entry)
     .type C_SYMBOL(kui_native_sdk_sci_route_entry),@object
 C_SYMBOL(kui_native_sdk_sci_route_entry):
@@ -92,11 +134,10 @@ C_SYMBOL(kui_retail_skies_read_entry): .long C_SYMBOL(kui_retail_skies_read_fail
  * recursion without replacing an active service frame. No FPU instruction or
  * register-bank change occurs. PR and all ABI callee-saved GPRs are preserved.
  * Synchronous SD chunks run masked; the caller's exact SR is restored.
- * KUI_RETAIL_CE (the Windows CE boot test): CE calls with its MMU on and its
- * stack at a virtual address, where a TLB miss with BL set resets the
- * console. That build touches the caller's stack only with the caller's own
- * SR: it masks after the pushes and restores SR before the pops. It masks
- * interrupts only, leaving SR.BL clear throughout (see .Lirq_mask). */
+ * KUI_RETAIL_CE and the native MMU-buffer profile can receive a virtual stack,
+ * where a TLB miss with BL set resets the console. They push with the caller's
+ * own SR, mask interrupts afterward, and restore SR before the pops. Their
+ * mask never newly sets SR.BL, so a BL-clear caller can refill its TLB. */
     .section .text.retail_hook,"ax"
     .align 2
     .global C_SYMBOL(kui_retail_resident_hook)
@@ -125,7 +166,7 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
     ldc r2,sr
 #endif
     mov.l r1,@-r15
-#if !defined(KUI_RETAIL_CE) && !KUI_TOY_PILOT_PRIVATE_P2
+#if !defined(KUI_RETAIL_CE) && !KUI_TOY_PILOT_PRIVATE_P2 && !KUI_NATIVE_GD_MMU_BUFFERS
     mov.l .Lirq_mask,r2
     or r2,r1
     ldc r1,sr
@@ -143,13 +184,63 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
      * IMASK15 remain held until every inherited save is read and popped;
      * only then is its exact SR restored. No live frame crosses unmask. */
 #endif
-#ifdef KUI_RETAIL_CE
+#if defined(KUI_RETAIL_CE) || KUI_NATIVE_GD_MMU_BUFFERS
     mov.l .Lirq_mask,r2
     or r2,r1
     ldc r1,sr
 #endif
     mov r0,r9
     mov r15,r8
+#if KUI_NATIVE_GD_PIO_STREAM
+    /* A refused/busy entry never consumes another entry's deferred work. */
+    mov #0,r10
+#endif
+#if KUI_NATIVE_OCRAM_BOOTSTRAP
+    /* Capture even calls refused by the lock/guard, before entering C.
+     * This distinguishes a busy CHECK from a stale C diagnostic. */
+#if KUI_VC2_VMU_PERSIST
+    .global __kui_vc2_gd_retry_before_trace
+__kui_vc2_gd_retry_before_trace:
+#endif
+    mov.l .Ltrace,r0
+    mov.l @r0,r1
+    add #1,r1
+    mov.l r1,@r0
+    mov.l r4,@(4,r0)
+    mov.l r5,@(8,r0)
+    mov.l r6,@(12,r0)
+    mov.l r7,@(16,r0)
+    mov.l @(28,r8),r1
+    mov.l r1,@(20,r0)
+    mov r8,r1
+    add #36,r1
+    mov.l r1,@(24,r0)
+    mov.l @(32,r8),r1
+    mov.l r1,@(28,r0)
+    mov.l r9,@(32,r0)
+    mov #-2,r1
+    mov.l r1,@(36,r0)
+    mov.l .Lactive,r1
+    mov.l @r1,r2
+    mov.l r2,@(40,r0)
+    mov.l .Ltrace_mmu,r1
+    mov.l @r1,r2
+    mov.l r2,@(44,r0)
+    mov.l .Ltrace_ccr,r1
+    mov.l @r1,r2
+    mov.l r2,@(48,r0)
+    mov #4,r3
+    tst r3,r2
+    bt .Ltrace_no_copyback
+    mov.l .Ltrace_copyback,r1
+    mov.l r2,@r1
+.Ltrace_no_copyback:
+    stc vbr,r1
+    mov.l r1,@(52,r0)
+    mov #0,r1
+    mov.l r1,@(56,r0)
+    mov.l r1,@(60,r0)
+#endif
     mov.l .Lactive,r0
     mov.l @r0,r1
     tst r1,r1
@@ -201,6 +292,20 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
     mov.l r2,@r1
     mov #-1,r9
 .Lunlock:
+#if KUI_NATIVE_GD_PIO_STREAM
+    /* Retain the callback in saved-register scratch across the publisher.
+     * Clear its shared ready pointer BEFORE publication and unlocking, so
+     * a reentrant callback cannot consume this completed EXEC a second time. */
+    mov.l .Lnative_pio_deferred,r1
+    mov.l @r1,r2
+    mov #0,r3
+    mov.l r3,@r1
+    cmp/pz r9
+    bf .Lnative_no_deferred
+    mov r2,r10
+    mov.l @(4,r1),r11
+.Lnative_no_deferred:
+#endif
     mov.l .Lactive,r1
     mov #0,r2
     mov.l r2,@r1
@@ -214,6 +319,23 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
     bra .Lreturn
     nop
 .Lbusy:
+#if KUI_VC2_VMU_PERSIST
+    /* Only the post-NK virtual-card borrower publishes active2. The fixed
+     * high gate parks a normal CE REQUEST instead of returning token0,
+     * which this title's driver treats as a permanent read error. Other
+     * functions retain the original busy convention through r3. */
+    mov #2,r2
+    cmp/eq r2,r1
+    bf .Lbusy_native
+    mov.l .Lvc2_gd_retry,r2
+    mov.l .Lvc2_gd_busy,r3
+    mov.l .Lvc2_gd_wait,r1
+    jmp @r1
+    nop
+    .global __kui_vc2_gd_legacy_busy
+__kui_vc2_gd_legacy_busy:
+.Lbusy_native:
+#endif
     mov r7,r0
     cmp/eq #0,r0
     bt .Lreturn
@@ -229,10 +351,29 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
 .Lerror:
     mov #-1,r0
 .Lreturn:
+#if KUI_NATIVE_OCRAM_BOOTSTRAP
+    mov.l .Ltrace,r1
+    mov.l r0,@(36,r1)
+    bsr .Lpublish
+    nop
+#endif
+#if KUI_NATIVE_GD_PIO_STREAM
+    /* The caller-saved registers survive the remaining restore sequence;
+     * R10/R11 themselves are restored from the owner's saved frame below. */
+    mov r10,r2
+    mov r11,r4
+#endif
     mov r8,r15
-#ifdef KUI_RETAIL_CE
+#if defined(KUI_RETAIL_CE) || KUI_NATIVE_GD_MMU_BUFFERS
     mov.l @(32,r15),r1
     ldc r1,sr
+#if KUI_NATIVE_GD_MMU_BUFFERS
+    /* Keep SH relaxation from moving a virtual stack load above the caller's
+     * SR restoration. A pop in this branch's delay slot is already safe. */
+    bra .Lnative_mmu_return_pops
+    nop
+.Lnative_mmu_return_pops:
+#endif
 #endif
     mov.l @r15+,r14
     mov.l @r15+,r13
@@ -243,7 +384,30 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
     mov.l @r15+,r8
     lds.l @r15+,pr
     mov.l @r15+,r1
-#ifndef KUI_RETAIL_CE
+#if !defined(KUI_RETAIL_CE) && !KUI_NATIVE_GD_MMU_BUFFERS
+    ldc r1,sr
+#endif
+#if KUI_NATIVE_GD_PIO_STREAM
+    tst r2,r2
+    bt .Lnative_pio_return
+    /* Microsoft SH calls reserve sixteen argument-home bytes. Preserve the
+     * outer GD result and return address through nested callback GD calls;
+     * GBR belongs to the owner even if its callback changes it. */
+    sts.l pr,@-r15
+    mov.l r0,@-r15
+    mov.l r1,@-r15
+    stc.l gbr,@-r15
+    add #-16,r15
+    ldc r1,sr
+    jsr @r2
+    nop
+    add #16,r15
+    ldc.l @r15+,gbr
+    mov.l @r15+,r1
+    mov.l @r15+,r0
+    lds.l @r15+,pr
+.Lnative_pio_return:
+    /* T was changed by the callback test (and possibly the callback). */
     ldc r1,sr
 #endif
     rts
@@ -284,16 +448,79 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
     rts
     nop
 #endif
+#if KUI_NATIVE_OCRAM_BOOTSTRAP
+/* No private stack use. Shift four chronological records, then publish all
+ * mutable low BSS AFTER the unlock. Discarding dirty cache tags in the next
+ * executable must not resurrect active=1. Restore the exact result in R0. */
     .align 2
-#ifdef KUI_RETAIL_CE
-/* Windows CE: interrupts masked, SR.BL left clear, so a TLB miss on CE's
- * virtual memory (the service reads and writes it directly) goes to CE's own
- * handler instead of resetting the console. */
+.Lpublish:
+#if !KUI_VC2_VMU_WATCH
+    mov.l .Ltrace_history,r1
+    mov r1,r2
+    add #20,r2
+    mov #15,r3
+.Lhistory_shift:
+    mov.l @r2+,r0
+    mov.l r0,@r1
+    add #4,r1
+    dt r3
+    bf .Lhistory_shift
+    mov.l .Ltrace,r2
+    mov.l @(16,r2),r0
+    mov.l r0,@r1
+    mov.l @(4,r2),r0
+    mov.l r0,@(4,r1)
+    mov.l @(8,r2),r0
+    mov.l r0,@(8,r1)
+    mov.l @(36,r2),r0
+    mov.l r0,@(12,r1)
+    mov.l @(48,r2),r0
+    mov.l r0,@(16,r1)
+#endif
+    mov.l .Lpublish_begin,r1
+    mov #-32,r3
+    and r3,r1
+    mov.l .Lpublish_end,r3
+.Lpublish_line:
+    ocbp @r1
+    add #32,r1
+    cmp/hs r3,r1
+    bf .Lpublish_line
+    mov.l .Ltrace,r1
+    mov.l @(36,r1),r0
+    rts
+    nop
+    .align 2
+.Ltrace: .long C_SYMBOL(kui_native_ocram_trace)
+#if !KUI_VC2_VMU_WATCH
+.Ltrace_history: .long C_SYMBOL(kui_native_ocram_trace)+KUI_OC_TRACE_HISTORY
+#endif
+.Ltrace_copyback: .long C_SYMBOL(kui_native_ocram_trace)+KUI_OC_TRACE_COPYBACK
+.Ltrace_mmu: .long 0xff000010
+.Ltrace_ccr: .long 0xff00001c
+#if KUI_NATIVE_GD_DMA_STREAM
+/* After adoption, the retired code prefix is ordinary receive RAM too.
+ * Publish its repaired/polled bytes together with every other reader word. */
+.Lpublish_begin: .long __native_dma_cold_begin
+#else
+.Lpublish_begin: .long __retail_resident_bss_begin
+#endif
+.Lpublish_end: .long __retail_resident_bss_end
+#endif
+    .align 2
+#if defined(KUI_RETAIL_CE) || KUI_NATIVE_GD_MMU_BUFFERS
+/* Mask interrupts without newly setting SR.BL. A BL-clear caller's virtual
+ * memory can still fault into its own TLB handler. */
 .Lirq_mask: .long 0x000000f0
 #else
 .Lirq_mask: .long 0x100000f0
 #endif
 .Lactive: .long C_SYMBOL(kui_retail_hook_active)
+#if KUI_VC2_VMU_PERSIST
+.Lvc2_gd_wait: .long KUI_VC2_VMU_GD_WAIT_P2
+.Lvc2_gd_retry: .long __kui_vc2_gd_retry_before_trace
+.Lvc2_gd_busy: .long __kui_vc2_gd_legacy_busy
+#endif
 .Lfault: .long C_SYMBOL(kui_retail_hook_fault)
 #if KUI_TOY_PILOT_PRIVATE_P2
 .Lprivate_stack: .long KUI_RETAIL_HOOK_STACK-16+0x20000000
@@ -306,6 +533,9 @@ C_SYMBOL(kui_retail_gd_10f0_hook):
 .Ldispatch: .long C_SYMBOL(kui_retail_resident_dispatch)
 .Lsource: .long C_SYMBOL(kui_retail_hook_source)
 .Lcaller_sr: .long C_SYMBOL(kui_retail_hook_sr)
+#if KUI_NATIVE_GD_PIO_STREAM
+.Lnative_pio_deferred: .long C_SYMBOL(kui_native_pio_deferred)
+#endif
 #ifdef KUI_RETAIL_CE
 .Lcaller: .long C_SYMBOL(kui_retail_hook_caller)
 .Ldeferred: .long C_SYMBOL(kui_retail_ce_deferred)
@@ -344,7 +574,9 @@ C_SYMBOL(kui_retail_skies_read_failure):
 
 /* Menu command 1 (return to the BIOS menu; A+B+X+Y+Start in most games)
  * shows the reader's counters, then restarts the console so the boot disc
- * starts K-UI again. Other menu functions still forward to firmware. Use our
+ * starts K-UI again. Other menu functions still forward to firmware. The
+ * isolated late-VMU test also stops command 3: its raw reader occupies the
+ * retired BOOT1 bytes, which a software reset could otherwise execute. Use our
  * private stack even if the caller was in a dying game. Native function 2 can
  * optionally answer for the unchanged mounted image without entering the
  * physical firmware, the GD service, or the resident stack. */
@@ -354,6 +586,10 @@ C_SYMBOL(kui_retail_menu_hook):
     mov r4,r0
     cmp/eq #1,r0
     bt .Lmenu_stop
+#if KUI_VC2_VMU_LATE
+    cmp/eq #3,r0
+    bt .Lmenu_stop
+#endif
 #ifdef KUI_RETAIL_CE
     /* Windows CE's CD driver calls function 2, the BIOS check that the disc
      * in the drive is still the one that booted. The BIOS would ask the
@@ -381,6 +617,15 @@ C_SYMBOL(kui_retail_menu_hook):
     jmp @r0
     nop
 .Lmenu_stop:
+#if KUI_SMASH_CE_CHILD && KUI_SMASH_CE_RETURN_PROBE
+    /* This authored P2 observer records the real CE E0 context and remains
+     * terminal. It never calls an unqualified CE worker or cold-overwrites. */
+    mov.l .Lsmash_ce_return,r0
+    jmp @r0
+    nop
+    .align 2
+.Lsmash_ce_return: .long 0xac008300
+#else
     stc sr,r0
 #if KUI_RETAIL_RETURN_TRACE == 2
     mov r0,r7 /* Preserve original entry SR before masking for the terminal. */
@@ -394,6 +639,7 @@ C_SYMBOL(kui_retail_menu_hook):
     mov.l .Lmenu_report,r0
     jmp @r0
     nop
+#endif
     .align 2
 .Lmenu_original: .long C_SYMBOL(kui_retail_original_menu)
 #if KUI_NATIVE_SESSION_CONTROLS
@@ -480,7 +726,7 @@ C_SYMBOL(kui_retail_ce_isr):
     .section .bss.retail_ce_isr,"aw",@nobits
     .align 2
 C_SYMBOL(kui_retail_ce_isr_sp): .space 4
-#elif defined(KUI_RETAIL_ASYNC) && KUI_NATIVE_SDK_SCI_ROUTE
+#elif defined(KUI_RETAIL_ASYNC) && KUI_NATIVE_SDK_SCI_ROUTE && !(KUI_NATIVE_OCRAM_BOOTSTRAP && KUI_NATIVE_STANDALONE_FOREGROUND)
 /* The SDK common ISR already owns the complete interrupted frame and calls
  * this entry with JSR, IMASK15, BLclear. Keep its SP and original SR, never
  * use RTE/SGR, and exclude the low GD stack before touching it. */
@@ -574,7 +820,7 @@ C_SYMBOL(kui_native_sdk_sci_route_exports):
     .long KUI_NATIVE_SDK_SCI_DESCRIPTOR_BYTES,C_SYMBOL(kui_retail_sdk_sci_entry)
     .long C_SYMBOL(kui_retail_async_region_storage)
     .size C_SYMBOL(kui_native_sdk_sci_route_exports),KUI_NATIVE_SDK_SCI_DESCRIPTOR_BYTES
-#elif defined(KUI_RETAIL_ASYNC)
+#elif defined(KUI_RETAIL_ASYNC) && !KUI_NATIVE_SDK_SCI_ROUTE
 /* Vector templates for the background reader, copied by
  * kui_retail_async_init into its region (VBR = region - 0x100). They run in
  * exception state (BL=1, RB=1) and leave every register, SSR, SPC and SGR as

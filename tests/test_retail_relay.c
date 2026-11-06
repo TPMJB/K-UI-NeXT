@@ -146,7 +146,7 @@ static void success(bool repair_vbr) {
     kui_retail_stage_relay(frame,CCR_VALUE);
     assert(!memcmp(frame,saved_frame,sizeof(saved_frame)));
     assert(!memcmp((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,executable,sizeof(executable)));
-    assert(calls.pauses==1 && calls.pause_frames==STEP_PAUSE_FRAMES);
+    assert(calls.pauses==(STEP_PAUSE_FRAMES?1u:0u) && calls.pause_frames==STEP_PAUSE_FRAMES);
 #ifdef KUI_RETAIL_CE
     assert(calls.restores==1 && calls.lines==7 && calls.hexes==4);
     assert(has_line("BOOTSTRAP 2 REACHED GAME ENTRY"));
@@ -239,7 +239,7 @@ static void patches_success(void) {
     assert(!memcmp(frame,saved_frame,sizeof(saved_frame)));
     assert(!memcmp((const void *)(uintptr_t)KUI_RETAIL_RESIDENT_ADDRESS,reader_blob,sizeof(reader_blob)));
     assert(!memcmp(&video,&before_video,sizeof(video)));
-    assert(!calls.restores && !calls.lines && !calls.hexes && calls.pauses==1);
+    assert(!calls.restores && !calls.lines && !calls.hexes && calls.pauses==(STEP_PAUSE_FRAMES?1u:0u));
     ++cases;
 }
 static void patches_rejected_case(unsigned fault) {

@@ -275,3 +275,7 @@ C(kui_disc_vmu_game_resume):
 /* Owner bootstrap2 calls the uncached executable alias. Resume that same
  * alias while the original entry performs its own cache setup. */
 .Ldisc_resume_game: .long 0xac010000
+
+/* Same immutable-proof scopes as image launch. Live SDK/card operations stay
+ * outside these scopes, and unknown entry cache modes retain the old path. */
+#include "native_proof_cache_scope.inc"

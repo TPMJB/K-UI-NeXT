@@ -20,7 +20,10 @@
  * pin is CID at 40, capacity at 56, partition first/end at 64/72, HC at 80;
  * 84..507 are zero. CRC32 at 508 covers 0..507 and all record bytes from 512.
  * Each 40-byte record is key[12], pair, identity[16], flags (bit 0 default),
- * four zero reserved bytes. Records sort by canonical key then ascending pair;
+ * four zero reserved bytes. A covered-empty product uses one record with
+ * pair=0, zero identity and flags=2. It suppresses legacy fallback after the
+ * last card is explicitly deleted; adding a card replaces this record.
+ * Records sort by canonical key then ascending pair;
  * each product has at most one default. Unused records are zero. Equal valid
  * generations must have identical contents. A present damaged catalogue with
  * no valid predecessor refuses; it never becomes implicit legacy fallback.
@@ -72,7 +75,9 @@ struct kui_vmu_game_candidates_repair {
 /* Read only, including current identity/ready marker and card/journal lengths
  * for every returned target. ABSENT alone permits legacy assign-v1/default
  * fallback. Present + multiple targets + NO_DEFAULT requires a launch choice;
- * a sole target can be selected without persisting a default. Outputs clear on
+ * a sole target can be selected without persisting a default. A covered-empty
+ * product returns OK with present=true/count=0 and must not use legacy fallback.
+ * Outputs clear on
  * failure. None of these APIs rewrite card images, journals, identities, v1
  * assignment files, game bindings or profiles. */
 int kui_vmu_game_candidates_list(const char *product,
@@ -84,7 +89,8 @@ int kui_vmu_game_candidates_list(const char *product,
  * storage==NULL is display-only: the stored pin is structurally checked but
  * is NOT fresh hardware identity proof. Launch/default/write APIs never allow
  * NULL storage. The manager independently admits each displayed card.
- * Every callback key marks that product as covered:
+ * A covered-empty product calls visit once with target==NULL and
+ * is_default=false. Every callback key marks that product as covered:
  * suppress its v1/game.bin fallback even when its target is not on this page.
  * Pointers live only during the callback. Callback true continues; false aborts
  * with CANCELLED. On any error discard partial callback output. ABSENT means
@@ -153,5 +159,26 @@ int kui_vmu_game_candidates_apply_choose(const struct kui_vmu_game_assignment *e
  * no-op. No default is stored for a one-time launch selection. */
 int kui_vmu_game_candidates_set_default(const char *product,
     const struct kui_vmu_game_candidate_target *target,uint64_t expected_sequence,
+    const struct kui_vmu_game_candidates_storage *storage,kui_log_fn log,kui_cancel_fn cancel);
+/* Whole-card deletion preparation. Identity must still name this exact
+ * pNNNN directory; binding_key is NULL, all zero, or its admitted canonical
+ * game.bin key. Hashes the complete newest candidate/legacy generations and
+ * the supplied binding so a confirmation cannot gain users unnoticed. users
+ * counts distinct effective products, including uncovered legacy bindings.
+ * storage==NULL is read-only preview with the stored pin, never write authority.
+ * Outputs clear on error. No card or catalogue files are modified. */
+int kui_vmu_game_candidates_card_references(unsigned pair,const uint8_t identity[16],
+    const char binding_key[KUI_VMU_GAME_CARD_KEY_BYTES],
+    const struct kui_vmu_game_candidates_storage *storage,uint8_t out_sha256[32],unsigned *users,
+    kui_log_fn log,kui_cancel_fn cancel);
+/* After confirmation, recheck the identity, fresh storage pin and exact
+ * preparation hash; atomically detach this identity from every product and
+ * clear defaults naming it. Remaining cards/defaults are retained. Covered
+ * empty products prevent v1/game.bin fallback from reviving a deleted target.
+ * The caller quarantines the admitted folder ONLY after OK. A late error can
+ * leave references detached while the card is still present; it never removes
+ * any image, journal, identity, v1 assignment, binding or backup file itself. */
+int kui_vmu_game_candidates_remove_card(unsigned pair,const uint8_t identity[16],
+    const char binding_key[KUI_VMU_GAME_CARD_KEY_BYTES],const uint8_t expected_sha256[32],
     const struct kui_vmu_game_candidates_storage *storage,kui_log_fn log,kui_cancel_fn cancel);
 #endif

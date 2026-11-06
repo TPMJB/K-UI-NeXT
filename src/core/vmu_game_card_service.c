@@ -5,6 +5,7 @@
 #include "kui/vmu_game_card_service.h"
 #include "kui/vmu_persist_profile.h"
 #include "kui/hash.h"
+#include "kui/smash_launch_timing.h"
 #include "diskio.h"
 #include <stdarg.h>
 #include <stdio.h>
@@ -163,8 +164,18 @@ static int card_collect(struct kui_vmu_game_card_work *w,unsigned pair,uint64_t 
         .high_capacity=w->raw.high_capacity?1u:0u,.pair_path=pair_path,
         .forbidden=forbidden,.forbidden_count=forbidden_count};
     memcpy(input.cid,w->raw.cid,16u);memcpy(input.image_id,identity,16u);
+    KUI_SMASH_TIME_SPAN(raw_scan,KUI_SMASH_UI_RAW_FS);
     int scan=kui_vmu_fs_collect(&input,&w->profile,&w->filesystem);
-    int snapshot=scan?0:kui_vmu_persist_profile_collect_snapshot(&w->profile,card_raw_role,w);
+    KUI_SMASH_TIME_END(raw_scan);
+    kui_smash_launch_timing_metric(KUI_SMASH_UI_RAW_READS,w->filesystem.stats.reads);
+    kui_smash_launch_timing_metric(KUI_SMASH_UI_FAT_STEPS,w->filesystem.stats.fat_entries);
+    kui_smash_launch_timing_metric(KUI_SMASH_UI_DIRECTORY_SECTORS,w->filesystem.stats.directory_sectors);
+    int snapshot=0;
+    if(!scan) {
+        KUI_SMASH_TIME_SPAN(snapshot_span,KUI_SMASH_UI_SNAPSHOT);
+        snapshot=kui_vmu_persist_profile_collect_snapshot(&w->profile,card_raw_role,w);
+        KUI_SMASH_TIME_END(snapshot_span);
+    }
     int encoded=scan || snapshot?0:kui_vmu_persist_profile_encode(&w->profile,w->wire);
     bool remounted=platform->raw_end(platform->context);
     if(!remounted) return card_refuse(choice,"the volume did not remount after the ownership scan");
@@ -402,10 +413,13 @@ static int card_select(const char *product,const struct kui_vmu_game_candidate_t
     bool explicit_candidates=catalogue==KUI_VMU_GAME_CANDIDATES_OK;
     unsigned pair=0;const uint8_t *expected_identity=NULL;
     if(explicit_candidates) {
-        if(!candidates.present || !candidates.count || candidates.count>KUI_VMU_GAME_CANDIDATES_PER_GAME ||
+        if(!candidates.present || candidates.count>KUI_VMU_GAME_CANDIDATES_PER_GAME ||
            !memchr(candidates.key,0,sizeof(candidates.key)) || strcmp(candidates.key,choice->key) ||
            !card_same_storage(&candidates.storage,&storage))
             return card_refuse(choice,"virtual VMU candidate list is empty or invalid");
+        if(!candidates.count && candidates.default_index==KUI_VMU_GAME_CANDIDATES_NO_DEFAULT)
+            return card_refuse(choice,"No virtual VMU remains; assign/import a card in VMU tools");
+        if(!candidates.count) return card_refuse(choice,"virtual VMU candidate default is invalid");
         uint32_t selected=candidates.default_index;
         if(exact) {
             selected=KUI_VMU_GAME_CANDIDATES_NO_DEFAULT;
@@ -470,12 +484,21 @@ static int card_select(const char *product,const struct kui_vmu_game_candidate_t
         pair=choice->pair;
     }
     if(boundary) {
+        KUI_SMASH_TIME_SPAN(history,KUI_SMASH_UI_HISTORY_TOTAL);
         result=boundary(boundary_context,KUI_VMU_GAME_CARD_RESOLVED,choice->key,pair,identity,&storage,log,cancel);
+        KUI_SMASH_TIME_END(history);
         if(result!=KUI_VMU_GAME_CARD_READY)return result==KUI_VMU_GAME_CARD_CANCELLED?
             result:card_refuse(choice,"VMU history is not ready; inspect history before launching");
         if(!card_storage_current(platform,&storage))return card_refuse(choice,"SD card changed during the history checkpoint");
     }
-    if(!choice->created && card_profile_current(w,pair,partition_first,partition_end,identity)) {
+    bool profile_current=false;
+    if(!choice->created) {
+        KUI_SMASH_TIME_SPAN(profile_cache,KUI_SMASH_UI_PROFILE_CACHE);
+        profile_current=card_profile_current(w,pair,partition_first,partition_end,identity);
+        KUI_SMASH_TIME_END(profile_cache);
+    }
+    kui_smash_launch_timing_metric(KUI_SMASH_UI_PROFILE_HIT,profile_current?1u:0u);
+    if(profile_current) {
         if(!card_storage_current(platform,&storage))return card_refuse(choice,"SD card changed during card preparation");
         memcpy(wire,w->check,KUI_VMU_PERSIST_PROFILE_WIRE_BYTES);
         log("Virtual card: p%04u for %s",pair,choice->key);return KUI_VMU_GAME_CARD_READY;
@@ -483,7 +506,9 @@ static int card_select(const char *product,const struct kui_vmu_game_candidate_t
     result=card_collect(w,pair,partition_first,partition_end,identity,forbidden,forbidden_count,platform,choice,log);
     if(result) return result;
     if(!card_storage_current(platform,&storage)) return card_refuse(choice,"SD card changed during card preparation");
+    KUI_SMASH_TIME_SPAN(profile_save,KUI_SMASH_UI_PROFILE_SAVE);
     result=card_save_profile(w,pair,partition_first,partition_end,identity,choice);
+    KUI_SMASH_TIME_END(profile_save);
     if(result) return result;
     if(!card_storage_current(platform,&storage)) return card_refuse(choice,"SD card changed after card preparation");
     memcpy(wire,w->wire,KUI_VMU_PERSIST_PROFILE_WIRE_BYTES);

@@ -96,14 +96,32 @@ static void reader_only_and_roles(void) {
     CHECK(kui_update_package_find(&p,"tools.kui")==p.entries+1u);
     static const char *const allowed[]={"runtime.kui","tools.kui","recovery.kui","redump.db","tosec.db",
         "apps/games/a-helper.bin","apps/disc/read.kui","apps/music/player-helper.bin","assets/font.bin","assets/a/b/c/d.bin",
-        "apps/games/probe.dat","apps/music/song.ogg","apps/music/song.wav"};
+        "apps/games/probe.dat","apps/music/song.ogg","apps/music/song.wav",
+        "apps/disc/loader-session.bin.kui"};
     static const char *const denied[]={"settings.ini","prefs.ini","saves/a.bin","vmu/a.bin","games/a.bin",
         "updates/a.kui","system/a.bin","apps/games/a/b.kui","assets/../settings.ini","assets/.hidden",
         "assets/a..b.bin","assets/a./b.bin","assets/A.bin","assets/a/b/c/d/e.bin","assets/a//b.bin",
         "assets/a\\b.bin","0:/KUI/runtime.kui","apps/music/../settings.ini","apps/music/a.vmd",
-        "apps/games/arbitrary.dat","apps/games/song.ogg","apps/disc/song.wav"};
+        "apps/games/arbitrary.dat","apps/games/song.ogg","apps/disc/song.wav",
+        "apps/games/selection-a.bin","apps/games/selection-b.bin",
+        "apps/games/launch-settings-a.bin","apps/games/launch-settings-b.bin",
+        "apps/games/vc2-vmu-session.bin","apps/games/smash-vc2-vmu-session.bin",
+        "apps/games/smash-swirl-vmu-session.bin","apps/disc/future-loader-session.bin",
+        "apps/music/player-settings-a.bin","apps/music/session-b.bin",
+        "apps/disc/future-selection-a.bin","apps/games/settings-a.bin",
+        "apps/games/a.bin","apps/music/player.bin","apps/games/custom-software.bin",
+        "apps/games/binarysettings-a.bin","apps/games/selection-c.bin"};
     for(unsigned i=0u;i<sizeof(allowed)/sizeof(allowed[0]);i++)CHECK(kui_update_module_path_valid(allowed[i]));
-    for(unsigned i=0u;i<sizeof(denied)/sizeof(denied[0]);i++)CHECK(!kui_update_module_path_valid(denied[i]));
+    for(unsigned i=0u;i<sizeof(denied)/sizeof(denied[0]);i++) {
+        CHECK(!kui_update_module_path_valid(denied[i]));
+        for(unsigned policy=KUI_UPDATE_KEEP;policy<=KUI_UPDATE_REMOVE;policy++) {
+            if(policy==KUI_UPDATE_SELF_KUI)continue;
+            const struct row invalid={denied[i],NULL,policy==KUI_UPDATE_RAW?8u:0u,(uint8_t)policy};
+            uint64_t bytes=wire_make(wire,2u,&invalid,1u);
+            struct kui_update_package rejected;
+            CHECK(decode(wire,bytes,&rejected)!=KUI_UPDATE_OK);
+        }
+    }
     char path[192];CHECK(kui_update_bank_path(p.build,"assets/a/b/c/d.bin",path,sizeof(path)));
     CHECK(!strcmp(path,"0:/KUI/system/abcdef012345/assets/a/b/c/d.bin"));
 }

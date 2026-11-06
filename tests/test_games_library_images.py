@@ -26,6 +26,8 @@ CASES += EDITOR_CASES + ("catalogue-v2", "catalogue-v3")
 GROUP_CASES = ("capture-groups", "capture-duplicates", "capture-release-conflict", "capture-invalid",
                "capture-read-fail", "capture-cancel", "capture-passport", "capture-duplicate-copy", "capture-two-releases", "capture-label-collision",
                "capture-activity", "capture-activity-explicit", "capture-activity-capacity")
+GROUP_CASES += ("mixed-recv", "mixed-recv-reverse", "mixed-recv-release", "mixed-recv-invalid",
+                "mixed-recv-marker", "mixed-recv-duplicate", "mixed-recv-io")
 CASES += GROUP_CASES
 
 
@@ -66,7 +68,35 @@ def fixture(base, enhanced=False, capture_case=None):
         folder.mkdir(parents=True)
         (folder / "selected.iso").write_bytes(b"SYNTHETIC IMAGE; LISTING ONLY")
     (base / "KUI").mkdir()
-    if capture_case:
+    if capture_case and capture_case.startswith("mixed-recv"):
+        # The owner's 2026-10-28 Library-startup-01.zip manifest names the
+        # original pair exactly this way: unnumbered Disc1, explicitly D2.
+        # Fixed fields are the owner's Disc1 IP / Redump Disc2 (2876) fields;
+        # payloads, filesystem and bootstrap data remain fully synthetic.
+        names = ["RESIDENT_EVIL_CODE_VERONICA", "RESIDENT_EVIL_CODE_VERONICA_D2"]
+        if capture_case == "mixed-recv-reverse":
+            names[1] = "RESIDENT EVIL CODE VERONICA D2"  # explicit row sorts first
+        if capture_case == "mixed-recv-marker":
+            names[1] = "RESIDENT_EVIL_CODE_VERONICA_D3"  # folder cannot supply the ordinal
+        if capture_case == "mixed-recv-duplicate":
+            names.append("RESIDENT_EVIL_CODE_VERONICA (2)")  # extra real Disc2 copy
+        for index, name in enumerate(names):
+            folder = games / name
+            make_fixture(folder, b"RESIDENT EVIL CODE VERONICA", gdi_name=f"{name}.gdi")
+            track = folder / "track03.bin"
+            data = bytearray(track.read_bytes())
+            data[16+32:16+48] = f"5EE7 GD-ROM{1 if index == 0 else 2}/2  ".encode()
+            data[16+48:16+56] = b" U      "
+            data[16+56:16+64] = b"0799A10 "
+            data[16+64:16+74] = b"T1204N    "
+            if index == 1 and capture_case == "mixed-recv-release":
+                data[16+74:16+80] = b"V1.001"
+            if index == 1 and capture_case == "mixed-recv-invalid":
+                data[16+44] = ord("?")
+            track.write_bytes(data)
+        run(sys.executable, str(ROOT / "tools/gdi_optimize.py"),
+            str(games / names[1] / f"{names[1]}.gdi"), str(games / (names[1] + "-2048")))
+    elif capture_case:
         # Synthetic payloads with factual release fields from Redump's own
         # published IP headers: https://redump.info/disc/3028 /3029 /3034.
         # No retail executable, audio or artwork bytes are used.

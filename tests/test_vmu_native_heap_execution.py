@@ -165,12 +165,19 @@ class SH:
             self.r[n] = self.read(self.r[m])
         elif op & 0xF00F == 0x6001:
             self.r[n] = signed(self.read(self.r[m], 2), 16) & MASK
+        elif op & 0xF00F == 0x000D:  # mov.w @(R0,Rm),Rn
+            address = (self.r[0] + self.r[m]) & MASK
+            assert not address & 1, "Unaligned indexed word load"
+            self.r[n] = signed(self.read(address, 2), 16) & MASK
         elif op & 0xF00F == 0x6006:
             value = self.read(self.r[m])
             self.r[m] = (self.r[m] + 4) & MASK
             self.r[n] = value
         elif op & 0xF00F == 0x600D:
             self.r[n] = self.r[m] & 0xFFFF
+        elif op & 0xF00F == 0x6008:  # swap.b Rm,Rn
+            value = self.r[m]
+            self.r[n] = (value & 0xFFFF0000) | ((value & 255) << 8) | ((value >> 8) & 255)
         elif op & 0xF00F == 0x2002:
             self.write(self.r[n], self.r[m])
         elif op & 0xF00F == 0x2001:
@@ -198,6 +205,13 @@ class SH:
         elif op & 0xF0FF == 0x4000:
             self.flag(self.r[n] & 0x80000000)
             self.r[n] = (self.r[n] << 1) & MASK
+        elif op & 0xF00F == 0x400D:  # shld Rm,Rn
+            shift = self.r[m]
+            if shift & 0x80000000:
+                count = (-shift) & 31
+                self.r[n] = self.r[n] >> count if count else 0
+            else:
+                self.r[n] = self.r[n] << (shift & 31) & MASK
         elif op & 0xF00F == 0x2009:
             self.r[n] &= self.r[m]
         elif op & 0xF00F == 0x200B:
@@ -303,8 +317,14 @@ def stage_layout(build):
                          for address, _, memory, flags in loads)
     worker = (build / "native-worker.bin").read_bytes()
     worker_image = read_elf(build / "native-worker.elf")
-    worker_span=layout_for(worker_image[4]).WORKER_BYTES
-    assert 80 <= len(worker) < worker_span - 0x1000
+    selected_layout=layout_for(worker_image[4])
+    assert selected_layout is layout_for(symbols), "Stage/worker runtime layouts differ"
+    worker_span=selected_layout.WORKER_BYTES
+    worker_stack_bytes=selected_layout.WORKER_STACK_BYTES
+    span_marker=worker_image[4].get("__kui_native_worker_span")
+    if span_marker is not None:
+        assert span_marker == (worker_span, 0, 0, 0xfff1), "Worker span marker conflicts with layout"
+    assert 80 <= len(worker) < worker_span - worker_stack_bytes
     export = struct.unpack_from("<20I", worker)
     assert export[:3] == (0x4B4E5031, 4, 80)
     origin = physical(export[7]) - len(worker)
@@ -338,8 +358,11 @@ def stage_layout(build):
     assert count == 48 and kind == 1 and not state & 3 and state & 0xff000000 == 0xac000000
     assert bss[1] == 8 and bss[2] & 7 == 3 and export[7] <= state < state + count <= export[8]
     assert bss[3] <= state < state + count <= bss[3] + bss[5] and trace[9] == state
+    assert export[9] == worker_image[4]["__vmu_native_worker_stack_bottom"][0]
+    assert export[10] == worker_image[4]["__vmu_native_worker_stack_top"][0]
     assert physical(export[10]) == physical(export[11]) == origin + worker_span
-    assert physical(export[9]) == origin + worker_span - 0x1000
+    assert physical(export[8]) <= origin + worker_span - worker_stack_bytes
+    assert physical(export[9]) == origin + worker_span - worker_stack_bytes
     return begin, end, stack, size, loads, worker
 
 
@@ -357,8 +380,12 @@ class HeapExecutionTests(unittest.TestCase):
         arena_begin, arena_end = physical(begin), physical(begin) + count
         lease_begin, lease_end = physical(header), physical(payload) + lease_bytes
         identity = {heap[15]: begin, heap[17]: begin, heap[16]: count,
-                    heap[11]: heap[12], heap[12]: allocate, heap[12] + 4: release,
                     sentinel + 4: 0, header + 4: lease_bytes // 32 + 1}
+        if heap[2:4] in ([1,1],(1,1)):
+            identity.update({heap[11]:heap[12],heap[12]:allocate,heap[12]+4:release})
+        else:
+            self.assertEqual(tuple(heap[2:4]),(3,2));self.assertEqual((heap[11],heap[12]),(0,0))
+            identity.update({heap[6]+0x14c:heap[15],heap[6]+0x150:heap[17],heap[6]+0x154:heap[16]})
         retained = model.block(header, lease_bytes + 32)
         live, operations, maximum_nodes, steps = {}, 0, 0, 0
         exact_fits = split_fits = failed_allocations = 0

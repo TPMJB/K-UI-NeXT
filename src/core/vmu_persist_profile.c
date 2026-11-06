@@ -285,6 +285,52 @@ int kui_vmu_persist_profile_same_ownership(const struct kui_vmu_persist_profile 
     }
     return 1;
 }
+static void persist_profile_hash32(struct kui_sha256 *hash,uint32_t value) {
+    uint8_t bytes[4];persist_profile_put32(bytes,value);kui_sha256_update(hash,bytes,sizeof(bytes));
+}
+static void persist_profile_hash64(struct kui_sha256 *hash,uint64_t value) {
+    uint8_t bytes[8];persist_profile_put64(bytes,value);kui_sha256_update(hash,bytes,sizeof(bytes));
+}
+int kui_vmu_persist_profile_ownership_sha256(const struct kui_vmu_persist_profile *p,uint8_t out[32]) {
+    if(!out) return KUI_VMU_PERSIST_PROFILE_ARGUMENT;
+    if(p) {
+        uintptr_t a=(uintptr_t)p,b=(uintptr_t)out;
+        if(a<=b?b-a<sizeof(*p):a-b<32u) return KUI_VMU_PERSIST_PROFILE_ARGUMENT;
+    }
+    memset(out,0,32u);
+    int result=kui_vmu_persist_profile_validate_ownership(p);if(result)return result;
+    static const char domain[]="KUI/VMU/OWNERSHIP/SHA256/V1";
+    struct kui_sha256 hash;kui_sha256_init(&hash);kui_sha256_update(&hash,domain,sizeof(domain));
+    persist_profile_hash64(&hash,p->card_sectors);persist_profile_hash64(&hash,p->partition_first);
+    persist_profile_hash64(&hash,p->partition_end);persist_profile_hash32(&hash,p->transport);
+    persist_profile_hash32(&hash,p->high_capacity);persist_profile_hash32(&hash,p->flags);
+    kui_sha256_update(&hash,p->cid,16u);kui_sha256_update(&hash,p->image_id,16u);
+    kui_sha256_update(&hash,p->pair_path,sizeof(p->pair_path));
+    const struct kui_vmu_persist_geometry *g=&p->geometry;
+    persist_profile_hash32(&hash,g->fs_type);persist_profile_hash32(&hash,g->sector_bytes);
+    persist_profile_hash32(&hash,g->sectors_per_cluster);persist_profile_hash32(&hash,g->volume_serial);
+    persist_profile_hash32(&hash,g->fat_count);persist_profile_hash32(&hash,g->active_fat);
+    persist_profile_hash64(&hash,g->fat_first_lba);persist_profile_hash64(&hash,g->fat_sectors);
+    persist_profile_hash64(&hash,g->data_first_lba);persist_profile_hash32(&hash,g->cluster_count);
+    persist_profile_hash32(&hash,g->root_cluster);persist_profile_hash32(&hash,g->fat_mirrored);
+    persist_profile_hash32(&hash,g->bitmap_first_cluster);persist_profile_hash32(&hash,g->upcase_first_cluster);
+    persist_profile_hash64(&hash,g->bitmap_bytes);persist_profile_hash64(&hash,g->upcase_bytes);
+    for(unsigned role=0u;role<3u;role++) {
+        const struct kui_vmu_persist_file *f=&p->files[role];
+        persist_profile_hash64(&hash,f->file_bytes);persist_profile_hash64(&hash,f->valid_bytes);
+        persist_profile_hash32(&hash,f->first_cluster);persist_profile_hash32(&hash,f->allocation_flags);
+        persist_profile_hash32(&hash,f->directory_first_cluster);persist_profile_hash32(&hash,f->entry_offset);
+        persist_profile_hash64(&hash,f->entry_lba);persist_profile_hash32(&hash,f->entry_count);
+        persist_profile_hash32(&hash,f->entry_kind);persist_profile_hash32(&hash,f->useful_count);
+        persist_profile_hash32(&hash,f->allocated_count);
+        for(unsigned kind=0u;kind<2u;kind++) for(unsigned i=0u;i<16u;i++) {
+            const struct kui_vmu_persist_extent *e=kind?&f->allocated[i]:&f->useful[i];
+            persist_profile_hash32(&hash,e->logical_block);persist_profile_hash32(&hash,e->lba);
+            persist_profile_hash32(&hash,e->blocks);
+        }
+    }
+    kui_sha256_digest(&hash,out);return 0;
+}
 int kui_vmu_persist_profile_map_lba(const struct kui_vmu_persist_profile *p,unsigned role,
     uint32_t logical,uint32_t *out) {
     if(!out) return KUI_VMU_PERSIST_PROFILE_ARGUMENT;

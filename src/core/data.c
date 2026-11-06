@@ -1,6 +1,9 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/core.h"
 #include <string.h>
+#if KUI_GUI_FAST_CRC32
+#include "../loader/stage_fast_crc32.h"
+#endif
 
 static uint32_t le32(const uint8_t *p) {
     return (uint32_t)p[0] | (uint32_t)p[1] << 8 |
@@ -107,6 +110,9 @@ void kui_pattern(uint8_t *out, uint64_t offset, size_t size) {
 }
 
 uint32_t kui_crc32(uint32_t previous, const void *data, size_t size) {
+#if KUI_GUI_FAST_CRC32
+    return kui_stage_crc32(previous,data,size);
+#else
     static const uint32_t nibble[16]={0,0x1db71064,0x3b6e20c8,0x26d930ac,
         0x76dc4190,0x6b6b51f4,0x4db26158,0x5005713c,0xedb88320,0xf00f9344,
         0xd6d6a3e8,0xcb61b38c,0x9b64c2b0,0x86d3d2d4,0xa00ae278,0xbdbdf21c};
@@ -118,4 +124,5 @@ uint32_t kui_crc32(uint32_t previous, const void *data, size_t size) {
         crc=(crc>>4)^nibble[crc&15];
     }
     return ~crc;
+#endif
 }

@@ -27,7 +27,11 @@ __asm__(".global __kui_native_readahead_diagnostic_auxiliary\n"
         ".global __kui_native_readahead_pio_auxiliary\n"
         ".set __kui_native_readahead_pio_auxiliary,1\n"
         ".global __kui_native_readahead_pio_pair_auxiliary\n"
-        ".set __kui_native_readahead_pio_pair_auxiliary,1\n");
+        ".set __kui_native_readahead_pio_pair_auxiliary,1\n"
+        ".global __kui_native_readahead_tick_budget_auxiliary\n"
+        ".set __kui_native_readahead_tick_budget_auxiliary,1\n"
+        ".global __kui_native_readahead_max_context_auxiliary\n"
+        ".set __kui_native_readahead_max_context_auxiliary,1\n");
 #if KUI_NATIVE_GENERAL_LEAN_LAYOUT
 __asm__(".global __kui_native_general_lean_auxiliary\n"
         ".set __kui_native_general_lean_auxiliary,1\n");
@@ -266,14 +270,14 @@ static bool producer_ready(kui_retail_async_region_type *r,bool interrupt,
     if(!dma_idle()) {skipped(KUI_NATIVE_RA_SKIP_GUEST_DMA);return false;}
     return true;
 }
-static void producer(kui_retail_async_region_type *r,bool interrupt) {
+static void producer(kui_retail_async_region_type *r,bool interrupt,unsigned block_limit) {
     uint32_t next;
     if(!producer_ready(r,interrupt,&next,true))return;
     const struct kui_native_ra_low_ops *o=C.config.ops;
     uint32_t *metrics=C.diagnostics.stage_result[KUI_NATIVE_RA_STAGE_NONE];
     struct ra_clock before=clock_read(),block_before=before;
     bool valid=true;
-    for(unsigned block=0u;block<KUI_NATIVE_RA_PIO_BLOCK_LIMIT;++block) {
+    for(unsigned block=0u;block<block_limit;++block) {
         if(block) {
             /* Recheck every ordinary admission guard before deciding
              * whether another complete block fits the soft window. */
@@ -352,7 +356,7 @@ static void deliver(uint32_t wait,kui_retail_async_region_type *r) {
     retire_spec(r,e->in_irq!=0u);
     if(!e->active) {
         if(!C.spec_owned)o->deliver(wait);
-        seed_completed(r);producer(r,e->in_irq!=0u);return;
+        seed_completed(r);producer(r,e->in_irq!=0u,KUI_NATIVE_RA_PIO_BLOCK_LIMIT);return;
     }
     if(C.quiesced) {C.quiesced=0u;++C.stats.resumes;}
     uint32_t delivered=0u,limit=e->in_irq?KUI_RETAIL_NATIVE_IRQ_BATCH_LIMIT:e->target;
@@ -385,7 +389,7 @@ static void deliver(uint32_t wait,kui_retail_async_region_type *r) {
         }
         o->deliver(wait);
     }
-    seed_completed(r);producer(r,e->in_irq!=0u);
+    seed_completed(r);producer(r,e->in_irq!=0u,KUI_NATIVE_RA_PIO_BLOCK_LIMIT);
 }
 static uint32_t quiesce(kui_retail_async_region_type *r) {
     if(r->engine.active || r->engine.in_irq || r->shared.service.pending ||
@@ -409,6 +413,14 @@ uint32_t kui_native_readahead_aux_dispatch(uint32_t event,uint32_t arg,
        *C.config.ops->region_storage!=r) {
         ++C.stats.guard_faults;return event==KUI_NATIVE_RA_QUIESCE?0u:1u;
     }
+    /* Admit the event-specific argument before clocks, seeding or any low
+     * operation. DELIVER's wait is unchanged; an invalid optional budget must
+     * never silently turn into the larger historical PIO window. */
+    if(event<KUI_NATIVE_RA_DELIVER || event>KUI_NATIVE_RA_CAPTURE_START ||
+       (event==KUI_NATIVE_RA_TICK?arg>KUI_NATIVE_RA_TICK_ONE_BLOCK:
+        event!=KUI_NATIVE_RA_DELIVER && arg)) {
+        ++C.stats.guard_faults;return 0u;
+    }
     if(r->engine.native_loan_state!=KUI_VMU_NATIVE_ASYNC_LOAN_IDLE) {
         skipped(KUI_NATIVE_RA_SKIP_LOAN);
         return event==KUI_NATIVE_RA_QUIESCE?0u:1u;
@@ -419,6 +431,9 @@ uint32_t kui_native_readahead_aux_dispatch(uint32_t event,uint32_t arg,
         memset(&C.diagnostics,0,sizeof(C.diagnostics));return 1u;
     }
     C.current_event=event;
+    /* Preserve entry context across low callbacks which may update the
+     * mutable engine. This uses no additional clock sample or public state. */
+    uint32_t visit_context=event|((arg&UINT32_C(0xffff))<<8)|((r->engine.in_irq&255u)<<24);
     struct ra_clock before=clock_read();uint32_t result=1u;
     switch(event) {
     case KUI_NATIVE_RA_DELIVER:deliver(arg,r);break;
@@ -427,7 +442,8 @@ uint32_t kui_native_readahead_aux_dispatch(uint32_t event,uint32_t arg,
         if(C.quiesced && r->engine.opened && r->shared.port.acquired) {
             C.quiesced=0u;++C.stats.resumes;
         }
-        seed_completed(r);producer(r,false);break;
+        seed_completed(r);producer(r,false,arg==KUI_NATIVE_RA_TICK_ONE_BLOCK?
+            1u:KUI_NATIVE_RA_PIO_BLOCK_LIMIT);break;
     case KUI_NATIVE_RA_QUIESCE:result=quiesce(r);break;
     case KUI_NATIVE_RA_RESUME:
         C.quiesced=0u;++C.stats.resumes;break;
@@ -445,6 +461,10 @@ uint32_t kui_native_readahead_aux_dispatch(uint32_t event,uint32_t arg,
     }
     struct ra_clock after=clock_read();uint32_t elapsed=before.counter-after.counter;
     if(!before.valid || !after.valid || elapsed>=UINT32_C(0x80000000))++C.stats.clock_bad;
-    else if(elapsed>C.stats.max_visit_ticks)C.stats.max_visit_ticks=elapsed;
+    else if(elapsed>C.stats.max_visit_ticks) {
+        C.stats.max_visit_ticks=elapsed;
+        C.diagnostics.stage_result[KUI_NATIVE_RA_STAGE_NONE][KUI_NATIVE_RA_AUX_MAX_CONTEXT]=
+            visit_context;
+    }
     return result;
 }

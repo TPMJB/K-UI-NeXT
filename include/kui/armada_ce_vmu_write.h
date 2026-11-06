@@ -36,7 +36,8 @@ _Static_assert(sizeof(struct kui_armada_ce_vmu_write)<=640u,
 int kui_armada_ce_vmu_write_init(struct kui_armada_ce_vmu_write *,
     const struct kui_vmu_emulation_io *);
 
-/* Exact A2/host0 only. INFO/ALLINFO/MEDIA/READ preserve native shapes; WRITE
+/* Exact source-selected endpoint/host0 only (default A2, Swirl A1).
+ * INFO/ALLINFO/MEDIA/READ preserve native shapes; WRITE
  * is140 bytes/34 words, phases0..3; SYNC phase4 commits the complete matching
  * block. CE read finalization phase0/1 requires a matching successful READ
  * and no active write, invokes no callback, and can return a4-byte ACK.

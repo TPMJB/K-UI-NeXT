@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: GPL-3.0-only
+HOST_CC ?= cc
+BUILD ?= build/vc2-gd-wait-host
+.DEFAULT_GOAL := vc2-gd-wait-host-tests
+.PHONY: vc2-gd-wait-host-tests
+vc2-gd-wait-host-tests:
+	@mkdir -p $(BUILD)
+	python3 tests/test_vc2_ce_vmu_gd_wait.py --cc "$(HOST_CC)" --json $(BUILD)/source-admission.json $(if $(VC2_OWNER_KERNEL),--kernel "$(VC2_OWNER_KERNEL)",)
+	python3 tests/test_vc2_ce_vmu_gd_wait_native.py

@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/smash-menu-return-host
+HOST_CC ?= cc
+MENU_ORIGINAL ?=
+.DEFAULT_GOAL := smash-menu-return-tests
+.PHONY: smash-menu-return-tests
+smash-menu-return-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic \
+	 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-pie -no-pie \
+	 -ffunction-sections -fdata-sections -Iinclude tests/test_smash_menu_return_seed.c \
+	 src/core/smash_menu_return.c src/core/smash_menu_loader.c src/core/retail_image.c \
+	 -Wl,--gc-sections -o $(BUILD)/test-return-seed
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-return-seed $(MENU_ORIGINAL)

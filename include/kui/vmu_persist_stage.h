@@ -41,6 +41,28 @@ int kui_vmu_persist_stage_admit(const struct kui_vmu_persist_profile *,
 int kui_vmu_persist_stage_prepare(const struct kui_vmu_persist_profile *,
     const struct kui_retail_manifest *,const struct kui_vmu_persist_session_ops *,
     struct kui_vmu_persist_stage_workspace *,struct kui_vmu_durable_handoff *);
+/* Collection-only new-owner preparation. The lifecycle owner supplies the
+ * trusted live-generation expected fields documented by session_attach.
+ * Rechecks every game/audio extent against all target whole allocations,
+ * freshly replays the complete metadata witness, recovers the real journal,
+ * validates/hashes the current image, checkpoints and verifies zero marker /
+ * final identity before sealing a NEW unchanged1272-byte worker handoff.
+ * The existing FS workspace supplies aligned replay scratch; no retained
+ * worker or stage-workspace ABI grows. Ordinary prepare/init are unchanged. */
+int kui_vmu_persist_stage_attach(const struct kui_vmu_persist_profile *,
+    const struct kui_retail_manifest *,const struct kui_vmu_persist_attach_source *,
+    const struct kui_vmu_persist_attach_ops *,
+    struct kui_vmu_persist_stage_workspace *,struct kui_vmu_durable_handoff *);
+/* Collection lifecycle transfer of already established allocation authority.
+ * Rechecks all child/game extents against complete allocations, consumes the
+ * trusted live epoch, and performs fresh journal/image/checkpoint/final-CID
+ * preparation. Only host metadata admission/replay is omitted. The result is
+ * the same fresh1272-byte handoff; ordinary prepare and witness attach remain
+ * independent entry points. */
+int kui_vmu_persist_stage_rebind(const struct kui_vmu_persist_profile *,
+    const struct kui_retail_manifest *,struct kui_vmu_persist_allocation_transfer *,
+    const struct kui_vmu_persist_session_ops *,struct kui_vmu_persist_stage_workspace *,
+    struct kui_vmu_durable_handoff *);
 /* Physical-disc variant. All game content is on the GD-ROM, so admission has
  * no SD image map or protected game extents. The complete live filesystem,
  * card identity, selected pair, journal recovery and sealed handoff checks are

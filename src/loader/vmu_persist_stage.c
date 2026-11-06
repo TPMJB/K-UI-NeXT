@@ -1,12 +1,16 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/vmu_persist_stage.h"
+#if KUI_SMASH_PHASE_DIAGNOSTIC
+#include "kui/smash_phase_trace.h"
+extern void kui_smash_phase_stage_mark(uint32_t);
+#endif
 #include <string.h>
 
 _Static_assert(sizeof(struct kui_vmu_persist_stage_workspace)<=65536u,"High-stage preparation scratch bound");
 
 /* Only this isolated native stage needs the scanner's dot-entry comparison.
  * Ordinary minic and every existing release/observer mode remain unchanged. */
-#if defined(__sh__) && (KUI_VMU_READONLY_PROOF == 4 || KUI_VMU_NATIVE_PERSISTENT_PROBE)
+#if defined(__sh__) && (KUI_VMU_READONLY_PROOF == 4 || KUI_VMU_NATIVE_PERSISTENT_PROBE || KUI_VC2_VMU_PERSIST || KUI_SMASH_CARD_SESSION)
 int strcmp(const char *left,const char *right) {
     const unsigned char *a=(const unsigned char *)left,*b=(const unsigned char *)right;
     while(*a && *a==*b) {++a;++b;}
@@ -77,6 +81,9 @@ static int vmu_persist_stage_fail(struct kui_vmu_persist_stage_workspace *w,
     memset(out,0,sizeof(*out));w->result=result;kui_vmu_persist_session_poison(&w->session);
     return result;
 }
+static int vmu_persist_stage_finish(const struct kui_vmu_persist_profile *,
+    const struct kui_vmu_persist_session_ops *,struct kui_vmu_persist_stage_workspace *,
+    struct kui_vmu_durable_handoff *);
 static int vmu_persist_stage_prepare(const struct kui_vmu_persist_profile *p,
     const struct kui_retail_manifest *m,uint32_t transport,bool physical_disc,
     const struct kui_vmu_persist_session_ops *ops,
@@ -109,10 +116,33 @@ static int vmu_persist_stage_prepare(const struct kui_vmu_persist_profile *p,
     w->phase=KUI_VMU_PERSIST_STAGE_RECOVER;
     int result=kui_vmu_persist_session_init(&w->session,p,&input,ops,&w->filesystem,&w->image);
     if(result) return vmu_persist_stage_fail(w,out,KUI_VMU_PERSIST_STAGE_SESSION);
+    return vmu_persist_stage_finish(p,ops,w,out);
+}
+static int vmu_persist_stage_finish(const struct kui_vmu_persist_profile *p,
+    const struct kui_vmu_persist_session_ops *ops,struct kui_vmu_persist_stage_workspace *w,
+    struct kui_vmu_durable_handoff *out) {
+#if KUI_SMASH_PHASE_DIAGNOSTIC
+    kui_smash_phase_stage_mark(KUI_SMASH_PHASE_SESSION_DONE);
+#endif
     w->phase=KUI_VMU_PERSIST_STAGE_CHECKPOINT;
     if(kui_vmu_persist_session_checkpoint(&w->session)) return vmu_persist_stage_fail(w,out,KUI_VMU_PERSIST_STAGE_SESSION);
+#if KUI_SMASH_PHASE_DIAGNOSTIC
+    kui_smash_phase_stage_mark(KUI_SMASH_PHASE_CHECKPOINT_DONE);
+#endif
     w->phase=KUI_VMU_PERSIST_STAGE_SNAPSHOT;
+#if KUI_VC2_VMU_PERSIST
+    /* VC2's init already recovered, validated and hashed the complete image.
+     * This exclusive session has not committed a block since that snapshot;
+     * checkpoint only syncs and clears the journal marker. Preserve its live
+     * base hashes instead of reading the same image twice before every boot.
+     * The normal final marker/CID/health checks below still run. */
+    if(!w->session.snapshot_valid) return vmu_persist_stage_fail(w,out,KUI_VMU_PERSIST_STAGE_SESSION);
+#else
     if(kui_vmu_persist_session_refresh(&w->session,&w->image)) return vmu_persist_stage_fail(w,out,KUI_VMU_PERSIST_STAGE_SESSION);
+#endif
+#if KUI_SMASH_PHASE_DIAGNOSTIC
+    kui_smash_phase_stage_mark(KUI_SMASH_PHASE_REFRESH_DONE);
+#endif
     w->phase=KUI_VMU_PERSIST_STAGE_ZERO_MARKER;
     uint32_t marker;
     if(kui_vmu_persist_profile_map_lba(p,KUI_VMU_PERSIST_JOURNAL,1u,&marker) ||
@@ -135,6 +165,143 @@ static int vmu_persist_stage_prepare(const struct kui_vmu_persist_profile *p,
     if(!w->session.snapshot_valid || kui_vmu_durable_handoff_seal(out) ||
        kui_vmu_persist_stage_handoff_matches(p,out)) return vmu_persist_stage_fail(w,out,KUI_VMU_PERSIST_STAGE_HANDOFF);
     w->result=0;return 0;
+}
+int kui_vmu_persist_stage_attach(const struct kui_vmu_persist_profile *p,
+    const struct kui_retail_manifest *m,const struct kui_vmu_persist_attach_source *source,
+    const struct kui_vmu_persist_attach_ops *ops,
+    struct kui_vmu_persist_stage_workspace *w,struct kui_vmu_durable_handoff *out) {
+    if(!out)return KUI_VMU_PERSIST_STAGE_ARGUMENT;
+    const void *inputs[]={p,m,source,ops,source?source->header:NULL,source?source->records:NULL};
+    const size_t input_bytes[]={sizeof(*p),sizeof(*m),sizeof(*source),sizeof(*ops),
+        KUI_VMU_FS_WITNESS_HEADER_BYTES,source?source->records_bytes:0u};
+    if(w && vmu_persist_stage_overlap(w,sizeof(*w),out,sizeof(*out)))
+        return KUI_VMU_PERSIST_STAGE_ARGUMENT;
+    for(unsigned i=0u;i<6u;i++)if(inputs[i] &&
+       vmu_persist_stage_overlap(out,sizeof(*out),inputs[i],input_bytes[i]))
+        return KUI_VMU_PERSIST_STAGE_ARGUMENT;
+    memset(out,0,sizeof(*out));
+    if(!p || !m || !source || !ops || !w)return KUI_VMU_PERSIST_STAGE_ARGUMENT;
+    for(unsigned i=0u;i<6u;i++)if(inputs[i] &&
+       vmu_persist_stage_overlap(w,sizeof(*w),inputs[i],input_bytes[i]))
+        return KUI_VMU_PERSIST_STAGE_ARGUMENT;
+    if(w->started)return KUI_VMU_PERSIST_STAGE_ARGUMENT;
+    uint8_t ownership[32];memcpy(ownership,source->ownership_sha256,32u);
+    memset(w,0,sizeof(*w));w->started=1u;w->phase=KUI_VMU_PERSIST_STAGE_PREFLIGHT;
+    if(kui_vmu_persist_stage_admit(p,m))
+        return vmu_persist_stage_fail(w,out,KUI_VMU_PERSIST_STAGE_MAPPING);
+    uintptr_t begin=(uintptr_t)w->filesystem.private_work.bytes;
+    uintptr_t aligned=(begin+31u)&~(uintptr_t)31u;
+    size_t scratch_bytes=sizeof(w->filesystem.private_work.bytes)-(size_t)(aligned-begin);
+    w->phase=KUI_VMU_PERSIST_STAGE_RECOVER;
+    int result=kui_vmu_persist_session_attach(&w->session,p,source,ops,
+        (void *)aligned,scratch_bytes,&w->image);
+    if(result)return vmu_persist_stage_fail(w,out,KUI_VMU_PERSIST_STAGE_SESSION);
+    result=vmu_persist_stage_finish(p,&w->session.ops,w,out);
+    if(result)return result;
+    uint8_t current[32];
+    if(kui_vmu_persist_profile_ownership_sha256(p,current) || memcmp(current,ownership,32u))
+        return vmu_persist_stage_fail(w,out,KUI_VMU_PERSIST_STAGE_HANDOFF);
+    return 0;
+}
+struct vmu_persist_rebind_finish_scope {
+    const struct kui_vmu_persist_profile *live,*pinned;
+    struct kui_vmu_persist_allocation_transfer *transfer;
+    const struct kui_vmu_persist_allocation_transfer *transfer_pin;
+    struct kui_vmu_persist_session_ops io;
+    struct kui_vmu_persist_stage_workspace *work;
+};
+static int vmu_persist_rebind_finish_guard(struct vmu_persist_rebind_finish_scope *s,int profile) {
+    const struct kui_vmu_persist_allocation_transfer *t=s->transfer,*p=s->transfer_pin;
+    if(t->state!=KUI_VMU_ALLOCATION_TRANSFER_CONSUMED ||
+       memcmp(t,p,offsetof(struct kui_vmu_persist_allocation_transfer,state)) ||
+       memcmp((const uint8_t *)t+16u,(const uint8_t *)p+16u,sizeof(*t)-16u))return 0;
+    /* All ownership fields precede provenance. The private snapshot prevents
+     * late callback count/map edits from being dereferenced by finish. This
+     * bounded RAM comparison also refuses edits before every possible write;
+     * it does not perform another filesystem or large SHA scan. */
+    return !profile || !memcmp(s->live,s->pinned,offsetof(struct kui_vmu_persist_profile,base_sha256));
+}
+static int vmu_persist_rebind_finish_identity(void *context,struct kui_vmu_persist_session_identity *out) {
+    struct vmu_persist_rebind_finish_scope *s=context;
+    if(!vmu_persist_rebind_finish_guard(s,1))return -1;
+    int result=s->io.identity(s->io.context,out);
+    return vmu_persist_rebind_finish_guard(s,1)?result:-1;
+}
+static int vmu_persist_rebind_finish_read(void *context,uint64_t lba,void *out) {
+    struct vmu_persist_rebind_finish_scope *s=context;
+    if(!vmu_persist_rebind_finish_guard(s,0))return -1;
+    int result=s->io.read_sector(s->io.context,lba,out);
+    return vmu_persist_rebind_finish_guard(s,0)?result:-1;
+}
+static int vmu_persist_rebind_finish_write(void *context,uint64_t lba,const void *data) {
+    struct vmu_persist_rebind_finish_scope *s=context;
+    if(!vmu_persist_rebind_finish_guard(s,1))return -1;
+    int result=s->io.write_sector(s->io.context,lba,data);
+    return vmu_persist_rebind_finish_guard(s,1)?result:-1;
+}
+static int vmu_persist_rebind_finish_sync(void *context) {
+    struct vmu_persist_rebind_finish_scope *s=context;
+    if(!vmu_persist_rebind_finish_guard(s,1))return -1;
+    int result=s->io.sync(s->io.context);
+    return vmu_persist_rebind_finish_guard(s,1)?result:-1;
+}
+static bool vmu_persist_rebind_finish_health(void *context) {
+    struct vmu_persist_rebind_finish_scope *s=context;
+    int profile=s->work->phase==KUI_VMU_PERSIST_STAGE_ZERO_MARKER;
+    if(!vmu_persist_rebind_finish_guard(s,profile))return false;
+    bool result=s->io.healthy(s->io.context);
+    return vmu_persist_rebind_finish_guard(s,profile) && result;
+}
+int kui_vmu_persist_stage_rebind(const struct kui_vmu_persist_profile *p,
+    const struct kui_retail_manifest *m,struct kui_vmu_persist_allocation_transfer *transfer,
+    const struct kui_vmu_persist_session_ops *ops,
+    struct kui_vmu_persist_stage_workspace *w,struct kui_vmu_durable_handoff *out) {
+    if(!out)return KUI_VMU_PERSIST_STAGE_ARGUMENT;
+    const void *inputs[]={p,m,transfer,ops};
+    const size_t input_bytes[]={sizeof(*p),sizeof(*m),sizeof(*transfer),sizeof(*ops)};
+    if(w && vmu_persist_stage_overlap(w,sizeof(*w),out,sizeof(*out)))
+        return KUI_VMU_PERSIST_STAGE_ARGUMENT;
+    for(unsigned i=0u;i<4u;i++)if(inputs[i] &&
+       vmu_persist_stage_overlap(out,sizeof(*out),inputs[i],input_bytes[i]))
+        return KUI_VMU_PERSIST_STAGE_ARGUMENT;
+    memset(out,0,sizeof(*out));
+    if(!p || !m || !transfer || !ops || !w || !ops->identity || !ops->healthy ||
+       !ops->read_sector || !ops->write_sector || !ops->sync)return KUI_VMU_PERSIST_STAGE_ARGUMENT;
+    for(unsigned i=0u;i<4u;i++) {
+        if(vmu_persist_stage_overlap(w,sizeof(*w),inputs[i],input_bytes[i]))
+            return KUI_VMU_PERSIST_STAGE_ARGUMENT;
+        if(i!=2u && vmu_persist_stage_overlap(transfer,sizeof(*transfer),inputs[i],input_bytes[i]))
+            return KUI_VMU_PERSIST_STAGE_ARGUMENT;
+    }
+    if(w->started)return KUI_VMU_PERSIST_STAGE_ARGUMENT;
+    struct kui_vmu_persist_allocation_transfer pinned=*transfer;
+    memset(w,0,sizeof(*w));w->started=1u;w->phase=KUI_VMU_PERSIST_STAGE_PREFLIGHT;
+    if(kui_vmu_persist_stage_admit(p,m))
+        return vmu_persist_stage_fail(w,out,KUI_VMU_PERSIST_STAGE_MAPPING);
+    /* Rebind has no filesystem scanner. Borrow its existing aligned scratch
+     * for a private validated profile, not additional retained RAM/stack. */
+    _Static_assert(sizeof(struct kui_vmu_persist_profile)<=KUI_VMU_FS_WORK_BYTES,"Rebind profile scratch");
+    struct kui_vmu_persist_profile *profile=(void *)w->filesystem.private_work.bytes;
+    memcpy(profile,p,sizeof(*profile));
+    w->phase=KUI_VMU_PERSIST_STAGE_RECOVER;
+    int result=kui_vmu_persist_session_rebind(&w->session,p,transfer,ops,&w->image);
+    if(result)return vmu_persist_stage_fail(w,out,KUI_VMU_PERSIST_STAGE_SESSION);
+    struct vmu_persist_rebind_finish_scope scope={p,profile,transfer,&pinned,w->session.ops,w};
+    w->session.ops=(struct kui_vmu_persist_session_ops){&scope,vmu_persist_rebind_finish_identity,
+        vmu_persist_rebind_finish_read,vmu_persist_rebind_finish_write,vmu_persist_rebind_finish_sync,
+        vmu_persist_rebind_finish_health};
+    result=vmu_persist_stage_finish(profile,&w->session.ops,w,out);
+    if(!result && !vmu_persist_rebind_finish_guard(&scope,1))
+        result=vmu_persist_stage_fail(w,out,KUI_VMU_PERSIST_STAGE_HANDOFF);
+    w->session.ops=scope.io;
+    uint8_t current[32];
+    if(!result && (transfer->state!=KUI_VMU_ALLOCATION_TRANSFER_CONSUMED ||
+       memcmp(transfer,&pinned,offsetof(struct kui_vmu_persist_allocation_transfer,state)) ||
+       memcmp((const uint8_t *)transfer+16u,(const uint8_t *)&pinned+16u,sizeof(pinned)-16u) ||
+       kui_vmu_persist_profile_ownership_sha256(p,current) || memcmp(current,pinned.ownership_sha256,32u)))
+        result=vmu_persist_stage_fail(w,out,KUI_VMU_PERSIST_STAGE_HANDOFF);
+    if(result)transfer->state=KUI_VMU_ALLOCATION_TRANSFER_POISONED;
+    return result;
 }
 int kui_vmu_persist_stage_prepare(const struct kui_vmu_persist_profile *p,
     const struct kui_retail_manifest *m,const struct kui_vmu_persist_session_ops *ops,

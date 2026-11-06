@@ -111,6 +111,12 @@ C(kui_vmu_observe_heap_hook):
     mov.l @(KUI_VMU_OBS_BOOT_STAGE_STACK,r2),r15
     jsr @r0
     nop
+#if KUI_VMU_NATIVE_HEAP_PROBE && !KUI_NATIVE_PHYSICAL_DISC
+    /* Metadata only: the deferred-clear tail wrapper must return to this
+     * exact surviving instruction. No retained low bytes are added. */
+    .global __kui_native_heap_resume_offset
+    .set __kui_native_heap_resume_offset,.-C(kui_vmu_observe_heap_hook)
+#endif
     mov r8,r15
     lds.l @r15+,pr
     mov.l @r15+,r8

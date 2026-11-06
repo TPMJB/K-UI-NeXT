@@ -19,6 +19,8 @@
 #include "kui/vmu_maple_observe_boot.h"
 #include "kui/vmu_persist_stage.h"
 #include "kui/vmu_backing.h"
+#include "kui/smash_fat_read_cache.h"
+#include "kui/vc2_ce_vmu_stage_cache.h"
 #include "../dreamcast/sci_sd_storage.h"
 #include "retail_display.h"
 #include "sci_sd_bus.h"
@@ -55,6 +57,12 @@ static struct kui_vmu_persist_profile native_persist_profile;
 static struct kui_vmu_persist_stage_workspace native_persist_work;
 static struct kui_vmu_durable_handoff native_persist_handoff;
 static struct kui_loader_sd native_persist_card;
+__asm__(".global __kui_native_fat_read_cache\n.set __kui_native_fat_read_cache,1\n"
+        ".global __kui_disc_fat_read_cache\n.set __kui_disc_fat_read_cache,1\n");
+static struct kui_smash_fat_read_cache disc_fat_read_cache;
+/* Temporary cold-stage memory; no resident lease or worker changes. */
+static struct kui_vc2_ce_vmu_stage_cache disc_persist_read_cache;
+static struct kui_loader_sd_stream disc_fat_read_stream;
 static bool native_persist_ready;
 static uint32_t native_heap_hook, native_terminal;
 static uint32_t native_disc_entry_return_frame,native_disc_entry_return_entry;
@@ -87,7 +95,8 @@ static bool native_read(void *context,uint32_t address,uint32_t *out) {
 }
 static void code_sha(uint8_t out[32]) {
     struct kui_sha256 h;kui_sha256_init(&h);
-    kui_sha256_update(&h,(const void *)(uintptr_t)native_heap.initializer,0x1d0u);
+    kui_sha256_update(&h,(const void *)(uintptr_t)native_heap.initializer,
+        native_heap.family==KUI_VMU_NATIVE_HEAP_DIRECT32?0x268u:0x1d0u);
     kui_sha256_digest(&h,out);
 }
 static bool allocation_safe(uint32_t begin,uint32_t bytes) {
@@ -118,6 +127,8 @@ static void native_report(uint32_t phase,uint32_t detail) {
         retail_display_hex("RETURN ENTRY",native_disc_entry_return_entry);
         retail_display_hex("RETURN TARGET",native_terminal);
     }
+    if(phase==2u && detail==0x75u)
+        retail_display_line("UNSUPPORTED PRE-ALLOCATOR RAM CLEAR");
     retail_display_hex("SDK SUBMIT",native_driver.submit);
     retail_display_hex("HEAP INITIALIZER",native_heap.initializer);
     retail_display_hex("HEAP POINTER",native_heap.initializer_slot);
@@ -143,25 +154,79 @@ static void native_disc_support_bind(const struct kui_vmu_native_passive_exports
 
 static int persist_identity(void *context,struct kui_vmu_persist_session_identity *out) {
     struct kui_vmu_sd_identity id;
+    kui_smash_fat_cache_begin_epoch(&disc_fat_read_cache);
+    kui_vc2_ce_vmu_stage_cache_invalidate(&disc_persist_read_cache);
     if(kui_vmu_sd_identity_read(context,&id)!=KUI_VMU_BACKING_OK) return -1;
     memcpy(out->cid,id.cid,16u);out->card_sectors=id.sectors;out->high_capacity=id.high_capacity;return 0;
 }
 static bool persist_healthy(void *context) {
     struct kui_loader_sd *card=context;
-    return card->ready && kui_sci_sd_healthy() && !kui_sci_sd_faulted();
+    return card->ready && !disc_fat_read_stream.active && kui_sci_sd_healthy() && !kui_sci_sd_faulted();
+}
+static int persist_read_run(void *context,uint32_t lba,uint32_t count,void *out) {
+    struct kui_loader_sd *card=context;
+    if(!count || count>KUI_VC2_STAGE_READ_BLOCKS || !persist_healthy(card))return -1;
+    if(count==1u)
+        return kui_loader_sd_read(card,lba,1u,out)==KUI_LOADER_SD_OK && persist_healthy(card)?0:-1;
+    enum kui_loader_sd_result result=kui_loader_sd_stream_start(card,&disc_fat_read_stream,lba,count);
+    for(uint32_t i=0u;i<count && result==KUI_LOADER_SD_OK;i++)
+        result=kui_loader_sd_stream_next(card,&disc_fat_read_stream,(uint8_t *)out+i*512u);
+    enum kui_loader_sd_result stopped_stream=kui_loader_sd_stream_stop(card,&disc_fat_read_stream);
+    return result==KUI_LOADER_SD_OK && stopped_stream==KUI_LOADER_SD_OK && persist_healthy(card)?0:-1;
+}
+static int persist_fat_read_one(void *context,uint32_t lba,uint8_t out[512]) {
+    return kui_vc2_ce_vmu_stage_cache_metadata_read(&disc_persist_read_cache,&native_persist_profile,
+        native_persist_work.session.phase==KUI_VMU_PERSIST_SESSION_ADMISSION,
+        lba,out,persist_read_run,context);
+}
+static int persist_fat_read_window(void *context,uint32_t lba,uint32_t count,
+    uint8_t *out,uint32_t *verified) {
+    struct kui_loader_sd *card=context;*verified=0u;
+    if(!count || count>KUI_SMASH_FAT_CACHE_WINDOW_BLOCKS || !persist_healthy(card))return -1;
+    enum kui_loader_sd_result result=kui_loader_sd_stream_start(card,&disc_fat_read_stream,lba,count);
+    for(uint32_t i=0u;i<count && result==KUI_LOADER_SD_OK;i++) {
+        result=kui_loader_sd_stream_next(card,&disc_fat_read_stream,out+i*512u);
+        if(result==KUI_LOADER_SD_OK)++*verified;
+    }
+    enum kui_loader_sd_result stopped_stream=kui_loader_sd_stream_stop(card,&disc_fat_read_stream);
+    if(stopped_stream!=KUI_LOADER_SD_OK || !persist_healthy(card)) {*verified=0u;return -1;}
+    if(*verified && native_persist_work.session.phase==KUI_VMU_PERSIST_SESSION_ADMISSION &&
+       kui_vc2_ce_vmu_stage_cache_admission_store(&disc_persist_read_cache,
+           &native_persist_profile,lba,*verified,out)) {
+        *verified=0u;return -1;
+    }
+    /* Keep only CRC-verified look-ahead prefixes after a confirmed healthy
+     * CMD12 stop. Failed/uncertain teardown never yields cached authority. */
+    return *verified?0:-1;
 }
 static int persist_read(void *context,uint64_t lba,void *out) {
-    return lba>UINT32_MAX || kui_loader_sd_read(context,(uint32_t)lba,1u,out)!=KUI_LOADER_SD_OK?-1:0;
+    if(lba>UINT32_MAX)return -1;
+    if(native_persist_work.session.phase==KUI_VMU_PERSIST_SESSION_ADMISSION) {
+        int hit=kui_vc2_ce_vmu_stage_cache_admission_peek(&disc_persist_read_cache,
+            &native_persist_profile,lba,out);
+        if(hit)return hit>0?0:-1;
+    }
+    if(native_persist_work.session.phase==KUI_VMU_PERSIST_SESSION_VALIDATION)
+        return kui_vc2_ce_vmu_stage_cache_read(&disc_persist_read_cache,&native_persist_profile,
+            false,true,lba,out,persist_read_run,context);
+    const struct kui_smash_fat_read_ops ops={context,persist_fat_read_one,persist_fat_read_window};
+    return kui_smash_fat_cache_read(&disc_fat_read_cache,&ops,(uint32_t)lba,out);
 }
 static int persist_write(void *context,uint64_t lba,const void *in) {
     struct kui_loader_sd *card=context;
-    if(lba>UINT32_MAX) return -1;
+    kui_smash_fat_cache_begin_epoch(&disc_fat_read_cache);
+    kui_vc2_ce_vmu_stage_cache_invalidate(&disc_persist_read_cache);
+    if(lba>UINT32_MAX || !persist_healthy(card)) return -1;
     bool (*block)(void *,const uint8_t *,uint8_t *,size_t,bool,uint16_t *)=card->bus.transfer_block;
     card->bus.transfer_block=NULL;
     enum kui_loader_sd_result result=kui_sci_sd_write(card,(uint32_t)lba,1u,in);
     card->bus.transfer_block=block;return result==KUI_LOADER_SD_OK?0:-1;
 }
-static int persist_sync(void *context) {return kui_sci_sd_sync(context)==KUI_LOADER_SD_OK?0:-1;}
+static int persist_sync(void *context) {
+    kui_smash_fat_cache_begin_epoch(&disc_fat_read_cache);
+    kui_vc2_ce_vmu_stage_cache_invalidate(&disc_persist_read_cache);
+    return !persist_healthy(context) || kui_sci_sd_sync(context)!=KUI_LOADER_SD_OK?-1:0;
+}
 static void native_persist_prepare(const uint8_t *wire) {
     if(plan.vmu_transport!=KUI_STORAGE_SCI || plan.vmu_profile_bytes!=KUI_VMU_PERSIST_PROFILE_WIRE_BYTES ||
        kui_vmu_persist_profile_decode(&native_persist_profile,wire,plan.vmu_profile_bytes) ||
@@ -173,6 +238,9 @@ static void native_persist_prepare(const uint8_t *wire) {
     bool healthy=result==KUI_LOADER_SD_OK && persist_healthy(&native_persist_card);
     kui_sci_sd_release();
     if(!healthy || kui_sci_sd_faulted()) stopped("SCI CARD INITIALIZATION REFUSED",(uint32_t)result);
+    if(!kui_smash_fat_cache_configure(&disc_fat_read_cache,native_persist_card.blocks,
+       native_persist_profile.partition_first,native_persist_profile.partition_end))
+        stopped("VMU FRESH FAT CACHE BOUNDS REFUSED",0u);
     result=kui_sci_sd_acquire();
     if(result!=KUI_LOADER_SD_OK) stopped("SCI SAVE PREPARATION PORT REFUSED",(uint32_t)result);
     retail_display_line("CHECKING SELECTED VMU OWNERSHIP / JOURNAL");
@@ -180,8 +248,9 @@ static void native_persist_prepare(const uint8_t *wire) {
         persist_read,persist_write,persist_sync,persist_healthy};
     int prepared=kui_vmu_persist_disc_stage_prepare(&native_persist_profile,plan.vmu_transport,
         &ops,&native_persist_work,&native_persist_handoff);
+    enum kui_loader_sd_result stopped_stream=kui_loader_sd_stream_stop(&native_persist_card,&disc_fat_read_stream);
     healthy=persist_healthy(&native_persist_card);kui_sci_sd_release();
-    if(prepared || !healthy || kui_sci_sd_faulted()) {
+    if(prepared || stopped_stream!=KUI_LOADER_SD_OK || !healthy || kui_sci_sd_faulted()) {
         retail_display_restore(&display);
         retail_display_line("PHYSICAL DISC VMU PREPARATION REFUSED");
         retail_display_hex("PREPARE",(uint32_t)prepared);
@@ -327,12 +396,20 @@ static void __attribute__((noipa)) native_disc_mapping_prepare(void) {
         }
         if(kui_vmu_native_heap_discover((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
            exec_bytes,KUI_RETAIL_EXEC_ADDRESS,&native_heap)!=KUI_VMU_NATIVE_HEAP_FOUND ||
-           !native_heap.initializer_slot ||
+           !kui_vmu_native_heap_metadata_valid(&native_heap) || !native_heap.initializer_slot ||
            !kui_vmu_native_heap_call_discover((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
             exec_bytes,&native_heap,&native_call) || !allocation_safe(native_call.entry_begin,native_call.entry_bytes))
             native_report(2u,native_heap.initializer_slot);
         native_passive_prepare();
     }
+    /* Both a trusted cached proof and a fresh mapping must recheck startup
+     * clear lifetime independently. Our heap callback and continuation are
+     * still in this high stage, so deferring then executing its erasing clear
+     * is not a valid physical-disc handoff. No hook has been published yet. */
+    struct kui_vmu_native_heap_preclear clear;
+    if(kui_vmu_native_heap_preclear_plan((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
+       exec_bytes,native_driver.image_sha256,&native_heap,&native_call,&clear)!=0)
+        native_report(2u,0x75u);
 }
 void kui_disc_vmu_stage_relay(const uint32_t *frame,uint32_t ccr) {
     (void)ccr;uint32_t sr;__asm__ volatile("stc sr,%0":"=r"(sr));
@@ -350,8 +427,15 @@ void kui_disc_vmu_stage_relay(const uint32_t *frame,uint32_t ccr) {
     kui_sha256_digest(&hash,digest);
     if(memcmp(digest,plan.exec_sha256,sizeof(digest))) stopped("BOOTSTRAP CHANGED EXECUTABLE SHA",7u);
     size_t program_bytes;
+#if KUI_NATIVE_CACHED_EXTENT
+    extern bool kui_vmu_native_cached_extent(const void *,size_t,uint32_t,size_t *);
+#define kui_vmu_native_program_extent kui_vmu_native_cached_extent
+#endif
     if(!kui_vmu_native_program_extent((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
        exec_bytes,KUI_RETAIL_EXEC_ADDRESS,&program_bytes)) native_report(2u,13u);
+#if KUI_NATIVE_CACHED_EXTENT
+#undef kui_vmu_native_program_extent
+#endif
     exec_bytes=(uint32_t)program_bytes;
     native_disc_mapping_prepare();
     native_heap_hook=(uint32_t)(uintptr_t)kui_vmu_observe_heap_hook;

@@ -112,13 +112,15 @@ enum kui_armada_ce_vmu_a2_publish_result {
  * The mandatory final admit callback runs after complete reply staging and
  * before the first guest store, including parent-only advertisement. False
  * latches ADMISSION and publishes no byte. It may not block or alter source.
- * Only parent A-controller bytes and one optional hardware-timeout A2 reply
+ * Only parent A-controller bytes and one optional hardware-timeout reply for
+ * the source-selected virtual endpoint (default A2, Swirl A1)
  * are writable. Parent accepts DEVINFO, ALLINFO or GETCOND; target admits
  * metadata/read requests and exact read-finalization shapes, with the backend
  * proving matching prior-read state for finalization. WRITE/RESET/KILL/LCD
  * never reach it. All validation and complete reply staging precede stores.
- * Target payload publishes before its header; the parent's A2 bit is ORed
- * last, preserving physical A1 and every other original header bit.
+ * Target payload publishes before its header; the parent's selected attachment
+ * bit is ORed last, preserving the other physical slots and every original
+ * header bit. A physical card already occupying the selected slot refuses.
  *
  * A store error can leave confirmed earlier payload words in guest memory;
  * there is no rollback claim. Its first fault is latched and no later call

@@ -1,0 +1,24 @@
+{
+  "status": "PASS",
+  "kernel_sha256": "b728e8eaef03bd7cc5acbe3dc3363ec9fafcaca90916cf21781d2e72ff99b3bc",
+  "module": "wsegacd.dll",
+  "source_rva": "0x19bc",
+  "actual_source_bytes_executed": true,
+  "zero_token": {
+    "return_status": "0xc0000185",
+    "return_to_caller": true,
+    "steps": 13,
+    "callee_saved_restored": true
+  },
+  "nonzero_token": {
+    "control_token": "0x1234",
+    "reached_normal_path": "0x19d0",
+    "steps": 7
+  },
+  "external_calls_executed": 0,
+  "scope": "Exact zero-token refusal branch and positive control only",
+  "schema": "kui.vc2.gd-request-busy-execution.v1",
+  "original_bytes_or_disassembly_included": false,
+  "source_window_sha256": "cac7ce4bd115df50f66c72cafa00616899647deb2a99e873cea03167480cb5e7",
+  "model": "Bounded SH integer control-path interpreter; exact source words fetched privately at execution"
+}

@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/native_standalone_admission.h"
+#include "kui/native_standalone_foreground.h"
 #include "kui/native_standalone_reader.h"
 #include "kui/native_sdk_sci_runtime.h"
 #include "standalone_symbols.h"
@@ -11,10 +12,28 @@ __asm__(".global __kui_native_standalone_reader_stage\n"
         ".global __kui_native_standalone_structural_stage\n"
         ".set __kui_native_standalone_structural_stage,1\n");
 /* The launcher selects this separately installed module only by this record. */
+#if KUI_NATIVE_STANDALONE_FOREGROUND
+__asm__(".global __kui_native_standalone_foreground_stage\n"
+        ".set __kui_native_standalone_foreground_stage,1\n");
+const struct kui_native_foreground_capability kui_native_foreground_reader_capability
+    __attribute__((used,section(".rodata.native_foreground_capability")))={
+    KUI_NATIVE_FOREGROUND_CAP_MAGIC0,KUI_NATIVE_FOREGROUND_CAP_MAGIC1,1u,
+#if KUI_SMASH_MENU_LOADER
+    KUI_NATIVE_FOREGROUND_CAP_BYTES,KUI_RETAIL_READER_STANDARD,KUI_NATIVE_FOREGROUND_SMASH_SLOTS,
+    0u,KUI_NATIVE_FOREGROUND_CAP_SMASH_MENU};
+#elif KUI_VC2_CE_VMU
+    KUI_NATIVE_FOREGROUND_CAP_BYTES,KUI_RETAIL_READER_STANDARD,KUI_NATIVE_FOREGROUND_VC2_SLOTS,
+    0u,KUI_VC2_VMU_PERSIST?KUI_NATIVE_FOREGROUND_CAP_VC2_PERSIST:
+       (KUI_VC2_VMU_LATE?KUI_NATIVE_FOREGROUND_CAP_VC2_LATE:KUI_NATIVE_FOREGROUND_CAP_VC2_READONLY)};
+#else
+    KUI_NATIVE_FOREGROUND_CAP_BYTES,KUI_RETAIL_READER_STANDARD,KUI_RETAIL_ASYNC_SLOTS,0u,0u};
+#endif
+#else
 const struct kui_native_standalone_capability kui_native_standalone_reader_capability
     __attribute__((used,section(".rodata.native_standalone_capability")))={
     KUI_NATIVE_STANDALONE_CAP_MAGIC0,KUI_NATIVE_STANDALONE_CAP_MAGIC1,1u,
     KUI_NATIVE_STANDALONE_CAP_BYTES,KUI_RETAIL_READER_ASYNC,0u,0u,0u};
+#endif
 static struct kui_native_sdk_sci_family standalone_family;
 static bool standalone_family_found;
 #define STANDALONE_ROLE_VECTOR standalone_family.vector
@@ -31,9 +50,11 @@ __asm__(".global __kui_native_standalone_reader_stage\n"
 #define STANDALONE_ROLE_FPU KUI_NATIVE_STANDALONE_SOURCE_FPU
 #define STANDALONE_ROLE_DEFAULT KUI_NATIVE_STANDALONE_SOURCE_DEFAULT
 #endif
+#if !KUI_NATIVE_STANDALONE_FOREGROUND
 static uint32_t standalone_word(uint32_t address) {
     return *(volatile const uint32_t *)(uintptr_t)address;
 }
+#endif
 #if KUI_NATIVE_STANDALONE_STRUCTURAL
 /* The image-only SDK family proof replaces the exact DOA2 digest. After the
  * relay has restored the executable, the second call must find the same roles. */
@@ -56,6 +77,7 @@ static void __attribute__((noipa)) standalone_source_check(void) {
  * complete low code. Both caches are off and IRQs masked. The route remains
  * unarmed; the later binder separately requires complete SCI/GD quiescence.
  * Only game-code roles survive; no temporary stage pointer is retained. */
+#if !KUI_NATIVE_STANDALONE_FOREGROUND
 static void __attribute__((noipa)) standalone_source_publish(void) {
     uint32_t sr,ccr;
     __asm__ volatile("stc sr,%0":"=r"(sr)::"memory");
@@ -94,3 +116,5 @@ static void __attribute__((noipa)) standalone_source_publish(void) {
        out[KUI_NATIVE_SDK_SCI_DEFAULT_OFFSET/4u]!=STANDALONE_ROLE_DEFAULT)
         stopped("STANDALONE SOURCE READBACK FAILED",3u);
 }
+
+#endif

@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Opt-in Standard-route control: no VMU lease and no SDK callback ownership.
+# Install ONLY as the control package's KUI/apps/games/retail-physical.kui.
+BUILD ?= build/native-standalone-foreground
+include Makefile.native-standalone-general
+FLAGS += -DKUI_NATIVE_STANDALONE_FOREGROUND=1
+.DEFAULT_GOAL := $(BUILD)/retail-native-foreground.kui
+$(BUILD)/retail-native-foreground.kui: $(BUILD)/entry.elf
+	python3 tools/runtime_package.py build $< $@ --build-id $(BUILD_ID)
+	python3 tools/runtime_package.py verify $@
+
+.PHONY: foreground-host-tests foreground-map-tests
+foreground-host-tests:
+	python3 tools/run_native_standalone_foreground.py --output $(abspath $(BUILD))/host-proof
+
+foreground-map-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic \
+	 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-pie -no-pie -ffunction-sections \
+	 -fdata-sections -Wl,--gc-sections -DKUI_VMU_GAME_CARDS=1 \
+	 -DKUI_RETAIL_EXTENDED_MAP=1 -Iinclude -I.deps/fatfs/source -Isrc/dreamcast \
+	 tests/test_native_foreground_mapping.c -o $(BUILD)/test-foreground-mapping
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD)/test-foreground-mapping
+
+.PHONY: foreground-launch-route-tests
+foreground-launch-route-tests: $(BUILD)/retail-native-foreground.kui
+	python3 tools/run_native_foreground_launch_route.py --module $< --output $(abspath $(BUILD))/launch-route-proof

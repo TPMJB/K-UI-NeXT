@@ -107,6 +107,118 @@ static bool pc_word(const uint8_t *p,size_t n,uint32_t base,size_t at,unsigned r
     size_t slot=at+4u+2u*(u16(p+at)&255u);(void)base;
     return slot<=n && n-slot>=2u && u16(p+slot)==value;
 }
+/* A startup head may be entered at its real prologue, never after the lock
+ * normalization on the way to the borrowed heap call. Reject encoded entry,
+ * raw entry pointers and MOVA address generation without suppressing data
+ * halfwords. The head is not patched: MOV.W/MOV.L reads of its bytes do not
+ * enter it. This strict head has no internal branch or literal pool. */
+static bool startup_head_no_entries(const uint8_t *p,size_t n,uint32_t base,size_t head) {
+    uint32_t first=physical(base)+(uint32_t)head,last=first+86u;
+    for(size_t at=0;at+2u<=n;at+=2u) {
+        uint16_t op=u16(p+at);uint32_t target=0u;bool transport=false;
+        if((op&0xe000u)==0xa000u) {
+            int32_t d=op&0xfffu;if(d&0x800) d-=0x1000;
+            target=physical(base)+(uint32_t)at+4u+(uint32_t)(2*d);transport=true;
+        } else if((op&0xff00u)==0x8900u || (op&0xff00u)==0x8b00u ||
+                  (op&0xff00u)==0x8d00u || (op&0xff00u)==0x8f00u) {
+            int32_t d=op&255u;if(d&128) d-=256;
+            target=physical(base)+(uint32_t)at+4u+(uint32_t)(2*d);transport=true;
+        } else if((op&0xff00u)==0xc700u) {
+            target=((physical(base)+(uint32_t)at+4u)&~3u)+4u*(op&255u);transport=true;
+        }
+        if(transport && target>first && target<last) return false;
+        if(!(at&3u) && n-at>=4u) {
+            uint32_t value=u32(p+at);
+            if(ram(value) && physical(value)>first && physical(value)<last) return false;
+        }
+    }
+    return true;
+}
+static bool source_code(uint32_t value,uint32_t base,size_t n) {
+    return ram(value) && !(value&1u) && physical(value)>=physical(base) &&
+        physical(value)-physical(base)<=n-2u;
+}
+/* One exact startup register allocation, independently linked to the lock
+ * cell and to the later heap/Maple role records. Its source lock starts as
+ * cell+4; MOV.L/OR/MOV.L installs only its P2 alias. No inherited register
+ * chooses a pointer, and every instruction through the call delay is fixed.
+ * The following ordinary calls are not assumed to preserve cache state:
+ * the later live coherence gate must prove both idle copies explicitly. */
+static bool startup_p2_at(const uint8_t *p,size_t n,uint32_t base,size_t s,
+    const struct kui_vmu_native_discovery *driver) {
+    static const struct witness w[]={
+        {0,0x2fe6},{2,0x2fd6},{4,0x2fc6},{6,0x2fb6},{8,0x2fa6},{10,0x2f96},
+        {12,0x4f22},{14,0x7ff0},{16,0x1f41},{20,0x0002},{26,0x2019},{28,0x1f52},
+        {30,0xcbf0},{32,0x2f62},{34,0x6242},{36,0x223b},{38,0x2422},{40,0x400e},
+        {44,0x420b},{46,0x0009},{50,0xeee0},{54,0x6522},{58,0x2539},{64,0x6032},
+        {66,0x251b},{68,0x202b},{72,0x20e9},{74,0x3508},{76,0x6403},{78,0x1f03},
+        {80,0x75e0},{82,0x420b},{84,0x7420},{88,0x55f2},{90,0x66f2},{92,0x430b},
+        {94,0x54f1},{98,0x420b},{100,0x0009},{108,0x430b},{110,0xe400}
+    };
+    if(s>n || n-s<112u) return false;
+    for(unsigned i=0;i<sizeof(w)/sizeof(w[0]);i++)
+        if(u16(p+s+w[i].offset)!=w[i].value) return false;
+    uint32_t cell,alias,end_cell,again,mask,area,upper,heap,rx,tx,value;
+    size_t end;
+    if(!pc_literal(p,n,base,s+18u,4u,&cell) || cell!=driver->lock_cell ||
+       !pc_word(p,n,base,s+22u,1u,0xff0fu) ||
+       !pc_literal(p,n,base,s+24u,3u,&alias) || alias!=0xa0000000u ||
+       !pc_literal(p,n,base,s+42u,2u,&value) || !source_code(value,base,n) ||
+       !pc_literal(p,n,base,s+48u,2u,&end_cell) || !index_of(end_cell,base,n,4u,&end) ||
+       !ram(u32(p+end)) || !pc_literal(p,n,base,s+52u,3u,&mask) || mask!=0xe0000000u ||
+       !pc_literal(p,n,base,s+56u,2u,&area) || area!=0x80000000u ||
+       !pc_literal(p,n,base,s+60u,3u,&again) || again!=end_cell ||
+       !pc_literal(p,n,base,s+62u,1u,&upper) || upper!=0x0d000000u ||
+       !pc_literal(p,n,base,s+70u,2u,&heap) || !source_code(heap,base,n) ||
+       !pc_literal(p,n,base,s+86u,3u,&value) || !source_code(value,base,n) ||
+       !pc_literal(p,n,base,s+96u,2u,&value) || !source_code(value,base,n) ||
+       !pc_literal(p,n,base,s+102u,3u,&value) || !source_code(value,base,n) ||
+       !pc_literal(p,n,base,s+104u,5u,&rx) || !ram(rx) ||
+       !pc_literal(p,n,base,s+106u,6u,&tx) || !ram(tx)) return false;
+    return startup_head_no_entries(p,n,base,s);
+}
+static const uint16_t startup_p2_prologue[]={
+    0x2fe6,0x2fd6,0x2fc6,0x2fb6,0x2fa6,0x2f96,0x4f22,0x7ff0,0x1f41};
+static const uint16_t startup_p2_lock[]={0x6242,0x223b,0x2422};
+static const uint16_t startup_p2_heap[]={0x20e9,0x3508,0x6403,0x1f03,0x75e0,0x420b,0x7420};
+static bool startup_words(const uint8_t *p,const uint16_t *expected,unsigned count) {
+    for(unsigned i=0;i<count;i++) if(u16(p+2u*i)!=expected[i]) return false;
+    return true;
+}
+/* Return 0 for no candidate, 1 for one complete normalizer, -1 for a hinted
+ * but unproved/ambiguous head. Two independent disjoint anchors are only a
+ * refusal hint, never acceptance. Thus a changed prologue, load register,
+ * literal alias or lock operation cannot silently become cached-lock early
+ * metadata. Every accepted head still passes the complete exact contract. */
+static int startup_p2(const uint8_t *p,size_t n,uint32_t base,
+    const struct kui_vmu_native_discovery *driver,size_t *chosen) {
+    unsigned found=0;
+    for(size_t at=0;at+2u<=n;at+=2u) {
+        uint16_t op=u16(p+at);size_t s;
+        if(op==startup_p2_prologue[0]) s=at;
+        else if(op==startup_p2_lock[0] && at>=34u) s=at-34u;
+        else if(op==startup_p2_heap[0] && at>=72u) s=at-72u;
+        else continue;
+        if(n-s<112u || (found && s==*chosen)) continue;
+        unsigned anchors=startup_words(p+s,startup_p2_prologue,sizeof(startup_p2_prologue)/2u)+
+            startup_words(p+s+34u,startup_p2_lock,sizeof(startup_p2_lock)/2u)+
+            startup_words(p+s+72u,startup_p2_heap,sizeof(startup_p2_heap)/2u);
+        if(anchors<2u) continue;
+        if(!startup_p2_at(p,n,base,s,driver) || ++found>1u) return -1;
+        *chosen=s;
+    }
+    return found?1:0;
+}
+bool kui_vmu_native_early_p2_calls_valid(const void *image,size_t n,
+    const struct kui_vmu_native_discovery *driver,uint32_t heap_call,uint32_t maple_call) {
+    size_t startup=0;
+    return driver && driver->family==KUI_VMU_NATIVE_FAMILY_EARLY_P2_V1 &&
+        driver->version==KUI_VMU_NATIVE_DISCOVERY_VERSION && driver->bytes==sizeof(*driver) &&
+        driver->image_bytes==n && valid(image,n,driver->load_address) &&
+        startup_p2(image,n,driver->load_address,driver,&startup)==1 &&
+        heap_call==driver->load_address+(uint32_t)startup+82u &&
+        maple_call==driver->load_address+(uint32_t)startup+108u;
+}
 /* The pd 1.46 server entry, completion_call-0x3a: it saves R8-R14 and PR,
  * calls the lock helper with the busy word set to one in the delay slot, and
  * records a -2 (lock held) result in manager+0x10e8 for the API wrappers'
@@ -138,11 +250,17 @@ static bool early_server(const uint8_t *p,size_t n,uint32_t base,const struct ku
         pc_word(p,n,base,h+2u,0u,0xfc0u) && pc_word(p,n,base,h+20u,0u,0x10f4u) &&
         pc_literal(p,n,base,h+36u,3u,&lock) && lock==r->lock_cell;
 }
-static void finish(struct kui_vmu_native_discovery *r,const void *p,size_t n,uint32_t base) {
+static bool finish(struct kui_vmu_native_discovery *r,const void *p,size_t n,uint32_t base) {
     r->version=KUI_VMU_NATIVE_DISCOVERY_VERSION;r->bytes=sizeof(*r);
     r->family=early_server(p,n,base,r)?KUI_VMU_NATIVE_FAMILY_EARLY_V1:KUI_VMU_NATIVE_FAMILY_UNIFORM_V1;
+    if(r->family==KUI_VMU_NATIVE_FAMILY_EARLY_V1) {
+        size_t startup=0;int normalizer=startup_p2(p,n,base,r,&startup);
+        if(normalizer<0) return false;
+        if(normalizer) r->family=KUI_VMU_NATIVE_FAMILY_EARLY_P2_V1;
+    }
     r->image_bytes=(uint32_t)n;
     r->load_address=base;r->requirements=KUI_VMU_NATIVE_REQUIREMENTS;hash(p,n,r->image_sha256);
+    return true;
 }
 enum kui_vmu_native_discovery_result kui_vmu_native_discover(
     const void *image,size_t n,uint32_t base,struct kui_vmu_native_discovery *out) {
@@ -169,7 +287,8 @@ enum kui_vmu_native_discovery_result kui_vmu_native_discover(
         if(partial>1u) return KUI_VMU_NATIVE_AMBIGUOUS;
     }
     if(!found) return partial?KUI_VMU_NATIVE_INCOMPLETE:KUI_VMU_NATIVE_NOT_FOUND;
-    finish(&chosen,image,n,base);*out=chosen;return KUI_VMU_NATIVE_RESOLVED;
+    if(!finish(&chosen,image,n,base)) return KUI_VMU_NATIVE_INCOMPLETE;
+    *out=chosen;return KUI_VMU_NATIVE_RESOLVED;
 }
 bool kui_vmu_native_discovery_cache_valid(const struct kui_vmu_native_discovery *r,
     const void *image,size_t n,uint32_t base) {

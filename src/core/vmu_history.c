@@ -5,6 +5,7 @@
 #include "kui/clock.h"
 #include "kui/hash.h"
 #include "kui/destination.h"
+#include "kui/smash_launch_timing.h"
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -62,15 +63,29 @@ static int exact(const char *path,void *out,size_t bytes,const void *compare,kui
     if(stopped(cancel))return STOP;
     FIL file;FRESULT r=f_open(&file,path,FA_READ);
     if(r!=FR_OK)return r==FR_NO_FILE || r==FR_NO_PATH?BAD:IO;
-    int result=f_size(&file)==bytes?OK:BAD;uint8_t block[512];
+    /* Both complete passes remain fresh. Reading the first pass directly
+     * into its existing image buffer avoids an extra allocation/copy. The
+     * compare pass borrows one bounded heap window; low memory retains the
+     * existing4KiB stack window and every comparison/sector CRC check. */
+    int result=f_size(&file)==bytes?OK:BAD;_Alignas(32) uint8_t fallback[4096];
+    const bool direct=out && !compare;
+    void *allocation=result==OK && !direct && bytes>sizeof(fallback)?malloc(32768u+31u):NULL;
+    uint8_t *block=allocation?(uint8_t *)(((uintptr_t)allocation+31u)&~(uintptr_t)31u):fallback;
+    size_t window=direct || allocation?32768u:sizeof(fallback);
+    if(result==OK && bytes>sizeof(fallback))kui_smash_launch_timing_metric(KUI_SMASH_UI_VERIFY_BATCH_BYTES,(uint32_t)window);
     for(size_t at=0;result==OK && at<bytes;) {
         if(stopped(cancel)){result=STOP;break;}
-        UINT n=(UINT)(bytes-at<sizeof(block)?bytes-at:sizeof(block)),got=0;
-        if(f_read(&file,block,n,&got)!=FR_OK || got!=n){result=IO;break;}
-        if(compare && memcmp(block,(const uint8_t *)compare+at,n)){result=BAD;break;}
-        if(out)memcpy((uint8_t *)out+at,block,n);
+        UINT n=(UINT)(bytes-at<window?bytes-at:window),got=0;
+        void *destination=direct?(uint8_t *)out+at:block;
+        FRESULT read=f_read(&file,destination,n,&got);
+        kui_smash_launch_timing_add(KUI_SMASH_UI_HISTORY_READ_CALLS,1u);
+        kui_smash_launch_timing_add(KUI_SMASH_UI_HISTORY_READ_BYTES,got);
+        if(read!=FR_OK || got!=n){result=IO;break;}
+        if(compare && memcmp(destination,(const uint8_t *)compare+at,n)){result=BAD;break;}
+        if(out && !direct)memcpy((uint8_t *)out+at,destination,n);
         at+=n;
     }
+    free(allocation);
     if(f_close(&file)!=FR_OK)result=IO;
     return result;
 }
@@ -214,7 +229,7 @@ static bool same_record(const struct kui_vmu_history_record *a,const struct kui_
         !memcmp(a->source_identity,b->source_identity,16u) && !memcmp(a->sha256,b->sha256,32u) &&
         !memcmp(a->product,b->product,12u);
 }
-static int prune(const char *key,const struct history_scan *s,const struct kui_vmu_history_platform *p,
+static int prune(const char *key,struct history_scan *s,const struct kui_vmu_history_platform *p,
     const struct kui_vmu_game_selection *card,uint8_t *image,kui_cancel_fn cancel) {
     for(unsigned i=KUI_VMU_HISTORY_KEEP;i<s->count;i++) {
         if(stopped(cancel))return STOP;
@@ -235,6 +250,11 @@ static int prune(const char *key,const struct history_scan *s,const struct kui_v
         path_for(path,key,record.sequence,"card.vmd");if(f_unlink(path)!=FR_OK)return IO;
         if(f_unlink(folder)!=FR_OK)return IO;
     }
+    /* The exclusive mounted operation has only removed the exact verified
+     * tail above. Keep the already verified retained records in this call;
+     * no external writer can run until the operation returns. An error above
+     * leaves this scan unpublished and the next operation scans afresh. */
+    if(s->count>KUI_VMU_HISTORY_KEEP)s->count=KUI_VMU_HISTORY_KEEP;
     return OK;
 }
 static int checkpoint(const struct kui_vmu_history_request *request,enum kui_vmu_history_reason reason,
@@ -248,8 +268,7 @@ static int checkpoint(const struct kui_vmu_history_request *request,enum kui_vmu
     if(s->count && !memcmp(record.sha256,s->records[0].sha256,32u)) {
         if(s->count>KUI_VMU_HISTORY_KEEP) {
             if((r=allocation(cancel)) || !storage_matches(platform,card))return r?r:STALE;
-            if((r=prune(card->product,s,platform,card,image,cancel)) ||
-               (r=scan(card->product,s,image,cancel)))return r;
+            if((r=prune(card->product,s,platform,card,image,cancel)))return r;
         }
         return KUI_VMU_HISTORY_UNCHANGED;
     }
@@ -257,9 +276,12 @@ static int checkpoint(const struct kui_vmu_history_request *request,enum kui_vmu
     if((r=allocation(cancel)) || !storage_matches(platform,card))return r?r:STALE;
     /* Repair a prior interrupted retention pass before allocating another
      * image, bounding completed history to eight plus one uncertain publish. */
+    bool pruned=s->count>KUI_VMU_HISTORY_KEEP;
     if((r=prune(card->product,s,platform,card,image,cancel)))return r;
-    /* Pruning used the scratch image; renew the recovered source afterwards. */
-    if((r=current_image(card,image,log,cancel)))return r;
+    /* Only actual pruning overwrites the recovered source scratch. The
+     * allocation walk is read-only, so the common no-victim path retains
+     * the exact current image that was recovered and hashed above. */
+    if(pruned && (r=current_image(card,image,log,cancel)))return r;
     char parent[192];path_for(parent,card->product,0,NULL);
     if(!kui_destination_mkdirs(parent+2,log))return IO;
     record.sequence=s->maximum+1u;char path[192];path_for(path,card->product,record.sequence,NULL);
@@ -273,10 +295,18 @@ static int checkpoint(const struct kui_vmu_history_request *request,enum kui_vmu
     if((r=write_new(path,wire,sizeof(wire),NULL)))return r;
     struct kui_vmu_history_record verified;
     if((r=verify(card->product,record.sequence,image,&verified,NULL)))return r;
+    if(!same_record(&record,&verified))return STALE;
     out->changed=true;
-    if((r=scan(card->product,s,image,NULL)))return r;
+    /* The initial scan verified every retained payload twice. All intervening
+     * mutations are this operation's allocation-admitted new files and exact
+     * pruned paths. Insert only the complete synced/readback-verified record;
+     * rereading every unchanged old payload twice more adds no authority.
+     * This list never survives this invocation or a failed mutation. */
+    if(s->count>=SCAN_LIMIT)return FULL;
+    memmove(s->records+1u,s->records,(size_t)s->count*sizeof(s->records[0]));
+    s->records[0]=verified;++s->count;s->maximum=verified.sequence;
     if((r=prune(card->product,s,platform,card,image,NULL)))return r;
-    return scan(card->product,s,image,NULL);
+    return OK;
 }
 static int restore(const struct kui_vmu_history_request *request,
     const struct kui_vmu_history_platform *platform,uint8_t *image,bool dedicated,struct kui_vmu_history_view *out,

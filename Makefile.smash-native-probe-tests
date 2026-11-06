@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: GPL-3.0-only
+.DEFAULT_GOAL := smash-native-worker-tests
+include Makefile.smash-native-child
+.PHONY: smash-native-worker-tests
+smash-native-worker-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(PASSIVE_HOST_FLAGS) $(VMU_LITE_HOST_FLAGS) -DKUI_VMU_VIRTUAL_A1=1 -DKUI_SMASH_NATIVE_CHILD=1 \
+	 tests/test_smash_native_vmu_worker.c $(COMPAT_WORKER_HOST_SRC) src/core/smash_native_vmu_probe.c \
+	 -Wl,--gc-sections -o $(BUILD)/test-smash-native-worker
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-smash-native-worker

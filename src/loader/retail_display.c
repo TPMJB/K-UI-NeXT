@@ -105,7 +105,20 @@ static const uint8_t glyphs[36][7] = {
 };
 static unsigned glyph_row(unsigned glyph,unsigned row_index) {return glyphs[glyph][row_index];}
 #endif
+#if KUI_NATIVE_GD_DMA_STREAM && defined(KUI_RETAIL_ASYNC)
+/* This terminal-only cursor occupies the last four retired launch-string
+ * bytes. The low profile supplies its exact linker alias; live renderers
+ * keep their independent state. */
+extern unsigned row;
+#else
 static unsigned row;
+#endif
+#if KUI_NATIVE_OCRAM_BOOTSTRAP
+/* The terminal OCRAM report needs 20 rows. Glyphs remain 14 pixels high. */
+#define RETAIL_LINE_PITCH 18u
+#else
+#define RETAIL_LINE_PITCH 22u
+#endif
 #ifdef KUI_RETAIL_CE
 /* The live status line draws on the frame Windows CE shows; every other
  * line uses K-UI's captured 640-pixel frame at the start of video RAM. */
@@ -117,36 +130,83 @@ static uint32_t base = 0xa5000000u, stride = 640u;
 void retail_display_capture(struct retail_display_state *s) {
     for(unsigned i=0;i<14;i++) s->regs[i]=*reg(i);
 }
+#if KUI_SMASH_CE_GIN_ADOPT || KUI_SMASH_NATIVE_GIN_ADOPTION_DISPLAY
+static uint32_t adoption_quiet;
+void retail_display_adoption_quiet(uint32_t quiet) { adoption_quiet=quiet; }
+#define DISPLAY_ADOPTION_QUIET() do { if(adoption_quiet)return; } while(0)
+#else
+#define DISPLAY_ADOPTION_QUIET() do {} while(0)
+#endif
 void retail_display_line(const char *text) {
+    DISPLAY_ADOPTION_QUIET();
     volatile uint16_t *frame=(volatile uint16_t *)(uintptr_t)base;
     unsigned x=20;
+#if !(KUI_NATIVE_GD_VRAM_DMA && defined(KUI_RETAIL_ASYNC))
     if(row>444) row=124;
-    for(unsigned y=row;y<row+22;y++)
+#endif
+#if !(KUI_NATIVE_GD_DMA_STREAM && defined(KUI_RETAIL_ASYNC))
+    for(unsigned y=row;y<row+RETAIL_LINE_PITCH;y++)
         for(unsigned a=16;a<624;a++) frame[y*stride+a]=0x0864;
+#endif
+    /* The native DMA profile uses only the stopped diagnostic: restore
+     * cleared the complete frame, and its <=21 lines never reuse a row.
+     * Keep the stage and every live/scrolling renderer on the original path. */
     while(*text && x<612) {
         unsigned char c=(unsigned char)*text++;
+#if KUI_NATIVE_GD_VRAM_DMA && defined(KUI_RETAIL_ASYNC)
+        /* This terminal's fixed labels and hex rows contain only ASCII
+         * letters, digits and spaces; no title or external string is drawn. */
+        if(c>='a')c-=32;
+        int n=c>='A'?c-'A':c>='0'?c-'0'+26:-1;
+#else
         if(c>='a' && c<='z') c-=32;
         int n=c>='A'&&c<='Z'?c-'A':c>='0'&&c<='9'?c-'0'+26:-1;
+#endif
         for(unsigned y=0;y<7;y++) {
-            unsigned bits=n>=0?glyph_row((unsigned)n,y):c=='-'&&y==3?14:
+            unsigned bits=n>=0?glyph_row((unsigned)n,y):
+#if KUI_NATIVE_GD_VRAM_DMA && defined(KUI_RETAIL_ASYNC)
+                /* This stopped profile prints only letters, digits and
+                 * spaces. Keep its fixed diagnostic pixels unchanged. */
+                0;
+#else
+                c=='-'&&y==3?14:
                 c==':'&&(y==2||y==5)?4:c=='.'&&y==6?4:
                 c=='/'?1u<<(y<5?y:4):0;
+#endif
             for(unsigned a=0;a<5;a++) if(bits&(16u>>a))
+#if KUI_NATIVE_GD_DMA_STREAM && defined(KUI_RETAIL_ASYNC)
+            {
+                /* x starts at20 and advances12; every doubled glyph column
+                 * is a naturally aligned pair of RGB565 pixels. Preserve
+                 * the same four pixels using two volatile word stores. */
+                volatile uint32_t *pair=(volatile uint32_t *)
+                    (frame+(row+y*2u)*stride+x+a*2u);
+                pair[0]=UINT32_MAX;pair[stride/2u]=UINT32_MAX;
+            }
+#else
                 for(unsigned dy=0;dy<2;dy++)
                     for(unsigned dx=0;dx<2;dx++)
                         frame[(row+y*2+dy)*stride+x+a*2+dx]=0xffff;
+#endif
         }
         x+=12;
     }
-    row+=22;
+    row+=RETAIL_LINE_PITCH;
 }
 void retail_display_restore(const struct retail_display_state *s) {
+    DISPLAY_ADOPTION_QUIET();
     *reg(0)=s->regs[0]&~1u;
     for(unsigned i=1;i<14;i++) *reg(i)=s->regs[i];
     *reg(0)=s->regs[0];
     volatile uint16_t *frame=(volatile uint16_t *)(uintptr_t)0xa5000000u;
     for(unsigned i=0;i<640u*480u;i++) frame[i]=0x0864;
     row=20;
+#if KUI_VC2_CE_VMU
+    /* This high terminal owns two complete pages; reserve their top line
+     * for build identity and avoid the generic launch banners overlapping
+     * its first row at 52. Ordinary resident/stage rendering is unchanged. */
+    retail_display_line("BUILD " KUI_BUILD_ID);
+#else
 #if KUI_NATIVE_READER_DIAGNOSTIC
 #if KUI_NATIVE_COOP_PUMP
 #if !defined(KUI_RETAIL_ASYNC)
@@ -174,8 +234,19 @@ void retail_display_restore(const struct retail_display_state *s) {
 #endif
 #endif
 #endif
+#endif
+#if KUI_NATIVE_OCRAM_BOOTSTRAP
+    row=52;
+#else
     row=108;
+#endif
 }
+#if KUI_SMASH_PHASE_DIAGNOSTIC
+/* Diagnostic-only page owns every row, starting over the generic banners. */
+void retail_display_phase_reset(const struct retail_display_state *s) {
+    retail_display_restore(s);row=20u;
+}
+#endif
 void retail_display_hex(const char *label,uint32_t value) {
     char out[50]; unsigned n=0;
     while(*label && n<39) out[n++]=*label++;
@@ -183,16 +254,65 @@ void retail_display_hex(const char *label,uint32_t value) {
     for(unsigned i=0;i<8;i++) out[n++]="0123456789ABCDEF"[(value>>(28-4*i))&15];
     out[n]=0; retail_display_line(out);
 }
+#if KUI_VC2_STAGE_OWNERSHIP_PROFILE
+static void vc2_ownership_body_clear(void) {
+    volatile uint16_t *frame=(volatile uint16_t *)(uintptr_t)base;
+    /* Keep BUILD at20 and the independent progress bar at464. This stage
+     * owns the body; clearing it only at page transitions retires the old
+     * launch banners and counter labels without repeated frame flicker. */
+    for(unsigned y=52u;y<460u;y++)
+        for(unsigned x=16u;x<624u;x++)frame[y*stride+x]=0x0864;
+    row=52u;
+}
+static void vc2_ownership_clock_line(uint32_t clock_available) {
+    retail_display_line(clock_available?
+        "COUNTERS HEX - TIMES IN MILLISECONDS":
+        "TIMER UNAVAILABLE - COUNTERS CONTINUE");
+}
+void retail_display_vc2_ownership_begin(void) {
+    DISPLAY_ADOPTION_QUIET();
+    vc2_ownership_body_clear();
+    retail_display_line("VC2 VMU SCANNING FILE OWNERSHIP");
+    /* The initial status follows before the first ownership sector read.
+     * Reserve its complete page so later summaries cannot reuse its rows. */
+    row=286u;
+}
+void retail_display_vc2_ownership_status(const uint32_t values[17]) {
+    DISPLAY_ADOPTION_QUIET();
+    unsigned prior=row;row=70u;
+    vc2_ownership_clock_line(values[3]);
+    retail_display_values("FS CLUSTER BYTES CLUSTERS CLOCK",values,4u);
+    retail_display_values("ELAPSED MS READ MS RUNS BLOCKS",values+4u,4u);
+    retail_display_values("DMA BLOCKS PIO CALLS DMAOR CHCR1",values+8u,4u);
+    retail_display_values("FAT ENTRIES CHAIN STEPS READS DIRS",values+12u,4u);
+    retail_display_values("CPU CCR",values+16u,1u);
+    row=prior;
+}
+void retail_display_vc2_ownership_results(uint32_t clock_available) {
+    DISPLAY_ADOPTION_QUIET();
+    vc2_ownership_body_clear();
+    retail_display_line("VC2 VMU OWNERSHIP CHECK RESULTS");
+    vc2_ownership_clock_line(clock_available);
+}
+#endif
 /* A legend line, then up to five values in nine-character columns under it. */
 void retail_display_values(const char *legend,const uint32_t *values,unsigned count) {
-#if defined(KUI_RETAIL_TRANSPORT) && !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC)
+#if (defined(KUI_RETAIL_TRANSPORT) && !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC)) || \
+    (KUI_NATIVE_GD_DMA_STREAM && defined(KUI_RETAIL_ASYNC))
     /* All input rows are word-aligned. Terminal snapshots may occupy the
      * byte-sector cache: alias-qualified reads remain valid under GCC LTO,
      * as do the ordinary uint32_t arrays used for other diagnostic rows. */
     typedef uint32_t display_word __attribute__((__may_alias__));
+#if KUI_NATIVE_OCRAM_BOOTSTRAP
+    const volatile display_word *words = (const volatile display_word *)(const void *)values;
+#else
     const display_word *words = (const display_word *)(const void *)values;
+#endif
     char out[50], *next = out;
-    retail_display_line(legend);
+#if KUI_NATIVE_OCRAM_BOOTSTRAP
+    if(*legend)
+#endif
+        retail_display_line(legend);
     for(unsigned v=0;v<count && v<5;v++) {
         uint32_t value = words[v];
         char *digit = next + 8;
@@ -205,9 +325,19 @@ void retail_display_values(const char *legend,const uint32_t *values,unsigned co
     *next = 0; retail_display_line(out);
 #else
     char out[50]; unsigned n=0;
-    retail_display_line(legend);
+#if KUI_NATIVE_OCRAM_BOOTSTRAP
+    if(*legend)
+#endif
+        retail_display_line(legend);
     for(unsigned v=0;v<count && v<5;v++) {
+#if KUI_NATIVE_OCRAM_BOOTSTRAP
+        /* Terminal history rows may be passed from the volatile trace ring.
+         * Restore qualification before their actual memory access. */
+        uint32_t value=((const volatile uint32_t *)values)[v];
+        for(unsigned i=0;i<8;i++) out[n++]="0123456789ABCDEF"[(value>>(28-4*i))&15];
+#else
         for(unsigned i=0;i<8;i++) out[n++]="0123456789ABCDEF"[(values[v]>>(28-4*i))&15];
+#endif
         out[n++]=' ';
     }
     out[n]=0; retail_display_line(out);
@@ -233,6 +363,7 @@ void retail_display_status(const char *legend,const uint32_t *values,unsigned co
 }
 #endif
 void retail_display_progress(uint32_t done,uint32_t total) {
+    DISPLAY_ADOPTION_QUIET();
     /* Fixed bottom bar, independent of scrolling diagnostic rows. */
     if(!total || done>total) return;
     uint32_t filled=(uint32_t)((uint64_t)done*600u/total);
@@ -241,6 +372,7 @@ void retail_display_progress(uint32_t done,uint32_t total) {
         for(unsigned x=0;x<600;x++) frame[y*640+20+x]=x<filled?0x07e0:0x2104;
 }
 void retail_display_pause(uint32_t frames_wanted) {
+    DISPLAY_ADOPTION_QUIET();
     /* Keep text visible for frames_wanted video frames (60 or 50 per second)
      * without borrowing any TMU channel. Each frame has a finite polling budget,
      * so a stopped scan generator cannot hang us during a longer pause. */

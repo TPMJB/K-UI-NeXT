@@ -6,6 +6,7 @@
 #include "kui/report.h"
 #include "kui/clock_platform.h"
 #include "kui/worker_stack.h"
+#include "kui/smash_launch_timing.h"
 #ifndef KUI_SD_RUNTIME
 #include "kui/boot_ui.h"
 #endif
@@ -39,6 +40,8 @@ static volatile uint8_t kui_update_ram_handoff[KUI_UPDATE_HANDOFF_BYTES]
 #include "kui/vmu_import.h"
 #include "kui/vmu_emulation_settings.h"
 #include "kui/vmu_game_info.h"
+#include "kui/vmu_library.h"
+#include "kui/media.h"
 #include "kui/music_player.h"
 #include "kui/games.h"
 #include "kui/game_launch_settings.h"
@@ -46,6 +49,7 @@ static volatile uint8_t kui_update_ram_handoff[KUI_UPDATE_HANDOFF_BYTES]
 #include "kui/games_probe.h"
 #include "kui/games_image_probe.h"
 #include "kui/games_retail.h"
+#include "kui/smash_native_child.h"
 #include "kui/games_covers.h"
 #include "kui/games_storage.h"
 #include "kui/games_library.h"
@@ -61,7 +65,7 @@ static volatile uint8_t kui_update_ram_handoff[KUI_UPDATE_HANDOFF_BYTES]
 #include "kui/update_browser.h"
 #include "kui/update_zip.h"
 #include "kui/update_boot.h"
-#include "kui/update_zip.h"
+#include "kui/startup_report.h"
 #include "kui/media.h"
 #include "diskio.h"
 #include "kui/disc_region.h"
@@ -184,6 +188,16 @@ static char vmu_restore_path_pending[KUI_VMU_BACKUP_PATH_CAP];
 static struct kui_vmu_view vmu_image_snapshot;
 static unsigned vmu_image_generation,vmu_image_page_pending,vmu_image_selected_pending;
 static char vmu_image_path_pending[KUI_VMU_BACKUP_PATH_CAP];
+static struct kui_shell_vmu_delete_request vmu_virtual_request_pending;
+static struct kui_vmu_delete_preview vmu_virtual_preview;
+static struct kui_vmu_game_candidates_storage vmu_virtual_preview_storage;
+static bool vmu_virtual_preview_storage_valid;
+static struct kui_app_status vmu_virtual_status;
+static unsigned vmu_virtual_request_generation,vmu_virtual_result_generation,vmu_virtual_generation;
+static bool vmu_virtual_committed,vmu_virtual_ready;
+static unsigned vmu_virtual_users;
+static struct kui_vmu_backup_entry vmu_card_pending,vmu_card_result;
+static unsigned vmu_card_request_generation,vmu_card_result_generation,vmu_card_generation;
 static char maintenance_compare_path_pending[KUI_FILES_PATH_CAP];
 static struct kui_vmu_view vmu_bulk_snapshot,vmu_import_snapshot;
 static unsigned vmu_bulk_generation,vmu_bulk_source_result,vmu_bulk_destination_result;
@@ -331,6 +345,10 @@ static struct kui_shell_games_art_key games_art_requested,games_art_running,game
 static bool games_art_request_valid,games_art_result_ready,games_art_done_valid;
 /* Background titles for the rows on screen, applied by the UI thread. */
 static struct kui_games_page games_titles_page;
+/* Only the storage worker uses this staging page. Warmup and prefetch run
+ * serially; the drawing thread receives the separate games_titles_page copy.
+ * Keep cold catalogue creation below the worker's fixed stack budget. */
+static struct kui_games_page games_idle_rows;
 static unsigned games_titles_offset;
 static bool games_titles_ready;
 /* Layout changes are coalesced hints, not foreground listing jobs. */
@@ -860,6 +878,7 @@ static void app_progress(const struct kui_app_status *status) {
     else if(active_app==20 || active_app==45) network_test_status=*status;
     else if((active_app>=41 && active_app<=43) || active_app==87 || active_app==88) maintenance_status=*status;
     else if(active_app>=84 && active_app<=86) vmu_image_snapshot.status=*status;
+    else if(active_app>=123 && active_app<=125) vmu_virtual_status=*status;
     else if(active_app==89 || active_app==90) vmu_bulk_snapshot.status=*status;
     else if(active_app==91 || active_app==92) vmu_import_snapshot.status=*status;
     else if(active_app==93 || active_app==101) vmu_collection_snapshot.status=*status;
@@ -2522,7 +2541,7 @@ static void files_song_result(const struct kui_app_status *result) {
 }
 static bool needs_cd_handoff(unsigned action) {
     return action==1 || (action>=4 && action<=7) || action==12 || action==22 ||
-        action==24 || action==25 || action==56 || action==57 || action==58 || action==65 || action==79 || action==81 || action==96 || action==97 || action==103 || action==104 || action==105 || action==119 || action==120 || action==126 || (action>=68 && action<=71) || (action>=46 && action<=48);
+        action==24 || action==25 || action==56 || action==57 || action==58 || action==121 || action==122 || action==65 || action==79 || action==81 || action==96 || action==97 || action==103 || action==104 || action==105 || action==119 || action==120 || action==126 || (action>=68 && action<=71) || (action>=46 && action<=48);
 }
 static bool games_page(enum kui_shell_page page) {
     return page==KUI_SHELL_GAMES || page==KUI_SHELL_GAMES_ADVANCED ||
@@ -2968,6 +2987,98 @@ static void vmu_game_default_work(void) {
         &result,kui_log,vmu_game_default_cancelled);
     vmu_game_default_publish(&result);
 }
+/* These jobs use one private request and a worker-owned preview token. The
+ * shell never confirms a row number, nor supplies a replacement image. */
+static bool vmu_virtual_storage_pin(struct kui_vmu_game_candidates_storage *storage) {
+    memset(storage,0,sizeof(*storage));
+    struct kui_vmu_sd_identity id;const struct kui_volume *volume=kui_media_volume();
+    if(!volume || !volume->count || !kui_sd_vmu_profile_identity(&id) || !id.sectors) return false;
+    memcpy(storage->cid,id.cid,16u);storage->card_sectors=id.sectors;
+    storage->high_capacity=id.high_capacity?1u:0u;
+    storage->partition_first=volume->start;storage->partition_end=(uint64_t)volume->start+volume->count;
+    return true;
+}
+static bool vmu_virtual_storage_same(const struct kui_vmu_game_candidates_storage *a,
+        const struct kui_vmu_game_candidates_storage *b) {
+    return !memcmp(a->cid,b->cid,16u) && a->card_sectors==b->card_sectors &&
+        a->high_capacity==b->high_capacity && a->partition_first==b->partition_first &&
+        a->partition_end==b->partition_end;
+}
+static void vmu_virtual_delete_work(bool commit) {
+    struct kui_app_status status={0};int result=KUI_VMU_LIBRARY_IO;
+    if(!commit) {
+        memset(&vmu_virtual_preview,0,sizeof(vmu_virtual_preview));
+        memset(&vmu_virtual_preview_storage,0,sizeof(vmu_virtual_preview_storage));
+        vmu_virtual_preview_storage_valid=false;
+    }
+    kui_sd_set_params(KUI_STORAGE_AUTO,true);
+    if(kui_games_storage_open(kui_log)==KUI_GAMES_STORAGE_OK) {
+        const struct kui_shell_vmu_delete_request *r=&vmu_virtual_request_pending;
+        struct kui_vmu_game_candidates_storage storage;
+        bool pin=vmu_virtual_storage_pin(&storage);
+        if(!commit) {
+            result=pin?kui_vmu_library_delete_preview(r->path,r->identity,r->whole_card?NULL:r->save_name,
+                &vmu_virtual_preview,kui_log,kui_cancelled):KUI_VMU_LIBRARY_INVALID;
+            /* The pin is independent of catalogue existence. Recheck after
+             * reading so the confirmed bytes also belong to this same SD. */
+            if(result==KUI_VMU_LIBRARY_OK) {
+                struct kui_vmu_game_candidates_storage after;
+                if(!vmu_virtual_storage_pin(&after) || !vmu_virtual_storage_same(&storage,&after))
+                    result=KUI_VMU_LIBRARY_INVALID;
+                else {
+                    memcpy(&vmu_virtual_preview_storage,&storage,sizeof(storage));
+                    vmu_virtual_preview_storage_valid=true;
+                }
+            }
+        } else {
+            bool same=vmu_virtual_preview.ready && !strcmp(r->path,vmu_virtual_preview.path) &&
+                !memcmp(r->identity,vmu_virtual_preview.identity,16u) &&
+                r->whole_card==vmu_virtual_preview.whole_card &&
+                (r->whole_card || !strcmp(r->save_name,vmu_virtual_preview.save_name));
+            result=same && pin && vmu_virtual_preview_storage_valid &&
+                vmu_virtual_storage_same(&storage,&vmu_virtual_preview_storage)?
+                kui_vmu_library_delete_commit(&vmu_virtual_preview,&storage,kui_log,kui_cancelled):KUI_VMU_LIBRARY_INVALID;
+            if(result==KUI_VMU_LIBRARY_OK) {
+                struct kui_vmu_game_candidates_storage after;
+                if(!vmu_virtual_storage_pin(&after) || !vmu_virtual_storage_same(&storage,&after))
+                    result=KUI_VMU_LIBRARY_UNCERTAIN;
+            }
+            vmu_virtual_preview.ready=false;
+        }
+        if(!kui_games_storage_done(false)) result=KUI_VMU_LIBRARY_UNCERTAIN;
+    }
+    status.complete=true;status.passed=result==KUI_VMU_LIBRARY_OK;
+    if(commit || !status.passed) {
+        vmu_virtual_preview.ready=false;vmu_virtual_preview_storage_valid=false;
+    }
+    status.stopped=result==KUI_VMU_LIBRARY_CANCELLED;status.errors=!status.passed && !status.stopped;
+    snprintf(status.message,sizeof(status.message),"%s",status.passed?
+        (commit?(vmu_virtual_request_pending.whole_card?"Virtual card deleted.":"Save deleted from the virtual card."):
+            "Selected card checked. Choose Cancel or Delete."):
+        status.stopped?"Delete stopped safely; reopen the card to check it.":
+        result==KUI_VMU_LIBRARY_UNCERTAIN?"Storage result uncertain. Refresh VMU tools before another action.":
+        "Delete refused: card or save changed, or storage could not be checked. Refresh and retry.");
+    mutex_lock(&lock);vmu_virtual_status=status;vmu_virtual_committed=commit;
+    vmu_virtual_ready=!commit && status.passed && vmu_virtual_preview.ready;
+    vmu_virtual_users=vmu_virtual_preview.users;vmu_virtual_result_generation=vmu_virtual_request_generation;
+    ++vmu_virtual_generation;mutex_unlock(&lock);
+}
+static void vmu_card_load_work(void) {
+    struct kui_vmu_backup_entry card=vmu_card_pending;card.readable=false;
+    kui_sd_set_params(KUI_STORAGE_AUTO,true);
+    if(kui_games_storage_open(kui_log)==KUI_GAMES_STORAGE_OK) {
+        int result=kui_vmu_library_describe(vmu_card_pending.path,vmu_card_pending.identity,&card,kui_log,kui_cancelled);
+        if(!kui_games_storage_done(false) || result!=KUI_VMU_LIBRARY_OK) card.readable=false;
+        if(card.readable && !card.custom_label && vmu_card_pending.label[0])
+            memcpy(card.label,vmu_card_pending.label,sizeof(card.label));
+    }
+    if(!card.readable) {
+        card=vmu_card_pending;card.readable=false;
+        snprintf(card.games,sizeof(card.games),"Card changed or could not be checked. Return and refresh game options.");
+    }
+    mutex_lock(&lock);vmu_card_result=card;vmu_card_result_generation=vmu_card_request_generation;
+    ++vmu_card_generation;mutex_unlock(&lock);
+}
 static bool games_warm_cancelled(void) {
     if(games_idle_cancelled()) return true;
     mutex_lock(&lock);
@@ -3095,23 +3206,23 @@ static bool games_prefetch_idle_work(void) {
     if(!wanted) return false;
     kui_sd_set_params(KUI_STORAGE_AUTO,true);
     const unsigned page=games_prefetch.page,view=games_prefetch.view,offset=page*KUI_GAMES_ROWS;
-    struct kui_games_page rows;
+    struct kui_games_page *rows=&games_idle_rows;
     if(games_prefetch.step==0) {
         /* Titles of the rows on screen, from record headers alone. */
-        if(!games_prefetch_rows(offset,&rows)) return true;
-        (void)kui_games_prefetch_titles(&rows,kui_log,games_prefetch_cancelled);
-        if(games_prefetch_cancelled() || !games_prefetch_rows(offset,&rows)) return true;
+        if(!games_prefetch_rows(offset,rows)) return true;
+        (void)kui_games_prefetch_titles(rows,kui_log,games_prefetch_cancelled);
+        if(games_prefetch_cancelled() || !games_prefetch_rows(offset,rows)) return true;
         mutex_lock(&lock);
-        games_titles_page=rows;games_titles_offset=offset;games_titles_ready=true;
+        games_titles_page=*rows;games_titles_offset=offset;games_titles_ready=true;
         mutex_unlock(&lock);
         games_prefetch.step=1;return true;
     }
     if(games_prefetch.step==1) {
         /* Box art of every row on screen, so moving the selection shows it. */
-        if(!games_prefetch_rows(offset,&rows)) return true;
-        for(unsigned row=0;row<rows.count;row++) {
+        if(!games_prefetch_rows(offset,rows)) return true;
+        for(unsigned row=0;row<rows->count;row++) {
             struct kui_games_cover_result result;
-            (void)kui_games_selected_cover(&rows.entries[row],kui_games_view_size(view),
+            (void)kui_games_selected_cover(&rows->entries[row],kui_games_view_size(view),
                 games_prefetch_pixels,&result,kui_log,games_prefetch_cancelled);
             if(games_prefetch_cancelled()) return true;
         }
@@ -3122,8 +3233,8 @@ static bool games_prefetch_idle_work(void) {
     int target=(int)page+near[games_prefetch.step-2u];
     if(target<0 || (target>(int)page && !more) ||
        (total && (unsigned)target*KUI_GAMES_ROWS>=total)) {++games_prefetch.step;return true;}
-    if(!games_prefetch_rows((unsigned)target*KUI_GAMES_ROWS,&rows)) return true;
-    (void)kui_games_prefetch_titles(&rows,kui_log,games_prefetch_cancelled);
+    if(!games_prefetch_rows((unsigned)target*KUI_GAMES_ROWS,rows)) return true;
+    (void)kui_games_prefetch_titles(rows,kui_log,games_prefetch_cancelled);
     if(!games_prefetch_cancelled()) ++games_prefetch.step;
     return true;
 }
@@ -3133,8 +3244,7 @@ static void games_warm_idle_work(void) {
     mutex_lock(&lock);bool song_pending=music_requested>=0;mutex_unlock(&lock);
     if(song_pending || (music.enabled && !music.loaded)) return;
     kui_sd_set_params(KUI_STORAGE_AUTO,true);
-    struct kui_games_page page;
-    bool ok=kui_games_library_rows(KUI_GAMES_SCAN_ROOT,"",0,KUI_GAMES_VIEW_SAVED,&page,kui_log,games_warm_cancelled);
+    bool ok=kui_games_library_rows(KUI_GAMES_SCAN_ROOT,"",0,KUI_GAMES_VIEW_SAVED,&games_idle_rows,kui_log,games_warm_cancelled);
     if(!games_warm_cancelled()) {
         if(!ok) games_cache_invalidate();
         games_warm_done=true;
@@ -3365,7 +3475,7 @@ static void *worker(void *unused) {
             if(action>=46 && action<=48) {salvage_status.complete=true;salvage_status.errors=1;snprintf(salvage_status.message,sizeof(salvage_status.message),"Audio CD stop failed; salvage refused.");}
             if(action==81 || action==96 || action==97) {scan_status=(struct kui_app_status){.complete=true,.errors=1};
                 snprintf(scan_status.message,sizeof(scan_status.message),"Audio CD stop failed; repair did not start.");}
-            if(action==56 || action==57 || action==58 || action==104) probe_launch_failed=true;
+            if(action==56 || action==57 || action==58 || action==104 || action==121 || action==122) probe_launch_failed=true;
             if(action==103 || action==104 || action==105) {
                 probe_status=(struct kui_app_status){.complete=true,.errors=1};
                 snprintf(probe_status.message,sizeof(probe_status.message),"Audio CD stop failed; disc test did not start.");
@@ -3546,7 +3656,7 @@ static void *worker(void *unused) {
                 snprintf(vmu_game_info_snapshot.notice,sizeof(vmu_game_info_snapshot.notice),"Card preference operation stopped; reopen game options.");
                 vmu_game_info_request_result=vmu_game_default_generation;++vmu_game_info_generation;
             }
-            if(action==56 || action==57 || action==58 || action==104) {
+            if(action==56 || action==57 || action==58 || action==104 || action==121 || action==122) {
                 probe_status=(struct kui_app_status){.complete=true,.stopped=true};
                 snprintf(probe_status.message,sizeof(probe_status.message),"%s",action==104?
                     "Direct disc boot stopped before starting.":"Games handoff stopped before starting.");
@@ -3565,6 +3675,19 @@ static void *worker(void *unused) {
                 vmu_image_snapshot.status=(struct kui_app_status){.complete=true,.stopped=true};
                 snprintf(vmu_image_snapshot.status.message,sizeof(vmu_image_snapshot.status.message),"Image operation stopped before starting.");
                 ++vmu_image_generation;
+            }
+            if(action==123 || action==124) {
+                vmu_virtual_status=(struct kui_app_status){.complete=true,.stopped=true};
+                snprintf(vmu_virtual_status.message,sizeof(vmu_virtual_status.message),"Delete stopped before starting; no files changed.");
+                vmu_virtual_ready=false;vmu_virtual_committed=action==124;
+                vmu_virtual_result_generation=vmu_virtual_request_generation;++vmu_virtual_generation;
+                vmu_virtual_preview.ready=false;
+                vmu_virtual_preview_storage_valid=false;
+            }
+            if(action==125) {
+                vmu_card_result=vmu_card_pending;vmu_card_result.readable=false;
+                snprintf(vmu_card_result.games,sizeof(vmu_card_result.games),"Card check stopped. Return and reopen this card.");
+                vmu_card_result_generation=vmu_card_request_generation;++vmu_card_generation;
             }
             if(action==89 || action==90) {
                 vmu_bulk_snapshot.status=(struct kui_app_status){.complete=true,.stopped=true};
@@ -3971,27 +4094,33 @@ static void *worker(void *unused) {
                 disc_launch_progress(&result);
                 disc_launch_failure_report("auto GD Play check failure",&result);
             }
-            if(action==56 || action==57 || action==58 || action==104) {
-                if(action==58 && vmu_history_resume_needed && vmu_emulation_generation &&
+            if(action==56 || action==57 || action==58 || action==104 || action==121 || action==122) {
+                if((action==58 || action==121 || action==122) && vmu_history_resume_needed && vmu_emulation_generation &&
                    vmu_emulation_ok && vmu_emulation_enabled) {
+                    KUI_SMASH_TIME_SPAN(early_resume_time,KUI_SMASH_UI_EARLY_RESUME);
                     vmu_history_resume_needed=false;vmu_history_previous_session();
+                    KUI_SMASH_TIME_END(early_resume_time);
                 }
                 kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 struct kui_native_session_request session_request={0};
-                bool session_ready=action==58 && !kui_cancelled() &&
+                bool session_ready=(action==58 || action==121 || action==122) && !kui_cancelled() &&
                     kui_games_library_session_request(games_activity_root_pending,games_path_pending,
                         &session_request,kui_log,kui_cancelled);
                 struct kui_games_activity_entry recent_key;
-                bool recent_ready=action==58 && !kui_cancelled() &&
+                bool recent_ready=(action==58 || action==121 || action==122) && !kui_cancelled() &&
                     kui_games_library_activity_key(games_activity_root_pending,games_path_pending,&recent_key,kui_log);
                 /* Resolve the disc-set identity while normal file services
                  * still own it, then release catalogue RAM before preparation. */
-                if(action==58) {kui_games_library_clear();(void)kui_games_storage_release();}
+                if(action==58 || action==121 || action==122) {kui_games_library_clear();(void)kui_games_storage_release();}
                 if(action!=104) (void)games_selection_store(true);
                 else disc_launch_release_menu_memory();
                 kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 struct kui_app_status disc_result;
-                bool prepared=action==104?
+                bool prepared=action==121 || action==122?
+                    kui_games_smash_native_prepare(action==121?KUI_SMASH_NATIVE_CHILD_PHANTASY_STAR_II:
+                        KUI_SMASH_NATIVE_CHILD_SHINING_FORCE,games_path_pending,games_reader_pending,
+                        &games_patches_pending,&games_vmu_selection_pending,session_ready?&session_request:NULL,
+                        &probe_image,kui_log,kui_cancelled):action==104?
                     (disc_vmu_launch_pending?
                      kui_disc_launcher_prepare_vmu(&games_vmu_selection_pending,&probe_image,&disc_result,kui_log,kui_cancelled,disc_launch_progress):
                      kui_disc_launcher_prepare(&probe_image,&disc_result,kui_log,kui_cancelled,disc_launch_progress)):action==58?
@@ -4000,6 +4129,7 @@ static void *worker(void *unused) {
                         kui_log,kui_cancelled):action==57?
                     kui_games_image_probe_prepare(games_path_pending,&probe_image,kui_log,kui_cancelled):
                     kui_games_probe_prepare(&probe_image,kui_log,kui_cancelled);
+                kui_smash_launch_timing_phase(KUI_SMASH_UI_POST_PREPARE);
                 if(prepared && kui_cancelled()) {
                     kui_runtime_free(&probe_image);prepared=false;
                     if(action==104) {
@@ -4010,6 +4140,7 @@ static void *worker(void *unused) {
                     }
                 }
                 if(prepared) {
+                    kui_smash_launch_timing_phase(KUI_SMASH_UI_ACTIVITY);
                     /* A recent item means a prepared launch. Read tests and
                      * failed preparation never enter this history. This is
                      * still the sole storage worker, before main's handoff. */
@@ -4020,8 +4151,10 @@ static void *worker(void *unused) {
                     }
                     /* No more filesystem work may run once main owns this
                      * image. arch_exec performs the final KOS teardown. */
+                    kui_smash_launch_timing_phase(KUI_SMASH_UI_AUDIO);
                     mutex_lock(&lock);kui_menu_sound_shutdown();mutex_unlock(&lock);
                     kui_music_shutdown();publish_music();
+                    kui_smash_launch_timing_finish(true,kui_log,kui_cancelled);
                     mutex_lock(&lock);probe_launch_disc=action==104;probe_launch_ready=true;mutex_unlock(&lock);
                     for(;;) {
                         thd_sleep(16);
@@ -4046,6 +4179,7 @@ static void *worker(void *unused) {
                         disc_launch_failure_report("auto GD Play handoff failure",&disc_result);
                     }
                 } else {
+                    kui_smash_launch_timing_finish(false,kui_log,kui_cancelled);
                     mutex_lock(&lock);probe_launch_failed=true;mutex_unlock(&lock);
                     if(action==104) disc_launch_failure_report("auto GD Play boot failure",&disc_result);
                 }
@@ -4188,6 +4322,8 @@ static void *worker(void *unused) {
                     action-84,&result,kui_log,kui_cancelled,app_progress);
                 mutex_lock(&lock);vmu_image_snapshot=result;++vmu_image_generation;mutex_unlock(&lock);
             }
+            if(action==123 || action==124) {active_app=action;vmu_virtual_delete_work(action==124);}
+            if(action==125) {active_app=action;vmu_card_load_work();}
             if(action==89 || action==90) {
                 struct kui_vmu_view result;
                 active_app=action;kui_sd_set_params(KUI_STORAGE_AUTO,true);
@@ -4521,6 +4657,7 @@ static void draw_shell(void) {
         shell.page==KUI_SHELL_CRC_SCAN?scan_status:
         shell.page==KUI_SHELL_SALVAGE?salvage_status:
         shell.page==KUI_SHELL_SYSTEM_TOOLS?maintenance_status:
+        (shell.vmu_virtual_delete_loading || shell.confirm_vmu_virtual_delete)?vmu_virtual_status:
         shell.page==KUI_SHELL_VMU_IMAGE?vmu_image_snapshot.status:
         shell.page==KUI_SHELL_VMU_IMPORT?vmu_import_snapshot.status:
         shell.page==KUI_SHELL_VMU_COLLECTION?vmu_collection_snapshot.status:
@@ -4634,6 +4771,8 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_GAMES_PROBE: return 56;
         case KUI_SHELL_GAMES_IMAGE_PROBE: return 57;
         case KUI_SHELL_GAMES_RETAIL: return 58;
+        case KUI_SHELL_GAMES_SMASH_PHANTASY_STAR_II: return 121;
+        case KUI_SHELL_GAMES_SMASH_SHINING_FORCE: return 122;
         case KUI_SHELL_GAMES_SCAN: return 59;
         case KUI_SHELL_FILES_LIST: return 60;
         case KUI_SHELL_FILES_CHECK: return 61;
@@ -4692,6 +4831,9 @@ static unsigned worker_action(enum kui_shell_action action) {
         case KUI_SHELL_PROBLEM_REPORT:return 116;
         case KUI_SHELL_VMU_BACKUP_SAVES:return 118;
         case KUI_SHELL_DISC_CARDS_RUN:return 119;
+        case KUI_SHELL_VMU_VIRTUAL_DELETE_PREVIEW:return 123;
+        case KUI_SHELL_VMU_VIRTUAL_DELETE_COMMIT:return 124;
+        case KUI_SHELL_VMU_CARD_LOAD:return 125;
         case KUI_SHELL_UPDATE_RUN:return 120;
         default: return 0;
     }
@@ -4765,6 +4907,35 @@ static bool boot_cancelled(void) {
 
 #ifdef KUI_SD_RUNTIME
 static bool update_boot_no_cancel(void) {return false;}
+static const char *startup_selection_name(enum kui_update_boot_result result) {
+    switch(result) {
+    case KUI_UPDATE_BOOT_BASELINE:return "root baseline";
+    case KUI_UPDATE_BOOT_PINNED:return "checked bank";
+    case KUI_UPDATE_BOOT_CHAIN:return "checked GUI handoff";
+    default:return "module loading blocked";
+    }
+}
+static void startup_report_save_mounted(void) {
+    /* No app worker exists yet. Keep chain predecessors as separate appended
+     * records so the final GUI cannot erase the reason a bank was refused. */
+    mutex_lock(&lock);
+    const size_t limit=KUI_STARTUP_REPORT_RECORD_MAX;
+    size_t used=(size_t)snprintf(report,limit,
+        "\n--- K-UI startup %.12s ---\nScope: current GUI startup through version selection, before storage release.\n"
+        "Pre-splash display: K-UI / Starting (normal status).\n"
+        "Earlier CD bootstrap/firmware logs are not carried across execution.\n",KUI_BUILD_ID);
+    bool clipped=false;
+    for(unsigned i=0;i<line_count;i++) {
+        size_t bytes=strlen(lines[i]);
+        if(bytes+used+80u>=limit) {clipped=true;break;}
+        memcpy(report+used,lines[i],bytes);used+=bytes;report[used++]='\n';
+    }
+    used+=(size_t)snprintf(report+used,limit-used,"--- End startup record%s ---\n",
+        clipped || log_truncated?" (RAM log truncated)":"");
+    mutex_unlock(&lock);
+    bool saved=kui_startup_report_append_mounted(report,used);
+    kui_log("Startup report %s: /KUI/startup.txt",saved?"saved":"unavailable; startup continues");
+}
 static void update_boot_timing_save(uint64_t connected_at,uint64_t mounted_at,uint64_t selected_at,
     uint64_t started,uint64_t connect_started,enum kui_update_boot_result result) {
     /* The startup caller already owns this mount. Keep the last dispatcher's
@@ -4801,8 +4972,12 @@ static void update_boot_start(void) {
     for(unsigned i=0;i<KUI_UPDATE_HANDOFF_BYTES;i++)handoff.wire[i]=kui_update_ram_handoff[i];
     for(unsigned i=16u;i<KUI_UPDATE_HANDOFF_BYTES;i++)kui_update_ram_handoff[i]=0;
     bool baseline=(controller_buttons()&CONT_B)!=0;
-    /* Resolve software before app workers start, without a separate startup
-     * status page. The normal launcher splash follows this checked dispatch. */
+    kui_log("Startup: compiled %.12s; catalog=%u; baseline button=%s; RAM handoff=%s",
+        KUI_BUILD_ID,(unsigned)kui_update_catalog_count(),baseline?"held":"released",
+        kui_update_handoff_empty(handoff.wire,sizeof(handoff.wire),NULL)?"empty":"present/invalid");
+    /* Keep normal boot artwork until the regular splash. Selection timings
+     * and failures remain in the startup reports and eventual GUI notice;
+     * this storage preflight needs no separate waiting screen. */
     kui_update_boot_block();
     /* The CD/previous GUI already pinned the boot device. Opening that exact
      * device avoids AUTO's extra probe mount/unmount before our own mount. */
@@ -4821,6 +4996,23 @@ static void update_boot_start(void) {
     kui_log("Updater startup: connection=%llu ms mount=%llu ms selection=%llu ms",
         (unsigned long long)(connected_at-connect_started),(unsigned long long)(mounted_at-connected_at),
         (unsigned long long)(selected_at-mounted_at));
+    bool safe_chain=false;
+    if(result==KUI_UPDATE_BOOT_CHAIN) {
+        uintptr_t stack;__asm__ __volatile__("mov r15,%0":"=r"(stack));
+        uintptr_t source=(uintptr_t)image.data;uint32_t bytes=image.info.payload_bytes;
+        safe_chain=!update_runtime_handoff_refusal(source,bytes,stack);
+        if(!safe_chain) {
+            kui_update_boot_block();result=KUI_UPDATE_BOOT_ERROR;
+            snprintf(update_boot_view.notice,sizeof(update_boot_view.notice),"Update runtime handoff refused; module loading blocked. Hold B on restart.");
+        }
+    }
+    kui_log("Startup selection: %s; transport=%s; bank=%s; build=%s; fallback=%s; elapsed=%llu ms",
+        startup_selection_name(result),kui_storage_name(kui_storage_selected()),
+        update_boot_view.bank[0]?update_boot_view.bank:"root",update_boot_view.build[0]?update_boot_view.build:KUI_BUILD_ID,
+        update_boot_view.fallback?"yes":"no",(unsigned long long)(timer_ms_gettime64()-started));
+    if(update_boot_view.notice[0])kui_log("Updates: %s",update_boot_view.notice);
+    if(baseline && result==KUI_UPDATE_BOOT_BASELINE)kui_log("Updates: B selected the original baseline for this boot.");
+    if(mounted)startup_report_save_mounted();
     if(mounted && (kui_update_handoff_empty(handoff.wire,sizeof(handoff.wire),NULL) ||
        result!=KUI_UPDATE_BOOT_PINNED))
         update_boot_timing_save(connected_at,mounted_at,selected_at,started,connect_started,result);
@@ -4832,17 +5024,15 @@ static void update_boot_start(void) {
     if(!released) {
         kui_update_boot_block();result=KUI_UPDATE_BOOT_ERROR;
         snprintf(update_boot_view.notice,sizeof(update_boot_view.notice),"Could not release update boot storage; restart after checking SD.");
+        kui_log("Updates: %s",update_boot_view.notice);
     }
-    if(result==KUI_UPDATE_BOOT_CHAIN) {
-        uintptr_t stack;__asm__ __volatile__("mov r15,%0":"=r"(stack));
-        uintptr_t source=(uintptr_t)image.data;uint32_t bytes=image.info.payload_bytes;
-        if(!update_runtime_handoff_refusal(source,bytes,stack))arch_exec(image.data,bytes);
+    if(result==KUI_UPDATE_BOOT_CHAIN && safe_chain) {
+        arch_exec(image.data,image.info.payload_bytes);
         kui_update_boot_block();
         snprintf(update_boot_view.notice,sizeof(update_boot_view.notice),"Update runtime handoff refused; module loading blocked. Hold B on restart.");
+        kui_log("Updates: %s",update_boot_view.notice);
     }
     kui_runtime_free(&image);
-    if(update_boot_view.notice[0])kui_log("Updates: %s",update_boot_view.notice);
-    if(baseline && result==KUI_UPDATE_BOOT_BASELINE)kui_log("Updates: B selected the original baseline for this boot.");
 }
 #endif
 int main(void) {
@@ -4955,6 +5145,7 @@ int main(void) {
     unsigned seen_clock_generation=0,seen_vmu_backups=0,seen_vmu_restore=0;
     unsigned seen_storage_test=0,seen_storage_history=0;
     unsigned seen_vmu_delete=0,seen_vmu_copy=0,seen_cd_audio=0,seen_vmu_image=0;
+    unsigned seen_vmu_virtual_delete=0,seen_vmu_card=0;
     unsigned seen_games_listing=0,seen_games_detail=0,seen_games_launch_result=0;
     unsigned seen_games_selection=0;
     unsigned seen_files_listing=0,seen_files_preview=0,seen_files_result=0,seen_files_picture=0;
@@ -4990,6 +5181,7 @@ int main(void) {
         /* Preserve Stop/cancel priority even if B was held before an A edge. */
         if(pressed && (buttons & CONT_B)) pressed |= CONT_B;
         bool games_ui_changed=false;
+        enum kui_shell_action vmu_virtual_refresh=KUI_SHELL_NONE;
         publish_music_if_ready();
         mutex_lock(&lock);
         if(screenshot_pressed) {screenshot_request();last_draw=0;}
@@ -5025,6 +5217,15 @@ int main(void) {
         if(seen_vmu_image!=vmu_image_generation) {
             kui_shell_set_vmu_image(&shell,vmu_image_path_pending,vmu_image_page_pending,&vmu_image_snapshot);
             seen_vmu_image=vmu_image_generation;
+        }
+        if(seen_vmu_card!=vmu_card_generation) {
+            kui_shell_set_vmu_card(&shell,vmu_card_result_generation,&vmu_card_result);
+            seen_vmu_card=vmu_card_generation;
+        }
+        if(seen_vmu_virtual_delete!=vmu_virtual_generation) {
+            vmu_virtual_refresh=kui_shell_set_vmu_virtual_delete(&shell,vmu_virtual_result_generation,
+                vmu_virtual_committed,vmu_virtual_ready,vmu_virtual_users,&vmu_virtual_status);
+            seen_vmu_virtual_delete=vmu_virtual_generation;
         }
         if(seen_vmu_bulk!=vmu_bulk_generation) {
             kui_shell_set_vmu_copy_all(&shell,vmu_bulk_source_result,vmu_bulk_destination_result,
@@ -5189,12 +5390,6 @@ int main(void) {
             if(shell.page==KUI_SHELL_VMU) {
                 vmu_slot_pending=shell.vmu_slot;vmu_page_pending=shell.vmu_page;
                 vmu_selected_pending=shell.vmu_selected;pending=16;
-            } else if(shell.page==KUI_SHELL_VMU_TOOLS) {
-                (void)kui_shell_input(&shell,KUI_SHELL_X,false);
-                vmu_emulation_request=shell.vmu_emulation_generation;
-                vmu_emulation_requested=shell.vmu_emulation_requested;pending=99;
-                vmu_emulation_slot_requested=shell.vmu_emulation_slot_requested;
-                vmu_emulation_slot_change=shell.vmu_emulation_slot_change;
             } else if(shell.page==KUI_SHELL_MUSIC) {
                 snprintf(music_path_pending,sizeof(music_path_pending),"%s",shell.music_path);
                 music_offset_pending=0;pending=23;
@@ -5217,7 +5412,8 @@ int main(void) {
         enum kui_shell_page page_before_input=shell.page;
         if(splash_active) {if(pressed&CONT_B) {startup_skip=true;splash_active=false;last_draw=0;}}
         else {
-            requested=kui_shell_input(&shell,shell_buttons(pressed),busy);
+            requested=vmu_virtual_refresh!=KUI_SHELL_NONE?vmu_virtual_refresh:
+                kui_shell_input(&shell,shell_buttons(pressed),busy);
             if(pressed && !busy && startup_finished)
                 kui_menu_sound_play(pressed&CONT_A?KUI_MENU_SOUND_CONFIRM:KUI_MENU_SOUND_MOVE);
         }
@@ -5467,6 +5663,16 @@ int main(void) {
                 vmu_image_snapshot=shell.vmu_image;vmu_image_snapshot.page=vmu_image_page_pending;
                 vmu_image_snapshot.status=(struct kui_app_status){0};
             }
+            if(action==123 || action==124) {
+                vmu_virtual_request_pending=shell.vmu_virtual_delete_request;
+                vmu_virtual_request_generation=shell.vmu_virtual_delete_generation;
+                vmu_virtual_status=(struct kui_app_status){0};
+                snprintf(vmu_virtual_status.message,sizeof(vmu_virtual_status.message),"%s",
+                    action==123?"Checking selected card and save...":"Deleting the confirmed selection...");
+            }
+            if(action==125) {
+                vmu_card_pending=shell.vmu_card;vmu_card_request_generation=shell.vmu_card_generation;
+            }
             if(action==35) clock_pending=shell.clock_draft;
             if(action==23 || action==24) {
                 snprintf(music_path_pending,sizeof(music_path_pending),"%s",
@@ -5474,7 +5680,7 @@ int main(void) {
                 music_offset_pending=shell.music_page*KUI_MUSIC_PLAYER_ROWS;
                 player_status=(struct kui_app_status){0};
             }
-            if(action==54 || action==55 || action==57 || action==58 || action==79 || action==109 || action==114) {
+            if(action==54 || action==55 || action==57 || action==58 || action==79 || action==109 || action==114 || action==121 || action==122) {
                 snprintf(games_path_pending,sizeof(games_path_pending),"%s",
                     action==54 || action==109 || action==114?shell.games_path:shell.games_selected_path);
                 games_offset_pending=shell.games_page*KUI_GAMES_ROWS;
@@ -5482,7 +5688,12 @@ int main(void) {
                 games_patches_pending=shell.games_launch_patches;
                 games_vmu_selection_pending=shell.games_vmu_selection;
             }
-            if(action==58)snprintf(games_activity_root_pending,sizeof(games_activity_root_pending),"%s",shell.games_path);
+            if(action==121 || action==122) {
+                games_reader_pending=KUI_RETAIL_READER_STANDARD;
+                games_patches_pending=(struct kui_game_ram_patches){0};
+                games_vmu_selection_pending=(struct kui_vmu_game_selection){0};
+            }
+            if(action==58 || action==121 || action==122)snprintf(games_activity_root_pending,sizeof(games_activity_root_pending),"%s",shell.games_path);
             if(action==109) {
                 snprintf(games_favorite_path_pending,sizeof(games_favorite_path_pending),"%s",shell.games_favorite_path);
                 snprintf(games_favorite_group_pending,sizeof(games_favorite_group_pending),"%s",shell.games_favorite_group);
@@ -5579,9 +5790,11 @@ int main(void) {
                 snprintf(probe_status.message,sizeof(probe_status.message),"Checking native GD boot bytes...");
                 probe_launch_disc=action==104;probe_launch_failed=false;
             }
-            if(action==56 || action==57 || action==58) {
+            if(action==56 || action==57 || action==58 || action==121 || action==122) {
                 probe_status=(struct kui_app_status){0};
-                snprintf(probe_status.message,sizeof(probe_status.message),"%s",action==58?
+                snprintf(probe_status.message,sizeof(probe_status.message),"%s",action==121?
+                    "Preparing Phantasy Star II with the shared VC2 card...":action==122?
+                    "Preparing Shining Force with the shared VC2 card...":action==58?
                     "Preparing selected game launch...":action==57?
                     "Mapping selected image and reading reference samples...":
                     "Preparing resident probe and SD map...");
@@ -5592,6 +5805,8 @@ int main(void) {
             if(action == 8 || action == 9)
                 snprintf(settings_note, sizeof(settings_note), "%s", action == 8 ?
                     "Loading preferences from storage..." : "Saving preferences to SD...");
+            if(action==56 || action==57 || action==58 || action==104 || action==121 || action==122)
+                kui_smash_launch_timing_request(action==58 || action==121 || action==122,input_at);
             pending = action; busy = true; cancel_requested = false; shell.scroll = 0;
             ui_hz_busy = 2;
             if(is_capture_action(action)) {

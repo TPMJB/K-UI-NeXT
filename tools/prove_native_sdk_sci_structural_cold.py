@@ -283,7 +283,7 @@ def check(stage,resident,self_test=False):
                     'release_depth':0x24c,'loan':0x2f4,'stream_busy':0x470,
                     'port_fault':0x4ec,'opened_mismatch':0x2c4,'preexisting_cookie':0x530,
                     'preexisting_default':0x534,'preexisting_vbr':0x538}
-                c.put_bytes(c.region+offsets[case],bytes((1,)) if case=='port_fault' else
+                c.put_bytes(c.region_field(offsets[case]),bytes((1,)) if case=='port_fault' else
                     struct.pack('<I',0 if case=='uninitialized' else 2 if case=='stream_busy' else 1))
             expect_refusal(c,detail,helpers=[],label=case);negative_context+=1
         # Canonical-P1/alignment/full-span guards run before both helpers.

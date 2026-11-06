@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Selected original VC2 SAMPLE, admitted from the unified collection menu.
+BUILD ?= build/smash-vc2-child
+SMASH_CE_CHILD := 1
+SMASH_CE_RETURN ?= 1
+VC2_SWIRL := 0
+VC2_LATE := 1
+VC2_PERSIST := 1
+include Makefile.vc2-ce-vmu
+FLAGS += -DKUI_SMASH_CE_CHILD=1
+STAGE_SRC += src/core/smash_ce_child.c src/core/smash_native_child.c src/core/smash_menu_return.c src/core/smash_menu_loader.c
+include Makefile.smash-ce-return-probe
+$(BUILD)/stage.elf: $(STAGE_OBJ)
+$(BUILD)/stage/src/loader/retail_stage.o: src/loader/smash_ce_child_stage.inc include/kui/smash_ce_child.h
+$(BUILD)/retail-smash-vc2-child.kui: $(BUILD)/retail-native-foreground.kui
+	cp $< $@
+.DEFAULT_GOAL := $(BUILD)/retail-smash-vc2-child.kui
+all: $(BUILD)/retail-smash-vc2-child.kui
+
+include Makefile.smash-card-session
+$(STAGE_OBJ): $(BUILD)/smash-ce-return-config

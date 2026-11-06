@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Read-only payload/mapping evidence, using the current payload copy policy.
+BUILD ?= build/vc2-texture-probe
+VC2_PERSIST := 1
+VC2_LATE := 1
+VC2_DIAGNOSTIC_MODE := 4
+VC2_TEXTURE_PROBE := 1
+include Makefile.vc2-ce-vmu

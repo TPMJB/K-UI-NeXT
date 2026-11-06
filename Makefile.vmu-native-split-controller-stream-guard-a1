@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Full General dual reader with virtual A1; preserve both New/X and Legacy/Y.
+BUILD ?= build/native-split-controller-stream-guard-a1
+include Makefile.vmu-native-split-controller-stream-guard
+# Distinguish a same-BUILD switch in either direction through readonly-config.
+override VMU_READER_PROFILE := background-general-a1
+FLAGS += -DKUI_VMU_VIRTUAL_A1=1
+NATIVE_FLAGS += -DKUI_VMU_VIRTUAL_A1=1

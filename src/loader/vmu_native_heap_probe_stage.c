@@ -6,6 +6,23 @@
 #include "kui/vmu_native_mode.h"
 #include "kui/vmu_native_background.h"
 #include "kui/native_session.h"
+#if KUI_SMASH_PHASE_DIAGNOSTIC
+#include "kui/smash_phase_trace.h"
+#include "kui/smash_phase_video.h"
+#include "retail_display.h"
+static void smash_phase_stage_display(struct retail_display_state *) __attribute__((noipa));
+static void smash_phase_stage_begin(void) __attribute__((noipa));
+#if KUI_SMASH_PHASE_TEXT
+static void smash_phase_stage_text_write(void) __attribute__((noipa));
+#else
+static void smash_phase_stage_report(void) __attribute__((noipa,noreturn));
+#endif
+void kui_smash_phase_stage_mark(uint32_t);
+static uint32_t smash_phase_io[6]; /* logical, single, runs, blocks, writes, syncs */
+#endif
+#if KUI_SMASH_NATIVE_MENU
+#include "kui/smash_menu_return_loader.h"
+#endif
 #if KUI_NATIVE_SESSION_CONTROLS
 #if !KUI_NATIVE_DUAL_READERS || !KUI_NATIVE_GENERAL_LEAN_LAYOUT || !KUI_NATIVE_READAHEAD || \
     !KUI_VMU_NATIVE_PERSISTENT_PROBE || KUI_NATIVE_BACKGROUND_COMPACT || KUI_NATIVE_PHYSICAL_DISC
@@ -207,6 +224,9 @@ static uint32_t native_runtime_mode(void) {
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
 #undef kui_retail_storage_init
 #include "vmu_native_persist_stage.inc"
+#if KUI_SMASH_PHASE_DIAGNOSTIC
+#include "smash_phase_stage.inc"
+#endif
 #endif
 #include "kui/vmu_native_discovery.h"
 #include "kui/vmu_native_heap.h"
@@ -303,7 +323,8 @@ static void native_publish(uint32_t address) {
 static void code_sha(uint8_t out[32]) {
     struct kui_sha256 h;kui_sha256_init(&h);
     if(native_arena) kui_sha256_update(&h,(const void *)(uintptr_t)native_call.load,6u);
-    else kui_sha256_update(&h,(const void *)(uintptr_t)native_heap.initializer,0x1d0u);
+    else kui_sha256_update(&h,(const void *)(uintptr_t)native_heap.initializer,
+        native_heap.family==KUI_VMU_NATIVE_HEAP_DIRECT32?0x268u:0x1d0u);
     kui_sha256_digest(&h,out);
 }
 static bool native_read(void *context,uint32_t address,uint32_t *out) {
@@ -420,6 +441,15 @@ __asm__(".global __kui_native_private_pool_budget_stage\n"
         ".set __kui_native_private_pool_budget_stage,1\n");
 static void __attribute__((noipa)) native_budget_prepare(
     const struct kui_vmu_native_heap_lease *lease,struct kui_vmu_native_heap_budget *budget) {
+    /* This reviewed private-pool reservation plan uses the dispatch layout
+     * and does not apply to Direct1.35. Leave this non-authoritative plan
+     * empty; placement, first-return, owner and complete bottom-code proofs
+     * still precede every original allocation/release call. */
+    if(native_heap.family==KUI_VMU_NATIVE_HEAP_DIRECT32) {
+        if(!kui_vmu_native_heap_metadata_valid(&native_heap) || !native_heap.initializer_slot)
+            native_report(6u,0x64u);
+        memset(budget,0,sizeof(*budget));return;
+    }
     if(lease->lease_bytes>UINT32_MAX-32u ||
        kui_vmu_native_heap_budget_prepare((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
            exec_bytes,&native_heap,&native_call,native_read,NULL,
@@ -497,6 +527,9 @@ static void __attribute__((noipa)) native_arena_install(volatile struct kui_vmu_
 }
 #endif
 void kui_vmu_observe_stage_install(void) {
+#if KUI_SMASH_PHASE_TEXT
+    kui_smash_phase_stage_mark(KUI_SMASH_PHASE_INSTALL_BEGIN);
+#endif
     volatile struct kui_vmu_observe_boot_control *c=control();uint8_t digest[32];
     uint32_t sr;__asm__ volatile("stc sr,%0":"=r"(sr));
     if(((sr>>4)&15u)!=15u || c->status!=KUI_VMU_OBS_BOOT_INITIALIZING)
@@ -555,6 +588,9 @@ void kui_vmu_observe_stage_install(void) {
     native_report(7u,lease.lease_bytes);
 #endif
 }
+#if KUI_NATIVE_CURRENT_BOTTOM_HEAP && !KUI_NATIVE_PHYSICAL_DISC
+#include "vmu_native_preclear_stage.inc"
+#endif
 #if KUI_NATIVE_DUAL_READERS
 static void __attribute__((noipa)) native_arm_heap_hook(const uint32_t *frame) {
     const struct native_low_bindings *low=native_low_bindings();
@@ -569,7 +605,11 @@ static void __attribute__((noipa)) native_arm_heap_hook(const uint32_t *frame) {
     *original=native_heap.initializer_target;
     original[1]=native_call.entry_begin;original[2]=native_call.entry_bytes;
     original[3]=native_call.return_pr&0x1fffffffu;
+#if KUI_NATIVE_CURRENT_BOTTOM_HEAP && !KUI_NATIVE_PHYSICAL_DISC
+    c->installer=native_preclear_installer();
+#else
     c->installer=(uint32_t)(uintptr_t)kui_vmu_observe_stage_install;
+#endif
     c->stage_stack=(uint32_t)(uintptr_t)(native_installer_stack+sizeof(native_installer_stack)-32u);
     c->status=KUI_VMU_OBS_BOOT_ARMED;
     *(volatile uint32_t *)(uintptr_t)native_heap.initializer_slot=low->heap_hook;
@@ -608,7 +648,16 @@ static void __attribute__((noipa)) native_arm_fixed_call(const uint32_t *frame) 
     ((uint32_t *)(uintptr_t)frame)[5]=low->return_hook;
 }
 #endif
+#if KUI_SMASH_NATIVE_CHILD
+#include "smash_native_child_stage.inc"
+#if KUI_SMASH_NATIVE_MENU
+#include "smash_native_return_stage.inc"
+#endif
+#endif
 void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
+#if KUI_SMASH_PHASE_DIAGNOSTIC
+    kui_smash_phase_stage_mark(KUI_SMASH_PHASE_RELAY_BEGIN);
+#endif
 #if KUI_VMU_NATIVE_WORKER_PROBE || KUI_VMU_NATIVE_PASSIVE_PROBE
     retail_display_restore(&display);
     retail_display_line("BOOTSTRAP 2 RETURNED");
@@ -618,6 +667,13 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     retail_display_line("COLD 01 BASE RELAY BEGIN");
 #endif
     kui_native_heap_base_relay(frame,ccr);
+#if KUI_SMASH_PHASE_DIAGNOSTIC
+    kui_smash_phase_stage_mark(KUI_SMASH_PHASE_RELAY_VERIFIED);
+#endif
+#if KUI_SMASH_NATIVE_CHILD && !KUI_SMASH_NATIVE_GIN_ADOPT
+    /* Base relay has verified the complete immutable original image first. */
+    smash_native_stage_frame(frame);
+#endif
 #if KUI_NATIVE_COLD_PROGRESS_STAGE
     retail_display_line("COLD 02 BASE RELAY VERIFIED");
 #endif
@@ -626,6 +682,9 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
      * Storage preparation has independently taken its no-VMU branch. */
     if(native_runtime_mode()==KUI_VMU_NATIVE_MODE_CONTROL) {
         retail_display_line("NATIVE VMU CONTROL / NO VIRTUAL CARD");
+#if KUI_SMASH_NATIVE_GIN_ADOPT
+        smash_native_gin_restore_arguments();
+#endif
         return;
     }
     if((manifest.storage_transport!=KUI_STORAGE_SCI
@@ -675,6 +734,9 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
 #if KUI_NATIVE_COLD_PROGRESS_STAGE
     retail_display_line("COLD 05 NATIVE RESOLUTION BEGIN");
 #endif
+#if KUI_SMASH_PHASE_DIAGNOSTIC
+    kui_smash_phase_stage_mark(KUI_SMASH_PHASE_RESOLVE_BEGIN);
+#endif
     bool mapping_cached=native_resolution_replay();
     if(mapping_cached) retail_display_line("USING VERIFIED NATIVE MAPPING CACHE");
     else {
@@ -723,7 +785,21 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
 #if KUI_VMU_NATIVE_CACHE_PROBE
     }
 #endif
+#if KUI_SMASH_NATIVE_MENU
+    /* Replay and discovery both just hashed their own immutable program.
+     * This adapter requires that hash to cover the complete original MDE;
+     * a reclaimed prefix never stands in for the whole executable owner.
+     * Argument patches and every native hook/worker binding follow below. */
+    if(!smash_native_complete_source_owner())
+        native_report(2u,UINT32_C(0x534f5731));
+#endif
+#if KUI_NATIVE_CURRENT_BOTTOM_HEAP && !KUI_NATIVE_PHYSICAL_DISC
+    native_preclear_prepare();
+#endif
     code_sha(native_heap_code_sha);
+#if KUI_SMASH_PHASE_DIAGNOSTIC
+    kui_smash_phase_stage_mark(KUI_SMASH_PHASE_RESOLVE_DONE);
+#endif
 #if KUI_NATIVE_COLD_PROGRESS_STAGE
     retail_display_line("COLD 06 NATIVE RESOLUTION VERIFIED");
 #endif
@@ -744,7 +820,11 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     *original=native_heap.initializer_target;
     original[1]=native_call.entry_begin;original[2]=native_call.entry_bytes;
     original[3]=native_call.return_pr&0x1fffffffu;
+#if KUI_NATIVE_CURRENT_BOTTOM_HEAP && !KUI_NATIVE_PHYSICAL_DISC
+    c->installer=native_preclear_installer();
+#else
     c->installer=(uint32_t)(uintptr_t)kui_vmu_observe_stage_install;
+#endif
     c->stage_stack=(uint32_t)(uintptr_t)(native_installer_stack+sizeof(native_installer_stack)-32u);
     c->status=KUI_VMU_OBS_BOOT_ARMED;
     *(volatile uint32_t *)(uintptr_t)native_heap.initializer_slot=KUI_VMU_OBSERVE_LOW_HEAP_HOOK;
@@ -753,10 +833,57 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
         native_report(2u,native_heap.initializer_slot);
     ((uint32_t *)(uintptr_t)frame)[5]=KUI_VMU_OBSERVE_LOW_RETURN_HOOK;
 #endif
+#if KUI_NATIVE_CURRENT_BOTTOM_HEAP && !KUI_NATIVE_PHYSICAL_DISC
+    native_preclear_arm();
+#endif
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     /* The fourth entry is already terminal before resuming the initial
      * executable, including if that executable itself enters the extra CRT
      * path before reaching the allocator hook. */
     if(!native_crt_bootstrap_prearm()) native_report(2u,0x48u);
 #endif
+#if KUI_SMASH_NATIVE_CHILD
+    /* Immutable SDK/heap/exit discovery and hook preparation are complete. */
+#if KUI_SMASH_NATIVE_GIN_ADOPT
+    smash_native_gin_restore_arguments();
+    kui_smash_native_return_stage_publish();
+#else
+    smash_native_stage_arguments();
+#endif
+#endif
+#if KUI_SMASH_PHASE_DIAGNOSTIC
+    kui_smash_phase_stage_mark(KUI_SMASH_PHASE_NATIVE_READY);
+#if !KUI_SMASH_PHASE_TEXT
+    smash_phase_stage_report();
+#endif
+#endif
 }
+
+#if KUI_SMASH_PHASE_TEXT
+#include "kui/smash_phase_file.h"
+#include "kui/smash_phase_text.h"
+__asm__(".section .rodata.smash_phase_text,\"a\"\n.balign 4\n"
+    ".global __smash_phase_text_capability\n__smash_phase_text_capability:\n"
+    ".ascii \"KUISTXT1\"\n.long 1,16\n.previous\n");
+static char smash_phase_text_buffer[KUI_SMASH_PHASE_TEXT_BYTES];
+static void smash_phase_stage_text_write(void) {
+    const struct kui_smash_phase_session_stats *session=NULL;
+#if KUI_SMASH_CARD_SESSION
+    struct kui_smash_phase_session_stats session_stats;
+    smash_card_session_phase_stats(&session_stats);session=&session_stats;
+#endif
+    if(smash_phase_fault || !kui_smash_phase_text_format_session(smash_phase_text_buffer,
+        &kui_smash_phase_stage_trace,KUI_BUILD_ID,kui_smash_native_menu_name(smash_menu_seed.selection),
+        &native_persist_work.filesystem.stats,smash_phase_io,session))
+        stopped("NATIVE TEXT TIMING INVALID",smash_phase_fault);
+    const struct kui_smash_menu_loader_seed *p=&smash_return_seed.outer;
+    const struct kui_smash_menu_capsule_runs outer={p->first_lba,p->first_blocks,p->second_lba,p->block_count};
+    struct kui_smash_phase_file_stats stats;
+    enum kui_smash_phase_file_result result=kui_smash_phase_file_write(&card,&manifest,
+        &native_persist_profile,&outer,1u,KUI_BUILD_ID,smash_phase_text_buffer,&stats);
+    if(result==KUI_SMASH_PHASE_FILE_CARD_FAULT)
+        stopped("NATIVE TEXT REPORT CARD FAULT",stats.detail);
+    /* Missing/refused report is best effort. It never grants a storage
+     * recovery or suppresses the ordinary launch/card failure checks. */
+}
+#endif

@@ -152,7 +152,12 @@ enum kui_shell_game_option {
 };
 enum kui_shell_vmu_card_action {
     KUI_SHELL_VMU_CARD_SAVES,KUI_SHELL_VMU_CARD_USERS,KUI_SHELL_VMU_CARD_RENAME,
-    KUI_SHELL_VMU_CARD_ASSIGN,KUI_SHELL_VMU_CARD_DETAILS,KUI_SHELL_VMU_CARD_ACTIONS
+    KUI_SHELL_VMU_CARD_ASSIGN,KUI_SHELL_VMU_CARD_DETAILS,KUI_SHELL_VMU_CARD_DELETE,KUI_SHELL_VMU_CARD_ACTIONS
+};
+struct kui_shell_vmu_delete_request {
+    char path[KUI_VMU_BACKUP_PATH_CAP],save_name[16];
+    uint8_t identity[16];
+    bool whole_card;
 };
 enum kui_shell_game_tool {
     KUI_SHELL_GAME_TOOL_ENCODING, KUI_SHELL_GAME_TOOL_SPEED,
@@ -216,6 +221,9 @@ enum kui_shell_action {
     KUI_SHELL_VMU_HISTORY_RUN, KUI_SHELL_GAMES_EDIT_LOAD, KUI_SHELL_GAMES_EDIT_SAVE,
     KUI_SHELL_GAMES_JUMP, KUI_SHELL_GAMES_IDENTITY_VERIFY, KUI_SHELL_PROBLEM_REPORT,
     KUI_SHELL_GAMES_LAYOUT_SAVE, KUI_SHELL_VMU_BACKUP_SAVES, KUI_SHELL_DISC_CARDS_RUN,
+    KUI_SHELL_VMU_VIRTUAL_DELETE_PREVIEW, KUI_SHELL_VMU_VIRTUAL_DELETE_COMMIT,
+    KUI_SHELL_VMU_CARD_LOAD,
+    KUI_SHELL_GAMES_SMASH_PHANTASY_STAR_II, KUI_SHELL_GAMES_SMASH_SHINING_FORCE,
     KUI_SHELL_UPDATE_RUN, KUI_SHELL_RESTART_KUI
 };
 enum kui_shell_outcome { KUI_SHELL_OUTCOME_NONE, KUI_SHELL_OUTCOME_COMPLETE,
@@ -279,8 +287,13 @@ struct kui_shell {
     unsigned vmu_collection_page,vmu_collection_selected,vmu_collection_generation;
     /* Card details pin one validated catalog row, independent of pagination. */
     struct kui_vmu_backup_entry vmu_card;
-    unsigned vmu_card_selected;
-    bool vmu_card_details,vmu_name_keyboard;
+    unsigned vmu_card_selected,vmu_card_generation;
+    bool vmu_card_details,vmu_name_keyboard,vmu_card_loading;
+    enum kui_shell_page vmu_card_return;
+    struct kui_shell_vmu_delete_request vmu_virtual_delete_request;
+    unsigned vmu_virtual_delete_generation,vmu_virtual_delete_selected,vmu_virtual_delete_users;
+    bool confirm_vmu_virtual_delete,vmu_virtual_delete_loading,vmu_virtual_delete_committing;
+    struct kui_app_status vmu_virtual_delete_status;
     enum kui_shell_page vmu_collection_return,vmu_backups_return,vmu_wizard_return;
     char vmu_name_path[KUI_VMU_BACKUP_PATH_CAP],vmu_name_label[49];
     uint8_t vmu_name_identity[16];
@@ -506,6 +519,9 @@ void kui_shell_set_game_vmu(struct kui_shell *,unsigned generation,const char *p
 /* A VMD result echoes its exact path and requested page; the returned page
  * can fall back to zero if the image has fewer saves after refresh. */
 void kui_shell_set_vmu_image(struct kui_shell *,const char *path,unsigned requested_page,const struct kui_vmu_view *);
+void kui_shell_set_vmu_card(struct kui_shell *,unsigned generation,const struct kui_vmu_backup_entry *);
+enum kui_shell_action kui_shell_set_vmu_virtual_delete(struct kui_shell *,unsigned generation,
+    bool committed,bool ready,unsigned users,const struct kui_app_status *);
 void kui_shell_set_vmu_backups(struct kui_shell *shell, const struct kui_vmu_backup_view *view);
 /* Managed collection results echo the exact request generation. Copy results
  * additionally echo every source selection and cannot authorize a fresh commit
@@ -549,6 +565,9 @@ bool kui_shell_set_games_rows(struct kui_shell *,const struct kui_games_page *,
 void kui_shell_set_games_detail(struct kui_shell *shell, const struct kui_games_detail *detail);
 bool kui_shell_games_zso_selected(const struct kui_shell *);
 bool kui_shell_games_image_ready(const struct kui_shell *shell);
+/* Only fresh inspection of the selected exact Smash Pack release exposes
+ * these explicit cold native-child VMU tests. No saved setting is changed. */
+bool kui_shell_games_smash_native_ready(const struct kui_shell *shell);
 /* The view to draw: the saved view once known, else the list. */
 unsigned kui_shell_games_view(const struct kui_shell *shell);
 bool kui_shell_set_games_layout_saved(struct kui_shell *,unsigned generation,unsigned view,

@@ -3,6 +3,9 @@
 #include "kui/native_session.h"
 #include <stdbool.h>
 #include <string.h>
+#if KUI_GUI_FAST_CRC32
+#include "../loader/stage_fast_crc32.h"
+#endif
 
 #define RECORD_BASE 320u
 #define RECORD_BYTES 12u
@@ -26,6 +29,9 @@ static void put64(uint8_t *p, uint64_t v) {
 }
 #endif
 uint32_t kui_retail_crc32(uint32_t previous, const void *data, size_t bytes) {
+#if KUI_GUI_FAST_CRC32
+    return kui_stage_crc32(previous,data,bytes);
+#else
     static const uint32_t table[16] = {
         0x00000000u, 0x1db71064u, 0x3b6e20c8u, 0x26d930acu,
         0x76dc4190u, 0x6b6b51f4u, 0x4db26158u, 0x5005713cu,
@@ -40,6 +46,7 @@ uint32_t kui_retail_crc32(uint32_t previous, const void *data, size_t bytes) {
         crc = (crc >> 4) ^ table[crc & 15u];
     }
     return crc ^ UINT32_MAX;
+#endif
 }
 #if KUI_RETAIL_MANIFEST_SLOTS == KUI_RETAIL_WIRE_SLOTS || KUI_NATIVE_SESSION_CONTROLS
 static uint32_t wire_crc(const uint8_t *wire) {

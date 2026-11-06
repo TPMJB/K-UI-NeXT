@@ -181,7 +181,7 @@ static void installed(uint32_t *frame) {
     uint32_t handler=get(KUI_GD_VECTOR_ADDRESS);
     memcpy(saved,frame,sizeof(saved));kui_retail_stage_relay(frame,CCR);
     for(unsigned point=0;point<4;point++) kui_retail_startup_trace_checkpoint(frame,point,CCR);
-    silent(frame);assert(spy.publishes==STARTUP_TRACE_POINTS+5u && spy.pauses==1);
+    silent(frame);assert(spy.publishes==STARTUP_TRACE_POINTS+5u && !spy.pauses);
 #if KUI_RETAIL_STARTUP_TRACE >= 3
     uint32_t final=startup_trace_address[4]-KUI_RETAIL_EXEC_ADDRESS;
     assert(!memcmp((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,owner,final));

@@ -1,8 +1,13 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/native_standalone_admission.h"
+#include "kui/native_standalone_foreground.h"
 #include "kui/hash.h"
 #include <string.h>
-#if defined(KUI_NATIVE_STANDALONE_STRUCTURAL) && KUI_NATIVE_STANDALONE_STRUCTURAL
+#if KUI_NATIVE_STANDALONE_FOREGROUND
+bool __attribute__((noipa)) kui_native_standalone_launch_prepare(struct kui_retail_manifest *m) {
+    return kui_native_foreground_manifest_valid(m);
+}
+#elif defined(KUI_NATIVE_STANDALONE_STRUCTURAL) && KUI_NATIVE_STANDALONE_STRUCTURAL
 /* The separately installed structural module is reached only by the
  * launcher's New route; its stage proves the SDK family on the loaded image. */
 bool __attribute__((noipa)) kui_native_standalone_launch_prepare(struct kui_retail_manifest *m) {

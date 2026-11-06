@@ -38,6 +38,10 @@ __asm__(".global __kui_native_readahead_pio_worker\n"
         ".set __kui_native_readahead_pio_worker,1\n");
 __asm__(".global __kui_native_readahead_pio_pair_worker\n"
         ".set __kui_native_readahead_pio_pair_worker,1\n");
+__asm__(".global __kui_native_readahead_tick_budget_worker\n"
+        ".set __kui_native_readahead_tick_budget_worker,1\n");
+__asm__(".global __kui_native_readahead_max_context_worker\n"
+        ".set __kui_native_readahead_max_context_worker,1\n");
 #endif
 static struct kui_reader_capture reader_capture;
 static kui_retail_async_region_type *reader_capture_region(void);
@@ -66,10 +70,10 @@ static const struct kui_native_ra_exports *reader_readahead_exports(
        (uint32_t)(uintptr_t)a->context>(load|UINT32_C(0x20000000))+4096u-sizeof(struct kui_native_ra_public))return NULL;
     return a;
 }
-static void reader_readahead_visit(uint32_t event) {
+static void reader_readahead_visit(uint32_t event,uint32_t arg) {
     kui_retail_async_region_type *r=reader_capture_region();
     const struct kui_native_ra_exports *a=reader_readahead_exports(r);
-    if(a)(void)a->visit(event,0u,r,0u);
+    if(a)(void)a->visit(event,arg,r,0u);
 }
 #ifndef KUI_VMU_NATIVE_PASSIVE_HOST_TEST
 /* Eight label/value pairs fit the sixteen body rows. The immutable field
@@ -223,7 +227,13 @@ static void __attribute__((noipa)) reader_cooperative_service(void) {
 #else
     if(!durable_card.inflight && !durable_card.handling)
 #endif
-        reader_readahead_visit(KUI_NATIVE_RA_TICK);
+        /* The early SDK's controller completion inherits the game caller's
+         * schedule. Keep look-ahead but admit only one complete optional
+         * block per visit; newer drivers retain their established pair.
+         * Reader-only mode intentionally uses the same family policy. */
+        reader_readahead_visit(KUI_NATIVE_RA_TICK,
+            kui_vmu_native_early_server(config.driver.family)?
+                KUI_NATIVE_RA_TICK_ONE_BLOCK:KUI_NATIVE_RA_TICK_DEFAULT);
 #endif
 #if KUI_NATIVE_PACED_CHECK || KUI_NATIVE_IRQ_REARM
     /* The measured controller callback supplied little data. This candidate
@@ -318,7 +328,7 @@ static kui_retail_async_region_type *reader_capture_region(void) {
 }
 static void reader_capture_start(void) {
 #if KUI_NATIVE_READAHEAD
-    reader_readahead_visit(KUI_NATIVE_RA_CAPTURE_START);
+    reader_readahead_visit(KUI_NATIVE_RA_CAPTURE_START,0u);
 #endif
     kui_reader_capture_reset(&reader_capture);
     kui_retail_async_region_type *r=reader_capture_region();

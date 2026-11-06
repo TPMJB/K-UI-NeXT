@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/native-vmu-live-fat-memo-host
+HOST_CC ?= cc
+.DEFAULT_GOAL := native-vmu-live-fat-memo-tests
+MEMO_TEST_FLAGS := -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic \
+ -fsanitize=address,undefined -fno-sanitize-recover=all -fno-pie -no-pie \
+ -ffunction-sections -fdata-sections -Iinclude
+.PHONY: reference-cache-force
+$(BUILD)/reference-cache.c: reference-cache-force
+	@mkdir -p $(BUILD)
+	git show 09a0980740295a0d08369823adad16861f3c4255:src/loader/vc2_ce_vmu_stage_cache.c > $@
+	python3 -c 'import hashlib,pathlib; p=pathlib.Path("$@"); assert hashlib.sha256(p.read_bytes()).hexdigest()=="4756e8a8034e7924aa43bcf1ee3641f11e311bcc8f9774675c90f5baccd7d5db"'
+$(BUILD)/reference-cache.o: $(BUILD)/reference-cache.c include/kui/vc2_ce_vmu_stage_cache.h
+	$(HOST_CC) $(MEMO_TEST_FLAGS) \
+	 -Dkui_vc2_ce_vmu_stage_cache_metadata_read=reference_cache_metadata_read \
+	 -Dkui_vc2_ce_vmu_stage_cache_read=reference_cache_read \
+	 -Dkui_vc2_ce_vmu_stage_cache_invalidate=reference_cache_invalidate -c $< -o $@
+.PHONY: native-vmu-live-fat-memo-tests
+native-vmu-live-fat-memo-tests: $(BUILD)/reference-cache.o
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(MEMO_TEST_FLAGS) tests/test_native_vmu_live_fat_memo.c \
+	 src/core/vmu_fs_admission.c src/core/vmu_persist_profile.c src/core/hash.c \
+	 src/core/retail_image.c src/loader/vc2_ce_vmu_stage_cache.c src/loader/smash_fat_read_cache.c \
+	 $(BUILD)/reference-cache.o -Wl,--gc-sections -o $(BUILD)/test-live-fat
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-live-fat

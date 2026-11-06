@@ -55,6 +55,7 @@ struct kui_games_detail {
     uint64_t bytes;
     uint32_t boot_bytes, boot_lba;
     unsigned tracks, audio_tracks, data_tracks;
+    unsigned disc_number, disc_total;
     struct kui_game_audio_info audio;
     /* Known tested disc release, never inferred from a title string. Final
      * executable and native-runtime guards still run before handoff. */
@@ -75,9 +76,24 @@ struct kui_games_detail {
     /* The inspected original native GDI is on SCI. This chooses an unsaved
      * launch default only; executable/reader admission still runs at launch. */
     bool background_default;
+    bool smash_native_child; /* Complete source identity admitted for explicit native-child tests. */
     enum kui_game_image_format format;
     bool cover; /* Large box art was loaded for this image. */
 };
+/* Checked IP identity for a multi-disc chooser, read only during a fresh
+ * catalogue scan. This never grants launch compatibility or merges paths. */
+struct kui_games_disc_identity {
+    char title[129],product[11],version[7],region[9];
+    unsigned number,total,format,media;
+};
+enum kui_games_identity_result {
+    KUI_GAMES_IDENTITY_UNKNOWN,KUI_GAMES_IDENTITY_FOUND,KUI_GAMES_IDENTITY_ERROR
+};
+/* Opens the selector and reads one boot-session sector, without boot-file
+ * hashing or artwork. Unsupported/malformed images remain ordinary rows;
+ * missing files, I/O and Stop refuse the replacement catalogue. */
+enum kui_games_identity_result kui_games_disc_identity_read(const char *path,
+    struct kui_games_disc_identity *out,kui_log_fn log,kui_cancel_fn cancel);
 /* One worker owns read-only SD access; offset counts entries, not pages.
  * Listing never creates /Games and never scans/hashes complete track files. */
 bool kui_games_list(const char *root, unsigned offset, struct kui_games_page *out,

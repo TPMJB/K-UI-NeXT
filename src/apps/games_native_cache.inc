@@ -9,11 +9,12 @@
 #include "kui/native_sdk_sci_family.h"
 #include "kui/hash.h"
 #include "kui/core.h"
+#include "kui/smash_launch_timing.h"
 
 enum native_cache_result {NATIVE_CACHE_SKIPPED,NATIVE_CACHE_READY,NATIVE_CACHE_CANCELLED};
 /* This reports only a completed source read, independently of whether an
  * optional SDK mapping can be built. It never grants cache/live ownership. */
-struct native_cache_source_proof {bool complete;uint32_t crc32;};
+struct native_cache_source_proof {bool complete;uint32_t crc32;uint8_t sha256[32];};
 struct native_cache_workspace {
     uint8_t wire[KUI_VMU_NATIVE_RESOLUTION_CACHE_BYTES];
     uint8_t compare[KUI_VMU_NATIVE_RESOLUTION_CACHE_BYTES];
@@ -125,36 +126,49 @@ static enum native_cache_result native_cache_prepare(const struct kui_game_image
         return NATIVE_CACHE_SKIPPED;
     size_t slot=kui_vmu_native_cache_seed_find(package->data,package->info.payload_bytes);
     if(slot==SIZE_MAX) return NATIVE_CACHE_SKIPPED;
+    kui_smash_launch_timing_phase(KUI_SMASH_UI_MDE_READ_HASH);
+    kui_smash_launch_timing_metric(KUI_SMASH_UI_MDE_BYTES,map->boot_bytes);
     if(native_cache_cancelled(cancel)) return NATIVE_CACHE_CANCELLED;
-    uint8_t *boot=malloc(map->boot_bytes);
+    const uint32_t boot_sectors=(map->boot_bytes+2047u)/2048u;
+    const size_t boot_capacity=(size_t)boot_sectors*2048u;
+    uint8_t *boot=malloc(boot_capacity);
     struct native_cache_workspace *work=malloc(sizeof(*work));
     if(!boot || !work) {free(work);free(boot);return NATIVE_CACHE_SKIPPED;}
     enum native_cache_result result=NATIVE_CACHE_SKIPPED;
-    struct kui_sha256 sha;uint8_t image_hash[32],sector[2048];kui_sha256_init(&sha);
+    struct kui_sha256 sha;uint8_t image_hash[32];kui_sha256_init(&sha);
     uint32_t source_crc=0u;
     if(log)log("Native VMU mapping: reading %u executable bytes",map->boot_bytes);
-    for(uint32_t done=0;done<map->boot_bytes;) {
-        if(native_cache_cancelled(cancel)) {result=NATIVE_CACHE_CANCELLED;goto finished;}
-        enum kui_game_result read=kui_game_image_read(image,map->boot_lba+done/2048u,1u,
-            KUI_GAME_SECTOR_MODE1,sector,sizeof(sector));
-        if(read!=KUI_GAME_OK) {
-            if(read==KUI_GAME_CANCELLED || native_cache_cancelled(cancel)) result=NATIVE_CACHE_CANCELLED;
-            goto finished;
-        }
-        uint32_t take=map->boot_bytes-done;if(take>sizeof(sector)) take=sizeof(sector);
-        memcpy(boot+done,sector,take);kui_sha256_update(&sha,sector,take);
-        if(source_proof)source_crc=kui_crc32(source_crc,sector,take);
-        done+=take;
+    KUI_SMASH_TIME_SPAN(source_read,KUI_SMASH_UI_EXEC_READ);
+    enum kui_game_result read=kui_game_image_read(image,map->boot_lba,boot_sectors,
+        KUI_GAME_SECTOR_MODE1,boot,boot_capacity);
+    KUI_SMASH_TIME_END(source_read);
+    if(read!=KUI_GAME_OK) {
+        if(read==KUI_GAME_CANCELLED || native_cache_cancelled(cancel)) result=NATIVE_CACHE_CANCELLED;
+        goto finished;
     }
-    if(source_proof)*source_proof=(struct native_cache_source_proof){true,source_crc};
+    if(native_cache_cancelled(cancel)) {result=NATIVE_CACHE_CANCELLED;goto finished;}
+    kui_smash_launch_timing_metric(KUI_SMASH_UI_EXEC_SOURCE_BYTES,map->boot_bytes);
+    KUI_SMASH_TIME_SPAN(source_sha,KUI_SMASH_UI_EXEC_SHA);
+    kui_sha256_update(&sha,boot,map->boot_bytes);
     kui_sha256_digest(&sha,image_hash);
+    KUI_SMASH_TIME_END(source_sha);
+    kui_smash_launch_timing_add(KUI_SMASH_UI_EXEC_SHA_BYTES,map->boot_bytes);
+    KUI_SMASH_TIME_SPAN(source_crc_time,KUI_SMASH_UI_EXEC_CRC);
+    if(source_proof)source_crc=kui_crc32(source_crc,boot,map->boot_bytes);
+    KUI_SMASH_TIME_END(source_crc_time);
+    if(source_proof) {source_proof->complete=true;source_proof->crc32=source_crc;memcpy(source_proof->sha256,image_hash,32u);}
+    kui_smash_launch_timing_phase(KUI_SMASH_UI_MDE_EXTENT);
     /* The cache filename binds the complete source read above. Its record
      * describes only the caller-proven live program, matching stage replay.
      * Do not shorten a source based on a cached record or an arbitrary tail. */
     size_t program_bytes;
     if(log)log("Native VMU mapping: validating executable lifetime extent");
-    if(!kui_vmu_native_program_extent(boot,map->boot_bytes,KUI_RETAIL_EXEC_ADDRESS,
-       &program_bytes)) goto finished;
+    KUI_SMASH_TIME_SPAN(program_extent,KUI_SMASH_UI_PROGRAM_EXTENT);
+    bool extent_valid=kui_vmu_native_program_extent(boot,map->boot_bytes,KUI_RETAIL_EXEC_ADDRESS,&program_bytes);
+    KUI_SMASH_TIME_END(program_extent);
+    if(!extent_valid)goto finished;
+    kui_smash_launch_timing_metric(KUI_SMASH_UI_PROGRAM_BYTES,program_bytes);
+    kui_smash_launch_timing_phase(KUI_SMASH_UI_MDE_PROOF);
     char path[120],hex[65];
     for(unsigned i=0;i<32u;i++) snprintf(hex+2u*i,3u,"%02x",image_hash[i]);
     int length=snprintf(path,sizeof(path),"0:/KUI/VMU/native-cache/v%u/%s.nvr",
@@ -166,15 +180,35 @@ static enum native_cache_result native_cache_prepare(const struct kui_game_image
     /* This copied digest is explicitly trusted local configuration. It is
      * kept separate from the record, never passed as an aliased self-hash. */
     if(log)log("Native VMU mapping: checking saved proof");
+    KUI_SMASH_TIME_SPAN(replay_time,KUI_SMASH_UI_SDK_REPLAY);
     bool hit=disk && native_cache_file_read(path,work->wire) &&
-        kui_vmu_native_resolution_cache_record_digest(work->wire,sizeof(work->wire),work->digest) &&
-        kui_vmu_native_resolution_cache_replay(boot,program_bytes,KUI_RETAIL_EXEC_ADDRESS,
-            work->wire,sizeof(work->wire),work->digest,&work->resolution);
+        kui_vmu_native_resolution_cache_record_digest(work->wire,sizeof(work->wire),work->digest);
+    if(hit) {
+        uint8_t prefix_hash[32];const uint8_t *program_hash=image_hash;
+        if(program_bytes!=map->boot_bytes) {
+            /* A reclaimed bootstrap suffix has a different identity. Hash
+             * exactly the proved prefix once; never reuse the full-source
+             * digest for that shorter program or copy a digest from wire. */
+            KUI_SMASH_TIME_SPAN(prefix_sha,KUI_SMASH_UI_EXEC_SHA);
+            struct kui_sha256 prefix;kui_sha256_init(&prefix);
+            kui_sha256_update(&prefix,boot,program_bytes);kui_sha256_digest(&prefix,prefix_hash);
+            KUI_SMASH_TIME_END(prefix_sha);
+            kui_smash_launch_timing_add(KUI_SMASH_UI_EXEC_SHA_BYTES,program_bytes);
+            program_hash=prefix_hash;
+        }
+        hit=kui_vmu_native_resolution_cache_replay_hashed(boot,program_bytes,KUI_RETAIL_EXEC_ADDRESS,
+            work->wire,sizeof(work->wire),work->digest,program_hash,&work->resolution);
+    }
+    KUI_SMASH_TIME_END(replay_time);
+    kui_smash_launch_timing_metric(KUI_SMASH_UI_CACHE_HIT,hit?1u:0u);
     if(!hit) {
         if(native_cache_cancelled(cancel)) {result=NATIVE_CACHE_CANCELLED;goto finished;}
         if(log)log("Native VMU mapping: scanning SDK families");
-        if(!kui_vmu_native_resolution_cache_build(boot,program_bytes,KUI_RETAIL_EXEC_ADDRESS,
-            work->wire,sizeof(work->wire),&work->resolution)) {
+        KUI_SMASH_TIME_SPAN(discover_time,KUI_SMASH_UI_SDK_DISCOVERY);
+        bool resolved=kui_vmu_native_resolution_cache_build(boot,program_bytes,KUI_RETAIL_EXEC_ADDRESS,
+            work->wire,sizeof(work->wire),&work->resolution);
+        KUI_SMASH_TIME_END(discover_time);
+        if(!resolved) {
             native_cache_standalone(boot,map,standalone);
             goto finished;
         }

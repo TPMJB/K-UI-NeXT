@@ -49,10 +49,15 @@ bool kui_games_library_activity_key(const char *root,const char *path,
 bool kui_games_library_record_played(const struct kui_games_activity_entry *,kui_log_fn log);
 /* Snapshot up to four real members of the selected disc set before clearing
  * catalogue memory for a launch. An ordinary image becomes a one-disc set.
- * The selected Original/2048 dialect is used for other members when present. */
+ * The selected Original/2048 dialect is used for other members when present.
+ * Root must be canonical and each input path must fit the request unchanged.
+ * Cancellation or any refusal leaves out unchanged. */
 bool kui_games_library_session_request(const char *root,const char *path,
     struct kui_native_session_request *out,kui_log_fn log,kui_cancel_fn cancel);
-/* Scans build a complete replacement from fresh directory/title discovery.
+/* Scans remount and build a complete replacement from fresh discovery.
+ * Proved-empty folders are omitted only from this launcher catalogue; the
+ * raw browser retains them. Checked IP multi-disc identities are persisted
+ * for a chooser without collapsing distinct image paths or duplicate discs.
  * Rebuild additionally permits repair of a damaged catalogue-generation
  * ledger after removing only generated index files. Stop before commit or a
  * failed replacement preserves the previous complete RAM catalogue. Only

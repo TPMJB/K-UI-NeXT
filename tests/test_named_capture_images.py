@@ -26,11 +26,11 @@ BINARY = str(ROOT / "build/capture-image")
 
 
 def run(image, *args, root="/Games", title="MDK2", variant=0, job=None,
-        opts="crc32,noend", selected=None, folder_label=None, expected=0):
+        opts="crc32,noend", selected=None, folder_label=None, disc_info=None, expected=0):
     env = dict(os.environ, KUI_TEST_OPTS=opts, KUI_TEST_TITLE=title,
                KUI_TEST_DISC_VARIANT=str(variant))
     for key in ("KUI_TEST_OUTPUT_ROOT", "KUI_TEST_GAME_NAMES", "KUI_TEST_JOB",
-                "KUI_TEST_SELECTED_JOB", "KUI_TEST_FOLDER_LABEL"):
+                "KUI_TEST_SELECTED_JOB", "KUI_TEST_FOLDER_LABEL", "KUI_TEST_DISC_INFO"):
         env.pop(key, None)
     if root is not None:
         env.update(KUI_TEST_OUTPUT_ROOT=root, KUI_TEST_GAME_NAMES="1")
@@ -40,6 +40,8 @@ def run(image, *args, root="/Games", title="MDK2", variant=0, job=None,
         env["KUI_TEST_SELECTED_JOB"] = selected
     if folder_label is not None:
         env["KUI_TEST_FOLDER_LABEL"] = folder_label
+    if disc_info is not None:
+        env["KUI_TEST_DISC_INFO"] = disc_info
     result = subprocess.run([BINARY, str(image), *args], env=env, text=True,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if result.returncode != expected:

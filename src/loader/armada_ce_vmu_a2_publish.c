@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/armada_ce_vmu_a2_publish.h"
+#include "kui/ce_vmu_target.h"
 
 static uint32_t a2_publish_inc(uint32_t n) {return n==UINT32_MAX?n:n+1u;}
 static uint32_t a2_publish_le32(const uint8_t *p) {
@@ -42,7 +43,7 @@ static unsigned a2_publish_parent_bytes(uint32_t request) {
     return cmd==9u && words==1u?16u:0u;
 }
 static unsigned a2_publish_target_bytes(const uint8_t *p,unsigned n) {
-    if(p[1]!=2u || p[2]) return 0;
+    if(p[1]!=KUI_CE_VMU_ADDRESS || p[2]) return 0;
     unsigned cmd=p[0];
     if(cmd==1u || cmd==2u) return n==4u && !p[3]?(cmd==1u?116u:196u):0u;
 #if KUI_ARMADA_CE_MAPLE_WRITE_STAGING
@@ -63,7 +64,7 @@ static unsigned a2_publish_target_bytes(const uint8_t *p,unsigned n) {
 static bool a2_publish_reply(const uint8_t *p,unsigned n,const uint8_t *request) {
 #if KUI_ARMADA_CE_MAPLE_WRITE_STAGING
     unsigned command=request[0];
-    if(n<4u || p[1] || p[2]!=2u || 4u+4u*p[3]!=n) return false;
+    if(n<4u || p[1] || p[2]!=KUI_CE_VMU_ADDRESS || 4u+4u*p[3]!=n) return false;
     if(command==11u || command==12u || command==13u) {
         if(p[0]==0xfcu) return n==4u;
         if(p[0]==0xfbu) return n==8u && !p[4] && !p[5] && !p[6] &&
@@ -77,7 +78,7 @@ static bool a2_publish_reply(const uint8_t *p,unsigned n,const uint8_t *request)
     return command!=11u || a2_publish_le32(p+8u)==a2_publish_le32(request+8u);
 #else
     unsigned command=request[0],expected=command==1u?5u:command==2u?6u:command==13u?7u:8u;
-    if(p[0]!=expected || p[1] || p[2]!=2u || 4u+4u*p[3]!=n) return false;
+    if(p[0]!=expected || p[1] || p[2]!=KUI_CE_VMU_ADDRESS || 4u+4u*p[3]!=n) return false;
     if(command==13u) return n==4u;
     if(a2_publish_le32(p+4u)!=0x02000000u) return false;
     return command!=11u || a2_publish_le32(p+8u)==a2_publish_le32(request+8u);
@@ -134,9 +135,9 @@ enum kui_armada_ce_vmu_a2_publish_result kui_armada_ce_vmu_a2_publish(
            !(p->response_function&0x01000000u)))
         return a2_publish_fail(out,KUI_ARMADA_CE_VMU_A2_PUBLISH_PARENT,
             p->rx_bus,p->response_header,parent_bytes,p->response_function);
-    if(p->response_header&0x00020000u)
+    if(p->response_header&KUI_CE_VMU_ATTACHMENT_BIT)
         return a2_publish_fail(out,KUI_ARMADA_CE_VMU_A2_PUBLISH_CONFLICT,
-            p->rx_bus,p->response_header,0x00020000u,0);
+            p->rx_bus,p->response_header,KUI_CE_VMU_ATTACHMENT_BIT,0);
     unsigned needed=0;
 #if KUI_ARMADA_CE_MAPLE_WRITE_STAGING
     uint8_t *request=work->request;
@@ -229,9 +230,16 @@ enum kui_armada_ce_vmu_a2_publish_result kui_armada_ce_vmu_a2_publish(
          * payload count) in this one4-byte CMD12 slice; never extend a store
          * into the allocator bucket. CMD13 uses8 bytes and has no exception.
          * target[4] retains the logical8 bytes while needed bounds stores. */
-        bool write_error_header_only=request[0]==12u && t->request_bytes==140u &&
+        bool write_error_header_only=
+#if KUI_VC2_VMU_WRITE_PROBE
+            /* No VC2 source proof yet for Armada's truncated FILEERR. A
+             * failed private response must fit its actual RX allocation. */
+            false;
+#else
+            request[0]==12u && t->request_bytes==140u &&
             t->capacity==4u && produced==8u &&
             ((const uint8_t *)(const void *)work->reply)[0]==0xfbu;
+#endif
 #endif
         if(
 #if KUI_ARMADA_CE_MAPLE_WRITE_STAGING
@@ -271,7 +279,7 @@ enum kui_armada_ce_vmu_a2_publish_result kui_armada_ce_vmu_a2_publish(
         out->commands[index]=a2_publish_inc(out->commands[index]);
 #endif
     }
-    uint32_t advertised=p->response_header|0x00020000u;
+    uint32_t advertised=p->response_header|KUI_CE_VMU_ATTACHMENT_BIT;
     if(!a2_publish_store(store,store_context,out,p->rx_bus,advertised))
         return a2_publish_fail(out,KUI_ARMADA_CE_VMU_A2_PUBLISH_STORE,
             p->rx_bus,advertised,0,needed);

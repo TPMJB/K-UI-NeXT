@@ -23,6 +23,33 @@ _kui_armada_ce_maple_hook:
     mov.l r6,@-r0
 #endif
     mov r0,r15
+#if KUI_VC2_CE_VMU
+    /* Retain the actual mapped caller context before C changes volatile
+     * registers. This is private BSS, not a followed guest pointer. */
+    mov.l .Lvc2_context,r0
+    mov.l r4,@r0
+    mov.l r5,@(4,r0)
+    mov.l r6,@(8,r0)
+    mov.l r3,@(12,r0)
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+    mov.l @(20,r15),r1
+#else
+    mov.l @(12,r15),r1
+#endif
+    mov.l r1,@(16,r0)
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+    mov.l @(12,r15),r1
+#else
+    mov.l @(4,r15),r1
+#endif
+    mov.l r1,@(20,r0)
+    mov.l .Lvc2_ttb,r1
+    mov.l @r1,r1
+    mov.l r1,@(24,r0)
+    mov.l .Lvc2_ccr,r1
+    mov.l @r1,r1
+    mov.l r1,@(28,r0)
+#endif
 #if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
     mov.l @(12,r15),r1
     mov.l .Lbridge_return,r2
@@ -30,8 +57,14 @@ _kui_armada_ce_maple_hook:
     mov r3,r7
 #endif
     mov.l .Lrun,r0
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+    add #-16,r15
+#endif
     jsr @r0
     nop
+#if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+    add #16,r15
+#endif
 #if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
 .Ldispatch:
     tst r0,r0
@@ -51,8 +84,10 @@ _kui_armada_ce_maple_hook:
     ldc r0,sr
     mov.l @(4,r8),r4
     mov.l .Lwork,r0
+    add #-16,r15
     jsr @r0
     nop
+    add #16,r15
     /* Preserve the result before the mask sequence reuses r0. No C or guest
      * access occurs between the service return and remasking. */
     mov r0,r7
@@ -71,8 +106,10 @@ _kui_armada_ce_maple_hook:
     ldc r0,sr
     mov.l @(4,r8),r4
     mov.l .Lwait,r0
+    add #-16,r15
     jsr @r0
     nop
+    add #16,r15
     mov r0,r7
     stc sr,r3
     mov r3,r0
@@ -87,8 +124,10 @@ _kui_armada_ce_maple_hook:
     mov #KUI_ARMADA_CE_MAPLE_RESUME_PHASE,r5
     mov.l @r15,r6
     mov.l .Lrun,r0
+    add #-16,r15
     jsr @r0
     nop
+    add #16,r15
     bra .Ldispatch
     nop
 .Lterminal:
@@ -119,6 +158,11 @@ _kui_armada_ce_maple_hook:
     .align 2
 .Lstack: .long __kui_maple_stack_top
 .Lrun: .long _kui_armada_ce_maple_traffic_run
+#if KUI_VC2_CE_VMU
+.Lvc2_context: .long _kui_vc2_ce_vmu_call_context
+.Lvc2_ttb: .long 0xff000008
+.Lvc2_ccr: .long 0xff00001c
+#endif
 #if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
 .Lworker_stack: .long __kui_vmu_worker_stack_top
 .Lwork: .long _kui_armada_ce_vmu_runtime_work
@@ -129,7 +173,7 @@ _kui_armada_ce_maple_hook:
     .global __kui_maple_traffic_shim_end
 __kui_maple_traffic_shim_end:
 
-#if KUI_ARMADA_CE_MAPLE_AUTO_STOP
+#if KUI_ARMADA_CE_MAPLE_AUTO_STOP && !KUI_VC2_CE_VMU
     /* Terminal diagnostic transfer only. C has proved this installed vector
      * equals our resident menu hook. Its command-1 entry masks BL/IMASK and
      * replaces this helper stack before entering the existing report loop. */

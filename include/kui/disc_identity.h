@@ -17,7 +17,7 @@ enum kui_disc_identity_state {
 };
 struct kui_disc_identity {
     enum kui_disc_identity_state state;
-    char title[KUI_DISC_IDENTITY_TITLE_CAP];
+    char title[KUI_DISC_IDENTITY_TITLE_CAP]; /* Display title includes a known multi-disc ordinal. */
     uint64_t next_poll_ms;
     int disc_type;
     /* Last BIOS observation, retained for transition-only diagnostic logging. */

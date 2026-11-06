@@ -1,0 +1,23 @@
+{
+  "schema": "kui.smash-menu.loader-entry.v1",
+  "passed": true,
+  "elf_sha256": "463ec385c233e4322c74d5149001dd932064f8492c28a0f70b735a8180dd58ed",
+  "entry": "0xac008300",
+  "fallback_target": "0xac010000",
+  "integer_frame": "0x8c00f3ac",
+  "integer_frame_words": 21,
+  "private_stack_begin": "0xac00b800",
+  "private_stack_end": "0xac00c000",
+  "fallback_cases": 32,
+  "fallback_instructions": [
+    56
+  ],
+  "exact_register_and_integer_control_restoration": true,
+  "no_sr_bank_change_before_integer_capture": true,
+  "no_cache_register_writes": true,
+  "limits": [
+    "The C dispatcher is substituted by an ABI-conforming fallback; its selection, quiescence, media and native-entry paths are not executed.",
+    "Register banking is not emulated. The linked prefix proves no SR/bank change precedes capture of the actual active R0..R7.",
+    "No cycle, cache timing, game, SDK or VMU execution claim is made."
+  ]
+}

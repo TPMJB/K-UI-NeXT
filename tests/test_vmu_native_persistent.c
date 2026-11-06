@@ -19,9 +19,10 @@
 #include "vmu_sd_model.h"
 #undef card
 static uint8_t memory[0x1000000u];
-static uint32_t mmio[4];
+static uint32_t mmio[6];
 static unsigned used,bus_reads,fail_read,checks;
 static void (*read_observer)(uint32_t,unsigned);
+static bool (*read_override)(uint32_t,unsigned,uint32_t *);
 static bool refuse_rx_map;
 static unsigned measured_submit_reads,measured_complete_reads;
 static struct kui_vmu_native_profile_sample test_clock;
@@ -40,7 +41,8 @@ const struct kui_vmu_native_passive_exports kui_vmu_native_worker_exports={
 #define CHECK(x) do {++checks;assert(x);} while(0)
 static int mmio_index(uint32_t a) {
     switch(a) {case 0xa05f6c04u:return 0;case 0xa05f6c10u:return 1;
-        case 0xa05f6c14u:return 2;case 0xa05f6c18u:return 3;default:return -1;}
+        case 0xa05f6c14u:return 2;case 0xa05f6c18u:return 3;
+        case 0xa05f6c80u:return 4;case 0xa05f6c8cu:return 5;default:return -1;}
 }
 static void put(uint32_t a,unsigned width,uint32_t v) {
     CHECK(width==1u || width==4u);
@@ -58,6 +60,7 @@ bool kui_vmu_native_passive_test_read(uint32_t a,unsigned width,uint32_t *v) {
     }
     if(read_observer) read_observer(a,width);
     ++bus_reads;if(fail_read && bus_reads==fail_read) return false;
+    if(read_override && read_override(a,width,v)) return true;
     if(ram(a,width,width)) {*v=0u;memcpy(v,memory+physical(a)-0x0c000000u,width);return true;}
     int i=mmio_index(a);if(i<0 || width!=4u) return false;*v=mmio[i];return true;
 }
@@ -89,7 +92,7 @@ static void runtime_phase(unsigned phase) {
     frame.sr=phase?0xf0u:0x60u;frame.pr=0x0c012226u;
 }
 static void fixture(void) {
-    read_observer=NULL;
+    read_observer=NULL;read_override=NULL;
     memset(&durable_card,0,sizeof(durable_card));memset(&overlay,0,sizeof(overlay));
     memset(&state,0,sizeof(state));memset(&config,0,sizeof(config));memset(captured,0,sizeof(captured));
     memset(receivers,0,sizeof(receivers));memset(&input,0,sizeof(input));memset(&frame,0,sizeof(frame));
@@ -824,6 +827,92 @@ static void early_pair_hook_witnesses(void) {
     }
     printf("Early exit pair: %u joint byte/bit mutations\n",mutations);
 }
+static void early_compact_hook_witnesses(void) {
+    unsigned mutations=0u;
+    for(unsigned half=0u;half<2u;half++) {
+        early_pair_setup(half);
+        input.exits.family=KUI_VMU_NATIVE_EXIT_EARLY_COMPACT;input.exits.count=3u;
+        input.exits.entries[2]=UINT32_C(0x8c013200);input.exits.exec_thunk=input.exits.entries[2]+76u;
+        arm();install_hooks();CHECK(!installed_hooks_valid());
+        uint32_t head=input.exits.entries[0];uint16_t patch[4];
+        CHECK(kui_vmu_native_patch_encode_head(head,patch));
+        for(unsigned byte=0;byte<8u;byte++)put(head+byte,1u,(patch[byte/2u]>>(8u*(byte&1u)))&255u);
+        CHECK(installed_hooks_valid());
+        for(unsigned i=0;i<32u;i++)for(unsigned bit=0;bit<8u;bit++) {
+            uint32_t at=i<20u?head+i:input.exits.entries[2]+i-20u;
+            uint8_t old=memory[physical(at)-UINT32_C(0x0c000000)];
+            put(at,1u,old^(1u<<bit));CHECK(!installed_hooks_valid());
+            put(at,1u,old);CHECK(installed_hooks_valid());++mutations;
+        }
+        idle();
+    }
+    for(unsigned invalid=0;invalid<3u;invalid++) {
+        early_pair_setup(0u);input.exits.family=KUI_VMU_NATIVE_EXIT_EARLY_COMPACT;
+        input.exits.count=3u;input.exits.entries[2]=UINT32_C(0x8c013200);
+        input.exits.exec_thunk=input.exits.entries[2]+76u;
+        if(!invalid)input.exits.count=2u;
+        else if(invalid==1u)input.exits.entries[2]=0u;
+        else input.exits.exec_thunk+=2u;
+        CHECK(kui_vmu_native_passive_arm(&input,NULL)<0 && !state.armed);
+    }
+    printf("Early compact exits: %u joint/loader byte-bit mutations\n",mutations);
+}
+/* Firmware-check capabilities use a third terminal entry and no executable
+ * thunk. The early variant retains the exact eight-byte shared head. */
+static void firmware_check_setup(bool early,unsigned half) {
+    early_pair_setup(half);
+    input.exits.family=early?KUI_VMU_NATIVE_EXIT_EARLY_FIRMWARE_CHECK:KUI_VMU_NATIVE_EXIT_FIRMWARE_CHECK;
+    input.exits.count=3u;input.exits.exec_thunk=0u;
+    if(!early) input.exits.entries[1]=input.exits.entries[0]+0x100u;
+    input.exits.entries[2]=input.exits.entries[0]+0x200u;
+}
+static void firmware_check_hook_witnesses(void) {
+    unsigned mutations=0u,neighbors=0u;
+    for(unsigned early=0u;early<2u;early++)for(unsigned half=0u;half<2u;half++) {
+        firmware_check_setup(early!=0u,half);arm();install_hooks();
+        CHECK(kui_vmu_native_exit_window(&input.exits,0u)==(early?8u:12u));
+        CHECK(kui_vmu_native_exit_window(&input.exits,1u)==12u && kui_vmu_native_exit_window(&input.exits,2u)==12u);
+        if(early) {
+            CHECK(!installed_hooks_valid());uint16_t head[4];
+            CHECK(kui_vmu_native_patch_encode_head(input.exits.entries[0],head));
+            for(unsigned byte=0;byte<sizeof(head);byte++)
+                put(input.exits.entries[0]+byte,1u,(head[byte/2u]>>(8u*(byte&1u)))&255u);
+        }
+        CHECK(installed_hooks_valid());
+        CHECK(hook_witness_count==11u+(early?(half?7u:5u):2u*(half?4u:3u))+(half?4u:3u));
+        for(unsigned i=0;i<3u;i++)for(unsigned byte=0;byte<(i==0u&&early?8u:12u);byte++)for(unsigned bit=0;bit<8u;bit++) {
+            uint32_t at=input.exits.entries[i]+byte;uint8_t old=memory[physical(at)-UINT32_C(0x0c000000)];
+            put(at,1u,old^(1u<<bit));CHECK(!installed_hooks_valid());
+            put(at,1u,old);CHECK(installed_hooks_valid());++mutations;
+        }
+        for(unsigned i=0;i<3u;i++)for(unsigned edge=0;edge<2u;edge++) {
+            uint32_t at=edge?input.exits.entries[i]+(i==0u&&early?8u:12u):input.exits.entries[i]-1u;
+            bool owned=false;
+            for(unsigned j=0;j<3u;j++)
+                if(at>=input.exits.entries[j] && at-input.exits.entries[j]<(j==0u&&early?8u:12u))owned=true;
+            if(owned)continue;
+            for(unsigned bit=0;bit<8u;bit++) {
+                uint8_t old=memory[physical(at)-UINT32_C(0x0c000000)];put(at,1u,old^(1u<<bit));
+                CHECK(installed_hooks_valid());put(at,1u,old);++neighbors;
+            }
+        }
+        idle();
+    }
+    for(unsigned early=0;early<2u;early++)for(unsigned invalid=0;invalid<12u;invalid++) {
+        firmware_check_setup(early!=0u,0u);
+        switch(invalid) {
+        case 0:input.exits.count=2u;break;case 1:input.exits.count=4u;break;
+        case 2:input.exits.entries[2]=0u;break;case 3:input.exits.entries[3]=UINT32_C(0x8c013300);break;
+        case 4:input.exits.exec_thunk=UINT32_C(0x8c01324c);break;case 5:input.exits.version=1u;break;
+        case 6:input.exits.bytes=48u;break;case 7:input.exits.family=11u;break;
+        case 8:input.exits.entries[2]|=1u;break;case 9:input.exits.entries[2]=input.driver.load_address-2u;break;
+        case 10:input.exits.entries[2]=input.driver.load_address+input.driver.image_bytes-10u;break;
+        default:if(early)input.exits.entries[1]+=2u;else input.exits.entries[1]=0u;break;
+        }
+        CHECK(kui_vmu_native_passive_arm(&input,NULL)<0 && !state.armed);
+    }
+    printf("Firmware check exits: %u byte-bit refusals, %u ignored adjacent bits; ordinary12/12/12 and early8/12/12\n",mutations,neighbors);
+}
 /* A no-allocator arena lease (The House of the Dead 2): the reviewed fixed
  * arena is the whole lease. The worker hooks the submit entry, the borrowed
  * literal, the completion slot and the exits, never a release or initializer
@@ -1219,7 +1308,7 @@ int main(void) {
     CHECK(!durable_card.commits && durable_card.faulted && !memcmp(target,rx_bytes(VIRTUAL),sizeof(target)));
     CHECK(!memcmp(sd.media[image_lba(42u)],next,512u));
     held_report_gesture_session();
-    bounded_controller_work();external_boundary_mutations();halfword_exit_hooks();prepared_hook_witnesses();early_pair_hook_witnesses();
+    bounded_controller_work();external_boundary_mutations();halfword_exit_hooks();prepared_hook_witnesses();early_pair_hook_witnesses();early_compact_hook_witnesses();firmware_check_hook_witnesses();
     arena_lease_mode();early_arena_session();
     polling_ownership_scope();gameplay_diagnostics();hooks_only_has_no_virtual_card_or_io();raw_chain_preserves_original_dma();completion_context_failures();
 #if !KUI_NATIVE_SPLIT_CONTROLLER_GENERAL

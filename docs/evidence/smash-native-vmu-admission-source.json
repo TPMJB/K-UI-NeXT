@@ -1,0 +1,217 @@
+{
+  "format": 1,
+  "owner_sha256": "04f49d583b39bdc710cec6d0a434b5d710b9bccedd539bedda29755135f0fe61",
+  "scope": "Execute the supplied MDE's native BUP presence/descriptor admission.\n\nThe existing Gin scalar interpreter runs actual original SDK functions with\nRAM records and production C INFO bytes. Hardware DMA, interrupt timing and\nBUP filesystem jobs are outside this narrow test. No game bytes are shipped.",
+  "source_guards": {
+    "0x8c010312": "0xd234",
+    "0x8c010314": "0x420b",
+    "0x8c010316": "0x9",
+    "0x8c010318": "0xde33",
+    "0x8c01031a": "0x63e2",
+    "0x8c01031c": "0x2338",
+    "0x8c01031e": "0x8939",
+    "0x8c010320": "0xd332",
+    "0x8c010322": "0x430b",
+    "0x8c018114": "0x430b",
+    "0x8c018116": "0xe400",
+    "0x8c0181e2": "0x63b1",
+    "0x8c0181f2": "0x2338",
+    "0x8c0181fe": "0x8d8d",
+    "0x8c018200": "0xff8d",
+    "0x8c018242": "0x32d",
+    "0x8c01824e": "0x3303",
+    "0x8c1cde18": "0x6320",
+    "0x8c1cde20": "0xc802",
+    "0x8c01bf12": "0x2668",
+    "0x8c01bf1c": "0x2e11"
+  },
+  "checkpoint": {
+    "parser_call": "0x8c010314",
+    "parser": "0x8c018066",
+    "sram_bytes_cell": "0x8c48f3e0",
+    "load": "0x8c01031a",
+    "test": "0x8c01031c",
+    "skip_if_zero": "0x8c01031e",
+    "save_check_call": "0x8c010322",
+    "save_check": "0x8c0180f0",
+    "meaning": "Nonzero SRAM size is observed only after ROM save-header parsing, immediately before the native RPG save-admission dialog"
+  },
+  "presence": [
+    {
+      "status": 0,
+      "function": "0x0",
+      "present": 0,
+      "instructions": 49
+    },
+    {
+      "status": 0,
+      "function": "0x1",
+      "present": 0,
+      "instructions": 49
+    },
+    {
+      "status": 0,
+      "function": "0x2",
+      "present": 0,
+      "instructions": 49
+    },
+    {
+      "status": 0,
+      "function": "0x4",
+      "present": 0,
+      "instructions": 49
+    },
+    {
+      "status": 0,
+      "function": "0x6",
+      "present": 0,
+      "instructions": 49
+    },
+    {
+      "status": 0,
+      "function": "0xe",
+      "present": 0,
+      "instructions": 49
+    },
+    {
+      "status": 1,
+      "function": "0x0",
+      "present": 0,
+      "instructions": 52
+    },
+    {
+      "status": 1,
+      "function": "0x1",
+      "present": 0,
+      "instructions": 52
+    },
+    {
+      "status": 1,
+      "function": "0x2",
+      "present": 1,
+      "instructions": 52
+    },
+    {
+      "status": 1,
+      "function": "0x4",
+      "present": 0,
+      "instructions": 52
+    },
+    {
+      "status": 1,
+      "function": "0x6",
+      "present": 1,
+      "instructions": 52
+    },
+    {
+      "status": 1,
+      "function": "0xe",
+      "present": 1,
+      "instructions": 52
+    },
+    {
+      "status": 2,
+      "function": "0x0",
+      "present": 0,
+      "instructions": 52
+    },
+    {
+      "status": 2,
+      "function": "0x1",
+      "present": 0,
+      "instructions": 52
+    },
+    {
+      "status": 2,
+      "function": "0x2",
+      "present": 1,
+      "instructions": 52
+    },
+    {
+      "status": 2,
+      "function": "0x4",
+      "present": 0,
+      "instructions": 52
+    },
+    {
+      "status": 2,
+      "function": "0x6",
+      "present": 1,
+      "instructions": 52
+    },
+    {
+      "status": 2,
+      "function": "0xe",
+      "present": 1,
+      "instructions": 52
+    },
+    {
+      "status": 255,
+      "function": "0x0",
+      "present": 0,
+      "instructions": 52
+    },
+    {
+      "status": 255,
+      "function": "0x1",
+      "present": 0,
+      "instructions": 52
+    },
+    {
+      "status": 255,
+      "function": "0x2",
+      "present": 1,
+      "instructions": 52
+    },
+    {
+      "status": 255,
+      "function": "0x4",
+      "present": 0,
+      "instructions": 52
+    },
+    {
+      "status": 255,
+      "function": "0x6",
+      "present": 1,
+      "instructions": 52
+    },
+    {
+      "status": 255,
+      "function": "0xe",
+      "present": 1,
+      "instructions": 52
+    }
+  ],
+  "descriptor": {
+    "raw": "000f4100",
+    "partitions": 1,
+    "block_bytes": 512,
+    "write_phases": 4,
+    "read_phases": 1,
+    "extra_crc": 0,
+    "instructions": 270
+  },
+  "app_message": [
+    {
+      "app_status": 0,
+      "generic_insert_vmu_branch": true
+    },
+    {
+      "app_status": 1,
+      "generic_insert_vmu_branch": false
+    },
+    {
+      "app_status": 2,
+      "generic_insert_vmu_branch": false
+    },
+    {
+      "app_status": 65535,
+      "generic_insert_vmu_branch": false
+    }
+  ],
+  "limitations": [
+    "No hardware DMA or interrupt timing modeled",
+    "Presence record input is supplied RAM state, not a claim that the production hook publishes it",
+    "Native BUP MEDIA/root/FAT admission jobs and save/load persistence are not replayed"
+  ]
+}

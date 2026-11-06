@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/smash-phase-text-host
+HOST_CC ?= cc
+.DEFAULT_GOAL := test
+.PHONY: test
+test:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic -Iinclude \
+ -DKUI_SMASH_PHASE_CLOCK_HOST_TEST=1 -ffunction-sections -fdata-sections \
+ -fsanitize=address,undefined -fno-sanitize-recover=all -fno-pie -no-pie \
+ tests/test_smash_phase_text.c src/core/smash_phase_text.c src/core/smash_phase_trace.c \
+ src/core/smash_phase_clock.c -Wl,--gc-sections -o $(BUILD)/test-text
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-text
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic -Iinclude \
+ -fsanitize=address,undefined -fno-sanitize-recover=all -fno-pie -no-pie \
+ tests/test_smash_phase_trace.c src/core/smash_phase_trace.c -o $(BUILD)/test-trace
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-trace

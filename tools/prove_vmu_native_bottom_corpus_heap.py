@@ -8,7 +8,9 @@ production C transition, code-family, placement and lifetime predicates read
 that same live model through a coherent callback. No target is built here.
 """
 import argparse
+from collections import Counter
 import ctypes
+from functools import lru_cache
 import hashlib
 import json
 from pathlib import Path
@@ -20,17 +22,157 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / "tests"), str(ROOT / "tools")]
 import test_vmu_native_heap_execution as heap
 from prove_vmu_native_evolution1_readahead_lease import LiveAllocatorProof
-from native_runtime_layout import LEASE_BYTES, AUX_OFFSET, layout_for
+from native_runtime_layout import LEASE_BYTES, AUX_OFFSET, GENERAL, layout_for
 
 SCHEMA = "kui.native.bottom-corpus-original-heap.v1"
 MARKER = "__kui_native_bottom_heap_stage"
 WORKER_MARKER = "__kui_native_bottom_heap_worker"
 ABSOLUTE_ONE = (1, 0, 0, 0xfff1)
 ARTIFACTS = ("stage.elf", "native-worker.elf", "native-worker.bin", "native-ra-aux.bin")
+ALIASES=(0,0x80000000,0xa0000000)
+CALLER_SRS=(0x600000f0,0x600001f1,0x600080f1)
+MINIMUM_EXTRAS=(64,96,128,160)
+COHORT_SCHEMA="kui.native.bottom-corpus-selection.v1"
+METADATA_KEYS=("schema","bottom_heap_schema","enabled","placement","lease_bytes",
+    "input_manifest_path","input_manifest_sha256","structural_matrix_path","structural_matrix_sha256",
+    "records_directory","inputs","selected_slugs","structural_candidate_count",
+    "full_structural_selection","cohort_policy","case_count","minimum_case_count","artifacts")
 
 
 def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+@lru_cache(maxsize=1)
+def _fixed_library():
+    directory=tempfile.TemporaryDirectory(prefix="kui-bottom-fixed-plan-")
+    proof=BottomObserver(Path(directory.name),GENERAL)
+    proof._directory=directory
+    return proof
+
+
+@lru_cache(maxsize=8)
+def fixed_binding(program,owner,call):
+    """Derive the kind2 hook from production immutable-image admission."""
+    library=_fixed_library().library
+    function=library.kui_vmu_native_heap_fixed_plan
+    function.argtypes=[ctypes.c_void_p,ctypes.c_size_t,ctypes.c_void_p,ctypes.c_void_p,ctypes.c_void_p,ctypes.c_void_p]
+    function.restype=ctypes.c_bool
+    image=ctypes.create_string_buffer(program)
+    digest=ctypes.create_string_buffer(hashlib.sha256(program).digest())
+    h=ctypes.create_string_buffer(struct.pack('<18I',*owner))
+    planned=ctypes.create_string_buffer(20);hook=ctypes.create_string_buffer(8)
+    assert function(image,len(program),digest,h,planned,hook),"Kind2 lacks its production fixed startup plan"
+    assert planned.raw==struct.pack('<5I',*call),"Kind2 call differs from production fixed startup plan"
+    slot,target=struct.unpack('<2I',hook.raw)
+    assert slot and target and not owner[7] and not owner[8]
+    return slot,target
+
+
+def cohort(manifest_path,matrix_path,records,lease_bytes):
+    """Derive every applicable owner from the complete structural matrix."""
+    manifest_path,matrix_path,records=map(lambda p:Path(p).resolve(),(manifest_path,matrix_path,records))
+    manifest,matrix=json.loads(manifest_path.read_text()),json.loads(matrix_path.read_text())
+    assert manifest['schema']=='kui.private.native-startup-inputs.v1'
+    assert matrix['schema']=='kui.native.structural-corpus.v1' and matrix['lease_bytes']==lease_bytes
+    assert matrix['input_manifest_sha256']==sha(manifest_path)
+    assert matrix.get('source_sha256') and all(sha(ROOT/name)==digest for name,digest in matrix['source_sha256'].items()),"Structural corpus sources changed"
+    files,rows=manifest['files'],matrix['results']
+    assert len({r['slug'] for r in files})==len(files) and len({r['slug'] for r in rows})==len(rows)
+    entries={r['slug']:r for r in files}
+    assert set(entries)=={r['slug'] for r in rows} and matrix['inputs']==len(files)
+    from audit_vmu_native_corpus import GATES,gate_passed
+    selected=[]
+    for row in rows:
+        entry=entries[row['slug']]
+        assert entry['windows_ce'] is False and row['source_bytes']==entry['source_bytes']
+        assert row['source_sha256']==entry['source_sha256']
+        assert row['detector_epoch']==matrix['detector_epoch']
+        refusal=next((name for name in GATES if not gate_passed(row,name)),None)
+        passed=refusal is None and row['probe_returncode']==0
+        assert row['first_refusal']==refusal and row['structural_384k_models_passed'] is passed
+        source=Path(entry['startup']).resolve()
+        assert source.stat().st_size==entry['source_bytes'] and sha(source)==entry['source_sha256']
+        if passed:selected.append(row)
+    assert selected,"Structural corpus has no applicable SDK allocator owners"
+    identities=[]
+    for row in selected:
+        entry=entries[row['slug']];source=Path(entry['startup']).resolve();record=records/(row['slug']+'.nvr')
+        raw,program,extent=heap.verified_program_image(source,record)
+        wire=record.read_bytes();owner=struct.unpack_from('<18I',wire,608);call=struct.unpack_from('<5I',wire,680)
+        kind=struct.unpack_from('<I',wire,20)[0]
+        assert kind in (1,2) and owner[2:4] in ((1,1),(3,2)),"Unreviewed bottom allocation strategy"
+        assert bool(row['fixed_arena'])==(kind==2) and bool(owner[7])==(kind==1)
+        assert (call[3],call[4])==(row['heap_begin'],row['heap_bytes'])
+        assert len(program)==row['image_bytes'] and hashlib.sha256(program).hexdigest()==row['image_sha256']
+        if 'record_sha256' in row:assert sha(record)==row['record_sha256']
+        hook=fixed_binding(program,owner,call) if kind==2 else None
+        identities.append(dict(slug=row['slug'],startup=str(source),record=str(record),
+            source_sha256=sha(source),record_sha256=sha(record),source_bytes=len(raw),
+            image_bytes=len(program),image_sha256=hashlib.sha256(program).hexdigest(),
+            resolution_kind=kind,heap_family=owner[2],heap_layout=owner[3],
+            allocation_strategy='fixed-sdk-bottom' if kind==2 else 'initializer-sdk-bottom',
+            fixed_hook=dict(slot=hook[0],target=hook[1]) if hook else None,
+            sdk_layout_version=row['layout_version'],rx_layout=row['rx_layout']))
+    policy=dict(schema=COHORT_SCHEMA,manifest_inputs=len(files),structural_candidates=len(selected),
+        allocator_families=dict(Counter(str(r['heap_family']) for r in identities)),
+        heap_layouts=dict(Counter(str(r['heap_layout']) for r in identities)),
+        resolution_kinds=dict(Counter(str(r['resolution_kind']) for r in identities)),
+        sdk_layout_versions=dict(Counter(str(r['sdk_layout_version']) for r in identities)),
+        rx_layouts=dict(Counter(str(r['rx_layout']) for r in identities)),
+        selected_by='every structurally accepted kind1/kind2 SDK allocator; unknown strategies refuse')
+    return manifest,matrix,selected,identities,policy
+
+
+def validate_corpus(report,*,full_rows=True,expected=None):
+    """Reject missing/extra/tampered cohorts and every alias/SR/minimum row."""
+    assert report.get('schema')=='kui.native.corpus-original-heap.v1' and report.get('bottom_heap_schema')==SCHEMA
+    assert report.get('enabled') is True and report.get('placement')=='bottom' and report.get('full_structural_selection') is True
+    assert sha(report['input_manifest_path'])==report['input_manifest_sha256']
+    assert sha(report['structural_matrix_path'])==report['structural_matrix_sha256']
+    expected=expected or cohort(report['input_manifest_path'],report['structural_matrix_path'],
+                              report['records_directory'],report['lease_bytes'])
+    _,matrix,selected,identities,policy=expected
+    slugs=[r['slug'] for r in identities];n=len(slugs)
+    assert report['inputs']==identities and report['selected_slugs']==slugs
+    assert report['structural_candidate_count']==n and report['cohort_policy']==policy
+    assert report['case_count']==n*len(ALIASES)*len(CALLER_SRS)
+    assert report['minimum_case_count']==n*len(ALIASES)*len(MINIMUM_EXTRAS)
+    if full_rows:
+        results=report['results'];cases=report['cases'];minimum=report['minimum_cases']
+        assert len(results)==n and {r['slug'] for r in results}==set(slugs)
+        assert len(cases)==report['case_count'] and len(minimum)==report['minimum_case_count']
+        assert {(r['slug'],r['alias'],r['caller_sr']) for r in cases}=={
+            (slug,alias,sr) for slug in slugs for alias in ALIASES for sr in CALLER_SRS}
+        assert {(r['slug'],r['alias'],r['arena_bytes']) for r in minimum}=={
+            (slug,alias,report['lease_bytes']+extra) for slug in slugs for alias in ALIASES for extra in MINIMUM_EXTRAS}
+        metadata={r['slug']:r for r in identities}
+        for row in results:
+            owner=metadata[row['slug']]
+            assert all(row[k]==owner[k] for k in ('source_sha256','source_bytes','record_sha256','image_bytes','image_sha256',
+                'resolution_kind','heap_family','heap_layout','allocation_strategy'))
+            assert row['stage_begin']==matrix['stage_begin'] and row['stage_end']==matrix['stage_end']
+        for row in cases:
+            owner=metadata[row['slug']]
+            assert row['lease_bytes']==report['lease_bytes']
+            assert all(row[k]==owner[k] for k in ('resolution_kind','heap_family','heap_layout'))
+            assert all(row[k] is True for k in ('full_header_and_payload_preserved','stage_and_installer_preserved',
+                'placeholder_payload_not_initialized_or_consumed','only_preexisting_installer_frame_accesses_inside_placeholder',
+                'oversized_request_refused'))
+            assert len(row['cold_original_instruction_counts'])==3 and all(v>0 for v in row['cold_original_instruction_counts'])
+            source=next(r for r in selected if r['slug']==row['slug'])
+            begin=heap.physical(source['heap_begin'])|row['alias'];lease=report['lease_bytes'];count=source['heap_bytes']
+            assert row['arena_begin']==begin and row['arena_bytes']==count and row['header']==begin
+            assert row['payload']==begin+32 and row['placeholder_payload']==begin+lease+64
+            assert row['placeholder_request']==count-lease-64 and row['original_upper_end']==begin+count
+            assert row['upper_free_header']==begin+lease+32 and row['remaining_units']==(count-lease-32)//32
+        for row in minimum:
+            extra=row['arena_bytes']-report['lease_bytes']
+            assert row['placeholder_request']==extra-64 and row['stage_transaction_admitted'] is (extra>=96)
+            assert row['zero_request_endpoint_not_dereferenced'] is True
+            assert row['production_bottom_transitions_and_full_release_admitted'] is True
+        assert report['future_original_operations']==sum(r['subsequent_original_operations'] for r in cases)
+    return expected
 
 
 class Trace(heap.SH):
@@ -194,8 +336,8 @@ def _cold(model, owner, begin, count, sp, stage_begin, stage_end, original_stage
     assert model.read(cursor) == sentinel
     _stage_unchanged(model, original_stage, stage_begin, stage_end, sp)
     observer.ready()
-    controls = [owner[11], owner[12], owner[12] + 4, sentinel, sentinel + 4,
-                cursor, owner[15], owner[16], owner[17]]
+    dispatch=[] if owner[2]==3 else [owner[11],owner[12],owner[12]+4]
+    controls = dispatch+[sentinel, sentinel + 4,cursor,owner[15],owner[16],owner[17]]
     headers = [begin, begin + 4, upper_header, upper_header + 4]
     physical_words = {heap.physical(x) for x in controls + headers}
     for label, writes, _steps, reads in calls:
@@ -225,13 +367,9 @@ def prove(build, manifest_path, matrix_path, records, *, selected_slugs=None):
     assert selected_layout==layout_for(worker_image[4]),"Stage/worker layouts differ"
     lease_bytes=selected_layout.LEASE_BYTES
     assert stage[4].get(MARKER) == worker_image[4].get(WORKER_MARKER) == ABSOLUTE_ONE
-    manifest, matrix = json.loads(manifest_path.read_text()), json.loads(matrix_path.read_text())
-    assert manifest["schema"] == "kui.private.native-startup-inputs.v1"
-    assert matrix["schema"] == "kui.native.structural-corpus.v1" and matrix["lease_bytes"] == lease_bytes
-    assert matrix["input_manifest_sha256"] == sha(manifest_path)
+    manifest,matrix,selected,identities,policy=cohort(manifest_path,matrix_path,records,lease_bytes)
     entries = {entry["slug"]: entry for entry in manifest["files"]}
-    selected = [row for row in matrix["results"] if row["structural_384k_models_passed"]]
-    assert selected
+    identity_by_slug={row['slug']:row for row in identities}
     structural_slugs = {row["slug"] for row in selected}
     assert len(structural_slugs) == len(selected), "Duplicate structural owner"
     if selected_slugs is not None:
@@ -266,11 +404,11 @@ def prove(build, manifest_path, matrix_path, records, *, selected_slugs=None):
             call = struct.unpack_from("<5I", wire, 680)
             original_begin, count = call[3:]
             initializer, allocate, release, sentinel, cursor = owner[6], owner[9], owner[10], owner[13], owner[14]
-            inputs.append(dict(slug=slug, startup=str(startup), record=str(record),
-                               source_sha256=sha(startup), record_sha256=sha(record)))
-            for alias in (0, 0x80000000, 0xa0000000):
+            inputs.append(identity_by_slug[slug])
+            kind=identity_by_slug[slug]['resolution_kind']
+            for alias in ALIASES:
                 begin = heap.physical(original_begin) | alias
-                for sr in (0x600000f0, 0x600001f1, 0x600080f1):
+                for sr in CALLER_SRS:
                     baseline, model = heap.SH(raw), Trace(raw)
                     baseline.sr = model.sr = sr
                     model.store_block(first, stage_pattern)
@@ -284,8 +422,8 @@ def prove(build, manifest_path, matrix_path, records, *, selected_slugs=None):
                     model.store_block(payload, payload_pattern)
                     assert model.block(first, end - first) == after_cold
                     retained = model.block(begin, lease_bytes + 32)
-                    identity = {at: model.read(at) for at in (owner[11], owner[12], owner[12] + 4,
-                                                            owner[15], owner[16], owner[17])}
+                    dispatch=[] if owner[2]==3 else [owner[11],owner[12],owner[12]+4]
+                    identity = {at:model.read(at) for at in dispatch+[owner[15],owner[16],owner[17]]}
                     live, matching = [], []
                     operations = future_steps = 0
                     for size in (1, 31, 32, 33, 1023, 4096, 8192, 16384, 128, 32768, 64, 127):
@@ -331,6 +469,7 @@ def prove(build, manifest_path, matrix_path, records, *, selected_slugs=None):
                     assert model.block(begin, lease_bytes + 32) == retained
                     observer.valid()
                     case = dict(slug=slug, alias=alias, caller_sr=sr,
+                        resolution_kind=kind,heap_family=owner[2],heap_layout=owner[3],
                         arena_begin=begin, arena_bytes=count, placeholder_request=count - lease_bytes - 64,
                         placeholder_payload=placeholder, payload=payload, header=begin,
                         lease_bytes=lease_bytes, original_upper_end=begin + count,
@@ -350,6 +489,8 @@ def prove(build, manifest_path, matrix_path, records, *, selected_slugs=None):
                     total_operations += operations
                     if primary:
                         results.append(dict(slug=slug, source_bytes=len(raw), source_sha256=sha(startup),
+                            resolution_kind=kind,heap_family=owner[2],heap_layout=owner[3],
+                            allocation_strategy=identity_by_slug[slug]['allocation_strategy'],
                             image_bytes=len(program), image_sha256=hashlib.sha256(program).hexdigest(),
                             record_sha256=sha(record), lease_bytes=lease_bytes,
                             arena_begin=begin, arena_bytes=count, payload=payload, header=begin,
@@ -369,7 +510,7 @@ def prove(build, manifest_path, matrix_path, records, *, selected_slugs=None):
                             production_live_allocator_proof=observer.report()))
                 # Include the exact minimum where allocate(0) returns the
                 # arena endpoint: its payload must never be dereferenced.
-                for extra in (64, 96, 128, 160):
+                for extra in MINIMUM_EXTRAS:
                     minimum = lease_bytes + extra
                     model = Trace(raw)
                     model.sr = 0x600000f0
@@ -388,16 +529,17 @@ def prove(build, manifest_path, matrix_path, records, *, selected_slugs=None):
                         stage_transaction_admitted=extra >= 96,
                         zero_request_endpoint_not_dereferenced=True,
                         production_bottom_transitions_and_full_release_admitted=True))
-    assert len(results) == len(selected) and len(cases) == len(selected) * 9
-    assert len(minimum_cases) == len(selected) * 12
+    assert len(results) == len(selected) and len(cases) == len(selected) * len(ALIASES)*len(CALLER_SRS)
+    assert len(minimum_cases) == len(selected) * len(ALIASES)*len(MINIMUM_EXTRAS)
     assert artifact_hashes == {name: sha(build / name) for name in ARTIFACTS}
-    return dict(schema="kui.native.corpus-original-heap.v1", placement="bottom",
+    report=dict(schema="kui.native.corpus-original-heap.v1", placement="bottom",
         bottom_heap_schema=SCHEMA, enabled=True, lease_bytes=lease_bytes,
         input_manifest_path=str(manifest_path), input_manifest_sha256=sha(manifest_path),
         structural_matrix_path=str(matrix_path), structural_matrix_sha256=sha(matrix_path),
         records_directory=str(records), artifacts=artifact_hashes, inputs=inputs,
         selected_slugs=[row["slug"] for row in selected],
         structural_candidate_count=len(structural_slugs),
+        cohort_policy=policy,
         full_structural_selection={row["slug"] for row in selected} == structural_slugs,
         case_count=len(cases), minimum_case_count=len(minimum_cases),
         future_original_operations=total_operations, cases=cases, minimum_cases=minimum_cases,
@@ -414,6 +556,9 @@ def prove(build, manifest_path, matrix_path, records, *, selected_slugs=None):
             "The placeholder is never initialized or consumed as a buffer. Its numerical span may contain the existing installer stack; only the independently bounded private call frame is accessed there.",
             "Full worker/auxiliary/cache storage footprints are modeled, not runtime producer instructions or game resource decoding.",
             "Actual compiled cold-stage instruction execution and hardware acceptance require separate evidence."])
+    if report['full_structural_selection']:
+        validate_corpus(report,expected=(manifest,matrix,selected,identities,policy))
+    return report
 
 
 def write_report(report, build, output):

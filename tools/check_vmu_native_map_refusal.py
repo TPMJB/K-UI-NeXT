@@ -40,6 +40,18 @@ READAHEAD_PINS={
 }
 
 def wide_guard_pins(image):
+    # Independent pristine3a6 full-General references, built with the shared
+    # low compiler policy. Historical and compact signatures stay separate.
+    from check_native_general_sdk_profile import profile
+    modern=profile(image,'low')
+    if modern is not None:
+        return {
+            '_native_background_map':('f259fb6039ddba89bfa08ea4806e67bd850ce73dac3daf2c8e1e0210fc2eb5c5',188),
+            '_native_resident_terminal':('5b44ac05b98ebc7021de6361a7a66d377db91f906ebb1580a4038cf5d1f392de',96),
+            '_kui_vmu_observe_low_failure':(
+                'd17923b5ecec8f11f53fe5d01bccd915f740cb194627ee0b052f924574cb2d6a' if modern=='session' else
+                '4733a395aa815e4a3227afe93d42acaf69d9a076a84a4fe138e68874d6c6f22d',60),
+        }
     from check_native_general_lean_profile import low_pins
     return low_pins(image,'map_refusal',READAHEAD_PINS)
 

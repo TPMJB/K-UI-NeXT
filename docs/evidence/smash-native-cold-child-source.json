@@ -1,0 +1,309 @@
+{
+  "schema": "kui.smash-native-cold-child-source.v1",
+  "scope": "Source-bound cold launch of the supplied MDE engine for Shining Force and Phantasy Star II using the shared test-card identity; no hot executable transition.",
+  "owners_sha256": {
+    "IP.BIN": "33c9cf893ead0b7bd001f85d4ee1197c35ef7eeef4093fed3a5877eebcb2246e",
+    "GINXFER.BIN": "fa12196993a7c757a78565963e257cd33443f80b3f226729fdc1cf7da51ed5b3",
+    "MDE_US.BIN": "04f49d583b39bdc710cec6d0a434b5d710b9bccedd539bedda29755135f0fe61",
+    "1ST_READ.BIN": "3a311b189a4870ccbefc4fcd306e2d38e5ae810ae5edd225af6b9aa6d5df5f10"
+  },
+  "original_context": {
+    "address": "0x8c19ee60",
+    "file_offset": "0x0018ee60",
+    "bytes": 8192,
+    "crc32": "0x11634ac3",
+    "gin_copies_all_context_bytes": true,
+    "original_scalar_crt_preserves_context": true
+  },
+  "arguments": {
+    "argc_accessor": "0x8c159dde",
+    "argv_accessor": "0x8c159e28",
+    "required_argc": 5,
+    "argv_context_offset": "0x00000100",
+    "argv_capacity": 256,
+    "variants": {
+      "Shining Force": [
+        "\\MDE_US.BIN",
+        "SHFORCE.SGA",
+        "MODE0",
+        "SKIP0",
+        "SOUND1"
+      ],
+      "Phantasy Star II": [
+        "\\MDE_US.BIN",
+        "PHSTAR2.SGA",
+        "MODE0",
+        "SKIP0",
+        "SOUND0"
+      ]
+    },
+    "original_scalar_crt_gate_end": "0x8c1a0e7a",
+    "untouched_context_ranges": [
+      [
+        0,
+        256
+      ],
+      [
+        512,
+        8192
+      ]
+    ]
+  },
+  "working_directory": {
+    "method": "Replay original Ginsu folder setter and original SDK IP-folder consumer; stop before directory resolution.",
+    "setter": "0x8c1ad2c8",
+    "mode_setter": "0x8c1ad31a",
+    "consumer_span": [
+      "0x8c1a77d2",
+      "0x8c1a7812"
+    ],
+    "ip_field": "0x8c0080f0",
+    "folder_bytes": 12,
+    "padding": "space",
+    "folders": [
+      "SHFORCE",
+      "PHSTAR2"
+    ],
+    "flag_offset": 12,
+    "flag_value": 1,
+    "mode_offset": 13,
+    "mode_value": 4,
+    "preserved_tail_offsets": [
+      14,
+      15
+    ],
+    "sdk_record": "0x8c5f95c8",
+    "sdk_folder_offset": 8
+  },
+  "cpu_contract": {
+    "source_final_span": [
+      "0x8c00e07c",
+      "0x8c00e0b2"
+    ],
+    "sp": "0x8c00f400",
+    "vbr": "0x8c00f400",
+    "sr": "0x700000f0",
+    "pr": "0xac00e0b2",
+    "stage_values_preserved_by_boot2": {
+      "MACL": "0x00000000",
+      "MACH": "0x00000000",
+      "GBR": "0x8c000000"
+    },
+    "r0_through_r14_zero": true,
+    "frame_words": 21,
+    "frame": "0x8c00f3ac",
+    "frame_order": [
+      "MACL",
+      "MACH",
+      "GBR",
+      "VBR",
+      "SR",
+      "PR",
+      "R14",
+      "R13",
+      "R12",
+      "R11",
+      "R10",
+      "R9",
+      "R8",
+      "R7",
+      "R6",
+      "R5",
+      "R4",
+      "R3",
+      "R2",
+      "R1",
+      "R0"
+    ],
+    "explicit_cold_frame_initialization": {
+      "0": "0x00000028",
+      "5": "0x00000000",
+      "18": "0x00000800",
+      "19": "0x00000800",
+      "20": "0x8c0100a0"
+    },
+    "gin_banked_register_limit": "GIN clears RB before writing R0..R7, then RTE restores RB1. The existing scalar model does not prove hardware post-RTE banked R0..R7 values. Cold R0..R2 initialization is safe because the original MDE entry/CRT overwrites them before use.",
+    "untouched": [
+      "FPSCR",
+      "CCR"
+    ]
+  },
+  "native_save_port": {
+    "method": "SHA-bound static instruction and table decoding",
+    "save_call": "0x8c0187e6",
+    "unit_zero_delay_slot": "0x8c0187e8",
+    "save_target": "0x8c01bd20",
+    "unit_table": "0x8c1d0f4c",
+    "unit_table_consumer": [
+      "0x8c1cd902",
+      "0x8c1cd90a"
+    ],
+    "receiver_table": "0x8c1d0f1c",
+    "transmit_consumer": "0x8c1cc8b8",
+    "native_save": {
+      "bup_unit": 0,
+      "sdk_device": 1,
+      "maple_receiver": "0x01",
+      "slot": "A1"
+    },
+    "next_unit": {
+      "bup_unit": 1,
+      "sdk_device": 2,
+      "maple_receiver": "0x02",
+      "slot": "A2"
+    }
+  },
+  "save_kind": {
+    "method": "SHA-bound original disassembly inspection; separate from scalar replay.",
+    "kind": "Genesis cartridge SRAM; not a complete emulator save state",
+    "rom_descriptor_parser": "0x8c018066",
+    "rom_header_descriptor_offset": "0x000001b0",
+    "accepted_type_bytes": [
+      "0xf0",
+      "0xf8",
+      "0xe0"
+    ],
+    "size_global": "0x8c48f3e0",
+    "dirty_global": "0x8c48f3e8",
+    "save_option_enable_gate": [
+      "0x8c01adb0",
+      "0x8c01adbc"
+    ],
+    "save_selection_recheck": [
+      "0x8c01ae8a",
+      "0x8c01ae96"
+    ],
+    "enabled_when": "SRAM size and dirty flag are both nonzero",
+    "save_payload": "SRAM bytes plus 640-byte VMS header, rounded up to 512-byte blocks",
+    "filename_scheme": "SP1_ plus four ROM-title bytes, period, three-digit slot"
+  },
+  "gin_preservation": {
+    "method": "Existing scalar SH interpreter, actual complete supplied GIN and engine/menu files",
+    "resident_elf_sha256": "bb54fad5eda4bc2c8909316bc7166ae379ed7ceda7e6751d27cca94fc6ddb353",
+    "cases": [
+      {
+        "file": "MDE_US.BIN",
+        "bytes": 1848288,
+        "sectors": 903,
+        "source": "0x8ce00000",
+        "copy_end": "0x8c1d3800",
+        "gin_context": "0x8c19ee60",
+        "protected_bytes": 16876,
+        "arguments": [
+          "\\MDE_US.BIN",
+          "SHFORCE.SGA",
+          "MODE0",
+          "SKIP0",
+          "SOUND1"
+        ],
+        "original_scalar_crt_preserves_context": true,
+        "original_ip_folder_setter_and_gdfs_consumer": [
+          "SHFORCE",
+          "PHSTAR2"
+        ],
+        "gin_single_bank_scalar_model_entry_contract": true
+      },
+      {
+        "file": "1ST_READ.BIN",
+        "bytes": 212324,
+        "sectors": 104,
+        "source": "0x8cf90000",
+        "copy_end": "0x8c044000",
+        "gin_context": "0x8c036a44",
+        "protected_bytes": 16876,
+        "arguments": null,
+        "original_scalar_crt_preserves_context": false,
+        "original_ip_folder_setter_and_gdfs_consumer": [],
+        "gin_single_bank_scalar_model_entry_contract": true
+      }
+    ],
+    "mde_staging": [
+      "0x8ce00000",
+      "0x8cfc3800"
+    ],
+    "old_menu_worker": "0x8cfaf000",
+    "old_menu_worker_overlapped_by_mde_staging": true,
+    "mde_compact_lease_predicted": "0x8cbaefe0",
+    "mde_compact_lease_bytes": 290816,
+    "compact_lease_outside_staging": true
+  },
+  "structural_admission": {
+    "audit_schema": "kui.native.structural-corpus.v1",
+    "audit_sha256": "7451ad2c1a6c611d37986d53d39ca4ad1dfabb18e2c700d93243431f4a4b393c",
+    "audited_source_hashes_match_current_tree": true,
+    "detector_epoch": 8,
+    "audited_model_lease_bytes": 331776,
+    "cases": [
+      {
+        "source_sha256": "04f49d583b39bdc710cec6d0a434b5d710b9bccedd539bedda29755135f0fe61",
+        "source_bytes": 1848288,
+        "driver": 1,
+        "layout": true,
+        "heap": 1,
+        "initializer_slot": true,
+        "initializer_call": true,
+        "aligned_hook_entries": true,
+        "release_hook_shape": true,
+        "exits": true,
+        "guarded_exits": true,
+        "combined_resolution": true,
+        "transport_execution": true,
+        "transport_checks": 958,
+        "live_bind_384k": true,
+        "first_refusal": null,
+        "console_compatibility": "not_tested_by_this_probe"
+      },
+      {
+        "source_sha256": "3a311b189a4870ccbefc4fcd306e2d38e5ae810ae5edd225af6b9aa6d5df5f10",
+        "source_bytes": 212324,
+        "driver": 1,
+        "layout": true,
+        "heap": 1,
+        "initializer_slot": true,
+        "initializer_call": true,
+        "aligned_hook_entries": true,
+        "release_hook_shape": true,
+        "exits": true,
+        "guarded_exits": true,
+        "combined_resolution": true,
+        "transport_execution": true,
+        "transport_checks": 958,
+        "live_bind_384k": true,
+        "first_refusal": null,
+        "console_compatibility": "not_tested_by_this_probe"
+      }
+    ],
+    "note": "These existing 324KiB structural probe results are necessary gates, not runtime allocation or gameplay evidence."
+  },
+  "host_tests": {
+    "pure_helper_target": "make -f Makefile.vc2-native-engine-tests smash-native-child-tests",
+    "pure_helper_checks": 20287,
+    "sanitizers": [
+      "address",
+      "undefined"
+    ],
+    "pure_helper_coverage": [
+      "original menu/IP/engine identities and every SHA byte",
+      "candidate and seed rejection",
+      "both argv/IP variants with untouched-byte guards",
+      "each of 8192 source-context bytes corrupted independently",
+      "all 672 individual saved-frame bit mutations at both P1/P2 aliases",
+      "every invalid address-bit mutation",
+      "overlap, wrap, null and size refusal preserves outputs"
+    ],
+    "gin_target": "make -f Makefile.vc2-native-engine-tests vc2-native-engine-gin-tests"
+  },
+  "replay_source_sha256": {
+    "tests/test_smashpack_native_engine_gin.py": "44a558a94d643d16263d5d42632917f4947afc26b6ace357c063b36c52c0be31",
+    "tests/test_smash_native_child.c": "5412a8f8057b43d23d4e5234e9e7de5b93af9adfa6a0949d512ff757901eac90",
+    "tests/test_vmu_native_patch_mixed_pool.c": "7046ddf92d7f9edf15933faf939edc20416270472542841ad3c0ec76d90976b0",
+    "src/core/smash_native_child.c": "01318144dd69641d87aa307c4e88fa67d74984a626066ff0bbce8f1a57607765"
+  },
+  "limits": [
+    "Scalar instruction/control-register model only; no cache, timing, interrupt or FPU simulation.",
+    "GIN clears RB before writing R0..R7 and restores RB1 through RTE. The single-bank replay does not establish hardware post-RTE R0..R7; the cold frame initializer sets only source-checked values and the original MDE entry overwrites R0..R2 before use.",
+    "No subsequent SDK constructors, actual directory resolver, ROM/media access or gameplay executed.",
+    "Native A1 VMU save/load and shared-card persistence still require the console test.",
+    "Cold child launch does not make original Smash Pack menu executable changes safe; that hot path remains separate."
+  ]
+}

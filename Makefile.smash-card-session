@@ -1,0 +1,42 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Shared temporary collection ownership state. No worker/resident reservation changes.
+ifeq ($(SMASH_CARD_SESSION),1)
+FLAGS += -DKUI_SMASH_CARD_SESSION=1 -I.deps/fatfs/source
+STAGE_FLAGS += -I.deps/fatfs/source
+SMASH_CARD_SRC := src/core/smash_card_session.c src/core/vmu_fs_witness.c \
+ src/core/vmu_fs_admission.c src/core/vmu_persist_profile.c src/core/vmu_persist_session.c \
+ src/core/vmu_store.c src/core/vmu_image.c src/core/vmu_durable.c src/core/hash.c \
+ src/core/data.c src/core/smash_menu_capsule.c src/loader/vmu_persist_stage.c \
+ src/loader/vmu_backing.c src/dreamcast/sci_sd_storage.c \
+ src/loader/vc2_ce_vmu_stage_cache.c src/loader/smash_fat_read_cache.c \
+ src/loader/smash_phase_file.c src/loader/smash_phase_string.c
+SMASH_CARD_EXISTING_SRC := $(STAGE_SRC)
+override STAGE_SRC += $(filter-out $(SMASH_CARD_EXISTING_SRC),$(SMASH_CARD_SRC))
+# Native TEXT already owns the same pinned FatFs objects; all other roles
+# link precisely one copy here. No filesystem writer is enabled in the shim.
+ifeq ($(filter $(BUILD)/phase-fatfs.o,$(STAGE_OBJ)),)
+STAGE_OBJ += $(BUILD)/phase-fatfs.o $(BUILD)/phase-ffunicode.o
+$(BUILD)/phase-fatfs.o: .deps/fatfs/source/ff.c .deps/fatfs/source/ffconf.h
+	@mkdir -p $(@D)
+	$(CC) $(FLAGS) -fcallgraph-info=su -MMD -MP -c $< -o $@
+$(BUILD)/phase-ffunicode.o: .deps/fatfs/source/ffunicode.c .deps/fatfs/source/ffconf.h
+	@mkdir -p $(@D)
+	$(CC) $(FLAGS) -fcallgraph-info=su -MMD -MP -c $< -o $@
+endif
+
+$(BUILD)/stage.elf: $(STAGE_OBJ)
+$(BUILD)/stage_asm.o $(BUILD)/entry_asm.o: include/kui/smash_card_session.h
+$(BUILD)/stage/src/loader/retail_stage.o $(BUILD)/stage/src/loader/vmu_native_heap_probe_stage.o: src/loader/smash_card_session_stage.inc include/kui/smash_card_session.h include/kui/smash_session_file.h
+endif
+
+# A reused build directory must never mix the two low-runtime wire sizes.
+# Record both opt-in and opt-out; changing a command-line flag alone does
+# not otherwise invalidate an existing object.
+.PHONY: smash-card-session-config-force
+$(BUILD)/smash-card-session-config: smash-card-session-config-force
+	@mkdir -p $(@D)
+	@echo 'SMASH_CARD_SESSION=$(if $(filter 1,$(SMASH_CARD_SESSION)),1,0)' > $@.tmp
+	@cmp -s $@.tmp $@ || mv $@.tmp $@
+	@rm -f $@.tmp
+$(STAGE_OBJ) $(SMASH_RETURN_OBJ) $(SMASH_HANDOFF_OBJ) \
+ $(BUILD)/entry_asm.o $(BUILD)/stage_asm.o: $(BUILD)/smash-card-session-config

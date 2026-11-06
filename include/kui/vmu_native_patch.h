@@ -6,7 +6,23 @@
 #include <stdint.h>
 /* Conservative immutable-image guard. Excludes encoded direct branches and
  * aligned main-RAM literals into a displaced instruction window's interior.
+ * An apparent branch in a bounded pointer pool can be treated as data only
+ * after proving its terminating RTS/delay (or the exact four-way tail-jump
+ * dispatcher), full-word literal references and no encoded address or
+ * partial-word entry to the pool/delay/padding. An apparent incoming branch
+ * may originate in another independently proved pool. The bounded dependency
+ * graph must finish without cycles, unrooted sources or exhausted limits.
+ * One scalar between two maximal RAM-pointer runs may form a mixed pool,
+ * with one unique return root and at most32 fully referenced words. A canonical
+ * alignment halfword may follow a halfword-aligned return and its delay.
+ * The full-image edge/dependency proof is unchanged for those candidates.
+ * A separate exact tail-veneer root permits one FF0F halfword mask only with
+ * exactly two complete SDK IMASK-restore readers; other partial reads refuse.
+ * MOV.L references are syntactic evidence, not proof that each executes.
+ * Literal pointers into patch interiors are always refused.
  * It does not establish arbitrary indirect control flow. */
+#define KUI_VMU_NATIVE_PATCH_POOL_NODES 8u
+#define KUI_VMU_NATIVE_PATCH_POOL_DEPTH 4u
 bool kui_vmu_native_patch_no_interior(const void *,size_t,uint32_t load,
     uint32_t begin,uint32_t bytes);
 struct kui_vmu_native_patch_window {uint32_t begin,bytes;};

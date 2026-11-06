@@ -4,6 +4,9 @@
 #include "kui/armada_ce_vmu_sd.h"
 #include "kui/armada_ce_vmu_write.h"
 #include "kui/armada_ce_vmu_a2_publish.h"
+#if KUI_VC2_VMU_PERSIST
+#include "kui/retail_image.h"
+#endif
 #include <string.h>
 
 struct kui_vmu_durable_handoff kui_armada_ce_vmu_runtime_handoff
@@ -15,6 +18,13 @@ static struct {
     struct kui_vmu_deferred_io queue;
     struct kui_armada_ce_vmu_sd sd;
     uint32_t started,ready,owner,handling,worker,faulted,busy_rounds;
+#if KUI_VC2_VMU_PERSIST
+    /* Private lower BSS; tags are block+1, so startup zeroing invalidates all.
+     * Cache data never reaches Maple directly: even a hit completes through
+     * the ordinary unmasked worker and the same deferred mailbox. */
+    uint8_t read_cache[8][512];
+    uint16_t read_tag[8];
+#endif
 } runtime;
 
 #ifdef KUI_ARMADA_CE_VMU_RUNTIME_TEST
@@ -56,6 +66,33 @@ static bool runtime_worker_ready(void *context) {
     bool valid=kui_armada_ce_maple_runtime_owner(runtime.owner);
     runtime_guard_leave(context,saved);return valid;
 }
+#if KUI_VC2_VMU_PERSIST
+static int runtime_cached_read(void *context,uint16_t block,uint8_t out[512]) {
+    if(context!=&runtime || block>=256u || out!=runtime.queue.bytes ||
+       runtime.faulted || runtime.sd.faulted || !runtime_worker_ready(context))
+        return KUI_VMU_EMU_IO_ERROR;
+    unsigned slot=block&7u;uint8_t *cached=runtime.read_cache[slot];
+    if(runtime.read_tag[slot]==block+1u) {
+        if(kui_retail_crc32(0u,cached,512u)!=runtime.sd.handoff.block_crc[block]) {
+            runtime.faulted=1u;return KUI_VMU_EMU_IO_ERROR;
+        }
+        memcpy(out,cached,512u);return KUI_VMU_EMU_IO_OK;
+    }
+    int result=kui_armada_ce_vmu_sd_read(&runtime.sd,block,out);
+    if(result==KUI_VMU_EMU_IO_OK) {
+        memcpy(cached,out,512u);runtime.read_tag[slot]=(uint16_t)(block+1u);
+    }
+    return result;
+}
+static int runtime_cached_commit(void *context,uint16_t block,const uint8_t in[512]) {
+    if(context!=&runtime)return KUI_VMU_EMU_IO_ERROR;
+    int result=kui_armada_ce_vmu_sd_commit(&runtime.sd,block,in);
+    /* A BUSY or failed save cannot publish a new cached view. The actual
+     * provider's durable ACK includes readback and reader restoration. */
+    if(result==KUI_VMU_EMU_IO_OK)runtime.read_tag[block&7u]=0u;
+    return result;
+}
+#endif
 int kui_armada_ce_vmu_runtime_bind(uint32_t owner) {
     if((runtime_sr()&UINT32_C(0x500000f0))!=UINT32_C(0x400000f0) ||
        !owner || (owner&3u) || owner>=UINT32_C(0x80000000)) return -1;
@@ -78,8 +115,12 @@ int kui_armada_ce_vmu_runtime_bind(uint32_t owner) {
     (void)services;
 #endif
     if(kui_armada_ce_vmu_sd_init(&runtime.sd,&kui_armada_ce_vmu_runtime_handoff,&sd_ops)) goto failed;
+#if KUI_VC2_VMU_PERSIST
+    const struct kui_vmu_emulation_io provider={&runtime,runtime_cached_read,runtime_cached_commit};
+#else
     const struct kui_vmu_emulation_io provider={&runtime.sd,
         kui_armada_ce_vmu_sd_read,kui_armada_ce_vmu_sd_commit};
+#endif
     if(kui_vmu_deferred_io_init(&runtime.queue,&provider,&guard)) goto failed;
     const struct kui_vmu_emulation_io queue={&runtime.queue,
         kui_vmu_deferred_io_read,kui_vmu_deferred_io_commit};
@@ -141,4 +182,45 @@ int kui_armada_ce_vmu_runtime_work(uint32_t owner) {
     runtime.worker=0u;runtime_guard_leave(&runtime,saved);
     return result;
 }
+#if KUI_VC2_VMU_PERSIST || defined(KUI_ARMADA_CE_VMU_RUNTIME_TEST)
+void kui_armada_ce_vmu_runtime_snapshot(
+    uint32_t out[KUI_ARMADA_CE_VMU_RUNTIME_SNAPSHOT_WORDS]) {
+    if(!out)return;
+    out[0]=runtime.started;out[1]=runtime.ready;out[2]=runtime.owner;
+    out[3]=runtime.faulted;out[4]=runtime.busy_rounds;
+    out[5]=runtime.endpoint.requests;out[6]=runtime.endpoint.reads;
+    out[7]=runtime.endpoint.write_phases;out[8]=runtime.endpoint.commits;
+    out[9]=runtime.endpoint.read_finalizations;
+    out[10]=runtime.endpoint.protocol.staged_block;
+    out[11]=runtime.endpoint.protocol.phases;out[12]=runtime.endpoint.protocol.active;
+    out[13]=runtime.endpoint.protocol.commit_attempted;
+    out[14]=runtime.endpoint.protocol.read_block;
+    out[15]=runtime.queue.state;out[16]=runtime.queue.ticket;
+    out[17]=runtime.queue.operation;out[18]=runtime.queue.block;out[19]=runtime.queue.failures;
+    out[20]=runtime.queue.submissions;out[21]=runtime.queue.completions;
+    out[22]=runtime.queue.provider_busy;out[23]=runtime.endpoint.busy;
+    out[24]=runtime.endpoint.io_errors;
+    out[25]=runtime.sd.started;out[26]=runtime.sd.bound;out[27]=runtime.sd.busy;
+    out[28]=runtime.sd.faulted;out[29]=runtime.sd.operation;
+    out[30]=runtime.sd.block;out[31]=runtime.sd.pending_crc;out[32]=runtime.sd.reads;
+    out[33]=runtime.sd.commits;out[34]=runtime.sd.bus_busy;
+    out[35]=runtime.sd.failures;out[36]=runtime.sd.identity_checks;
+    out[37]=runtime.sd.sector_reads;out[38]=runtime.sd.sector_writes;
+    out[39]=runtime.sd.last_lba;
+    out[40]=(uint32_t)runtime.sd.last_result;out[41]=(uint32_t)runtime.sd.last_sd_result;
+    out[42]=(uint32_t)runtime.sd.last_store_result;out[43]=(uint32_t)runtime.sd.last_loan_result;
+    out[44]=runtime.sd.pio.fault;
+    out[45]=runtime.sd.pio.detail;out[46]=runtime.sd.pio.stage;
+    out[47]=runtime.sd.pio.acquired;out[48]=runtime.sd.pio.captured;out[49]=runtime.sd.pio.selected;
+    out[50]=kui_armada_ce_vmu_runtime_handoff.base_count;
+    out[51]=kui_armada_ce_vmu_runtime_handoff.journal_count;
+    out[52]=kui_armada_ce_vmu_runtime_handoff.high_capacity;
+    out[53]=(uint32_t)kui_armada_ce_vmu_runtime_handoff.card_sectors;
+    out[54]=(uint32_t)(kui_armada_ce_vmu_runtime_handoff.card_sectors>>32);
+    out[55]=runtime.sd.pio.mode;out[56]=runtime.sd.pio.work;
+    out[57]=kui_armada_ce_vmu_runtime_services.loan_begin;
+    out[58]=kui_armada_ce_vmu_runtime_services.loan_end;
+    out[59]=kui_armada_ce_vmu_runtime_handoff.clean_checkpoint;
+}
+#endif
 #endif

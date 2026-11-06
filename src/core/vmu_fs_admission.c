@@ -9,6 +9,10 @@
 #define VMU_FS_TARGETS 259u
 #define VMU_FS_UPCASE_CLUSTERS 256u
 #define VMU_FS_EXFAT_SET 19u
+#define VMU_FS_TARGET_FILTER_WORDS 64u
+#ifdef KUI_VMU_FS_TARGET_INDEX_TEST
+static uint64_t vmu_fs_target_index_test_probes;
+#endif
 
 struct vmu_fs_dir {
     uint64_t bytes;
@@ -30,6 +34,10 @@ struct __attribute__((__may_alias__)) vmu_fs_state {
     struct kui_vmu_persist_profile profile;
     uint32_t visited[KUI_VMU_FS_MAX_DIRECTORY_CLUSTERS],visited_count;
     struct vmu_fs_target targets[VMU_FS_TARGETS];
+    /* Negative membership filter only: every target still receives the
+     * exact sorted-table lookup. At most 259 bits can be set in 2048 bits,
+     * so ordinary FAT links avoid most repeated binary searches. */
+    uint32_t target_filter[VMU_FS_TARGET_FILTER_WORDS];
     uint32_t target_count,upcase[VMU_FS_UPCASE_CLUSTERS],upcase_count;
     uint32_t bitmap_clusters,bitmap_checksum,upcase_checksum;
     struct vmu_fs_dir dirs[KUI_VMU_FS_MAX_DEPTH];
@@ -578,7 +586,13 @@ static int vmu_fs_overlap(uint64_t a,uint64_t n,uint64_t b,uint64_t m) {
 }
 static int vmu_fs_target_index(const struct vmu_fs_state *s,uint32_t cluster) {
     unsigned begin=0u,end=s->target_count;
+    if(!end || cluster<s->targets[0].cluster || cluster>s->targets[end-1u].cluster ||
+       !(s->target_filter[(cluster>>5u)&(VMU_FS_TARGET_FILTER_WORDS-1u)]&
+           (UINT32_C(1)<<(cluster&31u))))return -1;
     while(begin<end) {
+#ifdef KUI_VMU_FS_TARGET_INDEX_TEST
+        ++vmu_fs_target_index_test_probes;
+#endif
         unsigned middle=begin+(end-begin)/2u;
         if(s->targets[middle].cluster==cluster) return (int)middle;
         if(s->targets[middle].cluster<cluster) begin=middle+1u;else end=middle;
@@ -622,6 +636,7 @@ static int vmu_fs_file(struct vmu_fs_state *s,const struct vmu_fs_object *o,
         unsigned at=s->target_count++;
         while(at && s->targets[at-1u].cluster>c) {s->targets[at]=s->targets[at-1u];--at;}
         s->targets[at]=(struct vmu_fs_target){c,previous,role};
+        s->target_filter[(c>>5u)&(VMU_FS_TARGET_FILTER_WORDS-1u)]|=UINT32_C(1)<<(c&31u);
         ++s->stats->target_clusters;
         uint32_t logical=i*spc;
         if(vmu_fs_add_extent(s,file->allocated,&file->allocated_count,vmu_fs_limits[role],logical,(uint32_t)lba,spc))

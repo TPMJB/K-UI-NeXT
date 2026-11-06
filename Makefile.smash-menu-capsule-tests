@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/smash-menu-capsule-host
+HOST_CC ?= cc
+.DEFAULT_GOAL := smash-menu-capsule-tests
+CAPSULE_FLAGS := -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic \
+ -fsanitize=address,undefined -fno-sanitize-recover=all -fno-pie -no-pie \
+ -Iinclude -I.deps/fatfs/source
+.PHONY: smash-menu-capsule-tests
+smash-menu-capsule-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(CAPSULE_FLAGS) tests/test_smash_menu_capsule.c src/core/smash_menu_capsule.c -o $(BUILD)/test-map
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-map
+	$(HOST_CC) $(CAPSULE_FLAGS) tests/test_smash_menu_capsule_prepare.c src/core/smash_menu_capsule.c -o $(BUILD)/test-prepare
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-prepare
+	$(HOST_CC) $(CAPSULE_FLAGS) tests/test_smash_menu_capsule_pair.c src/core/smash_menu_capsule.c \
+	 src/core/smash_menu_loader.c src/core/smash_menu_return.c src/core/smash_native_menu.c src/core/retail_image.c \
+	 -o $(BUILD)/test-pair
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-pair
+	$(HOST_CC) $(CAPSULE_FLAGS) tests/test_smash_menu_collection_files.c src/core/smash_menu_capsule.c -o $(BUILD)/test-collection-files
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-collection-files
+	python3 tests/test_smash_capsule_launch_io.py
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-collection-files

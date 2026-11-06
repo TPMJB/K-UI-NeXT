@@ -11,7 +11,9 @@ SECTIONS
     . = 0x8c004000;
     .entry : { KEEP(*(.entry)) } :resident
     .text : { *(.text .text.*) } :resident
-    .rodata : { *(.rodata .rodata.*) } :resident
+    /* The stage copies this blob in words; keep tail alignment in an
+     * initialized section so objcopy and the embedded span agree exactly. */
+    .rodata : { *(.rodata .rodata.*) . = ALIGN(4); } :resident
     .data : { *(.data .data.*) } :resident
     . = ALIGN(4);
     __retail_resident_binary_end = .;

@@ -440,6 +440,51 @@ C(kui_vmu_native_allocation_failure_hook):
     .size C(kui_vmu_native_allocation_failure_hook),.-C(kui_vmu_native_allocation_failure_hook)
 #endif
 
+#if KUI_SMASH_NATIVE_MENU
+    /* A low handoff caller owns its own stack, not this worker's guard span.
+     * Preserve its C ABI before running the retirement proof on our existing
+     * stack. No SR write, bank switch, FPU instruction or hardware access. */
+    .text
+    .align 2
+    .global C(kui_smash_native_return_entry)
+    .type C(kui_smash_native_return_entry),@function
+C(kui_smash_native_return_entry):
+    mov.l r8,@-r15
+    sts.l pr,@-r15
+    mov r15,r8
+    /* Phase zero cannot overwrite a suspended transaction's worker frames.
+     * Masking was done by the low caller; no producer may intervene between
+     * this pure preflight and the full proof's repeated guard. */
+    mov.l .Lsmash_return_preflight,r0
+    jsr @r0
+    nop
+    cmp/eq #1,r0
+    bf .Lsmash_return_restore
+    mov.l .Lsmash_return_stack,r15
+    mov.l .Lsmash_return_body,r0
+    jsr @r0
+    nop
+.Lsmash_return_restore:
+    mov r8,r15
+    lds.l @r15+,pr
+    mov.l @r15+,r8
+    rts
+    nop
+    .align 2
+.Lsmash_return_preflight: .long C(kui_smash_native_return_preflight)
+.Lsmash_return_stack: .long RUNTIME_STACK_TOP-16
+.Lsmash_return_body: .long C(kui_smash_native_return_retire)
+    .size C(kui_smash_native_return_entry),.-C(kui_smash_native_return_entry)
+    .pushsection .rodata.smash_native_return,"a"
+    .align 2
+    .global C(kui_smash_native_return_exports)
+    .type C(kui_smash_native_return_exports),@object
+C(kui_smash_native_return_exports):
+    .long 0x4b535254,1,16,C(kui_smash_native_return_entry)
+    .size C(kui_smash_native_return_exports),.-C(kui_smash_native_return_exports)
+    .popsection
+#endif
+
     .data
     .align 2
     .global C(kui_vmu_native_passive_resume)

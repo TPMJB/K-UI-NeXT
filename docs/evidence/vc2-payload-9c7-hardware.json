@@ -1,0 +1,249 @@
+{
+  "schema": "kui.vc2.payload-9c7.hardware.v1",
+  "license": "GPL-3.0-only",
+  "build": "9c7d0498db86",
+  "source_commit": "9c7d0498db86234fe7a76b1286bf181bffec86d2",
+  "scope": "Manual transcription and decoded scalar evidence from three owner-supplied diagnostic photos. No photographs or commercial executable bytes are included.",
+  "photos": [
+    {
+      "source_filename": "01-image-1793760243355.jpg",
+      "diagnostic_page": 2,
+      "sha256": "69c6613ced7da29767529841c3c6d8c3dcb6dfc43d03342faf46426118d396dc",
+      "photo_included": false
+    },
+    {
+      "source_filename": "02-image-1793760249321.jpg",
+      "diagnostic_page": 3,
+      "sha256": "f378ed2995004d6dd24a73183cbcb37b0026996a5e3fb49fa6657bb45c152b6a",
+      "photo_included": false
+    },
+    {
+      "source_filename": "03-image-1793760256143.jpg",
+      "diagnostic_page": 1,
+      "sha256": "524b5e20d46be69741da2bbcbef262331f40036ca737128bcbfa7a59b8572b8c",
+      "photo_included": false
+    }
+  ],
+  "page_1_data": {
+    "WHY_CALLS_BYTES_TARGET_MAPFAIL": [
+      "00000002",
+      "00001a51",
+      "002a6aa6",
+      "00000000",
+      "00000000"
+    ],
+    "SRC_DST_LEN_OFFSET_FAD": {
+      "source": "8c0076b0",
+      "destination": "0e969f3a",
+      "length": "000000a6",
+      "offset": {
+        "status": "transcription-uncertain",
+        "candidates": [
+          "00003000",
+          "00003300"
+        ]
+      },
+      "FAD": "0007d1e0"
+    },
+    "HASH_SRC_DST_FIRST_WANT_GOT": [
+      "1e1e6e51",
+      "5d700d1b",
+      "0000005e",
+      "00000048",
+      "00000043"
+    ],
+    "TOKEN_CMD_LBA_COUNT_DEST": [
+      "000000a5",
+      "00000027",
+      "0007d144",
+      "00000009",
+      "0e969f3a"
+    ],
+    "TOTAL_DONE_PIECE_ERR_STAT": [
+      "00004800",
+      "00003000",
+      "000000a6",
+      "00000000",
+      "00000003"
+    ],
+    "PEND_MMU_PR_SP_FN": [
+      "00000001",
+      "00000001",
+      "01cf1978",
+      "0809f0cc",
+      "0000000c"
+    ]
+  },
+  "page_2_mmu": {
+    "SR_MMUCR_TTB_CCR_PTEH": [
+      "400081f0",
+      "7c000401",
+      "8c1058a0",
+      "00000105",
+      "0e969003"
+    ],
+    "FIRST_N_IDX_ADDR_DATA_PHYS": [
+      "00000001",
+      "0000003b",
+      "0e969303",
+      "0c51337c",
+      "0c513f3a"
+    ],
+    "FIRST_MASK": "00000fff",
+    "LAST_N_IDX_ADDR_DATA_PHYS": [
+      "00000001",
+      "0000003b",
+      "0e969303",
+      "0c51337c",
+      "0c513fdf"
+    ],
+    "LAST_MASK": "00000fff",
+    "RAM_VRAM_VM_MATCH_UNKNOWN": [
+      "00001a2f",
+      "00000000",
+      "00000022",
+      "00000022",
+      "00000000"
+    ],
+    "RAW_R5": "0809f0e0"
+  },
+  "page_3_alloc": {
+    "RAMFREE_RAMEND_EFFECTIVE_LOW_HIGH": [
+      "8c1e0000",
+      "8cfc0000",
+      "8cfc0000",
+      "8c1d1000",
+      "8cfc0000"
+    ],
+    "COUNT_POINTER_VALID": [
+      "00000001",
+      "8c1dd400",
+      "00000001"
+    ],
+    "START_END_ALLOC_STATE_META": [
+      [
+        "0c1e1000",
+        "0cfc0000",
+        "0c1e1000",
+        "8cfbf222",
+        "8cfbf000"
+      ],
+      [
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000"
+      ],
+      [
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000",
+        "00000000"
+      ]
+    ]
+  },
+  "decoded": {
+    "stop_reason": "Chunk source/destination comparison differed; virtual-VRAM stop bit was not set.",
+    "command": 39,
+    "native_function": 12,
+    "chunk_bytes": 166,
+    "first_mismatch": {
+      "chunk_offset": "0x5e",
+      "source_address": "0x8c00770e",
+      "destination_virtual_address": "0x0e969f98",
+      "destination_physical_address": "0x0c513f98",
+      "source_byte": "0x48",
+      "destination_byte": "0x43"
+    },
+    "UTLB": {
+      "unique_matches": 1,
+      "entry_index": 59,
+      "page_bytes": 4096,
+      "physical_page": "0x0c513000",
+      "region": "main RAM",
+      "cacheable": true,
+      "write_back": true,
+      "dirty": true,
+      "shared": false,
+      "protection_bits": 3
+    },
+    "allocator": {
+      "physical_region_bytes": 14544896,
+      "region_pages": 3551,
+      "metadata_pages": 1,
+      "usable_pages_before_allocations": 3550,
+      "reference_state_bytes": 3550,
+      "reservation_exclusion_consistent": true,
+      "current_free_pages_measured": false
+    },
+    "asset_mapping": {
+      "private_catalog": "vc2-runtime-originals/directory-catalog.json",
+      "asset": "VC2/BIN/COMMON/SOUND11.WVP",
+      "file_LBA": 512221,
+      "file_FAD": "0x7d173",
+      "file_bytes": 436292,
+      "candidate_chunk_file_offsets": [
+        "0x36800",
+        "0x36b00"
+      ],
+      "candidate_bad_byte_file_offsets": [
+        "0x3685e",
+        "0x36b5e"
+      ],
+      "limit": "Candidates differ by the uncertain low sector bits of the displayed chunk OFFSET; no file byte offset is asserted as uniquely transcribed."
+    }
+  },
+  "cache_geometry": {
+    "CCR": "0x105",
+    "OIX": 0,
+    "ORA": 0,
+    "operand_cache_index_bits": "13:5",
+    "bad_destination_virtual_line": "0x0e969f80",
+    "virtual_line_index": "0x1f80",
+    "bad_destination_physical_line": "0x0c513f80",
+    "physical_P1_alias_line": "0x8c513f80",
+    "physical_alias_index": "0x3f80",
+    "physical_tag_for_cache_array": "0x0c513c00",
+    "possible_alias_indices": [
+      "0x0f80",
+      "0x1f80",
+      "0x2f80",
+      "0x3f80"
+    ],
+    "source_line": "0x8c007700",
+    "source_index": "0x3700",
+    "source_buffer_role": "Native SCI receive area1 plus0x50; the chunk is not on either stack.",
+    "probe_literal_collision": {
+      "function": "translation",
+      "P1_literal_addresses": [
+        "0x8cfc9f80",
+        "0x8cfc9f84"
+      ],
+      "operand_cache_index": "0x1f80",
+      "runs_before_fold": true,
+      "source_confirmed": true,
+      "root_cause_confirmed": false
+    }
+  },
+  "conclusions": [
+    "This capture demonstrates a comparison mismatch after the probe observation sequence in a virtual mapping of main RAM; it does not demonstrate a VRAM copy failure.",
+    "The effective allocator ceiling and one-byte-per-page state geometry agree with the installed64KiB helper exclusion; no overlap with that exclusion is shown.",
+    "The original probe performs cached metadata/literal reads before comparison. Its translation literals share the damaged destination cache index and can perturb that line.",
+    "The literal collision does not by itself explain incorrect data: a correct writeback should preserve the copied bytes. Dirty aliases, source lifetime and the timing of the mismatch remain unmeasured."
+  ],
+  "required_next_observations": [
+    "Preserve the exact pre-copy source bytes and request tuple independently of the live SCI receive buffer.",
+    "Perform an uncached-code early destination comparison before cached metadata/translation work, then compare again afterward.",
+    "Compare live source and DMA state with the preserved pre-copy source to distinguish source reuse from destination corruption.",
+    "Treat UTLB/memory snapshots as mapping/capacity evidence rather than proof of current cache contents or free memory."
+  ],
+  "limits": [
+    "OFFSET remains explicitly ambiguous3000/3300; DONE is3000. Source hash is transcribed1e1e6e51.",
+    "No source-preservation snapshot or pre-translation comparison exists in this capture.",
+    "No operand-cache tags/data were captured, so a stale or dirty synonym is not established.",
+    "A source/destination hash covers this chunk only, not an entire file.",
+    "This evidence does not establish a reader fix, VMU-save compatibility, VRAM failure or a universal-loader claim."
+  ]
+}

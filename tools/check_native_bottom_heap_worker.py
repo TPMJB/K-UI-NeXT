@@ -57,12 +57,54 @@ DISPATCH_GATE_PINS = {'_span@vmu_native_heap.c': (76, '64d42c5ab08e5e0c1e43b9aa8
  '_kui_vmu_native_heap_lease_identity_valid': (76,
                                                '79a1ea16da8da8eeee75d90cbfc5159823a23ba3aa871de989554a606c6313cc'),
  '_kui_vmu_native_heap_lease_valid': (28, 'ec3c8bce81483e723c16ff9f4ba19b982ff81e3dde4701f2706817b52e3462b3')}
+DIRECT_FUNCTIONS=frozenset(PINS)-{'_bottom_geometry@vmu_native_heap.c'}
+# Independently rebuilt pristine 3a6ae064 General/session A1 and A2 workers
+# retain these same complete bodies. This modern direct-malloc closure inlines
+# bottom geometry and binds the immutable two-shape table; it is not the
+# historical nine-function closure above. No expected pin is learned from the
+# candidate. Their exact addresses/literal targets are included in raw hashes.
+SESSION_DIRECT_PINS={
+ '_span@vmu_native_heap.c':(76,'64d42c5ab08e5e0c1e43b9aa8b809ce1d2d0be16e4467bcb8f5443ca6b59f305'),
+ '_index@vmu_native_heap.c':(100,'c637e830fbe24402c127227a42e033eb0dbe087c58fb4e506e1c287d6a558f72'),
+ '_metadata@vmu_native_heap.c':(436,'660d4aea44dbad2b4dd11ab50c1b1331383fc030759c75514afd12abba9354e0'),
+ '_read_is@vmu_native_heap.c':(80,'cdf2e10e5f7e188d19273bede627fc11ec73b8f837cc429a161afe3242670e6e'),
+ '_identity@vmu_native_heap.c':(444,'6d46107fe1f8b05973dcc77d14ca96bc1388110eb51f4ecc1b9e258e8521efa9'),
+ '_kui_vmu_native_heap_lease_identity_valid':(76,'7a9b2982584158380cfa4e3db32f550184e08ad2ce45b96b3a17a6869221b20c'),
+ '_kui_vmu_native_heap_lease_valid_with_release':(512,'a6f20c65fced0cbeaf7825baa0baceede1b54d526e16f6f7656bae9376e66dcf'),
+ '_kui_vmu_native_heap_lease_valid':(52,'9c7327ee6f04ea86e61596db47984bf589331a6164f950b639db39bef89f58d1')}
+SESSION_DIRECT_OBJECTS={'_heap_shapes@vmu_native_heap.c':
+    (16,'fcf8e4fc85390977b00ad86a99a683d47e5e633fff6d62b0cb5d93837803e2c0')}
+# Independently pristine3a6 ordinary A1/A2 references preserve these complete
+# guard bodies and the16-byte immutable shape object. Slot-specific raw pins
+# include every actual pointer relocation; no candidate supplies expectations.
+ORDINARY_DIRECT_PINS={1: {'_identity@vmu_native_heap.c': (444, '006fecf2e6f25632d12a3ad435bf72f2d55554dcb6bed3b6bd3fc5cc00f7230d'),
+     '_index@vmu_native_heap.c': (100, '66676f102412c8ecc27ce9f0143f03a9594deca4f4245784860c7d675875f921'),
+     '_kui_vmu_native_heap_lease_identity_valid': (76,
+                                                   '359f305ee7ed3c776321cdc82bcabfd847ce87042f734d1d7210bf0b5a0414a9'),
+     '_kui_vmu_native_heap_lease_valid': (52, 'd0513e0edf81e206a40a0416326fc17fab96556207ff06db7cc9337678680f94'),
+     '_kui_vmu_native_heap_lease_valid_with_release': (512,
+                                                       'd17a47aabddfd6ae39dba071689b6658984616aa52c7cf9a81203120e889e7b1'),
+     '_metadata@vmu_native_heap.c': (436, 'dc5bcf893c96670cce10942be17c20414a586e291770083ee817f89cc8fa1cf0'),
+     '_read_is@vmu_native_heap.c': (80, '5524658ff175a69946be734798d5c531e8747ad0706ac9f514708f0c284a2657'),
+     '_span@vmu_native_heap.c': (76, '64d42c5ab08e5e0c1e43b9aa8b809ce1d2d0be16e4467bcb8f5443ca6b59f305')},
+ 2: {'_identity@vmu_native_heap.c': (444, 'd2c4049919bb3860844e575908ebb38d9801e04137162fea966b590eb48edd1a'),
+     '_index@vmu_native_heap.c': (100, '468b8be593a9f50192981498e5670b73f6ecbdebda2936341744b2976f4fb3c8'),
+     '_kui_vmu_native_heap_lease_identity_valid': (76,
+                                                   'ae45f68a7fd97986bb319ed76003d325483972d3493ade44edd86b409ceaafeb'),
+     '_kui_vmu_native_heap_lease_valid': (52, '191609eda161cef5ffed68ede10939328b71b89fb0bb1c849bdd80b5e2925c48'),
+     '_kui_vmu_native_heap_lease_valid_with_release': (512,
+                                                       '9aa49a668ea37e1ae1dc928fa3fa33b6efb3ed8d3a62a65d0adf520460c61dc8'),
+     '_metadata@vmu_native_heap.c': (436, '0150a88517cc6913208591909703a4b552b1173fc8f8b2e13b047e2837aa101e'),
+     '_read_is@vmu_native_heap.c': (80, '49269d3712b0cacc6782f3e7255b455c4d7faf5667683a9e616b0e88debb7bc5'),
+     '_span@vmu_native_heap.c': (76, '64d42c5ab08e5e0c1e43b9aa8b809ce1d2d0be16e4467bcb8f5443ca6b59f305')}}
+ORDINARY_DIRECT_OBJECTS={'_heap_shapes@vmu_native_heap.c': (16, 'fcf8e4fc85390977b00ad86a99a683d47e5e633fff6d62b0cb5d93837803e2c0')}
 SOURCES=('tools/native_runtime_layout.py','tools/check_native_general_lean_profile.py',
          'tools/check_native_general_lean_heap_pins.py','tools/check_native_compact_background_profile.py',
          'tools/check_native_bottom_heap_worker.py','tools/profile_vmu_native_release_sh.py',
          'tests/test_vmu_native_heap_execution.py','tests/test_native_compact_background_profile.py',
-         'src/core/vmu_native_heap.c',
+         'src/core/vmu_native_heap.c','src/core/vmu_native_heap_bottom_code.inc',
          'include/kui/vmu_native_heap.h')
+SOURCES+=('tools/check_native_session_witness_profile.py','tools/check_native_ordinary_general_profile.py')
 
 
 def require(value,message):
@@ -72,17 +114,30 @@ def require(value,message):
 def sha(data):return hashlib.sha256(data).hexdigest()
 
 
-def records(worker):
-    result={}
+def records(worker,direct=None):
+    result={};names=DIRECT_FUNCTIONS if direct is True or direct_profile(worker) else set(PINS)
+    if direct is True:
+        # The original-execution harness separately validates the exact
+        # physical-disc or compact exports/layout. Keep FILE identity here
+        # without asking the image-only reader-layout oracle to select a
+        # physical-disc lease profile that it does not implement.
+        from check_native_bottom_heap import records as typed_records
+        for name,(address,body,kind,section) in typed_records(worker).items():
+            if name not in names:continue
+            require(kind==2 and section[1]==1 and section[2]&7==6,
+                    'Direct guard is not complete executable code: '+name)
+            result[name]=(address,body,section[4]+address-section[3])
+        require(set(result)==names,'Direct worker heap guard closure differs')
+        return result
     for name,address,count,kind,owner in prepared_symbol_records(worker):
-        if name not in PINS:continue
+        if name not in names:continue
         require(name not in result and kind==2 and owner<len(worker[3]),'Ambiguous/untyped heap kernel: '+name)
         section=worker[3][owner]
         require(section[1]==1 and section[2]&7==6 and section[3]<=address<address+count<=section[3]+section[5],
                 'Heap kernel is not complete executable code: '+name)
         at=section[4]+address-section[3];body=worker[0][at:at+count]
         result[name]=(address,body,at)
-    require(set(result)==set(PINS),'Worker heap guard closure differs')
+    require(set(result)==names,'Worker heap guard closure differs')
     return result
 
 
@@ -90,20 +145,48 @@ def pinned(worker):
     gate=worker[4].get('__kui_native_dispatch_read_gate_worker')
     require(gate is None or gate==(1,0,0,0xfff1) and bottom_worker_profile(worker),
             'Dispatch-gated worker lacks exact bottom capability')
-    if worker_profile(worker):
+    if session_direct_profile(worker):
+        pins=SESSION_DIRECT_PINS
+        require(set(pins)==DIRECT_FUNCTIONS,'Session worker direct predicate closure differs')
+    elif ordinary_direct_profile(worker):
+        from check_native_ordinary_general_profile import profile as ordinary_slot
+        pins=ORDINARY_DIRECT_PINS[ordinary_slot(worker)]
+        require(set(pins)==DIRECT_FUNCTIONS,'Ordinary worker direct predicate closure differs')
+    elif worker_profile(worker):
         require(gate==(1,0,0,0xfff1), 'Lean heap worker requires its exact dispatch gate')
         from check_native_compact_background_profile import worker_profile as compact_profile
         if compact_profile(worker):
             from check_native_compact_background_profile import WORKER_FUNCTIONS as pins
+            require(set(pins)==DIRECT_FUNCTIONS,'Direct compact heap predicate closure differs')
         else:
             pins=WORKER_FUNCTIONS
-        require(set(pins)==set(PINS)==set(DISPATCH_GATE_PINS),
-                'Lean heap worker must retain the complete historical closure')
+            require(set(pins)==set(PINS)==set(DISPATCH_GATE_PINS),
+                    'Lean heap worker must retain the complete historical closure')
     else:
         pins=DISPATCH_GATE_PINS if gate is not None else PINS
     result={}
     for name,(address,body,_) in records(worker).items():
         require((len(body),sha(body))==pins[name],'Worker heap guard instruction/literal pin differs: '+name)
+        result[name]=dict(address=hex(address),bytes=len(body),sha256=sha(body))
+    return result
+
+
+def object_pins(worker):
+    """Keep compact metadata's complete immutable shape contract explicit."""
+    if not direct_profile(worker):return {}
+    if session_direct_profile(worker):pins=SESSION_DIRECT_OBJECTS
+    elif ordinary_direct_profile(worker):pins=ORDINARY_DIRECT_OBJECTS
+    else:
+        from check_native_compact_background_profile import WORKER_OBJECTS as pins
+    from check_native_bottom_heap import records as typed_records
+    available=typed_records(worker);result={}
+    require(set(pins)=={'_heap_shapes@vmu_native_heap.c'},
+            'Direct worker immutable shape closure differs')
+    for name,expected in pins.items():
+        require(name in available,'Direct worker shape object missing: '+name)
+        address,body,kind,section=available[name]
+        require(kind==1 and section[2]&7==2 and (len(body),sha(body))==expected,
+                'Direct worker immutable shape pin differs: '+name)
         result[name]=dict(address=hex(address),bytes=len(body),sha256=sha(body))
     return result
 
@@ -132,10 +215,11 @@ def layout():
 
 
 class Worker(ReleaseSH):
-    def __init__(self,path):
+    def __init__(self,path,direct=None):
         super().__init__(path)
-        self.closure=records(self.elf)
+        self.closure=records(self.elf,direct)
         self.reader_failure=False
+        self.reader_source=None
         self.executed=set();self.reader_addresses=[]
         self.tracking=False
 
@@ -172,7 +256,8 @@ class Worker(ReleaseSH):
                     require(self.r[4]==0 and not self.r[5]&3,'Coherent reader context/address changed')
                     SH.offset(self.r[5],4);SH.offset(self.r[6],4)
                     self.reader_addresses.append(self.r[5])
-                    if not self.reader_failure:self.write(self.r[6],self.read(self.r[5]))
+                    if not self.reader_failure:self.write(self.r[6],
+                        (self.read if self.reader_source is None else self.reader_source)(self.r[5]))
                     self.r[0]=0 if self.reader_failure else 1;self.pc=self.pr;continue
                 op=self.instruction(pc);target=None;delay=False;n=(op>>8)&15
                 if op>>12 in (0xa,0xb):
@@ -195,9 +280,14 @@ class Worker(ReleaseSH):
         finally:self.active=False;self.tracking=False
 
 
-def authored(path,anchor,alias,case):
+def authored(path,anchor,alias,case,direct=False):
     cpu=Worker(path);fixture(cpu,0,0)
     words=list(struct.unpack('<29I',cpu.block(LEASE,116)))
+    if direct:
+        # A direct owner has no dispatch objects. Its three original code
+        # literals witness the addresses of the live control cells instead.
+        words[6:8]=[3,2]
+        words[13:17]=[words[10]+0xae,words[10]+0x160,0,0]
     begin=0x0c600000|alias;count=0x100000;length=layout_for(cpu.elf[4]).LEASE_BYTES
     if case=='minimum':count=length+64
     if case=='ram-end':begin=0x0cf00000|alias
@@ -206,8 +296,10 @@ def authored(path,anchor,alias,case):
     words[22:]=[begin,count,length,header,payload,units,remaining]
     sentinel,table=words[17],words[16]
     cpu.store_block(LEASE,struct.pack('<29I',*words))
-    for at,value in ((sentinel-4,table),(table,words[13]),(table+4,words[14]),
-       (sentinel+4,0),(sentinel+0x20,sentinel),(sentinel+0x24,begin),(sentinel+0x28,count),
+    identity_roles=(((words[10]+0x14c,words[19]),(words[10]+0x150,words[21]),
+        (words[10]+0x154,words[20])) if direct else
+        ((sentinel-4,table),(table,words[13]),(table+4,words[14])))
+    for at,value in (*identity_roles,(sentinel+4,0),(sentinel+0x20,sentinel),(sentinel+0x24,begin),(sentinel+0x28,count),
        (sentinel+0x2c,begin),(header+4,units)):cpu.write(at,value)
     free_begin=payload+length if anchor=='head' else begin
     free_end=begin+count if anchor=='head' else header
@@ -256,8 +348,14 @@ def authored(path,anchor,alias,case):
     if case=='free-unaligned':cpu.write(sentinel,free_begin+1);expected_walk=0
     if case=='free-outside':cpu.write(sentinel,(0x0cfff000|alias));expected_walk=0
     if case.startswith('witness-'):
-        addresses=[sentinel+0x24,sentinel+0x2c,sentinel+0x28,sentinel-4,table,table+4,sentinel+4,header+4]
+        addresses=[sentinel+0x24,sentinel+0x2c,sentinel+0x28,
+            *[at for at,_ in identity_roles],sentinel+4,header+4]
         at=addresses[int(case.split('-')[1])];cpu.write(at,cpu.read(at)^1);expected_identity=expected_walk=0
+    if case.startswith('direct-'):
+        field,value={'family':(6,1),'layout':(7,1),'dispatch-cell':(15,sentinel-4),
+            'dispatch-table':(16,sentinel+0x40),'initializer-alignment':(10,words[10]+2)}[case[7:]]
+        words[field]=value;expected_identity=expected_walk=0
+        cpu.store_block(LEASE,struct.pack('<29I',*words))
     if case in ('release-lease','release-inside','release-unaligned','release-before','release-after'):
         candidate={'release-lease':payload,'release-inside':payload+32,'release-unaligned':free_begin+33,
                    'release-before':begin,'release-after':begin+count+32}[case];expected_walk=0
@@ -273,14 +371,16 @@ CASES=('valid','empty','minimum','ram-end','cursor-node','candidate','fragmented
  'free-intrusion','free-cross-lease','free-zero','free-too-large','free-unsorted','free-overlap',
  'cursor-unseen','free-cycle','free-unaligned','free-outside','candidate-free','candidate-zero',
  'candidate-too-large','candidate-alias','release-lease','release-inside','release-unaligned','release-before','release-after')
+DIRECT_CASES=(*CASES,*('direct-'+name for name in
+    ('family','layout','dispatch-cell','dispatch-table','initializer-alignment')))
 
 
-def execute_cases(path):
+def execute_cases(path,direct=False):
     rows=[];entered=set()
     for anchor in ('head','tail'):
         for alias in (0,0x80000000,0xa0000000):
-            for case in CASES:
-                cpu,candidate,initializations,identity,walk=authored(path,anchor,alias,case)
+            for case in DIRECT_CASES if direct else CASES:
+                cpu,candidate,initializations,identity,walk=authored(path,anchor,alias,case,direct)
                 first=cpu.call('_kui_vmu_native_heap_lease_identity_valid',[LEASE,READER,0,initializations])
                 require(first['result']==identity,'Worker identity result differs: '+str((anchor,hex(alias),case,first)))
                 result=cpu.call('_kui_vmu_native_heap_lease_valid_with_release',
@@ -293,11 +393,42 @@ def execute_cases(path):
                     simple=cpu.call('_kui_vmu_native_heap_lease_valid',[LEASE,READER,0,initializations])
                     require(simple['result']==walk,'Worker full lease wrapper result differs')
                 entered.update(cpu.executed)
+                require(not direct or all(cpu.reader_addresses),'Direct worker read an absent zero dispatch role')
                 rows.append(dict(anchor=anchor,alias=hex(alias),case=case,identity=identity,walk=walk,
                                  instructions=first['instructions']+result['instructions']))
-    require(entered==set(PINS),'Worker cases did not execute every pinned heap predicate')
+    require(entered==set(cpu.closure),'Worker cases did not execute every pinned heap predicate')
     return rows
 
+
+def direct_profile(worker):
+    from check_native_compact_background_profile import worker_profile as compact_profile
+    compact=compact_profile(worker)
+    session=session_direct_profile(worker)
+    ordinary=ordinary_direct_profile(worker)
+    require(sum(bool(p) for p in (compact,session,ordinary))<=1,
+            'Worker cannot mix compact/session/ordinary General heap profiles')
+    return compact or session or ordinary
+
+
+def session_direct_profile(worker):
+    from check_native_session_witness_profile import profile as session_profile
+    slot=session_profile(worker)
+    if slot is None:return False
+    require(slot in (1,2) and worker_profile(worker) and bottom_worker_profile(worker) and
+            worker[4].get('__kui_native_dispatch_read_gate_worker')==(1,0,0,0xfff1),
+            'Session heap requires its exact General/bottom/dispatch-gated profile')
+    return True
+
+
+
+def ordinary_direct_profile(worker):
+    from check_native_ordinary_general_profile import profile as ordinary_profile
+    slot=ordinary_profile(worker)
+    if slot is None:return False
+    require(slot in ORDINARY_DIRECT_PINS and worker_profile(worker) and bottom_worker_profile(worker) and
+            worker[4].get('__kui_native_dispatch_read_gate_worker')==(1,0,0,0xfff1),
+            'Ordinary heap requires its exact General/bottom/dispatch-gated profile')
+    return True
 
 def require_companion(worker,proof):
     require(isinstance(proof,dict) and proof.get('lease_bytes')==layout_for(worker[4]).LEASE_BYTES,
@@ -306,6 +437,7 @@ def require_companion(worker,proof):
     require(isinstance(proof,dict) and proof.get('schema')==SCHEMA and proof.get('enabled') is True and
             proof.get('artifact_sha256')==sha(worker[0]),'Bottom worker companion artifact/schema differs')
     require(proof.get('exact_code_pins')==pinned(worker),'Bottom worker companion lacks exact guard pins')
+    require(proof.get('exact_object_pins')==object_pins(worker),'Bottom worker companion lacks exact shape pins')
     require(proof.get('case_count')==len(CASES)*6 and proof.get('anchors')==['head','tail'] and
             proof.get('aliases')==[0,0x80000000,0xa0000000] and proof.get('all_heap_predicates_executed') is True and
             proof.get('no_predicate_stubs') is True,'Bottom worker companion coverage differs')
@@ -319,6 +451,16 @@ def require_companion(worker,proof):
             'Bottom worker companion authored-case matrix differs')
     require(proof.get('coherent_reader_only_fold') is True and proof.get('owner_and_lease_writes')==0,
             'Bottom worker companion read-only execution differs')
+    direct=proof.get('direct_family_cases')
+    require(isinstance(direct,list) and len(direct)==(len(DIRECT_CASES)*6 if direct_profile(worker) else 0),
+            'Bottom worker companion direct-family coverage differs')
+    if direct_profile(worker):
+        require({(r.get('anchor'),r.get('alias'),r.get('case')) for r in direct if isinstance(r,dict)}==
+            {(anchor,hex(alias),case) for anchor in ('head','tail')
+             for alias in (0,0x80000000,0xa0000000) for case in DIRECT_CASES} and
+            all(isinstance(r,dict) and r.get('identity') in (0,1) and r.get('walk') in (0,1) and
+                isinstance(r.get('instructions'),int) and r['instructions']>0 for r in direct),
+            'Bottom worker companion direct-family case matrix differs')
     require(proof.get('target_layout')==dict(zip(('lease.bytes','lease.owner','lease.begin','lease.heap_bytes',
       'lease.lease_bytes','lease.header','lease.payload','lease.units','lease.remaining','owner.bytes'),
       (116,16,88,92,96,100,104,108,112,72))),'Bottom worker companion ABI differs')
@@ -330,11 +472,12 @@ def require_companion(worker,proof):
 def check(directory,self_test=False):
     path=Path(directory)/'native-worker.elf';worker=read_elf(path)
     if not bottom_worker_profile(worker):return dict(schema=SCHEMA,enabled=False)
-    pins=pinned(worker);abi=layout();rows=execute_cases(path)
-    report=dict(schema=SCHEMA,enabled=True,artifact_sha256=sha(worker[0]),exact_code_pins=pins,
+    pins=pinned(worker);objects=object_pins(worker);abi=layout();rows=execute_cases(path)
+    direct_rows=execute_cases(path,True) if direct_profile(worker) else []
+    report=dict(schema=SCHEMA,enabled=True,artifact_sha256=sha(worker[0]),exact_code_pins=pins,exact_object_pins=objects,
       lease_bytes=layout_for(worker[4]).LEASE_BYTES,
       target_layout=abi,case_count=len(rows),anchors=['head','tail'],aliases=[0,0x80000000,0xa0000000],
-      cases=rows,all_heap_predicates_executed=True,no_predicate_stubs=True,
+      cases=rows,direct_family_cases=direct_rows,all_heap_predicates_executed=True,no_predicate_stubs=True,
       coherent_reader_only_fold=True,owner_and_lease_writes=0,
       source_sha256={n:sha((ROOT/n).read_bytes()) for n in SOURCES},
       limits=['Authored RAM metadata fixtures execute linked software guards, not a cycle/cache/hardware model.',
@@ -349,10 +492,23 @@ def check(directory,self_test=False):
                 try:pinned((bytes(changed),*worker[1:]))
                 except ValueError:byte_mutants+=1
                 else:raise ValueError('Heap byte pin accepted mutation: '+name)
+        object_mutants=0
+        if objects:
+            from check_native_bottom_heap import records as typed_records
+            for name in objects:
+                address,body,_,section=typed_records(worker)[name]
+                at=section[4]+address-section[3]
+                for index in range(len(body)):
+                    for bit in range(8):
+                        changed=bytearray(worker[0]);changed[at+index]^=1<<bit
+                        try:object_pins((bytes(changed),*worker[1:]))
+                        except ValueError:object_mutants+=1
+                        else:raise ValueError('Worker shape pin accepted changed bit: '+name)
         semantic=0
         for value,case,expected in ((0,'valid',1),(1,'middle',0)):
             cpu,_,initializations,_,_=authored(path,'head',0x80000000,case)
-            begin=cpu.closure['_bottom_geometry@vmu_native_heap.c'][0]
+            begin=cpu.closure['_identity@vmu_native_heap.c' if direct_profile(worker)
+                else '_bottom_geometry@vmu_native_heap.c'][0]
             cpu.store_block(begin,struct.pack('<3H',0xe000|value,0x000b,0x0009))
             result=cpu.call('_kui_vmu_native_heap_lease_identity_valid',[LEASE,READER,0,initializations])
             require(result['result']!=expected,'Worker semantic fixture missed changed endpoint geometry')
@@ -361,12 +517,15 @@ def check(directory,self_test=False):
         for field,value in [('schema','bad'),('artifact_sha256','0'*64),('case_count',0),('lease_bytes',0),
                             ('all_heap_predicates_executed',False),('no_predicate_stubs',False),
                             ('exact_code_pins',{}),('source_sha256',{}),('target_layout',{}),
-                            ('cases',[]),('owner_and_lease_writes',1),('coherent_reader_only_fold',False)]:
+                            ('exact_object_pins',{} if objects else {'invented':{}}),
+                            ('cases',[]),('direct_family_cases',[] if direct_rows else [{}]),
+                            ('owner_and_lease_writes',1),('coherent_reader_only_fold',False)]:
             changed={**report,field:value}
             try:require_companion(worker,changed)
             except ValueError:refusals+=1
             else:raise ValueError('Worker companion accepted changed field: '+field)
         report['self_tests']=dict(whole_guard_byte_mutants=byte_mutants,
+          whole_shape_object_bit_mutants=object_mutants,
           actual_endpoint_semantic_counterfactuals=semantic,companion_refusals=refusals)
     return report
 

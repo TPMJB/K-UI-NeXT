@@ -5,6 +5,7 @@
 #include "kui/vmu_fs_admission.h"
 #include "kui/vmu_image.h"
 #include "kui/vmu_store.h"
+#include "kui/vmu_fs_witness.h"
 
 struct kui_vmu_persist_session_identity {
     uint8_t cid[16];
@@ -32,13 +33,14 @@ enum kui_vmu_persist_session_result {
     KUI_VMU_PERSIST_SESSION_IDENTITY=-4, KUI_VMU_PERSIST_SESSION_IO=-5,
     KUI_VMU_PERSIST_SESSION_ALLOCATION=-6, KUI_VMU_PERSIST_SESSION_STORE=-7,
     KUI_VMU_PERSIST_SESSION_IMAGE=-8, KUI_VMU_PERSIST_SESSION_VERIFY=-9,
-    KUI_VMU_PERSIST_SESSION_BOUNDS=-10
+    KUI_VMU_PERSIST_SESSION_BOUNDS=-10, KUI_VMU_PERSIST_SESSION_WITNESS=-11
 };
 enum kui_vmu_persist_session_phase {
     KUI_VMU_PERSIST_SESSION_IDLE=0, KUI_VMU_PERSIST_SESSION_ADMISSION=1,
     KUI_VMU_PERSIST_SESSION_RECOVERY=2, KUI_VMU_PERSIST_SESSION_VALIDATION=3,
     KUI_VMU_PERSIST_SESSION_READ=4, KUI_VMU_PERSIST_SESSION_COMMIT=5,
-    KUI_VMU_PERSIST_SESSION_CHECKPOINT=6
+    KUI_VMU_PERSIST_SESSION_CHECKPOINT=6, KUI_VMU_PERSIST_SESSION_WITNESS_CHECK=7,
+    KUI_VMU_PERSIST_SESSION_REBIND=8
 };
 /* Static allocation only. Zero-initialize once; never move/copy/edit/reuse a
  * started instance, even after failure. Public caller-supplied API buffers and
@@ -72,6 +74,71 @@ int kui_vmu_persist_session_init(struct kui_vmu_persist_session *,
     const struct kui_vmu_persist_profile *,const struct kui_vmu_fs_input *,
     const struct kui_vmu_persist_session_ops *,struct kui_vmu_fs_workspace *,
     struct kui_vmu_image_workspace *);
+/* Collection attachment is a separate entry point, never an option on init.
+ * The lifecycle owner supplies expected_* from its LIVE, terminally retired
+ * generation receipt established by a complete ordinary ownership admission.
+ * They must not be accepted from the persisted witness header itself. The
+ * root receipt's binding SHA binds ownership_sha256 plus collection/build;
+ * the manifest SHA pins every captured metadata observation. No old session,
+ * callback, filesystem object or image-content snapshot is resumed/copied.
+ * Header/records are borrowed untrusted bytes; expected_* are trusted inputs. */
+struct kui_vmu_persist_attach_source {
+    const uint8_t *header;
+    const struct kui_vmu_fs_witness_record *records;
+    size_t records_bytes;
+    struct kui_vmu_fs_witness_binding expected_binding;
+    uint8_t expected_manifest_sha256[32],ownership_sha256[32];
+};
+/* Every callback, including read_run, accesses the SAME initialized device and
+ * io.context under one exclusive acquisition across attach and final release.
+ * read_run checks each block's ordinary wire CRC and healthy stream stop,
+ * retains no buffer, and writes only count*512 bytes to its supplied output. */
+struct kui_vmu_persist_attach_ops {
+    struct kui_vmu_persist_session_ops io;
+    kui_vmu_fs_witness_read_run read_run;
+};
+/* Internally verifies canonical profile binding, actual identity before/after
+ * complete fresh witness replay, then admits the exact maps before any store
+ * recovery write. Recovery, full VMU validation and current CRC/SHA collection
+ * are identical to init. Scratch is private, disjoint,32B aligned and >=16KiB.
+ * A fault latches this new session; neither witness nor caller bool bypasses
+ * verification. No local attestation is exposed or reusable after this call. */
+int kui_vmu_persist_session_attach(struct kui_vmu_persist_session *,
+    const struct kui_vmu_persist_profile *,const struct kui_vmu_persist_attach_source *,
+    const struct kui_vmu_persist_attach_ops *,void *scratch,size_t scratch_bytes,
+    struct kui_vmu_image_workspace *);
+/* A LIVE allocation epoch is distinct from a device/bus acquisition. Its
+ * lifecycle owner has proved that no allocation-capable writer ran after
+ * admission, and transfers it only after healthy terminal owner retirement.
+ * Protocol reinitialization may occur between owners; faults/GUI/reset or an
+ * unknown writer end the epoch BEFORE reinitialization can clear bus flags.
+ * This local descriptor is never an on-card record or an import interface.
+ * domain_binding_sha256 is authenticated by that lifecycle owner against its
+ * collection/build domain. A caller must not manufacture it from disk bytes.
+ * Rooted lifecycle generation/sequence validation prevents copies/replays;
+ * this mutable invocation guard additionally prevents reuse/reentry locally. */
+#define KUI_VMU_ALLOCATION_TRANSFER_MAGIC UINT32_C(0x31544156)
+#define KUI_VMU_ALLOCATION_TRANSFER_VERSION 1u
+#define KUI_VMU_ALLOCATION_TRANSFER_READY 1u
+#define KUI_VMU_ALLOCATION_TRANSFER_BUSY 2u
+#define KUI_VMU_ALLOCATION_TRANSFER_CONSUMED 3u
+#define KUI_VMU_ALLOCATION_TRANSFER_POISONED 4u
+struct kui_vmu_persist_allocation_transfer {
+    uint32_t magic,version,bytes,state;
+    uint64_t card_sectors,partition_first,partition_end;
+    uint32_t high_capacity,generation,sequence,previous_owner,next_owner;
+    uint8_t cid[16],image_id[16],ownership_sha256[32],domain_binding_sha256[32];
+    uint32_t reserved;
+};
+_Static_assert(sizeof(struct kui_vmu_persist_allocation_transfer)==160u,"Local allocation transfer bound");
+/* Fresh independent session: consumes the trusted live transfer, checks the
+ * exact ownership/actual CID, then recovers and validates CURRENT card data.
+ * No host filesystem metadata is read. All image/block CRC, journal and
+ * durability behavior remains the ordinary session behavior. The transfer is
+ * BUSY before any callback and terminally consumed/poisoned afterward. */
+int kui_vmu_persist_session_rebind(struct kui_vmu_persist_session *,
+    const struct kui_vmu_persist_profile *,struct kui_vmu_persist_allocation_transfer *,
+    const struct kui_vmu_persist_session_ops *,struct kui_vmu_image_workspace *);
 /* Read preserves the output on failure. Commit succeeds only after the
  * journal/base durability barriers, exact base readback and final identity/
  * health check. An error may still leave a committed redo record: do not ACK,

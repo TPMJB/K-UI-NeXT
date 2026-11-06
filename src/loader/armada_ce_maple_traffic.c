@@ -3,6 +3,9 @@
  * masked. All C frames and scratch live in the pre-NK private reservation. */
 #include "kui/armada_ce_maple_traffic.h"
 #include "kui/armada_ce_maple_continuation.h"
+#if KUI_VC2_CE_VMU
+#include "kui/vc2_ce_vmu_diagnostic.h"
+#endif
 #if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
 #include "kui/armada_ce_vmu_runtime.h"
 #endif
@@ -56,7 +59,11 @@ static bool __attribute__((noinline,noclone)) traffic_read_p2(
 #if KUI_ARMADA_CE_MAPLE_A2
 #include "kui/armada_ce_maple_rx_slice.h"
 #if !KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+#if KUI_VC2_VMU_WRITE_PROBE
+#include "kui/vc2_ce_vmu_write_probe.h"
+#else
 #include "kui/armada_ce_vmu_readonly.h"
+#endif
 #endif
 #include "kui/armada_ce_vmu_a2_publish.h"
 #include "kui/armada_ce_maple_auto.h"
@@ -113,7 +120,14 @@ enum kui_armada_ce_ram_bind_status kui_armada_ce_cache_line_native(
 #endif
 extern struct kui_armada_ce_vmu_a2_publish_snapshot kui_armada_ce_vmu_a2_log;
 #if !KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+#if KUI_VC2_VMU_WRITE_PROBE
+static struct kui_vc2_ce_vmu_write_probe a2_backend;
+void kui_vc2_ce_vmu_write_snapshot(uint32_t out[20]) {
+    kui_vc2_ce_vmu_write_probe_snapshot(&a2_backend,out);
+}
+#else
 static struct kui_armada_ce_vmu_readonly a2_backend;
+#endif
 #endif
 static struct kui_armada_ce_vmu_a2_publish_scratch a2_staging;
 static struct kui_armada_ce_vmu_a2_input a2_input;
@@ -168,15 +182,38 @@ extern volatile uint32_t kui_armada_ce_maple_proof_final;
 extern void kui_armada_ce_maple_auto_stop(void) __attribute__((noreturn));
 static void a2_auto_capture(unsigned phase) {
     const struct kui_armada_ce_vmu_a2_publish_snapshot *s=&kui_armada_ce_vmu_a2_log;
+    unsigned fault=s->fault[0];
+#if KUI_VC2_CE_VMU
+    fault|=kui_armada_ce_maple_hook_log.fault[0]|kui_armada_ce_maple_fence_log.fault[0];
+#endif
     unsigned reason=kui_armada_ce_maple_auto_decide(KUI_ARMADA_CE_MAPLE_AUTO_STOP,
-        s->counts[3],s->commands[0],s->commands[3],s->commands[4],s->fault[0]);
+        s->counts[3],s->commands[0],s->commands[3],s->commands[4],fault);
+#if KUI_VC2_VMU_WRITE_PROBE
+    /* A pending phase4 has passed the same fresh request/owner admission as
+     * publication. Capture before the original consumer; no commit ACK exists. */
+    if(!reason && kui_vc2_ce_vmu_write_probe_pending(&a2_backend))
+        reason=KUI_VC2_VMU_WRITE_PROBE_COMMIT_STOP;
+#endif
     /* Faults terminate before any further CE consumer call. A successful
      * checkpoint can stop on either side of that call. A completion-count
      * fallback also captures an event the driver never reaches. */
-    if(reason!=KUI_ARMADA_CE_MAPLE_AUTO_FAULT && phase!=KUI_ARMADA_CE_MAPLE_AUTO_PHASE) return;
+    if(reason!=KUI_ARMADA_CE_MAPLE_AUTO_FAULT &&
+#if KUI_VC2_VMU_WRITE_PROBE
+       reason!=KUI_VC2_VMU_WRITE_PROBE_COMMIT_STOP &&
+#endif
+       phase!=KUI_ARMADA_CE_MAPLE_AUTO_PHASE) return;
+#if KUI_ARMADA_CE_MAPLE_AUTO_LIMIT > 0
     if(!reason && kui_armada_ce_maple_hook_log.counts[1]>=KUI_ARMADA_CE_MAPLE_AUTO_LIMIT)
         reason=KUI_ARMADA_CE_MAPLE_AUTO_VISIT_LIMIT;
+#endif
     if(!reason) return;
+#if KUI_VC2_CE_VMU
+    const uint32_t owner[5]={fence_state.extension,traffic_scratch.map[0].virtual_address,
+        traffic_scratch.map[0].physical_address,
+        *(volatile const uint32_t *)(uintptr_t)KUI_CE_MAPLE_CURRENT_PROCESS,a2_context.records};
+    for(unsigned i=0;i<5u;i++)kui_vc2_ce_vmu_owner_context[i]=owner[i];
+    kui_vc2_ce_vmu_diagnostic_stop(reason,phase);
+#else
     uint32_t expected=*(volatile const uint32_t *)(uintptr_t)KUI_ARMADA_CE_MAPLE_AUTO_MENU_ADDRESS;
     uint32_t vector=*(volatile const uint32_t *)(uintptr_t)0xac0000e0u;
     /* This identity was published by our resident while installing this
@@ -188,6 +225,7 @@ static void a2_auto_capture(unsigned phase) {
     *(volatile uint32_t *)(uintptr_t)KUI_ARMADA_CE_MAPLE_AUTO_REASON_ADDRESS=reason;
     __asm__ volatile("" ::: "memory");
     kui_armada_ce_maple_auto_stop();
+#endif
 }
 #endif
 static void a2_fault(unsigned reason,uint32_t at,uint32_t actual,uint32_t expected,uint32_t detail) {
@@ -218,23 +256,28 @@ static int __attribute__((noinline,noclone)) a2_backend_call(void *context,
     (void)context;
     if(!a2_continuation.bound) {
         if(!a2_recheck(NULL)) return -1;
-        a2_continuation.thread=*(volatile const uint32_t *)(uintptr_t)0x8c145894u;
+        a2_continuation.thread=*(volatile const uint32_t *)(uintptr_t)KUI_CE_MAPLE_CURRENT_THREAD;
         a2_continuation.process=a2_context.process;a2_continuation.ttb=a2_context.ttb;
         a2_continuation.ccr=a2_context.ccr;
         a2_copy_words(&a2_continuation.extension,&traffic_scratch.map[0],sizeof(traffic_scratch.map[0]));
         uint32_t return_pc=kui_armada_ce_maple_bridge_return;
-        if(!a2_continuation.thread || (return_pc&0x81ffffffu)!=0x01dd67c6u ||
-           !a2_extension_word(0x178u,&a2_continuation.handle) || !a2_continuation.handle ||
+        if(!a2_continuation.thread || (return_pc&0x81ffffffu)!=KUI_CE_MAPLE_BRIDGE_PRE_RETURN ||
+           !a2_extension_word(KUI_CE_MAPLE_WORKER_HANDLE_OFFSET,&a2_continuation.handle) || !a2_continuation.handle ||
            kui_armada_ce_vmu_runtime_bind(a2_continuation.raw)) return -1;
-        a2_continuation.wait=return_pc-0x4b2u;
+        a2_continuation.wait=return_pc-(KUI_CE_MAPLE_BRIDGE_PRE_RETURN-KUI_CE_MAPLE_WAIT_THUNK);
         a2_continuation.bound=1u;
     }
     return kui_armada_ce_vmu_runtime_handle(NULL,request,request_bytes,response,capacity,bytes);
 #else
     (void)context;
+#if KUI_VC2_VMU_WRITE_PROBE
+    if(!a2_ready)return -1;
+    return kui_vc2_ce_vmu_write_probe_handle(&a2_backend,request,request_bytes,response,capacity,bytes);
+#else
     if(!a2_ready || a2_backend.self!=&a2_backend || a2_backend.backend.reader ||
        a2_backend.backend.reader_context) return -1;
     return kui_armada_ce_vmu_readonly_handle(&a2_backend,request,request_bytes,response,capacity,bytes);
+#endif
 #endif
 }
 static unsigned a2_minimum(uint32_t header) {
@@ -306,10 +349,20 @@ static bool __attribute__((noinline,noclone)) a2_recheck(void *context) {
 static void a2_run(uint32_t ttb,uint32_t process,uint32_t ccr) {
 #if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
     a2_continuation.result=UINT32_MAX;a2_continuation.checked=0;
-    if(a2_continuation.bound &&
-       (ttb!=a2_continuation.ttb || process!=a2_continuation.process || ccr!=a2_continuation.ccr ||
-        *(volatile const uint32_t *)(uintptr_t)0x8c145894u!=a2_continuation.thread)) {
-        a2_fault(100u,0,process,a2_continuation.process,ttb);return;
+    if(a2_continuation.bound) {
+        uint32_t at,actual,expected,why;
+        if(ttb!=a2_continuation.ttb) {
+            at=UINT32_C(0xff000008);actual=ttb;expected=a2_continuation.ttb;why=1u;
+        } else if(process!=a2_continuation.process) {
+            at=KUI_CE_MAPLE_CURRENT_PROCESS;actual=process;expected=a2_continuation.process;why=2u;
+        } else if(ccr!=a2_continuation.ccr) {
+            at=UINT32_C(0xff00001c);actual=ccr;expected=a2_continuation.ccr;why=3u;
+        } else {
+            at=KUI_CE_MAPLE_CURRENT_THREAD;
+            actual=*(volatile const uint32_t *)(uintptr_t)KUI_CE_MAPLE_CURRENT_THREAD;
+            expected=a2_continuation.thread;why=actual!=expected?4u:0u;
+        }
+        if(why) {a2_fault(100u,at,actual,expected,why);return;}
     }
 #endif
     unsigned diagnostic=kui_armada_ce_maple_diagnostic_mode;
@@ -321,7 +374,7 @@ static void a2_run(uint32_t ttb,uint32_t process,uint32_t ccr) {
     for(unsigned i=0;i<16u;i++) {
         unsigned address=(traffic_scratch.row[i][3]>>8)&255u;
         if(address==32u) {if(parent!=16u) return;parent=i;}
-        if(address==2u) {if(target!=16u) return;target=i;}
+        if(address==KUI_CE_VMU_ADDRESS) {if(target!=16u) return;target=i;}
         if(traffic_scratch.row[i][0]==last) {records=i+1u;break;}
     }
     if(!records || parent==16u) return;
@@ -398,7 +451,11 @@ static void a2_run(uint32_t ttb,uint32_t process,uint32_t ccr) {
     }
 #if !KUI_ARMADA_CE_VMU_WRITE_RUNTIME
     if(!a2_ready) {
+#if KUI_VC2_VMU_WRITE_PROBE
+        if(kui_vc2_ce_vmu_write_probe_init(&a2_backend)) {a2_fault(97u,0,0,0,0);return;}
+#else
         if(kui_armada_ce_vmu_readonly_init(&a2_backend)) {a2_fault(97u,0,0,0,0);return;}
+#endif
         a2_ready=1u;
     }
 #endif
@@ -447,8 +504,8 @@ static bool a2_held(void) {
 bool kui_armada_ce_maple_runtime_owner(uint32_t owner) {
     if(!a2_continuation.bound || !a2_continuation.pending || owner!=a2_continuation.raw ||
        !a2_held() ||
-       *(volatile const uint32_t *)(uintptr_t)0x8c145894u!=a2_continuation.thread ||
-       *(volatile const uint32_t *)(uintptr_t)0x8c145890u!=a2_continuation.process ||
+       *(volatile const uint32_t *)(uintptr_t)KUI_CE_MAPLE_CURRENT_THREAD!=a2_continuation.thread ||
+       *(volatile const uint32_t *)(uintptr_t)KUI_CE_MAPLE_CURRENT_PROCESS!=a2_continuation.process ||
        *(volatile const uint32_t *)(uintptr_t)0xff000008u!=a2_continuation.ttb ||
        *(volatile const uint32_t *)(uintptr_t)0xff00001cu!=a2_continuation.ccr) return false;
     struct kui_armada_ce_maple_mapping now;
@@ -456,10 +513,10 @@ bool kui_armada_ce_maple_runtime_owner(uint32_t owner) {
     if(kui_armada_ce_maple_resolve(a2_continuation.ttb,before->virtual_address,
        traffic_read_p1,NULL,&now) || !a2_same_words(before,&now,sizeof(now))) return false;
     uint32_t shutdown,handle;
-    if(!a2_extension_word(0,&shutdown) || shutdown || !a2_extension_word(0x178u,&handle) ||
+    if(!a2_extension_word(0,&shutdown) || shutdown || !a2_extension_word(KUI_CE_MAPLE_WORKER_HANDLE_OFFSET,&handle) ||
        handle!=a2_continuation.handle) return false;
-    return *(volatile const uint32_t *)(uintptr_t)0x8c145894u==a2_continuation.thread &&
-        *(volatile const uint32_t *)(uintptr_t)0x8c145890u==a2_continuation.process &&
+    return *(volatile const uint32_t *)(uintptr_t)KUI_CE_MAPLE_CURRENT_THREAD==a2_continuation.thread &&
+        *(volatile const uint32_t *)(uintptr_t)KUI_CE_MAPLE_CURRENT_PROCESS==a2_continuation.process &&
         *(volatile const uint32_t *)(uintptr_t)0xff000008u==a2_continuation.ttb &&
         *(volatile const uint32_t *)(uintptr_t)0xff00001cu==a2_continuation.ccr;
 }
@@ -518,6 +575,13 @@ void
 #endif
 kui_armada_ce_maple_traffic_run(uint32_t raw,uint32_t original_sp,
     uint32_t original_pr,uint32_t previous_mode) {
+#if KUI_VC2_VMU_PERSIST && KUI_ARMADA_CE_VMU_WRITE_RUNTIME
+    /* Matched texture-isolation control. The complete helper and reservation
+     * remain linked, but PRE/POST return before owner reads, MMIO, sampling,
+     * DMA fencing or virtual-card/provider work. Only the typed selector's
+     * four bytes differ between the full and control helper images. */
+    if(kui_armada_ce_maple_diagnostic_mode==3u) TRAFFIC_DONE();
+#endif
 #if KUI_ARMADA_CE_VMU_WRITE_RUNTIME
     bool resuming=original_sp==KUI_ARMADA_CE_MAPLE_RESUME_PHASE;
     if(resuming) {
@@ -559,7 +623,7 @@ kui_armada_ce_maple_traffic_run(uint32_t raw,uint32_t original_sp,
         TRAFFIC_DONE();
     }
     const uint32_t ttb=*(volatile const uint32_t *)(uintptr_t)0xff000008u;
-    const uint32_t process=*(volatile const uint32_t *)(uintptr_t)0x8c145890u;
+    const uint32_t process=*(volatile const uint32_t *)(uintptr_t)KUI_CE_MAPLE_CURRENT_PROCESS;
     const uint32_t ccr=*(volatile const uint32_t *)(uintptr_t)0xff00001cu;
     unsigned result=kui_armada_ce_maple_traffic_visit(raw,ttb,process,ccr,
         traffic_read_p1,traffic_read_cache,traffic_read_p2,NULL,
@@ -576,7 +640,7 @@ kui_armada_ce_maple_traffic_run(uint32_t raw,uint32_t original_sp,
     bool admitted=result==KUI_ARMADA_CE_MAPLE_TRAFFIC_OK && !traffic_scratch.word[0];
     uint32_t mmio_va=0,mmio_page=0,mmio_status=UINT32_MAX;
     if(admitted) {
-        uint32_t slot=(((process-0x8c14e6e0u)/0x9cu)+1u)<<25,va=0;
+        uint32_t slot=(((process-KUI_CE_MAPLE_PROCESS_BASE)/KUI_CE_MAPLE_PROCESS_STRIDE)+1u)<<25,va=0;
         struct kui_armada_ce_maple_mapping mapping;
         if(!kui_armada_ce_maple_owner_pointer(traffic_scratch.word[5],slot,0x100u,&va)) admitted=false;
         else {

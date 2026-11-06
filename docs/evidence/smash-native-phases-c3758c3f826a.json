@@ -1,0 +1,311 @@
+{
+  "schema": "kui.smash.native-phase-hardware.v2",
+  "build": "c3758c3f826a",
+  "selection": "SHINING FORCE",
+  "source_library_file_id": "libfile_a5d3abd642dc8191be49487a4ff00269",
+  "source_bytes": 4096,
+  "source_sha256": "f2eebb25c24983a40ee05c3ee54e07307807b2ec9e2391b51feb0069766ca43d",
+  "raw_endpoints": [
+    {
+      "phase": 1,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 8023764245,
+      "rtc": 2425033852
+    },
+    {
+      "phase": 2,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 9159382529,
+      "rtc": 2425033857
+    },
+    {
+      "phase": 3,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 9164497729,
+      "rtc": 2425033857
+    },
+    {
+      "phase": 4,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 9507253873,
+      "rtc": 2425033859
+    },
+    {
+      "phase": 5,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 9519911925,
+      "rtc": 2425033859
+    },
+    {
+      "phase": 10,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 9861570577,
+      "rtc": 2425033861
+    },
+    {
+      "phase": 11,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 9863726213,
+      "rtc": 2425033861
+    },
+    {
+      "phase": 12,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 9919432101,
+      "rtc": 2425033861
+    },
+    {
+      "phase": 13,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 10856460497,
+      "rtc": 2425033866
+    },
+    {
+      "phase": 14,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 10900773833,
+      "rtc": 2425033866
+    },
+    {
+      "phase": 15,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 10901785172,
+      "rtc": 2425033866
+    },
+    {
+      "phase": 16,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 10944522621,
+      "rtc": 2425033866
+    },
+    {
+      "phase": 17,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 10945139881,
+      "rtc": 2425033866
+    },
+    {
+      "phase": 18,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 10945168268,
+      "rtc": 2425033866
+    },
+    {
+      "phase": 19,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 10959738144,
+      "rtc": 2425033866
+    },
+    {
+      "phase": 21,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 11019093634,
+      "rtc": 2425033867
+    },
+    {
+      "phase": 22,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 11034648490,
+      "rtc": 2425033867
+    },
+    {
+      "phase": 23,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 11069693586,
+      "rtc": 2425033867
+    },
+    {
+      "phase": 24,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 11322327282,
+      "rtc": 2425033868
+    },
+    {
+      "phase": 25,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 11323283926,
+      "rtc": 2425033868
+    },
+    {
+      "phase": 26,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 11503983791,
+      "rtc": 2425033869
+    },
+    {
+      "phase": 27,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 11509891351,
+      "rtc": 2425033869
+    },
+    {
+      "phase": 28,
+      "flags": 7,
+      "pmcr": 49187,
+      "frqcr": 3594,
+      "cycles": 11511286455,
+      "rtc": 2425033869
+    }
+  ],
+  "metrics": {
+    "filesystem_logical_reads": 0,
+    "filesystem_chain_steps": 0,
+    "filesystem_fat_entries": 0,
+    "filesystem_directory_sectors": 0,
+    "vmu_prep_logical_reads": 1055,
+    "vmu_prep_single_commands": 3,
+    "vmu_prep_run_commands": 16,
+    "vmu_prep_crc_checked_sectors": 515,
+    "vmu_prep_writes": 1,
+    "vmu_prep_syncs": 2,
+    "full_admissions": 0,
+    "attaches": 1,
+    "receipt_generation": 3547960322,
+    "receipt_sequence": 2,
+    "receipt_valid": 1,
+    "receipt_blank": 0,
+    "native_gin_route": 1,
+    "boot2_calls": 0
+  },
+  "intervals": {
+    "total": {
+      "first_phase": 1,
+      "last_phase": 28,
+      "cycles": 3487522210,
+      "nominal_ms": 17437.61105,
+      "rtc_seconds": 17
+    },
+    "original_MDE_and_GIN": {
+      "first_phase": 1,
+      "last_phase": 2,
+      "cycles": 1135618284,
+      "nominal_ms": 5678.09142,
+      "rtc_seconds": 5
+    },
+    "capsule_SD": {
+      "first_phase": 3,
+      "last_phase": 4,
+      "cycles": 342756144,
+      "nominal_ms": 1713.78072,
+      "rtc_seconds": 2
+    },
+    "prefix_verifier_stage_entry": {
+      "first_phase": 5,
+      "last_phase": 10,
+      "cycles": 341658652,
+      "nominal_ms": 1708.29326,
+      "rtc_seconds": 2
+    },
+    "SD_card_init": {
+      "first_phase": 10,
+      "last_phase": 11,
+      "cycles": 2155636,
+      "nominal_ms": 10.77818,
+      "rtc_seconds": 0
+    },
+    "sidecar_config": {
+      "first_phase": 11,
+      "last_phase": 12,
+      "cycles": 55705888,
+      "nominal_ms": 278.52944,
+      "rtc_seconds": 0
+    },
+    "witness_replay_identity": {
+      "first_phase": 12,
+      "last_phase": 13,
+      "cycles": 937028396,
+      "nominal_ms": 4685.14198,
+      "rtc_seconds": 5
+    },
+    "old_FS_label_total": {
+      "first_phase": 11,
+      "last_phase": 13,
+      "cycles": 992734284,
+      "nominal_ms": 4963.67142,
+      "rtc_seconds": 5
+    },
+    "native_setup_bridge": {
+      "first_phase": 19,
+      "last_phase": 21,
+      "cycles": 59355490,
+      "nominal_ms": 296.77745,
+      "rtc_seconds": 1
+    },
+    "base_CRC": {
+      "first_phase": 21,
+      "last_phase": 22,
+      "cycles": 15554856,
+      "nominal_ms": 77.77428,
+      "rtc_seconds": 0
+    },
+    "extent": {
+      "first_phase": 22,
+      "last_phase": 23,
+      "cycles": 35045096,
+      "nominal_ms": 175.22548,
+      "rtc_seconds": 0
+    },
+    "SDK_allocator": {
+      "first_phase": 23,
+      "last_phase": 24,
+      "cycles": 252633696,
+      "nominal_ms": 1263.16848,
+      "rtc_seconds": 1
+    }
+  },
+  "owner_observation": {
+    "selection_to_options_seconds": 22,
+    "previous_observation_seconds": 30,
+    "return": "Current screen freezes and SD activity stops",
+    "first_affected_build": "uncertain; owner says preceding ZIP may also have failed"
+  },
+  "limits": [
+    "Total ends at worker installation; pre-callback wait, report I/O and later game work excluded.",
+    "Zero semantic walks is not zero metadata I/O; vmu_prep counters omit witness/sidecar traffic.",
+    "This launch report cannot locate the return freeze."
+  ]
+}

@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Execute the production launcher path against bounded byte-backed FatFs.
+BUILD ?= build/vc2-persist-ui-host
+HOST_CC ?= cc
+.DEFAULT_GOAL := vc2-persist-ui-tests
+PERSIST_UI_FLAGS := -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic \
+ -fsanitize=address,undefined -fno-sanitize-recover=all -fno-pie -no-pie -Iinclude \
+ -ffunction-sections -fdata-sections -DKUI_VMU_GAME_CARDS=1 \
+ -DKUI_RETAIL_EXTENDED_MAP=1 -I.deps/fatfs/source -Isrc/dreamcast
+PERSIST_UI_SOURCES := tests/test_vc2_ce_vmu_persist_prepare.c \
+ src/core/vmu_native_heap.c src/core/vmu_native_resolution_cache.c src/core/data.c src/core/vmu_native_cache_seed.c src/core/smash_native_child.c src/core/retail_image.c src/core/hash.c src/core/vmu_persist_profile.c src/core/vmu_game_card.c
+PERSIST_UI_SOURCES += src/core/smash_native_menu.c src/core/smash_menu_capsule.c src/core/smash_menu_loader.c
+PERSIST_UI_SOURCES += src/core/smash_menu_return.c
+PERSIST_UI_SOURCES += src/core/smash_ce_profile.c src/core/smash_ce_helper.c
+PERSIST_UI_SOURCES += src/core/smash_menu_collection.c
+.PHONY: vc2-persist-ui-tests
+vc2-persist-ui-tests:
+	@mkdir -p $(BUILD)
+	python3 tools/vmu_persist_profile.py --template $(BUILD)/template.bin > $(BUILD)/template-report.json
+	$(HOST_CC) $(PERSIST_UI_FLAGS) $(PERSIST_UI_SOURCES) -Wl,--gc-sections -o $(BUILD)/test-persist-ui
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-persist-ui $(BUILD)/template.bin
+	$(HOST_CC) $(PERSIST_UI_FLAGS) tests/test_smash_ce_helper.c src/core/smash_ce_helper.c src/core/smash_ce_profile.c src/core/runtime_image.c src/core/retail_image.c src/core/data.c -Wl,--gc-sections -o $(BUILD)/test-embedded-helper
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-embedded-helper
+
+.PHONY: smash-native-ui-tests
+smash-native-ui-tests: vc2-persist-ui-tests
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-persist-ui $(BUILD)/template.bin build/smash-native-child/retail-smash-native.kui
+
+.PHONY: smash-collection-route-tests
+smash-collection-route-tests: vc2-persist-ui-tests
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-persist-ui $(BUILD)/template.bin \
+	 build/smash-native-child/retail-smash-native.kui \
+	 build/vc2-ce-vmu-persist/retail-native-foreground.kui \
+	 build/vc2-reader-control/retail-native-foreground.kui \
+	 build/vc2-reader-unmarked/retail-native-foreground.kui

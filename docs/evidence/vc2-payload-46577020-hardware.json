@@ -1,0 +1,140 @@
+{
+  "schema": "kui.vc2.hardware-photo-transcription.v1",
+  "build": "46577020a054",
+  "photos": [
+    "upload/01-image-1793763176339.jpg",
+    "upload/02-image-1793763182291.jpg",
+    "upload/03-image-1793763194171.jpg"
+  ],
+  "transcription_method": "Visual inspection of originals and perspective-adjusted crops; hexadecimal values, not generated fixtures.",
+  "uncertainties": [
+    {
+      "field": "page1.early.destination_hash",
+      "preferred_read": "681CD4A9",
+      "less_likely_read": "681CD4E9",
+      "note": "Second-last nibble is blurred. Both readings differ from the clearly read late hash681CD409; WHY82 independently records an early/late change. Do not use the uncertain nibble as exact binary fixture proof."
+    }
+  ],
+  "page1": {
+    "stop": {
+      "why": "00000082",
+      "calls": "00002137",
+      "bytes": "00355000",
+      "target": "0000002B",
+      "mapfail": "00000000"
+    },
+    "chunk": {
+      "source": "8C007670",
+      "destination": "4243E600",
+      "length": "000001F0",
+      "offset": "00000110",
+      "fad": "0007D249"
+    },
+    "early": {
+      "source_hash": "E049ACA1",
+      "destination_hash": "681CD4A9",
+      "first_offset": "00000000",
+      "expected": "00000002",
+      "actual": "00000001"
+    },
+    "late": {
+      "destination_hash": "681CD409",
+      "first_offset": "00000000",
+      "expected": "00000002",
+      "actual": "00000001"
+    },
+    "source_early": {
+      "retained_hash": "E049ACA1",
+      "live_hash": "E049ACA1",
+      "first_offset": "FFFFFFFF",
+      "expected": "00000000",
+      "actual": "00000000"
+    },
+    "source_late": {
+      "live_hash": "E049ACA1",
+      "first_offset": "FFFFFFFF",
+      "expected": "00000000",
+      "actual": "00000000"
+    },
+    "pre_state": {
+      "state": "00000003",
+      "source": "8C007670",
+      "destination": "4243E600",
+      "length": "000001F0",
+      "offset": "00000110"
+    }
+  },
+  "page2": {
+    "request": {
+      "token": "000000C4",
+      "command": "00000027",
+      "lba": "0007D1B3",
+      "count": "00000041",
+      "destination": "4243E600",
+      "total": "00020800",
+      "done": "00000110",
+      "piece": "00001000",
+      "error": "00000000",
+      "status": "00000003",
+      "pending": "00000001",
+      "mmu": "00000001",
+      "pr": "01CF1978",
+      "sp": "0E90F87C",
+      "function": "0000000C",
+      "raw_r5": "0E90F890"
+    },
+    "cpu": {
+      "sr": "400081F0",
+      "mmucr": "00001401",
+      "ttb": "8C1058A0",
+      "ccr": "00000105",
+      "pteh": "4243E403"
+    },
+    "first_tlb": {
+      "matches": "00000001",
+      "index": "00000025",
+      "address": "4243E703",
+      "data": "0433E3F4",
+      "physical": "0433E600"
+    }
+  },
+  "page3": {
+    "dma_pre": {
+      "sar": "1FE00014",
+      "dar": "8C0074C8",
+      "tcr": "00000178",
+      "chcr": "00004911"
+    },
+    "dma_post": {
+      "sar": "1FE00014",
+      "dar": "8C007641",
+      "tcr": "00000000",
+      "chcr": "00004913"
+    },
+    "evict_reads": "00000040"
+  },
+  "derived_observations": {
+    "reason_flags": ["destination_mismatch", "early_late_changed"],
+    "pre_tuple_admitted": true,
+    "source_compares_match_early_and_late": true,
+    "destination_already_mismatches_in_immediate_P2_code_readback": true,
+    "destination_also_changes_by_late_readback": true,
+    "first_mismatch_byte_both_views": "expected02_actual01_at_offset0",
+    "unique_utlb_physical_destination": "0433E600",
+    "utlb_C_bit": 0,
+    "utlb_page_bytes": 1048576,
+    "physical_destination_class": "64-bit VRAM aperture",
+    "dma_register_snapshot_note": "SAR/DAR/TCR/CHCR are read sequentially while DMA may advance. PRE and POST are not atomic register tuples; do not infer byte-precise overlap from the count/address delta.",
+    "independent_golden_asset_comparison_available": false
+  },
+  "source_correlation": {
+    "file": "src/loader/retail_async.c",
+    "function": "native_payload_write",
+    "old_vram_selector": "(address & 0xfe000000u) == 0xa4000000u",
+    "observed_virtual_address_selects_old_vram_sink": false,
+    "observed_virtual_address_old_sink": "memcpy",
+    "strong_candidate": "Virtual CPU/PIO mapping to VRAM falls through the byte-copy path despite VRAM prohibiting byte accesses.",
+    "hardware_fix_verified": false,
+    "limit": "The screenshots prove this captured delivery mismatch and stable observed source. They do not prove the source is independently correct disk content, all texture issues share this cause, or a candidate fix works on hardware."
+  }
+}

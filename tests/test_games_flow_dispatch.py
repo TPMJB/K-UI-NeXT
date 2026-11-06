@@ -42,7 +42,7 @@ publication = block(source, source.index('if(games_flow_ready) {'))
 scheduler = block(source, source.index('if(idle && !games_layout_idle_work() && !games_flow_idle_work() && !games_art_idle_work()'))
 assert 'kui_shell_set_games_flow_rows' not in function(source, 'games_flow_idle_work')
 assert source.index('kui_shell_games_flow_tick(&shell,input_at)') < source.index(
-    'requested=kui_shell_input(&shell', source.index('kui_shell_games_flow_tick(&shell,input_at)'))
+    'kui_shell_input(&shell', source.index('kui_shell_games_flow_tick(&shell,input_at)'))
 
 prefix = r'''
 #include "kui/shell.h"

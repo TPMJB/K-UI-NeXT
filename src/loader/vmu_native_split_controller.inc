@@ -61,7 +61,7 @@ static inline __attribute__((always_inline)) bool split_controller_capture(
      * its initializer also retains the literal's original U0/P1 pointer.
      * Match the full transfer proof without accepting alternate aliases. */
     if(((current_sr()>>4)&15u)!=15u || sp<low+256u || sp>=low+KUI_VMU_NATIVE_PASSIVE_STACK_BYTES ||
-       (mask!=6u && mask!=15u && config.driver.family!=KUI_VMU_NATIVE_FAMILY_EARLY_V1) || f->r12!=1u ||
+       (mask!=6u && mask!=15u && !kui_vmu_native_early_server(config.driver.family)) || f->r12!=1u ||
        !ram(f->r14,4u,4u) || physical(f->r14)!=physical(config.driver.manager_cell)) return false;
     uint32_t source,manager,lock,value;
     if(!split_controller_word(UINT32_C(0xa05f6c04),&source)) return false;
@@ -124,6 +124,12 @@ static inline __attribute__((always_inline)) bool split_controller_capture(
 }
 void __attribute__((noipa)) kui_vmu_native_passive_split_submit(
     const struct kui_vmu_native_passive_frame *f) {
+    if(controller_pair.pending==NATIVE_CONTROLLER_STOPPED) {
+        if(controller_suspended(f,0u)) return;
+        /* The first enabled submission renews the full normal proof before
+         * the original MDST store; do not defer it through capture. */
+        kui_vmu_native_passive_submit(f);return;
+    }
 #if KUI_NATIVE_VMU_ONLY_FULL_SUBMIT
     /* Diagnostic control only. The retained full submit still chooses its
      * established physical-controller fast path or full virtual-card path.

@@ -532,6 +532,7 @@ static void test_overruns_fall_back_to_polled(void) {
     CHECK(!R.shared.service.error);
     m.overrun_every = 0;
 }
+#if !KUI_NATIVE_GD_MMU_BUFFERS
 static void test_diagnostic_counters(void) {
     setup(GAME_VBR, X, 2000, false);
     int32_t token = request(45000, 40, OUTPUT);
@@ -554,6 +555,7 @@ static void test_diagnostic_counters(void) {
     CHECK(finish(token, true, 0) == KUI_GD_COMPLETED);
     compare(45000, 40, OUTPUT);
 }
+#endif
 static void test_faults_retried(void) {
     setup(GAME_VBR, X, 50, true);
     card.corrupt_lba = manifest.slots[4 + 3].extent.card_lba + 1; card.corrupt_count = 2;
@@ -694,7 +696,9 @@ int main(void) {
     test_exec_tops_up();
     test_check_tops_up();
     test_overruns_fall_back_to_polled();
+#if !KUI_NATIVE_GD_MMU_BUFFERS
     test_diagnostic_counters();
+#endif
     test_faults_retried();
     test_cancel_writes_nothing_more();
     test_game_moves_vbr();

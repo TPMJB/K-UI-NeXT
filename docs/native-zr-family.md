@@ -376,7 +376,9 @@ the exact executable (bytes and SHA-256), like Crazy Taxi 2's plan:
   busy loans, faults, the last loan result and block, and the last card
   request and reply.
 
-### Remaining
+### Remaining at the earlier test-7 baseline
+
+The later direct-allocator candidate below updates the lease and EGG exit status.
 
 - Lease for the syMalloc 1.35 titles: Sonic Adventure, Time Stalkers,
   Elemental Gimmick Gear and Silver link syMalloc 1.35, which the heap model
@@ -411,3 +413,23 @@ Pages 112-113 (the stage, 0x8ce00000-0x8ce40000) and 127 are never marked.
 - Time Stalkers wrote every page, probably clearing RAM at boot. Marking RAM
   before the game starts cannot tell cleared pages from used ones; marking
   after the game's own startup could.
+
+
+### Direct syMalloc 1.35 compatibility candidate (November 1)
+
+The shared heap core now recognizes the direct allocator used by Time
+Stalkers, EGG, Sonic Adventure and Silver. It has no dispatch cell/table;
+those descriptor fields are zero. Allocation, release and literal roles are
+proved against the original direct bodies, including the bottom-reservation
+transaction and coherent lifetime checks. The fixed-eight runtime identity
+uses the direct allocator's real control literals. This does not authorize
+new executable reclamation, unproved exits or lock-alias behavior.
+
+Time Stalkers and EGG pass the new original-backed structural gates and are
+the next console VMU tests. EGG's earlier exit refusal is resolved through a
+bounded post-return pointer-pool proof: every word has a literal consumer,
+and encoded entries to the pool or its return delay slot are refused.
+Sonic Adventure still stops at exits. Silver retains its existing Standard
+adapter; the shared path still refuses the separately unreviewed executable
+reclamation and does not admit its startup lock-alias rewrite. See
+`universal-vmu-review-2026-11-01.md` and the package's exact build/evidence.

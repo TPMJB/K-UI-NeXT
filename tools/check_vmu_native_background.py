@@ -64,6 +64,10 @@ def passive_run_pins(worker,stage=None):
     from check_native_game_startup_profile import game_startup_profile
     historical=GAME_STARTUP_PASSIVE_RUN_PINS if game_startup_profile(worker) else WITNESS_PASSIVE_RUN_PINS
     if stage is None:return historical
+    from check_native_general_sdk_profile import profile as modern_profile
+    if modern_profile(stage,'stage') is not None:
+        from check_native_general_installer_profile import pinned
+        return pinned(stage)
     from check_native_followup_profile import stage_pins
     return stage_pins(stage,'installer',historical)
 
@@ -303,7 +307,14 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
     from check_native_vmu_toggle_profile import stage_profile as toggle_profile
     toggle_stage=toggle_profile(stage)
     require(not callback_profile(stage) or owned_timers, 'Selected low callbacks require the owned-timer installer')
-    selected_passive_pins=stage_pins(stage,'installer',selected_passive_pins)
+    from check_native_general_sdk_profile import profile as modern_profile
+    modern_installer=modern_profile(stage,'stage') is not None
+    session_installer=modern_installer and '__native_session_descriptor' in stage[4]
+    if modern_installer:
+        from check_native_general_installer_profile import pinned as installer_pins
+        selected_passive_pins=installer_pins(stage)
+    else:
+        selected_passive_pins=stage_pins(stage,'installer',selected_passive_pins)
     require(not owned_timers or witness, 'Owned-timer installer requires complete witness profile')
     if witness:
         # This is a separate, complete immutable function profile. Cold
@@ -319,8 +330,14 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
             # The General cold selector has its own complete pinned body.
             # Its final lease comparison uses a non-delayed refusal branch;
             # the following literal is the separately bounded worker span.
-            index=(0x15a if toggle_stage else 0x148)//2
-            if toggle_stage:
+            index=(0x164 if session_installer else 0x15a if toggle_stage else 0x148)//2
+            if session_installer:
+                require(selected_callbacks and words[index-3]==0x5ef7 and
+                        words[index-2]&0xff00==0xd100 and literal(index-2)==lease_bytes and
+                        words[index-1]==0x7e40 and words[index:index+3]==[0x52e8,0x3210,0x8b07] and
+                        words[index+3]&0xff00==0xdb00 and literal(index+3)==worker_bytes,
+                        'Session exact lease-size entry differs')
+            elif toggle_stage:
                 require(selected_callbacks and words[index]==0x52e8 and
                         words[index+1]&0xff00==0xd100 and literal(index+1)==lease_bytes and
                         words[index+2:index+4]==[0x3210,0x8b07] and
@@ -353,8 +370,14 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
     selected_callbacks=callback_profile(stage)
     selected_reader=(1 if '__kui_native_sdk_sci_route_resident' in resident['symbols'] else 2)
     internal_helpers=({symbols[name][0]:name for name in
-                      ('_native_low_bind_map','_native_low_bindings')}
+                      (('_native_low_bindings',) if session_installer else
+                       ('_native_low_bind_map','_native_low_bindings'))}
                      if selected_callbacks else {})
+    session_binder=symbols['_native_session_cold_bind'][0] if session_installer else None
+    session_getter=resident['symbols'].get('_kui_retail_native_session_control') if session_installer else None
+    if session_installer:
+        from check_native_session_callbacks import console_layout
+        session_control_slot=64+console_layout()['config_session_control']
     publisher = symbols["_kui_native_passive_publish"][0]
     copy = symbols["_memcpy"][0]
     relocate = symbols["_kui_vmu_native_relocate"][0]
@@ -376,6 +399,9 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
             self.lease = 0x8CDF0000
             if toggle_stage:
                 self.r[8],self.r[9],self.r[14]=self.load,copy,self.lease
+                if session_installer:
+                    self.r[1]=lease_bytes
+                    self.write(self.r[15]+session_control_slot,session_getter)
             elif witness:
                 self.r[8],self.r[9],self.r[10],self.r[11],self.r[12]=\
                     copy,self.load,self.lease,lease_bytes,self.r[15]+0x900
@@ -442,6 +468,9 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
             if op & 0xF00F == 0x0006:
                 self.write(self.r[0] + self.r[n], self.r[m])
                 return
+            if op & 0xF00F == 0x000e:
+                self.r[n] = self.read(self.r[0] + self.r[m])
+                return
             if op >> 12 == 9 and n == 6:
                 self.length_literals["current"] = pc + 4 + 2 * (op & 255)
             super().plain(op, pc)
@@ -491,14 +520,16 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
                 self.in_publisher = True
                 self.publisher_return = self.pr
                 self.pc = target
-            elif target == binder:
-                require(self.events == ["copy_map", "copy_region", "publish"] and self.r[4:6] == [manifest, self.load + map_offset],
+            elif target == (session_binder if session_installer else binder):
+                expected_args=([session_getter,binder,manifest,self.load+map_offset] if session_installer
+                               else [manifest,self.load+map_offset])
+                require(self.events == ["copy_map", "copy_region", "publish"] and self.r[4:4+len(expected_args)] == expected_args,
                         "typed low binder must follow complete vector publication")
                 require(self.block(self.load + map_offset, 1020) == self.map_pattern and
                         self.block(self.load + region_offset, 1888) == self.region_pattern, "binder sees changed snapshots")
                 self.events.append("bind")
                 self.selected_binder_edge=pc
-                self.witness["bind"] = self.outer_binding_call if selected_callbacks else pc
+                self.witness["bind"] = self.outer_binding_call if selected_callbacks and not session_installer else pc
                 # The new C wrapper tail-jumps into the real low binder.
                 # Its original caller continuation is the actual PR after
                 # that wrapper restored its frame; the next instruction in
@@ -543,7 +574,7 @@ def compiled_tail_copy(stage, resident, *, self_test=False, lease_bytes=0x30000,
                         'Background relocation omitted ordered cold progress')
                 self.witness["relocate"] = pc
                 require(not selected_callbacks or self.actual_internal_helpers==
-                        ['_native_low_bind_map','_native_low_bindings'],
+                        (['_native_low_bindings'] if session_installer else ['_native_low_bind_map','_native_low_bindings']),
                         'Background tail did not execute both selected low callback helpers')
                 self.stopped = "relocate"
             elif target == report:
@@ -815,7 +846,7 @@ def stage_contract(directory, resident, *, self_test=False,read_ahead_proof=None
         low_callback_companion({'stage':digest(data),
             'resident':digest((directory/'resident-sci.elf').read_bytes()),
             'legacy':digest((directory/'resident-legacy.elf').read_bytes())},callback_proof)
-        selected_binder,_=typed(image,'_native_low_bind_map',2)
+        selected_binder,_=typed(image,'_native_session_cold_bind' if '__native_session_descriptor' in image[4] else '_native_low_bind_map',2)
         require(installer_code.count(struct.pack('<I',selected_binder))==1,
                 'actual installer lacks its exact typed selected-reader binder helper')
     else:

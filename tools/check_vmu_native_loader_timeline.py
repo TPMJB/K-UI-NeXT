@@ -200,10 +200,13 @@ def sdk_route_variant(resident,worker,stage):
     return False
 
 
-def bridge_bindings(resident,bridge,sdk,read_ahead=False):
+def bridge_bindings(resident,bridge,sdk,read_ahead=False,modern=False):
     require(len(bridge)==36 and bridge[:28]==BRIDGE_INSTRUCTIONS,
             'timeline bridge instruction/halfword literal bytes differ from the reviewed original')
     expected=READAHEAD_BRIDGE_BINDINGS if read_ahead else SDK_BRIDGE_BINDINGS if sdk else BRIDGE_BINDINGS
+    if modern:
+        expected=tuple(resident[4][name][0] for name in
+            ('_kui_retail_async_region_storage','_kui_retail_hook_sr'))
     require(struct.unpack_from('<II',bridge,28)==expected,
             'timeline bridge must retain its exact reviewed region/SR literal pair')
     for name,address in zip(('_kui_retail_async_region_storage','_kui_retail_hook_sr'),expected):
@@ -283,11 +286,15 @@ def check(directory,*,self_test=False,read_ahead_proof=None):
     binder_pin=WITNESS_DUAL_BINDER_PIN if witness else DUAL_BINDER_PIN if dual else READAHEAD_BINDER_PIN if read_ahead else SDK_BINDER_PIN if sdk else BINDER_PIN
     from check_native_followup_profile import stage_pins
     binder_pin=stage_pins(stage,'timeline_binder',binder_pin)
-    require((hashlib.sha256(bridge).hexdigest(),len(bridge))==bridge_pin,
-            'linked timeline bridge instructions/literals changed')
-    bridge_bindings(resident,bridge,sdk,read_ahead)
+    from check_native_modern_timeline_profile import profile as modern_profile, pinned as modern_pinned
+    modern=modern_profile(resident,worker,stage)
+    normalized=modern_pinned(resident,stage) if modern is not None else None
+    if modern is None:
+        require((hashlib.sha256(bridge).hexdigest(),len(bridge))==bridge_pin,
+                'linked timeline bridge instructions/literals changed')
+    bridge_bindings(resident,bridge,sdk,read_ahead,modern is not None)
     binder,binder_body,binder_section=symbol_bytes(stage,'_native_loader_timeline_bind',2)
-    require((hashlib.sha256(binder_body).hexdigest(),len(binder_body))==binder_pin and
+    require((modern is not None or (hashlib.sha256(binder_body).hexdigest(),len(binder_body))==binder_pin) and
             binder_section[2]&7==6 and 0x8ce00000<=binder<binder+len(binder_body)<=0x8cfe0000,
             'linked timeline descriptor/region/profile binder changed')
     cases=0
@@ -308,6 +315,10 @@ def check(directory,*,self_test=False,read_ahead_proof=None):
             try:Bridge(resident,callback,7,True,1,2,changed).run().check()
             except (AssertionError,ValueError,KeyError,struct.error):rejected+=1
             else:raise ValueError('timeline bridge model accepted a changed memory binding')
+    typed_mutants=0
+    if self_test and modern is not None:
+        from check_native_modern_timeline_profile import mutation_checks
+        typed_mutants=mutation_checks(resident,stage)
     return {'enabled':True,'paired_resident_worker':True,'descriptor_address':hex(desc),
         'sdk_sci_route_variant':sdk,'sdk_sci_resident_callback_worker_stage_paired':sdk,
         'read_ahead_variant':read_ahead,
@@ -327,6 +338,8 @@ def check(directory,*,self_test=False,read_ahead_proof=None):
         'bridge_mutation_rejections':rejected,'null_callback_no_caller_state_access':True,
         'original_exit_function_caller_sr_region_forwarded':True,'nullable_tail_call_same_gd_frame':True,
         'cold_binder_address':hex(binder),'cold_binder_bytes':len(binder_body),
+        'modern_profile':modern,'independent_normalized_timeline_pins':normalized,
+        'modern_instruction_and_typed_target_mutation_rejections':typed_mutants,
         'complete_linked_cold_binder_pinned':True,'cold_binder_is_instruction_modelled':False,
         'reviewed_binder_checks':['descriptor alignment/span','magic/version','private callback code bounds',
             'retained region admission','initially empty slot','PROFILE mode only','OCBP publication'],

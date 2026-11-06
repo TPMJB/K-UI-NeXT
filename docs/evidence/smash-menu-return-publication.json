@@ -1,0 +1,22 @@
+{
+  "schema": "kui.smash-menu.return-publication.v1",
+  "passed": true,
+  "stage_elf_sha256": "06ce44de855ca28634aac3e51525b148aeb4c0671d8fbaf89e5db124e09cf142",
+  "gate_elf_sha256": "19cbe15b526fdb45567a1a5cb4af440547da8f7e753a449870573dbb97376eed",
+  "worker_elf_sha256": "c5ea1901ade756d82ddefe27aa124f62b22b9830e87f43d9d58b3d73e0ce113c",
+  "prepare_instructions": 60870,
+  "publication_instructions": 207576,
+  "binding_instructions": 632354,
+  "original_firmware_captured_before_patch": true,
+  "raw_and_code_exact": true,
+  "initialized_runtime_exact": true,
+  "private_stack_zeroed": true,
+  "reset_patch_before_cleanup": "0x8c0117f0",
+  "native_return_seed_delta": 304,
+  "actual_relocated_worker_gateway": "0x8cbeb5e4",
+  "metadata_resealed_after_worker_bind": true,
+  "limits": [
+    "The actual three cold-stage functions execute; normal bootstrap/GD loading and the call-site ordering are independently covered by the native route audit.",
+    "OCBP and CCR accesses are modeled without cache timing. The worker is relocated from its exact artifact; retirement, game and physical I/O are not invoked."
+  ]
+}

@@ -610,6 +610,55 @@ static void capture_activity_check(const char *name) {
     }
     puts("EVIDENCE pre-group raw/2048 favorites and latest played survived v3-to-v4 rescan/cold reload; inherited first toggle turned off, failed save preserved flags, explicit group choice won, and unfavorite never resurrected legacy favorites");
 }
+static unsigned recv_rows(struct kui_games_entry *group) {
+    unsigned count=0;
+    for(unsigned offset=0;;offset+=KUI_GAMES_ROWS) {
+        struct kui_games_page rows;page(offset,&rows);
+        for(unsigned i=0;i<rows.count;i++)if(strstr(rows.entries[i].path,"VERONICA")) {
+            ++count;if(group && rows.entries[i].group[0])*group=rows.entries[i];
+        }
+        if(!rows.has_more)return count;
+    }
+}
+static void mixed_recv_check(const char *name) {
+    bool grouped=!strcmp(name,"mixed-recv") || !strcmp(name,"mixed-recv-reverse") || !strcmp(name,"mixed-recv-io");
+    unsigned candidates=!strcmp(name,"mixed-recv-duplicate")?3u:2u;
+    assert(test.group_reads==candidates && test.group_bytes<=2352u*candidates);
+    struct kui_games_entry group={0};
+    assert(recv_rows(&group)==(grouped?1u:candidates) && (group.group[0]!=0)==grouped);
+    if(grouped) {
+        struct kui_games_page discs;assert(kui_games_library_rows("/Games",group.group,0,KUI_GAMES_VIEW_LIST,&discs,log_line,cancel));
+        assert(discs.count==2u && discs.total==2u && discs.entries[0].disc==1u && discs.entries[1].disc==2u);
+        assert(strstr(discs.entries[0].path,"/RESIDENT_EVIL_CODE_VERONICA/") && discs.entries[1].variant_2048_path[0]);
+        struct kui_native_session_request session;
+        assert(kui_games_library_session_request("/Games",discs.entries[1].variant_2048_path,&session,log_line,cancel));
+        assert(session.count==2u && session.selected==1u && !strcmp(session.paths[0],discs.entries[0].path) &&
+            !strcmp(session.paths[1],discs.entries[1].variant_2048_path));
+        struct kui_games_activity_entry first,second;
+        assert(kui_games_library_activity_key("/Games",discs.entries[0].path,&first,log_line) &&
+            kui_games_library_activity_key("/Games",discs.entries[1].variant_2048_path,&second,log_line));
+        assert(first.group[0] && !strcmp(first.group,second.group));
+        if(!strcmp(name,"mixed-recv-io")) {
+            for(unsigned i=0;i<2u;i++) {
+                unsigned writes=test.non_trace_writes;
+                test.fail_group_ip=i==0u;test.cancel_group_ip=i==1u;
+                assert(!kui_games_library_scan("/Games",false,log_line,cancel));
+                assert(test.non_trace_writes==writes && kui_games_library_ready("/Games"));
+                test.fail_group_ip=test.cancel_group_ip=test.cancelled=false;
+                struct kui_games_entry previous={0};assert(recv_rows(&previous)==1u && !strcmp(previous.group,group.group));
+            }
+        }
+    }
+    clear();unsigned dirs=test.readdirs,opens=test.game_opens,writes=test.writes,headers=test.group_reads;
+    struct kui_games_entry cold={0};assert(recv_rows(&cold)==(grouped?1u:candidates));
+    assert(test.readdirs==dirs && test.game_opens==opens && test.writes==writes && test.group_reads==headers);
+    if(grouped)assert(!strcmp(group.group,cold.group));
+    assert(kui_games_library_scan("/Games",false,log_line,cancel));
+    struct kui_games_entry rescanned={0};assert(recv_rows(&rescanned)==(grouped?1u:candidates));
+    if(grouped)assert(!strcmp(group.group,rescanned.group));
+    printf("EVIDENCE owner-style RECV mixed disc names %s; real IP release+ordinals, Original/2048/session identity, cold no-I/O and stable rescan checked\n",
+        grouped?"grouped":"safely kept separate");
+}
 static void capture_groups_check(const char *name) {
     unsigned candidates=!strcmp(name,"capture-label-collision")?7u:!strcmp(name,"capture-two-releases")?5u:
         !strcmp(name,"capture-passport") || !strcmp(name,"capture-duplicate-copy")?4u:3u;
@@ -689,6 +738,7 @@ static void check(const char *name) {
         else if(!strcmp(name,"catalogue-v2") || !strcmp(name,"catalogue-v3"))catalogue_legacy_check(!strcmp(name,"catalogue-v3")?3u:2u);
         else if(!strncmp(name,"capture-activity",16))capture_activity_check(name);
         else if(!strncmp(name,"capture-",8))capture_groups_check(name);
+        else if(!strncmp(name,"mixed-recv",10))mixed_recv_check(name);
         else if(!strcmp(name,"cold") || !strcmp(name,"groups"))cold_check();
         else if(!strcmp(name,"stale")) {
             add_game(true);assert(find("Standalone",NULL) && !find("New Arrival",NULL));clear();

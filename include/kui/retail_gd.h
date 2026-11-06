@@ -6,6 +6,65 @@
 #include "kui/retail_image.h"
 #include "kui/retail_native_drive.h"
 
+#ifndef KUI_NATIVE_GD_LEGACY_STREAM
+#define KUI_NATIVE_GD_LEGACY_STREAM 0
+#endif
+#if KUI_NATIVE_GD_LEGACY_STREAM != 0 && KUI_NATIVE_GD_LEGACY_STREAM != 1
+#error "Legacy native stream selector must be zero or one"
+#endif
+#if KUI_NATIVE_GD_LEGACY_STREAM && (!KUI_NATIVE_OCRAM_BOOTSTRAP || defined(KUI_RETAIL_CE))
+#error "Legacy GD streaming belongs to the separate native OCRAM profile"
+#endif
+#if KUI_NATIVE_GD_LEGACY_STREAM
+/* Older BIOS stream handshake: REQUEST {FAD,sectors}, then FN6 pieces and
+ * FN7 polling on one retained token. Pieces are finite whole sectors; the
+ * older 0x1ff end-of-disc request mode is refused. No CE queue, extra staging
+ * buffer, or additional resident state is introduced. Unshown GD counters
+ * retain their layout but are not updated; last_result/last_error remain. */
+#define KUI_RETAIL_GD_DMAREAD_LEGACY_STREAM 28u
+#define KUI_RETAIL_GD_LEGACY_STREAMING 3
+#endif
+
+#ifndef KUI_NATIVE_GD_MMU_BUFFERS
+#define KUI_NATIVE_GD_MMU_BUFFERS 0
+#endif
+#if KUI_NATIVE_GD_MMU_BUFFERS != 0 && KUI_NATIVE_GD_MMU_BUFFERS != 1
+#error "Native CPU MMU buffer selector must be zero or one"
+#endif
+#if KUI_NATIVE_GD_MMU_BUFFERS && !KUI_NATIVE_GD_LEGACY_STREAM
+#error "Native CPU MMU buffers require the native OCRAM legacy stream profile"
+#endif
+
+#ifndef KUI_NATIVE_GD_DMA_STREAM
+#define KUI_NATIVE_GD_DMA_STREAM 0
+#endif
+#if KUI_NATIVE_GD_DMA_STREAM != 0 && KUI_NATIVE_GD_DMA_STREAM != 1
+#error "Native GD DMA stream selector must be zero or one"
+#endif
+#if KUI_NATIVE_GD_DMA_STREAM && !KUI_NATIVE_GD_MMU_BUFFERS
+#error "Native GD DMA streams require the native CPU MMU buffer profile"
+#endif
+
+#ifndef KUI_NATIVE_GD_PIO_STREAM
+#define KUI_NATIVE_GD_PIO_STREAM 0
+#endif
+#if KUI_NATIVE_GD_PIO_STREAM != 0 && KUI_NATIVE_GD_PIO_STREAM != 1
+#error "Native GD PIO stream selector must be zero or one"
+#endif
+#if KUI_NATIVE_GD_PIO_STREAM && !KUI_NATIVE_GD_DMA_STREAM
+#error "Native GD PIO streams require the native DMA stream/MMU profile"
+#endif
+
+#ifndef KUI_NATIVE_GD_VRAM_DMA
+#define KUI_NATIVE_GD_VRAM_DMA 0
+#endif
+#if KUI_NATIVE_GD_VRAM_DMA != 0 && KUI_NATIVE_GD_VRAM_DMA != 1
+#error "Native GD VRAM DMA selector must be zero or one"
+#endif
+#if KUI_NATIVE_GD_VRAM_DMA && (!KUI_NATIVE_GD_DMA_STREAM || !KUI_NATIVE_GD_MMU_BUFFERS)
+#error "Native GD VRAM DMA requires the native DMA stream/MMU profile"
+#endif
+
 #ifndef KUI_NATIVE_SESSION_CONTROLS
 #define KUI_NATIVE_SESSION_CONTROLS 0
 #endif
@@ -30,7 +89,11 @@ enum kui_retail_disc_lid {
 enum kui_retail_map_access {
     /* ops.map writing=0/1 retains read/write access. Validation only checks
      * bounds and ownership; its non-null result must never be dereferenced. */
-    KUI_RETAIL_MAP_VALIDATE = 2
+    KUI_RETAIL_MAP_VALIDATE = 2,
+    /* Explicit DMA-only VRAM access. CPU parameters/results and PIO retain
+     * access 0/1/2 and cannot acquire physical VRAM mapping by coincidence. */
+    KUI_RETAIL_MAP_DMA_VALIDATE = 3,
+    KUI_RETAIL_MAP_DMA_WRITE = 4
 };
 enum kui_retail_gd_command {
     KUI_RETAIL_GD_GETTOC = 18, KUI_RETAIL_GD_PLAY = 20, KUI_RETAIL_GD_PLAY2 = 21,
@@ -40,18 +103,24 @@ enum kui_retail_gd_command {
     KUI_RETAIL_GD_REQ_STAT = 36, KUI_RETAIL_GD_GET_VERS = 40
 };
 
-#ifdef KUI_RETAIL_CE
+#if defined(KUI_RETAIL_CE) || KUI_NATIVE_GD_DMA_STREAM
 /* Windows CE's DMA stream read (DMAREAD_STREAM_EX), params {FAD, sectors,
- * flag}: CHECK reports STREAMING while bytes remain, and the driver moves
+ * opaque lookahead hint}: CHECK reports STREAMING while bytes remain, and the driver moves
  * them with DMA_TRANSFER {destination, bytes}, one physically contiguous
- * piece of its buffer at a time (adjacent pages merge, so any size), then
- * DMA_CHECK {bytes left}. Each driver call moves 4 KiB of a transfer and
- * raises the interrupts that keep CE's driver calling: G1 DMA end, and the
- * drive's while bytes remain and at completion (its SYSINTR 21 and 20). */
-/* Ordinary reads (PIOREAD, DMAREAD) in this build: CHECK's word 3 is 1
- * while one is pending and each step raises the drive's interrupt, so CE's
- * driver continues on that interrupt instead of sleeping a 25 ms tick. */
+ * piece at a time (32-byte alignment; adjacent pages merge), then DMA_CHECK
+ * {bytes left}. The native profile finishes each piece within FN6; the CE
+ * profile has its own paced adapter. A completed piece raises G1 DMA end
+ * (SYSINTR21), and final/error completion raises the drive's SYSINTR20. */
 #define KUI_RETAIL_GD_DMAREAD_STREAM 38u
+#define KUI_RETAIL_GD_STREAMING 3
+enum kui_retail_gd_interrupt {
+    KUI_RETAIL_GD_IRQ_DMA_END = 1, KUI_RETAIL_GD_IRQ_DRIVE = 2
+};
+#endif
+#ifdef KUI_RETAIL_CE
+/* Ordinary reads (PIOREAD, DMAREAD) in the CE profile: CHECK's word3 is1
+ * while pending and each step raises the drive's interrupt, so CE's driver
+ * continues on that interrupt instead of sleeping a25ms scheduler tick. */
 /* Its PIO twin (PIOREAD_STREAM_EX), same params: the driver registers a
  * callback (PIO_CALLBACK), then moves pieces of at most what PIO_CHECK
  * offers (4 KiB) with PIO_TRANSFER {destination, bytes} into its own
@@ -59,11 +128,9 @@ enum kui_retail_gd_command {
  * next. Transfers complete at once; the callback is then due and the drive's
  * interrupt raised so that CE's driver calls EXEC, after which the adapter
  * makes the callback (callback_due, pio_callback, pio_argument). */
+#endif
+#if defined(KUI_RETAIL_CE) || KUI_NATIVE_GD_PIO_STREAM
 #define KUI_RETAIL_GD_PIOREAD_STREAM 39u
-#define KUI_RETAIL_GD_STREAMING 3
-enum kui_retail_gd_interrupt {
-    KUI_RETAIL_GD_IRQ_DMA_END = 1, KUI_RETAIL_GD_IRQ_DRIVE = 2
-};
 #endif
 /* The extra low-memory fields are confined to the standard native reader.
  * CE and background reader layouts retain their existing ABI and footprint. */
@@ -90,9 +157,33 @@ enum kui_retail_gd_rejection {
     KUI_RETAIL_GD_REJECT_COMMAND_PARAMETERS,
     KUI_RETAIL_GD_REJECT_FUNCTION_ARGUMENT
 };
+/* Native FN6 refusal telemetry. These codes describe an unchanged rejected
+ * transfer; they are not GD status/error values and never relax DMA checks.
+ * Destination/bytes are zero until the CPU parameter packet has been read. */
+enum kui_retail_gd_transfer_rejection {
+    KUI_RETAIL_GD_TRANSFER_NONE,
+    KUI_RETAIL_GD_TRANSFER_OWNERSHIP,
+    KUI_RETAIL_GD_TRANSFER_STATE,
+    KUI_RETAIL_GD_TRANSFER_PACKET,
+    KUI_RETAIL_GD_TRANSFER_EMPTY,
+    KUI_RETAIL_GD_TRANSFER_CURSOR,
+    KUI_RETAIL_GD_TRANSFER_REMAINING,
+    KUI_RETAIL_GD_TRANSFER_BYTE_ALIGNMENT,
+    KUI_RETAIL_GD_TRANSFER_SECTOR_ALIGNMENT,
+    KUI_RETAIL_GD_TRANSFER_DESTINATION
+};
+#if KUI_NATIVE_GD_DMA_STREAM && KUI_NATIVE_GD_MMU_BUFFERS
+/* The constrained resident supplies a terminal-only trace writer. The core's
+ * weak no-op lets isolated host/profile consumers retain the same ABI and
+ * service footprint. Successful transfers never invoke this hook. */
+void kui_retail_gd_native_transfer_refused(uint32_t reason,
+    uint32_t destination,uint32_t bytes);
+#endif
 struct kui_retail_gd_diagnostics {
+#if !KUI_NATIVE_GD_MMU_BUFFERS
     uint32_t calls, requests, exec_calls, read_steps, sectors_read, rejected;
     uint32_t last_function, last_command, last_lba, last_count, last_destination;
+#endif
     uint32_t last_error;
     int32_t last_result;
 #if KUI_RETAIL_GD_REJECTION_DETAILS
@@ -112,6 +203,17 @@ struct kui_retail_gd {
     /* Sectors one EXEC may read: adapter pacing policy, not drive state.
      * Init sets STEP_SECTORS; values outside 1..STEP_MAX use that default. */
     uint32_t step;
+#if KUI_NATIVE_GD_MMU_BUFFERS
+    /* Live architectural call context, refreshed by the resident before
+     * dispatch. INIT/RESET retain it; it is not drive or kernel state. */
+    uint32_t cpu_mmu;
+#endif
+#if KUI_NATIVE_GD_PIO_STREAM
+    /* Registration survives command acknowledgement; the adapter schedules
+     * a due callback only after a later EXEC unlocks and restores its caller.
+     * Neither the core nor the reader invokes it within PIO_TRANSFER. */
+    uint32_t pio_callback,pio_argument,callback_due;
+#endif
 #if KUI_NATIVE_SESSION_CONTROLS
     /* Only the separately linked session-control service owns these words.
      * A generation identifies a medium lifetime, never a request token. */
@@ -139,12 +241,16 @@ struct kui_retail_gd {
 /* Tracks (a launch map's first count slots, track i numbered i + 1; their
  * extent fields are not used here) are referenced, not copied, and must
  * stay resident and immutable.
- * ops.map receives checked P1 addresses. Full read destinations are mapped
+ * ops.map receives checked P1 addresses, except raw CPU pointers admitted
+ * by the opt-in live-MMU context or the OCRAM bootstrap mapper. Physical
+ * DMA destinations retain their RAM-alias semantics in either context.
+ * Full read destinations are mapped
  * with KUI_RETAIL_MAP_VALIDATE during REQUEST, without cache maintenance or
  * memory access; EXEC maps each output chunk for writing before use.
  * ops.check is called in <=8-sector chunks with no I/O; ops.read only from
  * EXEC, in chunks of at most step sectors (two unless the adapter paces it).
- * All destination bytes must fit [guest_begin,guest_end). */
+ * RAM aliases must fit [guest_begin,guest_end); the resident mapper checks
+ * the separately admitted CPU virtual/OCRAM spans. */
 int kui_retail_gd_init(struct kui_retail_gd *, const union kui_retail_slot *tracks,
     uint32_t count, const struct kui_gd_ops *, uint32_t guest_begin,
     uint32_t guest_end);
@@ -185,8 +291,8 @@ int kui_retail_gd_disc_close(struct kui_retail_gd *,const struct kui_retail_mani
  * backend may use SCI DMA independently. CHECK never reads storage.
  * Completion/failure is acknowledged once by CHECK;
  * a subsequent CHECK returns NOT_FOUND. ABORT retains completed chunk bytes.
- * MISC and stream functions are not handled here, except Windows CE's DMA
- * stream read in the KUI_RETAIL_CE build (see KUI_RETAIL_GD_DMAREAD_STREAM). Callback-clear (r4=0) is a
+ * MISC and stream functions are not handled here, except the explicit CE
+ * and native stream profiles (see KUI_RETAIL_GD_DMAREAD_STREAM). Callback-clear (r4=0) is a
  * supported no-op; nonzero callback installation is explicitly unsupported.
  * The mode command's four words are virtual drive metadata, not physical SD
  * settings. DATATYPE accepts 2048-byte user data (type0 automatic,1024 Mode1
@@ -211,6 +317,15 @@ int32_t kui_retail_gd_dispatch(struct kui_retail_gd *, uint32_t r4,
  * every sector is delivered; CHECK then reports it as usual. Calls for
  * anything but a pending read are ignored. ops.read is never called. */
 void kui_retail_gd_progress(struct kui_retail_gd *, uint32_t sectors, uint32_t error);
+#if KUI_NATIVE_GD_DMA_STREAM
+/* Native command38 (and opt-in39) retains the request LBA and byte cursor.
+ * While it owns the token, outputs[0] is the active piece's remaining bytes,
+ * destination its current physical DMA/CPU PIO pointer, outputs[3] queued IRQs.
+ * The adapter reports only bytes actually delivered into that piece.
+ * The resident drains events before CHECK may acknowledge the terminal token. */
+void kui_retail_gd_native_dma_progress(struct kui_retail_gd *,uint32_t total,uint32_t error);
+uint32_t kui_retail_gd_native_dma_events(struct kui_retail_gd *);
+#endif
 #if KUI_NATIVE_SESSION_CONTROLS
 /* The adapter snapshots both values when accepting a read. Progress from a
  * retired medium or handle is ignored, even if another read is now pending.

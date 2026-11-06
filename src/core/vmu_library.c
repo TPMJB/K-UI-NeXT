@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* Read-only GUI admission of active cards and immutable import snapshots.
+/* GUI admission and explicitly confirmed management of virtual cards.
  * These functions are deliberately separate from the native save runtime. */
 #include "kui/vmu_library.h"
 #include "kui/vmu_collection.h"
@@ -11,6 +11,8 @@
 #include "kui/retail_image.h"
 #include "kui/game_cover.h"
 #include "kui/vmu_description.h"
+#include "kui/smash_launch_timing.h"
+#include "kui/media.h"
 #include "ff.h"
 #include "diskio.h"
 #include <limits.h>
@@ -75,15 +77,24 @@ static int optional_exact(const char *path,void *out,size_t bytes,bool *present,
     return read_exact(path,out,bytes,cancel);
 }
 static int compare_file(const char *path,const void *data,size_t bytes,kui_cancel_fn cancel) {
-    FIL file;uint8_t block[512];UINT got=0;
+    FIL file;_Alignas(32) uint8_t fallback[4096];UINT got=0;
     if(f_open(&file,path,FA_READ)!=FR_OK) return IO;
     int result=f_size(&file)==bytes?OK:BAD;
-    for(size_t at=0;result==OK && at<bytes;at+=sizeof(block)) {
+    void *allocation=result==OK && bytes>sizeof(fallback)?malloc(32768u+31u):NULL;
+    uint8_t *block=allocation?(uint8_t *)(((uintptr_t)allocation+31u)&~(uintptr_t)31u):fallback;
+    size_t window=allocation?32768u:sizeof(fallback);
+    if(result==OK && bytes>sizeof(fallback))kui_smash_launch_timing_metric(KUI_SMASH_UI_VERIFY_BATCH_BYTES,(uint32_t)window);
+    for(size_t at=0;result==OK && at<bytes;at+=window) {
         if(stopped(cancel)) {result=STOP;break;}
-        UINT n=(UINT)(bytes-at<sizeof(block)?bytes-at:sizeof(block));
-        if(f_read(&file,block,n,&got)!=FR_OK || got!=n) result=IO;
+        UINT n=(UINT)(bytes-at<window?bytes-at:window);
+        got=0u;
+        FRESULT read=f_read(&file,block,n,&got);
+        kui_smash_launch_timing_add(KUI_SMASH_UI_HISTORY_READ_CALLS,1u);
+        kui_smash_launch_timing_add(KUI_SMASH_UI_HISTORY_READ_BYTES,got);
+        if(read!=FR_OK || got!=n) result=IO;
         else if(memcmp(block,(const uint8_t *)data+at,n)) result=BAD;
     }
+    free(allocation);
     if(f_close(&file)!=FR_OK) result=IO;
     return result;
 }
@@ -259,27 +270,54 @@ int kui_vmu_library_label(const char *path,const uint8_t expected_identity[16],c
  * disjoint. Otherwise a damaged bitmap or cross-linked chain could lend save
  * data or directory clusters to a new name record or its directory entry. */
 #define LABEL_MAP_RUNS 64u
+#define LABEL_READ_SECTORS 8u
+struct label_read_window {LBA_t first;UINT sectors;uint8_t *data;};
+struct label_read_cache {
+    FATFS *fs;
+    struct label_read_window fat,bitmap;
+    void *allocation;
+};
+/* This cache belongs to one read-only allocation check. Every object's
+ * entries and allocation bits are still checked; only repeated physical
+ * reads of unchanged metadata within that exclusive walk are coalesced. */
+static int label_read_sector(struct label_read_cache *cache,FATFS *fs,bool bitmap,
+    LBA_t sector,const uint8_t **out) {
+    if(!cache || !fs || (cache->fs && cache->fs!=fs))return BAD;
+    cache->fs=fs;
+    struct label_read_window *window=bitmap?&cache->bitmap:&cache->fat;
+    LBA_t first=bitmap?fs->bitbase:fs->fatbase;
+    uint64_t sectors=bitmap?((uint64_t)fs->n_fatent-2u+4095u)/4096u:fs->fsize;
+    if(!sectors || sector<first || (uint64_t)sector-first>=sectors ||
+       (uint64_t)first+sectors>UINT64_C(0x100000000))return BAD;
+    if(!window->sectors || sector<window->first || sector-window->first>=window->sectors) {
+        uint64_t offset=((uint64_t)sector-first)/LABEL_READ_SECTORS*LABEL_READ_SECTORS;
+        UINT count=sectors-offset>LABEL_READ_SECTORS?LABEL_READ_SECTORS:(UINT)(sectors-offset);
+        window->sectors=0u;
+        if(disk_read(fs->pdrv,window->data,first+(LBA_t)offset,count)!=RES_OK)return IO;
+        window->first=first+(LBA_t)offset;window->sectors=count;
+    }
+    *out=window->data+(size_t)(sector-window->first)*512u;return OK;
+}
 struct label_file_map {FATFS *fs;DWORD runs[2u+2u*LABEL_MAP_RUNS];unsigned count;};
-static int label_object_map(const FFOBJID *object,bool directory,struct label_file_map *map,kui_cancel_fn cancel);
-static int label_file_map(const char *path,struct label_file_map *map,kui_cancel_fn cancel) {
+static int label_object_map(const FFOBJID *object,bool directory,struct label_file_map *map,
+    struct label_read_cache *cache,kui_cancel_fn cancel);
+static int label_file_map(const char *path,struct label_file_map *map,
+    struct label_read_cache *cache,kui_cancel_fn cancel) {
     FIL file;memset(map,0,sizeof(*map));
     if(f_open(&file,path,FA_READ)!=FR_OK) return IO;
-    int result=label_object_map(&file.obj,false,map,cancel);
+    int result=label_object_map(&file.obj,false,map,cache,cancel);
     if(f_close(&file)!=FR_OK) result=IO;
     return result;
 }
-static int label_allocated(const struct label_file_map *map,kui_cancel_fn cancel) {
+static int label_allocated(const struct label_file_map *map,struct label_read_cache *cache,kui_cancel_fn cancel) {
     if(map->fs->fs_type!=FS_EXFAT) return OK;
-    uint8_t bitmap[512];LBA_t loaded=(LBA_t)-1;
     for(unsigned i=0;i<map->count;i++) {
         uint32_t first=map->runs[2u+2u*i],n=map->runs[1u+2u*i];
         for(uint32_t cluster=first;cluster<first+n;cluster++) {
             if(stopped(cancel)) return STOP;
             uint32_t bit=cluster-2u;LBA_t sector=map->fs->bitbase+bit/4096u;
-            if(sector!=loaded) {
-                if(disk_read(map->fs->pdrv,bitmap,sector,1u)!=RES_OK) return IO;
-                loaded=sector;
-            }
+            const uint8_t *bitmap;int result=label_read_sector(cache,map->fs,true,sector,&bitmap);
+            if(result)return result;
             if(!(bitmap[(bit%4096u)/8u]&(1u<<(bit%8u)))) return BAD;
         }
     }
@@ -289,7 +327,8 @@ static int label_allocated(const struct label_file_map *map,kui_cancel_fn cancel
  * cluster marked free while it still holds a directory can erase its saves.
  * Read the allocation information from DIR.obj, but never pass a synthetic
  * FIL to FatFs (its seek implementation may materialize exFAT fragments). */
-static int label_object_map(const FFOBJID *object,bool directory,struct label_file_map *map,kui_cancel_fn cancel) {
+static int label_object_map(const FFOBJID *object,bool directory,struct label_file_map *map,
+    struct label_read_cache *cache,kui_cancel_fn cancel) {
     memset(map,0,sizeof(*map));map->fs=object->fs;
     FATFS *fs=map->fs;
     if(!fs || (fs->fs_type!=FS_FAT32 && fs->fs_type!=FS_EXFAT) || !fs->csize || fs->n_fatent<3u) return BAD;
@@ -307,7 +346,7 @@ static int label_object_map(const FFOBJID *object,bool directory,struct label_fi
             map->count=1u;map->runs[1]=(DWORD)expected;map->runs[2]=first;return OK;
         }
     }
-    uint8_t fat[512];LBA_t loaded=(LBA_t)-1;uint32_t cluster=first,total=0;
+    uint32_t cluster=first,total=0;
     for(;;) {
         if(stopped(cancel)) return STOP;
         if(cluster<2u || cluster>=fs->n_fatent || ++total>fs->n_fatent-2u || total>65536u) return BAD;
@@ -325,10 +364,8 @@ static int label_object_map(const FFOBJID *object,bool directory,struct label_fi
         uint32_t offset=cluster/128u;
         if(offset>=fs->fsize) return BAD;
         LBA_t sector=fs->fatbase+offset;
-        if(sector!=loaded) {
-            if(disk_read(fs->pdrv,fat,sector,1u)!=RES_OK) return IO;
-            loaded=sector;
-        }
+        const uint8_t *fat;int result=label_read_sector(cache,fs,false,sector,&fat);
+        if(result)return result;
         uint32_t next=get32(fat+(cluster%128u)*4u)&(fs->fs_type==FS_FAT32?UINT32_C(0x0fffffff):UINT32_C(0x7fffffff));
         uint32_t end=fs->fs_type==FS_FAT32?UINT32_C(0x0ffffff8):UINT32_C(0x7ffffff8);
         if(next>=end) return expected && (directory?total!=expected:total<expected)?BAD:OK;
@@ -340,7 +377,10 @@ static int label_object_map(const FFOBJID *object,bool directory,struct label_fi
  * silently share clusters. The set is GUI scratch and is freed before return.
  * Its bound is a refusal limit, never a reason to skip an unchecked object. */
 struct label_extent {uint32_t first,count;};
-struct label_ownership {FATFS *fs;struct label_extent *extents;size_t count,capacity;};
+struct label_ownership {
+    FATFS *fs;struct label_extent *extents;size_t count,capacity;
+    struct label_read_cache cache;
+};
 static int label_owned(struct label_ownership *owned,const struct label_file_map *map) {
     if(owned->fs && owned->fs!=map->fs) return BAD;
     owned->fs=map->fs;
@@ -362,8 +402,8 @@ static int label_owned(struct label_ownership *owned,const struct label_file_map
     return OK;
 }
 static int label_directory_owned(const FFOBJID *object,struct label_ownership *owned,kui_cancel_fn cancel) {
-    struct label_file_map map;int result=label_object_map(object,true,&map,cancel);
-    if(!result) result=label_allocated(&map,cancel);
+    struct label_file_map map;int result=label_object_map(object,true,&map,&owned->cache,cancel);
+    if(!result) result=label_allocated(&map,&owned->cache,cancel);
     if(!result) result=label_owned(owned,&map);
     return result;
 }
@@ -382,8 +422,8 @@ static int label_tree(const char *directory,unsigned depth,
             if(depth>=3u) {result=BAD;break;}
             result=label_tree(path,depth+1u,owned,entries,cancel);
         } else {
-            struct label_file_map map;result=label_file_map(path,&map,cancel);
-            if(!result) result=label_allocated(&map,cancel);
+            struct label_file_map map;result=label_file_map(path,&map,&owned->cache,cancel);
+            if(!result) result=label_allocated(&map,&owned->cache,cancel);
             if(!result) result=label_owned(owned,&map);
         }
         if(result) break;
@@ -393,6 +433,16 @@ static int label_tree(const char *directory,unsigned depth,
 }
 int kui_vmu_library_check_allocation(kui_cancel_fn cancel) {
     unsigned entries=0;struct label_ownership owned={0};int result=OK;
+    owned.cache.allocation=malloc(2u*LABEL_READ_SECTORS*512u+31u);
+    if(!owned.cache.allocation)return IO;
+    owned.cache.fat.data=(uint8_t *)(((uintptr_t)owned.cache.allocation+31u)&~(uintptr_t)31u);
+    owned.cache.bitmap.data=owned.cache.fat.data+LABEL_READ_SECTORS*512u;
+    /* Opening each managed file rewalks shared directory ancestors through
+     * FatFs' single-sector window. Memoize only this read-only walk's fresh
+     * metadata reads. All object/chain/bitmap/overlap checks still execute;
+     * no payload or proof survives the walk. Low memory keeps direct I/O. */
+    void *metadata=malloc(64u*(512u+sizeof(uint32_t)));
+    bool memoized=metadata && kui_media_read_cache_begin(metadata,64u*(512u+sizeof(uint32_t)));
     static const char *const ancestors[]={"0:/","0:/KUI"};
     for(unsigned i=0;!result && i<2u;i++) {
         DIR dir;FRESULT opened=f_opendir(&dir,ancestors[i]);
@@ -403,7 +453,10 @@ int kui_vmu_library_check_allocation(kui_cancel_fn cancel) {
     }
     if(!result) result=label_tree(ACTIVE_ROOT,0u,&owned,&entries,cancel);
     if(!result) result=label_tree("0:/KUI/vmu",0u,&owned,&entries,cancel);
+    if(memoized)kui_media_read_cache_end();
+    free(metadata);
     free(owned.extents);
+    free(owned.cache.allocation);
     return result;
 }
 int kui_vmu_library_rename(const char *path,const char *name,const uint8_t expected_identity[16],
@@ -559,6 +612,11 @@ static void save_contents(const uint8_t *image,char out[97]) {
     }
 }
 static void row_game(struct kui_vmu_backup_entry *row,const char *key,struct library_titles *titles,char first[129]) {
+    if(!strcmp(key,KUI_VMU_SMASHPACK_KEY)) {
+        game_append(row->titles,KUI_VMU_SMASHPACK_LABEL);
+        if(!first[0]) snprintf(first,129u,"%s",KUI_VMU_SMASHPACK_LABEL);
+        return;
+    }
     struct library_title *title=title_find(titles,key);
     if(title && title->title[0]) {
         game_append(row->titles,title->title);
@@ -576,8 +634,257 @@ static bool library_candidate(void *context,const char key[KUI_VMU_GAME_CARD_KEY
     (void)is_default;struct library_candidates *refs=context;
     if(refs->count==KUI_VMU_GAME_CANDIDATES_MAX) return false;
     struct kui_vmu_game_assignment *entry=refs->entries+refs->count++;
-    memcpy(entry->key,key,sizeof(entry->key));entry->pair=target->pair;
-    memcpy(entry->identity,target->identity,16u);return true;
+    memcpy(entry->key,key,sizeof(entry->key));
+    if(target) {entry->pair=target->pair;memcpy(entry->identity,target->identity,16u);}
+    return true;
+}
+
+static void delete_digest(const void *data,size_t bytes,uint8_t out[32]) {
+    struct kui_sha256 hash;kui_sha256_init(&hash);
+    kui_sha256_update(&hash,data,bytes);kui_sha256_digest(&hash,out);
+}
+static void delete_save_name(const uint8_t entry[32],char out[16]) {
+    unsigned n=12u;while(n && (!entry[4u+n-1u] || entry[4u+n-1u]==' ')) --n;
+    for(unsigned i=0;i<n;i++) out[i]=entry[4u+i]>=32u && entry[4u+i]<127u?(char)entry[4u+i]:'_';
+    out[n]=0;if(!n) strcpy(out,"Unnamed save");
+}
+static uint8_t *delete_entry(uint8_t *image,unsigned index) {
+    return index<208u?image+(253u-index/16u)*512u+(index%16u)*32u:NULL;
+}
+/* Names come from a checked directory, but deletion still admits only the
+ * bounded card-format leaves. An unrelated or nested object is a refusal. */
+static bool delete_leaf(const char *name,unsigned pair) {
+    static const char *const allowed[]={"card.vmd","card.journal","identity.bin",
+        "game.bin","import.bin","name-a.bin","name-b.bin","ready.bin","card.vmd.crc"};
+    for(unsigned i=0;i<sizeof(allowed)/sizeof(allowed[0]);i++) if(!strcmp(name,allowed[i])) return true;
+    char profile[48];snprintf(profile,sizeof(profile),"retail-persistent-profile-%04u.bin",pair);
+    return pair && !strcmp(name,profile);
+}
+static int delete_folder_check(const char *folder,unsigned pair,kui_cancel_fn cancel) {
+    DIR dir;FILINFO info;if(f_opendir(&dir,folder)!=FR_OK) return IO;
+    FRESULT r=FR_OK;int result=OK;unsigned count=0;
+    while((r=f_readdir(&dir,&info))==FR_OK && info.fname[0]) {
+        if(stopped(cancel)) {result=STOP;break;}
+        if(++count>10u || (info.fattrib&AM_DIR) || !delete_leaf(info.fname,pair)) {result=BAD;break;}
+    }
+    if(r!=FR_OK || f_closedir(&dir)!=FR_OK) return IO;
+    return result;
+}
+static int delete_folder_remove(const char *folder,unsigned pair) {
+    /* Re-admit names before the first unlink; no recursion or arbitrary
+     * suffix is accepted, including after a failed namespace commit. */
+    int result=delete_folder_check(folder,pair,NULL);if(result) return result;
+    for(;;) {
+        DIR dir;FILINFO info;
+        if(f_opendir(&dir,folder)!=FR_OK) return IO;
+        FRESULT r=f_readdir(&dir,&info);bool closed=f_closedir(&dir)==FR_OK;
+        if(r!=FR_OK || !closed) return IO;
+        if(!info.fname[0]) break;
+        char path[192];int n=snprintf(path,sizeof(path),"%s/%s",folder,info.fname);
+        if(n<=0 || n>=(int)sizeof(path) || !delete_leaf(info.fname,pair) ||
+           (info.fattrib&AM_DIR) || f_unlink(path)!=FR_OK) return IO;
+    }
+    return f_unlink(folder)==FR_OK?OK:IO;
+}
+static int delete_write_new(const char *path,const void *data,size_t bytes,kui_cancel_fn cancel) {
+    if(stopped(cancel)) return STOP;
+    FIL file;if(f_open(&file,path,FA_WRITE|FA_CREATE_NEW)!=FR_OK) return IO;
+    int result=OK;
+    for(size_t at=0;!result && at<bytes;) {
+        if(stopped(cancel)) {result=STOP;break;}
+        UINT n=(UINT)(bytes-at>4096u?4096u:bytes-at),done=0;
+        if(f_write(&file,(const uint8_t *)data+at,n,&done)!=FR_OK || done!=n) result=IO;
+        at+=n;
+    }
+    bool synced=f_sync(&file)==FR_OK,closed=f_close(&file)==FR_OK;
+    if(!synced || !closed) return IO;
+    return result?result:compare_file(path,data,bytes,cancel);
+}
+static int delete_stage(const char *source,const char *stage,const uint8_t identity[16],
+    uint8_t *image,kui_cancel_fn cancel) {
+    /* Pin the exclusively created stage before the next cancellation point.
+     * This small durable record authorizes bounded pre-commit cancellation
+     * cleanup; a failed write is uncertain and is deliberately preserved. */
+    char target[192];int n=snprintf(target,sizeof(target),"%s/identity.bin",stage);
+    if(n<=0 || n>=(int)sizeof(target)) return ARG;
+    int result=delete_write_new(target,identity,16u,NULL);if(result) return result;
+    n=snprintf(target,sizeof(target),"%s/card.vmd",stage);
+    if(n<=0 || n>=(int)sizeof(target)) return ARG;
+    result=delete_write_new(target,image,KUI_VMU_IMAGE_BYTES,cancel);if(result) return result;
+    uint8_t data[1024]={0};n=snprintf(target,sizeof(target),"%s/card.journal",stage);
+    if(n<=0 || n>=(int)sizeof(target)) return ARG;
+    result=delete_write_new(target,data,sizeof(data),cancel);if(result) return result;
+    static const char *const names[]={"game.bin","import.bin","name-a.bin","name-b.bin"};
+    static const size_t sizes[]={64u,64u,128u,128u};
+    bool ready_marker=false;
+    for(unsigned i=0;i<4u;i++) {
+        char from[192];bool present=false;if(!leaf(from,source,names[i])) return ARG;
+        result=optional_exact(from,data,sizes[i],&present,cancel);if(result) return result;
+        if(!present) continue;
+        if(i==0u || i==1u) ready_marker=true;
+        n=snprintf(target,sizeof(target),"%s/%s",stage,names[i]);
+        if(n<=0 || n>=(int)sizeof(target)) return ARG;
+        result=delete_write_new(target,data,sizes[i],cancel);if(result) return result;
+    }
+    /* A profile-only unbound card loses that physical cluster map when its
+     * folder is replaced. Give the replacement the usual imported readiness
+     * marker so admission never depends on the obsolete profile. */
+    if(!ready_marker) {
+        uint8_t identity[16];char from[192];if(!leaf(from,source,"identity.bin")) return ARG;
+        result=read_exact(from,identity,16u,cancel);if(result) return result;
+        memset(data,0,64u);memcpy(data,"KUIVMUI1",8u);memcpy(data+16u,identity,16u);
+        put32(data+60u,kui_crc32(0,data,60u));
+        n=snprintf(target,sizeof(target),"%s/import.bin",stage);
+        if(n<=0 || n>=(int)sizeof(target)) return ARG;
+        return delete_write_new(target,data,64u,cancel);
+    }
+    return OK;
+}
+static int delete_cancel_stage(const char *stage,unsigned pair,const uint8_t expected_identity[16]) {
+    char path[192];uint8_t identity[16];
+    int n=snprintf(path,sizeof(path),"%s/identity.bin",stage);
+    if(n<=0 || n>=(int)sizeof(path) || read_exact(path,identity,16u,NULL) ||
+       memcmp(identity,expected_identity,16u) || delete_folder_check(stage,pair,NULL) ||
+       delete_folder_remove(stage,pair)) return KUI_VMU_LIBRARY_UNCERTAIN;
+    return STOP;
+}
+static int delete_image_save(uint8_t *image,const struct kui_vmu_delete_preview *preview) {
+    uint8_t *entry=delete_entry(image,preview->directory_index);
+    if(!entry || memcmp(entry,preview->entry,32u)) return BAD;
+    unsigned blocks=get16(entry+24u),at=get16(entry+2u);uint8_t *fat=image+254u*512u;
+    for(unsigned i=0;i<blocks;i++) {
+        if(at>=200u) return BAD;
+        unsigned next=get16(fat+at*2u);fat[at*2u]=0xfcu;fat[at*2u+1u]=0xffu;at=next;
+    }
+    memset(entry,0,32u);struct kui_vmu_image_summary summary;
+    return image_summary(image,&summary);
+}
+int kui_vmu_library_delete_preview(const char *path,const uint8_t expected_identity[16],
+    const char *save_name,struct kui_vmu_delete_preview *out,kui_log_fn log,kui_cancel_fn cancel) {
+    if(!out) return ARG;
+    memset(out,0,sizeof(*out));
+    if(!kui_vmu_library_path(path) || !expected_identity || zero(expected_identity,16u) ||
+       (save_name && (!save_name[0] || strlen(save_name)>12u))) return ARG;
+    if(save_name && !path_pair(path)) return BAD;
+    uint8_t *image=malloc(KUI_VMU_IMAGE_BYTES),identity[16];char key[KUI_VMU_GAME_CARD_KEY_BYTES];
+    struct kui_vmu_image_summary summary;if(!image) return IO;
+    int result=read_admitted(path,image,identity,key,&summary,NULL,log,cancel);
+    if(!result && memcmp(identity,expected_identity,16u)) result=BAD;
+    if(!result) {
+        snprintf(out->path,sizeof(out->path),"%s",path);memcpy(out->identity,identity,16u);
+        out->whole_card=save_name==NULL;out->snapshot=!path_pair(path);out->files=summary.files;
+        out->blocks=summary.used_blocks;delete_digest(image,KUI_VMU_IMAGE_BYTES,out->image_sha256);
+        if(save_name) {
+            unsigned found=0;
+            for(unsigned i=0;i<208u;i++) {
+                const uint8_t *entry=delete_entry(image,i);char name[16];if(!entry[0]) continue;
+                delete_save_name(entry,name);if(strcmp(name,save_name)) continue;
+                ++found;out->directory_index=i;memcpy(out->entry,entry,32u);
+            }
+            if(found!=1u) result=BAD;
+            else {snprintf(out->save_name,sizeof(out->save_name),"%s",save_name);out->blocks=get16(out->entry+24u);}
+        }
+        if(!result && path_pair(path)) result=kui_vmu_game_candidates_card_references(path_pair(path),identity,key,
+            NULL,out->references_sha256,&out->users,log,cancel);
+        char folder[192];snprintf(folder,sizeof(folder),"%.*s",(int)(strlen(path)-9u),path);
+        if(!result) result=delete_folder_check(folder,path_pair(path),cancel);
+    }
+    free(image);
+    if(result) memset(out,0,sizeof(*out));else out->ready=true;
+    return result;
+}
+int kui_vmu_library_delete_commit(const struct kui_vmu_delete_preview *preview,
+    const struct kui_vmu_game_candidates_storage *storage,kui_log_fn log,kui_cancel_fn cancel) {
+    if(!preview || !preview->ready || !kui_vmu_library_path(preview->path) ||
+       preview->snapshot!=!path_pair(preview->path) || (!preview->whole_card && preview->snapshot)) return ARG;
+    unsigned pair=path_pair(preview->path);
+    if(pair && !storage) return ARG;
+    struct kui_vmu_delete_preview current;
+    int result=kui_vmu_library_delete_preview(preview->path,preview->identity,
+        preview->whole_card?NULL:preview->save_name,&current,log,cancel);
+    if(result) return result;
+    if(memcmp(&current,preview,sizeof(current))) return BAD;
+    if(pair) {
+        struct active_card *card=malloc(sizeof(*card));if(!card) return IO;
+        uint8_t references[32];unsigned users=0;
+        result=active_metadata(preview->path,card,cancel);
+        if(!result) result=kui_vmu_game_candidates_card_references(pair,preview->identity,card->key,
+            storage,references,&users,log,cancel);
+        free(card);
+        if(result) return result==KUI_VMU_GAME_CANDIDATES_IO?IO:
+            result==KUI_VMU_GAME_CANDIDATES_CANCELLED?STOP:BAD;
+        if(memcmp(references,preview->references_sha256,32u) || users!=preview->users) return BAD;
+    }
+    result=kui_vmu_library_check_allocation(cancel);if(result) return result;
+    char folder[192],quarantine[192],stage[192];
+    size_t n=strlen(preview->path)-9u;snprintf(folder,sizeof(folder),"%.*s",(int)n,preview->path);
+    const char *slash=strrchr(folder,'/');if(!slash) return ARG;
+    snprintf(quarantine,sizeof(quarantine),"%.*s/deleted-%s",(int)(slash-folder),folder,slash+1);
+    snprintf(stage,sizeof(stage),"%.*s/staged-%s",(int)(slash-folder),folder,slash+1);
+    FILINFO info;FRESULT r=f_stat(quarantine,&info);
+    if(r!=FR_NO_FILE && r!=FR_NO_PATH) return r==FR_OK?BAD:IO;
+    uint8_t *image=NULL,expected_image[32]={0};bool stage_created=false;
+    if(!preview->whole_card) {
+        r=f_stat(stage,&info);if(r!=FR_NO_FILE && r!=FR_NO_PATH) return r==FR_OK?BAD:IO;
+        image=malloc(KUI_VMU_IMAGE_BYTES);if(!image) return IO;
+        result=kui_vmu_library_read(preview->path,image,log,cancel);
+        if(!result) result=delete_image_save(image,preview);
+        if(!result) delete_digest(image,KUI_VMU_IMAGE_BYTES,expected_image);
+        if(!result) {
+            if(f_mkdir(stage)!=FR_OK) result=IO;else stage_created=true;
+        }
+        if(!result) result=delete_stage(preview->path,stage,preview->identity,image,cancel);
+        free(image);
+        if(result) return result==STOP && stage_created?
+            delete_cancel_stage(stage,pair,preview->identity):result;
+    }
+    if(stopped(cancel)) return stage_created?delete_cancel_stage(stage,pair,preview->identity):STOP;
+    if(pair && preview->whole_card) {
+        struct active_card *card=malloc(sizeof(*card));if(!card) return IO;
+        result=active_metadata(preview->path,card,cancel);
+        if(!result && stopped(cancel)) result=STOP;
+        /* Reference publication is the first commit. Stop is deferred from
+         * here through the directory move and bounded quarantine removal. */
+        if(!result) result=kui_vmu_game_candidates_remove_card(pair,preview->identity,card->key,
+            preview->references_sha256,storage,log,NULL);
+        free(card);if(result) return result==KUI_VMU_GAME_CANDIDATES_IO?KUI_VMU_LIBRARY_UNCERTAIN:
+            result==KUI_VMU_GAME_CANDIDATES_CANCELLED?STOP:BAD;
+    }
+    /* From this boundary Stop is deferred. A failed rename may already be
+     * durable; neither cleanup nor rollback is attempted on an error. */
+    if(f_rename(folder,quarantine)!=FR_OK) return KUI_VMU_LIBRARY_UNCERTAIN;
+    if(!preview->whole_card && f_rename(stage,folder)!=FR_OK) return KUI_VMU_LIBRARY_UNCERTAIN;
+    if(!preview->whole_card) {
+        uint8_t *verified=malloc(KUI_VMU_IMAGE_BYTES);if(!verified) return KUI_VMU_LIBRARY_UNCERTAIN;
+        result=kui_vmu_library_read(preview->path,verified,log,NULL);
+        uint8_t digest[32];if(!result) {delete_digest(verified,KUI_VMU_IMAGE_BYTES,digest);
+            if(memcmp(digest,expected_image,32u)) result=BAD;}
+        free(verified);
+        if(result) return KUI_VMU_LIBRARY_UNCERTAIN;
+    }
+    result=delete_folder_remove(quarantine,pair);
+    if(result) return KUI_VMU_LIBRARY_UNCERTAIN;
+    if(log) log("Virtual VMU: deleted %s",preview->whole_card?folder:preview->save_name);
+    return OK;
+}
+int kui_vmu_library_describe(const char *path,const uint8_t expected_identity[16],
+    struct kui_vmu_backup_entry *out,kui_log_fn log,kui_cancel_fn cancel) {
+    if(!out) return ARG;
+    memset(out,0,sizeof(*out));struct kui_vmu_delete_preview preview;
+    int result=kui_vmu_library_delete_preview(path,expected_identity,NULL,&preview,log,cancel);
+    if(result) return result;
+    snprintf(out->path,sizeof(out->path),"%s",path);memcpy(out->identity,expected_identity,16u);
+    out->active=!preview.snapshot;out->readable=true;out->users=preview.users;
+    out->bytes=preview.blocks*512u;out->free_blocks=200u-preview.blocks;
+    snprintf(out->folder,sizeof(out->folder),"%c%04u",out->active?'p':'v',
+        out->active?path_pair(path):kui_vmu_collection_path_id(path));
+    result=kui_vmu_library_label(path,expected_identity,out->label,cancel);
+    if(result) return result;
+    out->custom_label=out->label[0]!=0;
+    if(!out->label[0]) snprintf(out->label,sizeof(out->label),"%s %s",out->active?"Virtual VMU":"Stored snapshot",out->folder);
+    snprintf(out->name,sizeof(out->name),"%.15s",out->label);
+    snprintf(out->games,sizeof(out->games),"%u matching game%s",out->users,out->users==1u?"":"s");
+    return OK;
 }
 static bool candidate_covers(const struct library_candidates *refs,const char *key) {
     for(unsigned i=0;i<refs->count;i++) if(!strcmp(refs->entries[i].key,key)) return true;

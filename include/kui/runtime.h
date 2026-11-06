@@ -37,4 +37,7 @@ void kui_runtime_free(struct kui_runtime_image *image);
  * replacement never substitutes a root module.
  * This does not read/check the file; kui_runtime_read performs verification. */
 bool kui_runtime_resolve_path(const char *path,char *out,size_t capacity);
+/* A GUI-owned immutable module can satisfy a root-inherited role. This is
+ * false for explicitly selected bank replacements, which never fall back. */
+bool kui_runtime_bundle_contains(const char *path);
 #endif

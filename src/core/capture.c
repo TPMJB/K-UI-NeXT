@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/capture.h"
 #include "kui/capture_export.h"
+#include "kui/disc_number.h"
 #include "kui/known_dumps.h"
 #include "kui/timing.h"
 #include "kui/recovery_checks.h"
@@ -28,6 +29,7 @@ static struct {
     char path[KUI_DEST_PATH_CAP], title[129], identity[65], text[32768];
     char gdi_name[KUI_DEST_TITLE_CAP+5u];
     char output_name[KUI_DEST_TITLE_CAP+5u];
+    unsigned disc_number,disc_total;
     bool cue_layout_bad,strict_unsupported;
     struct kui_capture_export_report exported;
     bool named_output,reference_checked;
@@ -271,6 +273,7 @@ static bool identify(void) {
                     job.ops->log("Missing retail Dreamcast IP.BIN signature; capture refused");return false;
                 }
                 if(!sega) continue;
+                (void)kui_disc_number_read(job.data+offset,&job.disc_number,&job.disc_total);
                 for(unsigned c=0;c<128;c++) {
                     unsigned ch=job.data[offset+128+c];
                     job.title[c]=(ch>=32 && ch<=126 && ch!='"' && ch!='\\')?(char)ch:'_';
@@ -282,6 +285,7 @@ static bool identify(void) {
     }
     kui_sha256_digest(&hash,job.state.identity);kui_hex(job.state.identity,32,job.identity);
     job.ops->log("Disc: %s",job.title);
+    if(job.disc_total>1u)job.ops->log("Disc number: %u of %u",job.disc_number,job.disc_total);
     job.ops->log("Identity: %s",job.identity);
     job.ops->log("Profile: %s",profile);
     for(unsigned i=0;i<job.plan->count;i++) {
@@ -424,6 +428,20 @@ static bool choose_exact_dir(void) {
     job.ops->log("Selected job: %s; optical identity and checkpoints still required",job.dir+2);
     return true;
 }
+/* Reserve room for the real ordinal before truncating a long FAT-safe title.
+ * A following collision suffix remains a copy number, never a disc number. */
+static void disc_folder_title(char out[KUI_DEST_TITLE_CAP],const char *source) {
+    kui_destination_title(out,source);
+    if(job.disc_total<=1u)return;
+    char suffix[24];snprintf(suffix,sizeof(suffix)," (Disc %u)",job.disc_number);
+    size_t bytes=strlen(out),tail=strlen(suffix),limit=KUI_DEST_TITLE_CAP-1u-tail;
+    if(bytes>limit) {
+        bytes=limit;
+        while(bytes && ((unsigned char)out[bytes]&0xc0u)==0x80u)--bytes;
+        while(bytes && (out[bytes-1u]==' ' || out[bytes-1u]=='.'))--bytes;
+    }
+    memcpy(out+bytes,suffix,tail+1u);
+}
 static bool choose_named_dir(enum kui_capture_mode mode) {
     char root[KUI_DEST_ROOT_CAP],title[KUI_DEST_TITLE_CAP],label[KUI_DEST_TITLE_CAP],folder[KUI_DEST_NAME_CAP];
     char qualified[KUI_DEST_ROOT_CAP+2u],best[KUI_DEST_JOB_CAP]={0};
@@ -432,25 +450,29 @@ static bool choose_named_dir(enum kui_capture_mode mode) {
     }
     kui_destination_title(title,job.title);
     const char *requested=mode==KUI_CAPTURE_NEW?job.opt->output->folder_label:NULL;
-    kui_destination_title(label,requested && requested[0]?requested:job.title);
+    if(requested && requested[0])kui_destination_title(label,requested);
+    else disc_folder_title(label,job.title);
     snprintf(qualified,sizeof(qualified),"0:%s",root);
-    DIR directory;FILINFO info;unsigned highest=0,matching=0;
+    DIR directory;FILINFO info;unsigned highest=0,matching=0;bool numbered_match=false;
     FRESULT r=f_opendir(&directory,qualified);
     if(r==FR_OK) {
         bool ok=true;
         for(;;) {
             r=f_readdir(&directory,&info);
             if(r!=FR_OK || !info.fname[0] || cancelled()) break;
-            unsigned index;
-            if(!kui_destination_folder_index(info.fname,label,&index)) continue;
+            unsigned index;bool current=kui_destination_folder_index(info.fname,label,&index);
+            /* Previously completed and interrupted named jobs used the bare
+             * title. Keep finding them using their exact checkpoint identity. */
+            if(!current && (mode==KUI_CAPTURE_NEW || !kui_destination_folder_index(info.fname,title,&index)))continue;
             /* Files also occupy names on FAT, even though only directories can
              * contain resumable jobs. A different release can share a title. */
-            if(index>highest) highest=index;
-            if(mode==KUI_CAPTURE_NEW || !(info.fattrib&AM_DIR) || index<=matching) continue;
+            if(current && index>highest) highest=index;
+            if(mode==KUI_CAPTURE_NEW || !(info.fattrib&AM_DIR) ||
+               (numbered_match && !current) || (current==numbered_match && index<=matching))continue;
             char candidate[KUI_DEST_JOB_CAP];bool match;
             if(!kui_destination_job_path(candidate,root,info.fname) ||
                !candidate_matches(candidate,&match)) {ok=false;break;}
-            if(match) {matching=index;snprintf(best,sizeof(best),"%s",candidate);}
+            if(match) {matching=index;numbered_match=current;snprintf(best,sizeof(best),"%s",candidate);}
         }
         FRESULT closed=f_closedir(&directory);
         if(!ok || r!=FR_OK || closed!=FR_OK || cancelled()) return false;
@@ -903,9 +925,26 @@ static int repaired_metadata(bool require_verified) {
     if(require_verified)job.ops->log("Finalized in-place repair verified: saved bytes, receipt, checkpoint and descriptors agree");
     return 1;
 }
+/* Preserve old published manifests exactly. These optional presentation
+ * fields carry no authority: their values always come from the current raw
+ * IP sample, and final publication still requires a byte-for-byte match. */
+static bool disc_manifest_fields(char out[80]) {
+    out[0]=0;
+    if(!job.disc_number)return true;
+    path_for("manifest.json");FILINFO info;FRESULT r=f_stat(job.path,&info);
+    bool emit=r==FR_NO_FILE;
+    if(r==FR_OK) {
+        uint8_t digest[32];
+        if(!metadata_digest("manifest.json",sizeof(job.text)-1u,digest,true))return false;
+        emit=strstr(job.text,"\"disc_number\"") || strstr(job.text,"\"disc_total\"");
+    } else if(r!=FR_NO_FILE)return false;
+    if(emit)snprintf(out,80u,"  \"disc_number\":%u,\"disc_total\":%u,\n",job.disc_number,job.disc_total);
+    return true;
+}
 static bool final_metadata(bool create) {
     int repaired=repaired_metadata(true);if(repaired<0) {job.ops->log("Finalized in-place repair receipt/metadata mismatch; source preserved");return false;}
     if(repaired>0)return true;
+    char disc_fields[80];if(!disc_manifest_fields(disc_fields))return false;
     size_t used=0;
     if(!append(&used,"%u\n",job.plan->count)) return false;
     for(unsigned i=0;i<job.plan->count;i++) {
@@ -933,11 +972,11 @@ static bool final_metadata(bool create) {
         if(!job.verified) {job.ops->log("Direct 2048 output requires full saved-byte readback");return false;}
         if(!append(&used,"{\n  \"schema\":3,\"complete\":true,\"saved_data_verified\":true,\n"
             "  \"profile\":\"gdi-direct2048-rawaudio-v1\",\"optical_profile\":\"%s\",\n"
-            "  \"identity\":\"%s\",\"capture_build\":\"%s\",\"title\":\"%s\",\n"
+            "  \"identity\":\"%s\",\"capture_build\":\"%s\",\"title\":\"%s\",\n%s"
             "  \"output_format\":\"gdi_direct_2048\",\"gdi_file\":\"%s\",\"crc_only\":%s,\n"
             "  \"hash_scope\":\"saved payload bytes; raw catalogue comparison unavailable\",\n"
             "  \"audio\":\"raw drive bytes; no offset/subchannel correction\",\n  \"tracks\":[\n",
-            kui_capture_profile_name(job.plan),job.identity,job.state.build,job.title,job.gdi_name,job.crc_only?"true":"false"))return false;
+            kui_capture_profile_name(job.plan),job.identity,job.state.build,job.title,disc_fields,job.gdi_name,job.crc_only?"true":"false"))return false;
         for(unsigned i=0;i<job.plan->count;i++) {
             const struct kui_capture_track *t=&job.plan->tracks[i];char sha[65];kui_hex(job.state.track[i].sha256,32,sha);
             if(!append(&used,"    {\"number\":%u,\"session\":%" PRIu32 ",\"control\":%" PRIu32
@@ -975,9 +1014,9 @@ static bool final_metadata(bool create) {
     if(job.crc_only) {
         if(!append(&used,"{\n  \"schema\":2,\"complete\":true,\"hashes\":[\"crc32\"],\n"
             "  \"profile\":\"%s\",\"identity\":\"%s\",\n  \"capture_build\":\"%s\",\n"
-            "  \"title\":\"%s\",\"sector_bytes\":2352,\n%s"
+            "  \"title\":\"%s\",\"sector_bytes\":2352,\n%s%s"
             "  \"audio\":\"raw drive bytes; no offset/subchannel correction\",\n  \"tracks\":[\n",
-            kui_capture_profile_name(job.plan),job.identity,job.state.build,job.title,descriptor)) return false;
+            kui_capture_profile_name(job.plan),job.identity,job.state.build,job.title,disc_fields,descriptor)) return false;
         for(unsigned i=0;i<job.plan->count;i++) {
             const struct kui_capture_track *t=&job.plan->tracks[i];
             char mode[32]={0};
@@ -996,9 +1035,9 @@ static bool final_metadata(bool create) {
     }
     if(!append(&used,"{\n  \"schema\":1,\"complete\":true,\"saved_data_verified\":true,\n"
         "  \"profile\":\"%s\",\"identity\":\"%s\",\n  \"capture_build\":\"%s\",\n"
-        "  \"title\":\"%s\",\"sector_bytes\":2352,\"reference\":\"not compared\",\n%s"
+        "  \"title\":\"%s\",\"sector_bytes\":2352,\"reference\":\"not compared\",\n%s%s"
         "  \"audio\":\"raw drive bytes; no offset/subchannel correction\",\n  \"tracks\":[\n",
-        kui_capture_profile_name(job.plan),job.identity,job.state.build,job.title,descriptor)) return false;
+        kui_capture_profile_name(job.plan),job.identity,job.state.build,job.title,disc_fields,descriptor)) return false;
     for(unsigned i=0;i<job.plan->count;i++) {
         const struct kui_capture_track *t=&job.plan->tracks[i];char sha[65];
         char mode[32]={0};

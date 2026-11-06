@@ -18,6 +18,20 @@ struct fixture {
 
 static unsigned checks;
 #define CHECK(x) do { ++checks; assert(x); } while(0)
+static bool fail_image_allocation;
+static unsigned image_allocations, image_allocation_failures;
+void *__real_calloc(size_t, size_t);
+void *__wrap_calloc(size_t count, size_t bytes) {
+    if(count == 1u && bytes == sizeof(struct kui_game_image)) {
+        ++image_allocations;
+        if(fail_image_allocation) {
+            fail_image_allocation = false;
+            ++image_allocation_failures;
+            return NULL;
+        }
+    }
+    return __real_calloc(count, bytes);
+}
 
 static struct file *find(struct fixture *fixture, const char *name) {
     for(unsigned i = 0; i < fixture->count; ++i)
@@ -137,7 +151,8 @@ static void happy_paths(void) {
     fixture.reads = 0;
     memset(out, 0xa5, sizeof(out));
     CHECK(kui_game_image_read(&image, 45002, 4, KUI_GAME_SECTOR_MODE1, out, sizeof(out)) == KUI_GAME_OK);
-    CHECK(fixture.reads == 4 && fixture.last_offset == KUI_GAME_RAW_BYTES);
+    CHECK(fixture.reads == 2 && fixture.last_offset == 0u &&
+        fixture.last_size == 2u*KUI_GAME_RAW_BYTES);
     expect_data(out, 3, 2, 2);
     expect_data(out + 2u * KUI_GAME_DATA_BYTES, 4, 0, 2);
     CHECK(all_is(out + 4u * KUI_GAME_DATA_BYTES, sizeof(out) - 4u * KUI_GAME_DATA_BYTES, 0xa5));
@@ -289,9 +304,9 @@ static void file_sizes_and_failures(void) {
     fixture.reads = 0;
     fixture.fail_read = 2;
     fixture.failure = KUI_GAME_CANCELLED;
-    CHECK(kui_game_image_read(&image, 0, 2, KUI_GAME_SECTOR_MODE1, out, sizeof(out)) == KUI_GAME_CANCELLED);
+    CHECK(kui_game_image_read(&image, 45003, 2, KUI_GAME_SECTOR_MODE1, out, sizeof(out)) == KUI_GAME_CANCELLED);
     CHECK(fixture.reads == 2);
-    expect_data(out, 1, 0, 1);
+    expect_data(out, 3, 3, 1);
     CHECK(all_is(out + KUI_GAME_DATA_BYTES, KUI_GAME_DATA_BYTES, 0xa5));
 }
 
@@ -363,7 +378,7 @@ static void cooked_tracks(void) {
     CHECK(kui_game_image_read(&image, 45002, 4, KUI_GAME_SECTOR_MODE1, out, sizeof(out)) == KUI_GAME_OK);
     expect_data(out, 3, 2, 2);
     expect_data(out + 4096, 4, 0, 2);
-    CHECK(fixture.reads == 3); /* one cooked span, two raw sectors */
+    CHECK(fixture.reads == 2); /* one cooked span and one checked raw window */
     memset(out, 0xa5, sizeof(out));
     fixture.reads = 0;
     CHECK(kui_game_image_read(&image, 45003, 2, KUI_GAME_SECTOR_RAW, out, sizeof(out)) == KUI_GAME_UNSUPPORTED);
@@ -389,6 +404,58 @@ static void add_content(struct fixture *fixture, const char *name,
     struct file *file = &fixture->files[fixture->count - 1u];
     file->bytes = bytes;
     file->content = data;
+}
+static void named_allocation_failure(struct fixture *fixture, const char *name,
+    unsigned descriptor_reads) {
+    struct kui_game_image image;
+    enum kui_game_result previous_failure = fixture->failure;
+    unsigned stats = fixture->stats, reads = fixture->reads;
+    unsigned allocations = image_allocations, failures = image_allocation_failures;
+    CHECK(!fixture->fail_stat && !fixture->fail_read && !fail_image_allocation);
+    memset(&image, 0xa5, sizeof(image));
+    fail_image_allocation = true;
+    CHECK(named(fixture, name, &image) == KUI_GAME_IO);
+    CHECK(!fail_image_allocation && image_allocations == allocations + 1u &&
+        image_allocation_failures == failures + 1u);
+    CHECK(fixture->stats == stats && fixture->reads == reads);
+    CHECK(all_is(&image, sizeof(image), 0xa5));
+    /* Input validation precedes the private parse transaction. Filesystem
+     * callbacks run only after that transaction has acquired its workspace. */
+    stats = fixture->stats; reads = fixture->reads; allocations = image_allocations;
+    fail_image_allocation = true;
+    CHECK(named(fixture, "../unsafe.iso", &image) == KUI_GAME_INVALID);
+    CHECK(fixture->stats == stats && fixture->reads == reads && image_allocations == allocations);
+    fail_image_allocation = false;
+    fixture->fail_stat = fixture->stats + 1u; fixture->failure = KUI_GAME_CANCELLED;
+    CHECK(named(fixture, name, &image) == KUI_GAME_CANCELLED);
+    CHECK(fixture->stats == stats + 1u && fixture->reads == reads &&
+        image_allocations == allocations + 1u && all_is(&image, sizeof(image), 0xa5));
+    fixture->fail_stat = 0u;
+    if(descriptor_reads) {
+        /* Descriptor failure also discards the private parse transaction. */
+        fixture->fail_read = fixture->reads + 1u; stats = fixture->stats;
+        allocations = image_allocations;
+        CHECK(named(fixture, name, &image) == KUI_GAME_CANCELLED);
+        CHECK(fixture->stats == stats + 1u && fixture->reads == reads + 1u &&
+            image_allocations == allocations + 1u && all_is(&image, sizeof(image), 0xa5));
+        fixture->fail_read = 0u;
+    }
+    fail_image_allocation = false; fixture->failure = previous_failure;
+}
+static void named_gdi_transaction_allocation(void) {
+    struct fixture fixture; struct kui_game_image image;
+    init(&fixture);
+    add_content(&fixture, "game.gdi", (const unsigned char *)descriptor, sizeof(descriptor) - 1u);
+    unsigned allocations = image_allocations;
+    memset(&image,0xa5,sizeof(image));
+    fail_image_allocation = true;
+    CHECK(named(&fixture, "game.gdi", &image) == KUI_GAME_IO);
+    CHECK(!fail_image_allocation && image_allocations == allocations + 1u &&
+        fixture.stats == 0u && fixture.reads == 0u && all_is(&image,sizeof(image),0xa5));
+    CHECK(named(&fixture, "game.gdi", &image) == KUI_GAME_OK);
+    CHECK(image_allocations == allocations + 2u && fixture.stats == 5u && fixture.reads == 1u);
+    CHECK(image.format == KUI_GAME_IMAGE_GDI && image.count == 4u && image.files.ctx == &fixture);
+    fail_image_allocation = false;
 }
 static void offsets(void) {
     struct fixture fixture = {0};
@@ -438,6 +505,7 @@ static void cue_and_modes(void) {
     struct kui_game_image image;
     add_content(&fixture, "shared.bin", data, sizeof(data));
     add_content(&fixture, "Game.CUE", (const unsigned char *)cue, sizeof(cue) - 1u);
+    named_allocation_failure(&fixture, "Game.CUE", 1u);
     CHECK(named(&fixture, "Game.CUE", &image) == KUI_GAME_OK);
     static const unsigned char unicode_cue[] =
         "\xef\xbb\xbfREM\nREM ThisRemarkIsLongerThanTheGeometryKeywordBuffer\n"
@@ -548,6 +616,7 @@ static void singles(void) {
     struct fixture fixture = {0};
     struct kui_game_image image;
     add_content(&fixture, "test.iso", iso, sizeof(iso));
+    named_allocation_failure(&fixture, "test.iso", 0u);
     CHECK(named(&fixture, "test.iso", &image) == KUI_GAME_OK);
     CHECK(image.format == KUI_GAME_IMAGE_ISO && image.data_lba == 45000 && !image.scrambled && !image.cd_image);
     CHECK(image.tracks[0].start_lba == 45000u && image.tracks[0].end_lba == 45064u);
@@ -564,6 +633,7 @@ static void singles(void) {
     raw_sector(raw, 2352u, 1u, 15u); raw_sector(raw + 2352u, 2352u, 1u, 16u);
     memset(&fixture, 0, sizeof(fixture));
     add_content(&fixture, "test.img", raw, sizeof(raw));
+    named_allocation_failure(&fixture, "test.img", 0u);
     CHECK(named(&fixture, "test.img", &image) == KUI_GAME_OK);
     CHECK(image.format == KUI_GAME_IMAGE_RAW && image.data_lba == 0 && image.tracks[0].end_lba == 2u);
     CHECK(kui_game_image_read(&image, 1u, 1, KUI_GAME_SECTOR_MODE1, out, sizeof(out)) == KUI_GAME_OK);
@@ -624,6 +694,7 @@ static void zso_images(void) {
         size_t physical = zso_iso_fixture(container, iso, 64u);
         struct fixture fixture = {0}; struct kui_game_image image;
         add_content(&fixture, "Mixed.ZSO", container, physical);
+        if(!variant) named_allocation_failure(&fixture, "Mixed.ZSO", 0u);
         CHECK(named(&fixture, "Mixed.ZSO", &image) == KUI_GAME_OK);
         CHECK(image.compressed && image.format == KUI_GAME_IMAGE_ZSO && image.count == 1u);
         CHECK(image.data_lba == bases[variant] && image.cd_image == (bases[variant] < 45000u));
@@ -804,6 +875,7 @@ static void discovery_layout(void) {
 }
 int main(void) {
     discovery_layout();
+    named_gdi_transaction_allocation();
     happy_paths();
     preflight();
     syntax();

@@ -3,8 +3,26 @@
  * sequence is the one the SCI async probe proved on the console. */
 #include "kui/native_readahead.h"
 #include "retail_async.h"
+#include "kui/native_standalone_foreground.h"
 #include "kui/native_sci_priority.h"
 #include "kui/native_sdk_sci_runtime.h"
+#include "kui/smash_menu_loader.h"
+#if KUI_SMASH_MENU_LOADER
+#include "smash_menu_handoff_symbols.h"
+#endif
+#if KUI_NATIVE_GD_VRAM_DMA
+#include "kui/retail_vram_dma.h"
+#include "retail_vram_copy.h"
+#endif
+#if KUI_NATIVE_GD_MMU_BUFFERS && \
+    (!KUI_NATIVE_STANDALONE_FOREGROUND || !KUI_NATIVE_OCRAM_BOOTSTRAP || \
+     !KUI_NATIVE_REQUEST_TIMING || KUI_NATIVE_PACED_CHECK || defined(KUI_RETAIL_CE))
+#error "MMU foreground counter elision requires its unpaced native OCRAM profile"
+#endif
+#if KUI_NATIVE_STANDALONE_FOREGROUND
+__asm__(".global __kui_native_standalone_foreground_resident\n"
+        ".set __kui_native_standalone_foreground_resident,1\n");
+#endif
 #if KUI_NATIVE_STANDALONE_READER
 __asm__(".global __kui_native_standalone_reader_resident\n"
         ".set __kui_native_standalone_reader_resident,1\n");
@@ -124,7 +142,7 @@ extern void kui_retail_async_test_write32(uint32_t, uint32_t);
 #endif
 #endif
 #else
-#ifndef KUI_RETAIL_CE
+#if !defined(KUI_RETAIL_CE) && !KUI_NATIVE_STANDALONE_FOREGROUND
 static uint32_t vbr_get(void) {
     uint32_t value;
     __asm__ __volatile__("stc vbr,%0" : "=r"(value));
@@ -134,7 +152,7 @@ static uint32_t vbr_get(void) {
 static void vbr_set(uint32_t value) { __asm__ __volatile__("ldc %0,vbr" : : "r"(value) : "memory"); }
 #endif
 #endif
-#if defined(KUI_RETAIL_CE) || KUI_NATIVE_READER_DIAGNOSTIC
+#if defined(KUI_RETAIL_CE) || (KUI_NATIVE_READER_DIAGNOSTIC && !KUI_NATIVE_STANDALONE_FOREGROUND)
 static uint32_t rd32(uint32_t a) { return *(volatile uint32_t *)(uintptr_t)a; }
 #endif
 #ifdef KUI_RETAIL_CE
@@ -147,20 +165,35 @@ static void wr16(uint32_t a, uint16_t v) { *(volatile uint16_t *)(uintptr_t)a = 
 #if KUI_VMU_NATIVE_BACKGROUND
 kui_retail_async_region_type *kui_retail_async_region_storage;
 #elif KUI_NATIVE_STANDALONE_READER
+#if KUI_NATIVE_GD_DMA_STREAM && !defined(KUI_RETAIL_ASYNC_TEST)
+/* The linker reserves the complete typed region. Its first receive areas
+ * initially hold cold adoption instructions; no I/O occurs before return. */
+extern kui_retail_async_region_type standalone_reader_region;
+__asm__(".global _standalone_reader_region\n.type _standalone_reader_region,@object\n"
+        ".size _standalone_reader_region,0x640\n");
+#else
 static kui_retail_async_region_type standalone_reader_region __attribute__((aligned(32)));
+#endif
 kui_retail_async_region_type *kui_retail_async_region_storage=&standalone_reader_region;
 #else
 struct kui_retail_async_region kui_retail_async_region __attribute__((aligned(32)));
 #endif
 #define R kui_retail_async_region
 #define e kui_retail_async_region.engine
+#if KUI_NATIVE_GD_PIO_STREAM
+#define NATIVE_BYTE_STREAM(command) (((command)&~1u)==KUI_RETAIL_GD_DMAREAD_STREAM)
+#else
+#define NATIVE_BYTE_STREAM(command) ((command)==KUI_RETAIL_GD_DMAREAD_STREAM)
+#endif
 #if KUI_VMU_NATIVE_BACKGROUND
 static bool native_loan_blocked(void) {
     return e.native_loan_state!=KUI_VMU_NATIVE_ASYNC_LOAN_IDLE;
 }
 #elif KUI_NATIVE_STANDALONE_READER
 extern volatile uint32_t kui_retail_hook_active;
+#if !KUI_NATIVE_STANDALONE_FOREGROUND
 static bool native_loan_blocked(void) {return false;}
+#endif
 #endif
 #ifdef KUI_RETAIL_CE
 void kui_retail_async_init(const struct kui_retail_manifest *manifest) {
@@ -241,6 +274,9 @@ void kui_retail_async_init(const struct kui_retail_manifest *manifest) {
  * the admitted RTS callbacks in the SDK's original, persistent vector table.
  * The callback route never changes VBR or needs an interrupt-return veneer. */
 static bool sdk_sci_ready(void) {
+#if KUI_NATIVE_STANDALONE_FOREGROUND
+    return false;
+#else
 #if KUI_NATIVE_SDK_SCI_STRUCTURAL
     uint32_t owner=R.vector600[KUI_NATIVE_SDK_SCI_VBR_INDEX];
     if(R.vector600[KUI_NATIVE_SDK_SCI_COOKIE_INDEX]!=KUI_NATIVE_SDK_SCI_COOKIE ||
@@ -260,6 +296,7 @@ static bool sdk_sci_ready(void) {
     return rd32(KUI_NATIVE_SDK_SCI_OWNER_VBR+KUI_NATIVE_SDK_SCI_ERI_SLOT_OFFSET)==callback &&
         rd32(KUI_NATIVE_SDK_SCI_OWNER_VBR+KUI_NATIVE_SDK_SCI_RXI_SLOT_OFFSET)==callback;
 #endif
+#endif
 }
 static uint32_t sdk_sci_level(void) {
     return sdk_sci_ready()?SCI_LEVEL:0u;
@@ -271,7 +308,10 @@ static void hook(void) {
     uint16_t b=rd16(IPRB);uint32_t level=sdk_sci_level();
     if(!e.hooked) {e.release.sci=b&SCI_FIELD;e.hooked=1u;}
     else if((b&SCI_FIELD)!=e.release.armed) {
-        e.release.sci=b&SCI_FIELD;++e.stats.execs;
+        e.release.sci=b&SCI_FIELD;
+#if !KUI_NATIVE_GD_MMU_BUFFERS
+        ++e.stats.execs;
+#endif
     }
     /* The raw return trampoline is absent. Reuse its armed word for the
      * exact selected reader field, so losing readiness cannot mistake our
@@ -350,6 +390,11 @@ static void unhook(void) {
 /* The bus is claimed at the first read and kept: the card waits mid-stream
  * between requests, deselected. */
 static bool open_bus(void) {
+#if KUI_NATIVE_STANDALONE_FOREGROUND
+    /* Acquisition resets the bus fault flag. A failed foreground teardown
+     * must instead stay quarantined until this resident is initialized. */
+    if(R.shared.port.fault)return false;
+#endif
 #if KUI_VMU_NATIVE_BACKGROUND
     if(native_loan_blocked()) return false;
 #endif
@@ -488,9 +533,90 @@ static void wake(void) {
 }
 #else
 #define retry_polled() (e.retries >= POLLED)
+#if KUI_NATIVE_GD_VRAM_DMA
+#if KUI_VC2_TEXTURE_PROBE
+#include "kui/vc2_texture_probe.h"
+__asm__(".global _kui_vc2_texture_probe_entry\n.set _kui_vc2_texture_probe_entry,0xacfce100\n");
+#define TEXTURE_OFFSET(value) ,(value)
+#else
+#define TEXTURE_OFFSET(value)
+#endif
+static bool native_payload_write(uint32_t address,const uint8_t *bytes,uint32_t count
+#if KUI_VC2_TEXTURE_PROBE
+    ,uint32_t logical_offset
+#endif
+    ) {
+    struct kui_retail_gd *s=&R.shared.service;
+    const bool vram=(address&0xfe000000u)==0xa4000000u;
+    /* CE's U0/P3 pointers may map VRAM. The mapper below excludes P4;
+     * admitted P1/P2 RAM (top bits 10) keeps its existing fast copy. */
+    const bool wide=vram || (s->cpu_mmu && (address>>30)!=2u);
+    uint8_t *out=s->ops.map(s->ops.context,address,count,
+        vram?KUI_RETAIL_MAP_DMA_WRITE:1);
+#if KUI_VC2_TEXTURE_PROBE
+    /* The uncached PRE entry retains the exact source without touching
+     * destination cache lines or invoking cached metadata/translation code. */
+    if(out && s->ops.context)
+        kui_vc2_texture_probe_entry(bytes,(uint32_t)(uintptr_t)out,
+            count|UINT32_C(0x80000000),logical_offset);
+#endif
+    if(out) {
+        /* Use the original CPU virtual mapping, including CE's permissions
+         * and cache policy, with a bus width supported by RAM and VRAM. */
+        if(wide)native_vram_write(out,bytes,count);
+        else memcpy(out,bytes,count);
+#if KUI_SMASH_MENU_LOADER
+        if(!vram && !((bool (*)(uint32_t,uint32_t))(uintptr_t)
+            KUI_SMASH_MENU_LOADER_REDIRECT_P2)((uint32_t)(uintptr_t)out,count))return false;
+#endif
+    }
+#if KUI_VC2_TEXTURE_PROBE
+    /* No callback before the authenticated late helper owns the reservation.
+     * Compare the selected copy policy, before progress/completion publication.
+     * A failed map is terminally recorded with its original destination. */
+    if(s->ops.context)
+        kui_vc2_texture_probe_entry(out?bytes:NULL,
+            out?(uint32_t)(uintptr_t)out:address,count,logical_offset);
+#endif
+    if(!out)return false;
+    return true;
+}
+#endif
 static void write_out(void *unused, uint32_t offset, const uint8_t *bytes, uint32_t count) {
     (void)unused;
     struct kui_retail_gd *s = &R.shared.service;
+#if KUI_NATIVE_GD_DMA_STREAM
+    if(NATIVE_BYTE_STREAM(s->command)) {
+        /* Each physical scatter piece rereads its bounding sectors. The
+         * cursor context retains the piece's original stream offset while
+         * progress advances the live destination and byte remainder. */
+        uint32_t begin=(uint32_t)(uintptr_t)unused;
+        uint32_t skip=begin%s->sector_bytes;
+        if(e.failed || offset+count<=skip) return;
+        if(offset<skip) {
+            uint32_t n=skip-offset;bytes+=n;count-=n;offset=skip;
+        }
+        offset-=skip;
+        uint32_t end=s->completed_bytes+s->outputs[0]-begin;
+        if(offset>=end) return;
+        if(count>end-offset) count=end-offset;
+#if KUI_NATIVE_GD_VRAM_DMA
+        if(!native_payload_write(e.destination+offset,bytes,count TEXTURE_OFFSET(begin+offset)))e.failed=KUI_GD_ERROR_MEMORY;
+        else
+#else
+        uint8_t *out=s->ops.map(s->ops.context,e.destination+offset,count,1);
+        if(!out)e.failed=KUI_GD_ERROR_MEMORY;
+        else
+#endif
+        {
+#if !KUI_NATIVE_GD_VRAM_DMA
+            memcpy(out,bytes,count);
+#endif
+            kui_retail_gd_native_dma_progress(s,begin+offset+count,0u);
+        }
+        return;
+    }
+#endif
 #if KUI_NATIVE_SESSION_CONTROLS
     /* Fence the actual guest write, not merely the later completion report.
      * Old-medium bytes may never reach a newly accepted request's output. */
@@ -499,9 +625,13 @@ static void write_out(void *unused, uint32_t offset, const uint8_t *bytes, uint3
         e.failed=KUI_GD_ERROR_UNAVAILABLE;e.active=0u;return;
     }
 #endif
+#if KUI_NATIVE_GD_VRAM_DMA
+    if(!native_payload_write(e.destination+offset,bytes,count TEXTURE_OFFSET(offset)))e.failed=KUI_GD_ERROR_MEMORY;
+#else
     uint8_t *out = s->ops.map(s->ops.context, e.destination + offset, count, 1);
     if(out) memcpy(out, bytes, count);
     else e.failed = KUI_GD_ERROR_MEMORY;
+#endif
 }
 static bool topping(uint32_t function) { return function == KUI_GD_EXEC || function == KUI_GD_CHECK; }
 static bool tops_up(uint32_t function) {
@@ -623,8 +753,12 @@ deliver_work(uint32_t wait) {
             if(kui_retail_cursor_feed(&e.cursor, block) != KUI_GAME_OK) e.failed = KUI_GD_ERROR_IO;
             ++delivered;
             ++e.since;
+            /* The MMU profile's terminal page shows assembly/service state.
+             * Keep its scheduling and ABI without these unshown counters. */
+#if !KUI_NATIVE_GD_MMU_BUFFERS
             if(e.in_irq) ++e.stats.irq_blocks;
             else ++e.stats.call_blocks;
+#endif
             if(e.cursor.done == e.cursor.count) {
                 e.active = 0;
 #if KUI_NATIVE_REQUEST_TIMING && !KUI_NATIVE_STANDALONE_READER
@@ -699,6 +833,12 @@ static void deliver(uint32_t wait) {
 static void report(void) {
     struct kui_retail_gd *s = &R.shared.service;
     if(!s->pending || e.token != s->token) return;
+#if KUI_NATIVE_GD_DMA_STREAM
+    if(NATIVE_BYTE_STREAM(s->command)) {
+        if(e.failed) kui_retail_gd_native_dma_progress(s,s->completed_bytes,e.failed);
+        return;
+    }
+#endif
 #ifdef KUI_RETAIL_CE
     /* A DMA stream: the bytes written of its transfers. A PIO stream's
      * pieces are reported by the service (read_part). */
@@ -732,6 +872,12 @@ static void report(void) {
 #endif
 }
 static bool reads(uint32_t command) {
+#if KUI_NATIVE_GD_DMA_STREAM
+    if(NATIVE_BYTE_STREAM(command)) return true;
+#endif
+#if KUI_NATIVE_GD_LEGACY_STREAM
+    if(command == KUI_RETAIL_GD_DMAREAD_LEGACY_STREAM) return true;
+#endif
 #ifdef KUI_RETAIL_CE
     if(command == KUI_RETAIL_GD_DMAREAD_STREAM || command == KUI_RETAIL_GD_PIOREAD_STREAM) return true;
 #endif
@@ -751,17 +897,47 @@ static void start(void) {
     e.stats.exec_int=0u;
 #endif
     e.cursor.done = 0; /* a read that fails here delivered nothing */
+    uint32_t lba=s->lba,count=s->count;
+    void *context=NULL;
+#if KUI_NATIVE_GD_DMA_STREAM
+    if(NATIVE_BYTE_STREAM(s->command)) {
+        context=(void *)(uintptr_t)s->completed_bytes;
+        lba+=s->completed_bytes/s->sector_bytes;
+        count=(s->completed_bytes%s->sector_bytes+s->outputs[0]+s->sector_bytes-1u)/s->sector_bytes;
+    }
+#endif
 #ifdef KUI_RETAIL_CE
     e.piece_set = 0; e.piece_begin = e.piece_bytes = e.piece_filled = 0;
     e.spill_from = e.spill_bytes = 0;
     e.early_polled = 0;
 #else
-    e.destination = (s->destination & 0x00ffffffu) | 0x8c000000u;
+    e.destination = s->destination;
+#if KUI_NATIVE_GD_VRAM_DMA
+    /* dma_guest already validated the entire physical piece. Preserve its
+     * admitted PVR view rather than rebasing it into same-offset main RAM. */
+    uint32_t area=s->destination&0x1f000000u;
+    if((area==0x04000000u || area==0x05000000u) && (s->command==KUI_GD_DMAREAD ||
+       s->command==KUI_RETAIL_GD_DMAREAD_STREAM ||
+       s->command==KUI_RETAIL_GD_DMAREAD_LEGACY_STREAM))
+        e.destination=(s->destination&0x1fffffffu)|0xa0000000u;
+    else
 #endif
-    if((!e.opened && !open_bus()) ||
-       kui_retail_cursor_begin(&e.cursor, e.manifest, s->lba, s->count,
+#if KUI_NATIVE_GD_PIO_STREAM
+    /* PIO is a CPU copy in the caller's active address space. Its numeric
+     * 0c addresses may be virtual process slots, whereas DMA stays physical. */
+    if(!(s->cpu_mmu && (s->command==KUI_GD_PIOREAD ||
+                        s->command==KUI_RETAIL_GD_PIOREAD_STREAM)))
+#endif
+        e.destination = (s->destination & 0x00ffffffu) | 0x8c000000u;
+#endif
+    if(
+#if KUI_NATIVE_STANDALONE_FOREGROUND
+       R.shared.port.fault ||
+#endif
+       (!e.opened && !open_bus()) ||
+       kui_retail_cursor_begin(&e.cursor, e.manifest, lba, count,
            s->sector_bytes == KUI_GAME_RAW_BYTES ? KUI_GAME_SECTOR_RAW : KUI_GAME_SECTOR_MODE1,
-           write_out, NULL) != KUI_GAME_OK) {
+           write_out, context) != KUI_GAME_OK) {
         e.failed = KUI_GD_ERROR_IO;
         return;
     }
@@ -1090,7 +1266,9 @@ void kui_retail_async_call(uint32_t function) {
          * coming while the interrupt is held off. */
         if(tops_up(function) && e.since < e.target) {
             wait = e.target - e.since;
+#if !KUI_NATIVE_GD_MMU_BUFFERS
             ++e.stats.waits;
+#endif
         }
     }
     deliver(wait);
@@ -1105,6 +1283,92 @@ void __attribute__((noipa)) kui_retail_async_trace(uint32_t exit,uint32_t functi
     if(visit)visit(exit,function,kui_retail_hook_sr,&R);
 }
 #endif
+#if KUI_NATIVE_STANDALONE_FOREGROUND
+#include "native_standalone_foreground.inc"
+#endif
+#if KUI_VC2_VMU_LATE || KUI_SMASH_MENU_LOADER
+#if !KUI_NATIVE_STANDALONE_FOREGROUND || defined(KUI_RETAIL_CE)
+#error "VC2 helper hydration requires the native foreground reader"
+#endif
+uint32_t __attribute__((noinline,noclone,externally_visible,section(".vc2_late_raw")))
+kui_vc2_ce_vmu_read_card(uint32_t card_lba,uint8_t out[512]
+#if KUI_SMASH_MENU_LOADER
+    ,uint32_t count
+#endif
+    ) {
+#if !KUI_SMASH_MENU_LOADER
+    const uint32_t count=1u;
+#endif
+    const struct kui_retail_manifest *m=e.manifest;
+    const struct kui_retail_gd *s=&R.shared.service;
+    if(R.shared.port.fault)return KUI_SCI_STREAM_RESET;
+    /* The launch map pins both image and helper extents to this same card.
+     * Refuse before bus acquisition or output writes if the serialized
+     * foreground reader has not relinquished its completed GD piece. Stage
+     * validation pins 0<=start<end<=card_sectors<=2^32; an inclusive span
+     * ceiling keeps both LBA bounds in 32-bit arithmetic, including end 2^32. */
+    if(!out || !m ||
+#if KUI_SMASH_MENU_LOADER
+       !count || count>4096u ||
+       (uintptr_t)out>UINTPTR_MAX-count*512u ||
+#endif
+       (uint32_t)(card_lba-(uint32_t)m->partition_start)>
+           (uint32_t)(m->partition_end-m->partition_start-1u) ||
+#if KUI_SMASH_MENU_LOADER
+       count-1u>(uint32_t)(m->partition_end-m->partition_start-1u)-
+           (uint32_t)(card_lba-(uint32_t)m->partition_start) ||
+       (uint64_t)card_lba+count>m->card_sectors ||
+#else
+       card_lba>=m->card_sectors ||
+#endif
+       !s->initialized || s->pending || s->executing ||
+       e.active || e.in_irq || e.hooked || e.opened ||
+       e.release.armed || e.release.depth || R.shared.port.acquired ||
+       R.shared.stream.state)
+        return KUI_SCI_STREAM_BUSY;
+    enum kui_sci_stream_result result=KUI_SCI_STREAM_RESET;
+#if KUI_SMASH_MENU_LOADER
+    bool dma_failed=false;
+#endif
+    if(open_bus()) for(uint32_t i=0u;i<count;i++) {
+#if KUI_SMASH_MENU_LOADER
+        result=kui_sci_stream_fetch(card_lba+i,TOKEN_LIMIT,false);
+#else
+        /* The accepted CE helper hydration is a masked one-block read.
+         * Retain its programmed receive policy; outer capsule runs keep
+         * their independent batched DMA path below. */
+        result=kui_sci_stream_fetch(card_lba+i,TOKEN_LIMIT,true);
+#endif
+        if(result==KUI_SCI_STREAM_OK) {
+#if KUI_SMASH_MENU_LOADER
+            /* Hydration owns a quiescent reader, so an idle channel can use
+             * the existing bounded DMA receiver. A busy channel may choose
+             * PIO before starting. After DMA starts, deferred finish either
+             * completes this block or ends the operation: never resume it or
+             * retry it through PIO at an uncertain card position. */
+            for(uint32_t poll=0u;kui_sci_stream_busy() && poll<200000u;poll++) {
+                result=kui_sci_stream_poll(true);
+                if(result!=KUI_SCI_STREAM_OK && result!=KUI_SCI_STREAM_PENDING)break;
+            }
+            if(kui_sci_stream_busy() || result==KUI_SCI_STREAM_PENDING)result=KUI_SCI_STREAM_OVERRUN;
+            if(result!=KUI_SCI_STREAM_OK) {dma_failed=true;break;}
+#endif
+            const uint8_t *block=kui_sci_stream_take(card_lba+i,&result);
+            if(block)memcpy(out+i*512u,block,512u);
+            else if(result==KUI_SCI_STREAM_OK)result=KUI_SCI_STREAM_RESET;
+        }
+        if(result!=KUI_SCI_STREAM_OK)break;
+    }
+    /* Includes failed acquisition/open, token/CRC failure and success.
+     * An uncertain stop is deliberately not released or reacquired; the
+     * existing foreground teardown latches the fault until reinitialization. */
+    native_foreground_complete();
+#if KUI_SMASH_MENU_LOADER
+    if(dma_failed)R.shared.port.fault=true;
+#endif
+    return R.shared.port.fault?KUI_SCI_STREAM_RESET:(uint32_t)result;
+}
+#endif
 void kui_retail_async_after(uint32_t function, int32_t result) {
 #if KUI_VMU_NATIVE_BACKGROUND
     if(native_loan_blocked()) return;
@@ -1116,9 +1380,35 @@ void kui_retail_async_after(uint32_t function, int32_t result) {
     }
 #endif
     struct kui_retail_gd *s = &R.shared.service;
-    if(function == KUI_GD_REQUEST && result > 0 && s->pending && reads(s->command)) {
+    if(((function == KUI_GD_REQUEST && result > 0)
+#if KUI_NATIVE_GD_LEGACY_STREAM
+        || (function == KUI_GD_DMA_TRANSFER && !result)
+#if KUI_NATIVE_GD_PIO_STREAM
+        || (function == KUI_GD_PIO_TRANSFER && !result)
+#endif
+#endif
+       ) && s->pending && reads(s->command)
+#if KUI_NATIVE_GD_DMA_STREAM
+       && (!NATIVE_BYTE_STREAM(s->command) ||
+           ((function==KUI_GD_DMA_TRANSFER
+#if KUI_NATIVE_GD_PIO_STREAM
+             || function==KUI_GD_PIO_TRANSFER
+#endif
+            ) && s->outputs[0]))
+#endif
+       ) {
         start();
         if(e.active) {hook(); deliver(0);}
+#if KUI_NATIVE_GD_DMA_STREAM
+        /* This foreground bridge has no CE SCI ISR. Finish exactly this
+         * physical piece before publishing its DMA-end event; otherwise
+         * CE's DMA thread would sleep with no receiver to wake it. Existing
+         * SCI token/CRC/retry limits still govern each delivery visit. */
+        if(NATIVE_BYTE_STREAM(s->command)) {
+            while(e.active && !e.failed) deliver(UINT32_MAX);
+            if(e.failed) e.active=0u;
+        }
+#endif
         report();
 #ifdef KUI_RETAIL_CE
     } else if(function == KUI_GD_DMA_TRANSFER && !result && s->pending && e.token == s->token &&
@@ -1151,9 +1441,12 @@ void kui_retail_async_after(uint32_t function, int32_t result) {
     (void)stream_event(KUI_ARMADA_CE_STREAM_BUS_IDLE,0);
 #endif
 #endif
+#if KUI_NATIVE_STANDALONE_FOREGROUND
+    native_foreground_complete();
+#endif
 }
 uint32_t kui_retail_async_irq(void) {
-#if KUI_NATIVE_IRQ_REARM
+#if KUI_NATIVE_IRQ_REARM && !KUI_NATIVE_GD_MMU_BUFFERS
     ++e.stats.exec_int;
 #endif
 #if KUI_VMU_NATIVE_BACKGROUND
@@ -1204,6 +1497,9 @@ uint32_t kui_retail_async_irq(void) {
  * Zero means handled; a nonzero value is the independently admitted original
  * default callback, for the assembly tail-forward path with original R4. */
 uint32_t __attribute__((noipa)) kui_retail_sdk_sci_dispatch(uint32_t event) {
+#if KUI_NATIVE_STANDALONE_FOREGROUND
+    (void)event;return 0u;
+#else
     uint32_t original=R.vector600[KUI_NATIVE_SDK_SCI_DEFAULT_INDEX];
     if((event!=0x4e0u && event!=0x500u) || kui_retail_hook_active || native_loan_blocked())
         return original;
@@ -1212,6 +1508,7 @@ uint32_t __attribute__((noipa)) kui_retail_sdk_sci_dispatch(uint32_t event) {
         return original;
     }
     return kui_retail_async_irq()?original:0u;
+#endif
 }
 #endif
 #ifdef KUI_RETAIL_CE

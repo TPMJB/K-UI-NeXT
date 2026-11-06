@@ -75,7 +75,13 @@ def generate(path, prefix=""):
     background_name="_kui_vmu_native_background_manifest_bind"
     background=background_name in _linked_symbols(data,{background_name})
     low_limit=0x8C007BA0 if background else 0x8C007800
-    image = inspect_elf(data, 0x8C004000, low_limit)
+    from smash_native_menu_resident import MARKER,inspect as inspect_native_menu
+    if MARKER in _linked_symbols(data,{MARKER}):
+        if background:
+            raise ValueError("Native menu raw reader cannot share the background profile")
+        image=inspect_native_menu(data)['low']
+    else:
+        image = inspect_elf(data, 0x8C004000, low_limit)
     names = {
         "KUI_VMU_OBSERVE_LOW_HEAP_HOOK": "_kui_vmu_observe_heap_hook",
         "KUI_VMU_OBSERVE_LOW_RETURN_HOOK": "_kui_vmu_observe_return_hook",
@@ -121,6 +127,33 @@ def generate(path, prefix=""):
               not 0x8C004000 <= address < address + size <= 0x8C004000 + len(image["payload"])):
             raise ValueError("Observer hook must be a bounded low cached-code function")
         values[macro] = address
+    # The optional clear tail must return to this surviving instruction, not
+    # to an arbitrary address inside the resident. The ABS symbol consumes no
+    # low RAM; bind its assembly offset to the actual linked call/restore seam.
+    resume_name = "__kui_native_heap_resume_offset"
+    resume = _linked_symbols(data, {resume_name}).get(resume_name)
+    if resume is not None:
+        offset, size, kind, section = resume
+        hook, count, _, _ = typed["_kui_vmu_observe_heap_hook"]
+        header = EH.unpack_from(data)
+        sections = [SH.unpack_from(data, header[6] + i * header[11]) for i in range(header[12])]
+        for table in sections:
+            if table[1] != 2:
+                continue
+            strings = sections[table[6]]
+            names = region(data, strings[4], strings[5], "native resume symbol strings")
+            for at in range(table[4], table[4] + table[5], table[9]):
+                name, _, _, info, other, owner = SYM.unpack_from(data, at)
+                if names[name:names.find(b"\0", name)] == resume_name.encode("ascii"):
+                    if info != 0x10 or other or owner != 0xFFF1:
+                        raise ValueError("Native heap resume requires its global ABS offset")
+        body = region(image["payload"], hook - 0x8C004000, count, "native heap hook")
+        seam = struct.pack("<4H", 0x400b, 9, 0x6f83, 0x4f26)
+        if (size or kind or section is not None or offset < 4 or offset & 1 or
+                offset + 4 > count or
+                [at + 4 for at in range(0, len(body) - 7, 2) if body[at:at + 8] == seam] != [offset]):
+            raise ValueError("Native heap resume must follow its exact low installer call")
+        values["KUI_VMU_NATIVE_HEAP_RESUME_OFFSET"] = offset
     guard=prefix+"KUI_VMU_MAPLE_OBSERVE_SYMBOLS_H"
     return ("/* Generated from the admitted observation reader ELF. */\n"
             + f"#ifndef {guard}\n#define {guard}\n"

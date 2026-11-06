@@ -16,6 +16,8 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path[:0]=[str(ROOT/'tools'),str(ROOT/'tests')]
 PIO_MARKER='__kui_native_readahead_pio_auxiliary'
 PIO_PAIR_MARKER='__kui_native_readahead_pio_pair_auxiliary'
+TICK_BUDGET_MARKER='__kui_native_readahead_tick_budget_auxiliary'
+MAX_CONTEXT_MARKER='__kui_native_readahead_max_context_auxiliary'
 
 
 def require(ok,message):
@@ -41,16 +43,34 @@ def pio_pair_profile(aux):
     return True
 
 
+def tick_budget_profile(aux):
+    marker=aux[4].get(TICK_BUDGET_MARKER)
+    if marker is None:return False
+    require(marker==(1,0,0,0xfff1) and pio_pair_profile(aux),
+            'TICK budget marker differs or lacks the exact PIO pair profile')
+    return True
+
+
+def max_context_profile(aux):
+    marker=aux[4].get(MAX_CONTEXT_MARKER)
+    if marker is None:return False
+    require(marker==(1,0,0,0xfff1) and tick_budget_profile(aux),
+            'maximum-context marker differs or lacks the exact TICK budget profile')
+    return True
+
+
 def pio_cases(resident,aux,*,self_test=False):
     require(__debug__,'PIO producer proof requires Python assertions')
     pair=pio_pair_profile(aux)
+    budget_profile=tick_budget_profile(aux)
+    attribution=max_context_profile(aux)
     if not pio_profile(aux):return {'enabled':False}
     # The main audit imports this module only after its own definitions exist.
     # Keeping this dependency lazy also permits a standalone invocation.
     from check_vmu_native_readahead import (SnapshotCPU,pinned_code,typed_ops,
         HW_READS,STACK_BOTTOM,STACK_TOP,CANARY,MASK)
     from check_vmu_native_sdk_sci_route import assert_c_abi
-    pinned_code(aux);ops=typed_ops(resident)
+    pinned_code(aux,resident=resident);ops=typed_ops(resident)
     low_names=tuple(ops['functions']);low_addresses=tuple(ops['functions'].values())
     hardware=set(HW_READS)|{(0xffc00000,2),(0xffd80008,4),
                            (0xffd80010,2),(0xffd80004,1)}
@@ -63,13 +83,14 @@ def pio_cases(resident,aux,*,self_test=False):
             self.operations=[];self.actual_writes=[];self.stub_writes=[]
             geometry=layout_for(aux[4])
             self.lease=(AUX_LINK_BASE&0x1fffffff)-geometry.AUX_OFFSET
-            self.data=(self.lease|0xa0000000)+geometry.DATA_OFFSET;self.block=self.region+0x20;self.next=0x123401
+            self.data=(self.lease|0xa0000000)+geometry.DATA_OFFSET;self.block=self.reg(0x20);self.next=0x123401
             self.payload=bytes((i*37+seed*19)&255 for i in range(512))
             self.fetch_result=0;self.take_result=0;self.take_null=False
             self.fetch_results=None;self.take_results=None;self.last_fetch_lba=None
             self.after_first=None;self.after_first_done=False;self.clock_schedule=None
             self.clock_samples=0;self.clock_pending=False;self.clock_valid=None
             self.fetch_payloads=[]
+            self.after_deliver=None
             self.transport_busy=False;self.corrupt_append=False
             self.append_fail_at=None;self.take_null_at=None
             self.dma_chcr=0;self.dmaor=1
@@ -81,12 +102,15 @@ def pio_cases(resident,aux,*,self_test=False):
                     708:1,720:1,900:2}
             for offset,value in values.items():self.write(self.context+offset,value)
             for offset,value in ((0x2c4,1),(0x470,1),(0x474,self.next)):
-                self.write(self.region+offset,value)
-            self.write(self.region+0x4eb,1,1)
+                self.write(self.reg(offset),value)
+            self.write(self.reg(0x4eb),1,1)
             for i,b in enumerate(self.payload):self.write(self.block+i,b,1)
             self.writes=[];self.recording=True
 
         def read(self,address,count=4):
+            if getattr(self,'forbid_region_reads',False):
+                require(not self.region<=address<self.reg(0x600),
+                        'invalid event arguments reached dependent reader state')
             if address&0xe0000000==0xe0000000:
                 require((address,count) in hardware,'PIO producer read unexpected hardware register/width')
                 self.hw_reads.append((address,count))
@@ -152,13 +176,13 @@ def pio_cases(resident,aux,*,self_test=False):
             elif name=='_kui_sci_stream_fetch':
                 index=len(self.calls_named(name))-1;expected=self.next+(index if pair else 0)
                 assert args[:3]==[expected,256,1],('PIO fetch ABI',args)
-                assert self.read(self.region+0x470)==1 and self.read(self.region+0x474)==expected
+                assert self.read(self.reg(0x470))==1 and self.read(self.reg(0x474))==expected
                 assert not self.dma_chcr&7 and self.dmaor&7==1
                 self.last_fetch_lba=expected
                 result=self.fetch_results[index] if self.fetch_results is not None else self.fetch_result
                 if not result:
-                    self.write(self.region+0x474,expected+1)
-                    self.write(self.region+0x498,expected+1)
+                    self.write(self.reg(0x474),expected+1)
+                    self.write(self.reg(0x498),expected+1)
                     payload=bytes(b^(index*0x5a) for b in self.payload) if pair else self.payload
                     self.fetch_payloads.append(payload)
                     if pair:
@@ -172,16 +196,20 @@ def pio_cases(resident,aux,*,self_test=False):
                 result=0 if self.take_null or take_result or index==self.take_null_at else self.block
                 if self.corrupt_append or index==self.append_fail_at:self.write(self.context+696,384)
             elif name=='_unhook':pass
-            elif name=='_deliver_work':assert args[0]==0
+            elif name=='_deliver_work':
+                assert args[0]==self.deliver_wait
+                if self.after_deliver:self.after_deliver(self)
             else:raise ValueError('optional PIO called forbidden low operation: '+name)
             self.in_stub=False
             for i in range(8):self.r[i]=(0x91a357bd+i*0x13579+len(self.operations))&MASK
             self.r[0]=result;self.sr^=1;self.pr^=0x13572468
             self.mach^=0x13579bdf;self.macl^=0xfdb97531;self.pc=continuation
 
-        def execute(self,*,dispatch=False,event=2,interrupt=0):
+        def execute(self,*,dispatch=False,event=2,interrupt=0,arg=0,reserved=0,block_limit=2):
             self.write(self.context+900,event)
-            self.r[4:8]=[event,0,self.region,0] if dispatch else [self.region,interrupt,0,0]
+            self.r[4:8]=[event,arg,self.region,reserved] if dispatch else \
+                [self.region,interrupt,block_limit if budget_profile else 0,0]
+            self.deliver_wait=arg if dispatch and event==1 else 0
             before=self.snapshot();self.actual_writes=[];self.stub_writes=[];self.writes=[];self.hw_reads=[]
             self.operations=[]
             self.fetch_payloads=[];self.last_fetch_lba=None;self.after_first_done=False
@@ -191,7 +219,7 @@ def pio_cases(resident,aux,*,self_test=False):
                 require(self.context<=address<=self.context+904-count or
                     STACK_BOTTOM+16<=address<=STACK_TOP-32-count or
                     self.data<=address<=self.data+0x30000-count or
-                    (address==self.region+0x470 and count==4 and self.read(address)==3),
+                    (address==self.reg(0x470) and count==4 and self.read(address)==3),
                     'PIO producer wrote outside owned context/private stack/cache')
             for at in (STACK_BOTTOM,STACK_TOP-16):
                 assert all(self.read(at+4*i)==CANARY for i in range(4))
@@ -203,9 +231,13 @@ def pio_cases(resident,aux,*,self_test=False):
 
         def metrics(self):return [self.read(self.context+80+4*i) for i in range(3)]
 
-        def pair_metrics(self):return [self.read(self.context+80+4*i) for i in range(8)]
+        def pair_metrics(self):
+            values=[self.read(self.context+80+4*i) for i in range(8)]
+            if not attribution:assert values[7]==0,'historical spare metric changed'
+            return values
 
-    if pair:return _pair_cases(ProducerCPU,aux,self_test=self_test)
+    if pair:return _pair_cases(ProducerCPU,aux,self_test=self_test,
+        budget_profile=budget_profile,attribution=attribution)
 
     positive=refusals=failures=clocks=0
     for bank in (0,1):
@@ -215,7 +247,7 @@ def pio_cases(resident,aux,*,self_test=False):
                     c=ProducerCPU(positive,bank,blocked)
                     c.write(c.context+696,head);c.write(c.context+700,count)
                     c.next=c.read(c.context+692)+count
-                    c.write(c.region+0x474,c.next)
+                    c.write(c.reg(0x474),c.next)
                     c.execute(dispatch=dispatch)
                     slot=(head+count)%384
                     assert bytes(c.read(c.data+slot*512+i,1) for i in range(512))==c.payload
@@ -254,7 +286,7 @@ def pio_cases(resident,aux,*,self_test=False):
                         384 if name=='full' else c.next if name=='extent_end' else \
                         4 if name=='resume' else 3 if name=='lost_stream' else \
                         2 if name=='receiving' else c.next+1 if name=='position' else 1
-                    c.write((c.context if space=='c' else c.region)+offset,value,
+                    c.write(c.context+offset if space=='c' else c.reg(offset),value,
                             1 if name in ('not_acquired','port_fault') else 4)
                 if name=='busy':c.transport_busy=True
                 if name=='guest_dma':c.dma_chcr=1
@@ -304,7 +336,7 @@ def pio_cases(resident,aux,*,self_test=False):
         c=ProducerCPU(repeated)
         if mode=='capacity':
             c.write(c.context+700,383);c.next=c.read(c.context+692)+383
-            c.write(c.region+0x474,c.next)
+            c.write(c.reg(0x474),c.next)
         if mode=='extent':c.write(c.context+704,c.next+1)
         c.execute(dispatch=True)
         assert c.metrics()[0]==1
@@ -321,7 +353,7 @@ def pio_cases(resident,aux,*,self_test=False):
     # DELIVER's normal fallback remains typed demand work; it must not create
     # fresh optional traffic, even when called in a reader IRQ.
     for irq in (0,1):
-        c=ProducerCPU(irq);c.write(c.region+0x2cc,irq)
+        c=ProducerCPU(irq);c.write(c.reg(0x2cc),irq)
         c.execute(dispatch=True,event=1)
         assert len(c.calls_named('_deliver_work'))==1 and not c.calls_named('_kui_sci_stream_fetch')
         assert c.metrics()==[0,0,0];refusals+=1
@@ -376,8 +408,9 @@ def pio_cases(resident,aux,*,self_test=False):
         no_hardware_write_or_rdr_read=True,console_boot_verified=False,console_performance_verified=False)
 
 
-def _pair_cases(CPU,aux,*,self_test=False):
+def _pair_cases(CPU,aux,*,self_test=False,budget_profile=False,attribution=False):
     """The distinct pair image executes both full admission passes in SH."""
+    from native_runtime_layout import AUX_STACK_BOTTOM as STACK_BOTTOM,AUX_STACK_TOP as STACK_TOP
     mask=0xffffffff;positives=refusals=between=failures=clocks=repeated=0
 
     def copied_before_publication(c,head,count,blocks):
@@ -387,9 +420,13 @@ def _pair_cases(CPU,aux,*,self_test=False):
         for block in range(blocks):
             slot=(head+count+block)%384
             assert bytes(c.read(c.data+slot*512+i,1) for i in range(512))==c.fetch_payloads[block]
-            writes=[i for i,(at,size) in enumerate(c.actual_writes)
-                    if c.data+slot*512<=at<c.data+(slot+1)*512 and size==1]
-            assert len(writes)==512 and max(writes)<publications[block]
+            begin=c.data+slot*512;end=begin+512
+            writes=[(i,at,size) for i,(at,size) in enumerate(c.actual_writes)
+                    if begin<=at<end]
+            width=4 if attribution else 1
+            assert len(writes)==512//width and all(size==width for _,_,size in writes)
+            assert sorted(byte for _,at,size in writes for byte in range(at,at+size))==list(range(begin,end))
+            assert max(i for i,_,_ in writes)<publications[block]
 
     for bank in (0,1):
         for blocked in (False,True):
@@ -397,14 +434,15 @@ def _pair_cases(CPU,aux,*,self_test=False):
                 for head,count in ((0,1),(383,1),(2,382)):
                     c=CPU(positives,bank,blocked)
                     c.write(c.context+696,head);c.write(c.context+700,count)
-                    c.next=c.read(c.context+692)+count;c.write(c.region+0x474,c.next)
+                    c.next=c.read(c.context+692)+count;c.write(c.reg(0x474),c.next)
                     c.execute(dispatch=dispatch)
                     copied_before_publication(c,head,count,2)
                     assert c.read(c.context+700)==count+2 and c.read(c.context+740)==0
                     assert c.read(c.context+16)==2 and c.read(c.context+20)==1
                     assert len(c.calls_named('_kui_sci_stream_fetch'))==len(c.calls_named('_kui_sci_stream_take'))==2
                     assert not c.calls_named('_kui_sci_stream_poll') and not c.calls_named('_unhook')
-                    assert c.pair_metrics()==[2,10*c.timer_step,0,1,0,4*c.timer_step,0,0]
+                    assert c.pair_metrics()==[2,10*c.timer_step,0,1,0,4*c.timer_step,0,
+                        2 if attribution and dispatch else 0]
                     if dispatch:assert c.read(c.context+68)==12*c.timer_step
                     positives+=1
 
@@ -432,8 +470,8 @@ def _pair_cases(CPU,aux,*,self_test=False):
         elif name=='dmaor':c.dmaor=3
         else:
             if name=='extent_end':value=c.read(c.context+692)+c.read(c.context+700)
-            if name=='position':value=c.read(c.region+0x474)+1
-            c.write((c.context if space=='c' else c.region)+offset,value,size)
+            if name=='position':value=c.read(c.reg(0x474))+1
+            c.write(c.context+offset if space=='c' else c.reg(offset),value,size)
 
     for bank in (0,1):
         for blocked in (False,True):
@@ -519,13 +557,13 @@ def _pair_cases(CPU,aux,*,self_test=False):
         c=CPU(repeated)
         if mode in ('one_slot','two_slots'):
             c.write(c.context+700,383 if mode=='one_slot' else 382)
-            c.next=c.read(c.context+692)+c.read(c.context+700);c.write(c.region+0x474,c.next)
+            c.next=c.read(c.context+692)+c.read(c.context+700);c.write(c.reg(0x474),c.next)
         if mode in ('one_extent_block','two_extent_blocks'):
             c.write(c.context+704,c.next+(1 if mode=='one_extent_block' else 2))
         c.execute(dispatch=True);first_count=c.read(c.context+700);attempts=c.pair_metrics()[0]
         assert attempts==(1 if mode in ('one_slot','one_extent_block') else 2)
         c.next=c.read(c.context+692)+first_count
-        if mode=='demand_pending':c.write(c.region+0x370,1)
+        if mode=='demand_pending':c.write(c.reg(0x370),1)
         c.execute(dispatch=True)
         if mode=='two_ticks':
             assert len(c.calls_named('_kui_sci_stream_fetch'))==2 and c.read(c.context+700)==first_count+2
@@ -536,13 +574,117 @@ def _pair_cases(CPU,aux,*,self_test=False):
         repeated+=1
 
     for irq in (0,1):
-        c=CPU();c.write(c.region+0x2cc,irq);c.execute(dispatch=True,event=1)
+        c=CPU();c.write(c.reg(0x2cc),irq);c.execute(dispatch=True,event=1)
         assert len(c.calls_named('_deliver_work'))==1 and not c.calls_named('_kui_sci_stream_fetch')
-        assert c.pair_metrics()==[0]*8;refusals+=1
+        assert c.pair_metrics()[:7]==[0]*7
+        assert c.pair_metrics()[7]==((irq<<24)|1 if attribution else 0);refusals+=1
 
     # A longer prior maximum is retained independently for whole/single work.
     c=CPU();c.write(c.context+84,2000);c.write(c.context+100,1000);c.execute()
     assert c.pair_metrics()==[2,2000,0,1,0,1000,0,0];clocks+=1
+    budget_cases=budget_refusals=budget_guards=0
+    if budget_profile:
+        # Exercise both the dispatcher argument and the actual producer's
+        # bounded-loop parameter. The ordinary pair cases above remain exact.
+        for bank in (0,1):
+            for blocked in (False,True):
+                for dispatch in (False,True):
+                    for head,count in ((0,1),(383,1),(2,382)):
+                        c=CPU(budget_cases,bank,blocked)
+                        c.write(c.context+696,head);c.write(c.context+700,count)
+                        c.next=c.read(c.context+692)+count;c.write(c.reg(0x474),c.next)
+                        c.execute(dispatch=dispatch,arg=1,block_limit=1)
+                        copied_before_publication(c,head,count,1)
+                        assert c.read(c.context+700)==count+1 and c.read(c.context+16)==1
+                        assert c.read(c.context+740)==0 and c.read(c.context+20)==1
+                        assert len(c.calls_named('_kui_sci_stream_fetch'))==len(c.calls_named('_kui_sci_stream_take'))==1
+                        assert not c.calls_named('_kui_sci_stream_poll') and not c.calls_named('_unhook')
+                        assert c.pair_metrics()==[1,5*c.timer_step,0,0,0,4*c.timer_step,0,
+                            0x102 if attribution and dispatch else 0]
+                        if dispatch:assert c.read(c.context+68)==7*c.timer_step
+                        budget_cases+=1
+                for guard in guards:
+                    c=CPU(budget_guards,bank,blocked);apply_guard(c,guard)
+                    count=c.read(c.context+700)
+                    c.execute(event=1 if guard[0]=='event' else 2,block_limit=1)
+                    assert not c.calls_named('_kui_sci_stream_fetch') and c.pair_metrics()==[0]*8,guard[0]
+                    assert c.read(c.context+700)==count
+                    assert not any(c.data<=at<c.data+0x30000 for at,_ in c.actual_writes)
+                    budget_guards+=1
+                invalid=[(2,value) for value in (2,3,20,0x7fffffff,mask)]
+                invalid += [(event,value) for event in (3,4,5,6) for value in (1,2,20,mask)]
+                invalid += [(event,value) for event in (0,7,255,mask) for value in (0,1,20)]
+                for event,arg in invalid:
+                    c=CPU(budget_refusals,bank,blocked)
+                    # Argument rejection precedes reader/loan observations,
+                    # every timer sample and any cache/producer operation.
+                    c.forbid_region_reads=True
+                    c.execute(dispatch=True,event=event,arg=arg)
+                    assert c.r[0]==0 and c.read(c.context+64)==1
+                    assert not c.operations and not c.hw_reads and c.pair_metrics()==[0]*8
+                    assert c.read(c.context+700)==1
+                    assert all(at==c.context+64 or STACK_BOTTOM+16<=at<STACK_TOP-32
+                               for at,_ in c.actual_writes)
+                    budget_refusals+=1
+        # Budget belongs to one event call, with no sticky policy state.
+        c=CPU()
+        for arg,blocks in ((1,1),(0,2),(1,1)):
+            count=c.read(c.context+700);c.next=c.read(c.context+692)+count
+            c.execute(dispatch=True,arg=arg)
+            assert c.read(c.context+700)==count+blocks
+            assert len(c.calls_named('_kui_sci_stream_fetch'))==blocks
+            copied_before_publication(c,0,count,blocks)
+            budget_cases+=1
+        # DELIVER's event-specific wait argument retains its existing ABI.
+        c=CPU();c.execute(dispatch=True,event=1,arg=20)
+        assert len(c.calls_named('_deliver_work'))==1 and not c.calls_named('_kui_sci_stream_fetch')
+        assert c.pair_metrics()[:7]==[0]*7
+        assert c.pair_metrics()[7]==(0x1401 if attribution else 0);budget_cases+=1
+
+    attribution_cases=0
+    if attribution:
+        for bank in (0,1):
+            for blocked in (False,True):
+                for event,arg,irq in ((1,0,0),(1,0x12345,1),(1,mask,255),
+                                      (3,0,0),(3,0,1),(4,0,0),(4,0,255),(5,0,0),(5,0,1)):
+                    c=CPU(attribution_cases,bank,blocked)
+                    c.write(c.reg(0x2cc),irq)
+                    c.clock_schedule=[10000,9000]
+                    if event==1 and irq==1:
+                        # An ordinary callback changes live IRQ state. The
+                        # diagnostic belongs to the entry, before this call.
+                        c.after_deliver=lambda current:current.write(current.reg(0x2cc),2)
+                    c.execute(dispatch=True,event=event,arg=arg)
+                    expected=event|((arg&0xffff)<<8)|((irq&255)<<24)
+                    assert c.read(c.context+68)==1000 and c.pair_metrics()[7]==expected
+                    assert c.clock_samples==2 and c.timer_reads==2
+                    assert not c.calls_named('_kui_sci_stream_fetch')
+                    assert c.pair_metrics()[:7]==[0]*7
+                    if event==1 and irq==1:assert c.read(c.reg(0x2cc))==2
+                    attribution_cases+=1
+                # Existing maximum/tag survive ties, smaller intervals and
+                # bad clocks. Context uses no extra hardware clock read.
+                for mode,schedule,valid,maximum in (
+                    ('smaller',[10000,9000],None,2000),('equal',[10000,9000],None,1000),
+                    ('zero',[10000,10000],None,1000),('backward',[10000,10001],None,1000),
+                    ('half',[0x80001000,0x1000],None,1000),
+                    ('bad_before',[10000,9000],lambda i:i!=0,1000),
+                    ('bad_after',[10000,9000],lambda i:i!=1,1000)):
+                    c=CPU(attribution_cases,bank,blocked)
+                    c.write(c.context+68,maximum);c.write(c.context+108,0xab123401)
+                    c.clock_schedule=schedule;c.clock_valid=valid
+                    c.execute(dispatch=True,event=4)
+                    assert c.read(c.context+68)==maximum and c.pair_metrics()[7]==0xab123401,mode
+                    assert c.clock_samples==2 and c.timer_reads==2
+                    assert not c.calls_named('_kui_sci_stream_fetch')
+                    attribution_cases+=1
+                c=CPU(attribution_cases,bank,blocked)
+                c.write(c.context+68,2000);c.write(c.context+108,0xab123401)
+                c.execute(dispatch=True,event=6)
+                assert c.read(c.context+68)==0 and c.pair_metrics()==[0]*8
+                assert not c.operations and not c.hw_reads
+                attribution_cases+=1
+
     instruction_truth=0;c=CPU()
     for flag in (0,1):
         for value in (0,1,0x7fffffff,0x80000000,0xffff8000,mask):
@@ -568,16 +710,44 @@ def _pair_cases(CPU,aux,*,self_test=False):
             try:pio_pair_profile((*aux[:4],symbols))
             except ValueError:marker_mutations+=1
             else:raise ValueError('PIO pair proof accepted changed profile marker')
+        if budget_profile:
+            for value in ((0,0,0,0xfff1),(1,4,0,0xfff1),(1,0,1,0xfff1),(1,0,0,1)):
+                symbols=aux[4].copy();symbols[TICK_BUDGET_MARKER]=value
+                try:tick_budget_profile((*aux[:4],symbols))
+                except ValueError:marker_mutations+=1
+                else:raise ValueError('PIO budget proof accepted changed profile marker')
+        if attribution:
+            for value in ((0,0,0,0xfff1),(1,4,0,0xfff1),(1,0,1,0xfff1),(1,0,0,1)):
+                symbols=aux[4].copy();symbols[MAX_CONTEXT_MARKER]=value
+                try:max_context_profile((*aux[:4],symbols))
+                except ValueError:marker_mutations+=1
+                else:raise ValueError('maximum-context proof accepted changed profile marker')
     return dict(enabled=True,pair_profile=True,pair_candidate=True,
         actual_linked_producer_executed=True,tick_only=True,
         one_fresh_block_per_tick=False,maximum_blocks_per_visit=2,
         no_optional_dma_or_new_commands=True,producer_only_timing=True,
-        modelcases=positives+refusals+between+failures+clocks+repeated,
+        modelcases=positives+refusals+between+failures+clocks+repeated+budget_cases+budget_refusals+budget_guards+attribution_cases,
         actual_linked_producer_positive_cases=positives,actual_linked_admission_refusals=refusals,
         actual_linked_second_guard_refusals=between,actual_linked_error_paths=failures,
         actual_linked_clock_cases=clocks,repeated_tick_and_boundary_cases=repeated,
         additional_instruction_truth_cases=instruction_truth,
         profile_marker_mutations=marker_mutations,second_elapsed_limit_ticks=1144,
+        tick_budget_profile=budget_profile,
+        actual_linked_one_block_budget_cases=budget_cases,
+        actual_linked_one_block_guard_refusals=budget_guards,
+        invalid_event_argument_refusals_before_reader_or_clock=budget_refusals,
+        tick_zero_argument_preserves_pair=budget_profile,
+        tick_one_argument_one_complete_block=budget_profile,
+        one_block_budget_retains_all_ordinary_guards=budget_profile,
+        invalid_budget_arguments_before_any_optional_work=budget_profile,
+        budget_is_per_visit_and_deliver_wait_unchanged=budget_profile,
+        max_context_profile=attribution,actual_linked_max_context_cases=attribution_cases,
+        max_context_uses_event_argument_and_entry_irq=attribution,
+        max_context_ties_bad_clocks_and_smaller_intervals_retain_previous=attribution,
+        max_context_uses_existing_two_clock_samples_only=attribution,
+        capture_start_clears_max_context=attribution,
+        exact_cache_copy_access_bytes=4 if attribution else 1,
+        exact_cache_byte_coverage_before_each_validity_publication=True,
         second_limit_ticks=1144,second_block_timing_admitted=True,
         second_limit_inclusive=True,reserve_ticks=1200,soft_window_ticks=2344,
         positive_valid_intervals_required=True,all_ordinary_guards_rechecked_before_second=True,

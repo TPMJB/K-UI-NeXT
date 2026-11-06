@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
-static const struct kui_loader_sd_bus resident_sci={0};
+static struct kui_loader_sd_bus resident_sci={0};
 static const struct kui_ata_bus resident_ata={0};
 static unsigned scif_claims,sci_claims,ata_reads,ata_stops,sd_reads,stops,releases;
 static uint64_t ata_lba;
@@ -60,7 +60,15 @@ int main(void) {
         else memset(&stage.device.sd.bus,0xa5,sizeof(stage.device.sd.bus));
         assert(kui_retail_storage_adopt(&resident,&stage)==KUI_LOADER_SD_OK);
         assert(resident.transport==transport && kui_retail_storage_blocks(&resident)==2000u+transport*1000u);
-        if(transport==KUI_STORAGE_SCI) assert(!memcmp(&resident.device.sd.bus,&resident_sci,sizeof(resident_sci)));
+        if(transport==KUI_STORAGE_SCI) {
+            const struct kui_loader_sd_bus copied=resident_sci;
+            assert(!memcmp(&resident.device.sd.bus,&copied,sizeof(copied)));
+            /* Cold tables become SCI receive bytes after adoption. The
+             * card must retain its own callbacks after all source bytes die. */
+            memset(&resident_sci,0xa5,sizeof(resident_sci));
+            assert(!memcmp(&resident.device.sd.bus,&copied,sizeof(copied)));
+            resident_sci=copied;
+        }
         assert(kui_retail_storage_acquire(&resident)==KUI_LOADER_SD_OK);
         assert(kui_retail_storage_read_run(&resident,100,7,out)==KUI_LOADER_SD_OK);
         assert(kui_retail_storage_stop(&resident)==KUI_LOADER_SD_OK);

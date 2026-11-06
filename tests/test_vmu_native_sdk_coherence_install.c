@@ -15,12 +15,14 @@
 #include <string.h>
 #include <sys/mman.h>
 #define KUI_RETAIL_EXEC_ADDRESS UINT32_C(0x8c010000)
+#define NATIVE_LOW_HEAP_HOOK UINT32_C(0x8c004200)
 #define DEST UINT32_C(0xac700000)
 #define BYTES UINT32_C(0x4000)
 static uint32_t exec_bytes;
 static struct kui_vmu_native_discovery native_driver;
 static struct kui_vmu_native_layout passive_layout;
 static struct kui_vmu_native_heap native_heap;
+static struct kui_vmu_native_heap_call native_call;
 static struct kui_vmu_native_exit native_exits;
 static uint32_t call_slot;
 static unsigned publishes,patches;

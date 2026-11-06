@@ -66,7 +66,12 @@ int kui_vmu_history_checkpoint_mounted(const struct kui_vmu_game_selection *,
     enum kui_vmu_history_reason,struct kui_vmu_history_view *,kui_log_fn,kui_cancel_fn);
 /* Checkpoint the actual resolved card, then durably publish its two-generation
  * storage/identity-pinned session receipt before loader handoff. Any previous
- * receipt is recovered first. Failure refuses a history-enabled launch. */
+ * receipt is recovered first. Within this one exclusively owned operation,
+ * recovery of the exact same card also supplies its pre-launch checkpoint;
+ * the old pending receipt stays durable until its new pending generation is
+ * synced and read back. Different cards receive independent full checkpoints.
+ * No checkpoint or allocation proof is reused across operations or launches.
+ * Failure refuses a history-enabled launch. */
 int kui_vmu_history_session_begin(const struct kui_vmu_game_selection *,uint64_t local_seconds,
     const struct kui_vmu_history_platform *,struct kui_vmu_history_view *,kui_log_fn,kui_cancel_fn);
 /* A pending receipt means a previous launch may have run. It does not prove

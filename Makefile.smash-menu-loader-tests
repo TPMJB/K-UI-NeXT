@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/smash-menu-loader-host
+HOST_CC ?= cc
+.DEFAULT_GOAL := smash-menu-loader-tests
+.PHONY: smash-menu-loader-tests
+smash-menu-loader-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic \
+	 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-pie -no-pie \
+	 -ffunction-sections -fdata-sections -Iinclude tests/test_smash_menu_loader_seed.c \
+	 src/core/smash_menu_loader.c src/core/retail_image.c -Wl,--gc-sections -o $(BUILD)/test-seed
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-seed

@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/smash-phase-text-prepare-host
+HOST_CC ?= cc
+.DEFAULT_GOAL := smash-phase-text-prepare-tests
+.PHONY: smash-phase-text-prepare-tests
+smash-phase-text-prepare-tests:
+	@mkdir -p $(BUILD)
+	python3 -c 'from pathlib import Path; p=Path("config/ffconf.h").read_text(); assert p.count("#define FF_USE_MKFS 0")==1; Path("$(BUILD)/ffconf-test.h").write_text(p.replace("#define FF_USE_MKFS 0","#define FF_USE_MKFS 1"))'
+	$(HOST_CC) -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic -Wno-unused-function \
+	 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-pie -no-pie \
+	 -ffunction-sections -fdata-sections -Iinclude -Ifatfs/source -include $(BUILD)/ffconf-test.h \
+	 tests/test_smash_phase_text_prepare.c src/core/smash_menu_capsule.c src/core/game_launch_settings.c \
+	 src/core/diskio.c src/core/data.c src/core/clock.c src/core/hash.c \
+	 fatfs/source/ff.c fatfs/source/ffunicode.c -Wl,--gc-sections -o $(BUILD)/test-phase-text
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-phase-text

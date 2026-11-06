@@ -22,6 +22,21 @@ static bool overlap(uint32_t begin,uint32_t end,uint32_t other,uint32_t other_en
 static bool excludes_stage(uint32_t address,uint32_t bytes,uint32_t stage,uint32_t stage_end) {
     return span(address,bytes) && !overlap(physical(address),physical(address)+bytes,stage,stage_end);
 }
+/* Placement describes the concrete allocator footprint only; complete
+ * immutable descriptor admission remains the caller's separate obligation.
+ * A direct allocator has no word before its sentinel and no dispatch table.
+ * Reject invented/mixed families instead of inventing such absent objects. */
+static bool allocator_state_excludes_stage(const struct kui_vmu_native_heap *heap,
+    uint32_t stage,uint32_t stage_end) {
+    if(heap->family==KUI_VMU_NATIVE_HEAP_TAIL32 && heap->layout==KUI_VMU_NATIVE_HEAP_DISPATCH2)
+        return heap->sentinel>=4u &&
+            excludes_stage(heap->sentinel-4u,0x34u,stage,stage_end) &&
+            excludes_stage(heap->dispatch_table,8u,stage,stage_end);
+    if(heap->family==KUI_VMU_NATIVE_HEAP_DIRECT32 && heap->layout==KUI_VMU_NATIVE_HEAP_DIRECT)
+        return !heap->dispatch_cell && !heap->dispatch_table &&
+            excludes_stage(heap->sentinel,0x30u,stage,stage_end);
+    return false;
+}
 bool kui_vmu_native_stage_allocation_safe(const struct kui_vmu_native_heap *heap,
     uint32_t exec_bytes,uint32_t stage_begin,uint32_t stage_end,
     uint32_t arena_begin,uint32_t arena_bytes) {
@@ -32,9 +47,8 @@ bool kui_vmu_native_stage_allocation_safe(const struct kui_vmu_native_heap *heap
        stage<RAM_FIRST || stage>=RAM_END || limit<=stage || limit>RAM_END ||
        overlap(stage,limit,RAM_FIRST,RAM_FIRST+exec_bytes) ||
        arena_bytes<LEASE_WITH_HEADER+32u || !span(arena_begin,arena_bytes) ||
-       !excludes_stage(arena_begin,64u,stage,limit) || heap->sentinel<4u ||
-       !excludes_stage(heap->sentinel-4u,0x34u,stage,limit) ||
-       !excludes_stage(heap->dispatch_table,8u,stage,limit)) return false;
+       !excludes_stage(arena_begin,64u,stage,limit) ||
+       !allocator_state_excludes_stage(heap,stage,limit)) return false;
     uint32_t end=begin+arena_bytes,header=end-LEASE_WITH_HEADER;
     return !overlap(header,end,stage,limit) &&
         !overlap(begin,end,RAM_FIRST,RAM_FIRST+exec_bytes);
@@ -53,10 +67,9 @@ bool kui_vmu_native_stage_bottom_allocation_safe(const struct kui_vmu_native_hea
        stage<RAM_FIRST || stage>=RAM_END || limit<=stage || limit>RAM_END ||
        overlap(stage,limit,RAM_FIRST,RAM_FIRST+exec_bytes) ||
        arena_bytes<LEASE_WITH_HEADER+64u || !span(arena_begin,arena_bytes) ||
-       (arena_begin&31u) || (arena_bytes&31u) || heap->sentinel<4u ||
+       (arena_begin&31u) || (arena_bytes&31u) ||
        !excludes_stage(arena_begin,LEASE_WITH_HEADER+32u,stage,limit) ||
-       !excludes_stage(heap->sentinel-4u,0x34u,stage,limit) ||
-       !excludes_stage(heap->dispatch_table,8u,stage,limit)) return false;
+       !allocator_state_excludes_stage(heap,stage,limit)) return false;
     return !overlap(begin,begin+arena_bytes,RAM_FIRST,RAM_FIRST+exec_bytes);
 }
 /* An arena lease is the whole arena and holds no allocator metadata. Admit

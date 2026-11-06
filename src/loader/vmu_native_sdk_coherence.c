@@ -23,10 +23,11 @@ int kui_vmu_native_sdk_coherence_prepare(const struct kui_vmu_native_passive_con
        !ram(c->driver.load_address,c->driver.image_bytes,4u) ||
        !ram(c->driver.lock_cell,5u,4u) || !ram(c->driver.manager_cell,4u,4u) ||
        !ram(c->driver.manager_initial,0x1100u,4u) ||
-       !ram(c->driver.initializer,12u,2u) ||
-       (c->driver.initializer&UINT32_C(0xe0000000))!=UINT32_C(0x80000000) ||
-       !ram(c->layout.initializer,12u,2u) ||
-       (c->layout.initializer&UINT32_C(0xe0000000))!=UINT32_C(0x80000000) ||
+       /* Both twelve-byte heads are bounded inside this validated image
+        * below. A P1 image and even heads therefore also prove their RAM
+        * spans and aliases, without validating those spans a second time. */
+       ((c->driver.initializer|c->layout.initializer)&1u) ||
+       (c->driver.load_address&UINT32_C(0xe0000000))!=UINT32_C(0x80000000) ||
        c->layout.initializer<c->driver.load_address || c->driver.image_bytes<12u ||
        c->driver.initializer<c->driver.load_address ||
        c->driver.initializer-c->driver.load_address>c->driver.image_bytes-12u ||
@@ -34,9 +35,11 @@ int kui_vmu_native_sdk_coherence_prepare(const struct kui_vmu_native_passive_con
        c->layout.initializer!=c->driver.initializer+
            (c->layout.rx_layout==KUI_VMU_NATIVE_RX_EXPLICIT48?0x11cu:0u) ||
        kui_vmu_native_sdk_coherence_state[7]) return 0;
-    /* pd 1.46 keeps the image's cached lock pointer, so there is no P2 alias
-     * for this gate to retire; no gate is prepared or installed for it. */
+    /* Only the cached-lock early family has no P2 alias to retire. The
+     * startup-normalized early family uses this same checked cold gate. */
     if(c->driver.family==KUI_VMU_NATIVE_FAMILY_EARLY_V1) return 1;
+    if(c->driver.family==KUI_VMU_NATIVE_FAMILY_EARLY_P2_V1 &&
+       c->layout.rx_layout!=KUI_VMU_NATIVE_RX_UNIFORM48) return 0;
     uint32_t lock=(c->driver.lock_cell&UINT32_C(0x1fffffff))|UINT32_C(0x80000000);
     kui_vmu_native_sdk_coherence_state[0]=lock;
     kui_vmu_native_sdk_coherence_state[1]=c->driver.manager_cell;

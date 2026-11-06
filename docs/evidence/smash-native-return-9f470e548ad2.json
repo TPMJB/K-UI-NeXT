@@ -1,0 +1,70 @@
+{
+  "schema": "kui.smash.native-return-hardware.v1",
+  "build": "9f470e548ad2",
+  "source_commit": "9f470e548ad24a001bc2b8404de627d60ce729d0",
+  "selection": "SHINING FORCE",
+  "evidence_origin": "Owner text report in the current task; no new photograph or phase-TXT was attached.",
+  "owner_observation": {
+    "selection_to_start_resume_seconds": 18,
+    "precision": "approximately, owner-reported",
+    "scope": "native selection to Start Game / Resume menu, not phase-TXT total",
+    "native_return": "failed"
+  },
+  "decode": {
+    "message": "SMASH TIMING ORIGINAL VIDEO REFUSED",
+    "message_crc32_hex": "B4C2CD76",
+    "reason_rule": "CRC32(message) | 0x80000000",
+    "matching_reason_hex": "B4C2CD76",
+    "site": "returned outer loader preparation / strict original-video capture"
+  },
+  "reproduction_report": {
+    "original_kos_framebuffer_zero": "passes",
+    "game_nonzero_framebuffer": "refused",
+    "game_blanked_video": "refused",
+    "game_320x240": "refused",
+    "limit": "Reported source regression reproduction, not console proof of the proposed repair."
+  },
+  "followup_design": {
+    "original_vid1_bytes": 80,
+    "diagnostic_runtime_old_bytes": 516,
+    "diagnostic_runtime_new_bytes": 596,
+    "runtime_crc_covers_vid1": true,
+    "outer_return_seed_bytes": 368,
+    "outer_vid1_destination": "blank slot immediately after return seed",
+    "publication_gate": "complete padded outer capsule CRC must match before copying carried VID1",
+    "initial_gui_capture": "unchanged",
+    "returned_outer_capture": "validate and use carried original KOS VID1; do not recapture game PVR",
+    "video_mode_guard": "unchanged, strict",
+    "synthetic_timing": false,
+    "worker_and_reader_code_changes": false,
+    "return_progress_markers_retained": [
+      "105",
+      "106",
+      "107",
+      "108",
+      "109",
+      "10A"
+    ],
+    "outer_progress_markers_retained": [
+      "110",
+      "111",
+      "112",
+      "113",
+      "114",
+      "115",
+      "116"
+    ]
+  },
+  "acceptance": {
+    "9f_native_return": false,
+    "followup_console_return": "unverified",
+    "followup_console_timing": "unverified",
+    "five_ca_105_individual_stage": "still not identified by this later9f error"
+  },
+  "selection_basis": "The requested prior test was Shining Force; the latest message did not name the game again.",
+  "reported_code": {
+    "reason_hex": "B4C2CD76",
+    "detail_hex": "00000000",
+    "kind": "outer stage error, not progress marker"
+  }
+}

@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/armada_ce_vmu_write.h"
+#include "kui/ce_vmu_target.h"
 #include <string.h>
 
 #define CE_WRITE_MAGIC UINT32_C(0x31574341) /* ACW1 */
@@ -36,7 +37,7 @@ int kui_armada_ce_vmu_write_init(struct kui_armada_ce_vmu_write *s,
     if(s->started) return KUI_ARMADA_CE_VMU_WRITE_INTERNAL;
     memset(s,0,sizeof(*s));s->io=*io;
     const struct kui_vmu_emulation_io wrapped={s,ce_write_read,ce_write_commit};
-    if(kui_vmu_emulation_init(&s->protocol,2u,&wrapped))
+    if(kui_vmu_emulation_init(&s->protocol,KUI_CE_VMU_ADDRESS,&wrapped))
         return KUI_ARMADA_CE_VMU_WRITE_INTERNAL;
     s->self=s;s->magic=CE_WRITE_MAGIC;s->started=1u;return 0;
 }
@@ -67,13 +68,13 @@ int kui_armada_ce_vmu_write_handle(struct kui_armada_ce_vmu_write *s,
        ce_write_overlap(response,capacity,response_bytes,sizeof(*response_bytes)))
         return KUI_ARMADA_CE_VMU_WRITE_ARGUMENT;
     if(s->self!=s || s->magic!=CE_WRITE_MAGIC || s->started!=1u ||
-       !s->protocol.initialized || s->protocol.address!=2u || s->protocol.killed ||
+       !s->protocol.initialized || s->protocol.address!=KUI_CE_VMU_ADDRESS || s->protocol.killed ||
        s->protocol.io.context!=s || s->protocol.io.read_block!=ce_write_read ||
        s->protocol.io.commit_block!=ce_write_commit || !s->io.read_block || !s->io.commit_block)
         return KUI_ARMADA_CE_VMU_WRITE_INTERNAL;
     *response_bytes=0;
     if(s->handling) return KUI_ARMADA_CE_VMU_WRITE_INTERNAL;
-    if(request_bytes<3u || request[1]!=2u || request[2]) {
+    if(request_bytes<3u || request[1]!=KUI_CE_VMU_ADDRESS || request[2]) {
         ce_write_inc(&s->refused);return KUI_ARMADA_CE_VMU_WRITE_REFUSED;
     }
     unsigned command=request[0];
@@ -89,7 +90,7 @@ int kui_armada_ce_vmu_write_handle(struct kui_armada_ce_vmu_write *s,
             s->protocol.read_valid=0;ce_write_inc(&s->refused);
             return KUI_ARMADA_CE_VMU_WRITE_REFUSED;
         }
-        response[0]=7u;response[1]=0u;response[2]=2u;response[3]=0u;
+        response[0]=7u;response[1]=0u;response[2]=KUI_CE_VMU_ADDRESS;response[3]=0u;
         *response_bytes=4u;ce_write_inc(&s->requests);ce_write_inc(&s->read_finalizations);
         return KUI_ARMADA_CE_VMU_WRITE_HANDLED;
     }

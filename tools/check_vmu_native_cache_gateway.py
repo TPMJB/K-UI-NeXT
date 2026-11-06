@@ -9,6 +9,8 @@ are explicit inputs here. No cache record is treated as live ownership.
 import random
 import struct
 import hashlib
+from pathlib import Path
+import sys
 
 from check_vmu_native_worker_gateway import CPU, MASK, symbol_bytes
 from sh4_delay_slots import validate_delay_slot
@@ -17,9 +19,96 @@ from check_native_general_lean_profile import stage_profile,stage_pins
 STAGE, LIMIT = 0x8CE00000, 0x8CFE0000
 
 
+def replay_name(stage):
+    """Select only the explicitly marked, same seven-argument pure wrapper."""
+    marker=stage[4].get('__kui_native_cached_resolution')
+    wrapper='_kui_vmu_native_cached_resolution_replay'
+    require(bool(marker)==(wrapper in stage[4]),'Common replay cache marker/function mismatch')
+    if marker is not None:
+        require(marker==(1,0,0,0xfff1),'Invalid common replay cache scope marker')
+        address,body,section=symbol_bytes(stage,wrapper,2)
+        require(body and section[1]==1 and section[2]&7==6 and STAGE<=address<address+len(body)<=LIMIT,
+                'Common replay cache scope is not a bounded typed stage function')
+        return wrapper
+    return '_kui_vmu_native_resolution_cache_replay'
+
+
 def require(value, message):
     if not value:
         raise ValueError(message)
+
+
+def preclear_window(stage, body=None):
+    """One typed, zero-argument call followed by the existing code-SHA call."""
+    from check_native_bottom_heap import records
+    symbols = stage[4]
+    relay, original, _ = symbol_bytes(stage, '_kui_retail_stage_relay', 2)
+    body = original if body is None else body
+    entry, code, kind, section = records(stage)['_native_preclear_prepare@vmu_native_heap_probe_stage.c']
+    require(kind == 2 and section[1] == 1 and section[2] & 7 == 6 and
+            symbols['_native_preclear_prepare'][:3] == (entry, len(code), 2),
+            'Preclear route lost its exact source-qualified function entry')
+    digest, size, kind, owner = symbols['_native_heap_code_sha']
+    require(0 < owner < len(stage[3]), 'Preclear digest has no valid typed section owner')
+    target_section = stage[3][owner]
+    require(kind == 1 and size == 32 and target_section[1] == 8 and target_section[2] & 7 == 3 and
+            STAGE <= digest < digest + size <= symbols['__retail_stage_bss_end'][0] <= LIMIT and
+            target_section[3] <= digest < digest + size <= target_section[3] + target_section[5],
+            'Preclear continuation lost its exact mutable32-byte digest object')
+    sha_entry, sha_body, sha_section = symbol_bytes(stage, '_code_sha', 2)
+    require(sha_body and sha_section[1] == 1 and sha_section[2] & 7 == 6,
+            'Preclear continuation code SHA must be a typed executable function')
+    def literal(at, register):
+        op = struct.unpack_from('<H', body, at)[0]
+        if op & 0xff00 != 0xd000 | register << 8:
+            return None
+        address = ((relay + at + 4) & ~3) + 4 * (op & 255)
+        if not relay <= address <= relay + len(body) - 4:
+            return None
+        return struct.unpack_from('<I', body, address - relay)[0], address
+    windows = []
+    for at in range(0, len(body) - 13, 2):
+        first = literal(at, 1)
+        if not first or first[0] != entry:
+            continue
+        words = struct.unpack_from('<7H', body, at)
+        second, output = literal(at + 6, 1), literal(at + 8, 4)
+        if words[1:3] != (0x410b, 9) or words[5:] != (0x410b, 9) or \
+                not second or second[0] != sha_entry or not output or output[0] != digest:
+            continue
+        windows.append(dict(entry=entry, call=relay + at + 2, return_pr=relay + at + 6,
+            code_sha_return_pr=relay + at + 14, digest=digest,
+            literal_addresses=[first[1], second[1], output[1]],
+            window_offset=at, window_hex=body[at:at + 14].hex(),
+            function_sha256=hashlib.sha256(code).hexdigest(), argument_count=0))
+    require(len(windows) == 1, 'Preclear route requires its unique exact JSR/NOP/code-SHA window')
+    return windows[0]
+
+
+def bind_preclear(stage, directory=None, *, self_test=False):
+    from check_native_dual_callbacks import preclear_profile
+    if not preclear_profile(stage):
+        return None
+    require(directory is not None, 'Preclear cache route requires its actual artifact-bound companion directory')
+    from check_vmu_native_worker_gateway import read_elf
+    from check_native_preclear import check as check_preclear
+    directory = Path(directory).resolve()
+    actual = read_elf(directory / 'stage.elf')
+    require(actual[0] == stage[0] and actual[1:] == stage[1:],
+            'Preclear companion directory stage differs from the parsed stage under test')
+    proof_path = directory / 'native-preclear-proof.json'
+    require(proof_path.is_file(), 'Preclear cache route requires its actual-original companion file')
+    proof_bytes = proof_path.read_bytes()
+    companion = check_preclear(directory, self_test=self_test)
+    require(companion.get('enabled') is True and companion.get('original_linked_readers') == 2 and
+            companion.get('original_linked_refusals') == 62,
+            'Preclear route lacks the complete actual-original companion')
+    require(proof_path.read_bytes() == proof_bytes and
+            companion.get('actual_original_linked_companion_sha256') == hashlib.sha256(proof_bytes).hexdigest() and
+            (directory / 'stage.elf').read_bytes() == stage[0],
+            'Preclear companion or stage changed while its binding was checked')
+    return dict(stage_sha256=hashlib.sha256(stage[0]).hexdigest(), window=preclear_window(stage),
+                actual_companion=companion)
 
 
 class CacheGateway(CPU):
@@ -62,7 +151,7 @@ class CacheGateway(CPU):
         self.fixed_writes=[]
         self.targets = {symbols[name][0]: label for name, label in (
             ("_kui_vmu_native_cache_seed_read", "seed"),
-            ("_kui_vmu_native_resolution_cache_replay", "replay"),
+            (replay_name(stage), "replay"),
             ("_memcpy", "memcpy"), ("_allocation_safe", "allocation"),
             ("_readonly_release_replay_valid", "release"),
             ("_native_sdk_coherence_cached_admit", "sdk-slot"),
@@ -285,7 +374,8 @@ class CacheGateway(CPU):
 
 class CacheRoute(CacheGateway):
     """Execute the outer relay through cache-hit/cold-scan selection only."""
-    def __init__(self, stage, seed, mask, hit, invalid=0, *, mode=0, normalized=False, blob=None, eager=False):
+    def __init__(self, stage, seed, mask, hit, invalid=0, *, mode=0, normalized=False, blob=None, eager=False,
+                 preclear=None, preclear_refusal=0):
         begin, self.blob, _ = symbol_bytes(stage, "_kui_retail_stage_relay", 2)
         if blob is not None:
             self.blob = blob
@@ -304,6 +394,10 @@ class CacheRoute(CacheGateway):
         self.r[4:6] = [0x8c00ecac, 0x105]
         self.hit, self.invalid, self.calls, self.mode = hit, invalid, [], mode
         self.route = None
+        self.preclear, self.preclear_refusal = preclear, preclear_refusal
+        require(preclear_refusal in (0, 0x53, 0x54), 'Unknown preclear boundary outcome')
+        self.preclear_return = MASK if seed & 1 else 0
+        self.preclear_terminal = None
         symbols = stage[4]
         background='_native_background_boot_region' in symbols
         manifest = symbols["_manifest"][0]
@@ -326,6 +420,16 @@ class CacheRoute(CacheGateway):
             ("_kui_vmu_native_discover_layout", "cold"), ("_native_report", "refused"))}
         if "_native_runtime_mode" in symbols:
             self.targets[symbols["_native_runtime_mode"][0]] = "mode"
+        from check_native_dual_callbacks import preclear_profile
+        if preclear_profile(stage):
+            if preclear is None:
+                require(not hit or invalid or mode == 1,
+                        'A cached preclear continuation requires its verified companion')
+            else:
+                require(preclear.get('stage_sha256') == hashlib.sha256(stage[0]).hexdigest() and
+                        preclear.get('window') == preclear_window(stage, self.blob),
+                        'Preclear binding differs from the exact linked stage/window')
+                self.targets[preclear['window']['entry']] = 'preclear'
 
     def write(self,address,value):
         if address==self.exec_address:
@@ -343,6 +447,7 @@ class CacheRoute(CacheGateway):
             assert self.r[4:6] == [0x8c00ecac, 0x105]
             assert "ip" not in self.calls and "cache" not in self.calls
             assert self.mem[self.exec_address]==self.source_bytes
+            self.relay_sp = self.r[15]
         if name == "mode":
             assert self.calls.count("restore") == 1 and not any(
                 value in self.calls for value in ("ip", "extent", "cache", "cached", "cold", "refused"))
@@ -357,12 +462,28 @@ class CacheRoute(CacheGateway):
             assert self.calls.count("ip") == 1 and not self.invalid
             assert self.calls.count("extent")==1 and self.extent_writes==1
             assert self.mem[self.exec_address]==self.program_bytes
+        if name == 'preclear':
+            assert self.preclear is not None and self.hit and not self.invalid and self.mode != 1
+            assert self.calls[-3:] == ['cache', 'line', 'preclear']
+            assert self.calls.count('extent') == self.extent_writes == self.calls.count('cache') == 1
+            assert self.mem[self.exec_address] == self.program_bytes
+            assert self.pr == self.preclear['window']['return_pr'] and self.r[15] == self.relay_sp
+            if self.preclear_refusal:
+                self.preclear_terminal = [2, self.preclear_refusal]
+                self.route = 'preclear-refused'; self.pc = self.before[1]
+                return
         if name in ("cached", "cold", "refused"):
+            if name == 'cached' and self.preclear is not None:
+                assert self.calls[-2:] == ['preclear', 'cached'] and not self.preclear_refusal, \
+                    'Code SHA continuation reached before its preclear boundary'
+                assert self.pr == self.preclear['window']['code_sha_return_pr']
+                assert self.r[4] == self.preclear['window']['digest'] and self.r[15] == self.relay_sp
             self.route = name; self.pc = self.before[1]
             return
         for i in range(8):
             self.r[i] = (0x9468ace0 + i * 0x13579bd + len(self.calls)) & MASK
-        self.r[0] = (self.mode if name == "mode" else int(self.invalid != 5) if name == "ip"
+        self.r[0] = (self.preclear_return if name == 'preclear' else
+                     self.mode if name == "mode" else int(self.invalid != 5) if name == "ip"
                      else int(self.invalid!=6) if name=="extent"
                      else int(self.hit) if name == "cache" else 0)
         self.sr ^= 1; self.pr ^= 0x2468ace0; self.pc = return_pc
@@ -380,11 +501,18 @@ class CacheRoute(CacheGateway):
         if self.invalid:
             assert self.route == "refused" and "cache" not in self.calls
             assert not self.extent_writes and self.mem[self.exec_address]==self.source_bytes
+        elif self.preclear_refusal and self.hit and self.preclear is not None:
+            assert self.route == 'preclear-refused' and self.preclear_terminal == [2, self.preclear_refusal]
+            assert self.calls.count('preclear') == self.calls.count('cache') == self.extent_writes == 1
+            assert 'cached' not in self.calls and 'cold' not in self.calls
+            assert self.mem[self.exec_address] == self.program_bytes
         else:
             assert self.calls.count("cache") == 1
             assert self.route == ("cached" if self.hit else "cold")
             assert ("cold" in self.calls) == (not self.hit)
             assert self.extent_writes==1 and self.mem[self.exec_address]==self.program_bytes
+            if self.preclear is not None:
+                assert self.calls.count('preclear') == int(self.hit)
 
 
 class ExtentGateway(CacheGateway):
@@ -526,8 +654,54 @@ def check_extent_scope(stage,self_test=False):
         "proof_output_published_before_cache_restore":True,"console_speed_verified":False}
 
 
-def check(stage, *, self_test=False):
+def check_common_replay_pin(image):
+    """Complete reviewed dual-plan code, with only typed addresses relocated.
+
+    The prefix includes every instruction, branch, copy size, ABI frame
+    and short constant. The literal pool binds exact named functions and
+    exact private objects/interiors; no nearest-symbol normalization.
+    """
+    start,actual,section=symbol_bytes(image,'_native_resolution_replay',2)
+    prefix=bytes.fromhex(
+        '862f962f224f36d0ec7f6595f36735d41077f3660b400c760820078ff45100e8'
+        '8360147f264ff6690b00f6682ed8111f53912ed0122f2ed62ed1821f6364f3570b40'
+        '12650820ea8d83652bd92bd40b4968e6439683652ad40b49687529d848e629d50b49'
+        '836429d529d40b4914e629d529d40b4934e6825002881b8f01e427d00b4009000820'
+        'ca8925d112611821178924d01fd114550b4013540820bf8922d00b4009000820ba8d'
+        '036820d10b410900b7af836087511821e68b1dd0e0af090086508a511b2003c8a98b'
+        '1ad00b4009000820dd8ba4af00e860040004b8010900')
+    require(len(prefix)==0xe0 and len(actual)==312 and actual[:0xe0]==prefix and
+            section[1]==1 and section[2]&7==6,'Common dual-plan replay instructions changed')
+    objects={'_native_cached_resolution':688,'_exec_bytes':4,'_native_driver':104,
+             '_passive_layout':440,'_native_heap':72,'_native_call':20,'_native_exits':52,'_native_arena':4}
+    for name,count in objects.items():
+        value,size,kind,owner=image[4][name];target=image[3][owner]
+        require(kind==1 and size==count and target[1]==8 and target[2]&7==3 and
+                STAGE<=value<value+size<=LIMIT,'Common replay object role changed: '+name)
+    seed=image[4]['__native_resolution_cache_seed_start'][0]
+    require(image[4]['__native_resolution_cache_seed_end'][0]-seed==1120,
+            'Common replay seed extent changed')
+    bindings=(('_kui_vmu_native_cache_seed_read',0),('__native_resolution_cache_seed_start',0),
+        ('_native_cached_resolution',0),(replay_name(image),0),(None,0x8c010000),('_exec_bytes',0),
+        ('_memcpy',0),('_native_driver',0),('_passive_layout',0),('_native_heap',0),
+        ('_native_cached_resolution',544),('_native_cached_resolution',616),('_native_call',0),
+        ('_native_cached_resolution',636),('_native_exits',0),('_native_arena_plan_bind',0),
+        ('_native_arena',0),('_allocation_safe',0),('_native_sdk_coherence_cached_admit',0),
+        ('_native_passive_capture_windows',0),('_native_fixed_plan_bind',0),('_readonly_release_replay_valid',0))
+    expected=[]
+    for name,offset in bindings:
+        if name is None:expected.append(offset);continue
+        if name not in objects and name!='__native_resolution_cache_seed_start':
+            target,code,owner=symbol_bytes(image,name,2)
+            require(code and owner[2]&7==6 and STAGE<=target<target+len(code)<=LIMIT,
+                    'Common replay callback role changed: '+name)
+        expected.append(image[4][name][0]+offset)
+    require(actual[0xe0:]==struct.pack('<22I',*expected),'Common replay typed literal targets changed')
+
+
+def check(stage, *, self_test=False, preclear_directory=None):
     symbols, sections = stage[4], stage[3]
+    preclear = bind_preclear(stage, preclear_directory, self_test=self_test)
     lean_stage=stage_profile(stage)
     address, size, kind, owner = symbols["_native_cached_resolution"]
     require(kind == 1 and size == 688 and owner < len(sections), "cache metadata must be one typed688B stage object")
@@ -543,7 +717,10 @@ def check(stage, *, self_test=False):
         require(set(pins)=={'_native_resolution_replay'} and section[2]&7==6 and
                 (len(actual),hashlib.sha256(actual).hexdigest())==pins['_native_resolution_replay'],
                 'Lean General complete cache replay instructions/targets changed')
-    if lean_stage:pinned_replay(stage)
+    normalized_common=bool(lean_stage and '__kui_native_cached_resolution' in symbols and
+                           '_native_arena_plan_bind' in symbols)
+    if lean_stage:
+        (check_common_replay_pin if normalized_common else pinned_replay)(stage)
     cases = 0
     for seed in range(24):
         for mask in range(16):
@@ -581,12 +758,24 @@ def check(stage, *, self_test=False):
                     if background:options+=((True,7),)
                     for eager in ((False,True) if background else (False,)):
                         for hit,invalid in options:
-                            CacheRoute(stage,seed,mask,hit,invalid,mode=mode,normalized=normalized,eager=eager).run().check();routes+=1
+                            CacheRoute(stage,seed,mask,hit,invalid,mode=mode,normalized=normalized,eager=eager,
+                                       preclear=preclear).run().check();routes+=1
+    preclear_refusals = 0
+    if preclear is not None:
+        for seed in (0, 1):
+            for mask in (0, 15):
+                for mode in modes:
+                    for normalized in (False, True):
+                        for eager in (False, True):
+                            for detail in (0x53, 0x54):
+                                CacheRoute(stage, seed, mask, True, mode=mode, normalized=normalized,
+                                    eager=eager, preclear=preclear, preclear_refusal=detail).run().check()
+                                preclear_refusals += 1
     mutations = 0
     if self_test:
         # Mutate every actual callback literal and an exact memcpy length.
         targets = [symbols[name][0] for name in ("_kui_vmu_native_cache_seed_read",
-            "_kui_vmu_native_resolution_cache_replay", "_allocation_safe", "_readonly_release_replay_valid",
+            replay_name(stage), "_allocation_safe", "_readonly_release_replay_valid",
             "_native_sdk_coherence_cached_admit",
             "_native_passive_capture_windows")]
         if lean_stage:targets.append(symbols['_native_fixed_plan_bind'][0])
@@ -674,10 +863,22 @@ def check(stage, *, self_test=False):
         offset=section[4]+begin-section[3]
         for index in range(len(body)):
             changed=bytearray(stage[0]);changed[offset+index]^=1
-            try:pinned_replay((bytes(changed),*stage[1:]))
+            try:(check_common_replay_pin if normalized_common else pinned_replay)((bytes(changed),*stage[1:]))
             except ValueError:pin_mutations+=1
             else:raise ValueError('Lean cache replay pin accepted changed instructions or targets')
     extent_scope=check_extent_scope(stage,self_test)
+    resolution_scope={'enabled':False}
+    if replay_name(stage)=='_kui_vmu_native_cached_resolution_replay':
+        require(preclear_directory is not None,'Common replay scope requires its exact stage artifact directory')
+        path=Path(preclear_directory)/'stage.elf'
+        require(path.read_bytes()==stage[0],'Common replay scope directory differs from parsed stage')
+        sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tests'))
+        from test_native_stage_proof_scope import audit as proof_scope
+        resolution_scope=dict(proof_scope(path,self_test=self_test),enabled=True)
+        require(resolution_scope.get('status')=='PASS' and resolution_scope.get('argument_count')==7 and
+                resolution_scope.get('actual_SH_cases')==3840 and
+                resolution_scope.get('mutation_rejections')==(26 if self_test else 0),
+                'Common replay scope lacks its complete linked argument/cache/publication proof')
     return {"enabled": True, "temporary_resolution_address": hex(address), "temporary_resolution_bytes": size,
             "temporary_high_bss_only": True, "wrapper_entry": hex(begin), "wrapper_bytes": len(body),
             "actual_instruction_model_cases": cases, "mutation_rejections": mutations,
@@ -687,6 +888,13 @@ def check(stage, *, self_test=False):
             "validated_extent_before_cache_or_discovery":True,
             "normal_and_shortened_extent_routes_checked":True,
             "extent_failure_keeps_source_length_and_refuses":True,"pure_extent_cache_scope":extent_scope,
+            "pure_resolution_cache_scope":resolution_scope,
+            "preheap_clear_boundary":dict(enabled=preclear is not None,
+                typed_void_no_arguments=True if preclear else None,
+                exact_call_and_code_sha_window=preclear['window'] if preclear else None,
+                actual_original_companion=preclear['actual_companion'] if preclear else None,
+                terminal_refusal_boundary_cases=preclear_refusals,
+                model_scope='Cached-hit relay continuation only; preclear internals and their actual original execution remain in the separately mandatory artifact/source-bound companion'),
             "no_metadata_before_exact_image_replay": True, "fresh_allocation_and_release_guards": True,
             "fresh_sdk_initializer_slot_admission":True,"sdk_slot_admission_is_independent_image_predicate":True,
             "capture_only_after_all_guards": True,
@@ -698,6 +906,7 @@ def check(stage, *, self_test=False):
                                                [0x1a,0x46,0x90,0x9e,0xa8,0xbe] if lean_stage else []),
                 capture_requires_fixed_release_allocation_sdk_admissions=lean_stage,
                 complete_wrapper_byte_mutation_rejections=pin_mutations,
+                typed_relocated_common_template=normalized_common,
                 model_scope='Actual wrapper instructions; fixed-plan is a typed success/failure API boundary, with its two consumed private heap-output fields modeled; fixed-plan decoder itself is separately proved'),
             "arena_lease_replay":dict(enabled=arena_route,actual_wrapper_instruction_cases=arena_cases,
                 callback_result_combinations=64 if arena_route else 0,heap_family_offset=544+8,

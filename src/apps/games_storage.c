@@ -25,6 +25,11 @@ bool kui_games_storage_release(void) {
     kui_sd_disconnect();
     return ok;
 }
+enum kui_games_storage_result kui_games_storage_refresh(kui_log_fn log) {
+    if(open_session && fs.fs_type && !kui_games_storage_release())return KUI_GAMES_STORAGE_NO_MOUNT;
+    open_session=false;
+    return kui_games_storage_open(log);
+}
 bool kui_games_storage_done(bool keep) {
     if(!open_session) return true;
     ++jobs;

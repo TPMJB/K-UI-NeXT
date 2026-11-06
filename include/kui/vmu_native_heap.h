@@ -11,7 +11,11 @@
  * owner names only its image and the borrowed call's literal; every other
  * allocator role is zero, and no release or initializer entry exists. */
 #define KUI_VMU_NATIVE_HEAP_ARENA 2u
+/* syMalloc1.35: the same32-byte tail allocator with direct function entries.
+ * No dispatch cell or table exists; both descriptor roles must be zero. */
+#define KUI_VMU_NATIVE_HEAP_DIRECT32 3u
 #define KUI_VMU_NATIVE_HEAP_DISPATCH2 1u
+#define KUI_VMU_NATIVE_HEAP_DIRECT 2u
 #define KUI_VMU_NATIVE_HEAP_FREE_LIMIT 1024u
 enum kui_vmu_native_heap_result {
     KUI_VMU_NATIVE_HEAP_NONE=0, KUI_VMU_NATIVE_HEAP_FOUND=1,
@@ -28,6 +32,9 @@ struct kui_vmu_native_heap {
     uint32_t dispatch_cell,dispatch_table,sentinel,cursor_cell;
     uint32_t begin_cell,bytes_cell,begin_copy_cell;
 };
+/* Scalar allocator descriptor admission only; no RAM reads or authority to
+ * call/patch code. ARENA uses its separate exact arena/lease admission. */
+bool kui_vmu_native_heap_metadata_valid(const struct kui_vmu_native_heap *);
 enum kui_vmu_native_heap_result kui_vmu_native_heap_discover(
     const void *,size_t,uint32_t,struct kui_vmu_native_heap *);
 struct kui_vmu_native_heap_call {uint32_t load,call,return_pr,entry_begin,entry_bytes;};
@@ -40,6 +47,22 @@ struct kui_vmu_native_heap_call {uint32_t load,call,return_pr,entry_begin,entry_
  * Unknown state or multiple complete calls cannot authorize a hook. */
 bool kui_vmu_native_heap_call_discover(const void *,size_t,
     const struct kui_vmu_native_heap *,struct kui_vmu_native_heap_call *);
+/* One reviewed startup clears the complete arena immediately before this
+ * initializer call. That clear also covers a temporary high installer. This
+ * cold, immutable-image proof names its sole clear call and complete original
+ * helper; it does not authorize omitting any game bytes from the clear. The
+ * caller supplies SHA-256 already bound to this complete immutable image.
+ * Returns 1 for the exact reviewed owner, 0 for other owners, and -1 for an
+ * unreviewed/malformed variant of that owner. Output is unchanged on 0/-1.
+ * A successful caller must either preserve only its actual linked temporary
+ * interval and finish that deferred clear from retained low code before any
+ * guest resumes, or refuse launch. Its unique startup-clear call must then
+ * remain terminal: a later arena clear would precede the initializer guard
+ * and destroy retained allocations. No serialized heap/call record changes. */
+struct kui_vmu_native_heap_preclear {uint32_t slot,target,return_pr,begin,bytes;};
+int kui_vmu_native_heap_preclear_plan(const void *,size_t,const uint8_t sha256[32],
+    const struct kui_vmu_native_heap *,const struct kui_vmu_native_heap_call *,
+    struct kui_vmu_native_heap_preclear *);
 /* Some executables carry the reviewed allocator but never initialize it, so
  * no pointer names its initializer. For such an exact executable (bytes and
  * SHA-256), a reviewed plan names one startup call the installer borrows and

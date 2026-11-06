@@ -32,7 +32,7 @@ def function(name):
 # publishes main's handoff and waits before its only report call; therefore
 # successful handoff cannot acquire SD storage for a report.
 check_start = source.index('if(action==103) {')
-check_end = source.index('if(action==56 || action==57 || action==58 || action==104)', check_start)
+check_end = source.index('if(action==56 || action==57 || action==58 || action==104 || action==121 || action==122)', check_start)
 check = source[check_start:check_end]
 assert check.index('kui_disc_launcher_check(') < check.index('disc_launch_progress(&result);')
 assert check.index('disc_launch_progress(&result);') < check.index('disc_launch_failure_report(')

@@ -10,3 +10,10 @@ override STAGE_SRC := src/loader/vmu_native_heap_probe_stage.c src/loader/sd_rea
  src/core/vmu_native_heap_budget.c
 include Makefile.vmu-toy
 FLAGS += -DKUI_VMU_NATIVE_HEAP_PROBE=1
+# The one-shot preclear continuation belongs entirely to temporary stage
+# code. It adds no bytes to either retained low reader or the VMU worker.
+STAGE_OBJ += $(BUILD)/preclear_tail_asm.o
+$(BUILD)/preclear_tail_asm.o: src/loader/vmu_native_preclear_tail.S
+	@mkdir -p $(@D)
+	$(CC) $(FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/stage.elf: $(BUILD)/preclear_tail_asm.o

@@ -40,6 +40,7 @@ void kui_shell_init(struct kui_shell *s, const struct kui_settings *p) {
     s->problem_report_options.include_latest_screenshot=true;s->games_jump='A';
     s->browser_options.port=KUI_BROWSER_PORT;s->browser.state=KUI_BROWSER_STOPPED;
     s->vmu_collection_return=s->vmu_backups_return=s->vmu_wizard_return=KUI_SHELL_VMU_TOOLS;
+    s->vmu_card_return=KUI_SHELL_VMU_COLLECTION;
     s->salvage_passes=0; /* Keep retrying unresolved sectors until complete or stopped. */
     s->salvage_result_return=KUI_SHELL_SALVAGE_DRIVE;s->scan_return=KUI_SHELL_ADVANCED;
     kui_storage_test_defaults(&s->storage_test_request);
@@ -141,6 +142,20 @@ static void game_vmu_pick_page(struct kui_shell *s,bool launch) {
         if(s->games_vmu_info.cards[i].pair==s->games_vmu_selection.pair)
             s->games_vmu_card_selected=i;
     s->page=KUI_SHELL_GAMES_VMU_CARD;
+}
+static enum kui_shell_action disc_vmu_request(struct kui_shell *s) {
+    /* Every explicit disc attempt resolves the current physical product.
+     * Retrying a failed card query must discard its old choices just as a
+     * new request from GD Play does; no previous result may auto-launch. */
+    s->games_vmu_disc=true;s->gd_vmu_launch=true;
+    memset(&s->games_vmu_info,0,sizeof(s->games_vmu_info));
+    memset(&s->games_vmu_selection,0,sizeof(s->games_vmu_selection));
+    s->games_vmu_product[0]=s->games_vmu_label[0]=s->games_vmu_notice[0]=0;
+    ++s->games_vmu_generation;if(!s->games_vmu_generation) ++s->games_vmu_generation;
+    s->games_vmu_loading=true;s->games_vmu_default_saving=false;s->gd_auto_launch=false;
+    game_vmu_pick_page(s,true);
+    s->games_vmu_pick_return=KUI_SHELL_GD_PLAY;
+    return KUI_SHELL_GD_VMU_INFO;
 }
 void kui_shell_set_game_vmu_cards(struct kui_shell *s,unsigned generation,const struct kui_vmu_game_info *info) {
     char current[12];
@@ -559,7 +574,75 @@ static enum kui_shell_action list_vmu_collection(struct kui_shell *s,bool first)
 }
 static void vmu_card_open(struct kui_shell *s,const struct kui_vmu_backup_entry *entry) {
     s->vmu_card=*entry;s->vmu_card_selected=entry->readable?KUI_SHELL_VMU_CARD_SAVES:KUI_SHELL_VMU_CARD_DETAILS;s->vmu_card_details=false;
+    s->vmu_card_return=KUI_SHELL_VMU_COLLECTION;s->vmu_card_loading=false;
+    memset(&s->vmu_virtual_delete_status,0,sizeof(s->vmu_virtual_delete_status));
     s->page=KUI_SHELL_VMU_CARD;
+}
+void kui_shell_set_vmu_card(struct kui_shell *s,unsigned generation,const struct kui_vmu_backup_entry *card) {
+    if(!s || !card || !s->vmu_card_loading || s->page!=KUI_SHELL_VMU_CARD ||
+       generation!=s->vmu_card_generation || !memchr(card->path,0,sizeof(card->path)) ||
+       strcmp(card->path,s->vmu_card.path) || memcmp(card->identity,s->vmu_card.identity,16u)) return;
+    s->vmu_card=*card;s->vmu_card_loading=false;
+    s->vmu_card.name[sizeof(s->vmu_card.name)-1]=0;
+    s->vmu_card.label[sizeof(s->vmu_card.label)-1]=0;
+    s->vmu_card.games[sizeof(s->vmu_card.games)-1]=0;
+    s->vmu_card.titles[sizeof(s->vmu_card.titles)-1]=0;
+    s->vmu_card.contents[sizeof(s->vmu_card.contents)-1]=0;
+    if(!card->readable) s->vmu_card_selected=KUI_SHELL_VMU_CARD_DETAILS;
+}
+static enum kui_shell_action virtual_delete_preview(struct kui_shell *s,bool whole_card) {
+    if(s->vmu_card_loading || !s->vmu_card.readable || !vmu_collection_path(s->vmu_card.path) ||
+       (!whole_card && (!s->vmu_card.active || !s->vmu_image_collection ||
+        strcmp(s->vmu_image_path,s->vmu_card.path) || !s->vmu_image.present ||
+        s->vmu_image_selected>=s->vmu_image.count))) return KUI_SHELL_NONE;
+    bool identity=false;for(unsigned i=0;i<16u;i++) identity|=s->vmu_card.identity[i]!=0;
+    if(!identity) return KUI_SHELL_NONE;
+    struct kui_shell_vmu_delete_request *r=&s->vmu_virtual_delete_request;
+    memset(r,0,sizeof(*r));memcpy(r->path,s->vmu_card.path,sizeof(r->path));
+    memcpy(r->identity,s->vmu_card.identity,16u);r->whole_card=whole_card;
+    if(!whole_card) {
+        const char *name=s->vmu_image.entries[s->vmu_image_selected].name;
+        if(!name[0] || !memchr(name,0,sizeof(r->save_name))) return KUI_SHELL_NONE;
+        memcpy(r->save_name,name,sizeof(r->save_name));
+    }
+    ++s->vmu_virtual_delete_generation;
+    s->confirm_vmu_virtual_delete=false;s->vmu_virtual_delete_loading=true;
+    s->vmu_virtual_delete_committing=false;
+    s->vmu_virtual_delete_selected=0;memset(&s->vmu_virtual_delete_status,0,sizeof(s->vmu_virtual_delete_status));
+    return KUI_SHELL_VMU_VIRTUAL_DELETE_PREVIEW;
+}
+enum kui_shell_action kui_shell_set_vmu_virtual_delete(struct kui_shell *s,unsigned generation,
+        bool committed,bool ready,unsigned users,const struct kui_app_status *status) {
+    if(!s || !status || !s->vmu_virtual_delete_loading || generation!=s->vmu_virtual_delete_generation ||
+       (s->page!=KUI_SHELL_VMU_CARD && s->page!=KUI_SHELL_VMU_IMAGE) ||
+       strcmp(s->vmu_virtual_delete_request.path,s->vmu_card.path) ||
+       memcmp(s->vmu_virtual_delete_request.identity,s->vmu_card.identity,16u)) return KUI_SHELL_NONE;
+    s->vmu_virtual_delete_loading=false;s->vmu_virtual_delete_committing=false;s->vmu_virtual_delete_status=*status;
+    s->vmu_virtual_delete_status.message[sizeof(s->vmu_virtual_delete_status.message)-1]=0;
+    bool passed=status->complete && status->passed && !status->stopped && !status->errors;
+    s->confirm_vmu_virtual_delete=!committed && ready && passed;
+    s->vmu_virtual_delete_selected=0;s->vmu_virtual_delete_users=users;
+    if(!committed) return KUI_SHELL_NONE;
+    if(!passed) {
+        s->vmu_card.readable=false;s->vmu_image.present=false;
+        return KUI_SHELL_NONE;
+    }
+    /* Any mutation invalidates launch/default snapshots, even when this card
+     * was reached from VMU tools rather than the game's matching-card list. */
+    ++s->games_vmu_generation;s->games_vmu_loading=false;
+    memset(&s->games_vmu_selection,0,sizeof(s->games_vmu_selection));
+    memset(&s->games_vmu_info,0,sizeof(s->games_vmu_info));
+    if(!s->vmu_virtual_delete_request.whole_card) {
+        unsigned blocks=s->vmu_image_selected<s->vmu_image.count?
+            (s->vmu_image.entries[s->vmu_image_selected].bytes+511u)/512u:0u;
+        if(s->vmu_card.free_blocks+blocks<=200u) s->vmu_card.free_blocks+=blocks;
+        s->page=KUI_SHELL_VMU_IMAGE;return list_vmu_image(s);
+    }
+    s->games_vmu_pick_pending_launch=false;s->games_vmu_pick_check=false;
+    if(s->vmu_card_return==KUI_SHELL_GAMES_VMU_CARD) {
+        s->page=KUI_SHELL_GAMES_VMU_CARD;return game_vmu_request(s);
+    }
+    s->page=KUI_SHELL_VMU_COLLECTION;return list_vmu_collection(s,false);
 }
 static void vmu_card_name(struct kui_shell *s) {
     snprintf(s->keyboard,sizeof(s->keyboard),"%.48s",
@@ -1173,6 +1256,11 @@ bool kui_shell_games_image_ready(const struct kui_shell *s) {
          (games_pair_ready(s) && !strcmp(s->games_selected_path,games_variant_path(s)))) &&
         memchr(s->games_detail.path,0,sizeof(s->games_detail.path)) &&
         !strcmp(s->games_detail.path,s->games_selected_path);
+}
+bool kui_shell_games_smash_native_ready(const struct kui_shell *s) {
+    return s && s->games_tests_from_options && !s->games_loading &&
+        kui_shell_games_image_ready(s) && !s->games_detail.stopped &&
+        s->games_detail.smash_native_child;
 }
 bool kui_shell_games_retail_ready(const struct kui_shell *s) {
     return kui_shell_games_image_ready(s) &&
@@ -2415,6 +2503,9 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             ++s->disc_cards_generation;s->page=KUI_SHELL_GD_PLAY;return KUI_SHELL_NONE;
         }
         if(busy) {
+            if(s->vmu_virtual_delete_loading && !s->vmu_virtual_delete_committing) {
+                ++s->vmu_virtual_delete_generation;s->vmu_virtual_delete_loading=false;
+            }
             if(s->games_vmu_disc && s->page==KUI_SHELL_GAMES_VMU_CARD && !s->games_vmu_default_saving) {
                 ++s->games_vmu_generation;s->games_vmu_loading=false;
                 s->games_vmu_pick_pending_launch=false;s->page=KUI_SHELL_GD_PLAY;
@@ -2435,6 +2526,11 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             s->confirm_wifi_update=false;
             return KUI_SHELL_STOP;
         }
+        if(s->confirm_vmu_virtual_delete) {
+            s->confirm_vmu_virtual_delete=false;++s->vmu_virtual_delete_generation;
+            s->vmu_virtual_delete_status.message[0]=0;
+            return KUI_SHELL_NONE;
+        }
         if(s->page==KUI_SHELL_KEYBOARD && s->capture_label_keyboard) {
             s->capture_label_keyboard=false;s->page=KUI_SHELL_ADVANCED;
             s->destination_notice[0]=0;return KUI_SHELL_NONE;
@@ -2445,7 +2541,12 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         }
         if(s->page==KUI_SHELL_VMU_CARD) {
             if(s->vmu_card_details) s->vmu_card_details=false;
-            else s->page=KUI_SHELL_VMU_COLLECTION;
+            else {
+                ++s->vmu_card_generation;s->vmu_card_loading=false;
+                s->page=s->vmu_card_return;
+                if(s->page==KUI_SHELL_GAMES_VMU_CARD && !s->games_vmu_info.known)
+                    return game_vmu_request(s);
+            }
             return KUI_SHELL_NONE;
         }
         if(s->confirm_repair_in_place) {s->confirm_repair_in_place=false;return KUI_SHELL_NONE;}
@@ -2542,9 +2643,9 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
                 return wizard_request(s,s->vmu_wizard.automatic?KUI_VMU_WIZARD_SHOW_GROUPS:KUI_VMU_WIZARD_LIST_GAMES,
                     s->vmu_wizard.card,s->vmu_wizard.automatic?s->vmu_wizard.groups_page:s->vmu_wizard.page,0);
             s->page=s->vmu_wizard_return;
-            return s->page==KUI_SHELL_VMU_TOOLS?emulation_request(s,false):KUI_SHELL_NONE;
+            return KUI_SHELL_NONE;
         }
-        if(s->page==KUI_SHELL_VMU) {s->page=KUI_SHELL_VMU_TOOLS;return emulation_request(s,false);}
+        if(s->page==KUI_SHELL_VMU) {s->page=KUI_SHELL_VMU_TOOLS;return KUI_SHELL_NONE;}
         if(s->page==KUI_SHELL_VMU_IMPORT) {
             s->confirm_vmu_import=false;s->page=KUI_SHELL_VMU_RESTORE;
             return s->vmu_import_staged?list_backups(s,true):KUI_SHELL_NONE;
@@ -2742,9 +2843,8 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
     bool song_page=s->page==KUI_SHELL_HOME || s->page==KUI_SHELL_RIPPER;
     bool confirming=s->confirm_new || s->confirm_quick_resume || s->confirm_gd_boot || s->confirm_gd_direct ||
         s->confirm_storage_test || s->confirm_clock || s->confirm_defaults || s->confirm_vmu_restore ||
-        s->confirm_vmu_delete || s->confirm_vmu_copy || s->confirm_vmu_copy_all || s->confirm_vmu_import || s->confirm_music_clear || s->confirm_restart || s->confirm_salvage || s->confirm_salvage_check ||
-        s->confirm_repair_in_place || s->confirm_vmu_history_restore || s->confirm_games_identity || s->confirm_wifi_forget || s->confirm_wifi_update || s->confirm_vmu_wizard_reset || s->disc_cards_confirming ||
-        (s->page==KUI_SHELL_UPDATES && s->update.stage==KUI_SHELL_UPDATE_REVIEW) || s->page==KUI_SHELL_GAMES_PROBE_CONFIRM || s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ||
+        s->confirm_vmu_delete || s->confirm_vmu_virtual_delete || s->confirm_vmu_copy || s->confirm_vmu_copy_all || s->confirm_vmu_import || s->confirm_music_clear || s->confirm_restart || s->confirm_salvage || s->confirm_salvage_check ||
+        s->confirm_repair_in_place || s->confirm_vmu_history_restore || s->confirm_games_identity || s->confirm_wifi_forget || s->confirm_wifi_update || s->confirm_vmu_wizard_reset || s->disc_cards_confirming || (s->page==KUI_SHELL_UPDATES && s->update.stage==KUI_SHELL_UPDATE_REVIEW) || s->page==KUI_SHELL_GAMES_PROBE_CONFIRM || s->page==KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM ||
         s->page==KUI_SHELL_GAMES_RETAIL_CONFIRM || s->page==KUI_SHELL_GAMES_LAUNCH_OPTIONS ||
         s->page==KUI_SHELL_GAMES_VARIANTS || s->page==KUI_SHELL_FILES_CONFIRM;
     if(song_page && !confirming && !(buttons & ~(KUI_SHELL_L|KUI_SHELL_R))) {
@@ -2830,6 +2930,20 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             s->wifi_request.firmware=s->wifi.firmware;
             s->wifi_request.password[0]=0;
             return KUI_SHELL_WIFI_UPDATE;
+        }
+        return KUI_SHELL_NONE;
+    }
+    if(s->confirm_vmu_virtual_delete) {
+        if(buttons==KUI_SHELL_LEFT || buttons==KUI_SHELL_RIGHT || buttons==KUI_SHELL_UP || buttons==KUI_SHELL_DOWN)
+            s->vmu_virtual_delete_selected^=1u;
+        if(buttons==KUI_SHELL_A) {
+            s->confirm_vmu_virtual_delete=false;
+            ++s->vmu_virtual_delete_generation;
+            if(!s->vmu_virtual_delete_selected) {
+                s->vmu_virtual_delete_status.message[0]=0;return KUI_SHELL_NONE;
+            }
+            s->vmu_virtual_delete_loading=true;s->vmu_virtual_delete_committing=true;
+            return KUI_SHELL_VMU_VIRTUAL_DELETE_COMMIT;
         }
         return KUI_SHELL_NONE;
     }
@@ -2936,7 +3050,9 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
                 return KUI_SHELL_LOAD_SYSTEM;
             }
             if(s->page==KUI_SHELL_VMU) return KUI_SHELL_VMU_LIST;
-            if(s->page==KUI_SHELL_VMU_TOOLS) return emulation_request(s,false);
+            /* Opening the tools hub needs no storage or saved preference.
+             * Its preference rows load only when the user selects them. */
+            if(s->page==KUI_SHELL_VMU_TOOLS) return KUI_SHELL_NONE;
             if(s->page==KUI_SHELL_MUSIC) return list_music(s,true);
             if(s->page==KUI_SHELL_GAMES) {
                 s->games_group[0]=0;
@@ -3200,6 +3316,20 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         break;
     case KUI_SHELL_GAMES_VMU_CARD:
         if(s->games_vmu_loading) break;
+        if(buttons==KUI_SHELL_R && !s->games_vmu_disc) {
+            struct kui_vmu_game_selection chosen;
+            if(!kui_vmu_game_info_choose(&s->games_vmu_info,s->games_vmu_card_selected,&chosen)) break;
+            struct kui_vmu_backup_entry card={0};card.active=true;
+            snprintf(card.path,sizeof(card.path),"0:/KUI/vmu-test/p%04u/card.vmd",(unsigned)chosen.pair);
+            snprintf(card.folder,sizeof(card.folder),"p%04u",(unsigned)chosen.pair);
+            snprintf(card.label,sizeof(card.label),"%.48s",s->games_vmu_info.cards[s->games_vmu_card_selected].label);
+            memcpy(card.identity,chosen.identity,16u);vmu_card_open(s,&card);
+            s->vmu_card_selected=KUI_SHELL_VMU_CARD_SAVES;
+            s->vmu_card_return=KUI_SHELL_GAMES_VMU_CARD;s->vmu_card_loading=true;
+            ++s->vmu_card_generation;return KUI_SHELL_VMU_CARD_LOAD;
+        }
+        if(s->games_vmu_disc && buttons==KUI_SHELL_A && !s->games_vmu_info.known)
+            return disc_vmu_request(s);
         if(buttons==KUI_SHELL_START && !s->games_vmu_disc && kui_vmu_game_info_choose(&s->games_vmu_info,s->games_vmu_card_selected,&s->games_vmu_selection)) {
             memset(&s->vmu_history,0,sizeof(s->vmu_history));memset(&s->vmu_history_request,0,sizeof(s->vmu_history_request));
             s->vmu_history_request.card=s->games_vmu_selection;s->vmu_history.card=s->games_vmu_selection;
@@ -3349,12 +3479,17 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         return game_patch_input(s,buttons);
     case KUI_SHELL_GAMES_TESTS:
         if(buttons==KUI_SHELL_UP || buttons==KUI_SHELL_DOWN) {
-            s->game_tests_selected=move_count(s->game_tests_selected,buttons,2u);break;
+            s->game_tests_selected=move_count(s->game_tests_selected,buttons,
+                kui_shell_games_smash_native_ready(s)?4u:2u);break;
         }
         if(buttons!=KUI_SHELL_A) break;
         if(s->game_tests_selected==0u && kui_shell_games_image_ready(s) &&
            s->games_detail.format==KUI_GAME_IMAGE_GDI) s->page=KUI_SHELL_GAMES_IMAGE_PROBE_CONFIRM;
         else if(s->game_tests_selected==1u) s->page=KUI_SHELL_GAMES_PROBE_CONFIRM;
+        else if(kui_shell_games_smash_native_ready(s)) {
+            if(s->game_tests_selected==2u)return KUI_SHELL_GAMES_SMASH_PHANTASY_STAR_II;
+            if(s->game_tests_selected==3u)return KUI_SHELL_GAMES_SMASH_SHINING_FORCE;
+        }
         break;
     case KUI_SHELL_GAMES_INFO:
         break;
@@ -3600,9 +3735,12 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         if(buttons&KUI_SHELL_A)return s->recovery_operation==1u?KUI_SHELL_REPAIR_COPY:
             s->recovery_operation==2u?KUI_SHELL_FORENSIC:KUI_SHELL_ADVANCED_CRC;
         break;
-    case KUI_SHELL_VMU_TOOLS:
+    case KUI_SHELL_VMU_TOOLS: {
+        unsigned previous=s->vmu_tools_selected;
         s->vmu_tools_selected=move_count(s->vmu_tools_selected,buttons,6);
         if(buttons==KUI_SHELL_X) return emulation_request(s,false);
+        if(!s->vmu_emulation_known && previous!=s->vmu_tools_selected && s->vmu_tools_selected>=4u)
+            return emulation_request(s,false);
         if(buttons&KUI_SHELL_A) {
             if(!s->vmu_tools_selected) {
                 s->vmu_collection_return=KUI_SHELL_VMU_TOOLS;s->page=KUI_SHELL_VMU_COLLECTION;
@@ -3622,6 +3760,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             return wizard_request(s,KUI_VMU_WIZARD_OPEN,s->vmu_wizard.card,s->vmu_wizard.page,0);
         }
         break;
+    }
     case KUI_SHELL_VMU_WIZARD: {
         const struct kui_vmu_wizard_view *w=&s->vmu_wizard;
         if(w->stage==KUI_VMU_WIZARD_DETAILS) {
@@ -3659,7 +3798,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
                 if(s->vmu_wizard_return==KUI_SHELL_VMU_CARD) {
                     s->page=KUI_SHELL_VMU_COLLECTION;return list_vmu_collection(s,false);
                 }
-                s->page=KUI_SHELL_VMU_TOOLS;return emulation_request(s,false);
+                s->page=KUI_SHELL_VMU_TOOLS;return KUI_SHELL_NONE;
             }
             if(buttons&KUI_SHELL_X) s->confirm_vmu_wizard_reset=true;
             break;
@@ -3870,12 +4009,13 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
         }
         break;
     case KUI_SHELL_VMU_CARD:
-        if(s->vmu_card_details) break;
+        if(s->vmu_card_details || s->vmu_card_loading) break;
         s->vmu_card_selected=move_count(s->vmu_card_selected,buttons,KUI_SHELL_VMU_CARD_ACTIONS);
         if(buttons&KUI_SHELL_Y) {s->vmu_card_details=true;break;}
         if(!(buttons&KUI_SHELL_A)) break;
         if(s->vmu_card_selected==KUI_SHELL_VMU_CARD_DETAILS) {s->vmu_card_details=true;break;}
         if(!s->vmu_card.readable || !vmu_collection_path(s->vmu_card.path)) break;
+        if(s->vmu_card_selected==KUI_SHELL_VMU_CARD_DELETE) return virtual_delete_preview(s,true);
         if(s->vmu_card_selected==KUI_SHELL_VMU_CARD_SAVES) {
             memcpy(s->vmu_image_path,s->vmu_card.path,sizeof(s->vmu_image_path));
             s->vmu_image_collection=true;s->vmu_image_page=0;s->page=KUI_SHELL_VMU_IMAGE;
@@ -3891,6 +4031,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             return action;
         }
     case KUI_SHELL_VMU_IMAGE:
+        if(buttons==KUI_SHELL_R && s->vmu_image_collection) return virtual_delete_preview(s,false);
         if(vmu_scroll_rows(&s->vmu_image_page,&s->vmu_image_selected,&s->vmu_image_select_last,
                 buttons,s->vmu_image.count,s->vmu_image.total)) {
             bool last=s->vmu_image_select_last;
@@ -4010,16 +4151,7 @@ enum kui_shell_action kui_shell_input(struct kui_shell *s,
             memset(&s->disc_cards,0,sizeof(s->disc_cards));
             return disc_cards_request(s,KUI_DISC_CARDS_IDENTIFY,0);
         }
-        if(buttons==KUI_SHELL_A) {
-            s->games_vmu_disc=true;s->gd_vmu_launch=true;
-            memset(&s->games_vmu_info,0,sizeof(s->games_vmu_info));
-            memset(&s->games_vmu_selection,0,sizeof(s->games_vmu_selection));
-            s->games_vmu_product[0]=s->games_vmu_label[0]=s->games_vmu_notice[0]=0;
-            ++s->games_vmu_generation;if(!s->games_vmu_generation) ++s->games_vmu_generation;
-            s->games_vmu_loading=true;s->games_vmu_default_saving=false;s->gd_auto_launch=false;
-            game_vmu_pick_page(s,true);
-            return KUI_SHELL_GD_VMU_INFO;
-        }
+        if(buttons==KUI_SHELL_A) return disc_vmu_request(s);
         if(buttons==KUI_SHELL_X) s->confirm_gd_boot=true;
         else if(buttons==KUI_SHELL_Y) {
             s->page=KUI_SHELL_GD_OPTIONS;s->gd_options_selected=0;

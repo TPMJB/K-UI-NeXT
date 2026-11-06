@@ -92,6 +92,13 @@ int kui_vmu_persist_profile_decode(struct kui_vmu_persist_profile *,const uint8_
  * structurally valid. Returns1 only for exact semantic ownership equality. */
 int kui_vmu_persist_profile_same_ownership(const struct kui_vmu_persist_profile *,
     const struct kui_vmu_persist_profile *);
+/* SHA256 of exactly the same_ownership fields, domain-separated as
+ * "KUI/VMU/OWNERSHIP/SHA256/V1" including its terminating zero. Every integer
+ * is explicitly little endian; no C padding, pointers, provenance hashes,
+ * block CRCs or journal sequence enter the digest. This identifies a profile,
+ * not fresh filesystem ownership or permission to write. Output is cleared on
+ * invalid input; overlapping output is refused without modifying the input. */
+int kui_vmu_persist_profile_ownership_sha256(const struct kui_vmu_persist_profile *,uint8_t out[32]);
 int kui_vmu_persist_profile_map_lba(const struct kui_vmu_persist_profile *,
     unsigned role,uint32_t logical,uint32_t *out_lba);
 typedef int (*kui_vmu_persist_profile_read)(void *,unsigned role,uint32_t logical,uint8_t out[512]);

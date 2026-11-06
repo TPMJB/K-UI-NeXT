@@ -33,6 +33,16 @@ enum kui_sci_stream_result {
     KUI_SCI_STREAM_RESET     /* SCI or bus did not return to a known state */
 };
 struct kui_sci_stream_stats {
+#if KUI_NATIVE_GD_DMA_STREAM
+    /* This compact native profile has no SCI counter rows. Keep the
+     * scheduling counter independent; the other names are zero aliases
+     * only, not protocol, retry, CRC, or recovery state. */
+    union {
+        uint32_t blocks,starts,kept,overruns,crc_errors,token_errors;
+        uint32_t foreign,repaired,ahead,deferred;
+    };
+    uint32_t polled;
+#else
     uint32_t blocks, polled, starts, kept, overruns;
     uint32_t crc_errors, token_errors, foreign;
     uint32_t repaired; /* overruns resumed in place, the lost byte rebuilt from the CRC */
@@ -40,6 +50,7 @@ struct kui_sci_stream_stats {
      * token: the resumed reception ran a byte ahead (fetched again). */
     uint32_t ahead;
     uint32_t deferred; /* of those repaired, resumed by a later fetch (interrupt) */
+#endif
 #ifdef KUI_RETAIL_CE
     /* Incomplete receptions, including repair attempts, by DMA bytes still
      * remaining: 0, 1..128, 129..384, 385 or more. These are not timings. */

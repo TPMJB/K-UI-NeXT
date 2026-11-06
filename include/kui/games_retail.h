@@ -85,6 +85,12 @@ bool kui_games_retail_prepare_launch_session_card(const char *path,uint32_t read
     const struct kui_game_ram_patches *patches,const struct kui_vmu_game_selection *selection,
     const struct kui_native_session_request *session,struct kui_runtime_image *image,
     kui_log_fn log,kui_cancel_fn cancelled);
+/* Explicit source-bound Smash Pack native child test. Shares the existing
+ * Sega Smash Pack VMU and leaves the ordinary launch settings unchanged. */
+bool kui_games_smash_native_prepare(unsigned child,const char *path,uint32_t reader,
+    const struct kui_game_ram_patches *patches,const struct kui_vmu_game_selection *selection,
+    const struct kui_native_session_request *session,struct kui_runtime_image *image,
+    kui_log_fn log,kui_cancel_fn cancelled);
 /* Performs the same executable/package/map checks and preparation report as
  * a launch, then frees the staged package. Never exposes a handoff image or
  * executes a game. Success is preparation evidence, not console compatibility. */

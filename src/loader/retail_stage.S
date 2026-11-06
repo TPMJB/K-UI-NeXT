@@ -1,5 +1,89 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/retail_loader_layout.h"
+    .global __kui_retail_cold_instruction_cache
+    .set __kui_retail_cold_instruction_cache,1
+#if KUI_VC2_STAGE_CACHED_RELAY && (!KUI_VC2_CE_VMU || !KUI_VC2_VMU_LATE || !KUI_VC2_VMU_PERSIST)
+#error "VC2 instruction-cached relay belongs only to the persistent late cold stage"
+#endif
+#if KUI_VC2_STAGE_CACHED_RELAY
+    .global __kui_vc2_stage_cached_relay
+    .set __kui_vc2_stage_cached_relay,1
+#endif
+#if KUI_SMASH_MENU_LOADER
+    .pushsection .rodata.smash_menu_raw,"a"
+    .balign 4
+    .global __smash_menu_raw_start,__smash_menu_raw_end
+__smash_menu_raw_start:
+    .incbin KUI_SMASH_MENU_RAW_BIN
+__smash_menu_raw_end:
+    .popsection
+    .pushsection .rodata.smash_menu_handoff,"a"
+    .balign 4
+    .global __smash_menu_handoff_start,__smash_menu_handoff_end
+__smash_menu_handoff_start:
+    .incbin KUI_SMASH_MENU_HANDOFF_BIN
+__smash_menu_handoff_end:
+    .popsection
+#endif
+#if KUI_SMASH_CE_CHILD && KUI_SMASH_CE_RETURN_PROBE
+    .pushsection .rodata.smash_ce_return_probe,"a"
+    .balign 4
+    .global __smash_ce_return_probe_start,__smash_ce_return_probe_end
+__smash_ce_return_probe_start:
+    .incbin KUI_SMASH_CE_RETURN_PROBE_BIN
+__smash_ce_return_probe_end:
+    .popsection
+#endif
+#if KUI_SMASH_NATIVE_MENU
+    .pushsection .rodata.smash_return_raw,"a"
+    .balign 4
+    .global __smash_return_raw_start,__smash_return_raw_end
+__smash_return_raw_start:
+    .incbin KUI_SMASH_RETURN_RAW_BIN
+__smash_return_raw_end:
+    .popsection
+    .pushsection .rodata.smash_return_code,"a"
+    .balign 4
+    .global __smash_return_code_start,__smash_return_code_end
+__smash_return_code_start:
+    .incbin KUI_SMASH_RETURN_CODE_BIN
+__smash_return_code_end:
+    .popsection
+#endif
+#if KUI_VC2_CE_VMU
+#if KUI_SMASH_CE_CHILD
+#include "vc2_ce_vmu_symbols.h"
+#endif
+#if KUI_VC2_VMU_LATE
+    .pushsection .rodata.vc2_late_raw,"a"
+    .balign 4
+    .global __vc2_late_raw_start,__vc2_late_raw_end
+__vc2_late_raw_start:
+    .incbin KUI_VC2_LATE_RAW_BIN
+__vc2_late_raw_end:
+    .popsection
+#endif
+    .pushsection .rodata.vc2_vmu_blob,"a"
+    .balign 4
+#if KUI_SMASH_CE_CHILD
+    /* GUI-only byte location metadata. Raw helper instructions are unchanged;
+     * zero padding and the independently sealed 48KiB CRC remain mandatory. */
+    .global __smash_ce_embedded_helper
+__smash_ce_embedded_helper:
+    .long 0x5349554b,0x31484543,1+KUI_SMASH_CE_RETURN,32
+    .long 1+KUI_SMASH_SWIRL_VMU,KUI_VC2_VMU_BLOB_BYTES,49152,49152*KUI_SMASH_CE_RETURN
+#endif
+    .global __vc2_vmu_blob_start
+__vc2_vmu_blob_start:
+#if KUI_SMASH_CE_RETURN
+    .incbin KUI_SMASH_CE_PREPARED_BIN
+#else
+    .incbin KUI_VC2_VMU_HELPER_BIN
+#endif
+    .global __vc2_vmu_blob_end
+__vc2_vmu_blob_end:
+    .popsection
+#endif
 #ifndef KUI_RETAIL_CE_SCIF_BIN
 #define KUI_RETAIL_CE_SCIF_BIN "build/retail-ce/resident-scif.bin"
 #define KUI_RETAIL_CE_SCI_BIN "build/retail-ce/resident-sci.bin"
@@ -261,14 +345,13 @@ C(kui_retail_game_resume):
     cmp/hs r1,r0
     bf .Lpurge
     mov.l .Lccr,r0
-#if KUI_VMU_NATIVE_CACHED_CODE
     /* RAM is published above. The high-stage relay is called through P1:
      * cache its instructions while keeping every mutable RAM access uncached.
+     * This applies to every cold relay, including foreground/no-VMU paths.
+     * The initial-stage cache setup no longer applies after bootstrap2.
+     * DMA and mutable metadata keep the operand cache disabled.
      * The return below still restores the owner's exact enable/mode bits. */
     mov.l .Lscan_ccr,r1
-#else
-    mov.l .Loff,r1
-#endif
     mov.l r1,@r0
     nop
     nop
@@ -333,98 +416,13 @@ C(kui_retail_game_resume):
 .Lram: .long 0x8c000000
 .Lramend: .long KUI_RETAIL_RAM_END
 .Loff: .long 0x00000808
-#if KUI_VMU_NATIVE_CACHED_CODE
 .Lscan_ccr: .long 0x00000908
-#endif
 .Lrelaymain: .long C(kui_retail_stage_relay)
 /* Owner bootstrap2 calls the uncached executable alias. Resume that same
  * alias while the original entry performs its own cache setup. */
 .Lgame: .long KUI_RETAIL_EXEC_ADDRESS+0x20000000
 
-#if KUI_NATIVE_CACHED_EXTENT
-#if !KUI_VMU_NATIVE_CACHED_CODE
-#error "The pure extent cache scope requires the native instruction-cached relay"
-#endif
-/* Pure immutable-image proof only, called on the relay's P1 high stack.
- * The surrounding relay has already published RAM and selected CCR=0x100.
- * Unknown cache profiles take the original call without changing CCR.
- * Every CCR change executes through P2 and has eight following NOPs. */
-    .align 2
-    .global __kui_native_cached_extent
-    .set __kui_native_cached_extent,1
-    .global C(kui_vmu_native_cached_extent)
-    .type C(kui_vmu_native_cached_extent),@function
-C(kui_vmu_native_cached_extent):
-    mov.l r8,@-r15
-    mov.l r9,@-r15
-    sts.l pr,@-r15
-    mov.l .Lextent_p2_address,r0
-    jmp @r0
-    nop
-.Lextent_p2:
-    mov.l .Lextent_ccr,r1
-    mov.l @r1,r0
-    mov r0,r8
-    mov.l .Lextent_expected,r2
-    cmp/eq r2,r0
-    bf .Lextent_call
-    mov.l .Lextent_on,r0
-    mov.l r0,@r1
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-.Lextent_call:
-    mov.l .Lextent_proof,r0
-    jsr @r0
-    nop
-    mov r0,r9
-    mov.l .Lextent_expected,r0
-    cmp/eq r0,r8
-    bf .Lextent_done
-/* Publish the proof's P1 stack/output before returning to operand-cache-off
- * relay code. A full normal-index RAM purge also includes this 12B frame. */
-    mov.l .Lextent_ram,r0
-    mov.l .Lextent_ramend,r1
-.Lextent_purge:
-    ocbp @r0
-    add #32,r0
-    cmp/hs r1,r0
-    bf .Lextent_purge
-    mov.l .Lextent_off,r0
-    or r8,r0
-    mov.l .Lextent_ccr,r1
-    mov.l r0,@r1
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-    nop
-.Lextent_done:
-    mov r9,r0
-    lds.l @r15+,pr
-    mov.l @r15+,r9
-    mov.l @r15+,r8
-    rts
-    nop
-    .align 2
-.Lextent_p2_address: .long .Lextent_p2+0x20000000
-.Lextent_ccr: .long 0xff00001c
-.Lextent_expected: .long 0x100
-.Lextent_on: .long 0x909
-.Lextent_proof: .long C(kui_vmu_native_program_extent)
-.Lextent_ram: .long 0x8c000000
-.Lextent_ramend: .long KUI_RETAIL_RAM_END
-.Lextent_off: .long 0x808
-    .size C(kui_vmu_native_cached_extent),.-C(kui_vmu_native_cached_extent)
-#endif
+#include "native_proof_cache_scope.inc"
 
 #if defined(KUI_RETAIL_SONIC_STACK_TEST) && KUI_RETAIL_SONIC_STACK_TEST && !defined(KUI_RETAIL_CE)
 /* All seven original-entry stubs have saved R0 before selecting P2. Save

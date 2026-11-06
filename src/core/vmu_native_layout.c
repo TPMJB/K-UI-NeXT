@@ -352,7 +352,7 @@ static bool uniform_initializer(const uint8_t *p,size_t n,uint32_t base,
        !word_literal(p,n,base,s+62u,0u,0xfc8u) || !word_literal(p,n,base,s+86u,0u,0xfc4u) ||
        !literal(p,n,base,s+90u,4u,&alias) || alias!=0xa0000000u ||
        !literal(p,n,base,s+108u,3u,&constructor)) return false;
-    if(d->family==KUI_VMU_NATIVE_FAMILY_EARLY_V1) return early_constructor(p,n,base,constructor,d);
+    if(kui_vmu_native_early_server(d->family)) return early_constructor(p,n,base,constructor,d);
     if(!at(constructor,base,n,130u,&c) || !WORDS(p,n,c,construct)) return false;
     return target(p,n,base,c+18u,14u,d->manager_cell) &&
         word_literal(p,n,base,c+22u,0u,0x10b4u) && word_literal(p,n,base,c+30u,6u,0x6000u) &&
@@ -463,7 +463,7 @@ static bool uniform_from_bound(const void *image,size_t n,
         {16,0xc90f},{18,0x1f02},{20,0x0002},{22,0x2039},{24,0xcbf0},{26,0x400e},{30,0x0009},
         {36,0x66f2},{38,0x6573},{40,0x430b},{42,0x54f1}
     };
-    const bool early=d->family==KUI_VMU_NATIVE_FAMILY_EARLY_V1;
+    const bool early=kui_vmu_native_early_server(d->family);
     unsigned found=0;size_t wrapper=0;
     for(size_t s=0;early && s<n && n-s>=44u;s+=2u) {
         uint32_t capacity;
@@ -607,6 +607,8 @@ static bool layout_from_bound(const void *image,size_t n,
         uniform_found=uniform_from_bound(image,n,d,&uniform_layout,false,false,true);
     if(variable_found==uniform_found) return false;
     struct kui_vmu_native_layout chosen=variable_found?variable_layout:uniform_layout;bool infile;
+    if(d->family==KUI_VMU_NATIVE_FAMILY_EARLY_P2_V1 &&
+       !kui_vmu_native_early_p2_calls_valid(image,n,d,chosen.initializer_call-26u,chosen.initializer_call)) return false;
     if(!source_buffers(image,n,d,&chosen,&infile)) return false;
     chosen.version=infile?KUI_VMU_NATIVE_LAYOUT_INFILE_VERSION:KUI_VMU_NATIVE_LAYOUT_VERSION;
     *out=chosen;return true;

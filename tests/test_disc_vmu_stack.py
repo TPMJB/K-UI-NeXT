@@ -43,6 +43,12 @@ def main():
                 path.write_text(text)
 
         support = work/'support/src/loader/disc_vmu_storage.ci'
+        def add_edge(text, edge):
+            # Keep the compiler graph syntactically complete so the mutant
+            # reaches callback/recursion admission, rather than the separate
+            # truncated-graph guard added for incomplete build evidence.
+            assert text.rstrip().endswith('}')
+            return text.rstrip()[:-1]+edge+'}\n'
         refuses(support, lambda t: re.sub(
             r'(label: "kui_disc_vmu_storage_loan\\n[^"\n]*?\\n)(\d+)( bytes \(static\))',
             lambda m: m[1]+str(int(m[2])+4096)+m[3], t), 'needs')
@@ -50,11 +56,11 @@ def main():
         refuses(transport, lambda t: t.replace('0 bytes (static)', '0 bytes (dynamic)', 1), 'Dynamic stack')
         extra = ('edge: { sourcename: "kui_disc_vmu_storage_loan" '
                  'targetname: "__indirect_call" label: "unreviewed.c:1:1" }\n')
-        refuses(support, lambda t: t+extra, 'Unexpected support callback')
+        refuses(support, lambda t: add_edge(t,extra), 'Unexpected support callback')
         native = work/'native/src/loader/vmu_native_passive.ci'
         recursion = ('edge: { sourcename: "kui_vmu_native_passive_submit" '
                      'targetname: "kui_vmu_native_passive_submit" label: "vmu_native_passive.c:1:1" }\n')
-        refuses(native, lambda t: t+recursion, 'Recursive private-stack path')
+        refuses(native, lambda t: add_edge(t,recursion), 'Recursive private-stack path')
         lifetime = work/'native/src/core/vmu_native_lifetime.ci'
         refuses(lifetime, lambda t: t.replace(
             'targetname: "__indirect_call" label: "src/core/vmu_native_lifetime.c:',

@@ -1,0 +1,75 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Original-menu native collection route. The foreground reader and original
+# bootstrap remain independent of the fresh native child VMU allocation.
+BUILD ?= build/smash-menu-loader
+include Makefile.native-ocram-bootstrap
+FLAGS += -DKUI_SMASH_MENU_LOADER=1
+ifneq ($(filter 1 2,$(SMASH_PHASE_DIAGNOSTIC)),)
+FLAGS += -DKUI_SMASH_PHASE_DIAGNOSTIC=1
+endif
+RESIDENT_FLAGS := $(filter-out -DKUI_RETAIL_MANIFEST_SLOTS=64,$(RESIDENT_FLAGS)) \
+ -DKUI_RETAIL_MANIFEST_SLOTS=48 -DKUI_RETAIL_COMPACT_WORD_COPY=1 -fno-tree-fre -fno-caller-saves
+RESIDENT_OBJ += $(BUILD)/resident_compact_memcpy.o
+$(BUILD)/resident_compact_memcpy.o: src/loader/retail_compact_memcpy.S $(BUILD)/config Makefile.smash-menu-loader
+	$(CC) $(RESIDENT_FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/resident-sci.elf: $(BUILD)/resident_compact_memcpy.o
+NATIVE_RESIDENT_LINKER_SCRIPT := src/loader/retail_resident_vc2_late.ld
+NATIVE_RESIDENT_OBJCOPY_FLAGS := --remove-section=.vc2_late_raw
+NATIVE_IRQ_ROOT += -Wl,-u,_kui_vc2_ce_vmu_read_card -Wl,-u,_kui_smash_menu_loader_firmware \
+ -Wl,-u,_kui_smash_menu_loader_stop
+STAGE_SRC += src/core/smash_menu_loader.c src/core/smash_native_child.c src/core/smash_menu_return.c src/core/smash_menu_collection.c
+$(BUILD)/stage.elf: $(STAGE_OBJ)
+$(BUILD)/resident-sci.elf: src/loader/retail_resident_vc2_late.ld
+SMASH_HANDOFF_SRC := src/loader/smash_menu_loader.c src/core/smash_menu_loader.c src/core/smash_menu_return.c \
+ src/core/smash_native_menu.c src/core/smash_ce_child.c src/core/smash_menu_collection.c \
+ src/core/retail_image.c src/loader/minic.c src/loader/cold_load_crc32.c src/core/cold_image.c src/core/smash_ce_gin.c src/core/smash_native_gin.c
+ifneq ($(filter 1 2,$(SMASH_PHASE_DIAGNOSTIC)),)
+STAGE_SRC += src/core/smash_phase_video.c
+STAGE_SRC += src/loader/smash_return_fault_display.c
+SMASH_HANDOFF_SRC += src/core/smash_phase_clock.c src/core/smash_phase_trace.c src/core/smash_phase_video.c
+endif
+$(BUILD)/stage.elf: $(STAGE_OBJ)
+SMASH_HANDOFF_OBJ := $(patsubst %.c,$(BUILD)/handoff/%.o,$(SMASH_HANDOFF_SRC)) \
+ $(BUILD)/handoff_entry.o $(BUILD)/handoff_cold_load_scope.o
+SMASH_HANDOFF_FLAGS = $(FLAGS) -fcallgraph-info=su
+$(SMASH_HANDOFF_OBJ): Makefile.smash-menu-loader
+$(BUILD)/handoff/%.o: %.c $(BUILD)/config
+	@mkdir -p $(@D)
+	$(CC) $(SMASH_HANDOFF_FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/handoff_entry.o: src/loader/smash_menu_loader_entry.S $(BUILD)/config
+	$(CC) $(SMASH_HANDOFF_FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/handoff_cold_load_scope.o: src/loader/cold_load_scope.S $(BUILD)/config
+	$(CC) $(SMASH_HANDOFF_FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/handoff.elf: $(SMASH_HANDOFF_OBJ) src/loader/smash_menu_loader.ld Makefile.smash-menu-loader
+	$(CC) $(LINK) -Wl,-u,_kui_smash_menu_loader_redirect -Tsrc/loader/smash_menu_loader.ld -Wl,-Map,$(BUILD)/handoff.map \
+	 -o $@ $(SMASH_HANDOFF_OBJ) -lgcc
+$(BUILD)/handoff.bin: $(BUILD)/handoff.elf
+	$(OBJCOPY) -O binary $< $@
+$(BUILD)/smash_menu_handoff_symbols.h: $(BUILD)/handoff.elf tools/smash_menu_handoff_symbols.py
+	python3 tools/smash_menu_handoff_symbols.py $< $@
+$(BUILD)/resident/src/loader/retail_async.o: $(BUILD)/smash_menu_handoff_symbols.h
+$(BUILD)/smash_menu_loader_symbols.h: $(BUILD)/resident-sci.elf $(BUILD)/handoff.elf $(BUILD)/handoff.bin tools/smash_menu_loader_symbols.py
+	python3 tools/smash_menu_loader_symbols.py $(BUILD)/resident-sci.elf $(BUILD)/handoff.elf $@ \
+	 --raw-output $(BUILD)/smash-menu-raw.bin --handoff $(BUILD)/handoff.bin
+$(BUILD)/smash-menu-raw.bin: $(BUILD)/smash_menu_loader_symbols.h
+	@test -f $@
+$(BUILD)/stage/src/loader/retail_stage.o: $(BUILD)/smash_menu_loader_symbols.h src/loader/smash_menu_loader_stage.inc
+$(BUILD)/stage_asm.o: $(BUILD)/smash-menu-raw.bin $(BUILD)/handoff.bin
+STAGE_FLAGS += -DKUI_SMASH_MENU_RAW_BIN='"$(BUILD)/smash-menu-raw.bin"' \
+ -DKUI_SMASH_MENU_HANDOFF_BIN='"$(BUILD)/handoff.bin"'
+$(BUILD)/retail-smash-menu.kui: $(BUILD)/entry.elf
+	python3 tools/runtime_package.py build $< $@ --build-id $(BUILD_ID)
+	python3 tools/runtime_package.py verify $@
+.DEFAULT_GOAL := $(BUILD)/retail-smash-menu.kui
+all: $(BUILD)/retail-smash-menu.kui
+-include $(SMASH_HANDOFF_OBJ:.o=.d)
+-include $(BUILD)/resident_compact_memcpy.d
+
+.PHONY: smash-outer-phase-config-force
+$(BUILD)/smash-outer-phase-config: smash-outer-phase-config-force
+	@mkdir -p $(@D)
+	@echo 'SMASH_PHASE_DIAGNOSTIC=$(if $(filter 2,$(SMASH_PHASE_DIAGNOSTIC)),2,$(if $(filter 1,$(SMASH_PHASE_DIAGNOSTIC)),1,0))' > $@.tmp
+	@cmp -s $@.tmp $@ && rm $@.tmp || mv $@.tmp $@
+$(RESIDENT_OBJ) $(STAGE_OBJ) $(SMASH_HANDOFF_OBJ): $(BUILD)/smash-outer-phase-config
+
+include Makefile.smash-card-session

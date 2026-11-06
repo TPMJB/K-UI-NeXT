@@ -122,6 +122,30 @@ int main(void) {
                     self.assertIn("cmp/eq #2", menu)
                     self.assertIn(answer, menu)
 
+    def test_late_vmu_stops_boot1_reset_without_changing_normal_menu_routes(self):
+        # Original Smash/VC2 reset helpers set BIOS vector064 to IP8000 and
+        # call menu command3. Only the late test reuses retired BOOT1 code.
+        # Its existing terminal path must catch both return1 and reset3;
+        # the ordinary native and CE profiles keep forwarding reset3.
+        variants = (("late", ["-DKUI_VC2_VMU_LATE=1", "-DKUI_RETAIL_NATIVE_DISC_CHECK=1"], True),
+                    ("native", ["-DKUI_RETAIL_NATIVE_DISC_CHECK=1"], False),
+                    ("ce", ["-DKUI_RETAIL_CE=1"], False),
+                    ("toy", ["-DKUI_RETAIL_TOY_PILOT=1"], False))
+        for name, flags, stop_reset in variants:
+            with self.subTest(variant=name):
+                result = subprocess.run(
+                    ["cc", "-E", "-P", "-x", "assembler-with-cpp", "-Iinclude",
+                     *flags, "src/loader/retail_resident.S"],
+                    cwd=ROOT, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                menu = result.stdout.split("kui_retail_menu_hook:", 1)[1].split(".Lmenu_forward:", 1)[0]
+                self.assertIn("cmp/eq #1,r0\n    bt .Lmenu_stop", menu)
+                if stop_reset:
+                    self.assertIn("cmp/eq #3,r0\n    bt .Lmenu_stop", menu)
+                    self.assertLess(menu.index("cmp/eq #3"), menu.index("cmp/eq #2"))
+                else:
+                    self.assertNotIn("cmp/eq #3", menu)
+
 
 if __name__ == "__main__":
     unittest.main()

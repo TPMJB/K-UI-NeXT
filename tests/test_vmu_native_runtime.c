@@ -223,13 +223,22 @@ int main(void) {
         put(&f,f.driver.lock_cell,4u,early_wrong[i]);reject(&f,KUI_VMU_NATIVE_RUNTIME_POINTER);
     }
     early(&f);put(&f,0x8c011004u,1u,0u);reject(&f,KUI_VMU_NATIVE_RUNTIME_STATE);
+    /* The startup-normalized early family retains the same caller-level
+     * scheduling, while requiring its P2 pointer exactly in both phases. */
+    for(unsigned a=0;a<2u;a++) for(unsigned phase=0;phase<2u;phase++) for(unsigned level=0;level<16u;level++) {
+        fixture(&f,0u,0u,phase);f.driver.family=KUI_VMU_NATIVE_FAMILY_EARLY_P2_V1;
+        f.driver.lock_cell=early_lock[a]-4u;put(&f,f.driver.lock_cell,4u,0xac011004u);
+        f.boundary.inherited_sr=level<<4;
+        CHECK(run(&f,&out)==KUI_VMU_NATIVE_RUNTIME_VALID && out.lock==0xac011004u);
+        put(&f,f.driver.lock_cell,4u,early_lock[a]);reject(&f,KUI_VMU_NATIVE_RUNTIME_POINTER);
+    }
     /* The pd 1.50 family keeps its inherited IMASK6/15 contract. */
     for(unsigned level=0;level<16u;level++) {
         if(level==6u || level==15u) continue;
         fixture(&f,0u,0u,0u);f.boundary.inherited_sr=level<<4;
         reject(&f,KUI_VMU_NATIVE_RUNTIME_CONTEXT);CHECK(!f.reads);
     }
-    fixture(&f,0u,0u,0u);f.driver.family=3u;reject(&f,KUI_VMU_NATIVE_RUNTIME_INVALID);CHECK(!f.reads);
+    fixture(&f,0u,0u,0u);f.driver.family=4u;reject(&f,KUI_VMU_NATIVE_RUNTIME_INVALID);CHECK(!f.reads);
     fixture(&f,0u,0u,0u);f.driver.requirements=0u;reject(&f,KUI_VMU_NATIVE_RUNTIME_INVALID);CHECK(!f.reads);
     fixture(&f,0u,0u,0u);f.config.version++;reject(&f,KUI_VMU_NATIVE_RUNTIME_INVALID);CHECK(!f.reads);
     CHECK(kui_vmu_native_runtime_check(NULL,&f.config,&f.boundary,read_value,&f,&out)==KUI_VMU_NATIVE_RUNTIME_INVALID);

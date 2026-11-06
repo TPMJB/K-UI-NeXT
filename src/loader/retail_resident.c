@@ -1,7 +1,66 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/retail_resident.h"
+#if KUI_SMASH_MENU_LOADER
+#include "kui/smash_menu_loader.h"
+__asm__(".global __kui_smash_menu_loader_resident\n.set __kui_smash_menu_loader_resident,1\n");
+uint32_t kui_smash_menu_loader_firmware[9] __attribute__((used,externally_visible));
+#endif
+#if KUI_SMASH_SWIRL_VMU
+__asm__(".global __kui_smash_swirl_ce_vmu\n.set __kui_smash_swirl_ce_vmu,1\n");
+#endif
 #include "kui/retail_gd.h"
+#if KUI_NATIVE_GD_VRAM_DMA
+#include "kui/retail_vram_dma.h"
+__asm__(".global __kui_native_gd_vram_dma\n"
+        ".set __kui_native_gd_vram_dma,1\n");
+#endif
 #include "kui/retail_image.h"
+#include "kui/native_standalone_foreground.h"
+#include "kui/retail_ocram.h"
+#include "kui/native_ocram_diagnostic.h"
+#if KUI_NATIVE_OCRAM_BOOTSTRAP
+#if KUI_VC2_VMU_LATE
+__asm__(".global __kui_vc2_vmu_late_resident\n.set __kui_vc2_vmu_late_resident,1\n");
+#endif
+#if !KUI_NATIVE_STANDALONE_FOREGROUND || !defined(KUI_RETAIL_ASYNC)
+#error "OCRAM bootstrap bridge requires the separate native foreground reader"
+#endif
+__asm__(".global __kui_native_ocram_bootstrap_resident\n"
+        ".set __kui_native_ocram_bootstrap_resident,1\n");
+#if !KUI_NATIVE_GD_MMU_BUFFERS
+volatile struct kui_native_ocram_diagnostic kui_native_ocram_trace;
+#endif
+#endif
+#if KUI_NATIVE_GD_LEGACY_STREAM
+__asm__(".global __kui_native_gd_legacy_stream\n"
+        ".set __kui_native_gd_legacy_stream,1\n");
+#endif
+#if KUI_NATIVE_GD_MMU_BUFFERS
+__asm__(".global __kui_native_gd_mmu_buffers\n"
+        ".set __kui_native_gd_mmu_buffers,1\n");
+#endif
+#if KUI_NATIVE_GD_DMA_STREAM
+__asm__(".global __kui_native_gd_dma_stream\n"
+        ".set __kui_native_gd_dma_stream,1\n");
+#if KUI_NATIVE_OCRAM_BOOTSTRAP
+__asm__(".global __kui_native_transfer_diagnostic\n"
+        ".set __kui_native_transfer_diagnostic,1\n");
+/* Failure-only: FN6 stops before returning to its caller. Borrow current
+ * R6/MAP/WHY, never the completed history or live transfer accounting. */
+void kui_retail_gd_native_transfer_refused(uint32_t reason,uint32_t destination,uint32_t bytes) {
+    kui_native_ocram_trace.entry[3]=destination;
+    kui_native_ocram_trace.entry[14]=bytes;
+    kui_native_ocram_trace.entry[15]=0x100u|reason;
+}
+#endif
+#endif
+#if KUI_NATIVE_GD_PIO_STREAM
+__asm__(".global __kui_native_gd_pio_stream\n"
+        ".set __kui_native_gd_pio_stream,1\n");
+/* Only EXEC publishes a due PIO callback. Assembly consumes this pair
+ * before releasing its lock, then calls from the restored owner context. */
+volatile uint32_t kui_native_pio_deferred[2];
+#endif
 #if KUI_RETAIL_ZSO
 #include "kui/retail_zso.h"
 #if KUI_ZSO_CODECS != 1 && KUI_ZSO_CODECS != 2
@@ -85,12 +144,77 @@ static struct kui_retail_zso_manifest zso_manifest;
 #define manifest (zso_manifest.manifest)
 #define RETAIL_MANIFEST (&manifest)
 #else
+#if KUI_NATIVE_GD_MMU_BUFFERS
+/* This reader uses only manifest geometry/slots after adoption. Its stopped
+ * report does not display the copied launch title/product/bootfile strings.
+ * Reuse those private metadata bytes for the trace, retaining all map slots. */
+static union {
+    struct kui_retail_manifest map;
+    struct { uint8_t prefix[68]; volatile struct kui_native_ocram_diagnostic trace;
+#if KUI_NATIVE_GD_DMA_STREAM
+        volatile uint32_t ce_kernel[3];
+        volatile uint32_t hook_words[5];
+#if KUI_VC2_VMU_LATE
+        /* The terminal snapshot uses words0..167. Its display cursor lives
+         * beyond that snapshot, in the final retired map word. */
+        uint8_t diagnostic_padding[576];
+#endif
+        uint32_t diagnostic_row;
+#endif
+    } report;
+} kui_native_boot_state __attribute__((used,section(".bss.native_boot_state")));
+_Static_assert(offsetof(struct kui_retail_manifest,title)==68u &&
+    offsetof(struct kui_retail_manifest,slots)>=68u+KUI_OC_TRACE_BYTES,
+    "Trace must fit only unused resident manifest metadata");
+#if KUI_NATIVE_GD_DMA_STREAM
+_Static_assert(offsetof(struct kui_retail_manifest,slots)>=
+    offsetof(__typeof__(kui_native_boot_state),report.hook_words)+20u,
+    "Native CE event binding must fit only unused resident metadata");
+_Static_assert(sizeof(kui_native_boot_state.map)>=
+    offsetof(__typeof__(kui_native_boot_state),report.diagnostic_row)+4u,
+    "Terminal cursor must fit within retired manifest");
+__asm__(".global _kui_retail_hook_sr\n.type _kui_retail_hook_sr,@object\n"
+        ".set _kui_retail_hook_sr,_kui_native_boot_state+228\n.size _kui_retail_hook_sr,4\n"
+        ".global _kui_retail_hook_source\n.type _kui_retail_hook_source,@object\n"
+        ".set _kui_retail_hook_source,_kui_native_boot_state+232\n.size _kui_retail_hook_source,4\n"
+        ".global _kui_retail_original_menu\n.type _kui_retail_original_menu,@object\n"
+        ".set _kui_retail_original_menu,_kui_native_boot_state+236\n.size _kui_retail_original_menu,4\n"
+        ".global _kui_retail_hook_fault\n.type _kui_retail_hook_fault,@object\n"
+        ".set _kui_retail_hook_fault,_kui_native_boot_state+240\n.size _kui_retail_hook_fault,4\n"
+        ".global _kui_retail_hook_active\n.type _kui_retail_hook_active,@object\n"
+        ".set _kui_retail_hook_active,_kui_native_boot_state+244\n.size _kui_retail_hook_active,4\n"
+        ".global _row\n.type _row,@object\n"
+#if KUI_VC2_VMU_LATE
+        ".set _row,_kui_native_boot_state+824\n.size _row,4\n");
+#else
+        ".set _row,_kui_native_boot_state+248\n.size _row,4\n");
+#endif
+#endif
+__asm__(".global _manifest\n.type _manifest,@object\n"
+#if KUI_VC2_CE_VMU || KUI_SMASH_MENU_LOADER
+        ".set _manifest,_kui_native_boot_state\n.size _manifest,828\n"
+#else
+        ".set _manifest,_kui_native_boot_state\n.size _manifest,1020\n"
+#endif
+        ".global _kui_native_ocram_trace\n.type _kui_native_ocram_trace,@object\n"
+        ".set _kui_native_ocram_trace,_kui_native_boot_state+68\n"
+        ".size _kui_native_ocram_trace,148\n");
+#define RETAIL_MANIFEST (&kui_native_boot_state.map)
+#if KUI_VC2_CE_VMU || KUI_SMASH_MENU_LOADER
+_Static_assert(sizeof(struct kui_retail_manifest)==828u,"VC2 resident manifest alias size");
+#endif
+#define kui_native_ocram_trace (kui_native_boot_state.report.trace)
+#else
 static struct kui_retail_manifest manifest;
 #define RETAIL_MANIFEST (&manifest)
+#endif
 #endif
 #ifdef KUI_RETAIL_ASYNC
 /* The background reader keeps these between its interrupt vectors. */
 #include "retail_async.h"
+#if KUI_VC2_CE_VMU
+#include "kui/vc2_ce_vmu_handoff.h"
+#endif
 #if KUI_VMU_NATIVE_BACKGROUND
 _Static_assert(sizeof(kui_retail_async_region_type)==KUI_VMU_NATIVE_BACKGROUND_REGION_BYTES,
     "Native Background vector/state region geometry changed");
@@ -126,7 +250,11 @@ void kui_retail_toy_data_schedule_play(void) {
     toy_data_play_accepted=1u;
 }
 #endif
+#if KUI_NATIVE_GD_DMA_STREAM
+extern uint32_t kui_retail_original_menu;
+#else
 uint32_t kui_retail_original_menu;
+#endif
 #if KUI_NATIVE_SESSION_CONTROLS
 /* The return path starts a fresh KOS runtime, whose BIOS calls must not reach
  * a game-owned reader lease. Capture every firmware entry we replace. */
@@ -138,7 +266,11 @@ extern void kui_retail_gd_1000_hook(void);
 extern void kui_retail_gd_10f0_hook(void);
 /* Source: 0=BC supervisor vector, 1=C0 raw GD vector, 2/3=direct firmware
  * entries. Assembly publishes this only after acquiring the resident lock. */
+#if KUI_NATIVE_GD_DMA_STREAM
+extern volatile uint32_t kui_retail_hook_source, kui_retail_hook_sr;
+#else
 volatile uint32_t kui_retail_hook_source, kui_retail_hook_sr;
+#endif
 #if !defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC)
 /* Standard native entry captures these before replacing the owner's stack:
  * word 0 is its PR, word 1 its original SP. Never infer SP from our C frame. */
@@ -165,7 +297,11 @@ static int ram_alias(uint32_t address) {
     return area == 0x8c000000u || area == 0xac000000u;
 }
 #endif
+#if KUI_NATIVE_GD_DMA_STREAM
+extern volatile uint32_t kui_retail_hook_active, kui_retail_hook_fault;
+#else
 volatile uint32_t kui_retail_hook_active, kui_retail_hook_fault;
+#endif
 #if KUI_ARMADA_CE_AUDIO_OBSERVE
 #include "armada_ce_audio_observe.inc"
 #endif
@@ -202,6 +338,71 @@ static void purge(uint32_t address, uint32_t bytes) {
 static uint8_t *map_guest(void *unused, uint32_t address, uint32_t bytes,
                           int writing) {
     (void)unused;
+#if KUI_NATIVE_OCRAM_BOOTSTRAP
+    uint32_t why;
+    uint8_t *result=NULL;
+#endif
+#if KUI_NATIVE_GD_VRAM_DMA
+    /* Only a DMA-specific access may bypass CPU virtual-address policy.
+     * These uncached P2 windows must never take main-RAM cache operations. */
+    if(writing==KUI_RETAIL_MAP_DMA_VALIDATE || writing==KUI_RETAIL_MAP_DMA_WRITE) {
+        result=(uint8_t *)(uintptr_t)kui_retail_vram_dma_map(address,bytes,1u);
+        why=result?13u:14u;
+        goto ocram_mapping_done;
+    }
+#endif
+#if KUI_NATIVE_GD_MMU_BUFFERS
+    uint32_t area=address&0xff000000u;
+    if(service.cpu_mmu && area!=0x8c000000u && area!=0xac000000u) {
+        uint32_t end=address+bytes;
+        why=9u;
+        if(bytes && end>=address && (end<=0x80000000u ||
+           (address>=0xc0000000u && end<=0xe0000000u))) {
+            why=10u;
+            if(writing!=KUI_RETAIL_MAP_VALIDATE) {
+                why=8u;result=(uint8_t *)(uintptr_t)address;
+            }
+#if KUI_NATIVE_GD_PIO_STREAM
+            else if(service.command==KUI_RETAIL_GD_PIOREAD_STREAM ||
+                    (kui_native_ocram_trace.entry[4]==KUI_GD_REQUEST &&
+                     kui_native_ocram_trace.entry[1]==KUI_GD_PIOREAD)) {
+                /* A synchronous CPU copy runs only in this caller's MMU
+                 * context. Its raw virtual address must never become a
+                 * physical-DMA alias or be retained for an ISR writer. */
+                why=KUI_OC_MAP_CPU_VIRTUAL_PAYLOAD;
+                result=(uint8_t *)(uintptr_t)address;
+            }
+#endif
+        }
+        goto ocram_mapping_done;
+    }
+#endif
+#if KUI_NATIVE_OCRAM_BOOTSTRAP
+    if(kui_retail_ocram_address(address)) {
+        /* The native payload engine writes ordinary main RAM. This bridge
+         * is for CPU parameters/results, never a PIO/DMA read destination. */
+        why=2u;
+        if(writing==KUI_RETAIL_MAP_VALIDATE) goto ocram_mapping_done;
+        uint32_t mmucr=*(volatile const uint32_t *)(uintptr_t)0xff000010u;
+        uint32_t ccr=*(volatile const uint32_t *)(uintptr_t)0xff00001cu;
+        why=3u;
+        if(mmucr&1u) goto ocram_mapping_done;
+        why=4u;
+        if((ccr&0xa0u)!=0x20u) goto ocram_mapping_done;
+        why=5u;
+        if(!kui_retail_ocram_span(address,bytes,mmucr,ccr)) goto ocram_mapping_done;
+        why=1u;
+        result=(uint8_t *)(uintptr_t)address;
+ocram_mapping_done:
+        kui_native_ocram_trace.entry[14]=(uint32_t)(uintptr_t)result;
+        kui_native_ocram_trace.entry[15]=why;
+        return result;
+    }
+    why=7u;
+#define RETURN_BAD_MAP() goto ocram_mapping_done
+#else
+#define RETURN_BAD_MAP() return NULL
+#endif
 #ifdef KUI_RETAIL_CE
     /* Windows CE's virtual addresses (U0 or P3, with its MMU on) are used
      * as they are: the resident runs with SR.BL clear, so CE's own TLB-miss
@@ -209,28 +410,43 @@ static uint8_t *map_guest(void *unused, uint32_t address, uint32_t bytes,
     if(!ram_alias(address)) {
         uint32_t end = address + bytes;
         if(!(*(volatile const uint32_t *)(uintptr_t)0xff000010u & 1u) || end < address)
-            return NULL;
+            { RETURN_BAD_MAP(); }
         return end <= 0x80000000u || (address >= 0xc0000000u && end <= 0xe0000000u) ?
             (uint8_t *)(uintptr_t)address : NULL;
     }
 #endif
     if(address < KUI_RETAIL_IP_ADDRESS || address >= KUI_RETAIL_RAM_END ||
-       !bytes || bytes > KUI_RETAIL_RAM_END - address) return NULL;
+       !bytes || bytes > KUI_RETAIL_RAM_END - address) { RETURN_BAD_MAP(); }
     uint32_t end = address + bytes;
+#if KUI_VC2_CE_VMU
+    /* context starts NULL. Only the admitted high preparer marks it after
+     * the nested CE reservation is installed. Outer native reads may still
+     * overwrite the unowned staged helper. CE CPU virtual pointers take
+     * their separate branch above and retain their original meaning. */
+    if(unused && address<UINT32_C(0x8cfd0000) && end>KUI_VC2_VMU_RAMEND_P1)
+        { RETURN_BAD_MAP(); }
+#endif
 #if KUI_ARMADA_CE_EXCERPT
     /* CE's allocator never backs a virtual buffer with this pre-boot
      * reservation. Reject explicit RAM aliases before purge/copy too. */
-    if(!kui_armada_ce_excerpt_pool_destination_safe(address,bytes)) return NULL;
+    if(!kui_armada_ce_excerpt_pool_destination_safe(address,bytes)) { RETURN_BAD_MAP(); }
 #endif
 #if KUI_ARMADA_CE_MAPLE_HOOK
-    if(!kui_maple_reservation_destination_safe(address,bytes)) return NULL;
+    if(!kui_maple_reservation_destination_safe(address,bytes)) { RETURN_BAD_MAP(); }
 #endif
     if(address < KUI_RETAIL_HOOK_STACK && end > KUI_RETAIL_RESIDENT_ADDRESS)
-        return NULL;
+        { RETURN_BAD_MAP(); }
     /* Submission checks the entire destination without touching its cache.
      * EXEC purges only the chunk it is about to copy through P2. */
     if(writing != KUI_RETAIL_MAP_VALIDATE) purge(address, bytes);
+#if KUI_NATIVE_OCRAM_BOOTSTRAP
+    result=(uint8_t *)(uintptr_t)((address&0x1fffffffu)|0xa0000000u);
+    why=6u;
+    goto ocram_mapping_done;
+#else
     return (uint8_t *)(uintptr_t)((address & 0x1fffffffu) | 0xa0000000u);
+#endif
+#undef RETURN_BAD_MAP
 }
 #ifndef KUI_RETAIL_ASYNC
 #ifdef KUI_RETAIL_CE
@@ -316,6 +532,21 @@ static int read_sectors(void *unused, uint32_t lba, uint32_t count,
     return result == KUI_GAME_OK && card_result == KUI_LOADER_SD_OK ? 0 : -1;
 }
 #endif
+#if KUI_SMASH_NATIVE_MENU
+__asm__(".global __kui_smash_native_menu_resident\n.set __kui_smash_native_menu_resident,1\n");
+#if !KUI_NATIVE_VMU_ONLY || defined(KUI_RETAIL_ASYNC) || KUI_RETAIL_TRANSPORT != 1 || !KUI_RETAIL_LOW_RESIDENT
+#error "Smash native return raw reader requires the isolated synchronous SCI resident"
+#endif
+#include "smash_menu_return_raw.inc"
+void __attribute__((noreturn,noinline,externally_visible))
+kui_smash_menu_return_stop(uint32_t reason,uint32_t value) {
+    uint32_t values[2]={reason,value};
+    retail_display_restore(&display);
+    retail_display_line("SMASH RETURN");
+    retail_display_values("WHY VALUE",values,2u);
+    for(;;)__asm__ volatile("nop");
+}
+#endif
 #if defined(KUI_RETAIL_CE) && !defined(KUI_RETAIL_ASYNC)
 /* Windows CE's DMA stream pieces: part of the user data of a run of
  * sectors, under the same card ownership rules as read_sectors. */
@@ -363,18 +594,34 @@ static void redirect_entry(uint32_t address,void (*target)(void)) {
     code[0]=0xd001u; code[1]=0x402bu; code[2]=0x0009u; code[3]=0x0009u;
     *(volatile uint32_t *)(code+4)=(uint32_t)(uintptr_t)target;
 }
+#if KUI_SMASH_MENU_LOADER
+void __attribute__((noreturn,noinline,externally_visible))
+kui_smash_menu_loader_stop(uint32_t reason,uint32_t value) {
+    uint32_t values[2]={reason,value};
+    retail_display_restore(&display);
+    retail_display_line("SMASH MENU");
+    retail_display_values("WHY VALUE",values,2u);
+    for(;;)__asm__ volatile("nop");
+}
+#endif
 static void install_hook(void) {
-#if KUI_NATIVE_SESSION_CONTROLS
+#if KUI_NATIVE_SESSION_CONTROLS || KUI_SMASH_MENU_LOADER
     /* Firmware initialization may have dirty P1 lines. Publish them before
      * taking the immutable P2 snapshot consumed by the returning worker. */
     purge(0x8c0000bcu,40u);purge(0x8c001000u,12u);purge(0x8c0010f0u,12u);
-    native_session_firmware[0]=*(volatile uint32_t *)(uintptr_t)0xac0000bcu;
-    native_session_firmware[1]=*(volatile uint32_t *)(uintptr_t)0xac0000c0u;
-    native_session_firmware[2]=*(volatile uint32_t *)(uintptr_t)0xac0000e0u;
+#if KUI_SMASH_MENU_LOADER
+#define captured_firmware kui_smash_menu_loader_firmware
+#else
+#define captured_firmware native_session_firmware
+#endif
+    captured_firmware[0]=*(volatile uint32_t *)(uintptr_t)0xac0000bcu;
+    captured_firmware[1]=*(volatile uint32_t *)(uintptr_t)0xac0000c0u;
+    captured_firmware[2]=*(volatile uint32_t *)(uintptr_t)0xac0000e0u;
     for(unsigned i=0;i<3u;++i) {
-        native_session_firmware[i+3u]=*(volatile uint32_t *)(uintptr_t)(0xac001000u+i*4u);
-        native_session_firmware[i+6u]=*(volatile uint32_t *)(uintptr_t)(0xac0010f0u+i*4u);
+        captured_firmware[i+3u]=*(volatile uint32_t *)(uintptr_t)(0xac001000u+i*4u);
+        captured_firmware[i+6u]=*(volatile uint32_t *)(uintptr_t)(0xac0010f0u+i*4u);
     }
+#undef captured_firmware
 #endif
     /* Publish adjacent firmware vector writes before touching the shared
      * cache line, then install through P2 with no stale P1 alias left over. */
@@ -555,7 +802,27 @@ static void __attribute__((noinline)) ram_map_report(void) {
 /* The separate VMU reader keeps compact terminal fields in its unchanged
  * low reservation; the worker owns the detailed VMU report. No counters or
  * labels on this terminal-only path participate in game read scheduling. */
-static void __attribute__((noinline)) native_reader_report(const char *label) {
+#if KUI_NATIVE_OCRAM_BOOTSTRAP && !KUI_VC2_VMU_WATCH
+#if KUI_VC2_VMU_LATE
+#include "vc2_ce_vmu_late_report.inc"
+#else
+#include "native_ocram_diagnostic.inc"
+#endif
+#endif
+#if KUI_VC2_VMU_WATCH
+#include "vc2_ce_vmu_watch_report.inc"
+#endif
+static void __attribute__((noinline)) native_reader_report(const char *label
+#if KUI_NATIVE_OCRAM_BOOTSTRAP
+    ,uint32_t caller,uint32_t caller_sp
+#endif
+    ) {
+#if KUI_VC2_VMU_WATCH
+    (void)caller;(void)caller_sp;
+    watch_no_trap(label);
+#elif KUI_NATIVE_OCRAM_BOOTSTRAP
+    native_ocram_diagnostic_report(label,caller,caller_sp);
+#else
     retail_display_restore(&display);
     retail_display_line(label);
     retail_display_values("FN CMD",&service.diag.last_function,2u);
@@ -568,6 +835,7 @@ static void __attribute__((noinline)) native_reader_report(const char *label) {
 #if KUI_NATIVE_RAM_MAP
     ram_map_report();
 #endif
+#endif
 }
 static void report_fault(uint32_t function) {
     (void)function;
@@ -576,6 +844,9 @@ static void report_fault(uint32_t function) {
         "GD STOP"
 #else
         "READER STOP"
+#endif
+#if KUI_NATIVE_OCRAM_BOOTSTRAP
+        ,0u,0u
 #endif
     );
     for(;;) __asm__ volatile("nop");
@@ -674,6 +945,9 @@ static void report_fault(const char *reason, uint32_t function) {
  * original two-argument function and call ABI, including their stack budget. */
 #define report_fault(reason, function, current_param) report_fault((reason), (function))
 #endif
+#if KUI_NATIVE_GD_DMA_STREAM
+#include "native_ce_dma_events.inc"
+#endif
 #if KUI_RETAIL_RETURN_TRACE == 2
 /* Terminal CPU context can be stale; retain it without asserting it caused
  * the return. These reads neither acknowledge nor change exception state. */
@@ -764,7 +1038,7 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack
 #endif
                            ) {
 #if !KUI_RETAIL_RETURN_TRACE
-    (void)command; /* Assembly reaches this only for menu return command 1. */
+    (void)command; /* Terminal menu return, plus reset3 in the late VC2 test. */
     (void)caller; (void)stack;
 #endif
 #if KUI_VMU_NATIVE_BACKGROUND || KUI_NATIVE_STANDALONE_READER
@@ -776,10 +1050,18 @@ void kui_retail_menu_return(uint32_t command,uint32_t caller,uint32_t stack
 #else
         "GAME RETURN"
 #endif
+#if KUI_NATIVE_OCRAM_BOOTSTRAP
+        ,caller,stack
+#endif
     );
+#if KUI_NATIVE_STANDALONE_FOREGROUND
+    /* The opt-in control keeps a terminal return visible for diagnosis. */
+    for(;;) __asm__ volatile("nop");
+#else
     retail_display_pause(900u);
     ((void (*)(void))(uintptr_t)0xa0000000u)();
     for(;;) __asm__ volatile("nop");
+#endif
 #elif KUI_RETAIL_OBSERVE
     retail_display_restore(&display);
     observe_report();
@@ -988,6 +1270,11 @@ armada_return_pages:
 #endif
 #endif
 }
+#if KUI_NATIVE_GD_DMA_STREAM
+/* Cold adoption completes before the first SCI receive. Its instructions
+ * may occupy receive-only storage until that one-way lifetime transition. */
+__attribute__((section(".native_dma_cold_init"),noinline))
+#endif
 int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
     const struct kui_retail_storage *prepared_card, uint32_t original_gd_vector,
     const struct retail_display_state *saved_display) {
@@ -1020,7 +1307,16 @@ int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
     if(kui_retail_zso_manifest_validate(compressed)!=KUI_GAME_OK)return KUI_RETAIL_RESIDENT_MAP;
     zso_manifest=*compressed;
 #else
-    manifest = *prepared;
+    *RETAIL_MANIFEST = *prepared;
+#if KUI_NATIVE_GD_MMU_BUFFERS
+#if KUI_NATIVE_GD_DMA_STREAM
+    memset((void *)&kui_native_ocram_trace,0,
+        offsetof(struct kui_retail_manifest,slots)-68u);
+#else
+    memset((void *)&kui_native_ocram_trace,0,sizeof(kui_native_ocram_trace));
+#endif
+    __asm__ volatile("":: :"memory");
+#endif
 #endif
     if(kui_retail_storage_adopt(&card, prepared_card) != KUI_LOADER_SD_OK ||
        kui_retail_storage_blocks(&card) < RETAIL_MANIFEST->card_sectors ||
@@ -1029,7 +1325,15 @@ int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
     /* _start cleared all resident BSS, including image/cache/stream/counters. */
 #ifdef KUI_RETAIL_ASYNC
     kui_retail_async_init(RETAIL_MANIFEST);
+#if KUI_VC2_CE_VMU
+    /* init_prepared copies these callbacks by value into the live service.
+     * This source table is cold-only, like the adoption code; reclaim it
+     * with the receive buffers before the first SCI transaction. */
+    static const struct kui_gd_ops ops
+        __attribute__((section(".native_dma_cold_data")))={NULL,map_guest,check_sectors,NULL};
+#else
     const struct kui_gd_ops ops = {NULL, map_guest, check_sectors, NULL};
+#endif
 #else
 #if KUI_RETAIL_ZSO
     image.map=&zso_manifest;
@@ -1063,8 +1367,14 @@ int kui_retail_resident_init(const struct kui_retail_manifest *prepared,
 #if !(defined(KUI_RETAIL_TOY_PILOT) && KUI_RETAIL_TOY_PILOT && KUI_TOY_PILOT_PRIVATE_P2)
     /* The game's first instructions may reinitialize caches. Publish P1
      * manifest/card/guard state before that handoff. */
+#if KUI_NATIVE_GD_DMA_STREAM
+    extern unsigned char __native_dma_cold_begin[] __asm__("__native_dma_cold_begin");
+    purge((uint32_t)(uintptr_t)__native_dma_cold_begin,
+          (uint32_t)(__retail_resident_bss_end-__native_dma_cold_begin));
+#else
     purge((uint32_t)(uintptr_t)__retail_resident_bss_begin,
           (uint32_t)(__retail_resident_bss_end - __retail_resident_bss_begin));
+#endif
     purge(KUI_RETAIL_HOOK_STACK_BOTTOM, 16);
 #endif
     install_hook();
@@ -1280,6 +1590,9 @@ static int ce_record(uint32_t source, uint32_t r4, uint32_t r5, uint32_t r6, uin
 }
 #endif
 #ifdef KUI_RETAIL_ASYNC
+#if KUI_VC2_CE_VMU && !KUI_VC2_VMU_WATCH
+#include "vc2_ce_vmu_gate.inc"
+#endif
 int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
                                     uint32_t r6, uint32_t r7) {
     /* Entry contract as below. The reader delivers what has arrived before
@@ -1294,6 +1607,19 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
 #if KUI_NATIVE_LOADER_TIMELINE && !KUI_NATIVE_STANDALONE_READER
     kui_retail_async_trace(0u,r7);
 #endif
+#if KUI_NATIVE_GD_MMU_BUFFERS
+    /* The assembly capture precedes C and records the live AT bit. This is
+     * CPU call context; DMA payloads retain their separate physical path. */
+    service.cpu_mmu=kui_native_ocram_trace.entry[11]&1u;
+#endif
+#if KUI_NATIVE_GD_DMA_STREAM
+    if(r7==KUI_GD_REQUEST && (r4==KUI_RETAIL_GD_DMAREAD_STREAM
+#if KUI_NATIVE_GD_PIO_STREAM
+       || r4==KUI_RETAIL_GD_PIOREAD_STREAM
+#endif
+       ))
+        native_ce_dma_prepare(r7);
+#endif
     kui_retail_async_call(r7);
 #if KUI_WINCE_CDDA_WWP && KUI_ARMADA_CE_STREAM && KUI_ARMADA_CE_AUDIO_OBSERVE
     uint32_t drive_status=service.drive_status;
@@ -1301,6 +1627,12 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
         uint32_t status=wwp_ce_stream_drive_status();
         if(status) service.drive_status=status;
     }
+#endif
+#if KUI_VC2_VMU_WATCH
+    if(r7==KUI_GD_ABORT && kui_native_ocram_trace.entry[5]==KUI_VC2_VMU_ABORT_PR)
+        report_fault("TRANSITION REACHED",r7,r5);
+#elif KUI_VC2_CE_VMU
+    if(vc2_ce_vmu_gate(r4,r7))report_fault("VC2 VMU PREPARATION REFUSED",r7,r5);
 #endif
     int32_t result = kui_retail_gd_dispatch(&service, r4, r5, 0, r7);
 #if KUI_WINCE_CDDA_WWP && KUI_ARMADA_CE_STREAM && KUI_ARMADA_CE_AUDIO_OBSERVE
@@ -1310,6 +1642,19 @@ int32_t kui_retail_resident_dispatch(uint32_t r4, uint32_t r5,
     armada_ce_audio_record(r7, r4, result);
 #endif
     kui_retail_async_after(r7, result);
+#if KUI_NATIVE_GD_DMA_STREAM
+    /* Native stream pieces finish within FN6, so every completion is drained
+     * here before returning to CE or allowing a later CHECK to release it. */
+    native_ce_dma_events(r7);
+#endif
+#if KUI_NATIVE_GD_MMU_BUFFERS
+    if(result<0 && service.cpu_mmu && kui_native_ocram_trace.entry[15]>=9u
+#if KUI_NATIVE_GD_PIO_STREAM
+       && kui_native_ocram_trace.entry[15]!=KUI_OC_MAP_CPU_VIRTUAL_PAYLOAD
+#endif
+      )
+        report_fault("CPU MAP REFUSED",r7,r5);
+#endif
 #if KUI_NATIVE_LOADER_TIMELINE && !KUI_NATIVE_STANDALONE_READER
     kui_retail_async_trace(1u,r7);
 #endif

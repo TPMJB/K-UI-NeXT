@@ -273,8 +273,40 @@ static void evolution(uint32_t alias) {
         for(unsigned i=0;i<64u;i++) if(allocated[i].units) compare(allocated[i].at+32u,NULL,0u,false);
     }
 }
+static void direct_identity(void) {
+    static const uint32_t aliases[]={0u,UINT32_C(0x80000000),UINT32_C(0xa0000000)};
+    static const unsigned nodes[]={0u,1u,8u,64u};
+    for(unsigned a=0u;a<3u;a++) for(unsigned n=0u;n<4u;n++) {
+        fragmented(nodes[n],aliases[a]);
+        struct kui_vmu_native_heap *h=&lease.owner;
+        h->family=KUI_VMU_NATIVE_HEAP_DIRECT32;h->layout=KUI_VMU_NATIVE_HEAP_DIRECT;
+        h->allocate=h->initializer+0xaeu;h->release=h->initializer+0x160u;
+        h->dispatch_cell=h->dispatch_table=0u;
+        put(h->initializer+0x14cu,h->begin_cell);put(h->initializer+0x150u,h->begin_copy_cell);
+        put(h->initializer+0x154u,h->bytes_cell);
+        prepare(NULL,0u);compare(candidate,NULL,0u,true);compare(0u,NULL,0u,true);
+        CHECK(plan.identity[3].address==h->initializer+0x14cu && plan.identity[3].value==h->begin_cell);
+        CHECK(plan.identity[4].address==h->initializer+0x150u && plan.identity[4].value==h->begin_copy_cell);
+        CHECK(plan.identity[5].address==h->initializer+0x154u && plan.identity[5].value==h->bytes_cell);
+        for(unsigned i=0u;i<8u;i++) {
+            CHECK(plan.identity[i].address && !(plan.identity[i].address&3u));
+            uint32_t value=plan.identity[i].value;
+            for(unsigned bit=0u;bit<32u;bit++) {
+                put(plan.identity[i].address,value^(UINT32_C(1)<<bit));
+                compare(candidate,NULL,0u,false);compare(0u,NULL,0u,false);
+                reads=trace_count=0u;CHECK(!prepared(candidate));
+            }
+            put(plan.identity[i].address,value);
+        }
+        /* Both installer entry patches leave the three immutable control
+         * witnesses intact; prepared admission never reads a missing table. */
+        for(unsigned i=0u;i<3u;i++)put(h->initializer+4u*i,UINT32_C(0x12345678));
+        for(unsigned i=0u;i<5u;i++)put(h->release+4u*i,UINT32_C(0x87654321));
+        compare(candidate,NULL,0u,true);compare(0u,NULL,0u,true);
+    }
+}
 int main(void) {
-    valid_lists();malformed_lists();intervals();preparation_errors();identity_cases();
+    valid_lists();malformed_lists();intervals();preparation_errors();identity_cases();direct_identity();
     evolution(0u);evolution(UINT32_C(0x80000000));evolution(UINT32_C(0xa0000000));
     printf("Native prepared lifetime: %u checks; exact full-proof differential, all read faults, private plans, clipped unions and allocator evolution\n",checks);
     return 0;

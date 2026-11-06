@@ -171,7 +171,7 @@ static void transport_model(const uint8_t *image,size_t bytes,const struct kui_v
     if(uniform) {uint32_t pc=l->initializer+108u;constructor=sh_long(((pc+4u)&~3u)+4u*(sh_word(pc)&255u));}
     bool tail=uniform && (sh_word(l->initializer_call)&0xf0ffu)==0x402bu;
     /* The early constructor's slot loop ends four bytes later. */
-    uint32_t filled=d->family==KUI_VMU_NATIVE_FAMILY_EARLY_V1?90u:86u;
+    uint32_t filled=kui_vmu_native_early_server(d->family)?90u:86u;
     struct sh_model m={0};m.pc=l->initializer_call-(uniform?(tail?6u:8u):12u);m.sr=0x600000e0u;m.r[15]=0x0c900000u;m.r[10]=0x12345678u;
     for(unsigned step=0;step<10000u;step++) {
         if(physical(m.pc)==(uniform?physical(constructor)+filled:physical(l->initializer)+238u)) {
@@ -306,7 +306,7 @@ static void uniform_image_tests(const char *path) {
     uint32_t constructor=sh_long(((pc+4u)&~3u)+4u*(code&255u));
     /* The early wrapper is eight bytes shorter: its argument transport and
      * initializer call, and its helper call, sit eight bytes earlier. */
-    const bool early=d.family==KUI_VMU_NATIVE_FAMILY_EARLY_V1;
+    const bool early=kui_vmu_native_early_server(d.family);
     const uint32_t wrapper_tail=early?8u:0u;
     const uint32_t locations[]={d.initializer+22u,d.initializer+38u,d.initializer+104u,
         constructor+34u,constructor+48u,constructor+80u,constructor+82u,

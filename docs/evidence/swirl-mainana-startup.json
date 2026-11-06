@@ -1,0 +1,133 @@
+{
+  "schema": "kui.swirl.original-mainana-pre-nk.v1",
+  "status": "PASS",
+  "input_sha256": {
+    "SAMPLE.BIN": "82bb1160814548f4656b273353fd6168a691fb5f215b77377860ff9fd2156c8a",
+    "0WINCEOS.BIN": "a19080f2e243c04e01a3a473c7a3caa36fb85a5a8fbb2163c8f7a1b2c8ed5ea8"
+  },
+  "embedded_loader": {
+    "offset": "0x2509c",
+    "bytes": 15012,
+    "address": "0x8ce08300",
+    "sha256": "95a9df164794f4fe6902d18d21bfe0d22ff8b49518cfac07a682c7b1cfb9e58c"
+  },
+  "kernel": {
+    "fad": 493127,
+    "sectors": 893,
+    "bytes": 1828864,
+    "prefix_crc32": "7e29bc00",
+    "body_bytes": 1826816,
+    "body_crc32": "14a27ac2",
+    "destination": "0x0c010000"
+  },
+  "gd_calls": [
+    {
+      "function": 1,
+      "pr": "0x8ce09476",
+      "result": 0
+    },
+    {
+      "function": 0,
+      "pr": "0x8ce09550",
+      "result": 1,
+      "request": [
+        493127,
+        893
+      ]
+    },
+    {
+      "function": 2,
+      "pr": "0x8ce0956a",
+      "result": 0
+    },
+    {
+      "function": 7,
+      "pr": "0x8ce093b6",
+      "result": 0
+    },
+    {
+      "function": 6,
+      "pr": "0x8ce0940a",
+      "result": 0
+    },
+    {
+      "function": 7,
+      "pr": "0x8ce0941a",
+      "result": 0
+    },
+    {
+      "function": 7,
+      "pr": "0x8ce093b6",
+      "result": 0
+    },
+    {
+      "function": 6,
+      "pr": "0x8ce0940a",
+      "result": 0
+    },
+    {
+      "function": 7,
+      "pr": "0x8ce0941a",
+      "result": 0
+    },
+    {
+      "function": 8,
+      "pr": "0x8ce09362",
+      "admission_snapshot": [
+        1,
+        28,
+        493127,
+        1828864,
+        1826816,
+        2048,
+        0,
+        3,
+        0,
+        0,
+        0,
+        1,
+        201392128,
+        493870,
+        2048,
+        0
+      ]
+    }
+  ],
+  "transfer_pieces": [
+    {
+      "destination": "0x8ced4000",
+      "bytes": 2048,
+      "source_offset": 0,
+      "sha256": "443f6a8212d4321b5d318b1ab8053aa50e58ce1b55fccc2f2b3ecbdb4d6f2e99"
+    },
+    {
+      "destination": "0xc010000",
+      "bytes": 1826816,
+      "source_offset": 2048,
+      "sha256": "d0157583185d230bd64c4056c3bc93b6613623eb96fbc1536c3c5453b3121bea"
+    }
+  ],
+  "original_loader_instructions": 228951,
+  "final": {
+    "pc": "0x8c004000",
+    "pr": "0x8ce09362",
+    "sp": "0x8cfeef8c",
+    "sr": "0x700000f1"
+  },
+  "source_sha256": {
+    "tests/test_swirl_mainana_startup.py": "dadb3c3a278eb790d50222e65e07ae1f7fa802a4900c7b35422550f6b5139efe",
+    "src/core/retail_gd.c": "ac9cc69206e38ba9556ce46b758a9c1ced7172e11c346215ca5ae87f863b242a",
+    "tests/test_native_standalone_foreground_gin.py": "3a1d323dea660b2bfc711009c6b70b8509c9140181f0c7686ba7750c7eacc041",
+    "tests/test_vmu_native_sdk_poll_execution.py": "8b3b8a275e3c3f308f30c2164732190c0b9346c7f1561799618d62c395e79f74",
+    "tests/test_vmu_native_heap_execution.py": "59b042148180e4df455aa7248f4f5b61ff28fe211d8489eca836a02809ae8dee",
+    "include/kui/vc2_ce_vmu_handoff.h": "1735c23120c2d6a78ee35f356ff8bad61b5845fd8472703f98f84d552c4624db"
+  },
+  "compiled_swirl_profile_matches_original_tuple": true,
+  "catalog_matches_original_kernel_extent": true,
+  "limits": [
+    "Original supplied scalar MAINANA instructions and the production GD core execute.",
+    "Entry state, CPU RAM mapper, firmware gateway and synchronous exact-file data arrival are authored boundaries.",
+    "Stops on the original final FN8 before the helper installer and before any NK instruction.",
+    "Cache operations are recorded without a cache model. No SCI/DMA/interrupt/scheduler timing or console compatibility is certified."
+  ]
+}

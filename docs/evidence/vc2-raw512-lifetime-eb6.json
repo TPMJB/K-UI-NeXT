@@ -1,0 +1,503 @@
+{
+  "schema": "kui.vc2.ce-return.raw512-source-writer-audit.v1",
+  "status": "BOUNDED_AUDIT_WRITER_UNIDENTIFIED",
+  "repository_head": "eb6b4568969eacdb7166f23c5a83be94b3b84e8e",
+  "console_observation": {
+    "build": "eb6b4568969e",
+    "reason": "0xce010004",
+    "detail": "0x00000800",
+    "interpretation": "Only runtime predicate bit11, the raw512 CRC, fails; the other12 predicates pass. This identifies a changed execution island, not the actor that changed it."
+  },
+  "kernel_identity": {
+    "path": "../qualification-originals/VIRTCOP2/0WINCEOS.BIN",
+    "bytes": 1841152,
+    "sha256": "b728e8eaef03bd7cc5acbe3dc3363ec9fafcaca90916cf21781d2e72ff99b3bc"
+  },
+  "reviewed_contracts": [
+    {
+      "module": "wsegacd.dll",
+      "name": "constructor_bootblock_read",
+      "rva": 5056,
+      "bytes": 124,
+      "nominal_va": 30348224,
+      "rom_storage_address": 2349515712,
+      "sha256": "847e3451c964347db33f3a5b8d48cb5331bce0b9dba52264b12a3cec3ec4bb7b",
+      "crc32": "1ee35c4f",
+      "description": "At RVA0x13fc, source R5=0x8c008100, destination R4=device+36 and length R6=256; invokes memcpy through RVA0x5768. No store to the source block."
+    },
+    {
+      "module": "wsegacd.dll",
+      "name": "reinitialization_bootblock_read",
+      "rva": 7838,
+      "bytes": 20,
+      "nominal_va": 30351006,
+      "rom_storage_address": 2349518494,
+      "sha256": "d98a466c91dc1466ad35c51066cb5bbde309c87c0221dfaec516e0f9304863f3",
+      "crc32": "bc5aa283",
+      "description": "At RVA0x1ea4, source R5=0x8c008100, destination R4=device+36 and length R6=256; invokes memcpy through RVA0x5768. No store to the source block."
+    },
+    {
+      "module": "wsegacd.dll",
+      "name": "memcpy_import_thunk",
+      "rva": 22376,
+      "bytes": 12,
+      "nominal_va": 30365544,
+      "rom_storage_address": 2349533032,
+      "sha256": "f5ee7cc24adadb2e2cb17ca75fffa5b62ee587ab52faedddadc492112c8bd350",
+      "crc32": "49c5e61c",
+      "description": "Tail-jumps through COREDLL import IAT0x600c, ordinal1044 (memcpy)."
+    },
+    {
+      "module": "nk.exe",
+      "name": "oem_debug_entry_assignment",
+      "rva": 117226,
+      "bytes": 72,
+      "nominal_va": 2348993002,
+      "rom_storage_address": 2348993002,
+      "sha256": "c2a1dc90a6a23933c63b8350c9063d564b94f43cb5574ee520b85d60847007bd",
+      "crc32": "756b3acf",
+      "description": "Stores0xac008000 as an OEM transport entry pointer in global0x8c1d60c0; reads its first word and compares0x000b003b. Does not store through that low pointer."
+    },
+    {
+      "module": "nk.exe",
+      "name": "oem_debug_transport_call_1",
+      "rva": 118448,
+      "bytes": 132,
+      "nominal_va": 2348994224,
+      "rom_storage_address": 2348994224,
+      "sha256": "f147cae20288e73a2b26be0c974e3c0c8c1cd5e00378fd578bb43a2db7f9158e",
+      "crc32": "64455836",
+      "description": "Calls the low OEM transport through0x8c1d60c0 using stack/OEM buffers; the reviewed caller does not construct an0x8100 destination."
+    },
+    {
+      "module": "nk.exe",
+      "name": "oem_debug_transport_call_2",
+      "rva": 119646,
+      "bytes": 110,
+      "nominal_va": 2348995422,
+      "rom_storage_address": 2348995422,
+      "sha256": "1b43c984119bd5695e423258a5fa847bb5e953c7e4f9be87fee3c0b90a361ba6",
+      "crc32": "6a33c93d",
+      "description": "Calls the same transport with caller-derived buffer R6; no fixed0x8100 destination. General runtime caller addresses are not ruled out."
+    },
+    {
+      "module": "nk.exe",
+      "name": "oem_debug_transport_call_3",
+      "rva": 120008,
+      "bytes": 116,
+      "nominal_va": 2348995784,
+      "rom_storage_address": 2348995784,
+      "sha256": "4685b3643181336524f50e14481e8801e6022ff1451e2385d727c93552439855",
+      "crc32": "e1f91f8f",
+      "description": "Calls the same transport with caller-derived buffer R6; no fixed0x8100 destination. General runtime caller addresses are not ruled out."
+    },
+    {
+      "module": "nk.exe",
+      "name": "oem_debug_transport_call_4",
+      "rva": 120272,
+      "bytes": 88,
+      "nominal_va": 2348996048,
+      "rom_storage_address": 2348996048,
+      "sha256": "a0027c81cef0bbd7132dba58ea6e5f840dbbad3d8b32beb1ca66bc8570e41657",
+      "crc32": "c3b44268",
+      "description": "Calls the same transport with fixed OEM input buffer0x8c1dfbc0 and caller control state; no fixed0x8100 destination."
+    }
+  ],
+  "low_pointer_word_census": {
+    "method": "Read every16-bit-aligned32-bit word in all file-backed uncompressed kernel sections and select physical-masked values in0x0c008000..0x0c008300.",
+    "hits": [
+      {
+        "module": "nk.exe",
+        "section": 0,
+        "rva": "0x1ca38",
+        "value": "0xac008000"
+      },
+      {
+        "module": "sysstart.exe",
+        "section": 0,
+        "rva": "0x16a6",
+        "value": "0x2c008000"
+      },
+      {
+        "module": "wsegacd.dll",
+        "section": 0,
+        "rva": "0x134c",
+        "value": "0x8c0080fc"
+      },
+      {
+        "module": "wsegacd.dll",
+        "section": 0,
+        "rva": "0x1350",
+        "value": "0x8c0080f0"
+      },
+      {
+        "module": "wsegacd.dll",
+        "section": 0,
+        "rva": "0x13b0",
+        "value": "0x8c0080fc"
+      },
+      {
+        "module": "wsegacd.dll",
+        "section": 0,
+        "rva": "0x13b4",
+        "value": "0x8c0080fd"
+      },
+      {
+        "module": "wsegacd.dll",
+        "section": 0,
+        "rva": "0x142c",
+        "value": "0x8c008100"
+      },
+      {
+        "module": "wsegacd.dll",
+        "section": 0,
+        "rva": "0x1f00",
+        "value": "0x8c008100"
+      },
+      {
+        "module": "mapledev.dll",
+        "section": 0,
+        "rva": "0x67d8",
+        "value": "0xec0081fc"
+      }
+    ],
+    "non_pointer_hits": [
+      "sysstart RVA0x16a6 straddles two unrelated literal words (0x80000000 and0x00702c00).",
+      "mapledev RVA0x67d8 is two SH instructions, not an address literal."
+    ],
+    "limit": "This finite literal census neither discovers all computed destinations nor proves the absence of runtime writers."
+  },
+  "game_audit": {
+    "path": "../vc2-raw512-game-writer-audit.json",
+    "sha256": "fb9c53a3d245fa1a7b750707f7a4fd1d83f08cc22b585657599a52dfe84b44b3",
+    "metadata": {
+      "schema": "kui.vc2.raw512.game-writer-audit.v1",
+      "status": "BOUNDED_NO_WRITER_IDENTIFIED",
+      "target_physical_interval": [
+        "0x0c008100",
+        "0x0c008300"
+      ],
+      "target_aliases": [
+        [
+          "0x8c008100",
+          "0x8c008300"
+        ],
+        [
+          "0xac008100",
+          "0xac008300"
+        ]
+      ],
+      "hardware_observation": "EB6 console return reports CE010004/detail00000800: the raw512 CRC predicate alone fails; this audit does not identify who changed the bytes.",
+      "available_runtime_root": "../original-evidence/SmashPack-VC2-runtime",
+      "available_runtime": {
+        "1ST_READ.BIN": {
+          "bytes": 212324,
+          "sha256": "3a311b189a4870ccbefc4fcd306e2d38e5ae810ae5edd225af6b9aa6d5df5f10"
+        },
+        "GINSU.INI": {
+          "bytes": 345,
+          "sha256": "57cb94a21367ee2c685ff81113957ceee70014941ddb0622172628929f128c1d"
+        },
+        "IP.BIN": {
+          "bytes": 32768,
+          "sha256": "33c9cf893ead0b7bd001f85d4ee1197c35ef7eeef4093fed3a5877eebcb2246e"
+        },
+        "VC2/PROJECTCE.EXE": {
+          "bytes": 747068,
+          "sha256": "b013281919ef2ac24472b962247cff91e534baf215cc4ea687dbe1890d0c9a9f"
+        },
+        "VIRTCOP2/0WINCEOS.BIN": {
+          "bytes": 1841152,
+          "sha256": "b728e8eaef03bd7cc5acbe3dc3363ec9fafcaca90916cf21781d2e72ff99b3bc"
+        },
+        "VIRTCOP2/MAIGO.BIN": {
+          "bytes": 14856,
+          "sha256": "55d89bfb608806138f5c675ba2187a99a0b4e2f11f7f65048c3f406b8993826a"
+        },
+        "VIRTCOP2/SAMPLE.BIN": {
+          "bytes": 204576,
+          "sha256": "82bb1160814548f4656b273353fd6168a691fb5f215b77377860ff9fd2156c8a"
+        },
+        "directory-catalog.json": {
+          "bytes": 55460,
+          "sha256": "fda62b750f11692943ead76ad7343447c53aefec2926ac6be1a198ed484ec827"
+        },
+        "disc.gdi": {
+          "bytes": 1226,
+          "sha256": "9eb691f0331377c7e16597b2d60112e4b2582947661682a62f2d73db741f999e"
+        },
+        "startup-info.json": {
+          "bytes": 18005,
+          "sha256": "129a10edb06f919d787a6f05642aeb303daaa65222ea0ceab146530cb1a31bda"
+        }
+      },
+      "game_pe": {
+        "path": "VC2/PROJECTCE.EXE",
+        "bytes": 747068,
+        "sha256": "b013281919ef2ac24472b962247cff91e534baf215cc4ea687dbe1890d0c9a9f",
+        "image_base": "0x10000",
+        "entry_rva": "0x67584",
+        "sections": [
+          {
+            "name": ".text",
+            "rva": 8192,
+            "virtual_bytes": 415514,
+            "raw_bytes": 415744,
+            "raw_offset": 1024,
+            "characteristics": 1610612768
+          },
+          {
+            "name": "MMATRIX",
+            "rva": 425984,
+            "virtual_bytes": 2336,
+            "raw_bytes": 2560,
+            "raw_offset": 416768,
+            "characteristics": 1610612768
+          },
+          {
+            "name": ".rdata",
+            "rva": 434176,
+            "virtual_bytes": 13512,
+            "raw_bytes": 13824,
+            "raw_offset": 419328,
+            "characteristics": 1073741888
+          },
+          {
+            "name": ".data",
+            "rva": 450560,
+            "virtual_bytes": 8686709,
+            "raw_bytes": 302080,
+            "raw_offset": 433152,
+            "characteristics": 3221225536
+          },
+          {
+            "name": ".pdata",
+            "rva": 9142272,
+            "virtual_bytes": 11512,
+            "raw_bytes": 11776,
+            "raw_offset": 735232,
+            "characteristics": 1073741888
+          }
+        ]
+      },
+      "method": "Bounded PE/ROM tables and exact PC-relative32-bit load resolution in PROJECTCE .text, plus manual source-window review. PC-relative reference counts are not an exhaustive indirect-call or generated-address proof.",
+      "memcpy": {
+        "import_dll": "COREDLL.dll",
+        "ordinal": 1044,
+        "iat_nominal_va": "0x0007e03c",
+        "thunk_rva": "0x00066f58",
+        "nominal_thunk_va": "0x00076f58",
+        "pc_relative_reference_count": 17,
+        "reference_module_rvas": [
+          "0x0000e604",
+          "0x00010fa0",
+          "0x00010fb6",
+          "0x00010fce",
+          "0x00010fe4",
+          "0x00015cb4",
+          "0x0001998c",
+          "0x0001999c",
+          "0x00019ba4",
+          "0x0002ddf8",
+          "0x0004943e",
+          "0x0004944a",
+          "0x00049456",
+          "0x00049462",
+          "0x0004946e",
+          "0x000494f0",
+          "0x00060cb2"
+        ],
+        "destination_findings": "Audited fixed destinations include ordinary game user VAs0x000c7af0,0x00830800,0x00821c80..0x00821d80; other inspected destinations derive from stack/caller/object pointers. No inspected call establishes a destination in the raw512 island."
+      },
+      "memset": {
+        "import_dll": "COREDLL.dll",
+        "ordinal": 1047,
+        "iat_nominal_va": "0x0007e010",
+        "thunk_rva": "0x00066ed4",
+        "nominal_thunk_va": "0x00076ed4",
+        "pc_relative_reference_count": 42,
+        "reference_module_rvas": [
+          "0x00006bbe",
+          "0x0000ded4",
+          "0x00011078",
+          "0x0001108a",
+          "0x00014f64",
+          "0x000152ec",
+          "0x000153d4",
+          "0x0001552c",
+          "0x00015690",
+          "0x0001578a",
+          "0x00015880",
+          "0x00015974",
+          "0x00015a3e",
+          "0x00016d12",
+          "0x00016dc8",
+          "0x00019408",
+          "0x000198c6",
+          "0x00019960",
+          "0x00019c86",
+          "0x00019fe4",
+          "0x0001e3f8",
+          "0x0001e7b6",
+          "0x0001e902",
+          "0x0001e980",
+          "0x0001eb14",
+          "0x0001ef50",
+          "0x0001f0da",
+          "0x0001f1ba",
+          "0x0001f3a0",
+          "0x0001f72e",
+          "0x000280d6",
+          "0x00028106",
+          "0x00029216",
+          "0x0002e93e",
+          "0x0002ef18",
+          "0x0002ef88",
+          "0x000492fa",
+          "0x0004951e",
+          "0x000537b6",
+          "0x0005ddde",
+          "0x0005ddea",
+          "0x00066374"
+        ],
+        "limit": "No fixed low-RAM writer was identified. These42 references are not a completed proof over every dynamic destination."
+      },
+      "firmware_reference_module_rvas": {
+        "ResetToFirmware": [
+          "0x00032ad2",
+          "0x00049684",
+          "0x0004977c"
+        ],
+        "SetFirmwareValues": [
+          "0x00020094"
+        ],
+        "MDreamcast_ordinal23": [
+          "0x000494d8"
+        ]
+      },
+      "game_source_windows": [
+        {
+          "name": "memcpy_import_thunk",
+          "module_rva": "0x66f58",
+          "nominal_va": "0x76f58",
+          "file_offset": "0x65358",
+          "bytes": 12,
+          "sha256": "a8308437a71212a9058e63ea370f4a834acf3c3ea68fc6ae9cd8db90225ca356",
+          "crc32": "0x2cff68ed",
+          "meaning": "Tail-jumps through COREDLL memcpy IAT; no hard-coded destination."
+        },
+        {
+          "name": "memset_import_thunk",
+          "module_rva": "0x66ed4",
+          "nominal_va": "0x76ed4",
+          "file_offset": "0x652d4",
+          "bytes": 12,
+          "sha256": "ce4b62afbc232557b7688e1abfa840db19163783902c56d5a56c44e2e4400c00",
+          "crc32": "0xc61b786b",
+          "meaning": "Tail-jumps through COREDLL memset IAT; no hard-coded destination."
+        },
+        {
+          "name": "firmware_soundmode_caller",
+          "module_rva": "0x20060",
+          "nominal_va": "0x30060",
+          "file_offset": "0x1e460",
+          "bytes": 60,
+          "sha256": "34b3d93a7d6cd4a10bae62c4d9851ec381d45de18e50c422197fb8f6598d7fff",
+          "crc32": "0x60919721",
+          "meaning": "Calls FirmwareGetSoundMode; if changed, calls SetFirmwareValues with -1,FF,FF,selectedSoundMode,FF."
+        },
+        {
+          "name": "actual_title_reset_caller",
+          "module_rva": "0x32a94",
+          "nominal_va": "0x42a94",
+          "file_offset": "0x30e94",
+          "bytes": 70,
+          "sha256": "27b9745bee92de874dcc2f2587ed34d118debe7cc6b6eb82d611a2216899be18",
+          "crc32": "0x94c48c22",
+          "meaning": "Original game shutdown sequence then calls ResetToFirmware at RVA32AD2; no direct raw512 store in this window."
+        }
+      ],
+      "kernel_binding": {
+        "path": "VIRTCOP2/0WINCEOS.BIN",
+        "bytes": 1841152,
+        "sha256": "b728e8eaef03bd7cc5acbe3dc3363ec9fafcaca90916cf21781d2e72ff99b3bc",
+        "platutil_text_sha256": "1e7ca0bb9a9cfe1e5535509fbd129d6d1cdee79133c35499b05053e8f2150ff5",
+        "platutil_nominal_base": "0x1d20000"
+      },
+      "kernel_source_windows": [
+        {
+          "name": "ResetToFirmware",
+          "module": "platutil.dll",
+          "module_rva": "0x18ec",
+          "nominal_va": "0x1d218ec",
+          "rom_storage_address": "0x8c0a28ec",
+          "file_offset": "0x930ec",
+          "bytes": 44,
+          "sha256": "36b3f1657e178e0deb9821fd383a20d778860027fe7f68fe86a2258641d03db0",
+          "crc32": "0x47e6775",
+          "meaning": "SetKMode(1), load firmware E0 pointer, invoke command1, restore mode if returned. The wrapper has no direct raw512 write."
+        },
+        {
+          "name": "SetFirmwareValues",
+          "module": "platutil.dll",
+          "module_rva": "0x1918",
+          "nominal_va": "0x1d21918",
+          "rom_storage_address": "0x8c0a2918",
+          "file_offset": "0x93118",
+          "bytes": 148,
+          "sha256": "92cbe744767546af48253def0908077ec761e464e891898a172fbf29c1752bf7",
+          "crc32": "0x30619147",
+          "meaning": "Uses a stack settings buffer, FlashOpen/FlashRead/FlashWrite/FlashClose. No explicit raw512 destination appears in this wrapper; BIOS flash internals were not executed."
+        }
+      ],
+      "missing_external_dependency": {
+        "import_dll": "MDreamcast.dll",
+        "import_ordinal": 23,
+        "iat_nominal_va": "0x0007e0a8",
+        "reference_module_rva": "0x000494d8",
+        "catalog_record": {
+          "path": "VC2/WINCE/MDREAMCAST.DLL",
+          "normalized_path": "VC2/WINCE/MDREAMCAST.DLL",
+          "lba": 504216,
+          "bytes": 6733,
+          "flags": 0
+        },
+        "present_in_supplied_runtime": false,
+        "present_in_kernel_modules": false,
+        "limit": "The catalog supplies its location/size but no executable body was supplied. This middleware path and its further dependencies cannot be audited to their memory writes from current inputs."
+      },
+      "executable_literal_scan": {
+        "sections": [
+          ".text",
+          "MMATRIX"
+        ],
+        "alignment_bytes": 2,
+        "normalized_physical_range": [
+          "0x0c007000",
+          "0x0c010000"
+        ],
+        "hits": [],
+        "limit": "No matching literal is bounded negative evidence only; computed/dynamic destinations and external DLL behavior remain open."
+      },
+      "conclusion": "No concrete PROJECTCE or reviewed PLATUTIL writer to0x8100..0x8300 was identified. The raw512 lifetime failure is observed; its modifying instruction remains unknown.",
+      "source_parser_sha256": {
+        "tools/armada_pe_audio_audit.py": "f2e2324a01712f46b99a05c27555078785fde72497d451e9bea67aa983acbcfd",
+        "tools/armada_ce_rom_audit.py": "f406ef95c0189fa0eb588b019ca7c70376dcc3e2f3f2f1d0cfc75bd6856694f6"
+      },
+      "inputs_immutable_during_audit": true
+    }
+  },
+  "conclusions": [
+    "The two reviewed WSEGACD memcpy calls read256 bytes from0x8100 into a driver object. They cannot be cited as writers to0x8100.",
+    "No concrete writer to0x8100..0x8300 was identified in the reviewed kernel/game paths.",
+    "The actual low-memory modification may occur through an unreviewed computed destination or unavailable firmware/middleware body. Its mechanism remains unknown.",
+    "A protected authenticated copy preserves the installation-time code identity independently of the mutable execution island. Restoring that exact copy after terminal quiescence can preserve code authentication without accepting changed live bytes. This is a lifecycle correction, not attribution of a writer."
+  ],
+  "scope_limits": [
+    "Static source, control and dataflow audit only; no console memory dump, physical watchpoint or full CE/game emulation was available.",
+    "Only externally supplied exact source files were parsed. Compressed module sections were not decoded or guessed.",
+    "The scalar memcpy call arguments and import ordinal were reviewed; arbitrary caller addresses and BIOS function internals were not executed."
+  ],
+  "input_immutable_during_audit": true,
+  "production_edits": "None by this source-writer audit."
+}

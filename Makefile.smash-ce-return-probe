@@ -1,0 +1,112 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Collection children use the checked terminal CE return controller. The
+# separate live-CE observer remains diagnostic and must be selected explicitly.
+SMASH_CE_RETURN_PROBE ?= 0
+ifneq ($(words $(SMASH_CE_RETURN_PROBE)),1)
+$(error SMASH_CE_RETURN_PROBE must be explicitly zero or one)
+endif
+ifneq ($(filter $(SMASH_CE_RETURN_PROBE),0 1),$(SMASH_CE_RETURN_PROBE))
+$(error SMASH_CE_RETURN_PROBE must be explicitly zero or one)
+endif
+FLAGS += -DKUI_SMASH_CE_RETURN_PROBE=$(SMASH_CE_RETURN_PROBE)
+SMASH_CE_RETURN ?= 0
+FLAGS += -DKUI_SMASH_CE_RETURN=$(SMASH_CE_RETURN)
+RESIDENT_FLAGS += -DKUI_SMASH_CE_CHILD=1
+RESIDENT_FLAGS += -DKUI_SMASH_CE_RETURN=$(SMASH_CE_RETURN)
+ifeq ($(SMASH_CE_RETURN),1)
+ifneq ($(SMASH_CE_RETURN_PROBE),0)
+$(error CE return controller and terminal observer are distinct builds)
+endif
+STAGE_SRC += src/core/smash_ce_return_loader.c src/core/smash_phase_video.c
+STAGE_FLAGS += -DKUI_SMASH_CE_PREPARED_BIN='"$(VC2_VMU_DIR)/prepared.bin"'
+CE_RETURN_SRC := src/loader/smash_ce_return_loader.c src/loader/smash_ce_return_view.c \
+ src/core/smash_ce_return_loader.c src/core/smash_menu_return.c src/core/smash_menu_loader.c \
+ src/core/smash_card_session.c src/core/smash_phase_video.c \
+ src/loader/minic.c src/loader/cold_load_crc32.c src/loader/native_return_hardware.c \
+ src/loader/smash_return_fault_display.c
+CE_RETURN_OBJ := $(patsubst %.c,$(BUILD)/ce-controller/%.o,$(CE_RETURN_SRC)) \
+ $(BUILD)/ce-controller-entry.o $(BUILD)/ce-controller-mmu.o $(BUILD)/ce-controller-ram-clear.o \
+ $(BUILD)/ce-controller-hardware.o $(BUILD)/ce-controller-cache.o $(BUILD)/ce-controller-copy.o
+CE_RETURN_FLAGS = $(FLAGS) $(VC2_VMU_NATIVE_FLAGS) -DKUI_ARMADA_CE_VMU_WRITE_RUNTIME=1 -DKUI_SMASH_PHASE_DIAGNOSTIC=1 -DKUI_COLD_CRC32_SHARED_RETAIL=1
+$(BUILD)/ce-controller/%.o: %.c Makefile.smash-ce-return-probe $(BUILD)/config
+	@mkdir -p $(@D)
+	$(CC) $(CE_RETURN_FLAGS) -fcallgraph-info=su -MMD -MP -c $< -o $@
+$(BUILD)/ce-controller-entry.o: src/loader/smash_ce_return_entry.S $(BUILD)/config
+	$(CC) $(CE_RETURN_FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/ce-controller-mmu.o: src/loader/smash_ce_return_mmu.S $(BUILD)/config
+	$(CC) $(CE_RETURN_FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/ce-controller-ram-clear.o: src/loader/smash_ce_return_ram_clear.S $(BUILD)/config
+	$(CC) $(CE_RETURN_FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/ce-controller-hardware.o: src/loader/native_return_hardware.S $(BUILD)/config
+	$(CC) $(CE_RETURN_FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/ce-controller-cache.o: src/loader/cold_load_scope.S $(BUILD)/config
+	$(CC) $(CE_RETURN_FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/ce-controller-copy.o: src/loader/smash_ce_return_copy.S $(BUILD)/config
+	$(CC) $(CE_RETURN_FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/ce-return.elf: $(CE_RETURN_OBJ) src/loader/smash_ce_return_loader.ld
+	$(CC) $(LINK) -Tsrc/loader/smash_ce_return_loader.ld -Wl,-Map,$(BUILD)/ce-return.map -o $@ $(CE_RETURN_OBJ) -lgcc
+$(BUILD)/ce-return.bin: $(BUILD)/ce-return.elf
+	$(OBJCOPY) -O binary $< $@
+# The reviewed source asset avoids the resident->helper->controller cycle.
+# Every completed package must still match its FRESH resident and raw file;
+# an old prefix can never silently supply a different current reader ABI.
+$(BUILD)/ce-return-raw-image.ok: $(BUILD)/ce-return.elf $(BUILD)/resident-sci.elf $(BUILD)/vc2-raw.bin src/loader/smash_ce_return_raw_image.h tools/smash_ce_return_raw_image.py
+	python3 tools/smash_ce_return_raw_image.py verify --raw $(BUILD)/vc2-raw.bin --resident $(BUILD)/resident-sci.elf --controller $(BUILD)/ce-return.elf --header src/loader/smash_ce_return_raw_image.h
+	@touch $@
+$(BUILD)/retail-native-foreground.kui: $(BUILD)/ce-return-raw-image.ok
+$(VC2_VMU_DIR)/vc2_ce_vmu_symbols.h: $(BUILD)/ce-return.bin $(BUILD)/ce-return.elf
+$(BUILD)/smash-ce-profile.bin: $(VC2_VMU_DIR)/vc2_ce_vmu_symbols.h
+$(BUILD)/stage_asm.o: $(VC2_VMU_DIR)/vc2_ce_vmu_symbols.h
+$(BUILD)/smash_ce_return_view_symbols.h: $(VC2_VMU_DIR)/helper.elf $(BUILD)/resident-sci.elf tools/smash_ce_return_view.py
+	python3 tools/smash_ce_return_view.py $(VC2_VMU_DIR)/helper.elf $(BUILD)/resident-sci.elf $@ --helper-bin $(VC2_VMU_DIR)/helper.bin --report $(BUILD)/ce-return-view.json
+$(BUILD)/stage/src/loader/retail_stage.o: $(BUILD)/smash_ce_return_view_symbols.h
+$(BUILD)/stage.elf: $(STAGE_OBJ)
+-include $(CE_RETURN_OBJ:.o=.d)
+endif
+ifeq ($(SMASH_CE_RETURN_PROBE),1)
+STAGE_SRC += src/core/smash_ce_return_probe.c
+SMASH_CE_RETURN_SRC := src/loader/smash_ce_return_probe.c src/core/smash_ce_return_probe.c \
+ src/core/smash_menu_return.c src/core/smash_menu_loader.c src/core/retail_image.c \
+ src/loader/minic.c src/loader/cold_load_crc32.c
+SMASH_CE_RETURN_OBJ := $(patsubst %.c,$(BUILD)/ce-return/%.o,$(SMASH_CE_RETURN_SRC)) \
+ $(BUILD)/ce-return-entry.o $(BUILD)/ce-return-cache.o
+$(SMASH_CE_RETURN_OBJ): Makefile.smash-ce-return-probe
+$(BUILD)/ce-return/%.o: %.c $(BUILD)/config
+	@mkdir -p $(@D)
+	$(CC) $(FLAGS) -fcallgraph-info=su -MMD -MP -c $< -o $@
+$(BUILD)/ce-return-entry.o: src/loader/smash_ce_return_probe_entry.S $(BUILD)/config
+	$(CC) $(FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/ce-return-cache.o: src/loader/cold_load_scope.S $(BUILD)/config
+	$(CC) $(FLAGS) -MMD -MP -c $< -o $@
+$(BUILD)/ce-return.elf: $(SMASH_CE_RETURN_OBJ) src/loader/smash_ce_return_probe.ld
+	$(CC) $(LINK) -Tsrc/loader/smash_ce_return_probe.ld -Wl,-Map,$(BUILD)/ce-return.map -o $@ $(SMASH_CE_RETURN_OBJ) -lgcc
+$(BUILD)/ce-return.bin: $(BUILD)/ce-return.elf
+	$(OBJCOPY) -O binary $< $@
+$(BUILD)/smash_ce_return_probe_symbols.h: $(BUILD)/resident-sci.elf $(BUILD)/ce-return.elf $(BUILD)/ce-return.bin tools/smash_ce_return_probe_symbols.py
+	python3 tools/smash_ce_return_probe_symbols.py $(BUILD)/resident-sci.elf $(BUILD)/ce-return.elf $(BUILD)/ce-return.bin $@
+$(BUILD)/stage/src/loader/retail_stage.o: $(BUILD)/smash_ce_return_probe_symbols.h
+$(BUILD)/stage_asm.o: $(BUILD)/ce-return.bin
+STAGE_FLAGS += -DKUI_SMASH_CE_RETURN_PROBE_BIN='"$(BUILD)/ce-return.bin"'
+$(BUILD)/stage.elf: $(STAGE_OBJ)
+-include $(SMASH_CE_RETURN_OBJ:.o=.d)
+endif
+
+# Reusing a build directory must change every consumer of the explicit CE
+# controller/observer contract, including the static prepared helper variant.
+# The independently pinned raw helper body is deliberately not a dependency.
+ifneq ($(words $(SMASH_CE_RETURN)),1)
+$(error SMASH_CE_RETURN must be explicitly zero or one)
+endif
+ifneq ($(filter $(SMASH_CE_RETURN),0 1),$(SMASH_CE_RETURN))
+$(error SMASH_CE_RETURN must be explicitly zero or one)
+endif
+.PHONY: smash-ce-return-config-force
+$(BUILD)/smash-ce-return-config: smash-ce-return-config-force
+	@mkdir -p $(@D)
+	@echo 'SMASH_CE_RETURN=$(SMASH_CE_RETURN) SMASH_CE_RETURN_PROBE=$(SMASH_CE_RETURN_PROBE)' > $@.tmp
+	@cmp -s $@.tmp $@ || mv $@.tmp $@
+	@rm -f $@.tmp
+$(RESIDENT_OBJ) $(STAGE_OBJ) $(CE_RETURN_OBJ) $(SMASH_CE_RETURN_OBJ) \
+ $(BUILD)/entry_asm.o $(BUILD)/stage_asm.o $(BUILD)/smash-ce-profile.o \
+ $(BUILD)/smash-ce-profile.bin $(VC2_VMU_DIR)/vc2_ce_vmu_symbols.h: $(BUILD)/smash-ce-return-config
+$(BUILD)/smash-ce-profile.bin: $(VC2_VMU_DIR)/vc2_ce_vmu_symbols.h

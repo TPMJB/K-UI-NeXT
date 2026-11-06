@@ -101,8 +101,10 @@ class StorageRoute(Machine):
         self.toggle=stage_profile(stage)
         if self.toggle:
             _,original,section=symbol_bytes(stage,'_native_persist_storage_init',2)
+            from check_native_session_mode_profile import profile as session_profile,pinned as session_pins
+            selected=session_pins(stage) if session_profile(stage) else stage_pins(stage,'toggle')
             require(section[2]&7==6 and (len(original),hashlib.sha256(original).hexdigest())==
-                    stage_pins(stage,'toggle')['_native_persist_storage_init'],
+                    selected['_native_persist_storage_init'],
                     'Toggle storage route lacks its exact whole-function instruction pin')
         self.mode_prefix=['mode']*(2 if self.toggle and mode!=1 else 1)
         self.ready_reads=0
@@ -343,7 +345,12 @@ def instruction_routes(stage, *, self_test=False):
                             ModeHelper(stage,7,15,mode,body=bytes(changed),off_mode=off_mode).run().check()
                 except (AssertionError,ValueError,struct.error,KeyError):mutations+=1
                 else:raise ValueError('Toggle helper accepted altered reader-only/capability comparison')
-    return {"mode_helper_instruction_cases": cases, "storage_instruction_cases": storage,
+    from check_native_session_mode_profile import profile as session_profile,source_delta,byte_mutations
+    session_mode={'enabled':False}
+    if session_profile(stage):
+        session_mode=dict(source_delta(),enabled=True,complete_function_bodies=3,
+            exact_map_byte_mutation_rejections=byte_mutations(stage) if self_test else 0)
+    return {"session_mode":session_mode,"mode_helper_instruction_cases": cases, "storage_instruction_cases": storage,
             "worker_policy_instruction_cases": diagnostics,
             "mutation_rejections": mutations, "malformed_mode_stops_before_storage": True,
             "control_storage_bypasses_profile_acquire_recovery_and_writes": not background,

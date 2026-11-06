@@ -57,8 +57,16 @@ struct kui_retail_async_stats {
      * REQUEST_TIMING instead uses hooks/releases for request-start ticks
      * and longest completed-request ticks; legacy hook counts are omitted.
      * IRQ_REARM uses execs/exec_int for SCI-level repairs and real IRQ entries. */
+#if KUI_NATIVE_GD_MMU_BUFFERS
+    /* This private foreground profile elides every counter write. Keep the
+     * named zero-valued diagnostic view without reserving seven words. */
+    union {
+        uint32_t irq_blocks,call_blocks,waits,execs,exec_int,hooks,releases;
+    };
+#else
     uint32_t irq_blocks, call_blocks, waits, execs, exec_int;
     uint32_t hooks, releases;
+#endif
 };
 /* Returns the trampoline can hold pending: interrupts released while an
  * earlier released one's handler still runs. */
@@ -69,6 +77,11 @@ void kui_retail_async_trace(uint32_t exit,uint32_t function);
 /* The releasing entries' and trampoline's state, at region + 0x240 with
  * these offsets (retail_resident.S). */
 struct kui_retail_async_release {
+#if KUI_NATIVE_GD_LEGACY_STREAM && KUI_NATIVE_STANDALONE_FOREGROUND && !defined(KUI_RETAIL_ASYNC_TEST)
+    /* No raw-vector trampoline exists in this private foreground profile.
+     * Retain its SCI ownership and depth guard, without inactive frames. */
+    uint32_t sci,armed,depth;
+#else
     uint32_t vbr;    /* +0: the game's VBR the reader displaced */
     uint32_t sci;    /* +4: the game's IPRB SCI field (bits 7..4) */
     uint32_t armed;  /* +8: streaming: a return installs the reader again */
@@ -80,6 +93,7 @@ struct kui_retail_async_release {
      * events released at VBR+0x100, +0x400 and +0x600, and (C only) GD
      * calls that found the game had moved to other vectors. */
     uint32_t rehooks, released[3], vbr_changes;
+#endif
 };
 struct kui_retail_async {
     struct kui_retail_async_release release; /* first: at region + 0x240 */
@@ -97,8 +111,9 @@ struct kui_retail_async {
     /* Fits the unused native vector gap; release-frame offsets stay fixed. */
     uint32_t native_loan_state;
 #endif
-#if KUI_NATIVE_REQUEST_TIMING
-    /* Exactly the eight spare bytes of the native vector gap. */
+#if KUI_NATIVE_REQUEST_TIMING && !KUI_NATIVE_GD_MMU_BUFFERS
+    /* Exactly the eight spare bytes of the native vector gap. The MMU
+     * foreground profile neither samples nor displays these maxima. */
     uint32_t native_max_lba,native_max_count;
 #endif
 #ifdef KUI_RETAIL_CE
@@ -149,6 +164,32 @@ struct kui_retail_async_region {
     struct kui_retail_async engine;
     struct kui_retail_async_shared shared;
 };
+#elif KUI_NATIVE_GD_LEGACY_STREAM && KUI_NATIVE_STANDALONE_FOREGROUND && !defined(KUI_RETAIL_ASYNC_TEST)
+/* This foreground-only profile publishes no vectors or SDK callbacks. Keep
+ * the same two aligned receive buffers and typed engine/service state, but
+ * omit raw-vector holes. No external code addresses these private offsets. */
+struct kui_retail_async_region {
+    uint8_t area0[KUI_SCI_STREAM_AREA_BYTES] __attribute__((aligned(32)));
+    uint8_t area1[KUI_SCI_STREAM_AREA_BYTES] __attribute__((aligned(32)));
+    struct kui_retail_async engine;
+    struct kui_retail_async_shared shared;
+};
+/* MMU-only counter compaction may reduce private state; it cannot enlarge
+ * the original foreground reservation. Exact new offsets are build-bound. */
+_Static_assert(
+#if KUI_NATIVE_GD_MMU_BUFFERS
+    sizeof(struct kui_retail_async_region)==(KUI_NATIVE_GD_DMA_STREAM?0x640u:0x660u) &&
+    offsetof(struct kui_retail_async_region,shared)==0x4acu &&
+#else
+    sizeof(struct kui_retail_async_region)==0x6a0u &&
+    offsetof(struct kui_retail_async_region,shared)==0x4ccu &&
+#endif
+    _Alignof(struct kui_retail_async_region)==32u &&
+    offsetof(struct kui_retail_async_region,area0)==0u &&
+    offsetof(struct kui_retail_async_region,area1)==0x220u &&
+    offsetof(struct kui_retail_async_region,engine)==0x440u &&
+    sizeof(struct kui_retail_async_release)==12u,
+    "Private foreground region ABI changed");
 #else
 /* VBR is this region's address minus 0x100; the hardware uses only its
  * three vector offsets, so the gaps between them hold the receive areas and
@@ -199,6 +240,19 @@ extern struct kui_retail_async_region kui_retail_async_region;
 /* Once, at resident init: install nothing yet, copy the vectors; the
  * manifest's reader chooses how long GD calls may wait for blocks. */
 void kui_retail_async_init(const struct kui_retail_manifest *);
+#if KUI_SMASH_MENU_LOADER
+/* Surviving raw capsule reader: each bounded consecutive run owns SCI once,
+ * checks every block's CRC16 and tears down before returning. The caller
+ * owns count*512 nonaliasing destination bytes; at most4096 blocks fit. */
+uint32_t kui_vc2_ce_vmu_read_card(uint32_t card_lba,uint8_t out[512],uint32_t count);
+#elif KUI_VC2_VMU_LATE
+/* Exact late-VC2 caller only: IRQs masked, the completed native stream is
+ * idle, and out is an owned nonaliasing512-byte destination. Read one mapped
+ * helper-file card block without changing the GD token/command/byte cursor.
+ * Returns enum kui_sci_stream_result (zero on success). Preflight refusal
+ * is BUSY; an uncertain acquire/stop/release is RESET and stays quarantined. */
+uint32_t kui_vc2_ce_vmu_read_card(uint32_t card_lba,uint8_t out[512]);
+#endif
 #if KUI_NATIVE_SESSION_CONTROLS
 /* Masked native worker only, with no pending request/receiver/return frame.
  * RESET invalidates all read-ahead bytes while its loan state is still IDLE,

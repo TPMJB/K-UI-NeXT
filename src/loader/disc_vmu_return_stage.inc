@@ -31,7 +31,7 @@ static bool __attribute__((noipa)) native_disc_entry_return_bind(uint32_t *frame
     /* The early pair's first entry has only an eight-byte head. Borrow the
      * second entry's complete veneer; its writer also installs the head, so
      * both modified windows must pass the same ownership and alias checks. */
-    const bool paired=native_exits.family==KUI_VMU_NATIVE_EXIT_EARLY_PAIR;
+    const bool paired=kui_vmu_native_exit_window(&native_exits,0u)==8u;
     const unsigned selected=paired?1u:0u,first=paired?0u:selected,last=selected+1u;
     uint32_t entry=native_exits.entries[selected],begin=native_exits.load&UINT32_C(0x1fffffff);
     native_disc_entry_return_entry=entry;
@@ -42,7 +42,8 @@ static bool __attribute__((noipa)) native_disc_entry_return_bind(uint32_t *frame
            at<begin || at-begin>exec_bytes-12u ||
            !native_disc_return_disjoint(address,bytes,KUI_RETAIL_EXEC_ADDRESS,sizeof(original_entry)) ||
            !native_disc_return_disjoint(address,bytes,native_driver.submit,12u) ||
-           !native_disc_return_disjoint(address,bytes,native_heap.initializer,0x1d0u) ||
+           !native_disc_return_disjoint(address,bytes,native_heap.initializer,
+               native_heap.family==KUI_VMU_NATIVE_HEAP_DIRECT32?0x268u:0x1d0u) ||
            !native_disc_return_disjoint(address,bytes,native_heap.release,20u)) return false;
         for(unsigned j=0u;j<native_exits.count;j++)
             if(i!=j && !native_disc_return_disjoint(address,bytes,native_exits.entries[j],

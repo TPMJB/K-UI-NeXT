@@ -1,9 +1,17 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/armada_ce_vmu_runtime.h"
 #include "kui/retail_image.h"
+#if KUI_VC2_VMU_PERSIST
+#include "kui/vc2_ce_vmu_loan.h"
+#endif
 
 static int service_address(uint32_t p) {
+#if KUI_VC2_VMU_PERSIST
+    return p==(uint32_t)(uintptr_t)kui_vc2_ce_vmu_loan_begin ||
+        p==(uint32_t)(uintptr_t)kui_vc2_ce_vmu_loan_end;
+#else
     return !(p&1u) && p>=UINT32_C(0x8c008300) && p<UINT32_C(0x8c00d800);
+#endif
 }
 static int service_shape(const struct kui_armada_ce_vmu_runtime_services *s) {
     return s && service_address(s->loan_begin) && service_address(s->loan_end) &&

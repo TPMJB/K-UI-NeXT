@@ -160,6 +160,28 @@ def require(test,message):
     if not test:raise ValueError(message)
 
 
+def exact_cache_copy_cases(cases):
+    """Bind every reported copy case to its fixed alignment/overlap contract."""
+    if not isinstance(cases,list) or len(cases)!=18:return False
+    expected={(wrapped,None,alignment) for wrapped in (False,True) for alignment in range(4)}
+    expected|={(wrapped,delta,0) for wrapped in (False,True) for delta in (-4,-1,0,1,4)}
+    seen=set()
+    for case in cases:
+        if not isinstance(case,dict):return False
+        wrapped,delta,alignment=(case.get(key) for key in ('wrapped','delta','alignment'))
+        if type(wrapped) is not bool or type(alignment) is not int or \
+           (delta is not None and type(delta) is not int):return False
+        key=(wrapped,delta,alignment)
+        if key not in expected or key in seen:return False
+        seen.add(key)
+        width=4 if not((alignment if delta is None else delta)&3) else 1
+        if case.get('access_bytes')!=width or case.get('source_reads')!=512//width or \
+           case.get('destination_writes')!=512//width or \
+           case.get('publication_after_complete_copy') is not True or \
+           type(case.get('instructions')) is not int or case['instructions']<=0:return False
+    return seen==expected
+
+
 def pio_companion(worker,proof):
     """Select new pins only for the independently executed exact PIO pair."""
     marker=worker[4].get('__kui_native_readahead_pio_worker')
@@ -186,6 +208,54 @@ def pio_companion(worker,proof):
 def pio_pair_companion(worker,proof):
     """The pair policy is separately marked and has exact measured gates."""
     marker=worker[4].get('__kui_native_readahead_pio_pair_worker')
+    budget=worker[4].get('__kui_native_readahead_tick_budget_worker')
+    require(bool(budget)==bool(proof and proof.get('tick_budget_candidate')),
+            'read-ahead TICK budget worker/auxiliary proof differs')
+    if budget:
+        producer=proof.get('pio_producer',{})
+        binding=proof.get('worker_binding',{})
+        require(budget==(1,0,0,0xfff1) and marker==(1,0,0,0xfff1) and
+                all(producer.get(key) is True for key in (
+                    'tick_budget_profile','tick_zero_argument_preserves_pair',
+                    'tick_one_argument_one_complete_block',
+                    'one_block_budget_retains_all_ordinary_guards',
+                    'invalid_budget_arguments_before_any_optional_work',
+                    'budget_is_per_visit_and_deliver_wait_unchanged')) and
+                all(type(producer.get(key)) is int and producer[key]>0 for key in (
+                    'actual_linked_one_block_budget_cases','actual_linked_one_block_guard_refusals',
+                    'invalid_event_argument_refusals_before_reader_or_clock')) and
+                all(binding.get(key) is True for key in (
+                    'tick_budget_profile','early_family_one_block_argument_checked',
+                    'later_family_default_pair_argument_checked',
+                    'early_budget_keeps_stream_busy_payload_and_header_guards')) and
+                type(binding.get('actual_early_budget_worker_cases')) is int and
+                binding['actual_early_budget_worker_cases']>0,
+                'read-ahead TICK budget pins require complete linked producer and worker proofs')
+        from check_native_dual_readers import compact_budget_family_companion
+        compact_budget_family_companion(worker,binding)
+    context=worker[4].get('__kui_native_readahead_max_context_worker')
+    require(bool(context)==bool(proof and proof.get('max_context_candidate')),
+            'read-ahead maximum-context worker/auxiliary proof differs')
+    if context:
+        producer=proof.get('pio_producer',{});cache=proof.get('cache_copy',{})
+        require(context==(1,0,0,0xfff1) and budget==(1,0,0,0xfff1) and
+                all(producer.get(key) is True for key in (
+                    'max_context_profile','max_context_uses_event_argument_and_entry_irq',
+                    'max_context_ties_bad_clocks_and_smaller_intervals_retain_previous',
+                    'max_context_uses_existing_two_clock_samples_only','capture_start_clears_max_context',
+                    'exact_cache_byte_coverage_before_each_validity_publication')) and
+                type(producer.get('actual_linked_max_context_cases')) is int and
+                producer['actual_linked_max_context_cases']>0 and
+                producer.get('exact_cache_copy_access_bytes')==4 and
+                all(cache.get(key) is True for key in ('enabled','actual_linked_auxiliary_executed',
+                    'exact_source_reads_and_destination_writes','exact_overlap_wrap_and_byte_coverage',
+                    'validity_published_after_complete_copy')) and
+                isinstance(cache.get('auxiliary_sha256'),str) and
+                len(cache['auxiliary_sha256'])==64 and
+                cache.get('auxiliary_sha256')==proof.get('artifact_sha256',{}).get('auxiliary') and
+                cache.get('aligned_word_cases')==8 and cache.get('unaligned_byte_cases')==10 and
+                exact_cache_copy_cases(cache.get('cases')),
+                'read-ahead maximum-context pins require exact timing and linked cache-copy proofs')
     require(bool(marker)==bool(proof and proof.get('pio_pair_candidate')),
             'read-ahead PIO pair worker/auxiliary proof differs')
     if marker:
@@ -229,6 +299,9 @@ def pin_bodies(resident):
     structural=resident[4].get(STRUCTURAL_MARKER+'resident')
     require(structural is None or structural==(1,0,0,0xfff1),'structural SDK resident marker differs')
     selected=STRUCTURAL_PINS if structural else RA_PINS if '__kui_native_readahead_resident' in resident[4] else PINS
+    from check_native_general_sdk_profile import profile as general_sdk_profile, pinned as general_sdk_pins
+    if general_sdk_profile(resident,'low') is not None:
+        selected=general_sdk_pins(resident,'low')
     require(selected,'structural SDK resident pins have not been reviewed')
     for name,(count,digest) in selected.items():
         address,body,section=symbol_bytes(resident,name,2)
@@ -287,7 +360,9 @@ def stage_pins(stage,*,diagnostic=False,pio=False,pio_pair=False,multi_owner=Fal
         RA_STAGE_PINS if read_ahead else STAGE_PINS
     from check_native_followup_profile import stage_pins as followup_stage_pins,callback_profile
     require(not callback_profile(stage) or owned_timers, 'Selected low callbacks require the owned-timer SDK stage')
-    selected=followup_stage_pins(stage,'sdk',selected)
+    from check_native_general_sdk_profile import profile as general_sdk_profile, pinned as general_sdk_pins
+    selected=(general_sdk_pins(stage,'stage') if general_sdk_profile(stage,'stage') is not None
+              else followup_stage_pins(stage,'sdk',selected))
     require(selected,'SDK multi-owner immutable stage pins are missing')
     for name,(count,digest) in selected.items():
         address,body,section=symbol_bytes(stage,name,2)
@@ -388,13 +463,18 @@ class SDKCPU(InterruptCPU):
         self.active=self.symbols['_kui_retail_hook_active'][0]
         self.fault=self.symbols['_kui_retail_hook_fault'][0]
         self.callback=self.symbols['_kui_retail_sdk_sci_entry'][0]
+        from check_vmu_native_readahead import session_region_offsets
+        fields=session_region_offsets(resident)
+        self.hooked=REGION+fields.get(HOOKED-REGION,HOOKED-REGION)
+        self.loan=REGION+fields.get(LOAN-REGION,LOAN-REGION)
+        self.rearms=REGION+fields.get(REARMS-REGION,REARMS-REGION)
         self.write(self.pointer,REGION);self.write(self.active,0);self.write(self.fault,0)
         self.write(GUARD,0x4b554947);self.write(COOKIE_AT,COOKIE)
         self.previous=previous
         self.write(DEFAULT_AT,previous);self.write(OWNER_AT,vbr)
         self.write(self.eri_slot,self.callback);self.write(self.rxi_slot,self.callback)
-        self.write(LOAN,0);self.write(FRAME+4,0x70);self.write(FRAME+8,0x10)
-        self.write(HOOKED,0);self.write(REARMS,0xfffffffe)
+        self.write(self.loan,0);self.write(FRAME+4,0x70);self.write(FRAME+8,0x10)
+        self.write(self.hooked,0);self.write(self.rearms,0xfffffffe)
         self.r[4]=self.event
         self.iprb_writes=[];self.vbr_writes=[];self.callee_mode='abi';self.corrupt_guard=False
         self.initial=self.snapshot();self.writes=[]
@@ -493,28 +573,28 @@ def ownership_cases(resident,*,previous=DEFAULT):
             for hooked in (0,1):
                 for field in range(0,256,16):
                     c=SDKCPU(resident,field,mask,previous=previous);ownership(c,variant)
-                    c.write(HOOKED,hooked);c.iprb=(0xa50f&~0xf0)|field
-                    old=c.iprb;old_saved=c.read(FRAME+4);old_rearms=c.read(REARMS);last=0x10
+                    c.write(c.hooked,hooked);c.iprb=(0xa50f&~0xf0)|field
+                    old=c.iprb;old_saved=c.read(FRAME+4);old_rearms=c.read(c.rearms);last=0x10
                     old_vbr=c.control['vbr'];level=0x10 if variant=='ready' else 0
                     c.writes=[];before=c.snapshot();c.run_symbol('_hook');assert_c_abi(c,before)
                     assert c.control['vbr']==old_vbr and not c.vbr_writes
                     assert c.iprb==(old&~0xf0)|level
                     assert c.iprb_writes==([] if field==level else [(old&~0xf0)|level])
-                    assert c.read(HOOKED)==1
+                    assert c.read(c.hooked)==1
                     assert c.read(FRAME+4)==(old_saved if hooked and field==last else field)
                     assert c.read(FRAME+8)==level
-                    assert c.read(REARMS)==((old_rearms+int(hooked and field!=last))&MASK)
-                    assert all(address in (HOOKED,FRAME+4,FRAME+8,REARMS,IPRB) or OWNER_SP-128<=address<OWNER_SP
+                    assert c.read(c.rearms)==((old_rearms+int(hooked and field!=last))&MASK)
+                    assert all(address in (c.hooked,FRAME+4,FRAME+8,c.rearms,IPRB) or OWNER_SP-128<=address<OWNER_SP
                                for _,address,_,_ in c.writes)
                     hooks+=1
                     c=SDKCPU(resident,field,mask,previous=previous);ownership(c,variant)
-                    c.write(HOOKED,hooked);c.iprb=(0xa50f&~0xf0)|field
+                    c.write(c.hooked,hooked);c.iprb=(0xa50f&~0xf0)|field
                     old=c.iprb;old_vbr=c.control['vbr'];c.writes=[];before=c.snapshot();c.run_symbol('_unhook');assert_c_abi(c,before)
                     desired=(old&~0xf0)|0x70 if hooked and field==last else old
                     assert c.iprb==desired and c.iprb_writes==([desired] if hooked and field==last else [])
-                    assert c.read(HOOKED)==0 and c.read(FRAME+8)==(0 if hooked else 0x10)
+                    assert c.read(c.hooked)==0 and c.read(FRAME+8)==(0 if hooked else 0x10)
                     assert c.control['vbr']==old_vbr and not c.vbr_writes
-                    assert all(address in (HOOKED,FRAME+8,IPRB) or OWNER_SP-128<=address<OWNER_SP
+                    assert all(address in (c.hooked,FRAME+8,IPRB) or OWNER_SP-128<=address<OWNER_SP
                                for _,address,_,_ in c.writes)
                     unhooks+=1
     irq=resident[4]['_kui_retail_async_irq'][0]
@@ -525,7 +605,7 @@ def ownership_cases(resident,*,previous=DEFAULT):
                     for loan in (0,1,2,3):
                         for result in (0,1):
                             c=SDKCPU(resident,event,mask,previous=previous);ownership(c,variant)
-                            c.r[4]=event;c.write(c.active,active);c.write(LOAN,loan)
+                            c.r[4]=event;c.write(c.active,active);c.write(c.loan,loan)
                             c.targets={irq};c.callee_mode='deep-reader';c.callee_return=result
                             old_vbr=c.control['vbr'];c.writes=[]
                             before=c.snapshot();c.run_symbol('_kui_retail_sdk_sci_dispatch');assert_c_abi(c,before)
@@ -549,7 +629,7 @@ def ownership_cases(resident,*,previous=DEFAULT):
                 c.run_symbol('_hook');assert c.read(FRAME+4)==field
                 assert c.read(FRAME+8)==0 and c.iprb&0xf0==0
                 c.run_symbol('_unhook');assert c.iprb&0xf0==field
-                assert c.read(HOOKED)==c.read(FRAME+8)==0
+                assert c.read(c.hooked)==c.read(FRAME+8)==0
                 # Ready again, then lose a slot while a real reader is live.
                 c=SDKCPU(resident,field,mask,previous=previous);c.iprb=0xa50f|field;c.run_symbol('_hook')
                 ownership(c,variant);c.targets={irq};c.callee_mode='deep-reader'
@@ -563,7 +643,7 @@ def ownership_cases(resident,*,previous=DEFAULT):
                     c=SDKCPU(resident,field,mask,previous=previous);c.iprb=0xa50f|field;c.run_symbol('_hook')
                     ownership(c,variant);c.r[4]=0x300 if reason=='event' else 0x4e0
                     if reason=='active':c.write(c.active,1)
-                    if reason=='loan':c.write(LOAN,1)
+                    if reason=='loan':c.write(c.loan,1)
                     c.targets={irq};c.callee_mode='deep-reader';c.iprb_writes=[];c.writes=[]
                     c.run_symbol('_kui_retail_sdk_sci_dispatch')
                     assert c.calls==0 and c.r[0]==previous and not c.iprb_writes
@@ -634,10 +714,15 @@ class ColdBinderCPU(SDKCPU):
         self.put32(self.cell,self.region)
         control=resident[4]['_kui_vmu_observe_boot_control'][0]
         self.put32(control+8,4);self.put32(control+12,payload&0x1fffffff)
-        self.put32(self.region+0x378,1);self.put32(self.region+0x470,stream)
+        from check_vmu_native_readahead import session_region_offsets
+        self.region_offsets=session_region_offsets(resident)
+        self.put32(self.region_field(0x378),1);self.put32(self.region_field(0x470),stream)
         self.put32(ERI_SLOT,self.previous);self.put32(RXI_SLOT,self.previous)
         self.put32(self.region+0x53c,0xa5c39e17)
         self.initial=self.snapshot();self.writes=[]
+
+    def region_field(self,offset):
+        return self.region+self.region_offsets.get(offset,offset)
 
     def put_bytes(self,address,data):
         at=self.offset(address,len(data))

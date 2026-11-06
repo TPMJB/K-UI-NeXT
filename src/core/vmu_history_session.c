@@ -3,6 +3,7 @@
 #include "kui/vmu_library.h"
 #include "kui/destination.h"
 #include "kui/hash.h"
+#include "kui/smash_launch_timing.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -33,6 +34,15 @@ static bool pinned(const struct kui_vmu_history_platform *platform,const struct 
         !memcmp(now.cid,c->storage.cid,16u) && now.card_sectors==c->storage.card_sectors &&
         now.partition_first==c->storage.partition_first && now.partition_end==c->storage.partition_end &&
         now.high_capacity==c->storage.high_capacity;
+}
+static bool same_card(const struct kui_vmu_game_selection *a,const struct kui_vmu_game_selection *b) {
+    return a->pair==b->pair && !memcmp(a->product,b->product,sizeof(a->product)) &&
+        !memcmp(a->identity,b->identity,sizeof(a->identity)) &&
+        !memcmp(a->storage.cid,b->storage.cid,sizeof(a->storage.cid)) &&
+        a->storage.card_sectors==b->storage.card_sectors &&
+        a->storage.partition_first==b->storage.partition_first &&
+        a->storage.partition_end==b->storage.partition_end &&
+        a->storage.high_capacity==b->storage.high_capacity;
 }
 static void encode(uint8_t wire[512],uint64_t sequence,const struct kui_vmu_game_selection *card) {
     memset(wire,0,512u);memcpy(wire,"KUIVMUL1",8u);put32(wire+8u,1u);put32(wire+12u,512u);put64(wire+16u,sequence);
@@ -128,14 +138,61 @@ int kui_vmu_history_session_begin(const struct kui_vmu_game_selection *card,uint
     const struct kui_vmu_history_platform *platform,struct kui_vmu_history_view *out,
     kui_log_fn log,kui_cancel_fn cancel) {
     if(!out || !valid_card(card) || !platform || !platform->storage || !platform->salt || !log)return KUI_VMU_HISTORY_ARGUMENT;
-    int result=kui_vmu_history_session_resume(seconds,platform,out,log,cancel);
+    KUI_SMASH_TIME_SPAN(resume,KUI_SMASH_UI_HISTORY_RESUME);
+    memset(out,0,sizeof(*out));struct receipt previous;int result=load(&previous,cancel);
+    if(result) {
+        KUI_SMASH_TIME_END(resume);
+        snprintf(out->notice,sizeof(out->notice),"Previous-session history is not confirmed; receipt retained for retry.");
+        return result;
+    }
+    if(previous.pending && same_card(&previous.card,card)) {
+        /* This one exclusively owned operation has just recovered and fully
+         * verified the exact card the new launch will use. No game/card
+         * writes can occur before publication below. A second identical
+         * pre-launch checkpoint would only deduplicate the same image.
+         * Keep the old pending receipt durable until its replacement is
+         * synced and read back; a cut can safely recover either generation. */
+        if(!pinned(platform,card))result=KUI_VMU_HISTORY_STALE;
+        else {
+            struct kui_vmu_history_request request={.action=KUI_VMU_HISTORY_CHECKPOINT,.card=*card};
+            result=kui_vmu_history_apply(&request,KUI_VMU_HISTORY_AFTER_RETURN,seconds,platform,out,log,cancel);
+        }
+        KUI_SMASH_TIME_END(resume);
+        if(result<0) {
+            out->known=false;
+            snprintf(out->notice,sizeof(out->notice),"Previous-session history is not confirmed; receipt retained for retry.");
+            return result;
+        }
+        /* Match the unchanged BEFORE_LAUNCH result without discarding the
+         * newly verified history entries from the recovery checkpoint. */
+        out->changed=false;
+        KUI_SMASH_TIME_SPAN(replace_receipt,KUI_SMASH_UI_HISTORY_RECEIPT);
+        result=publish(&previous,card,card,platform,log,cancel);
+        KUI_SMASH_TIME_END(replace_receipt);
+        if(result<0) {
+            out->known=false;
+            snprintf(out->notice,sizeof(out->notice),"Session receipt was not verified; launch refused. Checkpoint kept.");
+            return result;
+        }
+        log("VMU history: verified the same card once before the next session");
+        snprintf(out->notice,sizeof(out->notice),"Pre-launch checkpoint and session receipt verified.");
+        return KUI_VMU_HISTORY_OK;
+    }
+    /* A different pending card still needs independent recovery, followed
+     * by a complete checkpoint of the newly selected card. */
+    result=previous.pending?kui_vmu_history_session_resume(seconds,platform,out,log,cancel):KUI_VMU_HISTORY_UNCHANGED;
+    KUI_SMASH_TIME_END(resume);
     if(result<0)return result;
     struct kui_vmu_history_request request={.action=KUI_VMU_HISTORY_CHECKPOINT,.card=*card};
+    KUI_SMASH_TIME_SPAN(prelaunch,KUI_SMASH_UI_HISTORY_PRELAUNCH);
     result=kui_vmu_history_apply(&request,KUI_VMU_HISTORY_BEFORE_LAUNCH,seconds,platform,out,log,cancel);
+    KUI_SMASH_TIME_END(prelaunch);
     if(result<0)return result;
+    KUI_SMASH_TIME_SPAN(receipt_span,KUI_SMASH_UI_HISTORY_RECEIPT);
     struct receipt receipt;result=load(&receipt,cancel);
-    if(result){out->known=false;snprintf(out->notice,sizeof(out->notice),"Session receipt could not be read; launch refused. Checkpoint kept.");return result;}
+    if(result){KUI_SMASH_TIME_END(receipt_span);out->known=false;snprintf(out->notice,sizeof(out->notice),"Session receipt could not be read; launch refused. Checkpoint kept.");return result;}
     result=publish(&receipt,card,card,platform,log,cancel);
+    KUI_SMASH_TIME_END(receipt_span);
     if(result<0){out->known=false;snprintf(out->notice,sizeof(out->notice),"Session receipt was not verified; launch refused. Checkpoint kept.");return result;}
     snprintf(out->notice,sizeof(out->notice),"Pre-launch checkpoint and session receipt verified.");return KUI_VMU_HISTORY_OK;
 }

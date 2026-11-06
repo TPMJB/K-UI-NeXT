@@ -1,0 +1,44 @@
+{
+  "schema": "kui.smash.engine2-startup-port.v1",
+  "updater_main_commit": "a27da110f02cf356c5b287ecbf67f4ae5df715ea",
+  "main_exact_source_tree": "d6d813279c509f74e262798ce9d5a4bf4d99bf0c",
+  "port_parent": "449ff8da30d620feb3ed53f4e2e8af51580d18fc",
+  "current_main_identical": {
+    "src/core/update.c": "5fcb22b19e2cac7fc8ac0852dd912a79685764efefbdcf84ccdeb2127162cca3",
+    "src/core/update_file.c": "d5d234e1d0a9f6bbf3ce6370f821f81f25dbbe15ddce979d90490a9c67db883d",
+    "src/core/update_boot.c": "53bfcae78f99a9dda270c0fa6a5451bd8bdd38174a1d55db068f26622bd3253c",
+    "src/core/update_software_file.c": "aecf57b11b1389bebea872ce36240c3b91b7d5b0a81748a07d0eb871a1e33b4d",
+    "src/core/update_zip.c": "8d6c6734bcd9c77b02138cd54532cd3ac933b4f5ecfe2ab9123d6968584c6d12",
+    "include/kui/update.h": "9c437a89d2008d1a5db74cd064ddb4724134c18c606c5ee415239a1257ed6862",
+    "include/kui/update_boot.h": "478fd88801086d8b92976acf3c2ad81130d50ddd0710fef978212747b00e373c",
+    "include/kui/update_software_file.h": "8d9b49b0a6241ab3d06dfc9403199d6777aaa0ec6b49ccb416e55ad44bd656d0",
+    "tools/make_update.py": "be3587a72cddde156f3c739247f822ae32420e5b45c636c39ae12af276ff7630",
+    "tools/update_package.py": "96ff1b5f6cfba1434c3e1bdf23d1278bbadec14f484f95783f2ead09607e9188",
+    "tools/update_consumer_check.c": "97a9572cafc219821a3ef5075b895a956a5b8c9baa74dd60e9be43f7d98b74d3"
+  },
+  "current_c_consumer_source_sha256": "2fceb39152402e69b4f16510742ce4017b117a065060b65924c37bdecdddc1c7",
+  "preserved_a6_gui": [
+    "startup.txt mounted append",
+    "safe checked GUI-handoff guard",
+    "runtime module bundle",
+    "native owner/cache preparation"
+  ],
+  "host_validation": {
+    "startup_timing_writer_failure_cases": 6,
+    "software_and_boot_read_budgets_fat32": 952,
+    "software_and_boot_read_budgets_exfat": 952,
+    "smash_producer_cases": 9,
+    "v2_producer_cases": 25,
+    "native_gui_build": true
+  },
+  "native_gui_provisional": {
+    "delivery": false,
+    "source_dirty": true,
+    "payload_bytes": 3491588,
+    "memory_bytes": 7789776,
+    "engine_markers": 1,
+    "bank_markers": 1
+  },
+  "console_time_measured": false,
+  "loader_changes": false
+}

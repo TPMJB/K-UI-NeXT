@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/smash-menu-ui-host
+HOST_CC ?= cc
+MENU_LOADER ?=
+MENU_NATIVE ?=
+MENU_VC2 ?=
+MENU_SWIRL ?=
+.DEFAULT_GOAL := smash-menu-ui-tests
+MENU_UI_FLAGS := -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic \
+ -fsanitize=address,undefined -fno-sanitize-recover=all -fno-pie -no-pie \
+ -ffunction-sections -fdata-sections -DKUI_VMU_GAME_CARDS=1 \
+ -DKUI_RETAIL_EXTENDED_MAP=1 -Iinclude -I.deps/fatfs/source -Isrc/dreamcast
+.PHONY: smash-menu-ui-tests
+smash-menu-ui-tests:
+	@mkdir -p $(BUILD)
+	$(HOST_CC) $(MENU_UI_FLAGS) tests/test_smash_menu_collection_prepare.c \
+ src/core/smash_native_child.c src/core/smash_native_menu.c src/core/smash_genesis_save_header.c src/core/smash_card_session.c src/core/smash_menu_loader.c src/core/retail_image.c src/core/runtime_image.c src/core/data.c \
+ src/core/smash_menu_return.c src/core/smash_menu_collection.c src/core/smash_ce_child.c src/core/smash_ce_profile.c src/core/smash_ce_helper.c \
+	 -Wl,--gc-sections -Wl,--wrap=kui_runtime_resolve_path -o $(BUILD)/test-collection
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 $(BUILD)/test-collection $(MENU_LOADER) $(MENU_NATIVE) $(MENU_VC2) $(MENU_SWIRL)

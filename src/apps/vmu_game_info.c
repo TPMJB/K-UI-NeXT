@@ -100,6 +100,7 @@ static bool named_card(unsigned pair,const uint8_t *expected,bool imported,
         unavailable(out,"Cannot verify the virtual VMU name; inspect VMU tools.");return false;
     }
     if(name[0]) snprintf(out->label,sizeof(out->label),"%s",name);
+    else if(!strcmp(out->product,KUI_VMU_SMASHPACK_KEY)) snprintf(out->label,sizeof(out->label),"%s",KUI_VMU_SMASHPACK_LABEL);
     else if(imported) snprintf(out->label,sizeof(out->label),"Shared virtual VMU");
     else snprintf(out->label,sizeof(out->label),"Game card %s",out->product);
     if(out->count>=KUI_VMU_GAME_INFO_CARDS_MAX) {
@@ -167,7 +168,7 @@ static int candidate_cards(struct kui_vmu_game_info *out,kui_log_fn log,kui_canc
     struct kui_vmu_game_candidates_view view;
     int result=kui_vmu_game_candidates_list(out->product,&out->storage,&view,log,cancel);
     if(result==KUI_VMU_GAME_CANDIDATES_ABSENT) return 0;
-    if(result!=KUI_VMU_GAME_CANDIDATES_OK || !view.present || !view.count ||
+    if(result!=KUI_VMU_GAME_CANDIDATES_OK || !view.present ||
        view.count>KUI_VMU_GAME_INFO_CARDS_MAX || !memchr(view.key,0,sizeof(view.key)) || strcmp(view.key,out->product) ||
        !same_pin(&view.storage,&out->storage) ||
        (view.default_index!=KUI_VMU_GAME_CANDIDATES_NO_DEFAULT && view.default_index>=view.count)) {
@@ -176,6 +177,12 @@ static int candidate_cards(struct kui_vmu_game_info *out,kui_log_fn log,kui_canc
             "Virtual VMU choices are unavailable; inspect VMU tools.");return -1;
     }
     out->candidates_sequence=view.sequence;
+    if(!view.count) {
+        out->known=true;
+        snprintf(out->label,sizeof(out->label),"No matching cards");
+        snprintf(out->notice,sizeof(out->notice),"Card deleted; assign or import a virtual VMU in VMU tools.");
+        return 1;
+    }
     for(unsigned i=0;i<view.count;i++) {
         const struct kui_vmu_game_candidate_target *target=&view.targets[i];
         if(!named_card(target->pair,target->identity,true,out,cancel)) return -1;
