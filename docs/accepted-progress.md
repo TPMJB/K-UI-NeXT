@@ -1,5 +1,30 @@
 # K-UI accepted progress
 
+## Current hardware failure: VC2 also fails as the first selection
+
+The owner now reports VC2 loading its VMU and then freezing on a cropped white
+screen even as the first game after boot. Later selections can freeze black.
+Repeated earlier successful launches do not establish reliable startup. The
+native RAM-retirement candidate946 is not accepted as a solution; a
+cleanup-only explanation cannot account for this fresh first-selection case.
+
+An active-runtime defect has been identified independently of that cleanup:
+while the virtual-card worker borrows the SD reader, the low GD gateway
+returns -1 for non-request control calls. The original VC2 WSEGACD drive-status
+call at return RVA23CE converts any nonzero result to C0000185 without retry.
+The existing request-only wait gate therefore leaves a permanent-error race
+in a normal, otherwise idle reader. Source-admitted control calls must wait
+for the actual borrower to release ownership and then execute normally; they
+must not receive invented results. CHECK's status4 already sleeps/retries in
+this exact driver and EXEC retains its existing busy behavior.
+
+The correction is limited to VC2's high GD-wait helper and its component
+identity. Swirl's helper, collection return controllers, native72KiB worker,
+Genesis options/Save Game, graphics copy policy and read batching are outside
+this change. The original driver error branch and the old linked wait gate
+are required regression controls. A software reproduction of that race does
+not establish that it caused every photographed console freeze.
+
 ## Later-reentry candidate: retire collection-native game RAM
 
 The next candidate preserves075e's working initial sequence and cache fix.

@@ -5,6 +5,25 @@ reader and history session. Their correctness and work limits must be checked
 there. Game-specific save eligibility and SDK compatibility remain separate
 from whether a shared path batches its reads.
 
+## Temporary storage ownership
+
+A virtual-card loan is a scheduling condition, not a disc error. Audit every
+guest API that can arrive during a loan, including status, initialization,
+callback registration and cancellation; request submission alone is not
+enough. A driver's handling of CHECK busy does not establish that it tolerates
+the same result from DRIVE or a dropped callback registration.
+
+For admitted ordinary-thread callers, wait using that owner's real scheduler
+and original stack, then retry the actual operation after ownership returns.
+Retain arguments, mode, completion and output-buffer semantics. Interrupt or
+unknown callers require their independently verified nonblocking contract;
+never fabricate a successful operation or call a guessed scheduler address.
+
+The VC2 regression must execute the old loan-busy path through the original
+DRIVE error branch, then the corrected linked wait/resume path. Keep this
+regression when altering shared ownership or adding another SDK profile.
+See [the control-call race](vc2-gd-loan-control-race.md).
+
 ## Filesystem image reads
 
 `python3 tests/test_game_image_batch.py` executes the production

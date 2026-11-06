@@ -6,12 +6,25 @@
     .global _kui_vc2_ce_vmu_gd_wait
     .type _kui_vc2_ce_vmu_gd_wait,@function
 _kui_vc2_ce_vmu_gd_wait:
-    /* Only REQUEST needs a real token. Keep every legacy non-FN0 result. */
+#if KUI_SMASH_SWIRL_VMU
+    /* Preserve the independently accepted Swirl gate. */
     mov r7,r1
     tst r1,r1
     bt .Lrequest
     jmp @r3
     nop
+#else
+    /* CHECK's4 is a real driver retry; EXEC's result is ignored. Other
+     * source-admitted calls must wait: e.g. DRIVE's-1 becomes permanent
+     * C0000185 even though the card loan is only temporarily busy. */
+    mov r7,r1
+    add #-1,r1
+    shlr r1
+    tst r1,r1
+    bf .Lrequest
+    jmp @r3
+    nop
+#endif
 .Lrequest:
     mov r0,r11
     mov r2,r12
@@ -31,11 +44,24 @@ _kui_vc2_ce_vmu_gd_wait:
     mov.l @(28,r8),r4
     mov.l @(32,r8),r5
     mov.l @r15,r6
+#if KUI_SMASH_SWIRL_VMU
     mov r9,r7
+#else
+    /* Keep the four-scalar native ABI: low byte=entry source, upper bytes
+     * =actual function. The original argument words remain parked above. */
+    mov.l @(12,r15),r7
+    shll8 r7
+    or r9,r7
+#endif
     mov.l .Ladmit,r0
+#if KUI_SMASH_SWIRL_VMU
     add #-16,r15
     jsr @r0
     nop
+#else
+    jsr @r0
+    add #-16,r15
+#endif
     add #16,r15
     mov r0,r13
     tst r13,r13
@@ -68,8 +94,13 @@ _kui_vc2_ce_vmu_gd_wait:
     bra .Lpoll
     nop
 .Lretry:
+#if KUI_SMASH_SWIRL_VMU
     mov.l @(16,r15),r0
     ldc r0,gbr
+#else
+    /* Both entries to the poll (initial admission and every Sleep return)
+     * already restore GBR. No call or GBR writer lies between poll/retry. */
+#endif
     mov.l @(20,r15),r0
     lds r0,mach
     mov.l @(24,r15),r0
@@ -78,9 +109,14 @@ _kui_vc2_ce_vmu_gd_wait:
     mov.l @(4,r15),r5
     mov.l @(8,r15),r6
     mov.l @(12,r15),r7
+#if KUI_SMASH_SWIRL_VMU
     add #32,r15
     jmp @r12
     nop
+#else
+    jmp @r12
+    add #32,r15
+#endif
 .Ladmission_fault:
     mov #1,r4
     bra .Lfatal

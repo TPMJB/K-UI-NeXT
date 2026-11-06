@@ -19,13 +19,16 @@ $(error VC2 diagnostic controls require the complete persistent helper profile)
 endif
 endif
 BUILD_ID ?= $(shell git rev-parse --short=12 HEAD)
-# The normal collection helper is an unchanged accepted component. Reproduce
-# its actual identity and require the complete pinned bytes below. Stamping a
-# GUI commit into it can change GCC string pooling and instruction addresses,
-# even when no helper implementation changed. Diagnostic helpers remain new
-# components and retain their own current source build.
+# Swirl's normal collection helper remains the unchanged accepted component.
+# VC2 now changes its live GD/VMU-loan arbitration and must carry its actual
+# source build. Do not stamp that new identity into Swirl's settled component:
+# GCC string pooling can move instructions even with no implementation change.
 ifeq ($(SMASH_CE_CHILD):$(VC2_PERSIST):$(VC2_DIAGNOSTIC_MODE):$(VC2_TEXTURE_PROBE),1:1:0:0)
+ifeq ($(VC2_SWIRL),1)
 VC2_HELPER_COMPONENT_BUILD := ab1b145b33b4
+else
+VC2_HELPER_COMPONENT_BUILD := $(BUILD_ID)
+endif
 else
 VC2_HELPER_COMPONENT_BUILD := $(BUILD_ID)
 endif
