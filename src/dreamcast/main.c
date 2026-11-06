@@ -4927,7 +4927,7 @@ static void startup_report_save_mounted(void) {
     const size_t limit=KUI_STARTUP_REPORT_RECORD_MAX;
     size_t used=(size_t)snprintf(report,limit,
         "\n--- K-UI startup %.12s ---\nScope: current GUI startup through version selection, before storage release.\n"
-        "Pre-splash display: K-UI / Starting (normal status).\n"
+        "Pre-splash display: original K-UI artwork before version selection.\n"
         "Earlier CD bootstrap/firmware logs are not carried across execution.\n",KUI_BUILD_ID);
     bool clipped=false;
     for(unsigned i=0;i<line_count;i++) {
@@ -5047,6 +5047,13 @@ int main(void) {
 #endif
     ui_thread = thd_get_current();
     vid_set_mode(DM_640x480 | DM_MULTIBUFFER, PM_RGB565);
+#ifdef KUI_SD_RUNTIME
+    /* Mode setup resets the previous framebuffer. Repaint the existing
+     * immutable RAM artwork before clock/setup logging or storage preflight;
+     * the normal splash/chime lifecycle still starts below. */
+    kui_splash_draw(vram_s);
+    vid_waitvbl();vid_flip(-1);
+#endif
     kui_log("Running " KUI_RELEASE_SHORT " " KUI_ROLE " build " KUI_BUILD_ID);
     kui_clock_start(kui_log);
     kui_log("Video: %ux%u %s %s, buffered",

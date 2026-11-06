@@ -1,5 +1,11 @@
 # K-UI work and release requirements
 
+The owner now explicitly requests restoration of the broken CD handoff-to-splash
+behavior. This is a narrow exception to the Games-only freeze below: paint the
+unchanged original artwork immediately before startup preflight, and deliver
+both physical GUI aliases. Preserve the qualified Games cohort and updater
+implementation. This exception does not authorize menu or bootloader redesign.
+
 This integration is strictly limited to the Games loading paths: readers,
 game bootstrap, virtual VMU, read-ahead, game compatibility and their build,
 delivery and verification. The owner explicitly excluded startup/splash,
