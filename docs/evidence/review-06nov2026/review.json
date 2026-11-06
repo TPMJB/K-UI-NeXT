@@ -1,0 +1,27 @@
+{
+  "date": "2026-11-06",
+  "scope": "Read-only code/artifact audits plus standing documentation policy; no runtime changes",
+  "frozen_candidate": "KUI-Shared-Game-Launch-06NOV2026-2210-UTC-f8807cb.zip",
+  "zip_sha256": "dc607c3e89ab6bac5c718b738bca9990ffd85ec39abb308140de280c4a7503e9",
+  "new_console_timings": false,
+  "physical_sd_available": false,
+  "reports": {
+    "ce-delivered.json": {
+      "original_report_sha256": "f486d18a4d2ef5a479a37669fdf7d602ce2d86543b65910097049612445342bd",
+      "public_report_sha256": "f486d18a4d2ef5a479a37669fdf7d602ce2d86543b65910097049612445342bd"
+    },
+    "restart.json": {
+      "original_report_sha256": "1c9f8c92cdbbb3e50fef0851fe3ba0acda66559d3e9741a5443baa6201f807bc",
+      "public_report_sha256": "1c9f8c92cdbbb3e50fef0851fe3ba0acda66559d3e9741a5443baa6201f807bc"
+    }
+  },
+  "external_sonic_review": {
+    "reported_by": "Claude, quoted by owner in this conversation",
+    "source_reference": "0d1691d2",
+    "reported_original": "Sonic Adventure 1 executable",
+    "original_hash_supplied": false,
+    "reported_result": "Old reader refuses nesting mode; new reader binds plain and nesting; six refusal cases retained",
+    "locally_reproduced_with_SA1": false,
+    "console_execution_reported": false
+  }
+}

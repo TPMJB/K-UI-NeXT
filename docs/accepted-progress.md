@@ -22,6 +22,13 @@ Capture GUI/module identity and both launch phases with usual matching options;
 retain the automatically generated launch record. Existing operation-count
 improvements must not be presented as measured console speed-ups.
 
+The subsequent [read-only review](review-06nov2026.md) confirms that all four
+delivered CE/CDDA modules already contain the VRAM-copy and folded-CRC changes;
+ordinary `ce-probe.kui` remains omitted. It also confirms that menu Restart
+may select a stale bank, while cold ROOT boot bypasses selectors. The physical
+card is unavailable, so existing banks are not assumed present or absent.
+Claude's original-backed SA1 result is recorded as an external report only.
+
 ## Sega Smash Pack accepted: cc81e63ca4d2, 2026-11-06
 
 The owner accepts the collection integration as complete after this exact

@@ -132,6 +132,13 @@ that separate operation. Do not convert a ZIP request into updater repair.
 Use America/Chicago date/time with CST/CDT and the actual component build in
 new filenames; retain existing delivered filenames and hashes unchanged.
 
+Validate a manual ZIP through cold CD/root boot. Menu Restart K-UI separately
+selects saved banks by activation sequence and can launch an older compatible
+bank instead of the copied ROOT. Do not delete/move banks or selectors to test
+this by default. Confirm the GUI and actual final module path/build/payload CRC;
+a matching GUI label alone does not prove a matching reader cohort. Existing
+startup report files can be stale because direct ROOT boot does not write them.
+
 Only when the owner explicitly requests KUP delivery, use the current Main producer:
 
     python3 tools/make_update.py staged/KUI test.kup
