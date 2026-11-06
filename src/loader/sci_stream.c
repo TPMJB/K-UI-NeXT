@@ -629,7 +629,12 @@ const uint8_t *kui_sci_stream_take(uint32_t lba, enum kui_sci_stream_result *res
                 else ++s.unrepaired;
             }
         }
-        if(crc != sent) {
+        /* A reconstructed byte consumes eight bits of the CRC's evidence:
+         * broader receive damage can then satisfy the remaining checksum.
+         * Never publish a block whose DMA reception lost a byte. Keep the
+         * existing CRC failure/retry path so the same block is read afresh,
+         * with bounded programmed-I/O fallback under repeated contention. */
+        if(((uint32_t)crc ^ sent) | lost) {
             STREAM_OBSERVE(++s.stats.crc_errors);
             *result = KUI_SCI_STREAM_CRC;
             return NULL;

@@ -24,6 +24,19 @@ static void __attribute__((noipa)) smash_ce_gin_begin(void) {
     /* This is the live original IP header, including fields we do not
      * interpret, rather than a replacement header read from disk. */
     smash_ce_gin_ip_crc=smash_ce_gin_retained_ip_crc();
+#if KUI_SMASH_CE_RETURN
+    /* GIN retains the collection's current scanout, which need not be the
+     * framebuffer0/640/RGB565 layout used by our terminal renderer. Select
+     * its already authenticated K-UI mode in RAM while adoption is quiet;
+     * neither successful adoption nor ordinary reads repaint the game.
+     * Snapshot the volatile descriptor once so the checked bytes are the
+     * same bytes copied into the low reader and later helper fault state. */
+    struct kui_smash_phase_video_seed video;
+    memcpy(&video,(const void *)&smash_ce_return_video_seed,sizeof(video));
+    if(!kui_smash_phase_video_valid(&video))
+        stopped("SMASH CE DIAGNOSTIC VIDEO REFUSED",0u);
+    memcpy(display.regs,video.regs,sizeof(display.regs));
+#endif
 }
 
 static void __attribute__((noipa)) smash_ce_gin_restore(void *out) {

@@ -33,6 +33,21 @@ static void check_channel_restored(void) {
     assert(m.sar == 0x11111111u && m.dar == 0x22222222u && m.tcr == 0x33u && m.chcr == 0);
 }
 
+/* A DMA reception which lost a byte is never payload, even if syndrome
+ * reconstruction found matching CRC bits. Refuse it first, then re-read all
+ * bytes and both CRC bytes from the same block through programmed I/O. */
+static const uint8_t *take_after_lost_byte_reread(uint32_t lba,
+    enum kui_sci_stream_result *result) {
+    assert(!kui_sci_stream_take(lba, result) && *result == KUI_SCI_STREAM_CRC);
+    unsigned commands = card.cmd18, stops = card.cmd12;
+    assert(kui_sci_stream_fetch(lba, LIMIT, true) == KUI_SCI_STREAM_OK);
+    assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
+    const uint8_t *block = kui_sci_stream_take(lba, result);
+    assert(block && *result == KUI_SCI_STREAM_OK);
+    assert(card.cmd18 == commands + 1u && card.cmd12 == stops + 1u);
+    return block;
+}
+
 /* A consumer as the resident uses it: take the next block, fetch the one
  * after it before copying, refetch after any failure. interrupt_polls: it
  * looks as the reader's interrupt does (a mid-block overrun is left for the
@@ -165,8 +180,8 @@ static void test_overrun_and_stall(void) {
      * overruns and is lost. Back on the bus, the channel takes byte `at`
      * (as on the console), or it stays held off and RDR keeps it until the
      * reception stops. Either way reception resumes at at+2 with the card
-     * where it stopped, and the CRC rebuilds the lost byte: no CMD12, no
-     * new CMD18. */
+     * where it stopped. That reconstructed reception must be refused; only
+     * a complete fresh block may become payload. */
     static const unsigned positions[] = {1, 2, 3, 77, 255, 256, 300, 508, 509, 510};
     const unsigned count = sizeof(positions) / sizeof(*positions);
     uint32_t lba = 40;
@@ -179,13 +194,14 @@ static void test_overrun_and_stall(void) {
             assert(kui_sci_stream_poll(false) == KUI_SCI_STREAM_PENDING && kui_sci_stream_busy());
             assert(m.chcr & 1u && m.dar == AREA_BASE + (m.dar & 0x1000u) + positions[i] + 2u);
             assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK && m.module_resets == resets + 2u);
-            check_block(lba, kui_sci_stream_take(lba, &r));
+            check_block(lba, take_after_lost_byte_reread(lba, &r));
             check_restored(); check_channel_restored();
         }
     }
     m.late_take = true;
     assert(st->repaired - before.repaired == 2u * count && st->overruns == before.overruns);
-    assert(card.cmd18 == 1 && !card.cmd12 && st->crc_errors == before.crc_errors);
+    assert(card.cmd18 == 1u + 2u * count && card.cmd12 == 2u * count &&
+        st->crc_errors - before.crc_errors == 2u * count);
     /* The channel's take of that byte still in flight when the reception is
      * stopped (RDR read, the write held off the bus): stopping the channel
      * does not cancel it, and the fence after the stop lets it land before
@@ -198,11 +214,12 @@ static void test_overrun_and_stall(void) {
         assert(kui_sci_stream_poll(false) == KUI_SCI_STREAM_PENDING && !m.flying && !m.in_flight);
         assert(m.fences - fences == 2u); /* before and after the stop */
         assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
-        check_block(lba, kui_sci_stream_take(lba, &r));
+        check_block(lba, take_after_lost_byte_reread(lba, &r));
         check_restored(); check_channel_restored();
     }
     assert(st->repaired - before.repaired == 2u * count + 4u && !st->ahead);
-    assert(card.cmd18 == 1 && !card.cmd12 && st->crc_errors == before.crc_errors);
+    assert(card.cmd18 == 1u + 2u * count + 4u && card.cmd12 == 2u * count + 4u &&
+        st->crc_errors - before.crc_errors == 2u * count + 4u);
     /* A resumed reception that runs a byte ahead ends with the card's gap
      * byte where the second CRC byte belongs (or the next token, with no
      * gap): the block is fetched again without a rebuild, which would accept
@@ -215,7 +232,8 @@ static void test_overrun_and_stall(void) {
         assert(kui_sci_stream_poll(false) == KUI_SCI_STREAM_PENDING);
         assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK && !m.ahead_on_resume);
         assert(!kui_sci_stream_take(lba, &r) && r == KUI_SCI_STREAM_CRC);
-        assert(st->ahead == gap + 1u && st->crc_errors - before.crc_errors == gap + 1u);
+        assert(st->ahead == gap + 1u &&
+            st->crc_errors - before.crc_errors == 2u * count + 4u + gap + 1u);
         card.nac = 1;
         assert(drive(lba, 2, out, true) == 0);
         check_range(lba, 2, out);
@@ -225,8 +243,8 @@ static void test_overrun_and_stall(void) {
     assert(kui_sci_stream_fetch(lba, LIMIT, false) == KUI_SCI_STREAM_OK);
     assert(kui_sci_stream_poll(false) == KUI_SCI_STREAM_PENDING);
     assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
-    check_block(lba, kui_sci_stream_take(lba, &r));
-    assert(card.cmd12 == cmd12 && st->repaired - before.repaired == 2u * count + 9u);
+    check_block(lba, take_after_lost_byte_reread(lba, &r));
+    assert(card.cmd12 == cmd12 + 1u && st->repaired - before.repaired == 2u * count + 9u);
     ++lba;
     before = *st;
     cmd12 = card.cmd12;
@@ -269,7 +287,7 @@ static void test_overrun_and_stall(void) {
         assert(kui_sci_stream_fetch(lba, LIMIT, false) == KUI_SCI_STREAM_OK);
         assert(kui_sci_stream_poll(false) == KUI_SCI_STREAM_PENDING && st->repaired == still + 1u);
         assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
-        check_block(lba, kui_sci_stream_take(lba, &r));
+        check_block(lba, take_after_lost_byte_reread(lba, &r));
         lba += 1;
     }
     unsigned repaired = st->repaired, overruns = st->overruns;
@@ -285,7 +303,7 @@ static void test_overrun_and_stall(void) {
     assert(kui_sci_stream_fetch(lba, LIMIT, false) == KUI_SCI_STREAM_OK);
     assert(kui_sci_stream_poll(false) == KUI_SCI_STREAM_PENDING && st->repaired == repaired + 1u);
     assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
-    check_block(lba, kui_sci_stream_take(lba, &r));
+    check_block(lba, take_after_lost_byte_reread(lba, &r));
     lba += 1;
     /* A receiver that never finishes ends as an overrun after the bound. */
     m.stall = true;
@@ -300,7 +318,8 @@ static void test_deferred_repair(void) {
     /* Seen from an interrupt, a mid-block overrun is not resumed there: the
      * SCI is handed back, the card waits deselected, nothing is in flight,
      * and the next fetch of that block resumes it in place (no CMD12, no
-     * new CMD18), however the channel took the byte RDR held. */
+     * new CMD18), however the channel took the byte RDR held. Its completed
+     * resumed reception still requires refusal and a fresh CRC-checked read. */
     reset_model();
     open_stream(false);
     const struct kui_sci_stream_stats *st = kui_sci_stream_stats();
@@ -321,19 +340,19 @@ static void test_deferred_repair(void) {
             assert(kui_sci_stream_fetch(lba, LIMIT, false) == KUI_SCI_STREAM_OK && kui_sci_stream_busy());
             assert(m.dma_starts == dma + 2u && !m.cs_high);
             assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
-            check_block(lba, kui_sci_stream_take(lba, &r));
+            check_block(lba, take_after_lost_byte_reread(lba, &r));
         }
     }
     assert(st->deferred - before.deferred == 8 && st->repaired - before.repaired == 8);
-    assert(st->overruns == before.overruns && st->crc_errors == before.crc_errors);
-    assert(card.cmd18 == 1 && !card.cmd12);
+    assert(st->overruns == before.overruns && st->crc_errors - before.crc_errors == 8u);
+    assert(card.cmd18 == 9u && card.cmd12 == 8u);
     /* Another block asked for instead: the card is stopped mid-block. */
     m.late_take = true; m.overrun_after = 100;
     assert(kui_sci_stream_fetch(lba, LIMIT, false) == KUI_SCI_STREAM_OK);
     assert(kui_sci_stream_poll(true) == KUI_SCI_STREAM_PENDING && !kui_sci_stream_busy());
     assert(drive(lba + 10u, 3, out, true) == 0);
     check_range(lba + 10u, 3, out);
-    assert(card.cmd12 == 1 && card.cmd18 == 2);
+    assert(card.cmd12 == 9u && card.cmd18 == 10u);
     assert(kui_sci_stream_stop() == KUI_SCI_STREAM_OK);
     check_restored(); check_channel_restored();
 }
@@ -519,8 +538,8 @@ static void test_crc_reference_vectors(void) {
             check_restored(); check_channel_restored();
         }
     }
-    /* Keep repair's CRC-syndrome reconstruction covered with the final
-     * nonuniform vector too, rather than only the model's usual pattern. */
+    /* A nonuniform vector also requires a fresh transmission after loss;
+     * reconstruction alone cannot establish independent CRC evidence. */
     reset_model();
     card_content = vector_content;
     open_stream(false);
@@ -529,7 +548,7 @@ static void test_crc_reference_vectors(void) {
     assert(kui_sci_stream_fetch(800u, LIMIT, false) == KUI_SCI_STREAM_OK);
     assert(kui_sci_stream_wait() == KUI_SCI_STREAM_OK);
     enum kui_sci_stream_result r;
-    const uint8_t *p = kui_sci_stream_take(800u, &r);
+    const uint8_t *p = take_after_lost_byte_reread(800u, &r);
     assert(p && r == KUI_SCI_STREAM_OK && !memcmp(p, crc_vector, sizeof(crc_vector)));
     assert(kui_sci_stream_stats()->repaired == repaired + 1u);
     assert(kui_sci_stream_stop() == KUI_SCI_STREAM_OK);

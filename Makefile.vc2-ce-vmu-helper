@@ -19,15 +19,15 @@ $(error VC2 diagnostic controls require the complete persistent helper profile)
 endif
 endif
 BUILD_ID ?= $(shell git rev-parse --short=12 HEAD)
-# Swirl's normal collection helper remains the unchanged accepted component.
-# VC2 now changes its live GD/VMU-loan arbitration and must carry its actual
-# source build. Do not stamp that new identity into Swirl's settled component:
+# Preserve each unchanged collection helper's actual component identity.
+# VC2 owns the91fa GD-control arbitration implementation; Swirl owns ab1.
+# A stage/GUI-only change must not stamp a new identity into either helper:
 # GCC string pooling can move instructions even with no implementation change.
 ifeq ($(SMASH_CE_CHILD):$(VC2_PERSIST):$(VC2_DIAGNOSTIC_MODE):$(VC2_TEXTURE_PROBE),1:1:0:0)
 ifeq ($(VC2_SWIRL),1)
 VC2_HELPER_COMPONENT_BUILD := ab1b145b33b4
 else
-VC2_HELPER_COMPONENT_BUILD := $(BUILD_ID)
+VC2_HELPER_COMPONENT_BUILD := 91fa7cc6922b
 endif
 else
 VC2_HELPER_COMPONENT_BUILD := $(BUILD_ID)
@@ -126,6 +126,9 @@ $(VC2_VMU_DIR)/helper.bin: $(VC2_VMU_DIR)/helper.elf tools/check_smash_helper_bo
 	$(VC2_VMU_OBJCOPY) -O binary --only-section=.uncached --only-section=.hook --only-section=.vc2_maple_bridge $(if $(filter 1,$(VC2_PERSIST)),--only-section=.gd_wait) $< $@
 ifeq ($(VC2_HELPER_COMPONENT_BUILD),ab1b145b33b4)
 	python3 tools/check_smash_helper_body.py $@ --kind $(if $(filter 1,$(VC2_SWIRL)),2,1) --build $(VC2_HELPER_COMPONENT_BUILD) --output $(VC2_VMU_DIR)/accepted-component.json
+endif
+ifeq ($(VC2_HELPER_COMPONENT_BUILD),91fa7cc6922b)
+	python3 tools/check_smash_helper_body.py $@ --kind 1 --build $(VC2_HELPER_COMPONENT_BUILD) --component vc2-arbitration --output $(VC2_VMU_DIR)/accepted-component.json
 endif
 $(VC2_VMU_DIR)/bridge.bin: $(VC2_VMU_DIR)/helper.elf
 	$(VC2_VMU_OBJCOPY) -O binary --only-section=.vc2_maple_bridge $< $@

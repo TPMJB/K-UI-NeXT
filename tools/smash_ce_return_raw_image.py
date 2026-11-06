@@ -4,13 +4,15 @@
 import argparse
 import hashlib
 import json
+import struct
 from pathlib import Path
 import zlib
 from check_vmu_native_worker_gateway import read_elf,symbol_bytes
 
 PREFIX_BYTES,RAW_BYTES=260,512
-ACCEPTED_SHA='7289dc76bd6ea1d3ddd4ae1f6f65aa1dbd1b31bc4e80f2345727bceb01d325c4'
+ACCEPTED_SHA='e6d55610190b00eab227b25a73289a13aab86a8194a314571022cfdda102e9cc'
 SYMBOL='_kui_smash_ce_return_raw_prefix'
+CALLBACK_LITERALS={240:'_open_bus',252:'_native_foreground_complete',256:'_memcpy'}
 
 def require(ok,message):
     if not ok:raise ValueError(message)
@@ -21,6 +23,9 @@ def accepted(raw,resident):
         'Current raw reader changed address, initialized prefix or section geometry')
     require(len(raw)==RAW_BYTES and raw==prefix+bytes(RAW_BYTES-PREFIX_BYTES),
         'Current raw file differs from the fresh linked reader plus canonical zero padding')
+    for offset,symbol in CALLBACK_LITERALS.items():
+        require(struct.unpack_from('<I',raw,offset)[0]==image[4][symbol][0],
+            'Current raw callback literal differs from its fresh resident symbol: '+symbol)
     require(hashlib.sha256(raw).hexdigest()==ACCEPTED_SHA,
         'Current raw reader differs from the explicitly reviewed image; regenerate/review its ABI')
     return prefix

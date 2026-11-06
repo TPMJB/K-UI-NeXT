@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Verify a freshly built CE helper permits only its one build-tag change.
+"""Verify freshly built, independently identified collection helpers.
 
 validate(raw, kind, build) accepts immutable raw helper bytes. The exact ab1
 body, size and one BUILD tag location are pinned; no bytes are rewritten.
+The VC2 arbitration component has its own strict full-byte91fa identity.
 """
 import argparse
 import hashlib
@@ -13,6 +14,8 @@ import re
 
 
 REFERENCE_BUILD = "ab1b145b33b4"
+VC2_ARBITRATION_BUILD = "91fa7cc6922b"
+VC2_ARBITRATION_SHA256 = "430562b98c41f5dcb8d7861300d3c4c8d37f2c4f4cc3f2edfdba10a5c90d92c0"
 PINS = {
     1: {"raw_bytes": 41152, "prepared_bytes": 49152, "tag_offset": 4082,
         "reference_sha256": "85e864ae8d386b4b2d5cec731f788441367fdf9f2bef86f57ccd12a430e214e8",
@@ -25,6 +28,17 @@ PINS = {
 
 def sha(data):
     return hashlib.sha256(data).hexdigest()
+
+
+def validate_arbitration(raw, kind, build):
+    """Admit the exact current component, never a newly retagged helper."""
+    if (kind != 1 or build != VC2_ARBITRATION_BUILD or len(raw) != 41152 or
+            sha(raw) != VC2_ARBITRATION_SHA256 or
+            raw.count(b"BUILD " + build.encode() + b"\0") != 1):
+        raise ValueError("VC2 helper differs from the complete91fa arbitration component")
+    return {"schema": "kui.smash.helper-arbitration-component.v1", "status": "PASS",
+            "kind": kind, "build": build, "raw_bytes": len(raw),
+            "raw_sha256": sha(raw), "byte_exact_91fa": True}
 
 
 def validate(raw, kind, build):
@@ -61,10 +75,12 @@ def main():
     parser.add_argument("raw", type=Path)
     parser.add_argument("--kind", required=True, choices=(1, 2), type=int)
     parser.add_argument("--build", required=True)
+    parser.add_argument("--component", choices=("legacy", "vc2-arbitration"), default="legacy")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     try:
-        text = json.dumps(validate(args.raw.read_bytes(), args.kind, args.build), indent=2) + "\n"
+        validator = validate_arbitration if args.component == "vc2-arbitration" else validate
+        text = json.dumps(validator(args.raw.read_bytes(), args.kind, args.build), indent=2) + "\n"
         if args.output:
             args.output.write_text(text)
         print(text, end="")

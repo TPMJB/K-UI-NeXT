@@ -1,0 +1,105 @@
+{
+  "schema": "kui.vc2.mainana-postblank-native-gd-prefix.v1",
+  "status": "BOUNDED_ORIGINAL_FLOW_CONFIRMED",
+  "source_sha256": "82bb1160814548f4656b273353fd6168a691fb5f215b77377860ff9fd2156c8a",
+  "gd_reset_window_sha256": "7e44dc1fe65c889a1f03243ff4a3087867e317616a68aa05b7dffe8942aafcac",
+  "gd_reset_cases": [
+    {
+      "gd_identity": "0x10",
+      "modeled_clock_advances": true,
+      "pc": "0x8c003000",
+      "steps": 35,
+      "clock_reads": 7,
+      "writes": [
+        {
+          "pc": "0x8ce08932",
+          "operation": "write",
+          "address": "0xa0600480",
+          "bytes": 1,
+          "value": "0x0"
+        },
+        {
+          "pc": "0x8ce08944",
+          "operation": "write",
+          "address": "0xa0600480",
+          "bytes": 1,
+          "value": "0x1"
+        }
+      ],
+      "returned": true
+    },
+    {
+      "gd_identity": "0x10",
+      "modeled_clock_advances": false,
+      "pc": "0x8ce0893e",
+      "steps": 201,
+      "clock_reads": 65,
+      "writes": [
+        {
+          "pc": "0x8ce08932",
+          "operation": "write",
+          "address": "0xa0600480",
+          "bytes": 1,
+          "value": "0x0"
+        }
+      ],
+      "returned": false
+    },
+    {
+      "gd_identity": "0xff",
+      "modeled_clock_advances": true,
+      "pc": "0x8c003000",
+      "steps": 22,
+      "clock_reads": 5,
+      "writes": [],
+      "returned": true
+    },
+    {
+      "gd_identity": "0xff",
+      "modeled_clock_advances": false,
+      "pc": "0x8ce08952",
+      "steps": 198,
+      "clock_reads": 65,
+      "writes": [],
+      "returned": false
+    }
+  ],
+  "first_syscalls": [
+    {
+      "function": 3,
+      "caller_pr": "0x8ce085ac"
+    },
+    {
+      "function": 0,
+      "command": 24,
+      "caller_pr": "0x8ce085b8"
+    },
+    {
+      "function": 2,
+      "caller_pr": "0x8ce085cc"
+    },
+    {
+      "function": 1,
+      "output": "0x7dfff000",
+      "caller_pr": "0x8ce085d8"
+    },
+    {
+      "function": 4,
+      "output": "0x7dfff010",
+      "caller_pr": "0x8ce085fc"
+    }
+  ],
+  "ordering": [
+    "8CE08358 disables scanout;8CE08366 PVR reset3",
+    "8CE08586 CPU/hardwaretable includingrealGDreset8CE08926",
+    "GDINIT/cmd24/EXEC/CHECK/DRIVE via8C0000BC",
+    "8CE0A300 graphicssetup",
+    "8CE09300 kernelread;preparerABORT8CE09362"
+  ],
+  "caveats": [
+    "The physicalGDreset bypasses theemulatedGDgateway, butisoriginalSAMPLEbehavior.",
+    "Counterheldconstanttrapsoriginaldelayloop;hardwaretableinitializes/restartsTMU0beforethiscall, so nostaleTSTRcauseisproved.",
+    "Loadingbitmaporiginnotyetidentified; linkingdisappearance toMAINANAblankisatemporal inference.",
+    "No productionloaderchangeorfullhardware/gameexecution."
+  ]
+}

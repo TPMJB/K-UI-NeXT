@@ -1,5 +1,88 @@
 # K-UI accepted progress
 
+## Sega Smash Pack accepted: cc81e63ca4d2, 2026-11-06
+
+The owner accepts the collection integration as complete after this exact
+sequence succeeded in one uninterrupted console session:
+`VC2 -> Shining Force -> PS2 -> Sega Swirl -> VC2 -> ALL OTHER GAMES -> VC2`.
+This includes repeated VC2 launches after both the saving games and the rest
+of the collection, the condition that previously failed. This acceptance
+supersedes the pending/rejected status of the earlier candidates below; their
+individual failures remain historical evidence.
+
+The accepted software is local source
+`cc81e63ca4d29f51b02bdd49e95d8cedbe689d7d`, identical in source tree
+`6f4814f643f5a39fd4728e79d3703167bb40e741` to published commit
+`6d489a90276776a4d62e4f68b9efdc3161c6c1c0`. The tested archive is
+`K-UI-Smash-cc81e63ca4d2-SCI-DAMAGED-BLOCK-CANDIDATE.zip`, SHA256
+`eb469340a2a6732a356a77536ca8a04a261740c3bca0620e84266f06c204ca6b`.
+Its embedded/standalone KUP SHA256 is
+`3c85ac9927a7ade59f69001babbb33a88175c54b592589b86e59a9c13e476209`.
+Retain these exact tested bytes; a documentation or merge commit is not a
+new tested binary, and no replacement package is required for this acceptance.
+
+Preserve the current VC2/Swirl helper components, the native72KiB worker,
+independent background-reader ownership, original Genesis options/Save Game,
+working returns, shared-card admission and loading improvements. The shared
+SCI lost-byte quarantine, bounded same-LBA retry, normal CMD18 batching and
+full block CRC checks are now part of this accepted baseline. Do not restore
+an earlier helper/decoder, bypass validation or retune individual games to
+recreate it. This collection acceptance does not qualify untested loader
+families or turn the separate generic CE audit into an installed global rollout.
+
+VC2 still takes a long time to load; the owner supplied no new duration or
+VMU-on/off comparison in this acceptance. Record that as an optional future
+performance investigation, not a remaining Smash completion blocker. Do not
+start another VC2 change or request another console run without a new request.
+If revisited, preserve this accepted baseline and measure the complete phases
+before applying the existing shared batching/card-admission lessons. Work
+counts alone do not establish a user-visible speedup. See
+[the shared policy](global-launch-policy.md) and
+[the accepted read-recovery repair](sci-damaged-block-reread.md).
+
+## 0a hardware report: damaged reconstructed block reaches the sector parser
+
+The owner's three0a2ddd9bb9b6 photos show FN12 PIO_TRANSFER in the original VC2
+driver, loading `VC2/BIN/COMMON/F_COMMON.BIN`. The sector parser rejects a header
+after0x69800 bytes. The accepted source block retains a DMA lost-byte marker;
+the mapper succeeded and the bus fault flag is clear. The blue pages are the
+now-visible terminal report. This package retained91fa's actual current helper
+and arbitration code; it did not roll them back. Fresh-first startup is still
+not reliable.
+
+An old-production negative control now demonstrates that CRC erasure repair
+can accept a wrong block with an invalid raw-sector header. Shared SCI source
+now rejects all reconstructed blocks and uses its existing bounded same-LBA
+retry/programmed-I/O fallback before game delivery. Normal batching, CRC checks,
+buffer geometry and current helper implementations remain required. This is
+a supported repair to the observed failure path, not proof of the console's
+exact corruption or a declaration that every freeze is solved. See
+[the repair and evidence](sci-damaged-block-reread.md).
+
+## 91fa hardware rejection: repeated VC2 fails before its VMU message
+
+The owner tested the delivered91fa package and reported this exact sequence:
+`VC2 -> Menu -> Play -> return to main -> Sega Swirl -> Shining Force -> PS2 -> Vectorman -> VC2 -> VC2 loading screen -> Dead`.
+The first VC2 visit reached play and returned. The later visit froze after the
+bottom-right Loading message disappeared, before the visible VMU message.
+On a working run, that interval contains another approximately5–7 seconds of
+SD activity before the VMU message and opening credits. No new LED behavior,
+error code, framebuffer color or failing instruction was reported for the
+failed run. Do not infer those details.
+
+91fa is not accepted as a reliable VC2 fix. Its reproduced drive-status/VMU
+loan defect remains a valid software correction; this report does not establish
+that defect as the freeze cause. The latest failure is specifically before
+the visible VMU check, which does not prove virtual-card code is inactive.
+Trace the loading-to-VMU handoff and repeated-launch state against this exact
+sequence. Do not request another console run merely to recheck a speculative
+reset or a code path already excluded by actual compiled configuration.
+
+The separate audit's generic CE completion fixes do not alter this native
+foreground/MMU/PIO configuration. Shipping those alone would not constitute
+a new VC2 test. Preserve current workers, options/Save Game, graphics policy,
+loading improvements and working returns while obtaining new evidence.
+
 ## Broader audit follow-up; delivered91fa remains unchanged
 
 The owner requested a systematic shared loader/VMU review after the repeated

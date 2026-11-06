@@ -1258,6 +1258,7 @@ static void late_card_failed_stop(void) {
         "\"sticky_quarantine_cases\":1,\"hardware_executed\":false}\n",checks);
 }
 #endif
+#ifndef KUI_RETAIL_FOREGROUND_FIXTURE_ONLY
 int main(int argc,char **argv) {
 #if KUI_VC2_VMU_LATE
     if(argc==2 && !strcmp(argv[1],"--vc2-late-stop")) {late_card_failed_stop();return 0;}
@@ -1314,3 +1315,4 @@ int main(int argc,char **argv) {
         callback_reads,publications,hw.vbr_sets);
     return 0;
 }
+#endif
