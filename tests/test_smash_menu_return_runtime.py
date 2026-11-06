@@ -22,7 +22,7 @@ from test_smash_menu_loader_runtime import RuntimeCPU, FIRMWARE, FIRMWARE_ADDRES
 RESET, ENTRY, TARGET = 0x8c0117f0, 0xac008300, 0xac010000
 RAW, RETIRE, STOP, CALLER = 0xac008100, 0x8c300000, 0xac007000, 0x8c003000
 CONTEXT, IP, CCR = 0x8c19ee60, 0x8c0080f0, 0xff00001c
-TAGS = {0xf4000008 + 32*i for i in range(512)}
+TAGS = {0xf4000000 + 32*i for i in range(512)}
 DMA = {0xffa0000c + 16*i for i in range(4)}
 G2_ENABLE = {0xa05f7800 + 32*i + 20 for i in range(4)}
 G2_ACTIVE = {0xa05f7800 + 32*i + 24 for i in range(4)}

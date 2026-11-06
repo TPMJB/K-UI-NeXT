@@ -41,7 +41,12 @@ C(kui_native_return_cache_off):
     nop
     .align 2
 .Lp2_alias: .long 0x20000000
-.Ltags: .long 0xf4000008
+/* Select entries directly (A=0). With A=1, read-back physical tags are
+ * translated as virtual addresses while CE's MMU is still enabled. A UTLB
+ * miss silently skips that writeback, then OCI would discard dirty data.
+ * SH7750 hardware manual4.5.3: non-associative writes retire each dirty entry
+ * without depending on the old game's translations. */
+.Ltags: .long 0xf4000000
 .Ltag_count: .long 512
 .Lccr: .long 0xff00001c
 .Lcache_disable: .long 0x00000808

@@ -1,5 +1,29 @@
 # K-UI accepted progress
 
+## Warm-entry follow-up: correct terminal cache writeback
+
+The current follow-up starts from the exact published Main eddbb01 tree. It
+changes one bit of the terminal cache-array address: F4000008 to F4000000.
+The former selects associative writes. CE calls this cleanup before disabling
+its MMU, so writing a physical tag back through the associative interface can
+miss or mismatch the game's virtual translation and silently do nothing.
+The following CCR invalidation can then discard dirty data. Direct entry
+writes avoid that translation dependency and retire every dirty cache entry.
+
+This is a confirmed cleanup defect, not a captured cause of the console black
+screen. The low64KiB firmware/IP area is deliberately preserved across returns
+and is not all covered by the earlier bounded low-reader publication. Losing
+dirty bytes there violates that preservation contract. Which live bytes were
+affected in the reported console run remains unknown.
+
+The source change preserves all instruction bytes, loop length and linked
+controller geometry; only the literal's association bit changes. No worker,
+helper, native options/save flow, game read path or return routing changes.
+The new linked-instruction cache test models the documented SH7750 hardware
+semantics and includes the old literal as a failing control. Console warm-order
+acceptance still requires the exact Swirl → Shining Force → PSII → VC2 check.
+See [the cache-retirement note](smash-cache-retirement.md).
+
 ## Current review handoff: VC2 fails after the multi-game sequence
 
 The owner reports that Sega Swirl → collection → Shining Force → collection →
