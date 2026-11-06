@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/retail_loader_layout.h"
+#include "native_cold_cache_policy.h"
     .global __kui_retail_cold_instruction_cache
     .set __kui_retail_cold_instruction_cache,1
 #if KUI_VC2_STAGE_CACHED_RELAY && (!KUI_VC2_CE_VMU || !KUI_VC2_VMU_LATE || !KUI_VC2_VMU_PERSIST)

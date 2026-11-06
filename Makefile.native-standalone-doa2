@@ -19,7 +19,7 @@ FLAGS = -std=c11 -Os -g -Wall -Wextra -Werror $(CPU) \
 RESIDENT_FLAGS = $(FLAGS) -DKUI_RETAIL_TRANSPORT=1 -DKUI_RETAIL_ASYNC=1 \
  -DKUI_RETAIL_GD_ASYNC=1 -DKUI_SCI_SD_NO_BLOCK=1 -DKUI_RETAIL_MANIFEST_SLOTS=64 \
  -flto -mrelax -fcallgraph-info=su
-STAGE_FLAGS = $(FLAGS) -DKUI_NATIVE_STANDALONE_STAGE=1
+STAGE_FLAGS = $(FLAGS) -DKUI_NATIVE_STANDALONE_STAGE=1 -fcallgraph-info=su
 LINK = $(CPU) -nostdlib -Wl,--gc-sections -Wl,--build-id=none
 NATIVE_SDK_CALLBACK_ROOT ?= -Wl,-u,_kui_retail_sdk_sci_entry
 NATIVE_IRQ_ROOT ?= -Wl,-u,_kui_retail_async_irq

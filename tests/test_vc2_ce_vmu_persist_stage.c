@@ -144,9 +144,12 @@ int kui_vmu_persist_stage_admit(const struct kui_vmu_persist_profile *profile,
     const struct kui_retail_manifest *map) {
     assert(profile==&vc2_persist_profile && map==&manifest);return admit_result;
 }
-int kui_vmu_persist_stage_prepare(const struct kui_vmu_persist_profile *profile,
+const struct kui_vmu_persist_stage_policy kui_vmu_persist_stage_exclusive_checkpoint={1u,16u,1u,0u};
+int kui_vmu_persist_stage_prepare_policy(const struct kui_vmu_persist_profile *profile,
     const struct kui_retail_manifest *map,const struct kui_vmu_persist_session_ops *ops,
+    const struct kui_vmu_persist_stage_policy *policy,
     struct kui_vmu_persist_stage_workspace *work,struct kui_vmu_durable_handoff *handoff) {
+    assert(policy==&kui_vmu_persist_stage_exclusive_checkpoint);
     assert(profile==&vc2_persist_profile && map==&manifest && ops->context==&card);
     assert(acquires==1u && !releases && work==&vc2_persist_work);++prepares;
     work->phase=KUI_VMU_PERSIST_STAGE_SEAL;

@@ -173,7 +173,7 @@ static void selection_tests(void) {
     setup();add_regular('a');io.directory_padding=256u;CHECK(prepare(false)==NATIVE_CACHE_SKIPPED);
     CHECK(io.reads==257u);
     setup();struct kui_vmu_native_resolution record;mock(image,sizeof(image),&record);
-    record.driver.image_bytes=record.heap.image_bytes=record.exits.image_bytes=768u;add(&record,'a');CHECK(prepare(false)==NATIVE_CACHE_SKIPPED);
+    record.driver.image_bytes=record.heap.image_bytes=record.exits.image_bytes=768u;add(&record,'a');CHECK(prepare(false)==NATIVE_CACHE_READY);
     setup();mock(image,sizeof(image),&record);record.driver.load_address=record.heap.load=record.exits.load=load+4u;
     add(&record,'a');CHECK(prepare(false)==NATIVE_CACHE_SKIPPED);
 }
@@ -277,7 +277,7 @@ static void indexed_hint_tests(void) {
         if(fault==2u)io.alias_path[0]='1';
         if(fault==3u) {
             struct kui_vmu_native_resolution record;mock(image,sizeof(image),&record);
-            record.driver.image_bytes=record.heap.image_bytes=record.exits.image_bytes=768u;
+            record.driver.image_bytes=record.heap.image_bytes=record.exits.image_bytes=1280u;
             CHECK(kui_vmu_native_resolution_cache_encode(&record,io.alias_wire,sizeof(io.alias_wire)));
         }
         io.opens=io.reads=io.closes=io.publishes=0u;
@@ -293,21 +293,68 @@ static void indexed_hint_tests(void) {
     }
     puts("PASS indexed native hints: canonical path/extent/epoch/class/lease keys,257-directory-call old control versus one direct read/no writes, unchanged NVR bytes, bad-alias fallback and failed publication");
 }
+/* The old production predicate discarded every reclaimed-program record
+ * before the stage could check it. Keep that exact predicate as a control. */
+#include "fixtures/native-hint-length-original.inc"
+static void prefix_candidate_tests(void) {
+    setup();struct kui_vmu_native_resolution record,out;mock(image,sizeof(image),&record);
+    map.boot_bytes=sizeof(image)+512u;add(&record,'a');
+    CHECK(!native_cache_hint_admitted_original(&map,false,&package,&record));
+    CHECK(native_cache_hint_admitted(&map,false,&package,&record));
+    CHECK(prepare(false)==NATIVE_CACHE_READY);
+    CHECK(native_cache_alias_publish("/Games/Test/Test.gdi",&map,false,&package,"/Games/Test",cancelled));
+    io.opens=io.reads=io.closes=io.publishes=io.alias_reads=io.canonical_reads=0u;
+    CHECK(prepare(false)==NATIVE_CACHE_READY && last_indexed);
+    const uint8_t *wire,*pin;CHECK(kui_vmu_native_cache_seed_read(module+128u,1120u,&wire,&pin));
+    /* No reviewed suffix exists in this generated full source. The actual
+     * lifetime proof keeps it whole, and exact-length replay must reject the
+     * smaller advisory record. A source truncation cannot manufacture a
+     * reviewed suffix; changing the hashed prefix also causes a SHA miss. */
+    uint8_t full[sizeof(image)+512u];memcpy(full,image,sizeof(image));memset(full+sizeof(image),0,512u);
+    size_t program=0u;CHECK(kui_vmu_native_program_extent(full,sizeof(full),load,&program) && program==sizeof(full));
+    CHECK(!kui_vmu_native_resolution_cache_replay(full,program,load,wire,1024u,pin,&out));
+    CHECK(kui_vmu_native_program_extent(full,sizeof(full)-1u,load,&program) && program==sizeof(full)-1u);
+    CHECK(!kui_vmu_native_resolution_cache_replay(full,program,load,wire,1024u,pin,&out));
+    full[500]^=1u;CHECK(!kui_vmu_native_resolution_cache_replay(full,sizeof(image),load,wire,1024u,pin,&out));
+    record.driver.image_bytes=record.heap.image_bytes=record.exits.image_bytes=map.boot_bytes+1u;
+    CHECK(!native_cache_hint_admitted(&map,false,&package,&record));
+    puts("PASS shorter advisory record: old production equality rejects; shared directory/index selection succeeds; fresh full lifetime/length/SHA checks still reject unproved truncation and changed prefix");
+}
 static void actual_rediscovery(const char *path) {
     FILE *file=fopen(path,"rb");CHECK(file);CHECK(!fseek(file,0,SEEK_END));long length=ftell(file);CHECK(length>0);
     rewind(file);uint8_t *boot=malloc((size_t)length);CHECK(boot);CHECK(fread(boot,1,(size_t)length,file)==(size_t)length);CHECK(!fclose(file));
     size_t bytes;CHECK(kui_vmu_native_program_extent(boot,(size_t)length,load,&bytes));
     struct kui_vmu_native_resolution record,out;uint8_t fresh[1024];
     CHECK(kui_vmu_native_resolution_cache_build(boot,bytes,load,fresh,sizeof(fresh),&record));
-    setup();map.boot_bytes=(uint32_t)bytes;record.driver.image_sha256[0]^=1u;add(&record,'a');
+    uint8_t proof_pin[32];CHECK(kui_vmu_native_resolution_cache_record_digest(fresh,sizeof(fresh),proof_pin));
+    CHECK(kui_vmu_native_resolution_cache_replay(boot,bytes,load,fresh,sizeof(fresh),proof_pin,&out));
+    /* A GUI candidate does not authorize the source's lifetime or prefix.
+     * Reexecute the real stage's extent then exact-length/SHA boundary. */
+    boot[0x200u]^=1u;size_t changed_extent=0u;
+    if(kui_vmu_native_program_extent(boot,(size_t)length,load,&changed_extent))
+        CHECK(!kui_vmu_native_resolution_cache_replay(boot,changed_extent,load,fresh,sizeof(fresh),proof_pin,&out));
+    boot[0x200u]^=1u;
+    if((size_t)length-bytes==0x8000u) {
+        boot[(size_t)length-1u]^=1u;
+        CHECK(!kui_vmu_native_program_extent(boot,(size_t)length,load,&changed_extent));
+        boot[(size_t)length-1u]^=1u;
+    }
+    setup();map.boot_bytes=(uint32_t)length;
+    CHECK(native_cache_hint_admitted(&map,true,&package,&record)==
+        (record.heap.family!=KUI_VMU_NATIVE_HEAP_ARENA));
+    if(bytes!=(size_t)length)CHECK(!native_cache_hint_admitted_original(&map,false,&package,&record));
+    record.driver.image_sha256[0]^=1u;add(&record,'a');
     if(!record.heap.initializer_slot || record.heap.family==KUI_VMU_NATIVE_HEAP_ARENA) {
         dual_module(record.heap.family==KUI_VMU_NATIVE_HEAP_ARENA?record.call.entry_bytes:KUI_NATIVE_DUAL_GENERAL_LEASE_BYTES);
         CHECK(prepare(true)==NATIVE_CACHE_READY);
     } else CHECK(prepare(false)==NATIVE_CACHE_READY);
     const uint8_t *wire,*pin;CHECK(kui_vmu_native_cache_seed_read(module+128u,1120u,&wire,&pin));
-    CHECK(!kui_vmu_native_resolution_cache_replay(boot,bytes,load,wire,1024u,pin,&out));
+    size_t fresh_bytes=0u;CHECK(kui_vmu_native_program_extent(boot,(size_t)length,load,&fresh_bytes) && fresh_bytes==bytes);
+    CHECK(!kui_vmu_native_resolution_cache_replay(boot,fresh_bytes,load,wire,1024u,pin,&out));
     CHECK(kui_vmu_native_resolution_cache_build(boot,bytes,load,fresh,sizeof(fresh),&out));
-    uint8_t expected[32];digest(boot,bytes,expected);CHECK(!memcmp(out.driver.image_sha256,expected,32u));free(boot);
+    uint8_t expected[32];digest(boot,bytes,expected);CHECK(!memcmp(out.driver.image_sha256,expected,32u));
+    printf("PASS actual advisory source: full_source_bytes=%lu freshly_proved_program_bytes=%lu; old equality refused shorter configuration; fresh extent/length/SHA, changed-prefix and suffix refusal retained\n",
+        (unsigned long)length,(unsigned long)bytes);free(boot);
 }
 static void actual_module_slot(const char *path) {
     FILE *file=fopen(path,"rb");CHECK(file);CHECK(!fseek(file,0,SEEK_END));long total=ftell(file);CHECK(total>64);
@@ -339,7 +386,7 @@ static void actual_module_slot(const char *path) {
     free(original);free(envelope);
 }
 int main(int argc,char **argv) {
-    inspect_tests();selection_tests();module_tests();failure_tests();stale_hint_tests();indexed_hint_tests();
+    inspect_tests();selection_tests();module_tests();failure_tests();stale_hint_tests();indexed_hint_tests();prefix_candidate_tests();
     bool modules=argc>1 && !strcmp(argv[1],"--modules");
     if(modules) {CHECK(argc>2);for(int i=2;i<argc;i++)actual_module_slot(argv[i]);}
     else if(argc>1)actual_rediscovery(argv[1]);

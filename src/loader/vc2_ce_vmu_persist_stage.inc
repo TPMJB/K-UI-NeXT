@@ -215,7 +215,8 @@ static uint32_t vc2_ce_vmu_persist_prepare(const struct kui_vc2_vmu_late_seed *s
 #if KUI_SMASH_CARD_SESSION
         smash_card_session_prepare(&vc2_persist_profile,&manifest,&ops,
 #else
-        kui_vmu_persist_stage_prepare(&vc2_persist_profile,&manifest,&ops,
+        kui_vmu_persist_stage_prepare_policy(&vc2_persist_profile,&manifest,&ops,
+        &kui_vmu_persist_stage_exclusive_checkpoint,
 #endif
         &vc2_persist_work,&vc2_persist_config.handoff);
     vc2_persist_phase_end();vc2_persist_read_phase=0u;

@@ -30,13 +30,19 @@ static void cache_fresh(void) {
 }
 static int cached_prepare(void) {
     const struct kui_vmu_persist_session_ops ops={&card,stage_identity,cached_read,cached_write,cached_sync,stage_health};
-    return kui_vmu_persist_stage_prepare(&card.expected,&card.game,&ops,&card.work,&card.handoff);
+    return kui_vmu_persist_stage_prepare_policy(&card.expected,&card.game,&ops,
+        &kui_vmu_persist_stage_exclusive_checkpoint,&card.work,&card.handoff);
+}
+static int uncached_snapshot_prepare(void) {
+    const struct kui_vmu_persist_session_ops ops=stage_ops();
+    return kui_vmu_persist_stage_prepare_policy(&card.expected,&card.game,&ops,
+        &kui_vmu_persist_stage_exclusive_checkpoint,&card.work,&card.handoff);
 }
 static void equivalent(unsigned imported,unsigned recovery) {
     struct kui_vmu_durable_handoff expected;
     if(imported)stage_imported_pair_fresh();else stage_fresh();
     if(recovery)stage_seed_real_marker();else card.base[123][7]^=0x71u;
-    assert(!stage_prepare());expected=card.handoff;unsigned baseline=card.reads;
+    assert(!uncached_snapshot_prepare());expected=card.handoff;unsigned baseline=card.reads;
     unsigned expected_writes=card.writes,expected_syncs=card.syncs,expected_identity=card.identities;
     if(imported)stage_imported_pair_fresh();else stage_fresh();
     memset(&cache,0,sizeof(cache));fail_run=run_calls=largest_run=0u;

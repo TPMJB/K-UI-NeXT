@@ -671,7 +671,7 @@ $(ZSO_DIR)/resident-sci.bin: $(ZSO_DIR)/resident-sci.elf
 	sh-elf-objcopy -O binary $< $@
 $(ZSO_DIR)/stage/%.o: %.c
 	@mkdir -p $(@D)
-	sh-elf-gcc $(ZSO_FLAGS) -MMD -MP -c $< -o $@
+	sh-elf-gcc $(ZSO_FLAGS) -fcallgraph-info=su -MMD -MP -c $< -o $@
 $(ZSO_DIR)/stage/src/loader/retail_display.o: force-build-id
 $(ZSO_DIR)/stage/retail_stage_asm.o: src/loader/retail_stage.S $(ZSO_DIR)/resident-sci.bin
 	@mkdir -p $(@D)
@@ -722,7 +722,7 @@ $(LZO_DIR)/resident-sci.bin: $(LZO_DIR)/resident-sci.elf
 	sh-elf-objcopy -O binary $< $@
 $(LZO_DIR)/stage/%.o: %.c
 	@mkdir -p $(@D)
-	sh-elf-gcc $(LZO_FLAGS) -MMD -MP -c $< -o $@
+	sh-elf-gcc $(LZO_FLAGS) -fcallgraph-info=su -MMD -MP -c $< -o $@
 $(LZO_DIR)/stage/src/loader/retail_display.o: force-build-id
 $(LZO_DIR)/stage/retail_stage_asm.o: src/loader/retail_stage.S $(LZO_DIR)/resident-sci.bin
 	@mkdir -p $(@D)
@@ -749,7 +749,7 @@ RETAIL_PHYSICAL_STAGE := $(RETAIL_PHYSICAL_DIR)/retail_stage.o \
 retail-physical: $(RETAIL_PHYSICAL_DIR)/retail-physical.kui
 $(RETAIL_PHYSICAL_DIR)/retail_stage.o: src/loader/retail_stage.c include/kui/native_physical_capability.h build/retail/layout-config
 	@mkdir -p $(@D)
-	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SKIES_DEFS) -DKUI_GAME_RAM_PATCHES_STAGE=$(if $(filter-out 0,$(KUI_RETAIL_STARTUP_TRACE) $(KUI_RETAIL_SONIC_STACK_TEST) $(KUI_RETAIL_RETURN_TRACE)),0,1) -DKUI_RETAIL_PHYSICAL_CAPABILITY=1 -MMD -MP -c $< -o $@
+	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SKIES_DEFS) -DKUI_GAME_RAM_PATCHES_STAGE=$(if $(filter-out 0,$(KUI_RETAIL_STARTUP_TRACE) $(KUI_RETAIL_SONIC_STACK_TEST) $(KUI_RETAIL_RETURN_TRACE)),0,1) -DKUI_RETAIL_PHYSICAL_CAPABILITY=1 -fcallgraph-info=su -MMD -MP -c $< -o $@
 $(RETAIL_PHYSICAL_DIR)/retail_stage_asm.o: src/loader/retail_stage.S $(RETAIL_RESIDENT_BINS) build/retail/layout-config
 	@mkdir -p $(@D)
 	sh-elf-gcc $(RETAIL_FLAGS) -MMD -MP -c $< -o $@

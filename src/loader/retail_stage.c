@@ -3,6 +3,7 @@
 __asm__(".global __kui_smash_swirl_ce_vmu\n.set __kui_smash_swirl_ce_vmu,1\n");
 #endif
 #include "kui/retail_loader_layout.h"
+#include "native_cold_cache_policy.h"
 #include "kui/retail_image.h"
 #if KUI_SMASH_NATIVE_MENU
 #include "kui/smash_menu_return_loader.h"
@@ -54,7 +55,7 @@ __asm__(".global __kui_smash_reader_control03\n.set __kui_smash_reader_control03
 #include "stage_fast_crc32.h"
 #define kui_retail_crc32 kui_stage_crc32
 __asm__(".global __kui_retail_cold_fast_crc\n.set __kui_retail_cold_fast_crc,1\n");
-#if KUI_NATIVE_CACHED_EXTENT && !defined(KUI_RETAIL_CE) && !KUI_SMASH_CE_CHILD && !KUI_NATIVE_PHYSICAL_DISC
+#if KUI_NATIVE_COLD_CRC_CACHE
 /* Only this immutable-byte leaf runs with operand caching enabled. The
  * assembly scope admits the known relay CPU/cache profile and publishes its
  * private stack before restoring it. No media or live ownership operation
@@ -2428,7 +2429,7 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
 #endif
     uint8_t *boot=(uint8_t *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS;
     memcpy(boot,original_entry,ENTRY_PATCH_BYTES);
-#if KUI_NATIVE_CACHED_EXTENT && !defined(KUI_RETAIL_CE) && !KUI_SMASH_CE_CHILD && !KUI_NATIVE_PHYSICAL_DISC
+#if KUI_NATIVE_COLD_CRC_CACHE
     uint32_t crc=kui_native_stage_cached_crc32(0,boot,exec_bytes);
 #else
     uint32_t crc=kui_retail_crc32(0,boot,exec_bytes);

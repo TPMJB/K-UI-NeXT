@@ -1455,14 +1455,16 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
         log("Virtual card: separate persistent A1 module selected; startup will show its card path");
     }
     struct native_cache_source_proof source_proof={0};bool standalone_candidate=false;
-    /* A saved mapping is only a candidate, not source identity. Raw native
-     * launches whose CRC was requested solely for a diagnostic report may
+    /* A saved mapping is only a candidate, not source identity. Native GDI
+     * launches with an optional CRC, or a mandatory cooked-source CRC, may
      * send a unique candidate directly to the unchanged stage. That stage
      * reads the source, proves its extent, hashes its own bytes and rebinds
      * live ownership; a different image causes normal fresh discovery.
-     * Cooked/patch/CDDA/special-module CRC and Smash's full SHA owner proof
-     * retain their fresh preflight. No cached digest enters source_proof. */
-    const bool hint_allowed=emulation_enabled && !required_boot_crc &&
+     * Cooked sources retain their mandatory fresh GUI CRC. Patch/CDDA/special-
+     * module CRC and Smash's full SHA owner proof retain fresh preflight.
+     * No cached digest enters source_proof. */
+    const bool hint_allowed=emulation_enabled &&
+        (!required_boot_crc || (cooked_boot && !patched && !cdda && !vmu_package)) &&
         !smash_native &&
 #if KUI_VMU_GAME_CARDS
         !smash_collection &&
@@ -1474,6 +1476,7 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     enum native_cache_result cache=hint_allowed?
         native_cache_hint_prepare(map,native_dual,package,files.root,path,&indexed_hint,log,cancel):NATIVE_CACHE_SKIPPED;
     const bool mapping_hint=cache==NATIVE_CACHE_READY;
+    bool optional_crc_to_stage=false;
     if(mapping_hint) {
         kui_smash_launch_timing_metric(KUI_SMASH_UI_MDE_BYTES,map->boot_bytes);
         kui_smash_launch_timing_metric(KUI_SMASH_UI_CACHE_HIT,1u);
@@ -1516,10 +1519,21 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
             log("New reader: virtual-A2 module cannot admit this executable; using standalone New without virtual VMU");
         }
     }
-    if(cache==NATIVE_CACHE_READY && hint_allowed && !indexed_hint) {
+    /* A fresh cooked full proof already supplied its CRC in one source pass.
+     * Do not add an optional alias write that would invalidate that proof
+     * and force a second pass; a later advisory hit can publish the alias. */
+    if(cache==NATIVE_CACHE_READY && hint_allowed && !indexed_hint &&
+       (!required_boot_crc || mapping_hint)) {
         uint64_t alias_epoch=kui_media_mutation_epoch();
-        (void)native_cache_alias_publish(path,map,native_dual,package,files.root,cancel);
-        if(alias_epoch!=kui_media_mutation_epoch())source_proof=(struct native_cache_source_proof){0};
+        bool published=native_cache_alias_publish(path,map,native_dual,package,files.root,cancel);
+        if(alias_epoch!=kui_media_mutation_epoch()) {
+            /* A successful advisory index write cannot preserve a GUI source
+             * receipt. Raw report-only CRC has the same stage authority as
+             * an advisory hit; do not reread the complete source merely for
+             * that optional report field. Failed publication keeps fallback. */
+            optional_crc_to_stage=published && source_proof.complete && !required_boot_crc;
+            source_proof=(struct native_cache_source_proof){0};
+        }
     }
     /* All module replacements are complete. Preserve the checked source
      * envelope identity before card, map and session bytes are personalized;
@@ -1558,11 +1572,12 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
 #else
     (void)cache;(void)selection;
 #endif
-    if(mapping_hint) {
+    if((mapping_hint || optional_crc_to_stage) && !required_boot_crc) {
         /* This flag existed only for reporting in this branch. Never copy
          * an old CRC into a fresh manifest or claim a completed source read. */
         map->flags&=~KUI_RETAIL_IMAGE_BOOT_CRC;
-        log("Native mapping hint: executable identity will be freshly checked by the detached stage");
+        log(mapping_hint?"Native mapping hint: executable identity will be freshly checked by the detached stage":
+            "Native mapping index published: optional executable identity will be freshly checked by the detached stage");
     } else if(defer_boot_crc) {
         if(source_proof.complete)map->boot_crc32=source_proof.crc32;
         else {

@@ -352,7 +352,8 @@ $(BUILD)/worker.bin: $(BUILD)/worker.elf
 $(BUILD)/stage/%.o: %.c $(BUILD)/toy_pilot_resident_symbols.h $(BUILD)/worker.bin
 	@mkdir -p $(@D)
 	$(CC) $(FLAGS) $(COOKED_STAGE_FLAGS) -DKUI_NATIVE_CDDA_COMPAT=$(NATIVE_COMPAT) $(BUS_ADMISSION) -DKUI_TOY_PILOT_WORKER_BIN='"$(BUILD)/worker.bin"' -MMD -MP -c $< -o $@
-$(BUILD)/stage_asm.o: src/loader/retail_stage.S $(BUILD)/resident-sci.bin
+$(BUILD)/stage_asm.o: src/loader/retail_stage.S src/loader/native_cold_cache_policy.h \
+ src/loader/native_proof_cache_scope.inc src/loader/native_sdk_cache_scope.inc $(BUILD)/resident-sci.bin
 	$(CC) $(FLAGS) -E -P -x assembler-with-cpp $< -o $(BUILD)/stage_asm.s.original
 	sed 's@build/retail/resident-[^"]*\.bin@$(BUILD)/resident-sci.bin@g' $(BUILD)/stage_asm.s.original > $(BUILD)/stage_asm.s
 	$(CC) $(FLAGS) -c $(BUILD)/stage_asm.s -o $@

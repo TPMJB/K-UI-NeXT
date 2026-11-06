@@ -197,7 +197,10 @@ static enum kui_loader_sd_result __attribute__((noipa)) native_persist_storage_i
 #if KUI_SMASH_CARD_SESSION
         smash_card_session_prepare(&native_persist_profile,&manifest,&ops,
 #else
-        kui_vmu_persist_stage_prepare(&native_persist_profile,&manifest,&ops,
+        /* Raw callbacks are serialized under this acquired port; writes
+         * change only their requested sector. Checkpoint cannot change base. */
+        kui_vmu_persist_stage_prepare_policy(&native_persist_profile,&manifest,&ops,
+        &kui_vmu_persist_stage_exclusive_checkpoint,
 #endif
         &native_persist_work,&native_persist_handoff);
     enum kui_loader_sd_result stopped_stream=kui_retail_storage_stop(storage);

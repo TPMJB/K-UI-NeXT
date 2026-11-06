@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* Shared immutable-image proof scopes. No game, SDK or live I/O state is cached. */
 #include "kui/retail_loader_layout.h"
+#include "native_cold_cache_policy.h"
 #if KUI_NATIVE_CACHED_EXTENT && KUI_VMU_NATIVE_PASSIVE_PROBE && !KUI_NATIVE_PHYSICAL_DISC
 #if !KUI_VMU_NATIVE_CACHED_CODE
 #error "Immutable discovery cache scope requires the native instruction-cached relay"
@@ -144,10 +145,7 @@ C(kui_native_stage_cached_discover_image):
 .Ldiscover_restore: .long 0x908
     .size C(kui_native_stage_cached_discover_image),.-C(kui_native_stage_cached_discover_image)
 #endif
-#if KUI_NATIVE_CACHED_EXTENT && !defined(KUI_RETAIL_CE) && !KUI_SMASH_CE_CHILD && !KUI_NATIVE_PHYSICAL_DISC
-#if !KUI_VMU_NATIVE_CACHED_CODE
-#error "The pure CRC cache scope requires the native instruction-cached relay"
-#endif
+#if KUI_NATIVE_COLD_CRC_CACHE
 /* Reusable three-argument immutable CRC scope. The BOOT2 relay has already
  * published RAM, stopped the owner, restored its entry bytes and selected
  * normal-index CCR=0x100. Cache only a bounded P1 RAM source on the known
@@ -269,6 +267,8 @@ C(kui_native_stage_cached_crc32):
 .Lcrc_restore: .long 0x908
     .size C(kui_native_stage_cached_crc32),.-C(kui_native_stage_cached_crc32)
 #endif
+
+#include "native_sdk_cache_scope.inc"
 
 #if KUI_NATIVE_CACHED_RESOLUTION
 #if !KUI_VMU_NATIVE_CACHED_CODE || !KUI_VMU_NATIVE_CACHE_PROBE

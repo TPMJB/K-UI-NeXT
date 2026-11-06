@@ -95,10 +95,14 @@ test-shared-game-launch: test-games-native-cache-hint
 
 # The ordered integration has one focused entry point. Linked-module admission,
 # stack bounds and real-console acceptance remain separate delivery gates.
-test-universal-loader: test-sci-stream-quarantine test-ce-gd-completion-lifecycle test-runtime-module-bundle-make test-ce-virtual-vram-copy test-ce-crc16-factoring test-package-universal-loader test-gui-launch-preparation test-shared-game-launch
+test-universal-loader: test-sci-stream-quarantine test-ce-gd-completion-lifecycle test-runtime-module-bundle-make test-ce-virtual-vram-copy test-ce-crc16-factoring test-package-universal-loader test-gui-launch-preparation test-shared-game-launch test-vmu-stage-snapshot
 	python3 tests/test_global_loader_rollout.py
 	python3 tests/test_build_universal_loader.py
 	python3 tests/test_native_service_inventory.py
+
+.PHONY: test-vmu-stage-snapshot
+test-vmu-stage-snapshot:
+	$(MAKE) -f Makefile.vmu-stage-snapshot-tests vmu-stage-snapshot-tests
 
 test: test-ce-virtual-vram-copy test-ce-crc16-factoring
 
@@ -747,6 +751,7 @@ test-native-session-controls: build/test-native-return build/test-native-session
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-native-return
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-native-session-stage
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-native-session-prepare
+	python3 tests/test_native_session_return_batch.py build/return-runtime-batching.json
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-native-disc-set
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-native-return-hardware
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-retail-gd-disc

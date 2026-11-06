@@ -112,7 +112,11 @@ static int smash_card_session_prepare(const struct kui_vmu_persist_profile *p,
     memcpy(smash_card_transfer.cid,p->cid,16u);memcpy(smash_card_transfer.image_id,p->image_id,16u);
     memcpy(smash_card_transfer.ownership_sha256,smash_card_config.ownership_sha256,32u);
     memcpy(smash_card_transfer.domain_binding_sha256,smash_card_receipt.binding_sha256,32u);
-    int result=kui_vmu_persist_stage_rebind(p,m,&smash_card_transfer,ops,work,out);
+    /* Every owner supplies its serialized bounded raw transport. A new
+     * rebind still recovers/validates/hashes CURRENT data; only its immediate
+     * marker-only checkpoint may reuse that same live snapshot. */
+    int result=kui_vmu_persist_stage_rebind_policy(p,m,&smash_card_transfer,ops,
+        &kui_vmu_persist_stage_exclusive_checkpoint,work,out);
     if(result)return result;
     if(smash_card_transfer.state!=KUI_VMU_ALLOCATION_TRANSFER_CONSUMED ||
        !kui_smash_card_receipt_transfer(&smash_card_receipt,role))

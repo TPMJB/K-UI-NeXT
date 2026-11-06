@@ -32,9 +32,15 @@ static bool runtime_plan(FATFS *fs,const struct kui_volume *volume,
     bool ok=bytes>=64u && f_read(&file,plan->header,64u,&got)==FR_OK && got==64u;
     struct kui_runtime_info info;
     if(ok)ok=kui_runtime_header(plan->header,bytes,&info)==KUI_RUNTIME_OK;
-    uint8_t page[4096];uint32_t crc=0,window[5]={0};unsigned markers=0,words=0;
+    /* Match the loader's bounded sequential reads without growing the I/O
+     * worker's stack. Low memory retains the original complete 4 KiB pass. */
+    uint8_t fallback[4096];
+    uint8_t *allocation=ok?malloc(32768u):NULL;
+    uint8_t *page=allocation?allocation:fallback;
+    const UINT page_bytes=allocation?32768u:(UINT)sizeof(fallback);
+    uint32_t crc=0,window[5]={0};unsigned markers=0,words=0;
     for(uint32_t at=0;ok && at<info.payload_bytes;) {
-        UINT take=info.payload_bytes-at>sizeof(page)?sizeof(page):info.payload_bytes-at;
+        UINT take=info.payload_bytes-at>page_bytes?page_bytes:info.payload_bytes-at;
         if(cancel()) {ok=false;*problem="return-runtime validation cancelled";break;}
         got=0;ok=f_read(&file,page,take,&got)==FR_OK && got==take;
         if(!ok)break;
@@ -46,6 +52,7 @@ static bool runtime_plan(FATFS *fs,const struct kui_volume *volume,
         }
         at+=take;
     }
+    free(allocation);
     if(ok)ok=crc==info.crc32 && markers==1u;
     if(f_close(&file)!=FR_OK)ok=false;
     if(!ok) {*problem="return runtime changed, has an invalid CRC/boot marker, or cannot be read";return false;}

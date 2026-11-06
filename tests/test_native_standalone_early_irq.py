@@ -93,7 +93,10 @@ class EarlyStageCPU(StageCPU):
   for name,value in (('_resident_blob',blob),('_resident_bytes',resident[4]['__retail_resident_binary_end'][0]-0x8c004000),('_resident_limit',0x8c007ba0),('_exec_bytes',len(owner['image']))):
    self.put(stage[4][name][0],value)
   for i in (0,4,8,12,16,0x530,0x534,0x538):self.put(self.region+i,0)
-  self.family_target=stage[4]['_kui_native_sdk_sci_family_find'][0];self.targets.add(self.family_target)
+  # The guarded wrapper is independently executed below before composing it
+  # with this production-C semantic oracle on exact original RAM bytes.
+  family_entry='_kui_native_stage_cached_sdk_family' if '__kui_native_cached_sdk_family' in stage[4] else '_kui_native_sdk_sci_family_find'
+  self.family_target=stage[4][family_entry][0];self.targets.add(self.family_target)
  def plain(self,op,pc):
   if op&0xf00f==0x2000:
    self.write(self.r[op>>8&15],self.r[op>>4&15],1);return
@@ -157,6 +160,10 @@ def main():
   need(old[4]['_standalone_reader_region'][1]==new[4]['_standalone_reader_region'][1]==0x760,'standalone region geometry changed')
   need(new[4]['__retail_resident_bss_end'][0]<=new[4]['__retail_hook_stack_bottom'][0],'resident exceeds fixed low-RAM budget')
  stage=read_elf(a.new_build/'stage.elf') if a.new_build else None
+ sdk_cache=None
+ if stage and '__kui_native_cached_sdk_family' in stage[4]:
+  from test_native_standalone_sdk_cache import audit as sdk_cache_audit
+  sdk_cache=sdk_cache_audit(a.new_build/'stage.elf')
  temporary=tempfile.TemporaryDirectory(prefix='kui-early-family-');library=production_family_library(temporary.name)
  rows=[]
  for path in a.originals:
@@ -188,6 +195,7 @@ def main():
    row['modes'].append(m)
   rows.append(row)
  result=dict(schema='kui.native.standalone-early-irq.execution.v1',result='PASS',cases=rows,old_resident_sha256=hashlib.sha256((a.old_build/'resident-sci.elf').read_bytes()).hexdigest(),new_resident_sha256=hashlib.sha256((a.new_build/'resident-sci.elf').read_bytes()).hexdigest() if new else None,console_execution=False,hardware_performance=False)
+ if sdk_cache:result['independently_executed_sdk_cache_scope']=sdk_cache
  result['source_sha256']={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in ('tests/test_native_standalone_early_irq.py','src/core/native_sdk_sci_family.c','src/core/native_sdk_sci_family.inc','src/loader/native_standalone_reader.inc','src/loader/native_standalone_reader_stage.inc','src/loader/retail_async.c','src/loader/retail_resident.S')}
  a.output.parent.mkdir(parents=True,exist_ok=True);a.output.write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result,indent=2))
 if __name__=='__main__':main()
