@@ -50,7 +50,17 @@ test-smash-ce-gin:
 test-updater-source-preservation:
 	python3 -c "import sys; sys.path.insert(0,'tools'); import update_addon as a; r=a.check_sources(a.source_state()); print('PASS updater-only main source preservation:',len(r['checked_paths']),'protected paths')"
 
+.PHONY: test-runtime-module-bundle-make test-ce-gd-completion-lifecycle
+test-runtime-module-bundle-make:
+	@mkdir -p build/shared-loader-audit
+	python3 tests/test_runtime_module_bundle_make.py --json build/shared-loader-audit/runtime-bundle-make.json
+test-ce-gd-completion-lifecycle:
+	@mkdir -p build/shared-loader-audit
+	python3 tests/test_ce_gd_completion_lifecycle.py --cc "$(CC)" --report build/shared-loader-audit/ce-gd-completion-lifecycle.json
+test: test-runtime-module-bundle-make test-ce-gd-completion-lifecycle
+
 .PHONY: test-updater
+test-updater: test-runtime-module-bundle-make
 test-updater: build/test-update build/test-update-v2 build/test-update-handoff build/update-image build/update-boot
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-update
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-update-v2

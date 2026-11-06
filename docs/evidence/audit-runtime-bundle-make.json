@@ -1,0 +1,28 @@
+{
+  "schema": "kui.runtime-module-bundle.make-inputs.v1",
+  "status": "PASS",
+  "current": {
+    "status": "PASS",
+    "production_makefile_sha256": "1c00770cd77a846923b5b1415a84a480fc3b6996efd5a62ee85a7d48f6f6d3b1",
+    "older_selected_path": true,
+    "older_changed_binary": true,
+    "older_changed_assembly": true,
+    "unchanged_object_reused": true,
+    "on_off_on_preserved": true,
+    "force_build_id_edges_retained": true,
+    "production_repository_files_mutated": false,
+    "compiler_and_receipt_boundaries_authored": true
+  },
+  "old_negative": {
+    "status": "OLD_DEFECT_REPRODUCED",
+    "production_makefile_sha256": "a38973c15d0ad0a2a842df590692cc45a0c210e517902956ae3dc342fc32e487",
+    "older_selected_path": true,
+    "older_changed_binary": true,
+    "older_changed_assembly": true,
+    "unchanged_object_reused": true,
+    "on_off_on_preserved": true,
+    "force_build_id_edges_retained": true,
+    "production_repository_files_mutated": false,
+    "compiler_and_receipt_boundaries_authored": true
+  }
+}

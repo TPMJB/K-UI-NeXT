@@ -60,10 +60,17 @@ LOADER_OBJECTS += build/dc/src/core/boot_ui.o build/dc/src/dreamcast/boot_draw.o
     build/dc/src/dreamcast/shell_font.o build/dc/src/apps/boot_splash.o
 RUNTIME_OBJECTS := $(filter-out build/dc/src/dreamcast/main.o build/dc/src/dreamcast/sd.o,$(OBJECTS)) build/dc/main-runtime.o build/dc/sd-runtime.o
 RUNTIME_MODULE_BUNDLE ?=
+# A different existing bundle can be older than the last compiled object.
+# Bind the selected path and exact inputs, not only prerequisite mtimes.
+.PHONY: force-runtime-module-bundle-config
+force-runtime-module-bundle-config:
+build/dc/runtime-module-bundle.config: force-runtime-module-bundle-config tools/runtime_module_bundle_config.py
+	@python3 tools/runtime_module_bundle_config.py --bundle '$(subst ','"'"',$(strip $(RUNTIME_MODULE_BUNDLE)))' --output $@
+$(RUNTIME): build/dc/runtime-module-bundle.config
 ifneq ($(strip $(RUNTIME_MODULE_BUNDLE)),)
 RUNTIME_OBJECTS += build/dc/src/core/runtime_module_bundle.o build/dc/runtime-module-bundle.o
 build/dc/src/core/runtime_module_bundle.o: CPPFLAGS += -Ithird_party/miniz
-build/dc/runtime-module-bundle.o: $(RUNTIME_MODULE_BUNDLE)/bundle.S $(RUNTIME_MODULE_BUNDLE)/bundle.bin
+build/dc/runtime-module-bundle.o: build/dc/runtime-module-bundle.config $(RUNTIME_MODULE_BUNDLE)/bundle.S $(RUNTIME_MODULE_BUNDLE)/bundle.bin
 	@mkdir -p $(@D)
 	kos-cc -c $(RUNTIME_MODULE_BUNDLE)/bundle.S -o $@
 endif

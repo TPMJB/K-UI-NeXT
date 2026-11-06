@@ -1,0 +1,85 @@
+{
+  "schema": "kui.audit.optional-session-return-crc.v1",
+  "source_commit": "91fa7cc6922b1e5274ac0e622fc9e9980763499c",
+  "source_files": {
+    "src/core/native_return.c": "c3b35c128384581e9f9779d919824b971b09a943ef38ab19bbb9538c573d6ef0",
+    "src/loader/native_session_worker.inc": "8ae17c95484b8ad5e49591ff966b04ab769384b59e824dd2bf0b0b33a52cfaf8",
+    "src/loader/stage_fast_crc32.h": "58b3733ce3470ee868c3a8f901c3bd68090cd417f3d63a2915ce4f39b1f1e7c7",
+    "Makefile.vmu-native-session-controls": "5c4c598d0f23caa7497a95373c562f9c4aeda0e3bb83edded81c005e5ff75ee5"
+  },
+  "elf_sha256": "f6c763884665f1264bfa9436ab45ae334b0d71ee476ef5745fceb22a5999c5e0",
+  "cases": [
+    {
+      "bytes": 0,
+      "current": {
+        "instructions": 11,
+        "crc32": "00000000"
+      },
+      "shared": {
+        "instructions": 28,
+        "crc32": "00000000"
+      }
+    },
+    {
+      "bytes": 1,
+      "current": {
+        "instructions": 85,
+        "crc32": "84b12bae"
+      },
+      "shared": {
+        "instructions": 39,
+        "crc32": "84b12bae"
+      }
+    },
+    {
+      "bytes": 4,
+      "current": {
+        "instructions": 307,
+        "crc32": "24350404"
+      },
+      "shared": {
+        "instructions": 64,
+        "crc32": "24350404"
+      }
+    },
+    {
+      "bytes": 16,
+      "current": {
+        "instructions": 1195,
+        "crc32": "cc358a71"
+      },
+      "shared": {
+        "instructions": 172,
+        "crc32": "cc358a71"
+      }
+    },
+    {
+      "bytes": 512,
+      "current": {
+        "instructions": 37899,
+        "crc32": "46551aef"
+      },
+      "shared": {
+        "instructions": 4636,
+        "crc32": "46551aef"
+      }
+    },
+    {
+      "bytes": 4096,
+      "current": {
+        "instructions": 303115,
+        "crc32": "ae049dd7"
+      },
+      "shared": {
+        "instructions": 36892,
+        "crc32": "ae049dd7"
+      }
+    }
+  ],
+  "scope": "Optional112KiB native session-controls return only; not currentcompact/Smash; no production edit",
+  "limits": [
+    "Actual separately compiled pure CRC instructions with authored inputRAM execute; noMMIO/cache/SDevents or elapsedconsole timing modeled.",
+    "Does not build or substitute theoptional112KiB worker.",
+    "No elapsedtime claim or newcurrentcoldstartupfailure established."
+  ]
+}
