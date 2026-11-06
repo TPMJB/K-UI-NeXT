@@ -11,6 +11,10 @@ This work starts at Main `d393b859a9ee23d372daca54ef13c7839072097a` on
 The initial implementation branch is `codex/universal-loader-integration`.
 The milestones below are ordered dependencies, not elapsed-time estimates.
 
+The canonical repository is `TacitusVox/K-UI-NeXT`. The account name is
+TacitusVox; older TacitusVoxt and TPMJB links are migration work, not alternate
+current publishing destinations.
+
 ## 1. Shared correctness and reproducible deployment — active
 
 Apply the demonstrated lessons across the actual affected reader families:
@@ -174,6 +178,35 @@ Use the current `tools/make_update.py` producer and actual C consumer for new
 KUPs. A complete composition must retain accepted components with their real
 identities and match the GUI's admission/provider decisions. A cold-stage
 subset must never be presented as a complete universal installation.
+
+User-facing test filenames include purpose, delivery date/time with an explicit
+zone, and the actual binary build identity, for example
+`KUI-Unified-Test-06NOV2026-1133-CST-72db614.kup`. Use Chicago local time with
+the applicable CST/CDT suffix. A new delivery filename does not imply rebuilt
+software; preserve the original binary identity and checksum when renaming.
+
+The accepted cc81 package and first consolidated test both contain updater
+engine 3. Prefer normal KUP installation, which retains the effective selected
+software inventory. The manual updater-and-test bootstrap deliberately selects
+physical ROOT and clears the previous selection; bank directories and user data
+remain, but bank-only software is no longer effective and may need reinstalling.
+Do not describe that fallback as preserving bank activation or automatic
+rollback. A future migration should preserve the effective software selection
+while repairing the updater.
+
+## Branding and documentation follow-up
+
+Keep the account migration separate from loader qualification. Update active
+source links, download/release tooling, shell credits and their tests to
+TacitusVox. Regenerate current branding from its source assets and update any
+derived images, embedded arrays and hash checks together. Inspect image pixels
+before deciding which artwork needs changing; a text search alone is not an
+artwork audit. Review hardware artwork and generator output in the same pass.
+
+Preserve historical release records, original credits and provenance. Historical
+TPMJB references require individual review rather than a repository-wide text
+replacement. Current publishing targets must resolve to TacitusVox even while
+that historical material remains.
 
 Reference contracts: `accepted-progress.md`, `global-launch-policy.md`,
 `shared-loader-audit-2026-11-06.md`, `shared-loader-vmu-regressions.md` and
