@@ -31,8 +31,11 @@ preservation requirements and unresolved integration work. A newer commit or a
 successful build does not establish that the selected configuration preserves
 accepted behavior.
 
-The current Games-only test source is `eeed38bd540e`, recorded in
-`docs/shared-game-launch-performance.md` and `docs/evidence/games-eeed38b`.
+The current native test source is `f8807cb16561`, recorded in
+`docs/shared-launch-coverage-restoration.md` and `docs/evidence/native-shared-f8807cb`.
+It is host/linked-qualified, not console-accepted. All twelve changed native
+cold families and their actual GUI are one qualified cohort. The eleven
+retained CE/Smash/no-VMU physical-disc files remain exact prior bytes.
 Default Standard/native-CDDA bindings are exact copies of its qualified GUI
 inputs. Preserve them in later GUI builds for this installation. The earlier
 7fc bootstrap candidate remains recorded in `docs/shared-native-bootstrap-rollout.md`.

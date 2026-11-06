@@ -1,0 +1,296 @@
+{
+  "schema": "kui.gui.shared-native-advisory-qualification.v1",
+  "result": "PASS",
+  "source_sha256": {
+    "src/apps/games_retail.c": "649970e1c9bb0e7affdb4a0f5ddae75926c5d230b28768bc9a3335816d3f0721",
+    "src/apps/games_native_cache_hint.inc": "6d351ebe176e107f8e182d380c25f6e5c961bc1ec991c2e94b2e3cc24407e020",
+    "tests/test_games_native_cache_hint.c": "a255535fba0a734079587392c76d2abad2937695b3c95deb10c7492be83109ce",
+    "tests/fixtures/native-hint-length-original.inc": "b8561238bc33e4d6e75cd4784f0dcf388180a46797179a92c6772235d02ba0e2",
+    "tests/test_games_cooked_native_hint.c": "5db0acfe9651b3b52d570bca66b9eb913266958d0bdc5a3a35d400b792042209",
+    "tests/test_games_cooked_native_hint.py": "01e67473a463d1dbba4cedd22e89820124bb2aafda2e37d45b66de1017ef57cc",
+    "tests/test_games_native_alias_crc.c": "fdc7aa7bf5f49c73b69d4a9f965c2327621ab6920b2dfee8109be8143ed2ea74",
+    "tests/test_games_native_alias_crc.py": "43c0131d0e5de79beeb2b497bdaaa561bbce97b7a768e61f3c7570e8e1e8ead3"
+  },
+  "prefix_control": {
+    "source_name": "1ST_READ.BIN",
+    "source_sha256": "16b45fcc84992a60d5a64bf64bf22b699b27306b95f177ba3d9730ca380069ae",
+    "full_source_bytes": 4057056,
+    "freshly_proved_program_bytes": 4024288,
+    "checks": 1551,
+    "frozen_old_predicate_rejects_shorter_candidate": true,
+    "new_direct_and_indexed_candidate_only": true,
+    "fresh_extent_length_sha_positive": true,
+    "changed_prefix_suffix_and_unproved_truncation_refused": true,
+    "stale_hint_full_rediscovery": true
+  },
+  "cooked": {
+    "schema": "kui.gui.cooked-native-hint.v1",
+    "result": "PASS",
+    "cases": [
+      {
+        "filesystem": "fat32",
+        "source_changed": false,
+        "implementation": "new",
+        "full_gui_proof_reads": 0,
+        "fresh_crc_passes": 1,
+        "source_read_calls": 1,
+        "boot_crc32": "4a3efbf8",
+        "mandatory_crc_retained": true,
+        "detached_physical_read_verified": true
+      },
+      {
+        "filesystem": "fat32",
+        "source_changed": false,
+        "implementation": "old",
+        "full_gui_proof_reads": 1,
+        "fresh_crc_passes": 0,
+        "source_read_calls": 1,
+        "boot_crc32": "4a3efbf8",
+        "mandatory_crc_retained": true,
+        "detached_physical_read_verified": true
+      },
+      {
+        "filesystem": "fat32",
+        "source_changed": true,
+        "implementation": "new",
+        "full_gui_proof_reads": 0,
+        "fresh_crc_passes": 1,
+        "source_read_calls": 1,
+        "boot_crc32": "1edabd59",
+        "mandatory_crc_retained": true,
+        "detached_physical_read_verified": false
+      },
+      {
+        "filesystem": "fat32",
+        "source_changed": true,
+        "implementation": "old",
+        "full_gui_proof_reads": 1,
+        "fresh_crc_passes": 0,
+        "source_read_calls": 1,
+        "boot_crc32": "1edabd59",
+        "mandatory_crc_retained": true,
+        "detached_physical_read_verified": false
+      },
+      {
+        "filesystem": "exfat",
+        "source_changed": false,
+        "implementation": "new",
+        "full_gui_proof_reads": 0,
+        "fresh_crc_passes": 1,
+        "source_read_calls": 1,
+        "boot_crc32": "4a3efbf8",
+        "mandatory_crc_retained": true,
+        "detached_physical_read_verified": true
+      },
+      {
+        "filesystem": "exfat",
+        "source_changed": false,
+        "implementation": "old",
+        "full_gui_proof_reads": 1,
+        "fresh_crc_passes": 0,
+        "source_read_calls": 1,
+        "boot_crc32": "4a3efbf8",
+        "mandatory_crc_retained": true,
+        "detached_physical_read_verified": true
+      },
+      {
+        "filesystem": "exfat",
+        "source_changed": true,
+        "implementation": "new",
+        "full_gui_proof_reads": 0,
+        "fresh_crc_passes": 1,
+        "source_read_calls": 1,
+        "boot_crc32": "1edabd59",
+        "mandatory_crc_retained": true,
+        "detached_physical_read_verified": false
+      },
+      {
+        "filesystem": "exfat",
+        "source_changed": true,
+        "implementation": "old",
+        "full_gui_proof_reads": 1,
+        "fresh_crc_passes": 0,
+        "source_read_calls": 1,
+        "boot_crc32": "1edabd59",
+        "mandatory_crc_retained": true,
+        "detached_physical_read_verified": false
+      }
+    ],
+    "source_sha256": "649970e1c9bb0e7affdb4a0f5ddae75926c5d230b28768bc9a3335816d3f0721",
+    "old_policy_control_sha256": "dc679a29f08f510539176dd99d89011a2549976f6132aab6f20f2382165d68f2",
+    "console_performance": false,
+    "scope": "Actual C launcher and real FatFs; synthetic advisory record is deliberately not SDK source authority. Fresh mandatory CRC and detached raw/cooked data checks retained."
+  },
+  "raw_cold_alias": {
+    "schema": "kui.gui.native-cold-alias-crc.v1",
+    "result": "PASS",
+    "cases": [
+      {
+        "filesystem": "fat32",
+        "scenario": "published",
+        "implementation": "new",
+        "full_source_passes": 1,
+        "fresh_sdk_source_reads": 1,
+        "extra_crc_passes": 0,
+        "boot_crc_required": false,
+        "fresh_stage_length_sha_replay_and_changed_source_miss": true
+      },
+      {
+        "filesystem": "fat32",
+        "scenario": "published",
+        "implementation": "old",
+        "full_source_passes": 2,
+        "fresh_sdk_source_reads": 1,
+        "extra_crc_passes": 1,
+        "boot_crc_required": true,
+        "fresh_stage_length_sha_replay_and_changed_source_miss": true
+      },
+      {
+        "filesystem": "fat32",
+        "scenario": "failed-alias",
+        "implementation": "new",
+        "full_source_passes": 2,
+        "fresh_sdk_source_reads": 1,
+        "extra_crc_passes": 1,
+        "boot_crc_required": true,
+        "fresh_stage_length_sha_replay_and_changed_source_miss": true
+      },
+      {
+        "filesystem": "fat32",
+        "scenario": "failed-alias",
+        "implementation": "old",
+        "full_source_passes": 2,
+        "fresh_sdk_source_reads": 1,
+        "extra_crc_passes": 1,
+        "boot_crc_required": true,
+        "fresh_stage_length_sha_replay_and_changed_source_miss": true
+      },
+      {
+        "filesystem": "fat32",
+        "scenario": "off",
+        "implementation": "new",
+        "full_source_passes": 1,
+        "fresh_sdk_source_reads": 1,
+        "extra_crc_passes": 0,
+        "boot_crc_required": true,
+        "fresh_stage_length_sha_replay_and_changed_source_miss": true
+      },
+      {
+        "filesystem": "fat32",
+        "scenario": "off",
+        "implementation": "old",
+        "full_source_passes": 1,
+        "fresh_sdk_source_reads": 1,
+        "extra_crc_passes": 0,
+        "boot_crc_required": true,
+        "fresh_stage_length_sha_replay_and_changed_source_miss": true
+      },
+      {
+        "filesystem": "fat32",
+        "scenario": "cooked",
+        "implementation": "new",
+        "full_source_passes": 1,
+        "fresh_sdk_source_reads": 1,
+        "extra_crc_passes": 0,
+        "boot_crc_required": true,
+        "fresh_stage_length_sha_replay_and_changed_source_miss": true
+      },
+      {
+        "filesystem": "fat32",
+        "scenario": "cooked",
+        "implementation": "old",
+        "full_source_passes": 1,
+        "fresh_sdk_source_reads": 1,
+        "extra_crc_passes": 0,
+        "boot_crc_required": true,
+        "fresh_stage_length_sha_replay_and_changed_source_miss": true
+      },
+      {
+        "filesystem": "exfat",
+        "scenario": "published",
+        "implementation": "new",
+        "full_source_passes": 1,
+        "fresh_sdk_source_reads": 1,
+        "extra_crc_passes": 0,
+        "boot_crc_required": false,
+        "fresh_stage_length_sha_replay_and_changed_source_miss": true
+      },
+      {
+        "filesystem": "exfat",
+        "scenario": "published",
+        "implementation": "old",
+        "full_source_passes": 2,
+        "fresh_sdk_source_reads": 1,
+        "extra_crc_passes": 1,
+        "boot_crc_required": true,
+        "fresh_stage_length_sha_replay_and_changed_source_miss": true
+      },
+      {
+        "filesystem": "exfat",
+        "scenario": "failed-alias",
+        "implementation": "new",
+        "full_source_passes": 2,
+        "fresh_sdk_source_reads": 1,
+        "extra_crc_passes": 1,
+        "boot_crc_required": true,
+        "fresh_stage_length_sha_replay_and_changed_source_miss": true
+      },
+      {
+        "filesystem": "exfat",
+        "scenario": "failed-alias",
+        "implementation": "old",
+        "full_source_passes": 2,
+        "fresh_sdk_source_reads": 1,
+        "extra_crc_passes": 1,
+        "boot_crc_required": true,
+        "fresh_stage_length_sha_replay_and_changed_source_miss": true
+      },
+      {
+        "filesystem": "exfat",
+        "scenario": "off",
+        "implementation": "new",
+        "full_source_passes": 1,
+        "fresh_sdk_source_reads": 1,
+        "extra_crc_passes": 0,
+        "boot_crc_required": true,
+        "fresh_stage_length_sha_replay_and_changed_source_miss": true
+      },
+      {
+        "filesystem": "exfat",
+        "scenario": "off",
+        "implementation": "old",
+        "full_source_passes": 1,
+        "fresh_sdk_source_reads": 1,
+        "extra_crc_passes": 0,
+        "boot_crc_required": true,
+        "fresh_stage_length_sha_replay_and_changed_source_miss": true
+      },
+      {
+        "filesystem": "exfat",
+        "scenario": "cooked",
+        "implementation": "new",
+        "full_source_passes": 1,
+        "fresh_sdk_source_reads": 1,
+        "extra_crc_passes": 0,
+        "boot_crc_required": true,
+        "fresh_stage_length_sha_replay_and_changed_source_miss": true
+      },
+      {
+        "filesystem": "exfat",
+        "scenario": "cooked",
+        "implementation": "old",
+        "full_source_passes": 1,
+        "fresh_sdk_source_reads": 1,
+        "extra_crc_passes": 0,
+        "boot_crc_required": true,
+        "fresh_stage_length_sha_replay_and_changed_source_miss": true
+      }
+    ],
+    "source_sha256": "649970e1c9bb0e7affdb4a0f5ddae75926c5d230b28768bc9a3335816d3f0721",
+    "old_policy_control_sha256": "39074833be9f964236184c60ef2cca225605ae5c4d387d18c1924b1e8ea1ff04",
+    "sdk_discovery": "Explicit pure adversary after actual synthetic discovery refusal; source read/publication/epoch/CRC/fallback/FatFs are production.",
+    "console_performance": false
+  },
+  "console_performance": false,
+  "scope": "Shared native GDI pre-bootstrap preparation; no title-specific behavior, new SDK authority, stage/worker changes or compatibility claim."
+}

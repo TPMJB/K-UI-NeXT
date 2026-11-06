@@ -1,0 +1,38 @@
+{
+  "physical": {
+    "whole_module_equal": true,
+    "reproduced_sha256": "809bfdbc3a3b6fdf4169a4a37929d9f3573734f9c401c8d3cb9094421c13fe71",
+    "shipped_sha256": "809bfdbc3a3b6fdf4169a4a37929d9f3573734f9c401c8d3cb9094421c13fe71",
+    "reference_directory": "old-source-reproduction/build/retail-physical"
+  },
+  "zso": {
+    "whole_module_equal": true,
+    "reproduced_sha256": "fd6cf9249c2f18e4ab6d4c8bcf28349bc71548350eff53adf4d21b80a1553062",
+    "shipped_sha256": "fd6cf9249c2f18e4ab6d4c8bcf28349bc71548350eff53adf4d21b80a1553062",
+    "reference_directory": "old-source-reproduction/build/retail-zso"
+  },
+  "lzo": {
+    "whole_module_equal": true,
+    "reproduced_sha256": "bdf77337ce16a2637b7eaa78c7e88dac7fe420c00c5688812eaf4d7447c2af84",
+    "shipped_sha256": "bdf77337ce16a2637b7eaa78c7e88dac7fe420c00c5688812eaf4d7447c2af84",
+    "reference_directory": "old-source-reproduction/build/retail-lzo"
+  },
+  "toy-raw": {
+    "whole_module_equal": true,
+    "reproduced_sha256": "923404c18b21a80e1adb1eafd902e1fb9a0ba7a389b102732d4727bc565dfc95",
+    "shipped_sha256": "923404c18b21a80e1adb1eafd902e1fb9a0ba7a389b102732d4727bc565dfc95",
+    "reference_directory": "old-source-reproduction/build/native-compat-toy-raw"
+  },
+  "toy-cooked": {
+    "whole_module_equal": true,
+    "reproduced_sha256": "108a3707c60b985307daddf7fd36c9c6d650974358ab94b1ed08fb2050d4c3b6",
+    "shipped_sha256": "108a3707c60b985307daddf7fd36c9c6d650974358ab94b1ed08fb2050d4c3b6",
+    "reference_directory": "old-source-reproduction/build/native-compat-toy-cooked"
+  },
+  "mdk2": {
+    "whole_module_equal": true,
+    "reproduced_sha256": "33a924482f0efbd491d86f0eb9b1cc05e61ce6cd00fc48aeba09677a03644c51",
+    "shipped_sha256": "33a924482f0efbd491d86f0eb9b1cc05e61ce6cd00fc48aeba09677a03644c51",
+    "reference_directory": "old-source-reproduction/build/native-compat-mdk2"
+  }
+}

@@ -1,0 +1,2513 @@
+{
+  "schema": "kui.native.cold-passive-kernel-delta.v1",
+  "status": "PASS",
+  "source_commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+  "source_file": "src/loader/vmu_native_passive_stage.inc",
+  "old_and_new_source_sha256": "320124144e1d6492759a04bec3a13bbee7d9da3aaa9308648b1686e54a87c0ed",
+  "roles": {
+    "games-background-a2": {
+      "status": "PASS",
+      "old_elf_sha256": "ac6c4466e5d907e7571197259258be9fd1a0d54f1f0203ab7b00385716c0d17a",
+      "current_elf_sha256": "881a999f5e536f09ddd8c1e549b9e0306f404ff178c7ff99f12e99f5fef01078",
+      "old_kernel_sha256": "8ba8672cb10c67550fff83cd24bdfbb6c8bd9900481a2c6692575075c5af98ee",
+      "new_kernel_sha256": "0a96a5b65becdfe75fbcc5864fffad9f8f3162f8fc3f3ccae2ad6d0a0a1e9267",
+      "kernel_bytes": 2084,
+      "all_nonliteral_bytes_and_all_literal_load_instructions_identical": true,
+      "all_changed_literals_have_same_typed_target_or_complete_immutable_string": true,
+      "changed_literal_words": 66,
+      "literal_bindings": [
+        {
+          "literal_offset": "0x19c",
+          "old": "0x8ce2fa2c",
+          "new": "0x8ce2faec",
+          "load_instruction_offsets": [
+            "0x2a"
+          ],
+          "binding": {
+            "kind": "same_complete_immutable_ASCII_string",
+            "text": "SPLIT CONTROLLER NEEDS NORMAL MODE"
+          }
+        },
+        {
+          "literal_offset": "0x1a4",
+          "old": "0x8ce1e8e0",
+          "new": "0x8ce1e9a0",
+          "load_instruction_offsets": [
+            "0x34"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "__native_worker_blob_begin",
+                0,
+                0,
+                0,
+                2
+              ],
+              [
+                "__vmu_sd_profile_blob_end",
+                0,
+                0,
+                0,
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x1a8",
+          "old": "0x8ce2abe0",
+          "new": "0x8ce2aca0",
+          "load_instruction_offsets": [
+            "0x36"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "__native_worker_blob_end",
+                0,
+                0,
+                0,
+                2
+              ],
+              [
+                "__native_worker_reloc_begin",
+                0,
+                0,
+                0,
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x1b0",
+          "old": "0x8ce014a4",
+          "new": "0x8ce014ac",
+          "load_instruction_offsets": [
+            "0x48"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_report",
+                0,
+                260,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x1b4",
+          "old": "0x8ce55200",
+          "new": "0x8ce552c0",
+          "load_instruction_offsets": [
+            "0x4e"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_driver",
+                0,
+                104,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x1b8",
+          "old": "0x8ce0bc34",
+          "new": "0x8ce0bc3c",
+          "load_instruction_offsets": [
+            "0x5a"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_kui_vmu_native_heap_lease_valid",
+                0,
+                52,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x1c4",
+          "old": "0x8ce06f98",
+          "new": "0x8ce06fa0",
+          "load_instruction_offsets": [
+            "0x70"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_memset",
+                0,
+                26,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x1cc",
+          "old": "0x8ce06fb2",
+          "new": "0x8ce06fba",
+          "load_instruction_offsets": [
+            "0x8e"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_memcpy",
+                0,
+                72,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x1d0",
+          "old": "0x8ce44f94",
+          "new": "0x8ce45054",
+          "load_instruction_offsets": [
+            "0xa6"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_passive_layout",
+                0,
+                440,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x1d8",
+          "old": "0x8cebc278",
+          "new": "0x8cebc338",
+          "load_instruction_offsets": [
+            "0xf6"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_display",
+                0,
+                56,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x1dc",
+          "old": "0x8ce81960",
+          "new": "0x8ce81a20",
+          "load_instruction_offsets": [
+            "0x114"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_persist_ready",
+                0,
+                1,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x1e0",
+          "old": "0x8ce113c4",
+          "new": "0x8ce113f0",
+          "load_instruction_offsets": [
+            "0x120"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_kui_vmu_persist_stage_handoff_matches",
+                0,
+                220,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x1e4",
+          "old": "0x8ce81964",
+          "new": "0x8ce81a24",
+          "load_instruction_offsets": [
+            "0x122",
+            "0x132"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_persist_handoff",
+                0,
+                1272,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x1e8",
+          "old": "0x8ce904b0",
+          "new": "0x8ce90570",
+          "load_instruction_offsets": [
+            "0x124"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_persist_profile",
+                0,
+                2728,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x1ec",
+          "old": "0x8ce01a2c",
+          "new": "0x8ce01a34",
+          "load_instruction_offsets": [
+            "0x138"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_low_configure",
+                0,
+                44,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x1f0",
+          "old": "0x8ce44f60",
+          "new": "0x8ce45020",
+          "load_instruction_offsets": [
+            "0x144"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_exits",
+                0,
+                52,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x378",
+          "old": "0x8ce07e44",
+          "new": "0x8ce07e4c",
+          "load_instruction_offsets": [
+            "0x200"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_retail_display_line",
+                0,
+                400,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x37c",
+          "old": "0x8ce2fa50",
+          "new": "0x8ce2fb10",
+          "load_instruction_offsets": [
+            "0x202"
+          ],
+          "binding": {
+            "kind": "same_complete_immutable_ASCII_string",
+            "text": "COLD 30 READER MAP BIND BEGIN"
+          }
+        },
+        {
+          "literal_offset": "0x388",
+          "old": "0x8cebcc80",
+          "new": "0x8cebcd40",
+          "load_instruction_offsets": [
+            "0x21c",
+            "0x262"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_manifest",
+                0,
+                2172,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x39c",
+          "old": "0x8cebc300",
+          "new": "0x8cebc3c0",
+          "load_instruction_offsets": [
+            "0x252"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_background_boot_region",
+                0,
+                1888,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x3a4",
+          "old": "0x8ce01a58",
+          "new": "0x8ce01a60",
+          "load_instruction_offsets": [
+            "0x260"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_low_bind_map",
+                0,
+                28,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x3a8",
+          "old": "0x8ce2c380",
+          "new": "0x8ce2c440",
+          "load_instruction_offsets": [
+            "0x26e"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "__native_worker_reloc_end",
+                0,
+                0,
+                0,
+                2
+              ],
+              [
+                "_native_ra_aux_blob_start",
+                0,
+                0,
+                0,
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x3ac",
+          "old": "0x8ce2fa70",
+          "new": "0x8ce2fb30",
+          "load_instruction_offsets": [
+            "0x270"
+          ],
+          "binding": {
+            "kind": "same_complete_immutable_ASCII_string",
+            "text": "COLD 31 READER MAP BOUND"
+          }
+        },
+        {
+          "literal_offset": "0x3b0",
+          "old": "0x8ce07fd4",
+          "new": "0x8ce07fdc",
+          "load_instruction_offsets": [
+            "0x276"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_retail_display_restore",
+                0,
+                136,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x3b4",
+          "old": "0x8cebc278",
+          "new": "0x8cebc338",
+          "load_instruction_offsets": [
+            "0x278"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_display",
+                0,
+                56,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x3bc",
+          "old": "0x8ce2fa8c",
+          "new": "0x8ce2fb4c",
+          "load_instruction_offsets": [
+            "0x280"
+          ],
+          "binding": {
+            "kind": "same_complete_immutable_ASCII_string",
+            "text": "RELOCATING PASSIVE MAPLE WORKER"
+          }
+        },
+        {
+          "literal_offset": "0x3c0",
+          "old": "0x8ce2faac",
+          "new": "0x8ce2fb6c",
+          "load_instruction_offsets": [
+            "0x286"
+          ],
+          "binding": {
+            "kind": "same_complete_immutable_ASCII_string",
+            "text": "COLD 32 WORKER RELOCATION BEGIN"
+          }
+        },
+        {
+          "literal_offset": "0x3c4",
+          "old": "0x8ce2abe0",
+          "new": "0x8ce2aca0",
+          "load_instruction_offsets": [
+            "0x28c",
+            "0x2a4"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "__native_worker_blob_end",
+                0,
+                0,
+                0,
+                2
+              ],
+              [
+                "__native_worker_reloc_begin",
+                0,
+                0,
+                0,
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x3c8",
+          "old": "0x8ce0d75c",
+          "new": "0x8ce0d764",
+          "load_instruction_offsets": [
+            "0x29c"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_kui_vmu_native_relocate",
+                0,
+                880,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x3d0",
+          "old": "0x8ce1e8e0",
+          "new": "0x8ce1e9a0",
+          "load_instruction_offsets": [
+            "0x2a6"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "__native_worker_blob_begin",
+                0,
+                0,
+                0,
+                2
+              ],
+              [
+                "__vmu_sd_profile_blob_end",
+                0,
+                0,
+                0,
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x3d4",
+          "old": "0x8ce2facc",
+          "new": "0x8ce2fb8c",
+          "load_instruction_offsets": [
+            "0x2ba"
+          ],
+          "binding": {
+            "kind": "same_complete_immutable_ASCII_string",
+            "text": "COLD 33 WORKER RELOCATED"
+          }
+        },
+        {
+          "literal_offset": "0x65c",
+          "old": "0x8ce551b8",
+          "new": "0x8ce55278",
+          "load_instruction_offsets": [
+            "0x46c"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_heap",
+                0,
+                72,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x664",
+          "old": "0x8ce55200",
+          "new": "0x8ce552c0",
+          "load_instruction_offsets": [
+            "0x498"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_driver",
+                0,
+                104,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x66c",
+          "old": "0x8ce07e44",
+          "new": "0x8ce07e4c",
+          "load_instruction_offsets": [
+            "0x4a8"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_retail_display_line",
+                0,
+                400,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x670",
+          "old": "0x8ce2fae8",
+          "new": "0x8ce2fba8",
+          "load_instruction_offsets": [
+            "0x4ae"
+          ],
+          "binding": {
+            "kind": "same_complete_immutable_ASCII_string",
+            "text": "COLD 34 WORKER ARM BEGIN"
+          }
+        },
+        {
+          "literal_offset": "0x674",
+          "old": "0x8ce1d274",
+          "new": "0x8ce1d324",
+          "load_instruction_offsets": [
+            "0x4b6"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_kui_vmu_native_worker_call",
+                0,
+                160,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x678",
+          "old": "0x8ce2fb04",
+          "new": "0x8ce2fbc4",
+          "load_instruction_offsets": [
+            "0x4cc"
+          ],
+          "binding": {
+            "kind": "same_complete_immutable_ASCII_string",
+            "text": "COLD 35 WORKER ARMED"
+          }
+        },
+        {
+          "literal_offset": "0x67c",
+          "old": "0x8ce0bc34",
+          "new": "0x8ce0bc3c",
+          "load_instruction_offsets": [
+            "0x4d2"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_kui_vmu_native_heap_lease_valid",
+                0,
+                52,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x684",
+          "old": "0x8ce01448",
+          "new": "0x8ce01450",
+          "load_instruction_offsets": [
+            "0x4e8"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_low_bindings",
+                0,
+                64,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x688",
+          "old": "0x8ce06ffa",
+          "new": "0x8ce07002",
+          "load_instruction_offsets": [
+            "0x506",
+            "0x5fe"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_memcmp",
+                0,
+                34,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x68c",
+          "old": "0x8ce304d4",
+          "new": "0x8ce30594",
+          "load_instruction_offsets": [
+            "0x508"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_original.9",
+                0,
+                12,
+                1,
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x690",
+          "old": "0x8ce55180",
+          "new": "0x8ce55240",
+          "load_instruction_offsets": [
+            "0x514",
+            "0x580"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_arena",
+                0,
+                4,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x694",
+          "old": "0x8ce44f24",
+          "new": "0x8ce44fe4",
+          "load_instruction_offsets": [
+            "0x51e"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_readonly_init_window",
+                0,
+                12,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x698",
+          "old": "0x8ce44f10",
+          "new": "0x8ce44fd0",
+          "load_instruction_offsets": [
+            "0x52e"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_readonly_release_window",
+                0,
+                20,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x6a4",
+          "old": "0x8ce0190c",
+          "new": "0x8ce01914",
+          "load_instruction_offsets": [
+            "0x54e"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_passive_lease_only",
+                0,
+                288,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x6a8",
+          "old": "0x8ce2fb1c",
+          "new": "0x8ce2fbdc",
+          "load_instruction_offsets": [
+            "0x56a"
+          ],
+          "binding": {
+            "kind": "same_complete_immutable_ASCII_string",
+            "text": "COLD 36 SDK HOOK PUBLICATION BEGIN"
+          }
+        },
+        {
+          "literal_offset": "0x6ac",
+          "old": "0x8ce02500",
+          "new": "0x8ce02508",
+          "load_instruction_offsets": [
+            "0x570"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_sdk_coherence_install",
+                0,
+                544,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x6b0",
+          "old": "0x8ce016ec",
+          "new": "0x8ce016f4",
+          "load_instruction_offsets": [
+            "0x58e",
+            "0x61c"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_readonly_patch_entry",
+                0,
+                240,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x6b4",
+          "old": "0x8ce44f30",
+          "new": "0x8ce44ff0",
+          "load_instruction_offsets": [
+            "0x5a0"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_persistent_exit_windows",
+                0,
+                48,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x6b8",
+          "old": "0x8ce44f78",
+          "new": "0x8ce45038",
+          "load_instruction_offsets": [
+            "0x5a2"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_exits",
+                24,
+                52,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x6bc",
+          "old": "0x8ce44f60",
+          "new": "0x8ce45020",
+          "load_instruction_offsets": [
+            "0x5a6"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_exits",
+                0,
+                52,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x6c0",
+          "old": "0x8ce06fb2",
+          "new": "0x8ce06fba",
+          "load_instruction_offsets": [
+            "0x5b6"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_memcpy",
+                0,
+                72,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x6c8",
+          "old": "0x8ce90f64",
+          "new": "0x8ce91024",
+          "load_instruction_offsets": [
+            "0x636"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_exec_bytes",
+                0,
+                4,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x6cc",
+          "old": "0x8ce30404",
+          "new": "0x8ce304c4",
+          "load_instruction_offsets": [
+            "0x63c"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_digest.3",
+                0,
+                32,
+                1,
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x6d0",
+          "old": "0x8ce55248",
+          "new": "0x8ce55308",
+          "load_instruction_offsets": [
+            "0x63e"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_driver",
+                72,
+                104,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x7dc",
+          "old": "0x8ce303f8",
+          "new": "0x8ce304b8",
+          "load_instruction_offsets": [
+            "0x6fe"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_witness.2",
+                0,
+                12,
+                1,
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x7e4",
+          "old": "0x8ce11164",
+          "new": "0x8ce1116c",
+          "load_instruction_offsets": [
+            "0x70a"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_kui_vmu_native_patch_no_interior",
+                0,
+                36,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x7ec",
+          "old": "0x8ce10aac",
+          "new": "0x8ce10ab4",
+          "load_instruction_offsets": [
+            "0x71e"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_kui_vmu_native_patch_encode",
+                0,
+                168,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x7fc",
+          "old": "0x8ce01488",
+          "new": "0x8ce01490",
+          "load_instruction_offsets": [
+            "0x76e"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_control",
+                0,
+                28,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x804",
+          "old": "0x8ce2fb40",
+          "new": "0x8ce2fc00",
+          "load_instruction_offsets": [
+            "0x784"
+          ],
+          "binding": {
+            "kind": "same_complete_immutable_ASCII_string",
+            "text": "COLD 37 SDK HOOKS INSTALLED"
+          }
+        },
+        {
+          "literal_offset": "0x808",
+          "old": "0x8ce02fac",
+          "new": "0x8ce02fb4",
+          "load_instruction_offsets": [
+            "0x7a8"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_dual_reader_bind",
+                0,
+                68,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x80c",
+          "old": "0x8ce2fb5c",
+          "new": "0x8ce2fc1c",
+          "load_instruction_offsets": [
+            "0x7ae"
+          ],
+          "binding": {
+            "kind": "same_complete_immutable_ASCII_string",
+            "text": "72 KIB VMU / 284 KIB BACKGROUND"
+          }
+        },
+        {
+          "literal_offset": "0x814",
+          "old": "0x8ce2fa10",
+          "new": "0x8ce2fad0",
+          "load_instruction_offsets": [
+            "0x7bc"
+          ],
+          "binding": {
+            "kind": "same_complete_immutable_ASCII_string",
+            "text": "NEW READER / VIRTUAL A2 ON"
+          }
+        },
+        {
+          "literal_offset": "0x818",
+          "old": "0x8ce2f9f4",
+          "new": "0x8ce2fab4",
+          "load_instruction_offsets": [
+            "0x7c0"
+          ],
+          "binding": {
+            "kind": "same_complete_immutable_ASCII_string",
+            "text": "NEW READER / VIRTUAL A2 OFF"
+          }
+        },
+        {
+          "literal_offset": "0x81c",
+          "old": "0x8ce2fb7c",
+          "new": "0x8ce2fc3c",
+          "load_instruction_offsets": [
+            "0x7c6"
+          ],
+          "binding": {
+            "kind": "same_complete_immutable_ASCII_string",
+            "text": "PREFETCH AUTO / SPLIT CONTROLLER ALL"
+          }
+        },
+        {
+          "literal_offset": "0x820",
+          "old": "0x8ce2fba4",
+          "new": "0x8ce2fc64",
+          "load_instruction_offsets": [
+            "0x7cc"
+          ],
+          "binding": {
+            "kind": "same_complete_immutable_ASCII_string",
+            "text": "REAL MAPLE CALLBACKS ON"
+          }
+        }
+      ]
+    },
+    "games-background-a1": {
+      "status": "PASS",
+      "old_elf_sha256": "ff0a1f283211ca748e03b7f72a34f17e96a07fb5173bae2431d70261cfed2d98",
+      "current_elf_sha256": "313f148cb449b5e79134ae911e831f35bb21e74b4fcf529d48817750a69b01c1",
+      "old_kernel_sha256": "83b82c32af198435290eaf7c3a8fa6e0ff3bb59505cb7c568837c01458c7dce5",
+      "new_kernel_sha256": "0054496b2770238b2fbb9bae14b35cd6fccf87e11bdf675722976e8eaccd0abb",
+      "kernel_bytes": 2084,
+      "all_nonliteral_bytes_and_all_literal_load_instructions_identical": true,
+      "all_changed_literals_have_same_typed_target_or_complete_immutable_string": true,
+      "changed_literal_words": 66,
+      "literal_bindings": [
+        {
+          "literal_offset": "0x19c",
+          "old": "0x8ce2fa4c",
+          "new": "0x8ce2fb0c",
+          "load_instruction_offsets": [
+            "0x2a"
+          ],
+          "binding": {
+            "kind": "same_complete_immutable_ASCII_string",
+            "text": "SPLIT CONTROLLER NEEDS NORMAL MODE"
+          }
+        },
+        {
+          "literal_offset": "0x1a4",
+          "old": "0x8ce1e8e0",
+          "new": "0x8ce1e9a0",
+          "load_instruction_offsets": [
+            "0x34"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "__native_worker_blob_begin",
+                0,
+                0,
+                0,
+                2
+              ],
+              [
+                "__vmu_sd_profile_blob_end",
+                0,
+                0,
+                0,
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x1a8",
+          "old": "0x8ce2abe0",
+          "new": "0x8ce2aca0",
+          "load_instruction_offsets": [
+            "0x36"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "__native_worker_blob_end",
+                0,
+                0,
+                0,
+                2
+              ],
+              [
+                "__native_worker_reloc_begin",
+                0,
+                0,
+                0,
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x1b0",
+          "old": "0x8ce014a4",
+          "new": "0x8ce014ac",
+          "load_instruction_offsets": [
+            "0x48"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_report",
+                0,
+                260,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x1b4",
+          "old": "0x8ce55220",
+          "new": "0x8ce552e0",
+          "load_instruction_offsets": [
+            "0x4e"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_driver",
+                0,
+                104,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x1b8",
+          "old": "0x8ce0bc34",
+          "new": "0x8ce0bc3c",
+          "load_instruction_offsets": [
+            "0x5a"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_kui_vmu_native_heap_lease_valid",
+                0,
+                52,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x1c4",
+          "old": "0x8ce06f98",
+          "new": "0x8ce06fa0",
+          "load_instruction_offsets": [
+            "0x70"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_memset",
+                0,
+                26,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x1cc",
+          "old": "0x8ce06fb2",
+          "new": "0x8ce06fba",
+          "load_instruction_offsets": [
+            "0x8e"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_memcpy",
+                0,
+                72,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x1d0",
+          "old": "0x8ce44fb4",
+          "new": "0x8ce45074",
+          "load_instruction_offsets": [
+            "0xa6"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_passive_layout",
+                0,
+                440,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x1d8",
+          "old": "0x8cebc298",
+          "new": "0x8cebc358",
+          "load_instruction_offsets": [
+            "0xf6"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_display",
+                0,
+                56,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x1dc",
+          "old": "0x8ce81980",
+          "new": "0x8ce81a40",
+          "load_instruction_offsets": [
+            "0x114"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_persist_ready",
+                0,
+                1,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x1e0",
+          "old": "0x8ce113c4",
+          "new": "0x8ce113f0",
+          "load_instruction_offsets": [
+            "0x120"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_kui_vmu_persist_stage_handoff_matches",
+                0,
+                220,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x1e4",
+          "old": "0x8ce81984",
+          "new": "0x8ce81a44",
+          "load_instruction_offsets": [
+            "0x122",
+            "0x132"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_persist_handoff",
+                0,
+                1272,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x1e8",
+          "old": "0x8ce904d0",
+          "new": "0x8ce90590",
+          "load_instruction_offsets": [
+            "0x124"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_persist_profile",
+                0,
+                2728,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x1ec",
+          "old": "0x8ce01a2c",
+          "new": "0x8ce01a34",
+          "load_instruction_offsets": [
+            "0x138"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_low_configure",
+                0,
+                44,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x1f0",
+          "old": "0x8ce44f80",
+          "new": "0x8ce45040",
+          "load_instruction_offsets": [
+            "0x144"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_exits",
+                0,
+                52,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x378",
+          "old": "0x8ce07e44",
+          "new": "0x8ce07e4c",
+          "load_instruction_offsets": [
+            "0x200"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_retail_display_line",
+                0,
+                400,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x37c",
+          "old": "0x8ce2fa70",
+          "new": "0x8ce2fb30",
+          "load_instruction_offsets": [
+            "0x202"
+          ],
+          "binding": {
+            "kind": "same_complete_immutable_ASCII_string",
+            "text": "COLD 30 READER MAP BIND BEGIN"
+          }
+        },
+        {
+          "literal_offset": "0x388",
+          "old": "0x8cebcca0",
+          "new": "0x8cebcd60",
+          "load_instruction_offsets": [
+            "0x21c",
+            "0x262"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_manifest",
+                0,
+                2172,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x39c",
+          "old": "0x8cebc320",
+          "new": "0x8cebc3e0",
+          "load_instruction_offsets": [
+            "0x252"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_background_boot_region",
+                0,
+                1888,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x3a4",
+          "old": "0x8ce01a58",
+          "new": "0x8ce01a60",
+          "load_instruction_offsets": [
+            "0x260"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_low_bind_map",
+                0,
+                28,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x3a8",
+          "old": "0x8ce2c388",
+          "new": "0x8ce2c448",
+          "load_instruction_offsets": [
+            "0x26e"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "__native_worker_reloc_end",
+                0,
+                0,
+                0,
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x3ac",
+          "old": "0x8ce2fa90",
+          "new": "0x8ce2fb50",
+          "load_instruction_offsets": [
+            "0x270"
+          ],
+          "binding": {
+            "kind": "same_complete_immutable_ASCII_string",
+            "text": "COLD 31 READER MAP BOUND"
+          }
+        },
+        {
+          "literal_offset": "0x3b0",
+          "old": "0x8ce07fd4",
+          "new": "0x8ce07fdc",
+          "load_instruction_offsets": [
+            "0x276"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_retail_display_restore",
+                0,
+                136,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x3b4",
+          "old": "0x8cebc298",
+          "new": "0x8cebc358",
+          "load_instruction_offsets": [
+            "0x278"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_display",
+                0,
+                56,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x3bc",
+          "old": "0x8ce2faac",
+          "new": "0x8ce2fb6c",
+          "load_instruction_offsets": [
+            "0x280"
+          ],
+          "binding": {
+            "kind": "same_complete_immutable_ASCII_string",
+            "text": "RELOCATING PASSIVE MAPLE WORKER"
+          }
+        },
+        {
+          "literal_offset": "0x3c0",
+          "old": "0x8ce2facc",
+          "new": "0x8ce2fb8c",
+          "load_instruction_offsets": [
+            "0x286"
+          ],
+          "binding": {
+            "kind": "same_complete_immutable_ASCII_string",
+            "text": "COLD 32 WORKER RELOCATION BEGIN"
+          }
+        },
+        {
+          "literal_offset": "0x3c4",
+          "old": "0x8ce2abe0",
+          "new": "0x8ce2aca0",
+          "load_instruction_offsets": [
+            "0x28c",
+            "0x2a4"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "__native_worker_blob_end",
+                0,
+                0,
+                0,
+                2
+              ],
+              [
+                "__native_worker_reloc_begin",
+                0,
+                0,
+                0,
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x3c8",
+          "old": "0x8ce0d75c",
+          "new": "0x8ce0d764",
+          "load_instruction_offsets": [
+            "0x29c"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_kui_vmu_native_relocate",
+                0,
+                880,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x3d0",
+          "old": "0x8ce1e8e0",
+          "new": "0x8ce1e9a0",
+          "load_instruction_offsets": [
+            "0x2a6"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "__native_worker_blob_begin",
+                0,
+                0,
+                0,
+                2
+              ],
+              [
+                "__vmu_sd_profile_blob_end",
+                0,
+                0,
+                0,
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x3d4",
+          "old": "0x8ce2faec",
+          "new": "0x8ce2fbac",
+          "load_instruction_offsets": [
+            "0x2ba"
+          ],
+          "binding": {
+            "kind": "same_complete_immutable_ASCII_string",
+            "text": "COLD 33 WORKER RELOCATED"
+          }
+        },
+        {
+          "literal_offset": "0x65c",
+          "old": "0x8ce551d8",
+          "new": "0x8ce55298",
+          "load_instruction_offsets": [
+            "0x46c"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_heap",
+                0,
+                72,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x664",
+          "old": "0x8ce55220",
+          "new": "0x8ce552e0",
+          "load_instruction_offsets": [
+            "0x498"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_driver",
+                0,
+                104,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x66c",
+          "old": "0x8ce07e44",
+          "new": "0x8ce07e4c",
+          "load_instruction_offsets": [
+            "0x4a8"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_retail_display_line",
+                0,
+                400,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x670",
+          "old": "0x8ce2fb08",
+          "new": "0x8ce2fbc8",
+          "load_instruction_offsets": [
+            "0x4ae"
+          ],
+          "binding": {
+            "kind": "same_complete_immutable_ASCII_string",
+            "text": "COLD 34 WORKER ARM BEGIN"
+          }
+        },
+        {
+          "literal_offset": "0x674",
+          "old": "0x8ce1d274",
+          "new": "0x8ce1d324",
+          "load_instruction_offsets": [
+            "0x4b6"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_kui_vmu_native_worker_call",
+                0,
+                160,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x678",
+          "old": "0x8ce2fb24",
+          "new": "0x8ce2fbe4",
+          "load_instruction_offsets": [
+            "0x4cc"
+          ],
+          "binding": {
+            "kind": "same_complete_immutable_ASCII_string",
+            "text": "COLD 35 WORKER ARMED"
+          }
+        },
+        {
+          "literal_offset": "0x67c",
+          "old": "0x8ce0bc34",
+          "new": "0x8ce0bc3c",
+          "load_instruction_offsets": [
+            "0x4d2"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_kui_vmu_native_heap_lease_valid",
+                0,
+                52,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x684",
+          "old": "0x8ce01448",
+          "new": "0x8ce01450",
+          "load_instruction_offsets": [
+            "0x4e8"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_low_bindings",
+                0,
+                64,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x688",
+          "old": "0x8ce06ffa",
+          "new": "0x8ce07002",
+          "load_instruction_offsets": [
+            "0x506",
+            "0x5fe"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_memcmp",
+                0,
+                34,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x68c",
+          "old": "0x8ce304f4",
+          "new": "0x8ce305b4",
+          "load_instruction_offsets": [
+            "0x508"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_original.9",
+                0,
+                12,
+                1,
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x690",
+          "old": "0x8ce551a0",
+          "new": "0x8ce55260",
+          "load_instruction_offsets": [
+            "0x514",
+            "0x580"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_arena",
+                0,
+                4,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x694",
+          "old": "0x8ce44f44",
+          "new": "0x8ce45004",
+          "load_instruction_offsets": [
+            "0x51e"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_readonly_init_window",
+                0,
+                12,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x698",
+          "old": "0x8ce44f30",
+          "new": "0x8ce44ff0",
+          "load_instruction_offsets": [
+            "0x52e"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_readonly_release_window",
+                0,
+                20,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x6a4",
+          "old": "0x8ce0190c",
+          "new": "0x8ce01914",
+          "load_instruction_offsets": [
+            "0x54e"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_passive_lease_only",
+                0,
+                288,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x6a8",
+          "old": "0x8ce2fb3c",
+          "new": "0x8ce2fbfc",
+          "load_instruction_offsets": [
+            "0x56a"
+          ],
+          "binding": {
+            "kind": "same_complete_immutable_ASCII_string",
+            "text": "COLD 36 SDK HOOK PUBLICATION BEGIN"
+          }
+        },
+        {
+          "literal_offset": "0x6ac",
+          "old": "0x8ce02500",
+          "new": "0x8ce02508",
+          "load_instruction_offsets": [
+            "0x570"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_sdk_coherence_install",
+                0,
+                544,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x6b0",
+          "old": "0x8ce016ec",
+          "new": "0x8ce016f4",
+          "load_instruction_offsets": [
+            "0x58e",
+            "0x61c"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_readonly_patch_entry",
+                0,
+                240,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x6b4",
+          "old": "0x8ce44f50",
+          "new": "0x8ce45010",
+          "load_instruction_offsets": [
+            "0x5a0"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_persistent_exit_windows",
+                0,
+                48,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x6b8",
+          "old": "0x8ce44f98",
+          "new": "0x8ce45058",
+          "load_instruction_offsets": [
+            "0x5a2"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_exits",
+                24,
+                52,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x6bc",
+          "old": "0x8ce44f80",
+          "new": "0x8ce45040",
+          "load_instruction_offsets": [
+            "0x5a6"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_exits",
+                0,
+                52,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x6c0",
+          "old": "0x8ce06fb2",
+          "new": "0x8ce06fba",
+          "load_instruction_offsets": [
+            "0x5b6"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_memcpy",
+                0,
+                72,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x6c8",
+          "old": "0x8ce90f84",
+          "new": "0x8ce91044",
+          "load_instruction_offsets": [
+            "0x636"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_exec_bytes",
+                0,
+                4,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x6cc",
+          "old": "0x8ce30424",
+          "new": "0x8ce304e4",
+          "load_instruction_offsets": [
+            "0x63c"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_digest.3",
+                0,
+                32,
+                1,
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x6d0",
+          "old": "0x8ce55268",
+          "new": "0x8ce55328",
+          "load_instruction_offsets": [
+            "0x63e"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_driver",
+                72,
+                104,
+                1,
+                3
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x7dc",
+          "old": "0x8ce30418",
+          "new": "0x8ce304d8",
+          "load_instruction_offsets": [
+            "0x6fe"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_witness.2",
+                0,
+                12,
+                1,
+                2
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x7e4",
+          "old": "0x8ce11164",
+          "new": "0x8ce1116c",
+          "load_instruction_offsets": [
+            "0x70a"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_kui_vmu_native_patch_no_interior",
+                0,
+                36,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x7ec",
+          "old": "0x8ce10aac",
+          "new": "0x8ce10ab4",
+          "load_instruction_offsets": [
+            "0x71e"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_kui_vmu_native_patch_encode",
+                0,
+                168,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x7fc",
+          "old": "0x8ce01488",
+          "new": "0x8ce01490",
+          "load_instruction_offsets": [
+            "0x76e"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_control",
+                0,
+                28,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x804",
+          "old": "0x8ce2fb60",
+          "new": "0x8ce2fc20",
+          "load_instruction_offsets": [
+            "0x784"
+          ],
+          "binding": {
+            "kind": "same_complete_immutable_ASCII_string",
+            "text": "COLD 37 SDK HOOKS INSTALLED"
+          }
+        },
+        {
+          "literal_offset": "0x808",
+          "old": "0x8ce02fac",
+          "new": "0x8ce02fb4",
+          "load_instruction_offsets": [
+            "0x7a8"
+          ],
+          "binding": {
+            "kind": "same_typed_symbol_and_offset",
+            "targets": [
+              [
+                "_native_dual_reader_bind",
+                0,
+                68,
+                2,
+                6
+              ]
+            ]
+          }
+        },
+        {
+          "literal_offset": "0x80c",
+          "old": "0x8ce2fb7c",
+          "new": "0x8ce2fc3c",
+          "load_instruction_offsets": [
+            "0x7ae"
+          ],
+          "binding": {
+            "kind": "same_complete_immutable_ASCII_string",
+            "text": "72 KIB VMU / 284 KIB BACKGROUND"
+          }
+        },
+        {
+          "literal_offset": "0x814",
+          "old": "0x8ce2fa30",
+          "new": "0x8ce2faf0",
+          "load_instruction_offsets": [
+            "0x7bc"
+          ],
+          "binding": {
+            "kind": "same_complete_immutable_ASCII_string",
+            "text": "NEW READER / VIRTUAL A1 ON"
+          }
+        },
+        {
+          "literal_offset": "0x818",
+          "old": "0x8ce2fa14",
+          "new": "0x8ce2fad4",
+          "load_instruction_offsets": [
+            "0x7c0"
+          ],
+          "binding": {
+            "kind": "same_complete_immutable_ASCII_string",
+            "text": "NEW READER / VIRTUAL A1 OFF"
+          }
+        },
+        {
+          "literal_offset": "0x81c",
+          "old": "0x8ce2fb9c",
+          "new": "0x8ce2fc5c",
+          "load_instruction_offsets": [
+            "0x7c6"
+          ],
+          "binding": {
+            "kind": "same_complete_immutable_ASCII_string",
+            "text": "PREFETCH AUTO / SPLIT CONTROLLER ALL"
+          }
+        },
+        {
+          "literal_offset": "0x820",
+          "old": "0x8ce2fbc4",
+          "new": "0x8ce2fc84",
+          "load_instruction_offsets": [
+            "0x7cc"
+          ],
+          "binding": {
+            "kind": "same_complete_immutable_ASCII_string",
+            "text": "REAL MAPLE CALLBACKS ON"
+          }
+        }
+      ]
+    }
+  },
+  "strict_historical_toggle_gate_still_refused": true,
+  "scope": "This separate reviewed cold-kernel comparison does not repin or pass the historical exact hash gate, and does not normalize any gameplay component bytes. All kernel differences are independently bound PC-relative pointer literal relocations; no instruction or nonpointer literal changed.",
+  "hardware_verified": false
+}

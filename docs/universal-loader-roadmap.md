@@ -1,5 +1,13 @@
 # Universal loader integration roadmap
 
+Current native candidate: `f8807cb16561`, with twelve changed cold families
+and exact preservation of the accepted Smash and CE files. The raw-rip
+program-prefix hint bug and the remaining native verification/snapshot
+coverage gaps are addressed by shared operation contracts, not title profiles.
+See [coverage and remaining work](shared-launch-coverage-restoration.md).
+Hardware timing and actual Sonic background activity still need observation;
+this is not an all-game acceptance record.
+
 Goal: one maintained K-UI build which selects the best verified launch backend,
 virtual VMU and optional read-ahead for each runtime. Keep successful games
 working while extending shared support. A runtime may use demand delivery

@@ -1,0 +1,5297 @@
+{
+  "schema": "kui.shared-loader.performance.v2",
+  "status": "PASS",
+  "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+  "allow_dirty": false,
+  "runtime": {
+    "elf_sha256": "eaabf4418dde74c955ba319606b003b3c8e13ad4aad5dec8f6645c673d5a22e5",
+    "compile_sha256": "432b61dadd850cb06b7731cd4b62f1fbd472fc929a7ea4a45aa831de5788f6f7",
+    "provenance": {
+      "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+      "source_dirty": false,
+      "elf_sha256": "eaabf4418dde74c955ba319606b003b3c8e13ad4aad5dec8f6645c673d5a22e5"
+    },
+    "module_sha256": "c4363bfd071f4c5d02b302437dc34682b0ece9cb0f4ef336f3d435db94811550",
+    "shared_functions": {
+      "_kui_game_image_read": {
+        "address": "0x8c09a238",
+        "bytes": 756,
+        "sha256": "6b3d360749b58bd620d9390310d01fa6cbcddacd31578f1aa690a8af3719b465"
+      },
+      "_kui_vmu_history_apply": {
+        "address": "0x8c0a26c8",
+        "bytes": 2500,
+        "sha256": "a3426261009bb9f3368d731095710b25f14ec9ec8907abf770ea6ea4d9eee3a1"
+      },
+      "_kui_vmu_history_session_begin": {
+        "address": "0x8c0a4b08",
+        "bytes": 1208,
+        "sha256": "dca216cfa44854eb827380a59a45d8dc015c793f256dbd24f1d8700ddb96e0a1"
+      }
+    },
+    "standard_manifest_binding": {
+      "normalized_payload_sha256": "d7dedf99e674c0990716184f56016e65509c3364fcdfd086922e6021bb922c71",
+      "actual_scalar_word_comparisons": 8,
+      "all_mismatches_use_historical_fallback": true,
+      "recognizer_sha256": "1980faab90c4c50ded0ca27c442615adad2cb3aa8633453acf1ba6974f7bf7cb",
+      "compiler_folded_digest_array": true
+    },
+    "standard_manifest": {
+      "schema": "kui.native.standard-build-manifest.test.v1",
+      "status": "PASS",
+      "manifest": {
+        "schema": "kui.native.standard-build-manifest.v1",
+        "source_commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+        "source_dirty": false,
+        "build": "f8807cb16561",
+        "profile": "paced-SCI-VMU-lite-A2",
+        "payload_bytes": 237752,
+        "memory_bytes": 237752,
+        "profile_payload_offset": 118752,
+        "normalized_payload_sha256": "d7dedf99e674c0990716184f56016e65509c3364fcdfd086922e6021bb922c71",
+        "module_sha256": "bdc9c9f9389bf71e68efd6c065ef3eb31453b5544378b2ded0590ddec60275b1",
+        "module_bytes": 237816,
+        "profile_bytes": 4096,
+        "provenance": {
+          "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+          "source_dirty": false,
+          "compile_provenance_sha256": "da807dc6981924bd4359eed93c2f65ebfa11b5eeb87f3ba1e87c0bce24563065",
+          "elf_sha256": "71afe06e5a6166f840c9a254c59b6498b46991413760fcd0cbf066736f9db1ce"
+        },
+        "launch_mutable_spans": [
+          [
+            118752,
+            4096
+          ]
+        ],
+        "build_labels_normalized": false,
+        "unknown_installed_modules_refused": true,
+        "artifacts_sha256": {
+          "entry.elf": "71afe06e5a6166f840c9a254c59b6498b46991413760fcd0cbf066736f9db1ce",
+          "stage.elf": "bf7f6b51739b02cabe22cf8294f3d55b7f29dead915dd741d50615f75b8a7091",
+          "native-worker.elf": "0503a67006ec555f4efd9056e9027b9ccd64add2ce83106f78c8d7fa9e2f1e3b",
+          "resident-sci.elf": "c10a7f8b203d7bc9c0e666f0c70ae7cc29ba6f2a3f7f9e97a3d6d21018ec4145",
+          "retail-native-vmu-lite-paced.kui": "bdc9c9f9389bf71e68efd6c065ef3eb31453b5544378b2ded0590ddec60275b1"
+        },
+        "full_linked_family_audit_required_for_delivery": true
+      },
+      "sanitizer_runs": [
+        {
+          "manifest_enabled": false,
+          "output": "Standard build manifest: 9 checks passed; current cohort only, code immutable, valid profile mutable"
+        },
+        {
+          "manifest_enabled": true,
+          "output": "Standard build manifest: 1418 checks passed; current cohort only, code immutable, valid profile mutable"
+        }
+      ],
+      "current_module_only": true,
+      "no_installed_module_self_authorization": true,
+      "source_sha256": {
+        "tests/test_native_standard_manifest.c": "70d40a844253aeab43f8c6c5320fc3f6af2b8b186ede49524e82bd6b1c90b835",
+        "src/core/native_vmu_standard.c": "41911c74bbea62c23f974d7c5ddb77c3811317803768f6ed091a08dd73986ddd",
+        "src/core/vmu_game_card.c": "a7409858eb0eec2f6243a68d759b8fb5b7165a9aa2222d214f595e9a466d4ae7",
+        "src/core/vmu_persist_profile.c": "a0468429007a0a7024b2251766149555b492032c0a37b407db2c3fb78f483f89",
+        "src/core/runtime_image.c": "e2c25e03ada0ad5067d326817e0109da1665b7905de1e65d338056c222b3dd8a",
+        "src/core/retail_image.c": "632d19e0f78e474bed87249ad80a7a1b827c18cd98f07f9b9c21e81da1999986",
+        "src/core/hash.c": "1dda19d3dc6a645396d24484cd8842c72bba811dce38f317660a2eeda7dc0d67",
+        "src/core/data.c": "2899e0f28ea7af1dd8cc0dc72a4f9dfed32a33f2e21908505c70e050b43941a5",
+        "include/kui/native_vmu_standard.h": "91725890746838dee4f9eb5e43c293ffc7dbbbcbef2e0a9bb48d49102b1ff6f1",
+        "tools/native_standard_manifest.py": "cc526450435cab09f08a1190ff210a3280383c967c45902c029f1042a70f7fec",
+        "tests/test_native_standard_manifest.py": "a1d9e6a95b176545ed6721c5bd755019b4142851eeaea8c0dbf0684a33164fe7"
+      }
+    }
+  },
+  "cohort": {
+    "background_a1": {
+      "module_sha256": "f8ad6a5232c548ad306faec8127db3bc6ca53cd892ce2cefa6b65c2c1b54341d",
+      "module_bytes": 290136,
+      "metadata": {
+        "format": 1,
+        "build": "f8807cb16561",
+        "payload_bytes": 290072,
+        "memory_bytes": 290072,
+        "crc32": "0a99d8ee"
+      },
+      "source": {
+        "elf_sha256": "7b308986bf8b52cf4a2fc6f22c6752f39e73f6be2a3b394ed2c671215b3927e0",
+        "compile_sha256": "ae33c8dd4f812f0d9d48dfe87be65d790144b6d25c0afbd7197b9d99d57a518c",
+        "provenance": {
+          "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+          "source_dirty": false,
+          "elf_sha256": "7b308986bf8b52cf4a2fc6f22c6752f39e73f6be2a3b394ed2c671215b3927e0"
+        }
+      },
+      "artifacts_sha256": {
+        "entry.elf": "7b308986bf8b52cf4a2fc6f22c6752f39e73f6be2a3b394ed2c671215b3927e0",
+        "stage.elf": "313f148cb449b5e79134ae911e831f35bb21e74b4fcf529d48817750a69b01c1",
+        "stage.bin": "0c4a4e1b3467de6ba97c1cc2b6aeb108d40d71d2f43cbad39fbac05431726da6",
+        "retail-native-background-compact.kui": "f8ad6a5232c548ad306faec8127db3bc6ca53cd892ce2cefa6b65c2c1b54341d",
+        "retail-native-dual.kui": "f8ad6a5232c548ad306faec8127db3bc6ca53cd892ce2cefa6b65c2c1b54341d",
+        "retail-maple-observe.kui": "f8ad6a5232c548ad306faec8127db3bc6ca53cd892ce2cefa6b65c2c1b54341d",
+        "native-worker.elf": "ae17bc37ad3904ac12cfcf6628564245a43ab1978c6f299a418b6c828697d4e5",
+        "native-worker.bin": "41e8b56ddc6d3a98a7073629805059996b557ee7bbb0c45dd21c031adcd0310c",
+        "native-worker.reloc": "0b19bd02a0840ea78494f318cf5180d6cabe479332366ec46d4769ee2f833a22",
+        "resident-sci.elf": "be79d40f7ba6d9b93d996cd55de5c1a4b337c89c953b7065c155448e5ef818a6",
+        "resident-sci.bin": "1a9dc592fc6fe92629f48080ecd531519c2903c94c453e193eee290e454b65b0",
+        "resident-legacy.elf": "9b33a6ed4cd08f9b0eab4ed5a494f608bd0c981ec07a1c4326f3568ec6db219d",
+        "stage/src/loader/vmu_native_heap_probe_stage.ci": "1df7b538f9e62993ded467dea6f1840ae35af675e71d46767bc033676f9647b0"
+      },
+      "background": {
+        "profile": "compact72",
+        "worker_bytes": 73728,
+        "lease_bytes": 290816,
+        "cache_bytes": 196608,
+        "worker_stack_bytes": 3072,
+        "virtual_slot": 1,
+        "readers": [
+          "new_x",
+          "legacy_y"
+        ],
+        "component_markers": {
+          "enabled": true,
+          "matching_immutable_component_markers": true,
+          "worker_bytes": 73728,
+          "lease_bytes": 290816,
+          "cache_bytes": 196608,
+          "components": 5
+        },
+        "optional_session_controls": false
+      },
+      "pure_resolution": {
+        "schema": "kui.native-stage.proof-cache-scope.v1",
+        "status": "PASS",
+        "elf_sha256": "313f148cb449b5e79134ae911e831f35bb21e74b4fcf529d48817750a69b01c1",
+        "wrapper_bytes": 156,
+        "pure_leaf_sha256": "399a901adf7c84ce859dc1af6f14d947adce0592afb60b2a5d1e41e160ddafc0",
+        "actual_SH_cases": 3840,
+        "mutation_rejections": 26,
+        "argument_count": 7,
+        "caller_stack_unchanged": true,
+        "private_frame_bytes": 24,
+        "unknown_CCR_unchanged": true,
+        "per_game_constants": false,
+        "limits": "Actual scope instructions execute; the real immutable replay leaf is an ABI adversary. No console timing is established."
+      },
+      "pure_extent": {
+        "enabled": true,
+        "entry": "0x8ce1d268",
+        "bytes": 140,
+        "actual_instruction_model_cases": 6144,
+        "mutation_rejections": 20,
+        "complete_linked_assembly_pinned": true,
+        "eligible_entry_ccr": "0x100",
+        "proof_ccr": "0x101",
+        "other_ccr_profiles_unchanged": true,
+        "same_pure_extent_proof": true,
+        "full_ram_purge_bytes": 16777216,
+        "cache_write_nops": [
+          8,
+          8
+        ],
+        "callee_preserved_integer_frame_bytes": 12,
+        "operand_cache_restored_off": true,
+        "proof_output_published_before_cache_restore": true,
+        "console_speed_verified": false
+      },
+      "fast_crc": {
+        "schema": "kui.smash-native.fast-crc.v1",
+        "status": "PASS",
+        "elf_sha256": "313f148cb449b5e79134ae911e831f35bb21e74b4fcf529d48817750a69b01c1",
+        "helper": "0x8ce001e8",
+        "helper_bytes": 144,
+        "helper_sha256": "8b6905b71d79ad8907b64a09d1993da1ea4df469e43bf97effcd0858003f16cc",
+        "byte_table": "0x8ce305cc",
+        "table_bytes": 1024,
+        "complete_readonly_table_candidates": 1,
+        "helper_bound_tables": 1,
+        "table_sha256": "12f3e0576d447eb37b36d82ba0c1c5481b8f0d12fdc70347ce4a076b229d4c86",
+        "actual_SH_cases": 128,
+        "instructions": 363128,
+        "one_table_read_per_byte": true,
+        "independent_oracle": "zlib.crc32",
+        "whole_image_relay_bound": true,
+        "observed_private_stack_bytes": 8,
+        "hardware_timing_verified": false
+      },
+      "fresh_fat_cache": {
+        "schema": "kui.smash-menu.fat-cache-linked.v1",
+        "status": "PASS",
+        "profile": "native",
+        "elf_sha256": "313f148cb449b5e79134ae911e831f35bb21e74b4fcf529d48817750a69b01c1",
+        "cache_bss": "0x8ce7d9c0",
+        "cache_bytes": 16512,
+        "actual_helpers": {
+          "_kui_smash_fat_cache_read": {
+            "entry": "0x8ce1a044",
+            "bytes": 1020,
+            "sha256": "79ac05690a43296f4dffe04128066b6c42126a9c1ce57d25b25d7fafdd4a03f3"
+          },
+          "_kui_smash_fat_cache_begin_epoch": {
+            "entry": "0x8ce19f72",
+            "bytes": 34,
+            "sha256": "8a1afde9b83c1223ea37c5c359d801a2179260a1338827fa716b3c79673368b4"
+          },
+          "_kui_smash_fat_cache_configure": {
+            "entry": "0x8ce19f94",
+            "bytes": 176,
+            "sha256": "3f68a51befa408e8baa64a9346d3be6d042768281d816247a3e4cd8afcf62113"
+          },
+          "_native_persist_fat_read_one": {
+            "entry": "0x8ce00714",
+            "bytes": 64,
+            "sha256": "3c0b7eb201e3a095d0f5fe113e612e29ea31390bd9564d2eb82079212431774b"
+          },
+          "_native_persist_fat_read_window": {
+            "entry": "0x8ce00b98",
+            "bytes": 248,
+            "sha256": "12ca031b56cd453988e25844b47e72af8695703ae8383607fde85496108363d0"
+          },
+          "_native_persist_read": {
+            "entry": "0x8ce00664",
+            "bytes": 176,
+            "sha256": "6b3f18c5b94ab64736650c1046fd17bbd911f7b74719116141c09759b70f7562"
+          },
+          "_native_persist_identity": {
+            "entry": "0x8ce00754",
+            "bytes": 112,
+            "sha256": "4d4beb624aac0421d1fe05dadb86de75157effab77abff36da24bc70a19c641a"
+          },
+          "_native_persist_write": {
+            "entry": "0x8ce0060c",
+            "bytes": 88,
+            "sha256": "b4449a10bd089d0fd94948746392518c5a595c49750c2823d3fa539ed63449b1"
+          },
+          "_native_persist_sync": {
+            "entry": "0x8ce005a0",
+            "bytes": 72,
+            "sha256": "97223ecf403febbf2172b26c147c465a545017f572e2932c1fe0e6ced4831992"
+          }
+        },
+        "actual_initial_read_sessions": [
+          [
+            "one",
+            100,
+            1
+          ],
+          [
+            "window",
+            132,
+            16
+          ],
+          [
+            "window",
+            148,
+            1
+          ],
+          [
+            "window",
+            149,
+            16
+          ],
+          [
+            "window",
+            165,
+            1
+          ]
+        ],
+        "epochs_drop_geometry_and_data": true,
+        "independent_copies_and_bounded_tail": true,
+        "verified_prefix_only": true,
+        "failed_stream_not_cached": true,
+        "stage_identity_write_sync_invalidation_bound": true,
+        "stage_bounded_stream_and_stop_bound": true,
+        "compiler_graph_sha256": {
+          "stage/src/loader/vmu_native_heap_probe_stage.ci": "1df7b538f9e62993ded467dea6f1840ae35af675e71d46767bc033676f9647b0",
+          "stage/src/loader/smash_fat_read_cache.ci": "2a704c9d5a61308b255c6fa0a11bdf05d2667a5c99d3b2ac4f57f02e50a8cb92"
+        },
+        "limits": "Actual compiled cache/epoch C and libc execute; physical callbacks are fixtures. Full filesystem correctness is separately tested by actual old/new admission under sanitizers."
+      },
+      "verified_fat_window": {
+        "schema": "kui.native-fat-window.linked.v1",
+        "status": "PASS",
+        "profile": "native",
+        "transport": 1,
+        "elf_sha256": "313f148cb449b5e79134ae911e831f35bb21e74b4fcf529d48817750a69b01c1",
+        "helpers": {
+          "_native_persist_fat_read_window": {
+            "address": "0x8ce00b98",
+            "bytes": 248,
+            "sha256": "12ca031b56cd453988e25844b47e72af8695703ae8383607fde85496108363d0"
+          },
+          "_native_persist_identity": {
+            "address": "0x8ce00754",
+            "bytes": 112,
+            "sha256": "4d4beb624aac0421d1fe05dadb86de75157effab77abff36da24bc70a19c641a"
+          },
+          "_native_persist_write": {
+            "address": "0x8ce0060c",
+            "bytes": 88,
+            "sha256": "b4449a10bd089d0fd94948746392518c5a595c49750c2823d3fa539ed63449b1"
+          },
+          "_native_persist_sync": {
+            "address": "0x8ce005a0",
+            "bytes": 72,
+            "sha256": "97223ecf403febbf2172b26c147c465a545017f572e2932c1fe0e6ced4831992"
+          }
+        },
+        "cases": [
+          {
+            "case": "complete",
+            "verified": 16,
+            "result": 0,
+            "events": [
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "read",
+                101,
+                15
+              ],
+              [
+                "read",
+                102,
+                14
+              ],
+              [
+                "read",
+                103,
+                13
+              ],
+              [
+                "read",
+                104,
+                12
+              ],
+              [
+                "read",
+                105,
+                11
+              ],
+              [
+                "read",
+                106,
+                10
+              ],
+              [
+                "read",
+                107,
+                9
+              ],
+              [
+                "read",
+                108,
+                8
+              ],
+              [
+                "read",
+                109,
+                7
+              ],
+              [
+                "read",
+                110,
+                6
+              ],
+              [
+                "read",
+                111,
+                5
+              ],
+              [
+                "read",
+                112,
+                4
+              ],
+              [
+                "read",
+                113,
+                3
+              ],
+              [
+                "read",
+                114,
+                2
+              ],
+              [
+                "read",
+                115,
+                1
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "short_window",
+            "verified": 1,
+            "result": 0,
+            "events": [
+              [
+                "read",
+                100,
+                1
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "zero_count",
+            "verified": 0,
+            "result": 4294967295,
+            "events": []
+          },
+          {
+            "case": "oversize",
+            "verified": 0,
+            "result": 4294967295,
+            "events": []
+          },
+          {
+            "case": "crc_first",
+            "verified": 0,
+            "result": 4294967295,
+            "events": [
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "crc_suffix",
+            "verified": 3,
+            "result": 0,
+            "events": [
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "read",
+                101,
+                15
+              ],
+              [
+                "read",
+                102,
+                14
+              ],
+              [
+                "read",
+                103,
+                13
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "failed_stop",
+            "verified": 0,
+            "result": 4294967295,
+            "events": [
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "read",
+                101,
+                15
+              ],
+              [
+                "read",
+                102,
+                14
+              ],
+              [
+                "read",
+                103,
+                13
+              ],
+              [
+                "read",
+                104,
+                12
+              ],
+              [
+                "read",
+                105,
+                11
+              ],
+              [
+                "read",
+                106,
+                10
+              ],
+              [
+                "read",
+                107,
+                9
+              ],
+              [
+                "read",
+                108,
+                8
+              ],
+              [
+                "read",
+                109,
+                7
+              ],
+              [
+                "read",
+                110,
+                6
+              ],
+              [
+                "read",
+                111,
+                5
+              ],
+              [
+                "read",
+                112,
+                4
+              ],
+              [
+                "read",
+                113,
+                3
+              ],
+              [
+                "read",
+                114,
+                2
+              ],
+              [
+                "read",
+                115,
+                1
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "unhealthy_after_stop",
+            "verified": 0,
+            "result": 4294967295,
+            "events": [
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "read",
+                101,
+                15
+              ],
+              [
+                "read",
+                102,
+                14
+              ],
+              [
+                "read",
+                103,
+                13
+              ],
+              [
+                "read",
+                104,
+                12
+              ],
+              [
+                "read",
+                105,
+                11
+              ],
+              [
+                "read",
+                106,
+                10
+              ],
+              [
+                "read",
+                107,
+                9
+              ],
+              [
+                "read",
+                108,
+                8
+              ],
+              [
+                "read",
+                109,
+                7
+              ],
+              [
+                "read",
+                110,
+                6
+              ],
+              [
+                "read",
+                111,
+                5
+              ],
+              [
+                "read",
+                112,
+                4
+              ],
+              [
+                "read",
+                113,
+                3
+              ],
+              [
+                "read",
+                114,
+                2
+              ],
+              [
+                "read",
+                115,
+                1
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "fault_after_stop",
+            "verified": 0,
+            "result": 4294967295,
+            "events": [
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "read",
+                101,
+                15
+              ],
+              [
+                "read",
+                102,
+                14
+              ],
+              [
+                "read",
+                103,
+                13
+              ],
+              [
+                "read",
+                104,
+                12
+              ],
+              [
+                "read",
+                105,
+                11
+              ],
+              [
+                "read",
+                106,
+                10
+              ],
+              [
+                "read",
+                107,
+                9
+              ],
+              [
+                "read",
+                108,
+                8
+              ],
+              [
+                "read",
+                109,
+                7
+              ],
+              [
+                "read",
+                110,
+                6
+              ],
+              [
+                "read",
+                111,
+                5
+              ],
+              [
+                "read",
+                112,
+                4
+              ],
+              [
+                "read",
+                113,
+                3
+              ],
+              [
+                "read",
+                114,
+                2
+              ],
+              [
+                "read",
+                115,
+                1
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "active_after_stop",
+            "verified": 0,
+            "result": 4294967295,
+            "events": [
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "read",
+                101,
+                15
+              ],
+              [
+                "read",
+                102,
+                14
+              ],
+              [
+                "read",
+                103,
+                13
+              ],
+              [
+                "read",
+                104,
+                12
+              ],
+              [
+                "read",
+                105,
+                11
+              ],
+              [
+                "read",
+                106,
+                10
+              ],
+              [
+                "read",
+                107,
+                9
+              ],
+              [
+                "read",
+                108,
+                8
+              ],
+              [
+                "read",
+                109,
+                7
+              ],
+              [
+                "read",
+                110,
+                6
+              ],
+              [
+                "read",
+                111,
+                5
+              ],
+              [
+                "read",
+                112,
+                4
+              ],
+              [
+                "read",
+                113,
+                3
+              ],
+              [
+                "read",
+                114,
+                2
+              ],
+              [
+                "read",
+                115,
+                1
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "unhealthy_before",
+            "verified": 0,
+            "result": 4294967295,
+            "events": []
+          },
+          {
+            "case": "fault_before",
+            "verified": 0,
+            "result": 4294967295,
+            "events": []
+          }
+        ],
+        "identity_write_sync_retire_before_io": [
+          "identity",
+          "write",
+          "sync"
+        ],
+        "limits": "Actual linked adapter, health and cache-epoch instructions execute. Stream/card/bus calls are finite ABI media fixtures; SPI/CRC protocol has separate tests."
+      },
+      "selected_resolution_route": {
+        "status": "PASS",
+        "bindings": [
+          {
+            "caller": "_native_resolution_replay",
+            "address": "0x8ce023d0",
+            "sha256": "c1c0f7e2c5f05cee202b65e2afc367edb721d98e00abc61faadc68d5f38f49f7",
+            "selected": "_kui_vmu_native_cached_resolution_replay",
+            "selected_edges": [
+              "allocation_safe",
+              "kui_vmu_native_cache_seed_read",
+              "kui_vmu_native_cached_resolution_replay",
+              "native_arena_plan_bind",
+              "native_fixed_plan_bind",
+              "native_passive_capture_windows",
+              "native_sdk_coherence_after_image_proof",
+              "readonly_release_replay_valid"
+            ]
+          },
+          {
+            "caller": "_kui_retail_stage_relay",
+            "address": "0x8ce049b4",
+            "sha256": "5f070cf2badd5dce3e20076ef69a220145b68433d3ec2182621ff7d70030032c",
+            "selected": "_kui_vmu_native_cached_extent",
+            "selected_edges": [
+              "code_sha",
+              "kui_native_heap_base_relay",
+              "kui_native_stage_cached_discover_image",
+              "kui_retail_observe_native_ip",
+              "kui_vmu_native_cached_extent",
+              "native_arm_fixed_call",
+              "native_arm_heap_hook",
+              "native_crt_bootstrap_prearm",
+              "native_passive_prepare_finish",
+              "native_preclear_arm",
+              "native_preclear_prepare",
+              "native_report",
+              "native_resolution_replay",
+              "native_runtime_mode",
+              "retail_display_line",
+              "retail_display_restore"
+            ]
+          }
+        ],
+        "callgraph_sha256": "1df7b538f9e62993ded467dea6f1840ae35af675e71d46767bc033676f9647b0"
+      }
+    },
+    "background_a2": {
+      "module_sha256": "09c1480c6c470166b3e584f54218d98679ef4a34a8765d47bde4d2187889481a",
+      "module_bytes": 290104,
+      "metadata": {
+        "format": 1,
+        "build": "f8807cb16561",
+        "payload_bytes": 290040,
+        "memory_bytes": 290040,
+        "crc32": "9b37b199"
+      },
+      "source": {
+        "elf_sha256": "5532317265efdcdab6831083db1e6cecbeebcfad96d063d559bf4ff101106074",
+        "compile_sha256": "276ba092579440cc5e1d4b0d21e5e60e4a2f74b6488f4d74c0d2790cbd7bb5a6",
+        "provenance": {
+          "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+          "source_dirty": false,
+          "elf_sha256": "5532317265efdcdab6831083db1e6cecbeebcfad96d063d559bf4ff101106074"
+        }
+      },
+      "artifacts_sha256": {
+        "entry.elf": "5532317265efdcdab6831083db1e6cecbeebcfad96d063d559bf4ff101106074",
+        "stage.elf": "881a999f5e536f09ddd8c1e549b9e0306f404ff178c7ff99f12e99f5fef01078",
+        "stage.bin": "ec04df5c6790e940250830fb4a2b23d7fdcd8a708405010020ed73fd8b517f66",
+        "retail-native-background-compact.kui": "09c1480c6c470166b3e584f54218d98679ef4a34a8765d47bde4d2187889481a",
+        "retail-native-dual.kui": "09c1480c6c470166b3e584f54218d98679ef4a34a8765d47bde4d2187889481a",
+        "retail-maple-observe.kui": "09c1480c6c470166b3e584f54218d98679ef4a34a8765d47bde4d2187889481a",
+        "native-worker.elf": "caac03b7a598307e708fc103f799bdc2535e11f12c7981e26eef3500a255632c",
+        "native-worker.bin": "2279920728e94c48821035bb4a6bbbfac87258aa8084a8747dad6f8227d8a693",
+        "native-worker.reloc": "aa7a1dda78bb0cb70ec0bb9740dcc8ad2072a2ff85226f41203bf4a1738836d0",
+        "resident-sci.elf": "be79d40f7ba6d9b93d996cd55de5c1a4b337c89c953b7065c155448e5ef818a6",
+        "resident-sci.bin": "1a9dc592fc6fe92629f48080ecd531519c2903c94c453e193eee290e454b65b0",
+        "resident-legacy.elf": "9b33a6ed4cd08f9b0eab4ed5a494f608bd0c981ec07a1c4326f3568ec6db219d",
+        "stage/src/loader/vmu_native_heap_probe_stage.ci": "1df7b538f9e62993ded467dea6f1840ae35af675e71d46767bc033676f9647b0"
+      },
+      "background": {
+        "profile": "compact72",
+        "worker_bytes": 73728,
+        "lease_bytes": 290816,
+        "cache_bytes": 196608,
+        "worker_stack_bytes": 3072,
+        "virtual_slot": 2,
+        "readers": [
+          "new_x",
+          "legacy_y"
+        ],
+        "component_markers": {
+          "enabled": true,
+          "matching_immutable_component_markers": true,
+          "worker_bytes": 73728,
+          "lease_bytes": 290816,
+          "cache_bytes": 196608,
+          "components": 5
+        },
+        "optional_session_controls": false
+      },
+      "pure_resolution": {
+        "schema": "kui.native-stage.proof-cache-scope.v1",
+        "status": "PASS",
+        "elf_sha256": "881a999f5e536f09ddd8c1e549b9e0306f404ff178c7ff99f12e99f5fef01078",
+        "wrapper_bytes": 156,
+        "pure_leaf_sha256": "399a901adf7c84ce859dc1af6f14d947adce0592afb60b2a5d1e41e160ddafc0",
+        "actual_SH_cases": 3840,
+        "mutation_rejections": 26,
+        "argument_count": 7,
+        "caller_stack_unchanged": true,
+        "private_frame_bytes": 24,
+        "unknown_CCR_unchanged": true,
+        "per_game_constants": false,
+        "limits": "Actual scope instructions execute; the real immutable replay leaf is an ABI adversary. No console timing is established."
+      },
+      "pure_extent": {
+        "enabled": true,
+        "entry": "0x8ce1d268",
+        "bytes": 140,
+        "actual_instruction_model_cases": 6144,
+        "mutation_rejections": 20,
+        "complete_linked_assembly_pinned": true,
+        "eligible_entry_ccr": "0x100",
+        "proof_ccr": "0x101",
+        "other_ccr_profiles_unchanged": true,
+        "same_pure_extent_proof": true,
+        "full_ram_purge_bytes": 16777216,
+        "cache_write_nops": [
+          8,
+          8
+        ],
+        "callee_preserved_integer_frame_bytes": 12,
+        "operand_cache_restored_off": true,
+        "proof_output_published_before_cache_restore": true,
+        "console_speed_verified": false
+      },
+      "fast_crc": {
+        "schema": "kui.smash-native.fast-crc.v1",
+        "status": "PASS",
+        "elf_sha256": "881a999f5e536f09ddd8c1e549b9e0306f404ff178c7ff99f12e99f5fef01078",
+        "helper": "0x8ce001e8",
+        "helper_bytes": 144,
+        "helper_sha256": "29ca97e5438f743b6ab4ae7fd04b957584ce00e7191ad1b82d1ae75237e45f2e",
+        "byte_table": "0x8ce305ac",
+        "table_bytes": 1024,
+        "complete_readonly_table_candidates": 1,
+        "helper_bound_tables": 1,
+        "table_sha256": "12f3e0576d447eb37b36d82ba0c1c5481b8f0d12fdc70347ce4a076b229d4c86",
+        "actual_SH_cases": 128,
+        "instructions": 363128,
+        "one_table_read_per_byte": true,
+        "independent_oracle": "zlib.crc32",
+        "whole_image_relay_bound": true,
+        "observed_private_stack_bytes": 8,
+        "hardware_timing_verified": false
+      },
+      "fresh_fat_cache": {
+        "schema": "kui.smash-menu.fat-cache-linked.v1",
+        "status": "PASS",
+        "profile": "native",
+        "elf_sha256": "881a999f5e536f09ddd8c1e549b9e0306f404ff178c7ff99f12e99f5fef01078",
+        "cache_bss": "0x8ce7d9a0",
+        "cache_bytes": 16512,
+        "actual_helpers": {
+          "_kui_smash_fat_cache_read": {
+            "entry": "0x8ce1a044",
+            "bytes": 1020,
+            "sha256": "bfcc4400679d9c4f9f2489893c32f62409a4916948e04571127c36fb9bb1fe57"
+          },
+          "_kui_smash_fat_cache_begin_epoch": {
+            "entry": "0x8ce19f72",
+            "bytes": 34,
+            "sha256": "8a1afde9b83c1223ea37c5c359d801a2179260a1338827fa716b3c79673368b4"
+          },
+          "_kui_smash_fat_cache_configure": {
+            "entry": "0x8ce19f94",
+            "bytes": 176,
+            "sha256": "3f68a51befa408e8baa64a9346d3be6d042768281d816247a3e4cd8afcf62113"
+          },
+          "_native_persist_fat_read_one": {
+            "entry": "0x8ce00714",
+            "bytes": 64,
+            "sha256": "fef4cc5f3119aba39515faa98bc0eb2daf8d8e72c0e488ee67c02bfdf2dcc2ff"
+          },
+          "_native_persist_fat_read_window": {
+            "entry": "0x8ce00b98",
+            "bytes": 248,
+            "sha256": "e864a23b41a3d577d239d25118ed332720f57d9cc64194a25dfc5f0cc6ddee28"
+          },
+          "_native_persist_read": {
+            "entry": "0x8ce00664",
+            "bytes": 176,
+            "sha256": "cbae042d78baf2bc48397a80e8368119dfede2c0b1cb76695b35f9971b1cfc13"
+          },
+          "_native_persist_identity": {
+            "entry": "0x8ce00754",
+            "bytes": 112,
+            "sha256": "2306fb40276cb4d46ac1eb98f55c641f7c971bad27551471cad7a523f0f67b04"
+          },
+          "_native_persist_write": {
+            "entry": "0x8ce0060c",
+            "bytes": 88,
+            "sha256": "6134a78f8a39c455eb46d3867a4c4d6688b3ff94c0afe7db2c75ce6011fb3718"
+          },
+          "_native_persist_sync": {
+            "entry": "0x8ce005a0",
+            "bytes": 72,
+            "sha256": "7d350b23e0f0be36431a16dbe7d90989d29b43c748cc8eeff81c82be065e4866"
+          }
+        },
+        "actual_initial_read_sessions": [
+          [
+            "one",
+            100,
+            1
+          ],
+          [
+            "window",
+            132,
+            16
+          ],
+          [
+            "window",
+            148,
+            1
+          ],
+          [
+            "window",
+            149,
+            16
+          ],
+          [
+            "window",
+            165,
+            1
+          ]
+        ],
+        "epochs_drop_geometry_and_data": true,
+        "independent_copies_and_bounded_tail": true,
+        "verified_prefix_only": true,
+        "failed_stream_not_cached": true,
+        "stage_identity_write_sync_invalidation_bound": true,
+        "stage_bounded_stream_and_stop_bound": true,
+        "compiler_graph_sha256": {
+          "stage/src/loader/vmu_native_heap_probe_stage.ci": "1df7b538f9e62993ded467dea6f1840ae35af675e71d46767bc033676f9647b0",
+          "stage/src/loader/smash_fat_read_cache.ci": "2a704c9d5a61308b255c6fa0a11bdf05d2667a5c99d3b2ac4f57f02e50a8cb92"
+        },
+        "limits": "Actual compiled cache/epoch C and libc execute; physical callbacks are fixtures. Full filesystem correctness is separately tested by actual old/new admission under sanitizers."
+      },
+      "verified_fat_window": {
+        "schema": "kui.native-fat-window.linked.v1",
+        "status": "PASS",
+        "profile": "native",
+        "transport": 1,
+        "elf_sha256": "881a999f5e536f09ddd8c1e549b9e0306f404ff178c7ff99f12e99f5fef01078",
+        "helpers": {
+          "_native_persist_fat_read_window": {
+            "address": "0x8ce00b98",
+            "bytes": 248,
+            "sha256": "e864a23b41a3d577d239d25118ed332720f57d9cc64194a25dfc5f0cc6ddee28"
+          },
+          "_native_persist_identity": {
+            "address": "0x8ce00754",
+            "bytes": 112,
+            "sha256": "2306fb40276cb4d46ac1eb98f55c641f7c971bad27551471cad7a523f0f67b04"
+          },
+          "_native_persist_write": {
+            "address": "0x8ce0060c",
+            "bytes": 88,
+            "sha256": "6134a78f8a39c455eb46d3867a4c4d6688b3ff94c0afe7db2c75ce6011fb3718"
+          },
+          "_native_persist_sync": {
+            "address": "0x8ce005a0",
+            "bytes": 72,
+            "sha256": "7d350b23e0f0be36431a16dbe7d90989d29b43c748cc8eeff81c82be065e4866"
+          }
+        },
+        "cases": [
+          {
+            "case": "complete",
+            "verified": 16,
+            "result": 0,
+            "events": [
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "read",
+                101,
+                15
+              ],
+              [
+                "read",
+                102,
+                14
+              ],
+              [
+                "read",
+                103,
+                13
+              ],
+              [
+                "read",
+                104,
+                12
+              ],
+              [
+                "read",
+                105,
+                11
+              ],
+              [
+                "read",
+                106,
+                10
+              ],
+              [
+                "read",
+                107,
+                9
+              ],
+              [
+                "read",
+                108,
+                8
+              ],
+              [
+                "read",
+                109,
+                7
+              ],
+              [
+                "read",
+                110,
+                6
+              ],
+              [
+                "read",
+                111,
+                5
+              ],
+              [
+                "read",
+                112,
+                4
+              ],
+              [
+                "read",
+                113,
+                3
+              ],
+              [
+                "read",
+                114,
+                2
+              ],
+              [
+                "read",
+                115,
+                1
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "short_window",
+            "verified": 1,
+            "result": 0,
+            "events": [
+              [
+                "read",
+                100,
+                1
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "zero_count",
+            "verified": 0,
+            "result": 4294967295,
+            "events": []
+          },
+          {
+            "case": "oversize",
+            "verified": 0,
+            "result": 4294967295,
+            "events": []
+          },
+          {
+            "case": "crc_first",
+            "verified": 0,
+            "result": 4294967295,
+            "events": [
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "crc_suffix",
+            "verified": 3,
+            "result": 0,
+            "events": [
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "read",
+                101,
+                15
+              ],
+              [
+                "read",
+                102,
+                14
+              ],
+              [
+                "read",
+                103,
+                13
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "failed_stop",
+            "verified": 0,
+            "result": 4294967295,
+            "events": [
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "read",
+                101,
+                15
+              ],
+              [
+                "read",
+                102,
+                14
+              ],
+              [
+                "read",
+                103,
+                13
+              ],
+              [
+                "read",
+                104,
+                12
+              ],
+              [
+                "read",
+                105,
+                11
+              ],
+              [
+                "read",
+                106,
+                10
+              ],
+              [
+                "read",
+                107,
+                9
+              ],
+              [
+                "read",
+                108,
+                8
+              ],
+              [
+                "read",
+                109,
+                7
+              ],
+              [
+                "read",
+                110,
+                6
+              ],
+              [
+                "read",
+                111,
+                5
+              ],
+              [
+                "read",
+                112,
+                4
+              ],
+              [
+                "read",
+                113,
+                3
+              ],
+              [
+                "read",
+                114,
+                2
+              ],
+              [
+                "read",
+                115,
+                1
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "unhealthy_after_stop",
+            "verified": 0,
+            "result": 4294967295,
+            "events": [
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "read",
+                101,
+                15
+              ],
+              [
+                "read",
+                102,
+                14
+              ],
+              [
+                "read",
+                103,
+                13
+              ],
+              [
+                "read",
+                104,
+                12
+              ],
+              [
+                "read",
+                105,
+                11
+              ],
+              [
+                "read",
+                106,
+                10
+              ],
+              [
+                "read",
+                107,
+                9
+              ],
+              [
+                "read",
+                108,
+                8
+              ],
+              [
+                "read",
+                109,
+                7
+              ],
+              [
+                "read",
+                110,
+                6
+              ],
+              [
+                "read",
+                111,
+                5
+              ],
+              [
+                "read",
+                112,
+                4
+              ],
+              [
+                "read",
+                113,
+                3
+              ],
+              [
+                "read",
+                114,
+                2
+              ],
+              [
+                "read",
+                115,
+                1
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "fault_after_stop",
+            "verified": 0,
+            "result": 4294967295,
+            "events": [
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "read",
+                101,
+                15
+              ],
+              [
+                "read",
+                102,
+                14
+              ],
+              [
+                "read",
+                103,
+                13
+              ],
+              [
+                "read",
+                104,
+                12
+              ],
+              [
+                "read",
+                105,
+                11
+              ],
+              [
+                "read",
+                106,
+                10
+              ],
+              [
+                "read",
+                107,
+                9
+              ],
+              [
+                "read",
+                108,
+                8
+              ],
+              [
+                "read",
+                109,
+                7
+              ],
+              [
+                "read",
+                110,
+                6
+              ],
+              [
+                "read",
+                111,
+                5
+              ],
+              [
+                "read",
+                112,
+                4
+              ],
+              [
+                "read",
+                113,
+                3
+              ],
+              [
+                "read",
+                114,
+                2
+              ],
+              [
+                "read",
+                115,
+                1
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "active_after_stop",
+            "verified": 0,
+            "result": 4294967295,
+            "events": [
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "read",
+                101,
+                15
+              ],
+              [
+                "read",
+                102,
+                14
+              ],
+              [
+                "read",
+                103,
+                13
+              ],
+              [
+                "read",
+                104,
+                12
+              ],
+              [
+                "read",
+                105,
+                11
+              ],
+              [
+                "read",
+                106,
+                10
+              ],
+              [
+                "read",
+                107,
+                9
+              ],
+              [
+                "read",
+                108,
+                8
+              ],
+              [
+                "read",
+                109,
+                7
+              ],
+              [
+                "read",
+                110,
+                6
+              ],
+              [
+                "read",
+                111,
+                5
+              ],
+              [
+                "read",
+                112,
+                4
+              ],
+              [
+                "read",
+                113,
+                3
+              ],
+              [
+                "read",
+                114,
+                2
+              ],
+              [
+                "read",
+                115,
+                1
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "unhealthy_before",
+            "verified": 0,
+            "result": 4294967295,
+            "events": []
+          },
+          {
+            "case": "fault_before",
+            "verified": 0,
+            "result": 4294967295,
+            "events": []
+          }
+        ],
+        "identity_write_sync_retire_before_io": [
+          "identity",
+          "write",
+          "sync"
+        ],
+        "limits": "Actual linked adapter, health and cache-epoch instructions execute. Stream/card/bus calls are finite ABI media fixtures; SPI/CRC protocol has separate tests."
+      },
+      "selected_resolution_route": {
+        "status": "PASS",
+        "bindings": [
+          {
+            "caller": "_native_resolution_replay",
+            "address": "0x8ce023d0",
+            "sha256": "55e5ef0bb830b00999541deb9ad144c42d6353012e91686481b5fbb8f875388b",
+            "selected": "_kui_vmu_native_cached_resolution_replay",
+            "selected_edges": [
+              "allocation_safe",
+              "kui_vmu_native_cache_seed_read",
+              "kui_vmu_native_cached_resolution_replay",
+              "native_arena_plan_bind",
+              "native_fixed_plan_bind",
+              "native_passive_capture_windows",
+              "native_sdk_coherence_after_image_proof",
+              "readonly_release_replay_valid"
+            ]
+          },
+          {
+            "caller": "_kui_retail_stage_relay",
+            "address": "0x8ce049b4",
+            "sha256": "b5469c608ac0ea47760530a8f8591f1f27459f4e5bb5c086068729a82e715ea3",
+            "selected": "_kui_vmu_native_cached_extent",
+            "selected_edges": [
+              "code_sha",
+              "kui_native_heap_base_relay",
+              "kui_native_stage_cached_discover_image",
+              "kui_retail_observe_native_ip",
+              "kui_vmu_native_cached_extent",
+              "native_arm_fixed_call",
+              "native_arm_heap_hook",
+              "native_crt_bootstrap_prearm",
+              "native_passive_prepare_finish",
+              "native_preclear_arm",
+              "native_preclear_prepare",
+              "native_report",
+              "native_resolution_replay",
+              "native_runtime_mode",
+              "retail_display_line",
+              "retail_display_restore"
+            ]
+          }
+        ],
+        "callgraph_sha256": "1df7b538f9e62993ded467dea6f1840ae35af675e71d46767bc033676f9647b0"
+      }
+    },
+    "disc_a1": {
+      "module_sha256": "51525354ca5326fb33f37c329f3c9222a2d00d7a5cea3193d4daf034c9baabe6",
+      "module_bytes": 177092,
+      "metadata": {
+        "format": 1,
+        "build": "f8807cb16561",
+        "payload_bytes": 177028,
+        "memory_bytes": 177028,
+        "crc32": "6d717f1a"
+      },
+      "source": {
+        "elf_sha256": "5b597288697c26d36fdc100351866b1db102d1755dcd0e787fc41c75ce805c9d",
+        "compile_sha256": "f1936fc73f9c624c943775fd78495ad2226fe27bba88833f7f5516788761d4cf",
+        "provenance": {
+          "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+          "source_dirty": false,
+          "elf_sha256": "5b597288697c26d36fdc100351866b1db102d1755dcd0e787fc41c75ce805c9d"
+        }
+      },
+      "artifacts_sha256": {
+        "disc-entry.elf": "5b597288697c26d36fdc100351866b1db102d1755dcd0e787fc41c75ce805c9d",
+        "disc-stage.elf": "aa7d5e00c896c567bb54dea68b2ff1b061972caababea9cbca540502f902d1ed",
+        "disc-stage.bin": "c0aa0cd0daeca4a4e47fd80f56e44e227ee5dc08e06bfcd994ceea67be9dd098",
+        "native-disc-vmu.kui": "51525354ca5326fb33f37c329f3c9222a2d00d7a5cea3193d4daf034c9baabe6",
+        "native-disc-vmu-a1.kui": "51525354ca5326fb33f37c329f3c9222a2d00d7a5cea3193d4daf034c9baabe6",
+        "native-worker.elf": "105eb934962e5911f8184af6ccc67ecfc9e1f63ea02313d16b5c225f2269f7af",
+        "native-worker.bin": "93d58c22206042a3310953b2955d8b2a81b84dda30b90111ebf6f5aa3187f4fe",
+        "native-worker.reloc": "63a905ca2d63039668da7d3d4f7570cfebb4a564a5628e072e90eda86c1a37da",
+        "disc/src/loader/disc_vmu_stage.ci": "f35bd6cbe594a852922dc100593b2592bb643355a97061eb73f1dd4c1732a964"
+      },
+      "background": null,
+      "pure_resolution": {
+        "schema": "kui.native-stage.proof-cache-scope.v1",
+        "status": "PASS",
+        "elf_sha256": "aa7d5e00c896c567bb54dea68b2ff1b061972caababea9cbca540502f902d1ed",
+        "wrapper_bytes": 156,
+        "pure_leaf_sha256": "34cf476c99e4016186f14204f6dd27bd7135b1a23c261a40757850d9fdb1efc1",
+        "actual_SH_cases": 3840,
+        "mutation_rejections": 26,
+        "argument_count": 7,
+        "caller_stack_unchanged": true,
+        "private_frame_bytes": 24,
+        "unknown_CCR_unchanged": true,
+        "per_game_constants": false,
+        "limits": "Actual scope instructions execute; the real immutable replay leaf is an ABI adversary. No console timing is established."
+      },
+      "pure_extent": {
+        "enabled": true,
+        "entry": "0x8ce17878",
+        "bytes": 140,
+        "actual_instruction_model_cases": 6144,
+        "mutation_rejections": 20,
+        "complete_linked_assembly_pinned": true,
+        "eligible_entry_ccr": "0x100",
+        "proof_ccr": "0x101",
+        "other_ccr_profiles_unchanged": true,
+        "same_pure_extent_proof": true,
+        "full_ram_purge_bytes": 16777216,
+        "cache_write_nops": [
+          8,
+          8
+        ],
+        "callee_preserved_integer_frame_bytes": 12,
+        "operand_cache_restored_off": true,
+        "proof_output_published_before_cache_restore": true,
+        "console_speed_verified": false
+      },
+      "fast_crc": {
+        "status": "PASS",
+        "elf_sha256": "aa7d5e00c896c567bb54dea68b2ff1b061972caababea9cbca540502f902d1ed",
+        "helpers": [
+          {
+            "entry": "0x8ce0113c",
+            "bytes": 140,
+            "sha256": "1e8f2527aaaa5d11c22bb8137147971cfdeb567425535883b0148f3e493cc9ac",
+            "table": "0x8ce27554",
+            "actual_SH_cases": 64
+          },
+          {
+            "entry": "0x8ce02cf4",
+            "bytes": 140,
+            "sha256": "3e9c24cdc846ae3a31053fca352798974c610bda7b7b66ca83f8edf30259674f",
+            "table": "0x8ce27a3c",
+            "actual_SH_cases": 64
+          }
+        ],
+        "source_callers": [
+          {
+            "name": "_fingerprint",
+            "address": "0x8ce02d80",
+            "helpers": [
+              "0x8ce02cf4"
+            ],
+            "sha256": "7c5ea65db0ec5c2445a696078889135b09b9e4d67297953e73621dced8a85b9b"
+          },
+          {
+            "name": "_kui_disc_vmu_stage_relay",
+            "address": "0x8ce02800",
+            "helpers": [
+              "0x8ce0113c"
+            ],
+            "sha256": "ff89b23adc6d314c4ca09d9cd71ac780707e04191b0b6b3434e7567b664e1859"
+          }
+        ],
+        "one_table_lookup_per_byte": true,
+        "oracle": "zlib.crc32",
+        "hardware_timing_verified": false
+      },
+      "fresh_fat_cache": {
+        "schema": "kui.smash-menu.fat-cache-linked.v1",
+        "status": "PASS",
+        "profile": "disc",
+        "elf_sha256": "aa7d5e00c896c567bb54dea68b2ff1b061972caababea9cbca540502f902d1ed",
+        "cache_bss": "0x8ce51f20",
+        "cache_bytes": 16512,
+        "actual_helpers": {
+          "_kui_smash_fat_cache_read": {
+            "entry": "0x8ce16828",
+            "bytes": 1020,
+            "sha256": "d2c8e978557f11d8209faa1ce3ff45496ffe957aae5117ef810e2d5addb30dae"
+          },
+          "_kui_smash_fat_cache_begin_epoch": {
+            "entry": "0x8ce16756",
+            "bytes": 34,
+            "sha256": "8a1afde9b83c1223ea37c5c359d801a2179260a1338827fa716b3c79673368b4"
+          },
+          "_kui_smash_fat_cache_configure": {
+            "entry": "0x8ce16778",
+            "bytes": 176,
+            "sha256": "fe18f1d4d6fbc67a76382bf29b92ffdd57e21c368bacb2fddc45a954395ff0a0"
+          },
+          "_persist_fat_read_one": {
+            "entry": "0x8ce00774",
+            "bytes": 64,
+            "sha256": "63bb8d39045f69991630573656e9a5dc8dd9ce578e00761ea1e03ffc8866b093"
+          },
+          "_persist_fat_read_window": {
+            "entry": "0x8ce0091c",
+            "bytes": 236,
+            "sha256": "2df82666e97fa94cc6dc10a25348404ba0ca1a6f61e0b8c1b09cb6e210575cdc"
+          },
+          "_persist_read": {
+            "entry": "0x8ce006c4",
+            "bytes": 176,
+            "sha256": "636caa38fe2c1b29e01978f642a9244414489e6bf5c9cc0d986d6fb897d4b104"
+          },
+          "_persist_identity": {
+            "entry": "0x8ce007b4",
+            "bytes": 108,
+            "sha256": "417b3fc516f080b4377b2e9631d6aed91e96a467ff0aa01286f4a7f6e4520c64"
+          },
+          "_persist_write": {
+            "entry": "0x8ce008ac",
+            "bytes": 112,
+            "sha256": "46d800f9feac863f6c659cb1798f90669c4e75b7854a539737757cd9fb93cbee"
+          },
+          "_persist_sync": {
+            "entry": "0x8ce0085c",
+            "bytes": 80,
+            "sha256": "e80537b3b15fec678c8281cb7d9d56f72e2bff449bbfd87b7d4f9cd1bf70906e"
+          }
+        },
+        "actual_initial_read_sessions": [
+          [
+            "one",
+            100,
+            1
+          ],
+          [
+            "window",
+            132,
+            16
+          ],
+          [
+            "window",
+            148,
+            1
+          ],
+          [
+            "window",
+            149,
+            16
+          ],
+          [
+            "window",
+            165,
+            1
+          ]
+        ],
+        "epochs_drop_geometry_and_data": true,
+        "independent_copies_and_bounded_tail": true,
+        "verified_prefix_only": true,
+        "failed_stream_not_cached": true,
+        "stage_identity_write_sync_invalidation_bound": true,
+        "stage_bounded_stream_and_stop_bound": true,
+        "compiler_graph_sha256": {
+          "disc/src/loader/disc_vmu_stage.ci": "f35bd6cbe594a852922dc100593b2592bb643355a97061eb73f1dd4c1732a964",
+          "disc/src/loader/smash_fat_read_cache.ci": "2a704c9d5a61308b255c6fa0a11bdf05d2667a5c99d3b2ac4f57f02e50a8cb92"
+        },
+        "limits": "Actual compiled cache/epoch C and libc execute; physical callbacks are fixtures. Full filesystem correctness is separately tested by actual old/new admission under sanitizers."
+      },
+      "verified_fat_window": {
+        "schema": "kui.native-fat-window.linked.v1",
+        "status": "PASS",
+        "profile": "disc",
+        "transport": 1,
+        "elf_sha256": "aa7d5e00c896c567bb54dea68b2ff1b061972caababea9cbca540502f902d1ed",
+        "helpers": {
+          "_persist_fat_read_window": {
+            "address": "0x8ce0091c",
+            "bytes": 236,
+            "sha256": "2df82666e97fa94cc6dc10a25348404ba0ca1a6f61e0b8c1b09cb6e210575cdc"
+          },
+          "_persist_identity": {
+            "address": "0x8ce007b4",
+            "bytes": 108,
+            "sha256": "417b3fc516f080b4377b2e9631d6aed91e96a467ff0aa01286f4a7f6e4520c64"
+          },
+          "_persist_write": {
+            "address": "0x8ce008ac",
+            "bytes": 112,
+            "sha256": "46d800f9feac863f6c659cb1798f90669c4e75b7854a539737757cd9fb93cbee"
+          },
+          "_persist_sync": {
+            "address": "0x8ce0085c",
+            "bytes": 80,
+            "sha256": "e80537b3b15fec678c8281cb7d9d56f72e2bff449bbfd87b7d4f9cd1bf70906e"
+          }
+        },
+        "cases": [
+          {
+            "case": "complete",
+            "verified": 16,
+            "result": 0,
+            "events": [
+              [
+                "start",
+                100,
+                16
+              ],
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "read",
+                101,
+                15
+              ],
+              [
+                "read",
+                102,
+                14
+              ],
+              [
+                "read",
+                103,
+                13
+              ],
+              [
+                "read",
+                104,
+                12
+              ],
+              [
+                "read",
+                105,
+                11
+              ],
+              [
+                "read",
+                106,
+                10
+              ],
+              [
+                "read",
+                107,
+                9
+              ],
+              [
+                "read",
+                108,
+                8
+              ],
+              [
+                "read",
+                109,
+                7
+              ],
+              [
+                "read",
+                110,
+                6
+              ],
+              [
+                "read",
+                111,
+                5
+              ],
+              [
+                "read",
+                112,
+                4
+              ],
+              [
+                "read",
+                113,
+                3
+              ],
+              [
+                "read",
+                114,
+                2
+              ],
+              [
+                "read",
+                115,
+                1
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "short_window",
+            "verified": 1,
+            "result": 0,
+            "events": [
+              [
+                "start",
+                100,
+                1
+              ],
+              [
+                "read",
+                100,
+                1
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "zero_count",
+            "verified": 0,
+            "result": 4294967295,
+            "events": []
+          },
+          {
+            "case": "oversize",
+            "verified": 0,
+            "result": 4294967295,
+            "events": []
+          },
+          {
+            "case": "crc_first",
+            "verified": 0,
+            "result": 4294967295,
+            "events": [
+              [
+                "start",
+                100,
+                16
+              ],
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "crc_suffix",
+            "verified": 3,
+            "result": 0,
+            "events": [
+              [
+                "start",
+                100,
+                16
+              ],
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "read",
+                101,
+                15
+              ],
+              [
+                "read",
+                102,
+                14
+              ],
+              [
+                "read",
+                103,
+                13
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "failed_stop",
+            "verified": 0,
+            "result": 4294967295,
+            "events": [
+              [
+                "start",
+                100,
+                16
+              ],
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "read",
+                101,
+                15
+              ],
+              [
+                "read",
+                102,
+                14
+              ],
+              [
+                "read",
+                103,
+                13
+              ],
+              [
+                "read",
+                104,
+                12
+              ],
+              [
+                "read",
+                105,
+                11
+              ],
+              [
+                "read",
+                106,
+                10
+              ],
+              [
+                "read",
+                107,
+                9
+              ],
+              [
+                "read",
+                108,
+                8
+              ],
+              [
+                "read",
+                109,
+                7
+              ],
+              [
+                "read",
+                110,
+                6
+              ],
+              [
+                "read",
+                111,
+                5
+              ],
+              [
+                "read",
+                112,
+                4
+              ],
+              [
+                "read",
+                113,
+                3
+              ],
+              [
+                "read",
+                114,
+                2
+              ],
+              [
+                "read",
+                115,
+                1
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "unhealthy_after_stop",
+            "verified": 0,
+            "result": 4294967295,
+            "events": [
+              [
+                "start",
+                100,
+                16
+              ],
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "read",
+                101,
+                15
+              ],
+              [
+                "read",
+                102,
+                14
+              ],
+              [
+                "read",
+                103,
+                13
+              ],
+              [
+                "read",
+                104,
+                12
+              ],
+              [
+                "read",
+                105,
+                11
+              ],
+              [
+                "read",
+                106,
+                10
+              ],
+              [
+                "read",
+                107,
+                9
+              ],
+              [
+                "read",
+                108,
+                8
+              ],
+              [
+                "read",
+                109,
+                7
+              ],
+              [
+                "read",
+                110,
+                6
+              ],
+              [
+                "read",
+                111,
+                5
+              ],
+              [
+                "read",
+                112,
+                4
+              ],
+              [
+                "read",
+                113,
+                3
+              ],
+              [
+                "read",
+                114,
+                2
+              ],
+              [
+                "read",
+                115,
+                1
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "fault_after_stop",
+            "verified": 0,
+            "result": 4294967295,
+            "events": [
+              [
+                "start",
+                100,
+                16
+              ],
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "read",
+                101,
+                15
+              ],
+              [
+                "read",
+                102,
+                14
+              ],
+              [
+                "read",
+                103,
+                13
+              ],
+              [
+                "read",
+                104,
+                12
+              ],
+              [
+                "read",
+                105,
+                11
+              ],
+              [
+                "read",
+                106,
+                10
+              ],
+              [
+                "read",
+                107,
+                9
+              ],
+              [
+                "read",
+                108,
+                8
+              ],
+              [
+                "read",
+                109,
+                7
+              ],
+              [
+                "read",
+                110,
+                6
+              ],
+              [
+                "read",
+                111,
+                5
+              ],
+              [
+                "read",
+                112,
+                4
+              ],
+              [
+                "read",
+                113,
+                3
+              ],
+              [
+                "read",
+                114,
+                2
+              ],
+              [
+                "read",
+                115,
+                1
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "active_after_stop",
+            "verified": 0,
+            "result": 4294967295,
+            "events": [
+              [
+                "start",
+                100,
+                16
+              ],
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "read",
+                101,
+                15
+              ],
+              [
+                "read",
+                102,
+                14
+              ],
+              [
+                "read",
+                103,
+                13
+              ],
+              [
+                "read",
+                104,
+                12
+              ],
+              [
+                "read",
+                105,
+                11
+              ],
+              [
+                "read",
+                106,
+                10
+              ],
+              [
+                "read",
+                107,
+                9
+              ],
+              [
+                "read",
+                108,
+                8
+              ],
+              [
+                "read",
+                109,
+                7
+              ],
+              [
+                "read",
+                110,
+                6
+              ],
+              [
+                "read",
+                111,
+                5
+              ],
+              [
+                "read",
+                112,
+                4
+              ],
+              [
+                "read",
+                113,
+                3
+              ],
+              [
+                "read",
+                114,
+                2
+              ],
+              [
+                "read",
+                115,
+                1
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "unhealthy_before",
+            "verified": 0,
+            "result": 4294967295,
+            "events": []
+          },
+          {
+            "case": "fault_before",
+            "verified": 0,
+            "result": 4294967295,
+            "events": []
+          },
+          {
+            "case": "start_failure",
+            "verified": 0,
+            "result": 4294967295,
+            "events": [
+              [
+                "start",
+                100,
+                16
+              ],
+              [
+                "stop"
+              ]
+            ]
+          }
+        ],
+        "identity_write_sync_retire_before_io": [
+          "identity",
+          "write",
+          "sync"
+        ],
+        "limits": "Actual linked adapter, health and cache-epoch instructions execute. Stream/card/bus calls are finite ABI media fixtures; SPI/CRC protocol has separate tests."
+      },
+      "selected_resolution_route": {
+        "status": "PASS",
+        "bindings": [
+          {
+            "caller": "_native_resolution_replay",
+            "address": "0x8ce01504",
+            "sha256": "8bf974c2c905ec5942bc735b69beac40284881682947dc67dc1dd66f11a9f7c9",
+            "selected": "_kui_vmu_native_cached_resolution_replay",
+            "selected_edges": [
+              "allocation_safe",
+              "kui_vmu_native_cache_seed_read",
+              "kui_vmu_native_cached_resolution_replay",
+              "kui_vmu_native_heap_metadata_valid",
+              "native_passive_capture_windows",
+              "native_sdk_coherence_after_image_proof",
+              "readonly_release_replay_valid"
+            ]
+          },
+          {
+            "caller": "_kui_disc_vmu_stage_relay",
+            "address": "0x8ce02800",
+            "sha256": "ff89b23adc6d314c4ca09d9cd71ac780707e04191b0b6b3434e7567b664e1859",
+            "selected": "_kui_vmu_native_cached_extent",
+            "selected_edges": [
+              "code_sha",
+              "kui_sha256_digest",
+              "kui_sha256_init",
+              "kui_sha256_update",
+              "kui_stage_crc32",
+              "kui_vmu_native_cached_extent",
+              "memcmp",
+              "memcpy",
+              "native_crt_bootstrap_prearm",
+              "native_disc_entry_return_bind",
+              "native_disc_mapping_prepare",
+              "native_report",
+              "stopped"
+            ]
+          }
+        ],
+        "callgraph_sha256": "f35bd6cbe594a852922dc100593b2592bb643355a97061eb73f1dd4c1732a964"
+      }
+    },
+    "disc_a2": {
+      "module_sha256": "e89205da1b8a804ead660d9ed1a69574b98c28dabc7dd3ff73a282bc21ecd5c1",
+      "module_bytes": 177092,
+      "metadata": {
+        "format": 1,
+        "build": "f8807cb16561",
+        "payload_bytes": 177028,
+        "memory_bytes": 177028,
+        "crc32": "6002ae65"
+      },
+      "source": {
+        "elf_sha256": "bb2eccb6657f844c464aa432c9622ee37a1c7ccf64c216a6166a88682b0aaf8a",
+        "compile_sha256": "fa79722db086e1365527f83344a6fcf94353f995f756f1e51f5b01a183a7dd15",
+        "provenance": {
+          "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+          "source_dirty": false,
+          "elf_sha256": "bb2eccb6657f844c464aa432c9622ee37a1c7ccf64c216a6166a88682b0aaf8a"
+        }
+      },
+      "artifacts_sha256": {
+        "disc-entry.elf": "bb2eccb6657f844c464aa432c9622ee37a1c7ccf64c216a6166a88682b0aaf8a",
+        "disc-stage.elf": "8ca43deaeab611b227699c545354f7cea79b405fd8e80e68daf84e0ab511dc38",
+        "disc-stage.bin": "73c24d2fb93aad4143c6b59b3af4ebd85d8398002fafa6d12cd33065dbb830ae",
+        "native-disc-vmu.kui": "e89205da1b8a804ead660d9ed1a69574b98c28dabc7dd3ff73a282bc21ecd5c1",
+        "native-worker.elf": "fb3c7ea705f98598485d1c118a9ed5bd7a91a7d116326ef287f810478d64f1fe",
+        "native-worker.bin": "178fdccaa7cf4c2b12698aee9f6e1f5636c8846a844a8fb8ca2e6215f60c9dd0",
+        "native-worker.reloc": "ff63ff8655151d8e63711a3d08c0d20acbaebd9a502f71478d34777aee2050eb",
+        "disc/src/loader/disc_vmu_stage.ci": "f35bd6cbe594a852922dc100593b2592bb643355a97061eb73f1dd4c1732a964"
+      },
+      "background": null,
+      "pure_resolution": {
+        "schema": "kui.native-stage.proof-cache-scope.v1",
+        "status": "PASS",
+        "elf_sha256": "8ca43deaeab611b227699c545354f7cea79b405fd8e80e68daf84e0ab511dc38",
+        "wrapper_bytes": 156,
+        "pure_leaf_sha256": "34cf476c99e4016186f14204f6dd27bd7135b1a23c261a40757850d9fdb1efc1",
+        "actual_SH_cases": 3840,
+        "mutation_rejections": 26,
+        "argument_count": 7,
+        "caller_stack_unchanged": true,
+        "private_frame_bytes": 24,
+        "unknown_CCR_unchanged": true,
+        "per_game_constants": false,
+        "limits": "Actual scope instructions execute; the real immutable replay leaf is an ABI adversary. No console timing is established."
+      },
+      "pure_extent": {
+        "enabled": true,
+        "entry": "0x8ce17878",
+        "bytes": 140,
+        "actual_instruction_model_cases": 6144,
+        "mutation_rejections": 20,
+        "complete_linked_assembly_pinned": true,
+        "eligible_entry_ccr": "0x100",
+        "proof_ccr": "0x101",
+        "other_ccr_profiles_unchanged": true,
+        "same_pure_extent_proof": true,
+        "full_ram_purge_bytes": 16777216,
+        "cache_write_nops": [
+          8,
+          8
+        ],
+        "callee_preserved_integer_frame_bytes": 12,
+        "operand_cache_restored_off": true,
+        "proof_output_published_before_cache_restore": true,
+        "console_speed_verified": false
+      },
+      "fast_crc": {
+        "status": "PASS",
+        "elf_sha256": "8ca43deaeab611b227699c545354f7cea79b405fd8e80e68daf84e0ab511dc38",
+        "helpers": [
+          {
+            "entry": "0x8ce0113c",
+            "bytes": 140,
+            "sha256": "1e8f2527aaaa5d11c22bb8137147971cfdeb567425535883b0148f3e493cc9ac",
+            "table": "0x8ce27554",
+            "actual_SH_cases": 64
+          },
+          {
+            "entry": "0x8ce02cf4",
+            "bytes": 140,
+            "sha256": "3e9c24cdc846ae3a31053fca352798974c610bda7b7b66ca83f8edf30259674f",
+            "table": "0x8ce27a3c",
+            "actual_SH_cases": 64
+          }
+        ],
+        "source_callers": [
+          {
+            "name": "_fingerprint",
+            "address": "0x8ce02d80",
+            "helpers": [
+              "0x8ce02cf4"
+            ],
+            "sha256": "7c5ea65db0ec5c2445a696078889135b09b9e4d67297953e73621dced8a85b9b"
+          },
+          {
+            "name": "_kui_disc_vmu_stage_relay",
+            "address": "0x8ce02800",
+            "helpers": [
+              "0x8ce0113c"
+            ],
+            "sha256": "ff89b23adc6d314c4ca09d9cd71ac780707e04191b0b6b3434e7567b664e1859"
+          }
+        ],
+        "one_table_lookup_per_byte": true,
+        "oracle": "zlib.crc32",
+        "hardware_timing_verified": false
+      },
+      "fresh_fat_cache": {
+        "schema": "kui.smash-menu.fat-cache-linked.v1",
+        "status": "PASS",
+        "profile": "disc",
+        "elf_sha256": "8ca43deaeab611b227699c545354f7cea79b405fd8e80e68daf84e0ab511dc38",
+        "cache_bss": "0x8ce51f20",
+        "cache_bytes": 16512,
+        "actual_helpers": {
+          "_kui_smash_fat_cache_read": {
+            "entry": "0x8ce16828",
+            "bytes": 1020,
+            "sha256": "d2c8e978557f11d8209faa1ce3ff45496ffe957aae5117ef810e2d5addb30dae"
+          },
+          "_kui_smash_fat_cache_begin_epoch": {
+            "entry": "0x8ce16756",
+            "bytes": 34,
+            "sha256": "8a1afde9b83c1223ea37c5c359d801a2179260a1338827fa716b3c79673368b4"
+          },
+          "_kui_smash_fat_cache_configure": {
+            "entry": "0x8ce16778",
+            "bytes": 176,
+            "sha256": "fe18f1d4d6fbc67a76382bf29b92ffdd57e21c368bacb2fddc45a954395ff0a0"
+          },
+          "_persist_fat_read_one": {
+            "entry": "0x8ce00774",
+            "bytes": 64,
+            "sha256": "63bb8d39045f69991630573656e9a5dc8dd9ce578e00761ea1e03ffc8866b093"
+          },
+          "_persist_fat_read_window": {
+            "entry": "0x8ce0091c",
+            "bytes": 236,
+            "sha256": "2df82666e97fa94cc6dc10a25348404ba0ca1a6f61e0b8c1b09cb6e210575cdc"
+          },
+          "_persist_read": {
+            "entry": "0x8ce006c4",
+            "bytes": 176,
+            "sha256": "636caa38fe2c1b29e01978f642a9244414489e6bf5c9cc0d986d6fb897d4b104"
+          },
+          "_persist_identity": {
+            "entry": "0x8ce007b4",
+            "bytes": 108,
+            "sha256": "417b3fc516f080b4377b2e9631d6aed91e96a467ff0aa01286f4a7f6e4520c64"
+          },
+          "_persist_write": {
+            "entry": "0x8ce008ac",
+            "bytes": 112,
+            "sha256": "46d800f9feac863f6c659cb1798f90669c4e75b7854a539737757cd9fb93cbee"
+          },
+          "_persist_sync": {
+            "entry": "0x8ce0085c",
+            "bytes": 80,
+            "sha256": "e80537b3b15fec678c8281cb7d9d56f72e2bff449bbfd87b7d4f9cd1bf70906e"
+          }
+        },
+        "actual_initial_read_sessions": [
+          [
+            "one",
+            100,
+            1
+          ],
+          [
+            "window",
+            132,
+            16
+          ],
+          [
+            "window",
+            148,
+            1
+          ],
+          [
+            "window",
+            149,
+            16
+          ],
+          [
+            "window",
+            165,
+            1
+          ]
+        ],
+        "epochs_drop_geometry_and_data": true,
+        "independent_copies_and_bounded_tail": true,
+        "verified_prefix_only": true,
+        "failed_stream_not_cached": true,
+        "stage_identity_write_sync_invalidation_bound": true,
+        "stage_bounded_stream_and_stop_bound": true,
+        "compiler_graph_sha256": {
+          "disc/src/loader/disc_vmu_stage.ci": "f35bd6cbe594a852922dc100593b2592bb643355a97061eb73f1dd4c1732a964",
+          "disc/src/loader/smash_fat_read_cache.ci": "2a704c9d5a61308b255c6fa0a11bdf05d2667a5c99d3b2ac4f57f02e50a8cb92"
+        },
+        "limits": "Actual compiled cache/epoch C and libc execute; physical callbacks are fixtures. Full filesystem correctness is separately tested by actual old/new admission under sanitizers."
+      },
+      "verified_fat_window": {
+        "schema": "kui.native-fat-window.linked.v1",
+        "status": "PASS",
+        "profile": "disc",
+        "transport": 1,
+        "elf_sha256": "8ca43deaeab611b227699c545354f7cea79b405fd8e80e68daf84e0ab511dc38",
+        "helpers": {
+          "_persist_fat_read_window": {
+            "address": "0x8ce0091c",
+            "bytes": 236,
+            "sha256": "2df82666e97fa94cc6dc10a25348404ba0ca1a6f61e0b8c1b09cb6e210575cdc"
+          },
+          "_persist_identity": {
+            "address": "0x8ce007b4",
+            "bytes": 108,
+            "sha256": "417b3fc516f080b4377b2e9631d6aed91e96a467ff0aa01286f4a7f6e4520c64"
+          },
+          "_persist_write": {
+            "address": "0x8ce008ac",
+            "bytes": 112,
+            "sha256": "46d800f9feac863f6c659cb1798f90669c4e75b7854a539737757cd9fb93cbee"
+          },
+          "_persist_sync": {
+            "address": "0x8ce0085c",
+            "bytes": 80,
+            "sha256": "e80537b3b15fec678c8281cb7d9d56f72e2bff449bbfd87b7d4f9cd1bf70906e"
+          }
+        },
+        "cases": [
+          {
+            "case": "complete",
+            "verified": 16,
+            "result": 0,
+            "events": [
+              [
+                "start",
+                100,
+                16
+              ],
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "read",
+                101,
+                15
+              ],
+              [
+                "read",
+                102,
+                14
+              ],
+              [
+                "read",
+                103,
+                13
+              ],
+              [
+                "read",
+                104,
+                12
+              ],
+              [
+                "read",
+                105,
+                11
+              ],
+              [
+                "read",
+                106,
+                10
+              ],
+              [
+                "read",
+                107,
+                9
+              ],
+              [
+                "read",
+                108,
+                8
+              ],
+              [
+                "read",
+                109,
+                7
+              ],
+              [
+                "read",
+                110,
+                6
+              ],
+              [
+                "read",
+                111,
+                5
+              ],
+              [
+                "read",
+                112,
+                4
+              ],
+              [
+                "read",
+                113,
+                3
+              ],
+              [
+                "read",
+                114,
+                2
+              ],
+              [
+                "read",
+                115,
+                1
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "short_window",
+            "verified": 1,
+            "result": 0,
+            "events": [
+              [
+                "start",
+                100,
+                1
+              ],
+              [
+                "read",
+                100,
+                1
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "zero_count",
+            "verified": 0,
+            "result": 4294967295,
+            "events": []
+          },
+          {
+            "case": "oversize",
+            "verified": 0,
+            "result": 4294967295,
+            "events": []
+          },
+          {
+            "case": "crc_first",
+            "verified": 0,
+            "result": 4294967295,
+            "events": [
+              [
+                "start",
+                100,
+                16
+              ],
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "crc_suffix",
+            "verified": 3,
+            "result": 0,
+            "events": [
+              [
+                "start",
+                100,
+                16
+              ],
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "read",
+                101,
+                15
+              ],
+              [
+                "read",
+                102,
+                14
+              ],
+              [
+                "read",
+                103,
+                13
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "failed_stop",
+            "verified": 0,
+            "result": 4294967295,
+            "events": [
+              [
+                "start",
+                100,
+                16
+              ],
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "read",
+                101,
+                15
+              ],
+              [
+                "read",
+                102,
+                14
+              ],
+              [
+                "read",
+                103,
+                13
+              ],
+              [
+                "read",
+                104,
+                12
+              ],
+              [
+                "read",
+                105,
+                11
+              ],
+              [
+                "read",
+                106,
+                10
+              ],
+              [
+                "read",
+                107,
+                9
+              ],
+              [
+                "read",
+                108,
+                8
+              ],
+              [
+                "read",
+                109,
+                7
+              ],
+              [
+                "read",
+                110,
+                6
+              ],
+              [
+                "read",
+                111,
+                5
+              ],
+              [
+                "read",
+                112,
+                4
+              ],
+              [
+                "read",
+                113,
+                3
+              ],
+              [
+                "read",
+                114,
+                2
+              ],
+              [
+                "read",
+                115,
+                1
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "unhealthy_after_stop",
+            "verified": 0,
+            "result": 4294967295,
+            "events": [
+              [
+                "start",
+                100,
+                16
+              ],
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "read",
+                101,
+                15
+              ],
+              [
+                "read",
+                102,
+                14
+              ],
+              [
+                "read",
+                103,
+                13
+              ],
+              [
+                "read",
+                104,
+                12
+              ],
+              [
+                "read",
+                105,
+                11
+              ],
+              [
+                "read",
+                106,
+                10
+              ],
+              [
+                "read",
+                107,
+                9
+              ],
+              [
+                "read",
+                108,
+                8
+              ],
+              [
+                "read",
+                109,
+                7
+              ],
+              [
+                "read",
+                110,
+                6
+              ],
+              [
+                "read",
+                111,
+                5
+              ],
+              [
+                "read",
+                112,
+                4
+              ],
+              [
+                "read",
+                113,
+                3
+              ],
+              [
+                "read",
+                114,
+                2
+              ],
+              [
+                "read",
+                115,
+                1
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "fault_after_stop",
+            "verified": 0,
+            "result": 4294967295,
+            "events": [
+              [
+                "start",
+                100,
+                16
+              ],
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "read",
+                101,
+                15
+              ],
+              [
+                "read",
+                102,
+                14
+              ],
+              [
+                "read",
+                103,
+                13
+              ],
+              [
+                "read",
+                104,
+                12
+              ],
+              [
+                "read",
+                105,
+                11
+              ],
+              [
+                "read",
+                106,
+                10
+              ],
+              [
+                "read",
+                107,
+                9
+              ],
+              [
+                "read",
+                108,
+                8
+              ],
+              [
+                "read",
+                109,
+                7
+              ],
+              [
+                "read",
+                110,
+                6
+              ],
+              [
+                "read",
+                111,
+                5
+              ],
+              [
+                "read",
+                112,
+                4
+              ],
+              [
+                "read",
+                113,
+                3
+              ],
+              [
+                "read",
+                114,
+                2
+              ],
+              [
+                "read",
+                115,
+                1
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "active_after_stop",
+            "verified": 0,
+            "result": 4294967295,
+            "events": [
+              [
+                "start",
+                100,
+                16
+              ],
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "read",
+                101,
+                15
+              ],
+              [
+                "read",
+                102,
+                14
+              ],
+              [
+                "read",
+                103,
+                13
+              ],
+              [
+                "read",
+                104,
+                12
+              ],
+              [
+                "read",
+                105,
+                11
+              ],
+              [
+                "read",
+                106,
+                10
+              ],
+              [
+                "read",
+                107,
+                9
+              ],
+              [
+                "read",
+                108,
+                8
+              ],
+              [
+                "read",
+                109,
+                7
+              ],
+              [
+                "read",
+                110,
+                6
+              ],
+              [
+                "read",
+                111,
+                5
+              ],
+              [
+                "read",
+                112,
+                4
+              ],
+              [
+                "read",
+                113,
+                3
+              ],
+              [
+                "read",
+                114,
+                2
+              ],
+              [
+                "read",
+                115,
+                1
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "unhealthy_before",
+            "verified": 0,
+            "result": 4294967295,
+            "events": []
+          },
+          {
+            "case": "fault_before",
+            "verified": 0,
+            "result": 4294967295,
+            "events": []
+          },
+          {
+            "case": "start_failure",
+            "verified": 0,
+            "result": 4294967295,
+            "events": [
+              [
+                "start",
+                100,
+                16
+              ],
+              [
+                "stop"
+              ]
+            ]
+          }
+        ],
+        "identity_write_sync_retire_before_io": [
+          "identity",
+          "write",
+          "sync"
+        ],
+        "limits": "Actual linked adapter, health and cache-epoch instructions execute. Stream/card/bus calls are finite ABI media fixtures; SPI/CRC protocol has separate tests."
+      },
+      "selected_resolution_route": {
+        "status": "PASS",
+        "bindings": [
+          {
+            "caller": "_native_resolution_replay",
+            "address": "0x8ce01504",
+            "sha256": "8bf974c2c905ec5942bc735b69beac40284881682947dc67dc1dd66f11a9f7c9",
+            "selected": "_kui_vmu_native_cached_resolution_replay",
+            "selected_edges": [
+              "allocation_safe",
+              "kui_vmu_native_cache_seed_read",
+              "kui_vmu_native_cached_resolution_replay",
+              "kui_vmu_native_heap_metadata_valid",
+              "native_passive_capture_windows",
+              "native_sdk_coherence_after_image_proof",
+              "readonly_release_replay_valid"
+            ]
+          },
+          {
+            "caller": "_kui_disc_vmu_stage_relay",
+            "address": "0x8ce02800",
+            "sha256": "ff89b23adc6d314c4ca09d9cd71ac780707e04191b0b6b3434e7567b664e1859",
+            "selected": "_kui_vmu_native_cached_extent",
+            "selected_edges": [
+              "code_sha",
+              "kui_sha256_digest",
+              "kui_sha256_init",
+              "kui_sha256_update",
+              "kui_stage_crc32",
+              "kui_vmu_native_cached_extent",
+              "memcmp",
+              "memcpy",
+              "native_crt_bootstrap_prearm",
+              "native_disc_entry_return_bind",
+              "native_disc_mapping_prepare",
+              "native_report",
+              "stopped"
+            ]
+          }
+        ],
+        "callgraph_sha256": "f35bd6cbe594a852922dc100593b2592bb643355a97061eb73f1dd4c1732a964"
+      }
+    },
+    "standard": {
+      "module_sha256": "bdc9c9f9389bf71e68efd6c065ef3eb31453b5544378b2ded0590ddec60275b1",
+      "module_bytes": 237816,
+      "metadata": {
+        "format": 1,
+        "build": "f8807cb16561",
+        "payload_bytes": 237752,
+        "memory_bytes": 237752,
+        "crc32": "0a4dd691"
+      },
+      "source": {
+        "elf_sha256": "71afe06e5a6166f840c9a254c59b6498b46991413760fcd0cbf066736f9db1ce",
+        "compile_sha256": "da807dc6981924bd4359eed93c2f65ebfa11b5eeb87f3ba1e87c0bce24563065",
+        "provenance": {
+          "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+          "source_dirty": false,
+          "elf_sha256": "71afe06e5a6166f840c9a254c59b6498b46991413760fcd0cbf066736f9db1ce"
+        }
+      },
+      "artifacts_sha256": {
+        "entry.elf": "71afe06e5a6166f840c9a254c59b6498b46991413760fcd0cbf066736f9db1ce",
+        "stage.elf": "bf7f6b51739b02cabe22cf8294f3d55b7f29dead915dd741d50615f75b8a7091",
+        "stage.bin": "713b227e801bdc1f9c95dcdb48f781264b4214e72e715cd77ebfba94d0334ccb",
+        "retail-native-vmu-lite-paced.kui": "bdc9c9f9389bf71e68efd6c065ef3eb31453b5544378b2ded0590ddec60275b1",
+        "retail-maple-observe.kui": "bdc9c9f9389bf71e68efd6c065ef3eb31453b5544378b2ded0590ddec60275b1",
+        "native-worker.elf": "0503a67006ec555f4efd9056e9027b9ccd64add2ce83106f78c8d7fa9e2f1e3b",
+        "native-worker.bin": "9c14809d1a4b6d6ea4d82c2a044e82e033e8345c7a69ad46d0217d9555f6cda9",
+        "native-worker.reloc": "77652f59a859089bc6a5e89ebc78193bed477d6648d17b223d549baedd3fff02",
+        "resident-sci.elf": "c10a7f8b203d7bc9c0e666f0c70ae7cc29ba6f2a3f7f9e97a3d6d21018ec4145",
+        "resident-sci.bin": "19c8e23372bdee465eee217be08c7cadfd554c5f0fd6ef6fdd261beba8088181",
+        "stage/src/loader/vmu_native_heap_probe_stage.ci": "9e24abee02f5a6c4c60f10f8316ef6caca06ab751f9289ce1d28a05cb6c13bb7"
+      },
+      "background": null,
+      "pure_resolution": {
+        "schema": "kui.native-stage.proof-cache-scope.v1",
+        "status": "PASS",
+        "elf_sha256": "bf7f6b51739b02cabe22cf8294f3d55b7f29dead915dd741d50615f75b8a7091",
+        "wrapper_bytes": 156,
+        "pure_leaf_sha256": "d6d96983508697a520a815409f9522403aa783156959eb6c9b5920ff24b4a10b",
+        "actual_SH_cases": 3840,
+        "mutation_rejections": 26,
+        "argument_count": 7,
+        "caller_stack_unchanged": true,
+        "private_frame_bytes": 24,
+        "unknown_CCR_unchanged": true,
+        "per_game_constants": false,
+        "limits": "Actual scope instructions execute; the real immutable replay leaf is an ABI adversary. No console timing is established."
+      },
+      "pure_extent": {
+        "enabled": true,
+        "entry": "0x8ce1a8b4",
+        "bytes": 140,
+        "actual_instruction_model_cases": 6144,
+        "mutation_rejections": 20,
+        "complete_linked_assembly_pinned": true,
+        "eligible_entry_ccr": "0x100",
+        "proof_ccr": "0x101",
+        "other_ccr_profiles_unchanged": true,
+        "same_pure_extent_proof": true,
+        "full_ram_purge_bytes": 16777216,
+        "cache_write_nops": [
+          8,
+          8
+        ],
+        "callee_preserved_integer_frame_bytes": 12,
+        "operand_cache_restored_off": true,
+        "proof_output_published_before_cache_restore": true,
+        "console_speed_verified": false
+      },
+      "fast_crc": {
+        "schema": "kui.smash-native.fast-crc.v1",
+        "status": "PASS",
+        "elf_sha256": "bf7f6b51739b02cabe22cf8294f3d55b7f29dead915dd741d50615f75b8a7091",
+        "helper": "0x8ce00138",
+        "helper_bytes": 144,
+        "helper_sha256": "20f484994929415198d4c89b6adb724162005c39d4a1eb9b516cc3951824a52f",
+        "byte_table": "0x8ce2a8f0",
+        "table_bytes": 1024,
+        "complete_readonly_table_candidates": 1,
+        "helper_bound_tables": 1,
+        "table_sha256": "12f3e0576d447eb37b36d82ba0c1c5481b8f0d12fdc70347ce4a076b229d4c86",
+        "actual_SH_cases": 128,
+        "instructions": 363128,
+        "one_table_read_per_byte": true,
+        "independent_oracle": "zlib.crc32",
+        "whole_image_relay_bound": true,
+        "observed_private_stack_bytes": 8,
+        "hardware_timing_verified": false
+      },
+      "fresh_fat_cache": {
+        "schema": "kui.smash-menu.fat-cache-linked.v1",
+        "status": "PASS",
+        "profile": "native",
+        "elf_sha256": "bf7f6b51739b02cabe22cf8294f3d55b7f29dead915dd741d50615f75b8a7091",
+        "cache_bss": "0x8ce70d40",
+        "cache_bytes": 16512,
+        "actual_helpers": {
+          "_kui_smash_fat_cache_read": {
+            "entry": "0x8ce188ac",
+            "bytes": 1020,
+            "sha256": "c46ecfe6a68ecbd6867e4d07f0c365daf5da80533f39403a07174bed2e874970"
+          },
+          "_kui_smash_fat_cache_begin_epoch": {
+            "entry": "0x8ce187da",
+            "bytes": 34,
+            "sha256": "8a1afde9b83c1223ea37c5c359d801a2179260a1338827fa716b3c79673368b4"
+          },
+          "_kui_smash_fat_cache_configure": {
+            "entry": "0x8ce187fc",
+            "bytes": 176,
+            "sha256": "a041565cc090f1a774085acde6b746b9e7c816dd8608d7d6a39cd196ebba5a9c"
+          },
+          "_native_persist_fat_read_one": {
+            "entry": "0x8ce008e4",
+            "bytes": 64,
+            "sha256": "c7c9984350a97b2211a8eae3caf6475d54ddbd8a29a4f662c06d15619c6d0016"
+          },
+          "_native_persist_fat_read_window": {
+            "entry": "0x8ce00a74",
+            "bytes": 248,
+            "sha256": "87c696e59cc90bc7009e365f1412bb1a7c616aeee0175c26b8f5d3fa2438216c"
+          },
+          "_native_persist_read": {
+            "entry": "0x8ce00834",
+            "bytes": 176,
+            "sha256": "5d0c9e40dd9a90cb9819df5bbc2a581300927c4c8c30b470864cb5999ae2a2fb"
+          },
+          "_native_persist_identity": {
+            "entry": "0x8ce00924",
+            "bytes": 112,
+            "sha256": "e760c9e5ecc64dca58e14da63b88b93a8a06eabc56966989e22fccdd341b0869"
+          },
+          "_native_persist_write": {
+            "entry": "0x8ce007dc",
+            "bytes": 88,
+            "sha256": "18cc982c34f316bd5279a0dbd559516763bd27d016f7de6d12dbb12d7a1dc126"
+          },
+          "_native_persist_sync": {
+            "entry": "0x8ce00770",
+            "bytes": 72,
+            "sha256": "31c135ca676c1775db0b6da499a4d9eaa3f1e27248866acc288ca3e8e3d80ab0"
+          }
+        },
+        "actual_initial_read_sessions": [
+          [
+            "one",
+            100,
+            1
+          ],
+          [
+            "window",
+            132,
+            16
+          ],
+          [
+            "window",
+            148,
+            1
+          ],
+          [
+            "window",
+            149,
+            16
+          ],
+          [
+            "window",
+            165,
+            1
+          ]
+        ],
+        "epochs_drop_geometry_and_data": true,
+        "independent_copies_and_bounded_tail": true,
+        "verified_prefix_only": true,
+        "failed_stream_not_cached": true,
+        "stage_identity_write_sync_invalidation_bound": true,
+        "stage_bounded_stream_and_stop_bound": true,
+        "compiler_graph_sha256": {
+          "stage/src/loader/vmu_native_heap_probe_stage.ci": "9e24abee02f5a6c4c60f10f8316ef6caca06ab751f9289ce1d28a05cb6c13bb7",
+          "stage/src/loader/smash_fat_read_cache.ci": "2a704c9d5a61308b255c6fa0a11bdf05d2667a5c99d3b2ac4f57f02e50a8cb92"
+        },
+        "limits": "Actual compiled cache/epoch C and libc execute; physical callbacks are fixtures. Full filesystem correctness is separately tested by actual old/new admission under sanitizers."
+      },
+      "verified_fat_window": {
+        "schema": "kui.native-fat-window.linked.v1",
+        "status": "PASS",
+        "profile": "native",
+        "transport": 1,
+        "elf_sha256": "bf7f6b51739b02cabe22cf8294f3d55b7f29dead915dd741d50615f75b8a7091",
+        "helpers": {
+          "_native_persist_fat_read_window": {
+            "address": "0x8ce00a74",
+            "bytes": 248,
+            "sha256": "87c696e59cc90bc7009e365f1412bb1a7c616aeee0175c26b8f5d3fa2438216c"
+          },
+          "_native_persist_identity": {
+            "address": "0x8ce00924",
+            "bytes": 112,
+            "sha256": "e760c9e5ecc64dca58e14da63b88b93a8a06eabc56966989e22fccdd341b0869"
+          },
+          "_native_persist_write": {
+            "address": "0x8ce007dc",
+            "bytes": 88,
+            "sha256": "18cc982c34f316bd5279a0dbd559516763bd27d016f7de6d12dbb12d7a1dc126"
+          },
+          "_native_persist_sync": {
+            "address": "0x8ce00770",
+            "bytes": 72,
+            "sha256": "31c135ca676c1775db0b6da499a4d9eaa3f1e27248866acc288ca3e8e3d80ab0"
+          }
+        },
+        "cases": [
+          {
+            "case": "complete",
+            "verified": 16,
+            "result": 0,
+            "events": [
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "read",
+                101,
+                15
+              ],
+              [
+                "read",
+                102,
+                14
+              ],
+              [
+                "read",
+                103,
+                13
+              ],
+              [
+                "read",
+                104,
+                12
+              ],
+              [
+                "read",
+                105,
+                11
+              ],
+              [
+                "read",
+                106,
+                10
+              ],
+              [
+                "read",
+                107,
+                9
+              ],
+              [
+                "read",
+                108,
+                8
+              ],
+              [
+                "read",
+                109,
+                7
+              ],
+              [
+                "read",
+                110,
+                6
+              ],
+              [
+                "read",
+                111,
+                5
+              ],
+              [
+                "read",
+                112,
+                4
+              ],
+              [
+                "read",
+                113,
+                3
+              ],
+              [
+                "read",
+                114,
+                2
+              ],
+              [
+                "read",
+                115,
+                1
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "short_window",
+            "verified": 1,
+            "result": 0,
+            "events": [
+              [
+                "read",
+                100,
+                1
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "zero_count",
+            "verified": 0,
+            "result": 4294967295,
+            "events": []
+          },
+          {
+            "case": "oversize",
+            "verified": 0,
+            "result": 4294967295,
+            "events": []
+          },
+          {
+            "case": "crc_first",
+            "verified": 0,
+            "result": 4294967295,
+            "events": [
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "crc_suffix",
+            "verified": 3,
+            "result": 0,
+            "events": [
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "read",
+                101,
+                15
+              ],
+              [
+                "read",
+                102,
+                14
+              ],
+              [
+                "read",
+                103,
+                13
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "failed_stop",
+            "verified": 0,
+            "result": 4294967295,
+            "events": [
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "read",
+                101,
+                15
+              ],
+              [
+                "read",
+                102,
+                14
+              ],
+              [
+                "read",
+                103,
+                13
+              ],
+              [
+                "read",
+                104,
+                12
+              ],
+              [
+                "read",
+                105,
+                11
+              ],
+              [
+                "read",
+                106,
+                10
+              ],
+              [
+                "read",
+                107,
+                9
+              ],
+              [
+                "read",
+                108,
+                8
+              ],
+              [
+                "read",
+                109,
+                7
+              ],
+              [
+                "read",
+                110,
+                6
+              ],
+              [
+                "read",
+                111,
+                5
+              ],
+              [
+                "read",
+                112,
+                4
+              ],
+              [
+                "read",
+                113,
+                3
+              ],
+              [
+                "read",
+                114,
+                2
+              ],
+              [
+                "read",
+                115,
+                1
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "unhealthy_after_stop",
+            "verified": 0,
+            "result": 4294967295,
+            "events": [
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "read",
+                101,
+                15
+              ],
+              [
+                "read",
+                102,
+                14
+              ],
+              [
+                "read",
+                103,
+                13
+              ],
+              [
+                "read",
+                104,
+                12
+              ],
+              [
+                "read",
+                105,
+                11
+              ],
+              [
+                "read",
+                106,
+                10
+              ],
+              [
+                "read",
+                107,
+                9
+              ],
+              [
+                "read",
+                108,
+                8
+              ],
+              [
+                "read",
+                109,
+                7
+              ],
+              [
+                "read",
+                110,
+                6
+              ],
+              [
+                "read",
+                111,
+                5
+              ],
+              [
+                "read",
+                112,
+                4
+              ],
+              [
+                "read",
+                113,
+                3
+              ],
+              [
+                "read",
+                114,
+                2
+              ],
+              [
+                "read",
+                115,
+                1
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "fault_after_stop",
+            "verified": 0,
+            "result": 4294967295,
+            "events": [
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "read",
+                101,
+                15
+              ],
+              [
+                "read",
+                102,
+                14
+              ],
+              [
+                "read",
+                103,
+                13
+              ],
+              [
+                "read",
+                104,
+                12
+              ],
+              [
+                "read",
+                105,
+                11
+              ],
+              [
+                "read",
+                106,
+                10
+              ],
+              [
+                "read",
+                107,
+                9
+              ],
+              [
+                "read",
+                108,
+                8
+              ],
+              [
+                "read",
+                109,
+                7
+              ],
+              [
+                "read",
+                110,
+                6
+              ],
+              [
+                "read",
+                111,
+                5
+              ],
+              [
+                "read",
+                112,
+                4
+              ],
+              [
+                "read",
+                113,
+                3
+              ],
+              [
+                "read",
+                114,
+                2
+              ],
+              [
+                "read",
+                115,
+                1
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "active_after_stop",
+            "verified": 0,
+            "result": 4294967295,
+            "events": [
+              [
+                "read",
+                100,
+                16
+              ],
+              [
+                "read",
+                101,
+                15
+              ],
+              [
+                "read",
+                102,
+                14
+              ],
+              [
+                "read",
+                103,
+                13
+              ],
+              [
+                "read",
+                104,
+                12
+              ],
+              [
+                "read",
+                105,
+                11
+              ],
+              [
+                "read",
+                106,
+                10
+              ],
+              [
+                "read",
+                107,
+                9
+              ],
+              [
+                "read",
+                108,
+                8
+              ],
+              [
+                "read",
+                109,
+                7
+              ],
+              [
+                "read",
+                110,
+                6
+              ],
+              [
+                "read",
+                111,
+                5
+              ],
+              [
+                "read",
+                112,
+                4
+              ],
+              [
+                "read",
+                113,
+                3
+              ],
+              [
+                "read",
+                114,
+                2
+              ],
+              [
+                "read",
+                115,
+                1
+              ],
+              [
+                "stop"
+              ]
+            ]
+          },
+          {
+            "case": "unhealthy_before",
+            "verified": 0,
+            "result": 4294967295,
+            "events": []
+          },
+          {
+            "case": "fault_before",
+            "verified": 0,
+            "result": 4294967295,
+            "events": []
+          }
+        ],
+        "identity_write_sync_retire_before_io": [
+          "identity",
+          "write",
+          "sync"
+        ],
+        "limits": "Actual linked adapter, health and cache-epoch instructions execute. Stream/card/bus calls are finite ABI media fixtures; SPI/CRC protocol has separate tests."
+      },
+      "selected_resolution_route": {
+        "status": "PASS",
+        "bindings": [
+          {
+            "caller": "_native_resolution_replay",
+            "address": "0x8ce01c98",
+            "sha256": "67406aa43d7a1be8297651a8bbe97e9b55036b35fee35ca40e2b33cd1d0272c8",
+            "selected": "_kui_vmu_native_cached_resolution_replay",
+            "selected_edges": [
+              "allocation_safe",
+              "kui_vmu_native_cache_seed_read",
+              "kui_vmu_native_cached_resolution_replay",
+              "native_passive_capture_windows",
+              "native_sdk_coherence_after_image_proof",
+              "readonly_release_replay_valid"
+            ]
+          },
+          {
+            "caller": "_kui_retail_stage_relay",
+            "address": "0x8ce03774",
+            "sha256": "4ce45fb1acc438dea25f57b11173ce0553e86c069f0dab8de00314686452c2a7",
+            "selected": "_kui_vmu_native_cached_extent",
+            "selected_edges": [
+              "code_sha",
+              "kui_native_heap_base_relay",
+              "kui_native_stage_cached_discover_image",
+              "kui_retail_observe_native_ip",
+              "kui_vmu_native_cached_extent",
+              "native_crt_bootstrap_prearm",
+              "native_passive_prepare_finish",
+              "native_preclear_arm",
+              "native_preclear_prepare",
+              "native_report",
+              "native_resolution_replay",
+              "native_runtime_mode",
+              "retail_display_line",
+              "retail_display_restore"
+            ]
+          }
+        ],
+        "callgraph_sha256": "9e24abee02f5a6c4c60f10f8316ef6caca06ab751f9289ce1d28a05cb6c13bb7"
+      }
+    }
+  },
+  "shared_algorithms": {
+    "image_batch": {
+      "schema": "kui.game-image.common-batch.v1",
+      "status": "PASS",
+      "layout_output_cases": 10,
+      "request_sizes": [
+        1,
+        2,
+        15,
+        16,
+        17,
+        33,
+        257
+      ],
+      "container_labels": 5,
+      "maximum_physical_sectors_per_buffered_read": 16,
+      "representative_257_raw_sectors": {
+        "old_callbacks": 257,
+        "new_callbacks": 17
+      },
+      "sanitizers": [
+        "address",
+        "undefined"
+      ],
+      "output": "Batch matrix:10physical-layout/output cases x7request sizes x5container labels;257raw sectors use17 bounded reads\nPASS common image batch: byte-identical layouts,16sector bound, track/offset boundaries, OOMfallback, reentry, cancel/poisonedI/O andeveryheader validation\n",
+      "source_sha256": {
+        "tests/test_game_image_batch.c": "ed9644f85f14c85b70cdaebc5de7a37cd1d7008b9ada541cfb31049ab9b6545f",
+        "src/core/zso.c": "3071d237a606ab9978c46adef3242970b620b3a9abe493291691f491dd8f7c47",
+        "src/core/lzo1x.c": "20293bd5488f1503443698988c56ffd2427b74da2dac61e23a552cb49700b4d8",
+        "src/core/game_image.c": "8ca73620fcb221c913bff66935f3fc6fbb85c4095c28b8cb18b7822e60004b3d",
+        "include/kui/game_image.h": "1a640a41a21229b697874d66533954b04bb93ac0b355b61676881bfef26305c7"
+      },
+      "limits": "Actual shared filesystem image-reader C; container parsers, physical SD CRCs, resident ownership and VMU saving have separate regression suites. Callback counts are not console timings."
+    },
+    "launcher_checksums": {
+      "schema": "kui.launch.common-checksum-batch.v1",
+      "status": "PASS",
+      "physical_layouts": 6,
+      "container_labels": 5,
+      "request_sizes": [
+        1,
+        2,
+        15,
+        16,
+        17,
+        33,
+        257
+      ],
+      "tail_cases": 2,
+      "maximum_logical_sectors_per_read": 16,
+      "maximum_checksum_heap_bytes": 32768,
+      "representative_257_sectors": {
+        "old_callbacks": 257,
+        "new_callbacks": 17
+      },
+      "representative_33_sectors": {
+        "old_callbacks": 33,
+        "new_callbacks": 3
+      },
+      "stack_fallback_bytes": 2048,
+      "output": "Actual launcher checksum matrix PASS:6 physical layouts x5 container labels x7 sizes x2 tails;257 sectors use17 reads,33 use3\nActual checksum guards PASS: exact partial tails, complete preflight,2KiB OOM fallback,cancel/I/O refusal,repeatable and transient mode diagnostics\n",
+      "sanitizers": [
+        "address",
+        "undefined"
+      ],
+      "source_sha256": {
+        "tests/test_games_retail_checksum_batch.c": "1024ae97e0f08fa25fecf4535cc28958fda10385e3044f399b6d1c25be0086e7",
+        "src/core/game_image.c": "8ca73620fcb221c913bff66935f3fc6fbb85c4095c28b8cb18b7822e60004b3d",
+        "src/core/zso.c": "3071d237a606ab9978c46adef3242970b620b3a9abe493291691f491dd8f7c47",
+        "src/core/lzo1x.c": "20293bd5488f1503443698988c56ffd2427b74da2dac61e23a552cb49700b4d8",
+        "src/core/hash.c": "1dda19d3dc6a645396d24484cd8842c72bba811dce38f317660a2eeda7dc0d67",
+        "src/core/retail_image.c": "632d19e0f78e474bed87249ad80a7a1b827c18cd98f07f9b9c21e81da1999986",
+        "src/apps/games_retail.c": "649970e1c9bb0e7affdb4a0f5ddae75926c5d230b28768bc9a3335816d3f0721",
+        "include/kui/game_image.h": "1a640a41a21229b697874d66533954b04bb93ac0b355b61676881bfef26305c7",
+        "tests/test_games_retail_checksum_batch.py": "8d9e634659372bf987438ef000fb456e11794749422d93cad1f00d787f86fdf2"
+      },
+      "limits": "Actual private checksum helpers and shared reader; callbacks are not console timings. Full parser, launch route and physical SD CRC gates remain separate.",
+      "real_fatfs": {
+        "status": "PASS",
+        "cases": 50,
+        "filesystems": [
+          "fat32",
+          "exfat"
+        ],
+        "production_checksum_crc_and_fault_fixtures": true,
+        "ordinary_ce_raw_cooked_and_async": true,
+        "independent_fsck": false,
+        "results": [
+          {
+            "filesystem": "fat32",
+            "case": "format-checksum-cooked",
+            "card_unchanged": true,
+            "actual_fatfs_calls": {
+              "ip": 1,
+              "boot": 3,
+              "max_bytes": 32768
+            }
+          },
+          {
+            "filesystem": "fat32",
+            "case": "format-checksum-gdi-raw",
+            "card_unchanged": true,
+            "actual_fatfs_calls": {
+              "ip": 1,
+              "boot": 0,
+              "max_bytes": 37632
+            }
+          },
+          {
+            "filesystem": "fat32",
+            "case": "format-checksum-iso",
+            "card_unchanged": true,
+            "actual_fatfs_calls": {
+              "ip": 1,
+              "boot": 3,
+              "max_bytes": 32768
+            }
+          },
+          {
+            "filesystem": "fat32",
+            "case": "format-checksum-raw-bin",
+            "card_unchanged": true,
+            "actual_fatfs_calls": {
+              "ip": 1,
+              "boot": 3,
+              "max_bytes": 37632
+            }
+          },
+          {
+            "filesystem": "fat32",
+            "case": "format-checksum-cue-shared",
+            "card_unchanged": true,
+            "actual_fatfs_calls": {
+              "ip": 1,
+              "boot": 3,
+              "max_bytes": 37632
+            }
+          },
+          {
+            "filesystem": "fat32",
+            "case": "format-checksum-cue-2336",
+            "card_unchanged": true,
+            "actual_fatfs_calls": {
+              "ip": 1,
+              "boot": 3,
+              "max_bytes": 37376
+            }
+          },
+          {
+            "filesystem": "fat32",
+            "case": "format-checksum-cue-2448",
+            "card_unchanged": true,
+            "actual_fatfs_calls": {
+              "ip": 1,
+              "boot": 3,
+              "max_bytes": 39168
+            }
+          },
+          {
+            "filesystem": "fat32",
+            "case": "format-checksum-cdi",
+            "card_unchanged": true,
+            "actual_fatfs_calls": {
+              "ip": 1,
+              "boot": 3,
+              "max_bytes": 37632
+            }
+          },
+          {
+            "filesystem": "fat32",
+            "case": "format-checksum-cooked-read-fail",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "fat32",
+            "case": "format-checksum-cooked-short-read",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "fat32",
+            "case": "format-checksum-cooked-cancel-read",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "fat32",
+            "case": "format-checksum-cue-shared-read-fail",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "fat32",
+            "case": "format-checksum-cue-shared-short-read",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "fat32",
+            "case": "format-checksum-cue-shared-cancel-read",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "fat32",
+            "case": "format-checksum-cue-shared-cancel-between-reads",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "fat32",
+            "case": "format-checksum-cue-shared-bad-mode",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "fat32",
+            "case": "format-checksum-cue-shared-bad-ip-header",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "fat32",
+            "case": "valid",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "fat32",
+            "case": "boot-tail",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "fat32",
+            "case": "cooked-2048",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "fat32",
+            "case": "cooked-boot-tail",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "fat32",
+            "case": "async-cooked-2048",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "fat32",
+            "case": "ce-probe",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "fat32",
+            "case": "ce-probe-cooked",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "fat32",
+            "case": "ce-probe-async",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "exfat",
+            "case": "format-checksum-cooked",
+            "card_unchanged": true,
+            "actual_fatfs_calls": {
+              "ip": 1,
+              "boot": 3,
+              "max_bytes": 32768
+            }
+          },
+          {
+            "filesystem": "exfat",
+            "case": "format-checksum-gdi-raw",
+            "card_unchanged": true,
+            "actual_fatfs_calls": {
+              "ip": 1,
+              "boot": 0,
+              "max_bytes": 37632
+            }
+          },
+          {
+            "filesystem": "exfat",
+            "case": "format-checksum-iso",
+            "card_unchanged": true,
+            "actual_fatfs_calls": {
+              "ip": 1,
+              "boot": 3,
+              "max_bytes": 32768
+            }
+          },
+          {
+            "filesystem": "exfat",
+            "case": "format-checksum-raw-bin",
+            "card_unchanged": true,
+            "actual_fatfs_calls": {
+              "ip": 1,
+              "boot": 3,
+              "max_bytes": 37632
+            }
+          },
+          {
+            "filesystem": "exfat",
+            "case": "format-checksum-cue-shared",
+            "card_unchanged": true,
+            "actual_fatfs_calls": {
+              "ip": 1,
+              "boot": 3,
+              "max_bytes": 37632
+            }
+          },
+          {
+            "filesystem": "exfat",
+            "case": "format-checksum-cue-2336",
+            "card_unchanged": true,
+            "actual_fatfs_calls": {
+              "ip": 1,
+              "boot": 3,
+              "max_bytes": 37376
+            }
+          },
+          {
+            "filesystem": "exfat",
+            "case": "format-checksum-cue-2448",
+            "card_unchanged": true,
+            "actual_fatfs_calls": {
+              "ip": 1,
+              "boot": 3,
+              "max_bytes": 39168
+            }
+          },
+          {
+            "filesystem": "exfat",
+            "case": "format-checksum-cdi",
+            "card_unchanged": true,
+            "actual_fatfs_calls": {
+              "ip": 1,
+              "boot": 3,
+              "max_bytes": 37632
+            }
+          },
+          {
+            "filesystem": "exfat",
+            "case": "format-checksum-cooked-read-fail",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "exfat",
+            "case": "format-checksum-cooked-short-read",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "exfat",
+            "case": "format-checksum-cooked-cancel-read",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "exfat",
+            "case": "format-checksum-cue-shared-read-fail",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "exfat",
+            "case": "format-checksum-cue-shared-short-read",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "exfat",
+            "case": "format-checksum-cue-shared-cancel-read",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "exfat",
+            "case": "format-checksum-cue-shared-cancel-between-reads",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "exfat",
+            "case": "format-checksum-cue-shared-bad-mode",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "exfat",
+            "case": "format-checksum-cue-shared-bad-ip-header",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "exfat",
+            "case": "valid",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "exfat",
+            "case": "boot-tail",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "exfat",
+            "case": "cooked-2048",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "exfat",
+            "case": "cooked-boot-tail",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "exfat",
+            "case": "async-cooked-2048",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "exfat",
+            "case": "ce-probe",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "exfat",
+            "case": "ce-probe-cooked",
+            "card_unchanged": true
+          },
+          {
+            "filesystem": "exfat",
+            "case": "ce-probe-async",
+            "card_unchanged": true
+          }
+        ],
+        "launcher_binary_sha256": "50fc91e9b284e8648bc4b1a0fb73d047e09d1fa2a571476f105b286ace6d440c",
+        "source_sha256": {
+          ".deps/fatfs/source/ff.c": "3c30280ffe2d0fb19a5241d9ed9f20a2c3911c2861652ebf6ad57f74fb369250",
+          ".deps/fatfs/source/ffunicode.c": "6cd4dc4a664386ebd108e56d367582c35f005fc20381486366b5d77ac58119bd",
+          "include/kui/game_image.h": "1a640a41a21229b697874d66533954b04bb93ac0b355b61676881bfef26305c7",
+          "src/apps/game_launch_report.c": "ce21628a1aebc92cdaa035772fc7c0a559259492e704942ff171177c5d30c29b",
+          "src/apps/games_retail.c": "649970e1c9bb0e7affdb4a0f5ddae75926c5d230b28768bc9a3335816d3f0721",
+          "src/apps/native_session_prepare.c": "836255c9239bcdd99620634923590aba161c1e8a0a38ff58118d1c58001ef900",
+          "src/core/clock.c": "67b83afdd37be85a152f355011be528386a762df4a44e8f4679c57b191c9a2ec",
+          "src/core/command.c": "1261a6a77ea69d7afcf1189650200d17ce35192c216638117c1ff88215740afd",
+          "src/core/data.c": "2899e0f28ea7af1dd8cc0dc72a4f9dfed32a33f2e21908505c70e050b43941a5",
+          "src/core/destination.c": "5d0600fb873b85cef79e933f2099b830989b19a6f1c6852b40898f71b8ff9685",
+          "src/core/destination_file.c": "3e7b05fddf3983613e94daa81fe5afae1fb205a4d043ac6cde9a10aaf24c393e",
+          "src/core/diskio.c": "7e509b9dc3ba01f82ac232b2c9b9d44d98f3793286b9eb1ffaf7236d799cfe7a",
+          "src/core/game_image.c": "8ca73620fcb221c913bff66935f3fc6fbb85c4095c28b8cb18b7822e60004b3d",
+          "src/core/game_launch_settings.c": "41048f35fcbd6645336db0d8c8738897d08206f2cc6e7b34998d4e4fa8dbf04e",
+          "src/core/game_metadata.c": "cff66a8f9829f6714b28f1829ed0e221962c42dfac4ef4ef1753aab7103e824b",
+          "src/core/game_ram_patches.c": "8f29e465084a31c311276c2f898ab32cc5534e8d2383a058b9fb34763f11bd4b",
+          "src/core/hash.c": "1dda19d3dc6a645396d24484cd8842c72bba811dce38f317660a2eeda7dc0d67",
+          "src/core/lzo1x.c": "20293bd5488f1503443698988c56ffd2427b74da2dac61e23a552cb49700b4d8",
+          "src/core/native_return.c": "c3b35c128384581e9f9779d919824b971b09a943ef38ab19bbb9538c573d6ef0",
+          "src/core/native_sdk_sci_family.c": "7a67f496acfd2fd76eeaf1dfa8dfedaf439c5a02d48ee68c07c53726c2085202",
+          "src/core/native_session.c": "01dfc3dc883210046ec973659f5e2c6db8222209ba62e95707954407739fd257",
+          "src/core/retail_cursor.c": "701ac44935b96320a0869b4f056f371a6b048d6a0ecacb10e40d0bee49be9a90",
+          "src/core/retail_image.c": "632d19e0f78e474bed87249ad80a7a1b827c18cd98f07f9b9c21e81da1999986",
+          "src/core/retail_zso.c": "b18ed5053bab020e89f919e56c5dc7a376fb9b1cbecd1cfa07dd34193c224740",
+          "src/core/runtime_file.c": "98121565f331fde076615c3e9e810f74c96a1c8de0a87ef3f8017887f1331af3",
+          "src/core/runtime_image.c": "e2c25e03ada0ad5067d326817e0109da1665b7905de1e65d338056c222b3dd8a",
+          "src/core/smash_ce_child.c": "f4195482522457fe210f3a08f35c17dcff2a4eb258f7d0fb74d11bc9b5d8a34f",
+          "src/core/smash_ce_helper.c": "e96f002712cbd4412b3309f493aa2407184db4fc7bcf7da5863fe89404df54ef",
+          "src/core/smash_ce_profile.c": "04d46c0ec0de555425604a29888b24f2690ef983e84b7ab6270c6a61259613f2",
+          "src/core/smash_menu_collection.c": "bb12eb08c1a588958a809c66f4fb8af48766a1bcca978496d327118db7d2cb58",
+          "src/core/smash_menu_loader.c": "14adbd4dda9bfb53a3ba9e199a984a312434baf70939ef0c4024596ae4bff63e",
+          "src/core/smash_native_child.c": "01318144dd69641d87aa307c4e88fa67d74984a626066ff0bbce8f1a57607765",
+          "src/core/storage_policy.c": "7a238a1b16d9148ef578dd69dbb1dcc98cde5720969765b9e135ed96a0d26e4a",
+          "src/core/storage_probe.c": "44110c4952c544f3b6fa75048dc21e869b6b239e23eabaf6c133d57c1d73b6e3",
+          "src/core/vmu_emulation_settings.c": "c2be1c8287be559ed6e7c9b91c15484a382e7f4328cfc3de4bd4422d1478f80f",
+          "src/core/vmu_launch_package.c": "f8d40454608f98aae00e93b63ff572da07e368ac8a35a082e7113e608cab15f1",
+          "src/core/vmu_native_cache_seed.c": "b016cda845a52c19712b0598ae9480d22d9ee00fe75903eea5d120e2d123080a",
+          "src/core/vmu_native_discovery.c": "7ce3aff14143573120da57ff065b1456f4258ac5dfae6288e8abc2c3af88e406",
+          "src/core/vmu_native_exit.c": "26d91c79a4497662bb88eb62047c72f5ddf71e4ed667d42c2985100c22b8456c",
+          "src/core/vmu_native_heap.c": "7d99629da1954d1332c1da653a67b9d7139ee488c0cc33e78946f207f88594e2",
+          "src/core/vmu_native_layout.c": "463b2b2bf3e8dbaecac6c4fdb753a61317b7cad7f7eca435f1045992f9be3f90",
+          "src/core/vmu_native_patch.c": "5ee2bd21ff7e916bcf513e8ef37683c60455df7d7d41a0c9502083137b05c498",
+          "src/core/vmu_native_program.c": "09d22cf2307626ac77e66f848488ac1b66a52f70d9458e673fc9d03f32552fd7",
+          "src/core/vmu_native_resolution_cache.c": "32dd8684d6a90dad9a184734b537973470ad1b55fa3d72f080f65cd72903d093",
+          "src/core/zso.c": "3071d237a606ab9978c46adef3242970b620b3a9abe493291691f491dd8f7c47",
+          "tests/format_fatfs_fixture.c": "eab99e32160b19d9e987469e28e2edd281102d428d11522848696717898a361b",
+          "tests/game_format_fixture.py": "e9a25a053981240bb888c10c9f40100dbd5fd6af76fe20b36c3090927f3468e6",
+          "tests/games_fixture.py": "1b381330dd0bd80783287001282c9e91658f008a88c8ddab82a30343d8fefacf",
+          "tests/games_retail.c": "8705a6318a6946230c747ff604fdf7dbace0b2c3403b7059d0afa7e357e5e3b7",
+          "tests/test_games_library_images.py": "19983ee93b531e9403c349873502fcc075234f2b696992f9148f8aaf70e22902",
+          "tests/test_games_retail.py": "7ef711d2fbbc74af308886cf861b790db22eb31cf3dad5274bd7a4ef5b990061",
+          "tests/test_games_retail_checksum_batch.py": "8d9e634659372bf987438ef000fb456e11794749422d93cad1f00d787f86fdf2",
+          "tests/test_loader_probe_images.py": "d985d343260944310a4801ae744d9a816708a93be6c2dd065815a57e1635eafc"
+        }
+      },
+      "model_reexecuted": true
+    },
+    "history": {
+      "ok": true,
+      "scope": "shared VMU library/history path for every game; no title gate",
+      "history_128k_read_calls_per_pass": {
+        "previous_4KiB_windows": 32,
+        "after": 4,
+        "window_bytes": 32768,
+        "heap_failure_window_bytes": 4096,
+        "verification_passes": 2
+      },
+      "same_card_pending_begin": {
+        "checkpoint_calls_before": 2,
+        "checkpoint_calls_after": 1,
+        "receipt_allocation_and_publication_before": 2,
+        "receipt_allocation_and_publication_after": 1
+      },
+      "different_card_receipts_independently_recovered": true,
+      "old_pending_generation_retained_until_verified_replacement": true,
+      "measured_console_time": false,
+      "full_real_fatfs_regressions_executed": true,
+      "complete_session_launch_io": {
+        "status": "PASS",
+        "scope": "shared complete session-begin path; real FatFs/device callbacks",
+        "read_command_evidence": "single/multi-sector device callback counts; console SD elapsed time is not inferred",
+        "tested_scenarios": [
+          "unchanged",
+          "changed"
+        ],
+        "tested_cluster_bytes": {
+          "FAT32": [
+            512
+          ],
+          "exFAT": [
+            4096,
+            131072
+          ]
+        },
+        "measured_console_time": false,
+        "verification_passes_per_trusted_image": 2,
+        "cross_invocation_corruption_device_fault_cancel_and_identity_refused": true,
+        "results": {
+          "current": [
+            {
+              "filesystem": "FAT32",
+              "cluster": 512,
+              "actual_cluster": 512,
+              "scenario": "unchanged",
+              "reads": 5088,
+              "read_sectors": 5123,
+              "single_sector_read_calls": 5083,
+              "multi_sector_read_calls": 5,
+              "writes": 5,
+              "write_sectors": 5,
+              "syncs": 1,
+              "allocation_walks": 1,
+              "allocation_reads": 22,
+              "allocation_read_sectors": 57,
+              "retained_image_read_sectors": 512,
+              "retained_image_read_calls": 512,
+              "disk_sha256": "5f1882d5323f14ce4f2c0de9f917da89da27110ae5b0e4fc9ae69cad28808c2a"
+            },
+            {
+              "filesystem": "exFAT",
+              "cluster": 4096,
+              "actual_cluster": 4096,
+              "scenario": "unchanged",
+              "reads": 970,
+              "read_sectors": 5028,
+              "single_sector_read_calls": 388,
+              "multi_sector_read_calls": 582,
+              "writes": 4,
+              "write_sectors": 4,
+              "syncs": 1,
+              "allocation_walks": 1,
+              "allocation_reads": 20,
+              "allocation_read_sectors": 30,
+              "retained_image_read_sectors": 512,
+              "retained_image_read_calls": 64,
+              "disk_sha256": "14bd202b75f7d15c059dab1c39fc67292e8ca8b83902c7d98f767f968db2c615"
+            },
+            {
+              "filesystem": "exFAT",
+              "cluster": 131072,
+              "actual_cluster": 131072,
+              "scenario": "unchanged",
+              "reads": 463,
+              "read_sectors": 5022,
+              "single_sector_read_calls": 389,
+              "multi_sector_read_calls": 74,
+              "writes": 4,
+              "write_sectors": 4,
+              "syncs": 1,
+              "allocation_walks": 1,
+              "allocation_reads": 20,
+              "allocation_read_sectors": 24,
+              "retained_image_read_sectors": 512,
+              "retained_image_read_calls": 8,
+              "disk_sha256": "b7061b2dfc49e701d20db553882005187da28d06e41ea08d3f901222e98c4e19"
+            },
+            {
+              "filesystem": "FAT32",
+              "cluster": 512,
+              "actual_cluster": 512,
+              "scenario": "changed",
+              "reads": 6587,
+              "read_sectors": 6657,
+              "single_sector_read_calls": 6577,
+              "multi_sector_read_calls": 10,
+              "writes": 292,
+              "write_sectors": 292,
+              "syncs": 7,
+              "allocation_walks": 2,
+              "allocation_reads": 44,
+              "allocation_read_sectors": 114,
+              "retained_image_read_sectors": 512,
+              "retained_image_read_calls": 512,
+              "disk_sha256": "d6bda50b397e27d179f7676c464d2c493523c5120c4c05d15678024133ef6a56"
+            },
+            {
+              "filesystem": "exFAT",
+              "cluster": 4096,
+              "actual_cluster": 4096,
+              "scenario": "changed",
+              "reads": 1300,
+              "read_sectors": 6488,
+              "single_sector_read_calls": 556,
+              "multi_sector_read_calls": 744,
+              "writes": 59,
+              "write_sectors": 283,
+              "syncs": 7,
+              "allocation_walks": 2,
+              "allocation_reads": 40,
+              "allocation_read_sectors": 60,
+              "retained_image_read_sectors": 512,
+              "retained_image_read_calls": 64,
+              "disk_sha256": "1dc181ad7b97fea03e129b891d3e951ef6c63628ff04264a287e130642af4f74"
+            },
+            {
+              "filesystem": "exFAT",
+              "cluster": 131072,
+              "actual_cluster": 131072,
+              "scenario": "changed",
+              "reads": 653,
+              "read_sectors": 6476,
+              "single_sector_read_calls": 558,
+              "multi_sector_read_calls": 95,
+              "writes": 307,
+              "write_sectors": 531,
+              "syncs": 7,
+              "allocation_walks": 2,
+              "allocation_reads": 40,
+              "allocation_read_sectors": 48,
+              "retained_image_read_sectors": 512,
+              "retained_image_read_calls": 8,
+              "disk_sha256": "41560ead16d2c7548315ce803feba62f62a7510f39b24eb05b6153724f1294d9"
+            }
+          ]
+        },
+        "source_sha256": {
+          "src/core/vmu_history.c": "f48453aae53e228679385cd9002deed3a3062c4826b59c64bb5479b7efb5510e",
+          "src/core/vmu_history_session.c": "b7a6a887767b0bc2a43b619585d4923713cd72fcd31d2a67fb63cb9c28920ea5",
+          "src/core/vmu_library.c": "c12ac4db41d9e268fe219accee1454850db8a4d839a6496bb6c6ca05f485789c",
+          "src/core/diskio.c": "7e509b9dc3ba01f82ac232b2c9b9d44d98f3793286b9eb1ffaf7236d799cfe7a",
+          "include/kui/media.h": "3013e3fab35a40ca67c8de3fe14b2d021af1e23007804fda3f11289054129e39",
+          "tests/test_vmu_history_launch_io.c": "feeb4b19e77fc0d866c539db972a84b4af243e6d2701ffb088d2997ad50f28e3",
+          "tests/test_vmu_history_launch_io.py": "50e51db5d44cf9ae48fce1ad8de4d92369ad662c96aab595cca835099169bc22"
+        },
+        "reference_source_sha256": null,
+        "reference_library_source_sha256": null,
+        "reference_diskio_source_sha256": null
+      },
+      "verified_history_records_reused_only_within_exclusive_operation": true,
+      "outputs": {
+        "batch": "Common history verification: two complete128KiB passes in4+4 reads, direct first pass,4KiB low-memory fallback and corruption/error/cancel/metrics retained",
+        "library_batch": "Common library comparison: four32KiB reads,32x4KiB low-memory fallback, corruption/short/error/cancel/metrics retained",
+        "receipt": "Common history session: same-card checkpoint calls 2->1, receipt allocation/publication calls 2->1; durability guards OK",
+        "metadata_cache": "Media read cache: first-read I/O, scope/nesting, direct multi-sector I/O, write/error/reset invalidation and bounds passed",
+        "real_fatfs_history": "VMU history record: 933 checks; canonical provenance, every-byte corruption, padding and alias boundaries passed\nVMU history FAT32 cluster512: redo, dedup, snapshot/restore cuts, identity/corrupt receipts, receipt publication/clear cuts, pre-raw resolved-card boundary, export and retention passed\nVMU history exFAT cluster4096: redo, dedup, snapshot/restore cuts, identity/corrupt receipts, receipt publication/clear cuts, pre-raw resolved-card boundary, export and retention passed\nVMU history exFAT cluster131072: redo, dedup, snapshot/restore cuts, identity/corrupt receipts, receipt publication/clear cuts, pre-raw resolved-card boundary, export and retention passed\nVMU history: 44881 checks passed on real FatFs images; private formatter, no independent fsck",
+        "real_fatfs_library": "VMU library bulk read budget: single=0 multi=5 sectors=512\nVMU library allocation read budget: fat-single=0 fat-multi=1 bitmap=1\nVMU library (exFAT): 10539 checks, 5 write boundaries passed\nVMU library bulk read budget: single=0 multi=64 sectors=512\nVMU library allocation read budget: fat-single=1 fat-multi=1 bitmap=1\nVMU library (exFAT): 4828 checks, 5 write boundaries passed\nVMU library bulk read budget: single=512 multi=0 sectors=512\nVMU library allocation read budget: fat-single=2 fat-multi=4 bitmap=0\nVMU library (FAT32): 11679 checks, 9 write boundaries passed\n...\n----------------------------------------------------------------------\nRan 3 tests in 12.992s\n\nOK"
+      },
+      "source_sha256": {
+        "src/core/vmu_history.c": "f48453aae53e228679385cd9002deed3a3062c4826b59c64bb5479b7efb5510e",
+        "src/core/vmu_history_session.c": "b7a6a887767b0bc2a43b619585d4923713cd72fcd31d2a67fb63cb9c28920ea5",
+        "src/core/vmu_library.c": "c12ac4db41d9e268fe219accee1454850db8a4d839a6496bb6c6ca05f485789c",
+        "include/kui/vmu_history.h": "f1f2466d0d09b09ec448be8cc8393267ae3056037bfc2aad9559d7565ee9f111",
+        "tests/test_vmu_history_session_fast.c": "c7f18430bb193bdf49f0a5556a0574ce87c0e87dc8bc2a73069fd4494b9823b0",
+        "tests/test_vmu_history_batch.c": "3d9e6f0e6dbec881cffcc8f21a00dd8d165da7c8acd3e3228470d49731f3300d",
+        "tests/test_vmu_history.c": "e986616a342318110ec53001c4e970ffce0542e2d70b9b73fc7830e17ee1b67a",
+        "tests/test_vmu_history.py": "ddbf6be467050802bc836466d072960ea0b46a1f3431823a8f2e177eb97d20d8",
+        "tests/test_vmu_library.c": "7c58a06731f46503031a29fca13f7063460d7e45dae84c7597358a334f834f8a",
+        "tests/test_vmu_library.py": "b5b648ed84c214969d5d14d66fb3f8e1eb9ddd020991663bddcf634a32a9ece9",
+        "tests/test_vmu_history_performance.py": "39de3c726474885b50a2fb9dffeba790bf6049af2cf7330aa9191e251a20d851",
+        "tests/test_vmu_history_launch_io.c": "feeb4b19e77fc0d866c539db972a84b4af243e6d2701ffb088d2997ad50f28e3",
+        "tests/test_vmu_history_launch_io.py": "50e51db5d44cf9ae48fce1ad8de4d92369ad662c96aab595cca835099169bc22",
+        "src/core/diskio.c": "7e509b9dc3ba01f82ac232b2c9b9d44d98f3793286b9eb1ffaf7236d799cfe7a",
+        "include/kui/media.h": "3013e3fab35a40ca67c8de3fe14b2d021af1e23007804fda3f11289054129e39",
+        "tests/test_media_read_cache.c": "85ff6e58c7cd480a2dcec11f2cd5d6044b92fb2f5cff26cdb201514510f167de",
+        "tests/test_media_read_cache.py": "d508ded2856e9a49d760cbc83a16d71a9db6b62c3d94fc50b7c79bd44855c545",
+        "tests/test_vmu_history_receipt_io.c": "3495219ea1a0f1596337362a4cbcafed25578802be882e1a98f6d3d16e86832f",
+        "tests/test_vmu_history_receipt_io.py": "0627feb718ee9dfaae78877c497935a63e8dbfb41d933e27604537efacbf7a49"
+      },
+      "model_reexecuted": true
+    },
+    "effective_family_defaults": {
+      "schema": "kui.native.shared-performance-defaults.v1",
+      "status": "PASS",
+      "profiles": [
+        {
+          "profile": "standard-sci",
+          "makefile": "Makefile.vmu-native-vmu-lite-paced",
+          "stage_optimizations": {
+            "KUI_NATIVE_STAGE_FAST_CRC": "1",
+            "KUI_NATIVE_STAGE_FAST_SCAN": "1",
+            "KUI_NATIVE_CACHED_EXTENT": "1",
+            "KUI_NATIVE_CACHED_RESOLUTION": "1"
+          },
+          "fresh_FAT_windows": true,
+          "FAT_implementation_link_count": 1,
+          "fresh_metadata_memo": true,
+          "validated_image_snapshot_runs": 32,
+          "session_controls": false,
+          "canonical_background_default": false
+        },
+        {
+          "profile": "standard-scif",
+          "makefile": "Makefile.vmu-native-vmu-lite",
+          "stage_optimizations": {
+            "KUI_NATIVE_STAGE_FAST_CRC": "1",
+            "KUI_NATIVE_STAGE_FAST_SCAN": "1",
+            "KUI_NATIVE_CACHED_EXTENT": "1",
+            "KUI_NATIVE_CACHED_RESOLUTION": "1"
+          },
+          "fresh_FAT_windows": true,
+          "FAT_implementation_link_count": 1,
+          "fresh_metadata_memo": true,
+          "validated_image_snapshot_runs": 32,
+          "session_controls": false,
+          "canonical_background_default": false
+        },
+        {
+          "profile": "smash-native-menu",
+          "makefile": "Makefile.smash-native-menu",
+          "stage_optimizations": {
+            "KUI_NATIVE_STAGE_FAST_CRC": "1",
+            "KUI_NATIVE_STAGE_FAST_SCAN": "1",
+            "KUI_NATIVE_CACHED_EXTENT": "1",
+            "KUI_NATIVE_CACHED_RESOLUTION": "1"
+          },
+          "fresh_FAT_windows": true,
+          "FAT_implementation_link_count": 1,
+          "fresh_metadata_memo": true,
+          "validated_image_snapshot_runs": 32,
+          "session_controls": false,
+          "canonical_background_default": false
+        },
+        {
+          "profile": "background-general-a2",
+          "makefile": "Makefile.vmu-native-split-controller-stream-guard",
+          "stage_optimizations": {
+            "KUI_NATIVE_STAGE_FAST_CRC": "1",
+            "KUI_NATIVE_STAGE_FAST_SCAN": "1",
+            "KUI_NATIVE_CACHED_EXTENT": "1",
+            "KUI_NATIVE_CACHED_RESOLUTION": "1"
+          },
+          "fresh_FAT_windows": true,
+          "FAT_implementation_link_count": 1,
+          "fresh_metadata_memo": true,
+          "validated_image_snapshot_runs": 32,
+          "session_controls": false,
+          "canonical_background_default": false
+        },
+        {
+          "profile": "background-general-a1",
+          "makefile": "Makefile.vmu-native-split-controller-stream-guard-a1",
+          "stage_optimizations": {
+            "KUI_NATIVE_STAGE_FAST_CRC": "1",
+            "KUI_NATIVE_STAGE_FAST_SCAN": "1",
+            "KUI_NATIVE_CACHED_EXTENT": "1",
+            "KUI_NATIVE_CACHED_RESOLUTION": "1"
+          },
+          "fresh_FAT_windows": true,
+          "FAT_implementation_link_count": 1,
+          "fresh_metadata_memo": true,
+          "validated_image_snapshot_runs": 32,
+          "session_controls": false,
+          "canonical_background_default": false
+        },
+        {
+          "profile": "background-session-a2",
+          "makefile": "Makefile.vmu-native-session-controls",
+          "stage_optimizations": {
+            "KUI_NATIVE_STAGE_FAST_CRC": "1",
+            "KUI_NATIVE_STAGE_FAST_SCAN": "1",
+            "KUI_NATIVE_CACHED_EXTENT": "1",
+            "KUI_NATIVE_CACHED_RESOLUTION": "1"
+          },
+          "fresh_FAT_windows": true,
+          "FAT_implementation_link_count": 1,
+          "fresh_metadata_memo": true,
+          "validated_image_snapshot_runs": 32,
+          "session_controls": true,
+          "canonical_background_default": false
+        },
+        {
+          "profile": "background-session-a1",
+          "makefile": "Makefile.vmu-native-session-controls-a1",
+          "stage_optimizations": {
+            "KUI_NATIVE_STAGE_FAST_CRC": "1",
+            "KUI_NATIVE_STAGE_FAST_SCAN": "1",
+            "KUI_NATIVE_CACHED_EXTENT": "1",
+            "KUI_NATIVE_CACHED_RESOLUTION": "1"
+          },
+          "fresh_FAT_windows": true,
+          "FAT_implementation_link_count": 1,
+          "fresh_metadata_memo": true,
+          "validated_image_snapshot_runs": 32,
+          "session_controls": true,
+          "canonical_background_default": false
+        },
+        {
+          "profile": "background-compact-a2",
+          "makefile": "Makefile.vmu-native-background-compact",
+          "stage_optimizations": {
+            "KUI_NATIVE_STAGE_FAST_CRC": "1",
+            "KUI_NATIVE_STAGE_FAST_SCAN": "1",
+            "KUI_NATIVE_CACHED_EXTENT": "1",
+            "KUI_NATIVE_CACHED_RESOLUTION": "1"
+          },
+          "fresh_FAT_windows": true,
+          "FAT_implementation_link_count": 1,
+          "fresh_metadata_memo": true,
+          "validated_image_snapshot_runs": 32,
+          "session_controls": false,
+          "canonical_background_default": true
+        },
+        {
+          "profile": "background-compact-a1",
+          "makefile": "Makefile.vmu-native-background-compact-a1",
+          "stage_optimizations": {
+            "KUI_NATIVE_STAGE_FAST_CRC": "1",
+            "KUI_NATIVE_STAGE_FAST_SCAN": "1",
+            "KUI_NATIVE_CACHED_EXTENT": "1",
+            "KUI_NATIVE_CACHED_RESOLUTION": "1"
+          },
+          "fresh_FAT_windows": true,
+          "FAT_implementation_link_count": 1,
+          "fresh_metadata_memo": true,
+          "validated_image_snapshot_runs": 32,
+          "session_controls": false,
+          "canonical_background_default": true
+        },
+        {
+          "profile": "disc-a2",
+          "makefile": "Makefile.disc-vmu",
+          "stage_optimizations": {
+            "KUI_NATIVE_STAGE_FAST_SCAN": "1",
+            "KUI_NATIVE_CACHED_EXTENT": "1",
+            "KUI_NATIVE_CACHED_RESOLUTION": "1"
+          },
+          "fresh_FAT_windows": true,
+          "FAT_implementation_link_count": 1,
+          "fresh_metadata_memo": true,
+          "validated_image_snapshot_runs": 32,
+          "session_controls": false,
+          "canonical_background_default": false
+        },
+        {
+          "profile": "disc-a1",
+          "makefile": "Makefile.disc-vmu-a1",
+          "stage_optimizations": {
+            "KUI_NATIVE_STAGE_FAST_SCAN": "1",
+            "KUI_NATIVE_CACHED_EXTENT": "1",
+            "KUI_NATIVE_CACHED_RESOLUTION": "1"
+          },
+          "fresh_FAT_windows": true,
+          "FAT_implementation_link_count": 1,
+          "fresh_metadata_memo": true,
+          "validated_image_snapshot_runs": 32,
+          "session_controls": false,
+          "canonical_background_default": false
+        }
+      ],
+      "per_game_selectors": false,
+      "default_background_profiles": [
+        "background-compact-a2",
+        "background-compact-a1"
+      ],
+      "default_background_geometry": {
+        "worker_bytes": 73728,
+        "lease_bytes": 290816,
+        "cache_bytes": 196608
+      },
+      "source_sha256": {
+        "Makefile.disc-vmu": "6eb309e5763cb3f60285da5e489c1e36ff47fdc40c14566d6a20b7122676fe4d",
+        "Makefile.disc-vmu-a1": "dc3afed2d3f8105006acee5e6450da5ed926675d950149193ceadcec4002b9b6",
+        "Makefile.smash-native-menu": "0e6422a0164945525b93891045e5bf65b634e0eafa868759b185aff0ac514ac0",
+        "Makefile.vmu-native-background-compact": "49e29e6631c02edb093d6afeb1758cb984b4a51154eaf0528b71db233e355dad",
+        "Makefile.vmu-native-background-compact-a1": "4dd1cfe546cb07cbb2bf0b6f0713a3259d773778c390a862a0dc2d0cc4a93ee5",
+        "Makefile.vmu-native-compat": "bf8daf1771e42b3b219a3fbe2a1d194b463eca46ed91a0f7bce4cacf1d928d1d",
+        "Makefile.vmu-native-persistent": "51650e35a49bedda42ef2392586f5b16ffa9a0bc9d646ac7ead21a7e7ba995ca",
+        "Makefile.vmu-native-session-controls": "5c4c598d0f23caa7497a95373c562f9c4aeda0e3bb83edded81c005e5ff75ee5",
+        "Makefile.vmu-native-session-controls-a1": "c444ded0fd4f1b47716a0aaa10f07bc9fd312514ab66d9970a70339da4b5fecd",
+        "Makefile.vmu-native-split-controller-stream-guard": "30ba9386e04e8536d90da784a71e8f3ec79a81dc20771434032fde5f6d0792c3",
+        "Makefile.vmu-native-split-controller-stream-guard-a1": "efcfb61e1a9dafa60f003cbb3cf59749a774d88c6e25a0e29fee99924bd1c850",
+        "Makefile.vmu-native-vmu-lite": "613c3115ba858bc5f379aec817e3faabf42ba3cd01a0a9e15c9f63d6afb72f18",
+        "Makefile.vmu-native-vmu-lite-paced": "9dba08f420831855eb85c114ad9c689d104eff6f84f6dc1d937f77473392625d",
+        "include/kui/vc2_ce_vmu_stage_cache.h": "d61d16abcfbc53bbfd5613c5ff83caac4f47e819859b7951246ac1818bef9e8c",
+        "src/loader/disc_vmu_stage.c": "281f7d4a9c4be916376a92607ed3c7c8d2962b4cc0587b6ec5dae2df497cac83",
+        "src/loader/native_proof_cache_scope.inc": "b6bdd13ca799b850d6b9717f19a714f19be9bd8d879a74dcca4f4acecd0b1309",
+        "src/loader/vc2_ce_vmu_stage_cache.c": "4daff4b65c5b6be53e751465563c45c4640a3c5ecaf39009bdc419b7ce879ab9",
+        "src/loader/vmu_native_persist_stage.inc": "4d0ee1349e35dadbd224174c382042579f0b4df2012b331d003bf3869a8d7d98",
+        "tests/test_native_performance_defaults.py": "a473cc0de4aee87a14a96783c9216604927aa41ce740ecfc778698364da3f80a"
+      },
+      "limits": "Effective build policies are checked; linked execution, storage correctness and console timing are separate gates."
+    },
+    "background_reader_routing": {
+      "schema": "kui.native.background-route.v1",
+      "status": "PASS",
+      "requested_reader_routes": {
+        "new": "compact-dual",
+        "legacy": "compact-dual"
+      },
+      "optional_session_controls": "explicit-dual-path-New-only",
+      "virtual_slots": [
+        1,
+        2
+      ],
+      "crossed_and_malformed_capabilities_refused": true,
+      "per_title_rules": false,
+      "sanitizers": [
+        "address",
+        "undefined"
+      ],
+      "output": "Background routing PASS: compact ordinary X/Y at dual A1/A2 paths; explicit optional session X only; malformed/duplicate/truncated capabilities and invalid readers refused\n",
+      "source_sha256": {
+        "tests/test_native_background_route.c": "4f64f9add62de9fa9263289f828bd45626e1928a11592d39493fac16730e5354",
+        "src/core/native_session.c": "01dfc3dc883210046ec973659f5e2c6db8222209ba62e95707954407739fd257",
+        "include/kui/native_background_route.h": "7f50a50804383d3b4dc56dc16f2dc93012c36ba13fad52217d4b16d5434c4716",
+        "include/kui/games_retail.h": "3e93b833497d4eda4cc6691956e0a45dee179e4ddf8697ad9aea54f9944e63b9",
+        "include/kui/native_dual_reader.h": "edd205291f3f242707a6eff85dddf77287ec3a7d43709452f54256e1d3599e99",
+        "include/kui/native_session.h": "50db557175adf501f5e904c32decbc0b1dae9dd04b3798eb0a9f2be3a64fc832",
+        "src/apps/games_retail.c": "649970e1c9bb0e7affdb4a0f5ddae75926c5d230b28768bc9a3335816d3f0721"
+      }
+    }
+  },
+  "hardware_verified": false,
+  "console_speedup_measured": false,
+  "per_game_constants": false,
+  "qualification_mode": "focused-next-test",
+  "safety_audits_remain_mandatory": false,
+  "unchanged_runtime_reference_qualification_required": true,
+  "proof_python_sha256": {
+    "tools/check_shared_loader_performance.py": "4358ec10586eeb23a75239bb4d29af81e8dc07cbc4311fbd559be8706dbeebc6",
+    "tools/check_loader_layout.py": "7551528fa4e86adc02903389f0b8c8266297ccbcb1d0984ddd04ac40cd473dea",
+    "tools/check_armada_ce_maple_hook.py": "af6e3904a4975acb4010de61b0618fe76eb52e9976cee28ee48be04a618b124d",
+    "tools/sh4_delay_slots.py": "cb39ca8374b28e6ed866dbeb75b592d4cc6a615f608fc2716bb3339bb5de39b9",
+    "tests/test_armada_ce_maple_hook.py": "27cad031d7b1c441b3d2df86569cd43d7df3c50789fce2e701ad7d49697ed652",
+    "tools/check_retail_instructions.py": "088f769c2b6b9ae6e2182eecc28dae9863835e882eed6a64b28ea01df19e52af",
+    "tools/vmu_native_relocations.py": "df3d0be21dfd034ef33765d7901b414d8ba6b92248284c762e0a133b5196cced",
+    "tools/check_vmu_native_worker_gateway.py": "5980f8d1a959126f68c36a380db19dd24d586ddc07217e3f1c55e89db7f95e50",
+    "tools/runtime_package.py": "c885e08e5a167b02dcaa6884084d11ef4cad70161f423d0d8876d92330ecd0b5",
+    "tools/native_runtime_layout.py": "4ebdd14101c2e62a8b057c9effc884d8af518834ee00156919b13101783c46d5",
+    "tests/test_game_image_batch.py": "05d5123d3c7d825ed740a25ff6964f7e8c9c1b3b13d672b71e703e2af73cb151",
+    "tools/check_native_general_lean_profile.py": "ae3ac2b88ce5410a9c0d9f0df93ad9d556ada349689eb05e563113ced5cc2d98",
+    "tools/check_vmu_native_cache_gateway.py": "36fd36276089348ddc1481743ebf5632cf9c14a9f83f226ed5e6db5c415947d0",
+    "tests/test_smash_native_cached_replay.py": "14a458fdfaa423b587b4481115621190860d449ca5d2f0e3a559ade19c5194db",
+    "tests/test_native_stage_proof_scope.py": "9be0c6021e5cc42058e0367929171d1ade7e2d8d4845afbb1f04e62148b1a1cb",
+    "tools/check_vmu_native_stage_stack.py": "b3bed5023f8b61fe6a115214101d86873762b25942418db05a918c2f592717c5",
+    "tools/check_retail_stack.py": "e670f464c4c6a7d18c1339ffb823f92fa043611b2264850ffb4b582e2db59f76",
+    "tests/test_vmu_native_heap_execution.py": "59983100426ef016a2b84c05aec857a0fc8095f43d680c4d2aab2917ecf7da32",
+    "tools/profile_vmu_native_release_sh.py": "0e1c4e8e9a18073f36453fea4c360262661c8dbe11b30e5515c423cfb6219bfd",
+    "tests/test_vmu_native_sdk_poll_execution.py": "8b3b8a275e3c3f308f30c2164732190c0b9346c7f1561799618d62c395e79f74",
+    "tests/test_native_standalone_foreground_gin.py": "3a1d323dea660b2bfc711009c6b70b8509c9140181f0c7686ba7750c7eacc041",
+    "tests/test_smash_native_fat_cache_linked.py": "c70754fd94526ae24a59fe81f1af14d5642ad0f2d131535892b747bced244ff4",
+    "tests/test_smash_phase_clock_linked.py": "7ff958bfc1e8cc446f30aa98c29e4d5f8df743ce7eb68386a1e263d848e66310",
+    "tests/test_native_fat_window_linked.py": "ed971d037e1a3aaf621098083ba1d8af181b28204ca4a3034e5fe8f88599fbf0",
+    "tests/test_smash_native_fast_crc.py": "a16f6e4e819b41706abb37b2bbc65032ed08e9fd9859b083ab8f827dce17db08",
+    "tests/test_native_performance_defaults.py": "a473cc0de4aee87a14a96783c9216604927aa41ce740ecfc778698364da3f80a",
+    "tools/retail_package.py": "05b125fb83bc3f53d83cf1658e0a56905ad42ab11948b5df34a534cf63384785",
+    "tools/check_retail_loader_layout.py": "096ea3d9e4a9bba7c39b0067412f38147037faea5bc61f13d8d73be4e4126c69",
+    "tools/toy_pilot_symbols.py": "ca6cdaea8405f59449c6e986dbae39398f4de8f2bc6ffd0417da14fd0d0264d8",
+    "tools/check_vmu_native_heap_probe.py": "8811e66b50b8d52153f7a1fb99de1d38ba9d7785a3d5901429cfb97a24d04e4f",
+    "tools/check_vmu_native_readonly.py": "dec56e034a022925ac5f7568a103b54981f95667a4fce68fb6b961cc511a5456",
+    "tools/vmu_maple_observe_symbols.py": "1d9c984e22090726d2e303ee5768be0e85d1c61b48f4467ca3d731c5286be56b",
+    "tools/check_vmu_maple_observe_hook.py": "a6c0214b548914f565a30495c0d05bfb95909baacd8b10b976b81bbebe7d35e4",
+    "tools/check_vmu_pio_write.py": "3115bf1d532695bed86879a530f14c91a94e75668e78a530b7b0986be5bb998b",
+    "tools/package_vmu_maple_observe.py": "d8369c5cf820486d535dbfcd815dd60b9ed1e55a9ecd577d845340d456ee3332",
+    "tools/vmu_sd_profile.py": "d30599b62d946ea2ea1e9784644f139ff5d20fd6714442af7c896e2f613418a6",
+    "tools/personalize_vmu_sd_proof.py": "f2dc8a00c9bc2f07c4fa2f9cb72c38a7182bd4a8f2d56bb927b7dd0b2a9895cb",
+    "tools/check_vmu_native_cache_seed.py": "ff9cac5078807f22e0238e0db4111d8ee0d3726c9e4c90f467bb4c9e04ce9420",
+    "tools/check_vmu_native_irq_rearm.py": "0c0d6b7d3fd1edcf66df667179d84399125f262dc2b4cf3bf7c1af8d00d6ae8b",
+    "tools/check_vmu_native_loader_timeline.py": "e9ffb56a589d3b3c21b90e00df29a1f8b8b62a151de936e841ff4dabac46a299",
+    "tests/test_vmu_native_sci_sdk_restore.py": "96a6596fe5dfe29812a400b5b09f9e2a397b9c8c51eee7c62a74ca34a5b14810",
+    "tools/check_vmu_native_sdk_sci_route.py": "8eeb5d7e7e818825a1720e181348d6822cfd8331cd720baec287b6ec1e541a00",
+    "tools/check_vmu_native_mode.py": "9469c7a1aec5d6fc3328419f88580ae56a082d2def9af8685322f080bc6cbe90",
+    "tools/check_vmu_native_trace.py": "8f961e25dc52bfed964185a9c3876067bc500109d3d7123a11540a41372fcff7",
+    "tools/check_vmu_native_map_refusal.py": "2486c969c14d79d161726d73cf8fc618d0f6d96c07ead51745bc1cc8d3990bb8",
+    "tools/check_vmu_native_fault_capture.py": "58349e7576631aa9d9108709c167eb0abccb3fec490d845548ba44d3ce7f709e",
+    "tools/check_vmu_native_background.py": "9cfd7add2701d2396af432b82bf31dde50a48adde4f46116601c9ff5421dd506",
+    "tools/check_vmu_native_persistent.py": "e92b3d7a73dd1cc34fd1410c3dd338a6232ded43ea31eb6899ced5b1f1b4992d",
+    "tools/check_native_vmu_only.py": "40d37355b204d9eb61989b3abf80b2e833d0ce6823df6765a28facf783ffb613",
+    "tools/vmu_native_cache_seed.py": "f4c410fe543ddb2638b2f1d10ffa3036355f60721dec4f4935c6e45b8f7f6976",
+    "tools/vmu_native_mode.py": "421d2ebd81afc6389b96f84720fa62719750f839530fe04d86031c6debdb4b87",
+    "tools/vmu_persist_profile.py": "21ef36d522515c2c8d452759ff78ef633773699dfb51f8cbe596c8229d060360",
+    "tools/personalize_vmu_native_persistent.py": "be2821c8ac23ec7aad665c7e49acd58b16ee9c2cccd24dc9bd4a1825e68c35d4",
+    "tests/test_personalize_vmu_native_persistent.py": "55e02bbe5b08f9e1c0bc51c48a6872adfa4da5b29b510736900830f2f0345887",
+    "tools/package_vmu_native_a2_delivery.py": "2f0ff84501cfc4fb9121af19232c1583f78dd3a9e6ba5f90694cacc724f711c7",
+    "tests/test_native_dual_readers.py": "45da37d2871c6c3024f1867bbba36d21566378143a02d5926cc387009db90e69",
+    "tools/check_native_controller_failure_witness.py": "302f78750cae355bd6bd76bf3d757a605c1d6e862112564aec7518cbead1d7dd",
+    "tools/package_vmu_native_dual_delivery.py": "e6846406afa578d6b79300f9d4ba8363b9fa24388659b7579b0691d3156d0d56",
+    "tools/package_native_vmu_only.py": "edb6c38c6921ce791a6913253b3c92be6e6b9668e7e7eeb003bceee8a4c4358d",
+    "tools/native_standard_manifest.py": "cc526450435cab09f08a1190ff210a3280383c967c45902c029f1042a70f7fec",
+    "tests/test_native_standard_manifest.py": "a1d9e6a95b176545ed6721c5bd755019b4142851eeaea8c0dbf0684a33164fe7",
+    "tests/test_native_background_route.py": "8694420f50e37ba653f9a63b1cbf8a23c6054031f17931e9c71f2cb0a047fb0b",
+    "tools/check_vmu_native_readahead.py": "5b8cf94a1b4f5629a46664b8bc1db884cbc4cbfbadf30ed4f6341d90e53a46f4",
+    "tools/check_native_dual_readers.py": "d3e6d4e9463ce7b628ba552153e5e1e9ccf286c9c6edb3a14d32998e4c66fcaa",
+    "tests/test_games_retail_checksum_batch.py": "8d9e634659372bf987438ef000fb456e11794749422d93cad1f00d787f86fdf2",
+    "tests/games_fixture.py": "1b381330dd0bd80783287001282c9e91658f008a88c8ddab82a30343d8fefacf",
+    "tests/test_images.py": "c150d31dbc245fcf11bf6c888761d94247a1f8922cd143b96e57a6870695e88b",
+    "tests/test_games_library_images.py": "19983ee93b531e9403c349873502fcc075234f2b696992f9148f8aaf70e22902",
+    "tests/game_format_fixture.py": "e9a25a053981240bb888c10c9f40100dbd5fd6af76fe20b36c3090927f3468e6",
+    "tests/zso_fixture.py": "a5be0291c5093d8f153bc09f4a84ecc36f5a73b40422d1c6b57141d670040750",
+    "tools/make_loader_probe.py": "f2e5c42ed6882486a86c530c42a354526461f9a381716dff84fccd9409b79baf",
+    "tests/test_loader_probe_images.py": "d985d343260944310a4801ae744d9a816708a93be6c2dd065815a57e1635eafc",
+    "tests/test_games_retail.py": "7ef711d2fbbc74af308886cf861b790db22eb31cf3dad5274bd7a4ef5b990061",
+    "tests/test_vmu_history_performance.py": "39de3c726474885b50a2fb9dffeba790bf6049af2cf7330aa9191e251a20d851",
+    "tests/test_vmu_history_launch_io.py": "50e51db5d44cf9ae48fce1ad8de4d92369ad662c96aab595cca835099169bc22"
+  },
+  "limits": [
+    "This focused gate executes changed shared-stage models and exact bindings; separate unchanged-runtime reference qualification is required.",
+    "Clean compile provenance is trusted to bind the runtime C algorithms; linked stage cache/FAT/CRC instructions execute in bounded models.",
+    "Canonical map labels are not commercial-game compatibility or console timing results."
+  ]
+}

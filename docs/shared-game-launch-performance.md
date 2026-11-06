@@ -1,5 +1,17 @@
 # Shared Games launch work
 
+The current native test cohort is `f8807cb16561`. The normal raw-rip hint
+admission bug, cold optional-CRC reread, fallback cache-scope coverage and
+checked snapshot reuse are corrected across the twelve affected native
+families. See [operation coverage](shared-launch-coverage-restoration.md),
+[native cold scopes](shared-native-cold-cache.md) and
+[focused evidence](evidence/native-shared-f8807cb/native-cold-scopes.json).
+Console timing and Sonic Adventure's live SCI activity remain unverified.
+
+The early-artwork `f7229` candidate was rejected: it masked a boot delay.
+[Direct ROOT boot](root-boot-restoration.md) now follows the original 2.0
+splash/chime lifecycle without the added cold version-selection pass.
+
 The owner requires Games-only integration. Startup/splash, menus, branding and
 the updater implementation are frozen. Performance fixes belong in the common
 operation and must reach every applicable routed module; they are not another

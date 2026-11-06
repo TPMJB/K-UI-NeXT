@@ -1,0 +1,27 @@
+{
+  "linked_GUI": {
+    "build": "f8807cb16561",
+    "bytes": 3554464,
+    "sha256": "c4363bfd071f4c5d02b302437dc34682b0ece9cb0f4ef336f3d435db94811550",
+    "elf_sha256": "eaabf4418dde74c955ba319606b003b3c8e13ad4aad5dec8f6645c673d5a22e5",
+    "compile_receipt_sha256": "432b61dadd850cb06b7731cd4b62f1fbd472fc929a7ea4a45aa831de5788f6f7"
+  },
+  "standard": {
+    "normalized_payload_sha256": "d7dedf99e674c0990716184f56016e65509c3364fcdfd086922e6021bb922c71",
+    "actual_scalar_word_comparisons": 8,
+    "all_mismatches_use_historical_fallback": true,
+    "recognizer_sha256": "1980faab90c4c50ded0ca27c442615adad2cb3aa8633453acf1ba6974f7bf7cb",
+    "compiler_folded_digest_array": true
+  },
+  "cdda": {
+    "status": "PASS",
+    "profiles": [
+      "toy-raw",
+      "toy-cooked",
+      "mdk2"
+    ],
+    "exact_table_bytes": 180,
+    "exact_table_sha256": "53ab24a2fdb6871aa21b40b7c19aec96c2b50cb80f5b546c0403ac74595f8a72",
+    "runtime_elf_sha256": "eaabf4418dde74c955ba319606b003b3c8e13ad4aad5dec8f6645c673d5a22e5"
+  }
+}

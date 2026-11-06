@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 import struct
 import subprocess
+import sys
 
 from check_retail_instructions import IMAGES, audit as instruction_audit
 from check_retail_loader_layout import check_directory
@@ -25,6 +26,8 @@ SCHEMA='kui.native.physical-standard.audit.v1'
 CAPABILITY=struct.pack('<8I',0x5049554b,0x31594850,1,32,0,0,0,0)
 MARKER='__kui_native_physical_stage'
 SYMBOL='_kui_native_physical_capability'
+COLD_CRC_SYMBOLS=frozenset(('_kui_native_stage_cached_crc32','__kui_native_cached_boot_crc'))
+AUDIT_ONLY_PATHS=frozenset(('tools/check_retail_physical.py','tests/test_retail_physical.py'))
 RESIDENTS=('scif','sci','ide','scia')
 GUARD=struct.pack('<12H',0x6043,0x2008,0x8b05,0xe003,0x3502,0x8902,0xe001,0x000b,0x0009,0xe000,0x000b,0x0009)
 ARTIFACTS=('retail-physical.kui','entry.elf','entry.map','entry.compile.json',
@@ -50,10 +53,31 @@ def typed_descriptor(stage,module):
     return dict(module_offset=offset,bytes=32,allocated_read_only=True,unique_complete_descriptor=True)
 
 
-def no_virtual_runtime(images,module):
+def cold_crc_scope(stage,path):
+    require(path is not None and Path(path).read_bytes()==stage[0],
+            'Cold CRC exception requires the exact actual stage ELF')
+    sys.path.insert(0,str(ROOT/'tests'))
+    from test_native_stage_cached_crc import audit as cached_crc_audit
+    sources=('tests/test_native_stage_cached_crc.py','tests/test_smash_native_fast_crc.py',
+             'tools/check_vmu_native_cache_gateway.py','tools/check_retail_physical.py')
+    pins={name:sha((ROOT/name).read_bytes()) for name in sources}
+    proof=cached_crc_audit(Path(path),relay='_kui_retail_stage_relay')
+    require(proof['status']=='PASS' and proof['elf_sha256']==sha(stage[0]) and
+            Path(path).read_bytes()==stage[0] and
+            pins=={name:sha((ROOT/name).read_bytes()) for name in sources},
+            'Cold CRC exception lacks a current ELF/source-bound execution proof')
+    return dict(proof=proof,proof_source_sha256=pins,stage_sha256=sha(stage[0]),
+                allowed_stage_symbols=sorted(COLD_CRC_SYMBOLS))
+
+
+def no_virtual_runtime(images,module,*,stage_path=None):
+    cold=None
+    if 'stage' in images and COLD_CRC_SYMBOLS.intersection(images['stage'][4]):
+        cold=cold_crc_scope(images['stage'],stage_path)
     for name,image in images.items():
         for symbol in image[4]:
-            own=symbol==MARKER or symbol.startswith('_kui_native_physical_')
+            own=(symbol==MARKER or symbol.startswith('_kui_native_physical_') or
+                 (name=='stage' and cold is not None and symbol in COLD_CRC_SYMBOLS))
             require(own or not symbol.startswith(('_kui_vmu_','__kui_vmu_','__vmu_',
                     '_kui_native_','__kui_native_','_native_','__native_')),
                     'Physical loader contains a VMU/native-worker symbol: '+name+':'+symbol)
@@ -62,6 +86,7 @@ def no_virtual_runtime(images,module):
                 'Physical loader retains virtual-card/cache ownership symbols: '+name)
     for magic in (b'KUIVMUP2',b'KUIVMU04',b'KUINVM01',b'KUINVS01',b'KUINVR01'):
         require(magic not in module,'Physical loader contains a VMU/cache/patch template: '+repr(magic))
+    return cold
 
 
 def execute_guard(body,reader,transport):
@@ -122,13 +147,19 @@ def guard_witness(stage):
         instruction_cases=cases,reader=0,transport_mask=7)
 
 
-def source_provenance(directory,images,allow_dirty):
+def source_provenance(directory,images,allow_dirty,*,permit_audit_only=True):
     commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
     dirty=bool(subprocess.check_output(['git','status','--porcelain','--untracked-files=all'],cwd=ROOT))
-    require(allow_dirty or not dirty,'Final physical Standard audit requires clean committed source')
+    changed=set()
+    if dirty:
+        for command in (['git','diff','--name-only','-z','HEAD'],
+                        ['git','ls-files','--others','--exclude-standard','-z']):
+            changed.update(p.decode() for p in subprocess.check_output(command,cwd=ROOT).split(b'\0') if p)
+    audit_only=permit_audit_only and bool(changed) and changed<=AUDIT_ONLY_PATHS
+    require(allow_dirty or not dirty or audit_only,'Final physical Standard audit requires clean committed source')
     for name,image in images.items():
         record=json.loads((directory/(name+'.compile.json')).read_bytes())
-        require(record==dict(commit=commit,source_dirty=dirty,elf_sha256=sha(image[0])),
+        require(record==dict(commit=commit,source_dirty=False if audit_only else dirty,elf_sha256=sha(image[0])),
                 'Physical image lacks exact current compile provenance: '+name)
     config=(directory/'plain-layout-config').read_text().split()
     fields=dict(item.split('=',1) for item in config)
@@ -136,7 +167,13 @@ def source_provenance(directory,images,allow_dirty):
         fields.get('LOW') in ('0','1') and fields.get('TRACE')=='0' and fields.get('SONIC')=='0' and
         fields.get('RETURN_TRACE','0')=='0' and fields.get('SKIES_READ_DIAGNOSTIC','0')=='0',
         'Physical Standard residents must use their ordinary non-diagnostic layout/configuration')
-    return json.loads((directory/'entry.compile.json').read_bytes())
+    result=json.loads((directory/'entry.compile.json').read_bytes())
+    if audit_only:
+        result['audit_only_worktree']=dict(changed_paths=sorted(changed),
+            sha256={name:sha((ROOT/name).read_bytes()) for name in sorted(changed)},
+            production_tree_unchanged=True,compiled_receipts_unmodified=True,
+            original_strict_dirty_policy_would_refuse=True)
+    return result
 
 
 def audit(directory,*,allow_dirty=False,self_test=True):
@@ -145,6 +182,7 @@ def audit(directory,*,allow_dirty=False,self_test=True):
         path=directory/artifact
         require(path.is_file() and not path.is_symlink() and path.stat().st_size>0,
                 'Missing ordinary nonempty physical artifact: '+artifact)
+    initial_artifacts={name:sha((directory/name).read_bytes()) for name in ARTIFACTS}
     images={name:read_elf(directory/(name+'.elf')) for name in IMAGES}
     layout=check_directory(directory)
     module=(directory/'retail-physical.kui').read_bytes();runtime=verify(module);inspect_retail(module)
@@ -160,7 +198,7 @@ def audit(directory,*,allow_dirty=False,self_test=True):
     require(patch_address%4==0 and patch_section[2]&7==3 and patch_bytes==RAM_PATCH_SEED and
         module[patch_offset:patch_offset+64]==RAM_PATCH_SEED,
         'Physical ordinary RAM patch seed is not its exact initialized blank object')
-    no_virtual_runtime(images,module)
+    cold_crc=no_virtual_runtime(images,module,stage_path=directory/'stage.elf')
     guard=guard_witness(images['stage'])
     resident_hashes={}
     for transport in RESIDENTS:
@@ -207,6 +245,8 @@ def audit(directory,*,allow_dirty=False,self_test=True):
             for altered in (text[:text.rfind('}')],text+'node: {}'):
                 require(not closed_callgraph(altered),'Physical audit accepts a truncated/extra compiler graph')
                 mutations+=1
+    require(initial_artifacts=={name:sha((directory/name).read_bytes()) for name in ARTIFACTS},
+            'Physical artifacts changed during qualification')
     return dict(schema=SCHEMA,source_provenance=source,runtime=runtime,module_sha256=sha(module),
         reader=0,transport_mask=7,lease_bytes=0,worker_bytes=0,virtual_cards=0,
         background_reader_enabled=False,prefetch_enabled=False,descriptor=descriptor,
@@ -215,7 +255,7 @@ def audit(directory,*,allow_dirty=False,self_test=True):
         ram_patch_seed=dict(module_offset=patch_offset,bytes=64,initialized_data=True,blank=True),
         layout=layout,instruction_audit=instruction_counts,
         compiler_callgraphs=dict(complete_files=len(reports)),mutation_rejections=mutations,
-        artifact_sha256={name:sha((directory/name).read_bytes()) for name in ARTIFACTS},
+        artifact_sha256=initial_artifacts,cold_crc_scope=cold_crc,
         console_execution_verified=False)
 
 

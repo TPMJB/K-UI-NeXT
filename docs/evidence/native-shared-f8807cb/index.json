@@ -1,0 +1,89 @@
+{
+  "source_commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+  "source_tree": "a0e4108e38d8013ee5c5e600a9835b46cb7d1f1c",
+  "equivalent_public_source_commit": "e79da8cee44d95cda518721df7a97a83965ee2c3",
+  "status": "HOST_AND_LINKED_QUALIFIED_CONSOLE_PENDING",
+  "paths_normalized": true,
+  "public_records": {
+    "old-native-reproduction.json": {
+      "public_sha256": "e7582896259c6d61cfdbdff446429c0193a56ef358eee386b14162b17a08005f",
+      "bytes": 1864
+    },
+    "passive-cold-kernel-delta.json": {
+      "public_sha256": "aff4418d3d1fde4bbb0c395409d7ccf8ad859953dec99d74e0afed2b55f41d11",
+      "bytes": 61461
+    },
+    "return-runtime-batching.json": {
+      "public_sha256": "fdd198384ed614f5ecbc3e5639bba911dce0649a715e4d69372c46819222a273",
+      "bytes": 11662
+    },
+    "sonic-source-audit.json": {
+      "public_sha256": "a4ce5d6352518c1b5088f383f17ae664373b7ff936dda7dd76a935d7398d28b1",
+      "bytes": 33423
+    },
+    "snapshot-linked.json": {
+      "public_sha256": "f0ac9aacd7913341afa4e46226c54cdff5c7553d18f6a2a252559bc7d272acd6",
+      "bytes": 56817
+    },
+    "native-hints.json": {
+      "public_sha256": "d794ffcbd357b8a27939a1577d3f8f8dd93bc3565dbbc98cec77512436818d8b",
+      "bytes": 10487
+    },
+    "live-component-preservation.json": {
+      "public_sha256": "acb22abe69eb3ce84f32bb0aba613e0641516b950b400a0df40aa0661519d01c",
+      "bytes": 176360
+    },
+    "native-cold-scopes.json": {
+      "public_sha256": "f2a4e1d140a5e12cef2fb40ce47c096b1d1a22bb8cb97c64b468a36e3483adc2",
+      "bytes": 11304
+    },
+    "snapshot-core.json": {
+      "public_sha256": "51764a8a806d6714526c81499eafaeec13f544f4ca24bac2a86d146a2bb40121",
+      "bytes": 3607
+    },
+    "GUI-fallback-admission.json": {
+      "public_sha256": "47c8e4a33e310f1862e98cdb0d24b49e9780c27c7d5372003ee212f3350a0330",
+      "bytes": 4844
+    },
+    "shared-service-policy.json": {
+      "public_sha256": "9dead3734f7a40e40fda62cce17fefc1313f74e00f8cc520361d231ec0caf6a8",
+      "bytes": 166257
+    },
+    "GUI-standard-admission.json": {
+      "public_sha256": "d9cc09da3e22c9b0b0d07454c500fc3f134db154e52bee47ed2c23432b68cd5b",
+      "bytes": 3297
+    },
+    "GUI-bindings.json": {
+      "public_sha256": "d2cb20cb633107e8c53de72d9868ca482534a35ce1d4e0993eed0032d8708c62",
+      "bytes": 1022
+    },
+    "snapshot-policy-owners.json": {
+      "public_sha256": "d076d663aa8c44b3f7ca1e77abe27dda073327b37649cf4c828b456b89e313b8",
+      "bytes": 1802
+    },
+    "five-vmu-layout.json": {
+      "public_sha256": "e8e694aedfdc4be62a3d8356ed3a33448b80298a2881c744e35f727e4388c1d6",
+      "bytes": 105762
+    },
+    "seven-native-layout.json": {
+      "public_sha256": "b9bbc8f2b056c618453fb83762b6e5c6f5dca0890a178c38b10607b515753600",
+      "bytes": 33056
+    },
+    "root-startup-lifecycle.txt": {
+      "public_sha256": "3ee632aa68fd1e93215a1862e6b3a366debfce8dbcbac356336f080012bead2a",
+      "bytes": 448
+    },
+    "Smash-packaged-admission.json": {
+      "public_sha256": "0155881e5ea1d97e5358095c835ea8a6e477d29a6249853432f05ba084443c97",
+      "bytes": 15512
+    },
+    "physical-auditor.json": {
+      "public_sha256": "fd7555d70e04f7f8907e2e6d7f3ac90103135898015e0dd4b38d21c387311342",
+      "bytes": 10334
+    },
+    "delivery.json": {
+      "public_sha256": "69426e097037c16b32ab21f4c3c1e326cc87f8aeb1bd090cb9241d1741c109c6",
+      "bytes": 8143
+    }
+  }
+}

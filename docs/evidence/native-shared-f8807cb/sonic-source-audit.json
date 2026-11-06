@@ -1,0 +1,820 @@
+{
+  "schema": "kui.native.sonic-background-audit.v1",
+  "status": "SOURCE_AND_BYTES_AUDITED_HARDWARE_LAG_CAUSE_UNRESOLVED",
+  "scope": "Compare actual pre-universal dbadd compact Background modules with the eeed manual delivery, and audit the older Sonic Adventure standalone selection and IRQ bind. This does not establish which installed route ran in the reported session.",
+  "baseline": {
+    "source_commit": "dbadd024e2ff2b61f0052ead008b6a4a987d41f7",
+    "archive_sha256": "23c3a4387c44980682b643f62d732e60eb4037dc307822b7d8a75f0a009d94ed"
+  },
+  "delivered": {
+    "source_commit": "eeed38bd540e7a1085ca53aabf832e5d7a835efa",
+    "archive_sha256": "17ff15b9fc3ac08255e52549ade2b9936f70e427e99a0643bb09ed3777ae3d28",
+    "archive_module_hashes_rechecked": true
+  },
+  "roles": {
+    "a1": {
+      "baseline_module": {
+        "path": "KUI/apps/games/retail-native-dual-a1.kui",
+        "build": "dbadd024e2ff",
+        "bytes": 286304,
+        "sha256": "6c73126e1ef83335d972c90277fabad6574b1aba425aa6acaf74d5af17390eca"
+      },
+      "delivered_module": {
+        "bytes": 289928,
+        "sha256": "e45daaecbfc5da96b8da87123daa89ab786e16187b7b640412dd13a01c7c54f4",
+        "runtime": {
+          "format": 1,
+          "build": "eeed38bd540e",
+          "payload_bytes": 289864,
+          "memory_bytes": 289864,
+          "crc32": "e45b0f2b"
+        }
+      },
+      "complete_worker_reference_proof": {
+        "reference_commit": "3a6ae064bb3f456da8d71587a8db0ce974f139cf",
+        "reference_source_tree": "c931fc2b2152d3d8428d65edaef6828384774faf",
+        "reference_build": {
+          "compiler": "sh-elf-gcc 15.2.0",
+          "makefile": "Makefile.vmu-native-background-compact-a1",
+          "target": "native-worker.elf",
+          "additional_compiler_flags": []
+        },
+        "historical_compact_profile_main_commit": "0045dd96937ee7485ecd4fe0432b28babea8646a",
+        "main_worker_byte_equivalence_claimed": false,
+        "reference_elf_sha256": "888a880a3e2897d49626bde713c8fa862664734a7cb8553dfb3b8b6515451899",
+        "candidate_elf_sha256": "08707f08625fcdd3785c5471c8ed2b6264a4ae79c9060651df90aae387a56b1e",
+        "normalized_initialized_load_sha256": "eeb7282bd60edac67a35994784298c750c8b8f47eea8fcb06ca99f3f9f77d2d2",
+        "complete_initialized_bytes_and_headers_identical": true,
+        "complete_symbol_source_type_ownership_identical": true,
+        "complete_allocated_and_BSS_geometry_identical": true,
+        "permitted_changes": {
+          "display_build_label_address": "0x8c10bece",
+          "display_build_label_bytes": 12,
+          "added_absolute_virtual_slot": 1
+        }
+      },
+      "worker_and_read_ahead_auxiliary": {
+        "native-worker": {
+          "candidate_binary_sha256": "ce0ab629f2f588a1e810e480f47db0cbcbfb9672b0cc3d2aaf737c526bad7c76",
+          "candidate_elf_sha256": "08707f08625fcdd3785c5471c8ed2b6264a4ae79c9060651df90aae387a56b1e",
+          "old_module_offset": 129696,
+          "bytes": 49920,
+          "exact_match_after_only_display_build_label": true,
+          "geometry": [
+            [
+              1,
+              256,
+              2886729728,
+              2349858816,
+              80,
+              80,
+              4,
+              128
+            ],
+            [
+              1,
+              352,
+              2349858912,
+              2349858912,
+              49792,
+              49792,
+              5,
+              128
+            ],
+            [
+              1,
+              50144,
+              2886779616,
+              2349908704,
+              32,
+              23840,
+              6,
+              128
+            ]
+          ]
+        },
+        "native-ra-aux": {
+          "candidate_binary_sha256": "bcd2d79ec6c60962e5a89d7492750231b8a554e0f3a5b7935cf98732bebac073",
+          "candidate_elf_sha256": "9f2c3bd7f2f8b7f20aa3b003589b6b25f0999bdba24fe01178587672a0bce475",
+          "old_module_offset": 185696,
+          "bytes": 10400,
+          "exact_match_after_only_display_build_label": true,
+          "geometry": [
+            [
+              1,
+              256,
+              2353139712,
+              2353139712,
+              64,
+              64,
+              4,
+              128
+            ],
+            [
+              1,
+              320,
+              2890010688,
+              2353139776,
+              904,
+              904,
+              6,
+              128
+            ],
+            [
+              1,
+              1280,
+              2353143808,
+              2353143808,
+              6304,
+              12288,
+              7,
+              128
+            ]
+          ]
+        }
+      },
+      "low_engines": {
+        "resident-sci": {
+          "old_binary_bytes": 15072,
+          "old_binary_sha256": "fc7ed35eb4af3fb4a33bb55ccb3b9804498a36426b6237d4062970975430f2a7",
+          "new_binary_bytes": 15076,
+          "new_binary_sha256": "4931374495ccf84b43d75c66d6720495b7bc7218976657dfa1e0100c3167d6bc",
+          "new_elf_sha256": "b9681a6e1ceab59df5baf2ce5b09f06e101f07691a882e424cbfda6f1bcb4704",
+          "raw_growth_bytes": 4,
+          "fixed_entry": "0x8c004000",
+          "fixed_guarded_stack": [
+            "0x8c007ba0",
+            "0x8c007d00"
+          ],
+          "new_BSS_end": "0x8c007b80",
+          "compared_live_functions": {
+            "_sdk_sci_ready": {
+              "old_address": "0x8c0056d4",
+              "new_address": "0x8c0056d8",
+              "bytes": 88,
+              "old_sha256": "3c5d0ae577b816ea7367943ec10b30db0e385fda20fe793e186c9af6bef40dbe",
+              "new_sha256": "2dcb143272bad82f69f28cade8cbe32697d2a62dcdf3862b50c499a4110db252",
+              "all_instruction_bytes_identical": true,
+              "only_differences_proven_PC_relative_load_literal_words": [
+                {
+                  "offset": 68,
+                  "old": "0x8c007af4",
+                  "new": "0x8c007b14",
+                  "delta": 32
+                },
+                {
+                  "offset": 84,
+                  "old": "0x8c007418",
+                  "new": "0x8c00741c",
+                  "delta": 4
+                }
+              ]
+            },
+            "_hook": {
+              "old_address": "0x8c00572c",
+              "new_address": "0x8c005730",
+              "bytes": 104,
+              "old_sha256": "1418c7b031391cd352731c7841dad0a5d325261d890b5bb86c86968168cc2386",
+              "new_sha256": "5bd59487871739f87957b0a460cee88390e3b0d458057e753a5d57ddd9508e7a",
+              "all_instruction_bytes_identical": true,
+              "only_differences_proven_PC_relative_load_literal_words": [
+                {
+                  "offset": 96,
+                  "old": "0x8c007af4",
+                  "new": "0x8c007b14",
+                  "delta": 32
+                }
+              ]
+            },
+            "_unhook": {
+              "old_address": "0x8c005790",
+              "new_address": "0x8c005794",
+              "bytes": 68,
+              "old_sha256": "13daac30c93b96e95e638a366ec7dffd8491318ce42c2a61980cc5dfc3ee0f7a",
+              "new_sha256": "bb78a4185726fa27283da1f86736372c38554b5398564ecd0970880d846b4237",
+              "all_instruction_bytes_identical": true,
+              "only_differences_proven_PC_relative_load_literal_words": [
+                {
+                  "offset": 60,
+                  "old": "0x8c007af4",
+                  "new": "0x8c007b14",
+                  "delta": 32
+                }
+              ]
+            },
+            "_kui_retail_async_irq": {
+              "old_address": "0x8c007228",
+              "new_address": "0x8c00722c",
+              "bytes": 108,
+              "old_sha256": "788e97735ca90248ff4e76d0960dcce5b64996865fcfb79ec1b49c36f8ba1fcd",
+              "new_sha256": "4c30d89fdc6a2ce8746e2433ff7743d5032abfeec28dbf5e9a91f7128d9784cf",
+              "all_instruction_bytes_identical": true,
+              "only_differences_proven_PC_relative_load_literal_words": [
+                {
+                  "offset": 92,
+                  "old": "0x8c007af4",
+                  "new": "0x8c007b14",
+                  "delta": 32
+                },
+                {
+                  "offset": 100,
+                  "old": "0x8c0059ac",
+                  "new": "0x8c0059b0",
+                  "delta": 4
+                },
+                {
+                  "offset": 104,
+                  "old": "0x8c005790",
+                  "new": "0x8c005794",
+                  "delta": 4
+                }
+              ]
+            },
+            "_kui_retail_sdk_sci_dispatch": {
+              "old_address": "0x8c007294",
+              "new_address": "0x8c007298",
+              "bytes": 128,
+              "old_sha256": "c7f32d603a514000c04aac9a7514514140a1c0e0e463982ff78659d4c19e5d38",
+              "new_sha256": "49f667a0c4d5cd509329b102fef83c0acb0d178e237e660e4d074349b41f4f8a",
+              "all_instruction_bytes_identical": true,
+              "only_differences_proven_PC_relative_load_literal_words": [
+                {
+                  "offset": 104,
+                  "old": "0x8c007af4",
+                  "new": "0x8c007b14",
+                  "delta": 32
+                },
+                {
+                  "offset": 108,
+                  "old": "0x8c007af0",
+                  "new": "0x8c007b10",
+                  "delta": 32
+                },
+                {
+                  "offset": 112,
+                  "old": "0x8c0056d4",
+                  "new": "0x8c0056d8",
+                  "delta": 4
+                },
+                {
+                  "offset": 116,
+                  "old": "0x8c00572c",
+                  "new": "0x8c005730",
+                  "delta": 4
+                }
+              ]
+            },
+            "_kui_retail_sdk_sci_entry": {
+              "old_address": "0x8c007418",
+              "new_address": "0x8c00741c",
+              "bytes": 152,
+              "old_sha256": "d420aaa9e59c158890c5a35253240c18c2ccfb956bfead58a6b94ccb0af660e1",
+              "new_sha256": "a8e66963ae8c0a606fee794c18bfd1fbef2dbf4462c4c4ac4471fa1df03caee4",
+              "all_instruction_bytes_identical": true,
+              "only_differences_proven_PC_relative_load_literal_words": [
+                {
+                  "offset": 124,
+                  "old": "0x8c007af0",
+                  "new": "0x8c007b10",
+                  "delta": 32
+                },
+                {
+                  "offset": 140,
+                  "old": "0x8c007294",
+                  "new": "0x8c007298",
+                  "delta": 4
+                },
+                {
+                  "offset": 144,
+                  "old": "0x8c007ae4",
+                  "new": "0x8c007b04",
+                  "delta": 32
+                },
+                {
+                  "offset": 148,
+                  "old": "0x8c007af4",
+                  "new": "0x8c007b14",
+                  "delta": 32
+                }
+              ]
+            }
+          }
+        },
+        "resident-legacy": {
+          "old_binary_bytes": 15116,
+          "old_binary_sha256": "2a8e30ab4c30fed30495ebfac029ed4a37552bcffea034bdccac9a81271481e9",
+          "new_binary_bytes": 15120,
+          "new_binary_sha256": "340f4be8c30bdd7285f33ec1873fed649546e44b7b5fc337e2771d3413550fed",
+          "new_elf_sha256": "ec4576e2d202049664e52fa0363cbd8d5a8786ff33fbedf7e27b9fd3b4c57af9",
+          "raw_growth_bytes": 4,
+          "fixed_entry": "0x8c004000",
+          "fixed_guarded_stack": [
+            "0x8c007ba0",
+            "0x8c007d00"
+          ],
+          "new_BSS_end": "0x8c007ba0",
+          "compared_live_functions": {
+            "_hook": {
+              "old_address": "0x8c0051c4",
+              "new_address": "0x8c0051c4",
+              "bytes": 128,
+              "old_sha256": "2556eec876e55d8fb6671340336ab22a80aa046b40a8976f9f1d48e9b4aa1b36",
+              "new_sha256": "2556eec876e55d8fb6671340336ab22a80aa046b40a8976f9f1d48e9b4aa1b36",
+              "all_instruction_bytes_identical": true,
+              "only_differences_proven_PC_relative_load_literal_words": []
+            },
+            "_unhook": {
+              "old_address": "0x8c005244",
+              "new_address": "0x8c005244",
+              "bytes": 92,
+              "old_sha256": "96ea8a2bbd984d28394f4679f0d41108b1919ef19027bb46049bdcba9d56a424",
+              "new_sha256": "96ea8a2bbd984d28394f4679f0d41108b1919ef19027bb46049bdcba9d56a424",
+              "all_instruction_bytes_identical": true,
+              "only_differences_proven_PC_relative_load_literal_words": []
+            },
+            "_kui_retail_async_irq": {
+              "old_address": "0x8c007114",
+              "new_address": "0x8c007118",
+              "bytes": 100,
+              "old_sha256": "8b640a29e15f074597b4a0ca305bf134b59b97d55527437daf8ef56b82751c84",
+              "new_sha256": "8b640a29e15f074597b4a0ca305bf134b59b97d55527437daf8ef56b82751c84",
+              "all_instruction_bytes_identical": true,
+              "only_differences_proven_PC_relative_load_literal_words": []
+            }
+          }
+        }
+      },
+      "delivered_archive_low_binary_recheck": {
+        "resident-sci": {
+          "matching_archived_ranges": [
+            214504,
+            229580,
+            244656,
+            259732
+          ],
+          "bytes": 15076,
+          "sha256": "4931374495ccf84b43d75c66d6720495b7bc7218976657dfa1e0100c3167d6bc"
+        },
+        "resident-legacy": {
+          "matching_archived_ranges": [
+            274808
+          ],
+          "bytes": 15120,
+          "sha256": "340f4be8c30bdd7285f33ec1873fed649546e44b7b5fc337e2771d3413550fed"
+        }
+      }
+    },
+    "a2": {
+      "baseline_module": {
+        "path": "KUI/apps/games/retail-native-dual.kui",
+        "build": "dbadd024e2ff",
+        "bytes": 286272,
+        "sha256": "6c30616508516294ace74a483aef94bfa474d0681901656e6fa8fb98c79d5153"
+      },
+      "delivered_module": {
+        "bytes": 289896,
+        "sha256": "212333df086ee965098a0677775b25177e06c8767f0c2f2dfe17b8392744de22",
+        "runtime": {
+          "format": 1,
+          "build": "eeed38bd540e",
+          "payload_bytes": 289832,
+          "memory_bytes": 289832,
+          "crc32": "d7c8bedb"
+        }
+      },
+      "complete_worker_reference_proof": {
+        "reference_commit": "3a6ae064bb3f456da8d71587a8db0ce974f139cf",
+        "reference_source_tree": "c931fc2b2152d3d8428d65edaef6828384774faf",
+        "reference_build": {
+          "compiler": "sh-elf-gcc 15.2.0",
+          "makefile": "Makefile.vmu-native-background-compact",
+          "target": "native-worker.elf",
+          "additional_compiler_flags": []
+        },
+        "historical_compact_profile_main_commit": "0045dd96937ee7485ecd4fe0432b28babea8646a",
+        "main_worker_byte_equivalence_claimed": false,
+        "reference_elf_sha256": "a4b44a6e126ac5a7ea6b228696e735a54bed2a2810b9f61d915a157ebf0faecf",
+        "candidate_elf_sha256": "80b1eb9ab6894854490d2caa49478354a58c02bed63abe691765ad92d62b960d",
+        "normalized_initialized_load_sha256": "93ac4c5352682bdf5398ef9f6bfa78ba6c0d65be9a98723b3a7452912bb7cf30",
+        "complete_initialized_bytes_and_headers_identical": true,
+        "complete_symbol_source_type_ownership_identical": true,
+        "complete_allocated_and_BSS_geometry_identical": true,
+        "permitted_changes": {
+          "display_build_label_address": "0x8c10bece",
+          "display_build_label_bytes": 12,
+          "added_absolute_virtual_slot": 2
+        }
+      },
+      "worker_and_read_ahead_auxiliary": {
+        "native-worker": {
+          "candidate_binary_sha256": "ce274d33ed2d8b4a76aa56d4c3e5bdf61080c40f93bc6c65e879d6141ecfb605",
+          "candidate_elf_sha256": "80b1eb9ab6894854490d2caa49478354a58c02bed63abe691765ad92d62b960d",
+          "old_module_offset": 129696,
+          "bytes": 49920,
+          "exact_match_after_only_display_build_label": true,
+          "geometry": [
+            [
+              1,
+              256,
+              2886729728,
+              2349858816,
+              80,
+              80,
+              4,
+              128
+            ],
+            [
+              1,
+              352,
+              2349858912,
+              2349858912,
+              49792,
+              49792,
+              5,
+              128
+            ],
+            [
+              1,
+              50144,
+              2886779616,
+              2349908704,
+              32,
+              23840,
+              6,
+              128
+            ]
+          ]
+        },
+        "native-ra-aux": {
+          "candidate_binary_sha256": "bcd2d79ec6c60962e5a89d7492750231b8a554e0f3a5b7935cf98732bebac073",
+          "candidate_elf_sha256": "9f2c3bd7f2f8b7f20aa3b003589b6b25f0999bdba24fe01178587672a0bce475",
+          "old_module_offset": 185664,
+          "bytes": 10400,
+          "exact_match_after_only_display_build_label": true,
+          "geometry": [
+            [
+              1,
+              256,
+              2353139712,
+              2353139712,
+              64,
+              64,
+              4,
+              128
+            ],
+            [
+              1,
+              320,
+              2890010688,
+              2353139776,
+              904,
+              904,
+              6,
+              128
+            ],
+            [
+              1,
+              1280,
+              2353143808,
+              2353143808,
+              6304,
+              12288,
+              7,
+              128
+            ]
+          ]
+        }
+      },
+      "low_engines": {
+        "resident-sci": {
+          "old_binary_bytes": 15072,
+          "old_binary_sha256": "fc7ed35eb4af3fb4a33bb55ccb3b9804498a36426b6237d4062970975430f2a7",
+          "new_binary_bytes": 15076,
+          "new_binary_sha256": "4931374495ccf84b43d75c66d6720495b7bc7218976657dfa1e0100c3167d6bc",
+          "new_elf_sha256": "b9681a6e1ceab59df5baf2ce5b09f06e101f07691a882e424cbfda6f1bcb4704",
+          "raw_growth_bytes": 4,
+          "fixed_entry": "0x8c004000",
+          "fixed_guarded_stack": [
+            "0x8c007ba0",
+            "0x8c007d00"
+          ],
+          "new_BSS_end": "0x8c007b80",
+          "compared_live_functions": {
+            "_sdk_sci_ready": {
+              "old_address": "0x8c0056d4",
+              "new_address": "0x8c0056d8",
+              "bytes": 88,
+              "old_sha256": "3c5d0ae577b816ea7367943ec10b30db0e385fda20fe793e186c9af6bef40dbe",
+              "new_sha256": "2dcb143272bad82f69f28cade8cbe32697d2a62dcdf3862b50c499a4110db252",
+              "all_instruction_bytes_identical": true,
+              "only_differences_proven_PC_relative_load_literal_words": [
+                {
+                  "offset": 68,
+                  "old": "0x8c007af4",
+                  "new": "0x8c007b14",
+                  "delta": 32
+                },
+                {
+                  "offset": 84,
+                  "old": "0x8c007418",
+                  "new": "0x8c00741c",
+                  "delta": 4
+                }
+              ]
+            },
+            "_hook": {
+              "old_address": "0x8c00572c",
+              "new_address": "0x8c005730",
+              "bytes": 104,
+              "old_sha256": "1418c7b031391cd352731c7841dad0a5d325261d890b5bb86c86968168cc2386",
+              "new_sha256": "5bd59487871739f87957b0a460cee88390e3b0d458057e753a5d57ddd9508e7a",
+              "all_instruction_bytes_identical": true,
+              "only_differences_proven_PC_relative_load_literal_words": [
+                {
+                  "offset": 96,
+                  "old": "0x8c007af4",
+                  "new": "0x8c007b14",
+                  "delta": 32
+                }
+              ]
+            },
+            "_unhook": {
+              "old_address": "0x8c005790",
+              "new_address": "0x8c005794",
+              "bytes": 68,
+              "old_sha256": "13daac30c93b96e95e638a366ec7dffd8491318ce42c2a61980cc5dfc3ee0f7a",
+              "new_sha256": "bb78a4185726fa27283da1f86736372c38554b5398564ecd0970880d846b4237",
+              "all_instruction_bytes_identical": true,
+              "only_differences_proven_PC_relative_load_literal_words": [
+                {
+                  "offset": 60,
+                  "old": "0x8c007af4",
+                  "new": "0x8c007b14",
+                  "delta": 32
+                }
+              ]
+            },
+            "_kui_retail_async_irq": {
+              "old_address": "0x8c007228",
+              "new_address": "0x8c00722c",
+              "bytes": 108,
+              "old_sha256": "788e97735ca90248ff4e76d0960dcce5b64996865fcfb79ec1b49c36f8ba1fcd",
+              "new_sha256": "4c30d89fdc6a2ce8746e2433ff7743d5032abfeec28dbf5e9a91f7128d9784cf",
+              "all_instruction_bytes_identical": true,
+              "only_differences_proven_PC_relative_load_literal_words": [
+                {
+                  "offset": 92,
+                  "old": "0x8c007af4",
+                  "new": "0x8c007b14",
+                  "delta": 32
+                },
+                {
+                  "offset": 100,
+                  "old": "0x8c0059ac",
+                  "new": "0x8c0059b0",
+                  "delta": 4
+                },
+                {
+                  "offset": 104,
+                  "old": "0x8c005790",
+                  "new": "0x8c005794",
+                  "delta": 4
+                }
+              ]
+            },
+            "_kui_retail_sdk_sci_dispatch": {
+              "old_address": "0x8c007294",
+              "new_address": "0x8c007298",
+              "bytes": 128,
+              "old_sha256": "c7f32d603a514000c04aac9a7514514140a1c0e0e463982ff78659d4c19e5d38",
+              "new_sha256": "49f667a0c4d5cd509329b102fef83c0acb0d178e237e660e4d074349b41f4f8a",
+              "all_instruction_bytes_identical": true,
+              "only_differences_proven_PC_relative_load_literal_words": [
+                {
+                  "offset": 104,
+                  "old": "0x8c007af4",
+                  "new": "0x8c007b14",
+                  "delta": 32
+                },
+                {
+                  "offset": 108,
+                  "old": "0x8c007af0",
+                  "new": "0x8c007b10",
+                  "delta": 32
+                },
+                {
+                  "offset": 112,
+                  "old": "0x8c0056d4",
+                  "new": "0x8c0056d8",
+                  "delta": 4
+                },
+                {
+                  "offset": 116,
+                  "old": "0x8c00572c",
+                  "new": "0x8c005730",
+                  "delta": 4
+                }
+              ]
+            },
+            "_kui_retail_sdk_sci_entry": {
+              "old_address": "0x8c007418",
+              "new_address": "0x8c00741c",
+              "bytes": 152,
+              "old_sha256": "d420aaa9e59c158890c5a35253240c18c2ccfb956bfead58a6b94ccb0af660e1",
+              "new_sha256": "a8e66963ae8c0a606fee794c18bfd1fbef2dbf4462c4c4ac4471fa1df03caee4",
+              "all_instruction_bytes_identical": true,
+              "only_differences_proven_PC_relative_load_literal_words": [
+                {
+                  "offset": 124,
+                  "old": "0x8c007af0",
+                  "new": "0x8c007b10",
+                  "delta": 32
+                },
+                {
+                  "offset": 140,
+                  "old": "0x8c007294",
+                  "new": "0x8c007298",
+                  "delta": 4
+                },
+                {
+                  "offset": 144,
+                  "old": "0x8c007ae4",
+                  "new": "0x8c007b04",
+                  "delta": 32
+                },
+                {
+                  "offset": 148,
+                  "old": "0x8c007af4",
+                  "new": "0x8c007b14",
+                  "delta": 32
+                }
+              ]
+            }
+          }
+        },
+        "resident-legacy": {
+          "old_binary_bytes": 15116,
+          "old_binary_sha256": "2a8e30ab4c30fed30495ebfac029ed4a37552bcffea034bdccac9a81271481e9",
+          "new_binary_bytes": 15120,
+          "new_binary_sha256": "340f4be8c30bdd7285f33ec1873fed649546e44b7b5fc337e2771d3413550fed",
+          "new_elf_sha256": "ec4576e2d202049664e52fa0363cbd8d5a8786ff33fbedf7e27b9fd3b4c57af9",
+          "raw_growth_bytes": 4,
+          "fixed_entry": "0x8c004000",
+          "fixed_guarded_stack": [
+            "0x8c007ba0",
+            "0x8c007d00"
+          ],
+          "new_BSS_end": "0x8c007ba0",
+          "compared_live_functions": {
+            "_hook": {
+              "old_address": "0x8c0051c4",
+              "new_address": "0x8c0051c4",
+              "bytes": 128,
+              "old_sha256": "2556eec876e55d8fb6671340336ab22a80aa046b40a8976f9f1d48e9b4aa1b36",
+              "new_sha256": "2556eec876e55d8fb6671340336ab22a80aa046b40a8976f9f1d48e9b4aa1b36",
+              "all_instruction_bytes_identical": true,
+              "only_differences_proven_PC_relative_load_literal_words": []
+            },
+            "_unhook": {
+              "old_address": "0x8c005244",
+              "new_address": "0x8c005244",
+              "bytes": 92,
+              "old_sha256": "96ea8a2bbd984d28394f4679f0d41108b1919ef19027bb46049bdcba9d56a424",
+              "new_sha256": "96ea8a2bbd984d28394f4679f0d41108b1919ef19027bb46049bdcba9d56a424",
+              "all_instruction_bytes_identical": true,
+              "only_differences_proven_PC_relative_load_literal_words": []
+            },
+            "_kui_retail_async_irq": {
+              "old_address": "0x8c007114",
+              "new_address": "0x8c007118",
+              "bytes": 100,
+              "old_sha256": "8b640a29e15f074597b4a0ca305bf134b59b97d55527437daf8ef56b82751c84",
+              "new_sha256": "8b640a29e15f074597b4a0ca305bf134b59b97d55527437daf8ef56b82751c84",
+              "all_instruction_bytes_identical": true,
+              "only_differences_proven_PC_relative_load_literal_words": []
+            }
+          }
+        }
+      },
+      "delivered_archive_low_binary_recheck": {
+        "resident-sci": {
+          "matching_archived_ranges": [
+            214472,
+            229548,
+            244624,
+            259700
+          ],
+          "bytes": 15076,
+          "sha256": "4931374495ccf84b43d75c66d6720495b7bc7218976657dfa1e0100c3167d6bc"
+        },
+        "resident-legacy": {
+          "matching_archived_ranges": [
+            274776
+          ],
+          "bytes": 15120,
+          "sha256": "340f4be8c30bdd7285f33ec1873fed649546e44b7b5fc337e2771d3413550fed"
+        }
+      }
+    }
+  },
+  "preserved_geometry": {
+    "worker_bytes": 73728,
+    "complete_lease_bytes": 290816,
+    "read_ahead_cache_bytes": 196608,
+    "worker_stack_bytes": 3072,
+    "low_stack_bytes": 352,
+    "virtual_VMU_off_retains_the_compact_reader_cache_and_lease": true
+  },
+  "actual_changed_live_policy": {
+    "commit": "6d489a90276776a4d62e4f68b9efdc3161c6c1c0",
+    "source": "src/loader/sci_stream.c",
+    "change": "A DMA block marked as having lost a byte is now rejected even when reconstruction yields a matching CRC. The existing bounded same-LBA retry and PIO fallback reread the block.",
+    "raw_growth_per_low_engine_bytes": 4,
+    "distinction": "This safety fix already exists in pre-universal d393 source and accepted Smash; rebuilding the previously inherited dbadd compact modules installs it in those native readers.",
+    "possible_cost": "More rereads under DMA contention. No Sonic lost-byte/retry counts or matched hardware timing were available, so this is not established as the reported lag cause.",
+    "CE_fold_applies_to_native_Sonic": false
+  },
+  "standalone_function_source_history": {
+    "src/loader/native_standalone_reader.inc": {
+      "5b7e129": {
+        "function_bytes": 3963,
+        "function_sha256": "ddbb891ed3162c4474015facefd533c9dbdfe926a3d030a3a890ea0e7a210de9"
+      },
+      "d393b85": {
+        "function_bytes": 3963,
+        "function_sha256": "ddbb891ed3162c4474015facefd533c9dbdfe926a3d030a3a890ea0e7a210de9"
+      },
+      "eeed38b": {
+        "function_bytes": 3963,
+        "function_sha256": "ddbb891ed3162c4474015facefd533c9dbdfe926a3d030a3a890ea0e7a210de9"
+      },
+      "0d1691d": {
+        "function_bytes": 4308,
+        "function_sha256": "059101cdbdcbdd3e8f7aa6edc4d4be69ba39186020718f51f1a82ae566cbf476"
+      }
+    },
+    "src/core/native_sdk_sci_family.c": {
+      "5b7e129": {
+        "function_bytes": 4998,
+        "function_sha256": "1c104fe0526ab851ff61972876fda46ce35a2effb6dd30f14b5b580e140424d3"
+      },
+      "d393b85": {
+        "function_bytes": 4998,
+        "function_sha256": "1c104fe0526ab851ff61972876fda46ce35a2effb6dd30f14b5b580e140424d3"
+      },
+      "eeed38b": {
+        "function_bytes": 4998,
+        "function_sha256": "1c104fe0526ab851ff61972876fda46ce35a2effb6dd30f14b5b580e140424d3"
+      },
+      "0d1691d": {
+        "function_bytes": 5026,
+        "function_sha256": "37432c51fb571aa47da0c12a1a0a6900e86a46f31e97a783de747785ae8693a8"
+      }
+    }
+  },
+  "standalone_history": {
+    "Sonic_Adventure_1": "The reviewed Oct28 executable cannot use the compact combined SDK/heap lease. Historical compatibility test2 selected the standalone New reader, without virtual VMU or read-ahead cache. The Oct31 record reports normal play; its exact delivered archive is not locally pinned.",
+    "Sonic_Adventure_2": "Oct23 imperceptible-lag and Oct27 prefetch/Shadow-intro observations concern this separate title and are not Sonic Adventure1 acceptance.",
+    "inherited_bind_gap": "The standalone plain-only early-SDK late-binder function and family-export function are source-identical at5b7e129, pre-universal d393 and shipped eeed. A valid nesting-mode game can consequently remain on foreground GD-call supply. This gap predates the universal rollout.",
+    "new_correction_limit": "The separately qualified a0dc/0d1691d correction admits independently proved plain/nesting handlers. Original-backed linked checks cover EGG, The House of the Dead2 and Time Stalkers; no new original-backed Sonic Adventure or hardware-lag result is claimed."
+  },
+  "current_production_routing": {
+    "source": "src/apps/games_retail.c and include/kui/native_background_route.h",
+    "default": "Eligible original native SCI GDI defaults to New(X); saved per-image settings override it.",
+    "New_and_Legacy": "Both select the compact dual module. A1 is chosen only for an A1 assignment with virtual VMU enabled; virtual VMU Off selects the A2 module and retains its complete reader reservation.",
+    "no_silent_Standard_downgrade": "Native compact selection refuses unsupported transport and64-slot map overflow.",
+    "standalone_fallback": "New(X) only, after complete combined proof refusal plus a supported image SDK SCI family and a valid installed standalone module. This fallback already existed before the universal integration.",
+    "advisory_mapping_miss": "Runs fresh complete discovery; it is not by itself a reader downgrade."
+  },
+  "IRQ_route_evidence": {
+    "preserved_compact_live_instructions": "Complete sampled readiness, hook, unhook, SCI IRQ dispatch and callback function instruction bytes match actual dbadd low blobs. Only proved PC-relative literal words relocate with4-byte code growth/32-byte BSS alignment. Legacy hook/unhook/IRQ bodies are byte-identical. Full per-function hashes and changed literals are above.",
+    "cold_success_for_combined_New": [
+      "SDK SCI ROUTE READY / LEVEL 1",
+      "BOUNDED READ AHEAD READY / 192 KIB CACHE"
+    ],
+    "runtime_guard": "Cookie, owned VBR and both SCI callback slots must still match. Loss disables the reader SCI field and retains foreground GD-call supply; a changed/reset route is not forcibly reacquired.",
+    "priority": "SCI level1, normal cache/stream policy and buffer sizes are preserved. No new priority7 or game DMAC-priority setting was found.",
+    "actual_console_IRQ_activity_verified": false
+  },
+  "observable_gap": {
+    "available_reports": [
+      "KUI/apps/games/last-launch-a.txt",
+      "KUI/apps/games/last-launch-b.txt",
+      "the selected image folder/launch-timing.txt"
+    ],
+    "report_scope": "Final verified selected module path/build/payload CRC and size, reader, virtual-VMU mode and image identity before handoff. These files do not prove a runtime callback bound or fired.",
+    "compact_profile": "The general compact profile uses NORMAL and elides PROFILE capture/report consumers; actual eeed workers have no READ AHEAD or IRQ BLKS report labels.",
+    "standalone_profile": "No VMU capture consumer or normal runtime counter/gesture proves the late bind or SCI IRQ activity. Stage wording proves selection only.",
+    "still_needed": [
+      "Actual final reader/module and image fingerprint from the lagging launch",
+      "The live SCI callback state and IRQ contribution during the lag",
+      "Lost-byte quarantine/refetch counts during that interval",
+      "The exact older smooth Sonic module/settings if available"
+    ]
+  },
+  "limits": [
+    "Read-only source, archived-module, ELF and bounded instruction evidence; no production changes, new reader build or hardware acceptance in this audit.",
+    "The preserved compact worker/auxiliary do not prove that Sonic Adventure1 selected them.",
+    "The real quarantine semantic delta and inherited standalone nesting gap are not a measured explanation for the reported lag."
+  ]
+}

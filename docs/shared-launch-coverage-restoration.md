@@ -44,3 +44,33 @@ final selected reader but do not prove its live SCI callbacks or persist the
 bootstrap phase breakdown. Sonic Adventure's current lag and actual IRQ use
 therefore remain hardware questions; preserved worker bytes alone do not
 establish that its selected reader is running in the background.
+
+## Qualified manual test
+
+`KUI-Shared-Game-Launch-06NOV2026-2210-UTC-f8807cb.zip` is 6,087,588 bytes,
+SHA256 `dc607c3e89ab6bac5c718b738bca9990ffd85ec39abb308140de280c4a7503e9`.
+It contains the same 28 software paths as the previous manual test: seventeen
+changed aliases and eleven exact retained files, plus README/BUILD/LICENSE.
+The changed GUI/readers report `f8807cb16561`; retained CE/Smash/disc files keep
+their true component identities. No KUP, selection records or user data are
+included. Copy the complete KUI folder for this direct ROOT test.
+
+All twelve changed native families built from clean source. Current seven-family
+cache/layout proofs, five-service snapshot/stack/embedding proofs and actual GUI
+Standard/CDDA/Smash/fallback admission pass. Twenty-seven installed game-time
+components preserve complete initialized bodies and memory geometry, apart from
+their twelve-byte build labels. Separate reports retain seven nonallocated
+debug-symbol comparison refusals and the historical cold-kernel pin refusal;
+the latter refuses the actual previous cohort too. No pin was weakened: complete
+loaded-body, typed relocation and changed-path proofs are recorded explicitly.
+These results are not new console compatibility or latency acceptance.
+
+Use normal raw images and usual options. Evolution 2's first and second launches
+exercise the shared cold and cached preparation paths. Record K-UI-to-bootstrap
+and bootstrap-to-game separately. Keep `KUI/apps/games/launch-timing.txt` for the
+actual selected module and GUI phase record; it excludes its own report-write
+cost and the later bootstrap. Sonic's selected reader and gameplay remain a
+separate observation, with live SCI activity not yet captured.
+
+Exact inventory and proof index:
+[`evidence/native-shared-f8807cb/delivery.json`](evidence/native-shared-f8807cb/delivery.json).

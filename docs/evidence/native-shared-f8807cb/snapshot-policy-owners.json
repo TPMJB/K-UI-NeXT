@@ -1,0 +1,46 @@
+{
+  "schema": "kui.snapshot-policy.immutable-owner.v1",
+  "status": "PASS",
+  "roles": {
+    "standard": {
+      "stage_elf_sha256": "bf7f6b51739b02cabe22cf8294f3d55b7f29dead915dd741d50615f75b8a7091",
+      "policy_address": "0x8ce2bd1c",
+      "policy_sha256": "e28076dc57767e559c241b6405bccde6fb24d5a7e123d3caca4a91ab1e951086",
+      "bytes": 16,
+      "owned_PROGBITS_read_only_section": true,
+      "section_flags": 2
+    },
+    "background_a2": {
+      "stage_elf_sha256": "881a999f5e536f09ddd8c1e549b9e0306f404ff178c7ff99f12e99f5fef01078",
+      "policy_address": "0x8ce31b24",
+      "policy_sha256": "e28076dc57767e559c241b6405bccde6fb24d5a7e123d3caca4a91ab1e951086",
+      "bytes": 16,
+      "owned_PROGBITS_read_only_section": true,
+      "section_flags": 2
+    },
+    "background_a1": {
+      "stage_elf_sha256": "313f148cb449b5e79134ae911e831f35bb21e74b4fcf529d48817750a69b01c1",
+      "policy_address": "0x8ce31b44",
+      "policy_sha256": "e28076dc57767e559c241b6405bccde6fb24d5a7e123d3caca4a91ab1e951086",
+      "bytes": 16,
+      "owned_PROGBITS_read_only_section": true,
+      "section_flags": 2
+    },
+    "disc_a2": {
+      "stage_elf_sha256": "8ca43deaeab611b227699c545354f7cea79b405fd8e80e68daf84e0ab511dc38",
+      "policy_address": "0x8ce28080",
+      "policy_sha256": "e28076dc57767e559c241b6405bccde6fb24d5a7e123d3caca4a91ab1e951086",
+      "bytes": 16,
+      "owned_PROGBITS_read_only_section": true,
+      "section_flags": 2
+    },
+    "disc_a1": {
+      "stage_elf_sha256": "aa7d5e00c896c567bb54dea68b2ff1b061972caababea9cbca540502f902d1ed",
+      "policy_address": "0x8ce28080",
+      "policy_sha256": "e28076dc57767e559c241b6405bccde6fb24d5a7e123d3caca4a91ab1e951086",
+      "bytes": 16,
+      "owned_PROGBITS_read_only_section": true,
+      "section_flags": 2
+    }
+  }
+}
