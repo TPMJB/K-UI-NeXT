@@ -1,10 +1,14 @@
 # K-UI work and release requirements
 
-The owner now explicitly requests restoration of the broken CD handoff-to-splash
-behavior. This is a narrow exception to the Games-only freeze below: paint the
-unchanged original artwork immediately before startup preflight, and deliver
-both physical GUI aliases. Preserve the qualified Games cohort and updater
-implementation. This exception does not authorize menu or bootloader redesign.
+The owner explicitly rejects the early-artwork workaround: it hid the added
+boot delay rather than restoring the original splash/chime sequence. Undo that
+workaround and the synchronous version-selection insertion on ordinary CD/root
+startup. Match the v2.0.0 direct startup lifecycle without moving that same work
+behind the splash. Explicit checked RAM restart handoffs retain their bank
+adoption/validation. Cold CD boot now runs the physical ROOT files directly;
+saved bank activation is not part of that original boot path. Preserve every
+Games component and deliver both physical GUI aliases. No menu/bootloader
+redesign or additional updater implementation changes are authorized.
 
 This integration is strictly limited to the Games loading paths: readers,
 game bootstrap, virtual VMU, read-ahead, game compatibility and their build,

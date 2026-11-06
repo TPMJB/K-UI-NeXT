@@ -4927,7 +4927,7 @@ static void startup_report_save_mounted(void) {
     const size_t limit=KUI_STARTUP_REPORT_RECORD_MAX;
     size_t used=(size_t)snprintf(report,limit,
         "\n--- K-UI startup %.12s ---\nScope: current GUI startup through version selection, before storage release.\n"
-        "Pre-splash display: original K-UI artwork before version selection.\n"
+        "Entry: explicit checked GUI restart handoff.\n"
         "Earlier CD bootstrap/firmware logs are not carried across execution.\n",KUI_BUILD_ID);
     bool clipped=false;
     for(unsigned i=0;i<line_count;i++) {
@@ -5047,13 +5047,6 @@ int main(void) {
 #endif
     ui_thread = thd_get_current();
     vid_set_mode(DM_640x480 | DM_MULTIBUFFER, PM_RGB565);
-#ifdef KUI_SD_RUNTIME
-    /* Mode setup resets the previous framebuffer. Repaint the existing
-     * immutable RAM artwork before clock/setup logging or storage preflight;
-     * the normal splash/chime lifecycle still starts below. */
-    kui_splash_draw(vram_s);
-    vid_waitvbl();vid_flip(-1);
-#endif
     kui_log("Running " KUI_RELEASE_SHORT " " KUI_ROLE " build " KUI_BUILD_ID);
     kui_clock_start(kui_log);
     kui_log("Video: %ux%u %s %s, buffered",
@@ -5078,8 +5071,18 @@ int main(void) {
 #endif
     kui_log("Use a spare test card for write tests. No formatting; existing files preserved.");
 #ifdef KUI_SD_RUNTIME
+    /* Restore direct CD/root startup: the loaded physical GUI goes straight
+     * to its original splash/chime lifecycle, with no version-selection
+     * mount, rechain or diagnostic writes. Only an explicit checked RAM
+     * restart needs the bank recipient's existing adoption/validation path. */
+    uint8_t startup_handoff[KUI_UPDATE_HANDOFF_BYTES];
+    for(unsigned i=0;i<KUI_UPDATE_HANDOFF_BYTES;i++)
+        startup_handoff[i]=kui_update_ram_handoff[i];
     kui_update_boot_require_engine(KUI_UPDATE_ENGINE_CURRENT);
-    update_boot_start();
+    if(kui_update_handoff_empty(startup_handoff,sizeof(startup_handoff),NULL)) {
+        kui_update_boot_reset();
+        snprintf(update_boot_view.build,sizeof(update_boot_view.build),"%.12s",KUI_BUILD_ID);
+    } else update_boot_start();
     kui_system_settings_default(&system_current);system_pending=system_current;
     kui_music_init(kui_log);kui_disc_identity_init(&disc_identity);
     kui_disc_identity_park(&disc_identity);disc_snapshot=disc_identity;
