@@ -10,6 +10,18 @@ both identical physical aliases; normal ZIP delivery excludes activation
 records, banks and user data. The current Games/boot implementation is unchanged
 by this documentation correction.
 
+## Current console checkpoint — f8807cb16561
+
+The delivered `KUI-Shared-Game-Launch-06NOV2026-2210-UTC-f8807cb.zip`
+(SHA256 `dc607c3e89ab6bac5c718b738bca9990ffd85ec39abb308140de280c4a7503e9`)
+remains the unchanged native timing candidate. Host/linked qualification is
+recorded under `evidence/native-shared-f8807cb`; no Dreamcast timing or Sonic
+live-IRQ acceptance has been supplied. Compare two or three normal library
+games with the preceding measured behavior before another runtime change.
+Capture GUI/module identity and both launch phases with usual matching options;
+retain the automatically generated launch record. Existing operation-count
+improvements must not be presented as measured console speed-ups.
+
 ## Sega Smash Pack accepted: cc81e63ca4d2, 2026-11-06
 
 The owner accepts the collection integration as complete after this exact

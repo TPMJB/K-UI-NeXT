@@ -64,6 +64,26 @@ Do not repeat settled compatibility matrices for an unrelated GUI/updater
 change. Use production routing, filesystem and package checks for preservation;
 request console tests only for changed behavior and observable new questions.
 
+## Console measurement checkpoint
+
+Keep the delivered `f8807cb16561` native candidate unchanged while its console
+baseline is pending. Do not stack another performance/compatibility change or
+replace that ZIP on the strength of host counts alone. Read-only audits and
+documentation may continue. A separately requested fix must identify its
+baseline and changed behavior explicitly.
+
+After this checkpoint, make one behavior change per source commit and obtain
+the relevant console comparison before stacking the next behavior change.
+Keep evidence/documentation commits separate from compiled changes. Compare
+first and repeat launches on two or three representative games with the same
+image format, storage, reader and VMU options. Record K-UI-to-bootstrap and
+bootstrap-to-game separately, plus gameplay/save results when affected.
+Record the actual GUI and selected module path/build/payload CRC; a filename,
+build label, host instruction count or compile success is not a console timing.
+`launch-timing.txt` excludes its own final report I/O and the later bootstrap.
+If the combined candidate regresses, isolate or revert against the measured
+baseline instead of adding another combined optimization.
+
 Startup performance is a shared loader requirement. Batch consecutive reads
 and keep every SD block CRC check by default across supported launch families;
 do not make the same optimization a new title-specific opt-in. Every installed
