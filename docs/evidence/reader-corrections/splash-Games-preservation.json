@@ -1,0 +1,58 @@
+[
+  {
+    "object": "src/apps/games_retail.o",
+    "status": "PASS",
+    "code_and_relocations_identical": true,
+    "normalized_build_label_sections": [
+      ".rodata.prepare_launch.str1.4"
+    ]
+  },
+  {
+    "object": "src/apps/game_launch_report.o",
+    "status": "PASS",
+    "code_and_relocations_identical": true,
+    "normalized_build_label_sections": []
+  },
+  {
+    "object": "src/apps/smash_launch_timing.o",
+    "status": "PASS",
+    "code_and_relocations_identical": true,
+    "normalized_build_label_sections": []
+  },
+  {
+    "object": "src/core/vmu_native_program.o",
+    "status": "PASS",
+    "code_and_relocations_identical": true,
+    "normalized_build_label_sections": []
+  },
+  {
+    "object": "src/core/vmu_native_heap.o",
+    "status": "PASS",
+    "code_and_relocations_identical": true,
+    "normalized_build_label_sections": []
+  },
+  {
+    "object": "src/core/vmu_native_exit.o",
+    "status": "PASS",
+    "code_and_relocations_identical": true,
+    "normalized_build_label_sections": []
+  },
+  {
+    "object": "src/core/vmu_native_resolution_cache.o",
+    "status": "PASS",
+    "code_and_relocations_identical": true,
+    "normalized_build_label_sections": []
+  },
+  {
+    "object": "src/core/vmu_game_card_service.o",
+    "status": "PASS",
+    "code_and_relocations_identical": true,
+    "normalized_build_label_sections": []
+  },
+  {
+    "object": "src/core/vmu_history_session.o",
+    "status": "PASS",
+    "code_and_relocations_identical": true,
+    "normalized_build_label_sections": []
+  }
+]

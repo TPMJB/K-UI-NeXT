@@ -1,0 +1,295 @@
+{
+  "schema": "kui.native.standalone-early-irq.execution.v1",
+  "result": "PASS",
+  "cases": [
+    {
+      "source_name": "1ST_READ.BIN",
+      "source_sha256": "2589fa5b63072473d190767903e08c9cde8e7acfc1e2b524fd4943332cbd0630",
+      "roles": {
+        "vector": "0x8c092e38",
+        "default": "0x8c09314c",
+        "install": "0x8c077fe0"
+      },
+      "modes": [
+        {
+          "mode": "0x0",
+          "old_installed": true,
+          "old_binder_instructions": 334,
+          "new_installed": true,
+          "new_binder_instructions": 388,
+          "callback": {
+            "actual_integer_lookup_and_jsr": true,
+            "actual_linked_callback": true,
+            "deep_reader": "explicit ABI adversary",
+            "full_fpu_frame": false
+          },
+          "new_refusals": [
+            "template_pair_disagree",
+            "live_common_disagrees",
+            "unknown_source_live_common",
+            "eri_owned",
+            "rxi_owned",
+            "active_reader"
+          ]
+        },
+        {
+          "mode": "0x80000000",
+          "old_installed": false,
+          "old_binder_instructions": 285,
+          "new_installed": true,
+          "new_binder_instructions": 395,
+          "callback": {
+            "actual_integer_lookup_and_jsr": true,
+            "actual_linked_callback": true,
+            "deep_reader": "explicit ABI adversary",
+            "full_fpu_frame": false
+          },
+          "new_refusals": [
+            "template_pair_disagree",
+            "live_common_disagrees",
+            "unknown_source_live_common",
+            "eri_owned",
+            "rxi_owned",
+            "active_reader"
+          ]
+        }
+      ],
+      "source_caller_publication": {
+        "production_family_calls": [
+          {
+            "result": 1,
+            "roles": [
+              2349411896,
+              2349411948,
+              2349412280,
+              2349412684
+            ]
+          },
+          {
+            "result": 1,
+            "roles": [
+              2349411896,
+              2349411948,
+              2349412280,
+              2349412684
+            ]
+          },
+          {
+            "result": 1,
+            "roles": [
+              2349411896,
+              2349411948,
+              2349412280,
+              2349412684
+            ]
+          }
+        ],
+        "changed_alternate_stops": true,
+        "source_descriptor_words": [
+          2349411896,
+          2349411948,
+          2349412280,
+          2349412684,
+          1397900337
+        ]
+      }
+    },
+    {
+      "source_name": "1ST_READ.BIN",
+      "source_sha256": "37817967c2949de6ca4c83522f7eff36fb18ea17a5f06d995f6e93319511ee6f",
+      "roles": {
+        "vector": "0x8c0cda8c",
+        "default": "0xc0cdda0",
+        "install": "0x8c0bf044"
+      },
+      "modes": [
+        {
+          "mode": "0x0",
+          "old_installed": true,
+          "old_binder_instructions": 334,
+          "new_installed": true,
+          "new_binder_instructions": 388,
+          "callback": {
+            "actual_integer_lookup_and_jsr": true,
+            "actual_linked_callback": true,
+            "deep_reader": "explicit ABI adversary",
+            "full_fpu_frame": false
+          },
+          "new_refusals": [
+            "template_pair_disagree",
+            "live_common_disagrees",
+            "unknown_source_live_common",
+            "eri_owned",
+            "rxi_owned",
+            "active_reader"
+          ]
+        },
+        {
+          "mode": "0x80000000",
+          "old_installed": false,
+          "old_binder_instructions": 285,
+          "new_installed": true,
+          "new_binder_instructions": 395,
+          "callback": {
+            "actual_integer_lookup_and_jsr": true,
+            "actual_linked_callback": true,
+            "deep_reader": "explicit ABI adversary",
+            "full_fpu_frame": false
+          },
+          "new_refusals": [
+            "template_pair_disagree",
+            "live_common_disagrees",
+            "unknown_source_live_common",
+            "eri_owned",
+            "rxi_owned",
+            "active_reader"
+          ]
+        }
+      ],
+      "source_caller_publication": {
+        "production_family_calls": [
+          {
+            "result": 1,
+            "roles": [
+              2349652620,
+              202169024,
+              202169356,
+              202169760
+            ]
+          },
+          {
+            "result": 1,
+            "roles": [
+              2349652620,
+              202169024,
+              202169356,
+              202169760
+            ]
+          },
+          {
+            "result": 1,
+            "roles": [
+              2349652620,
+              202169024,
+              202169356,
+              202169760
+            ]
+          }
+        ],
+        "changed_alternate_stops": true,
+        "source_descriptor_words": [
+          2349652620,
+          202169024,
+          202169356,
+          202169760,
+          1397900337
+        ]
+      }
+    },
+    {
+      "source_name": "1ST_READ.BIN",
+      "source_sha256": "a9fa66b6bcc482dfaa47683d552e42f24a8200c8efa5ed905d8184eedeba3ac0",
+      "roles": {
+        "vector": "0x8c061154",
+        "default": "0x8c061468",
+        "install": "0x8c03ab34"
+      },
+      "modes": [
+        {
+          "mode": "0x0",
+          "old_installed": true,
+          "old_binder_instructions": 334,
+          "new_installed": true,
+          "new_binder_instructions": 388,
+          "callback": {
+            "actual_integer_lookup_and_jsr": true,
+            "actual_linked_callback": true,
+            "deep_reader": "explicit ABI adversary",
+            "full_fpu_frame": false
+          },
+          "new_refusals": [
+            "template_pair_disagree",
+            "live_common_disagrees",
+            "unknown_source_live_common",
+            "eri_owned",
+            "rxi_owned",
+            "active_reader"
+          ]
+        },
+        {
+          "mode": "0x80000000",
+          "old_installed": false,
+          "old_binder_instructions": 285,
+          "new_installed": true,
+          "new_binder_instructions": 395,
+          "callback": {
+            "actual_integer_lookup_and_jsr": true,
+            "actual_linked_callback": true,
+            "deep_reader": "explicit ABI adversary",
+            "full_fpu_frame": false
+          },
+          "new_refusals": [
+            "template_pair_disagree",
+            "live_common_disagrees",
+            "unknown_source_live_common",
+            "eri_owned",
+            "rxi_owned",
+            "active_reader"
+          ]
+        }
+      ],
+      "source_caller_publication": {
+        "production_family_calls": [
+          {
+            "result": 1,
+            "roles": [
+              2349207892,
+              2349207944,
+              2349208276,
+              2349208680
+            ]
+          },
+          {
+            "result": 1,
+            "roles": [
+              2349207892,
+              2349207944,
+              2349208276,
+              2349208680
+            ]
+          },
+          {
+            "result": 1,
+            "roles": [
+              2349207892,
+              2349207944,
+              2349208276,
+              2349208680
+            ]
+          }
+        ],
+        "changed_alternate_stops": true,
+        "source_descriptor_words": [
+          2349207892,
+          2349207944,
+          2349208276,
+          2349208680,
+          1397900337
+        ]
+      }
+    }
+  ],
+  "old_resident_sha256": "a5e1d6f2c965e652159bd1526e1baf4551169737643e55cece6b004fdca52273",
+  "new_resident_sha256": "456da14d997ef1b443222f436babc33c534a6fcc5afe1b2202d5fd0cde9946e9",
+  "console_execution": false,
+  "hardware_performance": false,
+  "source_sha256": {
+    "tests/test_native_standalone_early_irq.py": "5ec35854905de2a9f42a7046a4de2510ad25f62bb7793f325036c914cbf8a0fa",
+    "src/core/native_sdk_sci_family.c": "7a67f496acfd2fd76eeaf1dfa8dfedaf439c5a02d48ee68c07c53726c2085202",
+    "src/core/native_sdk_sci_family.inc": "4a3aa4f7357a14c107ae10fd835c0098500ab3c044e0399c57bd75d65ea4f928",
+    "src/loader/native_standalone_reader.inc": "efa517d9b31d004b49e1a09d776159a455e6f63380883dc0978621bb0cfaa5ad",
+    "src/loader/native_standalone_reader_stage.inc": "886ec3cde5f18a5e809515fbda578fc0cd0cb0ebdd322976b02eb6bb386ba5ed",
+    "src/loader/retail_async.c": "ef38074ed91ffdea34c87adf886625b2b48d41854d837f1bb1142e6760c84ec4",
+    "src/loader/retail_resident.S": "762ee657b282e4c0ef3336223822e8019da28bc77d8e697a65552d09c8115ea2"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "standard": {
+    "normalized_payload_sha256": "02f8d14e952c018065cae6ae300eeb8dbd4ceb5db45cd532a95ab7b444d086a5",
+    "actual_scalar_word_comparisons": 8,
+    "all_mismatches_use_historical_fallback": true,
+    "recognizer_sha256": "d843344af255a299ff1f1b448240b53bef09fbf1cb6578b2361ab2b0d07b7d5e",
+    "compiler_folded_digest_array": true
+  },
+  "cdda": {
+    "status": "PASS",
+    "profiles": [
+      "toy-raw",
+      "toy-cooked",
+      "mdk2"
+    ],
+    "exact_table_bytes": 180,
+    "exact_table_sha256": "4aa70b6a313e9d84aaad02f6f6ab5fc8b8a2ffa66eff7e16488979413c8d31ba",
+    "runtime_elf_sha256": "da5cc5830e8ae38368dcd8beecc1bbd5b709969e5e054abcc2d2dc4da38b770e"
+  }
+}

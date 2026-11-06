@@ -200,18 +200,24 @@ Unknown/mixed pointers, occupied callback slots and an active reader still
 refuse. The 16-byte family ABI and first-install-only ownership stay unchanged;
 there is no game-title mapping.
 
-The original EGG executable and actual linked old/candidate instructions now
-reproduce the gap in an SH model: old B binds plain mode and refuses nesting;
-the candidate binds both and preserves the negative controls. The local report is
-`build/standalone-irq-restoration/egg-linked.json`. Production core tests also
-exercise the installer and binder. See
+Clean standalone build `a0dc9a62e79f`, published as IRQ source commit `0d1691d`,
+now passes the final linked instruction model with original EGG, The House of
+the Dead 2 and Time Stalkers executables, each in plain and nesting modes.
+Old B binds plain mode and refuses nesting; the corrected reader binds both
+and preserves the negative controls. The source check/publisher and the
+original integer event lookup/JSR reach the actual linked callback with its
+C ABI preserved. This does not model the complete FPU frame or hardware
+timing. The final report is `build/standalone-irq-restoration/final-linked.json`.
+Production GUI preparation on FAT32 and exFAT also passes with the actual
+module; the GUI remains `f7229`. See the module hash/evidence note in
+`shared-game-launch-performance.md` and
 [`native_sdk_sci_family.c`](../src/core/native_sdk_sci_family.c),
-[`native_standalone_reader.inc`](../src/loader/native_standalone_reader.inc)
-and [`test_native_sdk_sci_early_family.c`](../tests/test_native_sdk_sci_early_family.c).
+[`native_standalone_reader.inc`](../src/loader/native_standalone_reader.inc),
+[`test_native_sdk_sci_early_family.c`](../tests/test_native_sdk_sci_early_family.c)
+and [`test_native_standalone_early_irq.py`](../tests/test_native_standalone_early_irq.py).
 These are source and linked-execution results; console launch/loading tests
 remain pending. Sonic Adventure's original executable is still unavailable:
-the Library index names an archive whose file was not restored, so no new
-original-backed Sonic Adventure result is claimed.
+no new original-backed Sonic Adventure result is claimed.
 
 ## Virtual VMU route for the early titles (The House of the Dead 2 admitted for test 7)
 

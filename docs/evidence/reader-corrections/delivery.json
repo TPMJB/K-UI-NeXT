@@ -1,0 +1,338 @@
+{
+  "CE_audit_sha256": "9f64d3b5578a9817ee5e5bca39fcef7149bed9cd47646b2d79b4cd85b5c90211",
+  "CE_backend_bytes_changed": false,
+  "CE_full256_promoted": false,
+  "GUI_sha256": "4add961b9810b5882cdf108c3adef81ac5c52c810f4d5411f488cb6007334c71",
+  "GUI_source_build": "f7229eed7699",
+  "accepted_Smash_six_files_unchanged": true,
+  "all_member_hash_inventory": {
+    "KUI/apps/disc/native-disc-vmu-a1.kui": {
+      "bytes": 176884,
+      "runtime": {
+        "build": "eeed38bd540e",
+        "crc32": "8e8a5969",
+        "format": 1,
+        "memory_bytes": 176820,
+        "payload_bytes": 176820
+      },
+      "sha256": "2e519ee282e9c54cfbf40caa395480d20970203613d43056525b594fc5a6c46a"
+    },
+    "KUI/apps/disc/native-disc-vmu.kui": {
+      "bytes": 176884,
+      "runtime": {
+        "build": "eeed38bd540e",
+        "crc32": "96af2149",
+        "format": 1,
+        "memory_bytes": 176820,
+        "payload_bytes": 176820
+      },
+      "sha256": "15ff0d3ad2f8890e2ad4f727658704a9210620d37fb2b571de542ac639f9854e"
+    },
+    "KUI/apps/disc/native-disc.kui": {
+      "bytes": 15756,
+      "runtime": {
+        "build": "eeed38bd540e",
+        "crc32": "6ea0c236",
+        "format": 1,
+        "memory_bytes": 15692,
+        "payload_bytes": 15692
+      },
+      "sha256": "2d58e931996c9ec679643746a90260f4f294ddc792504b39e7442b67e08adeca"
+    },
+    "KUI/apps/games/cdda-native-mdk2.kui": {
+      "bytes": 67176,
+      "runtime": {
+        "build": "eeed38bd540e",
+        "crc32": "62f5a822",
+        "format": 1,
+        "memory_bytes": 67112,
+        "payload_bytes": 67112
+      },
+      "sha256": "33a924482f0efbd491d86f0eb9b1cc05e61ce6cd00fc48aeba09677a03644c51"
+    },
+    "KUI/apps/games/cdda-native-toy-cooked.kui": {
+      "bytes": 85188,
+      "runtime": {
+        "build": "eeed38bd540e",
+        "crc32": "febf7348",
+        "format": 1,
+        "memory_bytes": 85124,
+        "payload_bytes": 85124
+      },
+      "sha256": "108a3707c60b985307daddf7fd36c9c6d650974358ab94b1ed08fb2050d4c3b6"
+    },
+    "KUI/apps/games/cdda-native-toy-raw.kui": {
+      "bytes": 85156,
+      "runtime": {
+        "build": "eeed38bd540e",
+        "crc32": "7a58f9e6",
+        "format": 1,
+        "memory_bytes": 85092,
+        "payload_bytes": 85092
+      },
+      "sha256": "923404c18b21a80e1adb1eafd902e1fb9a0ba7a389b102732d4727bc565dfc95"
+    },
+    "KUI/apps/games/cdda-toy-cooked.kui": {
+      "bytes": 85188,
+      "runtime": {
+        "build": "eeed38bd540e",
+        "crc32": "febf7348",
+        "format": 1,
+        "memory_bytes": 85124,
+        "payload_bytes": 85124
+      },
+      "sha256": "108a3707c60b985307daddf7fd36c9c6d650974358ab94b1ed08fb2050d4c3b6"
+    },
+    "KUI/apps/games/cdda-toy-raw.kui": {
+      "bytes": 85156,
+      "runtime": {
+        "build": "eeed38bd540e",
+        "crc32": "7a58f9e6",
+        "format": 1,
+        "memory_bytes": 85092,
+        "payload_bytes": 85092
+      },
+      "sha256": "923404c18b21a80e1adb1eafd902e1fb9a0ba7a389b102732d4727bc565dfc95"
+    },
+    "KUI/apps/games/ce-cdda-armada.kui": {
+      "bytes": 135156,
+      "runtime": {
+        "build": "eeed38bd540e",
+        "crc32": "1fd9b3ad",
+        "format": 1,
+        "memory_bytes": 135092,
+        "payload_bytes": 135092
+      },
+      "sha256": "91b1d4e43b866928767cb7e602fb41bee37c495c153452eeb4756851aa4f4807"
+    },
+    "KUI/apps/games/ce-cdda-bam4.kui": {
+      "bytes": 135140,
+      "runtime": {
+        "build": "eeed38bd540e",
+        "crc32": "b8df86f5",
+        "format": 1,
+        "memory_bytes": 135076,
+        "payload_bytes": 135076
+      },
+      "sha256": "f3b689d0f03b7c580f258f1ab4ca9423f0db1184f7028caa9c1c73e62e46dec4"
+    },
+    "KUI/apps/games/ce-cdda-worms.kui": {
+      "bytes": 136068,
+      "runtime": {
+        "build": "eeed38bd540e",
+        "crc32": "f3219805",
+        "format": 1,
+        "memory_bytes": 136004,
+        "payload_bytes": 136004
+      },
+      "sha256": "1a03c4a2b079dd8ba098aa50085471376d2591f7405bdcee519cc205c70eb933"
+    },
+    "KUI/apps/games/ce-cdda-wwp.kui": {
+      "bytes": 135748,
+      "runtime": {
+        "build": "eeed38bd540e",
+        "crc32": "dd3cc6ec",
+        "format": 1,
+        "memory_bytes": 135684,
+        "payload_bytes": 135684
+      },
+      "sha256": "39cf505fb35ae0650595de87533972ba4a83386e14cb52e26eb8d80b743ce6e4"
+    },
+    "KUI/apps/games/lzo-boot.kui": {
+      "bytes": 38052,
+      "runtime": {
+        "build": "eeed38bd540e",
+        "crc32": "27e8a049",
+        "format": 1,
+        "memory_bytes": 37988,
+        "payload_bytes": 37988
+      },
+      "sha256": "bdf77337ce16a2637b7eaa78c7e88dac7fe420c00c5688812eaf4d7447c2af84"
+    },
+    "KUI/apps/games/retail-boot.kui": {
+      "bytes": 237608,
+      "runtime": {
+        "build": "eeed38bd540e",
+        "crc32": "64a9e4ce",
+        "format": 1,
+        "memory_bytes": 237544,
+        "payload_bytes": 237544
+      },
+      "sha256": "95978bab1155608d94a707402e31fe82e999faa9dfc5dd01966457756e6a3209"
+    },
+    "KUI/apps/games/retail-cdda-mdk2.kui": {
+      "bytes": 67176,
+      "runtime": {
+        "build": "eeed38bd540e",
+        "crc32": "62f5a822",
+        "format": 1,
+        "memory_bytes": 67112,
+        "payload_bytes": 67112
+      },
+      "sha256": "33a924482f0efbd491d86f0eb9b1cc05e61ce6cd00fc48aeba09677a03644c51"
+    },
+    "KUI/apps/games/retail-native-dual-a1.kui": {
+      "bytes": 289928,
+      "runtime": {
+        "build": "eeed38bd540e",
+        "crc32": "e45b0f2b",
+        "format": 1,
+        "memory_bytes": 289864,
+        "payload_bytes": 289864
+      },
+      "sha256": "e45daaecbfc5da96b8da87123daa89ab786e16187b7b640412dd13a01c7c54f4"
+    },
+    "KUI/apps/games/retail-native-dual.kui": {
+      "bytes": 289896,
+      "runtime": {
+        "build": "eeed38bd540e",
+        "crc32": "d7c8bedb",
+        "format": 1,
+        "memory_bytes": 289832,
+        "payload_bytes": 289832
+      },
+      "sha256": "212333df086ee965098a0677775b25177e06c8767f0c2f2dfe17b8392744de22"
+    },
+    "KUI/apps/games/retail-native-standalone.kui": {
+      "bytes": 48588,
+      "runtime": {
+        "build": "a0dc9a62e79f",
+        "crc32": "44d3d814",
+        "format": 1,
+        "memory_bytes": 48524,
+        "payload_bytes": 48524
+      },
+      "sha256": "8a1eb7faad51b5e5167226cb4e521c478cfd3fa2d38901b3cb84e1e85c88576a"
+    },
+    "KUI/apps/games/retail-physical.kui": {
+      "bytes": 76124,
+      "runtime": {
+        "build": "eeed38bd540e",
+        "crc32": "beca0f4b",
+        "format": 1,
+        "memory_bytes": 76060,
+        "payload_bytes": 76060
+      },
+      "sha256": "809bfdbc3a3b6fdf4169a4a37929d9f3573734f9c401c8d3cb9094421c13fe71"
+    },
+    "KUI/apps/games/retail-smash-menu.kui": {
+      "bytes": 103092,
+      "runtime": {
+        "build": "cc81e63ca4d2",
+        "crc32": "79a3821d",
+        "format": 1,
+        "memory_bytes": 103028,
+        "payload_bytes": 103028
+      },
+      "sha256": "e6d0bef744f007a6cae87a10f9e83b7084801fedbdbc15b93b974ab3a3ee9117"
+    },
+    "KUI/apps/games/retail-smash-native-menu.kui": {
+      "bytes": 271620,
+      "runtime": {
+        "build": "cc81e63ca4d2",
+        "crc32": "ca10f8d3",
+        "format": 1,
+        "memory_bytes": 271556,
+        "payload_bytes": 271556
+      },
+      "sha256": "b2d633f5254e5db852382f6e1263f283d6dd00434c7841ed852ca9f15e67de2e"
+    },
+    "KUI/apps/games/retail-smash-swirl.kui": {
+      "bytes": 139096,
+      "runtime": {
+        "build": "cc81e63ca4d2",
+        "crc32": "a1ac3591",
+        "format": 1,
+        "memory_bytes": 139032,
+        "payload_bytes": 139032
+      },
+      "sha256": "5b8f7f1c36983ad4d08ef63f928375201b289e4825635bc7eea1727217a3881b"
+    },
+    "KUI/apps/games/retail-smash-vc2.kui": {
+      "bytes": 139068,
+      "runtime": {
+        "build": "cc81e63ca4d2",
+        "crc32": "4d9a5460",
+        "format": 1,
+        "memory_bytes": 139004,
+        "payload_bytes": 139004
+      },
+      "sha256": "a36421a22e4e3d1da10b82d996816c427f311da90bd5ed633dac7af01e5deca5"
+    },
+    "KUI/apps/games/smash-swirl-vmu-helper.bin": {
+      "bytes": 49152,
+      "kind": "pinned accepted raw helper",
+      "sha256": "e125475c098abe25daf97db6b75408a78ae5778f3310e45df0839043c9d01445"
+    },
+    "KUI/apps/games/smash-vc2-vmu-helper.bin": {
+      "bytes": 49152,
+      "kind": "pinned accepted raw helper",
+      "sha256": "42f49cd45120ea3b7a4df56d0378e9e7529d56337b779f4cdb077b7f4b1f98a5"
+    },
+    "KUI/apps/games/zso-boot.kui": {
+      "bytes": 37280,
+      "runtime": {
+        "build": "eeed38bd540e",
+        "crc32": "46e87235",
+        "format": 1,
+        "memory_bytes": 37216,
+        "payload_bytes": 37216
+      },
+      "sha256": "fd6cf9249c2f18e4ab6d4c8bcf28349bc71548350eff53adf4d21b80a1553062"
+    },
+    "KUI/boot.kui": {
+      "bytes": 3554400,
+      "runtime": {
+        "build": "f7229eed7699",
+        "crc32": "a4a538ef",
+        "format": 1,
+        "memory_bytes": 7854096,
+        "payload_bytes": 3554336
+      },
+      "sha256": "4add961b9810b5882cdf108c3adef81ac5c52c810f4d5411f488cb6007334c71"
+    },
+    "KUI/runtime.kui": {
+      "bytes": 3554400,
+      "runtime": {
+        "build": "f7229eed7699",
+        "crc32": "a4a538ef",
+        "format": 1,
+        "memory_bytes": 7854096,
+        "payload_bytes": 3554336
+      },
+      "sha256": "4add961b9810b5882cdf108c3adef81ac5c52c810f4d5411f488cb6007334c71"
+    }
+  },
+  "archive_members": 31,
+  "artifact": "build/deliverables/KUI-Games-Reader-Corrections-06NOV2026-2105-UTC-a0dc9a6.zip",
+  "bytes": 6080457,
+  "changed_software_paths": [
+    "KUI/apps/games/retail-native-standalone.kui",
+    "KUI/boot.kui",
+    "KUI/runtime.kui"
+  ],
+  "final_stack_report_sha256": "3e724246eeb309d3c6258262771352b77096537f8ec3fa4fbfdea5587eb5ed2c",
+  "hardware_tested": false,
+  "missing_new_standalone_negative_control": "Manual archive contains missing, duplicate or unauthorized members",
+  "sha256": "573bb632d8f09f6051bc56ad7a99d0b50a36b2338c47a333561d0c7a9ff0e704",
+  "software_members": 28,
+  "stale_old_standalone_negative_control": "Manual archive software changed",
+  "standalone_bss_spare_bytes": 32,
+  "standalone_final_stack": "PASS",
+  "standalone_sha256": "8a1eb7faad51b5e5167226cb4e521c478cfd3fa2d38901b3cb84e1e85c88576a",
+  "standalone_source_build": "a0dc9a62e79f",
+  "standalone_source_payload_crc32": "44D3D814",
+  "standalone_stack_available_bytes": 304,
+  "standalone_stack_margin_bytes": 64,
+  "standalone_stack_worst_bytes": 220,
+  "status": "PASS",
+  "strict_inventory_and_archive_matches": "PASS",
+  "unchanged_software_count": 25,
+  "artifact_saved": true,
+  "download_url": "https://chatgpt.com/library?file_id=libfile_70d3ad536f608191ad8b73f44657d357&account_id=personal",
+  "source_branch_published": true,
+  "main_changed": false,
+  "pr_url": "https://github.com/TacitusVox/K-UI-NeXT/pull/34",
+  "standalone_equivalent_public_source_commit": "0d1691d2fe50616251fa7f5f2a44d94e0e5c689f",
+  "standalone_source_tree": "dbabb7a56b7f6cc13ce6523fc0ea6e897b6706b8"
+}

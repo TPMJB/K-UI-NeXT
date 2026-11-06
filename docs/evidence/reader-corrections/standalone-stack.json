@@ -1,0 +1,53 @@
+{
+  "schema": "kui.native.standalone-early-irq.final-stack.v1",
+  "result": "PASS",
+  "source_commit": "a0dc9a62e79f5f47ed36d7d9d6b3ea3abb85efca",
+  "analysis": "Unmodified callgraph emitted by actual final production LTO link; copied to checker-required lto path. No rebuild or final artifact modification.",
+  "resident_elf_sha256": "456da14d997ef1b443222f436babc33c534a6fcc5afe1b2202d5fd0cde9946e9",
+  "resident_binary_sha256": "04a64be6f47383d20e28e40160c5a136e9fa250fd86656d3cd31112931949105",
+  "allocated_segments": [
+    {
+      "address": "0x8c004000",
+      "file_bytes": 12272,
+      "memory_bytes": 15232,
+      "sha256": "04a64be6f47383d20e28e40160c5a136e9fa250fd86656d3cd31112931949105"
+    }
+  ],
+  "production_config_sha256": "d3816bf323fa2c028080bd2257618e37875c92be6287dbd22c35e18b154b8e51",
+  "compiler_callgraphs": {
+    "resident-sci.elf.ltrans0.ltrans.ci": "ed813c51b79e64144fafbb0f3ce0c02c1ac95831ae256e509a106b71d2af7d47"
+  },
+  "geometry": {
+    "region_bytes": 1888,
+    "bss_end": "0x8c007b80",
+    "stack_bottom": "0x8c007ba0",
+    "stack_top": "0x8c007d00",
+    "stack_bytes": 352,
+    "bss_spare_bytes": 32
+  },
+  "stack": {
+    "worst_bytes": 220,
+    "margin": 64,
+    "available_bytes": 304,
+    "paths": {
+      "kui_retail_resident_dispatch": {
+        "bytes": 212,
+        "path": "kui_retail_resident_dispatch(44) -> deliver(80) -> kui_sci_stream_fetch.constprop.0(44) -> command(20) -> byte(0) -> transfer(24)"
+      },
+      "kui_retail_async_irq": {
+        "bytes": 220,
+        "path": "kui_retail_async_irq(8) -> deliver(80) -> kui_sci_stream_fetch.constprop.0(44) -> command(20) -> byte(0) -> transfer(24)"
+      },
+      "kui_retail_menu_return": {
+        "bytes": 156,
+        "path": "kui_retail_menu_return(8) -> native_reader_report(20) -> retail_display_values(76) -> retail_display_line(52)"
+      }
+    }
+  },
+  "final_entry_receipt_unchanged": {
+    "commit": "a0dc9a62e79f5f47ed36d7d9d6b3ea3abb85efca",
+    "source_dirty": false,
+    "elf_sha256": "5a11677712302228bef5963f4457b4688909461318b83e8b9b159f92a0256bda"
+  },
+  "checker_sha256": "e670f464c4c6a7d18c1339ffb823f92fa043611b2264850ffb4b582e2db59f76"
+}
