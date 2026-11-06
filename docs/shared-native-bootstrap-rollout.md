@@ -1,5 +1,10 @@
 # Shared native bootstrap consolidation
 
+This records the historical7fc candidate. The current Games-only cohort and
+its exact default admission are recorded in `shared-game-launch-performance.md`
+and `evidence/games-eeed38b`. Do not restore this candidate's bindings over a
+later qualified Games cohort.
+
 The owner reports Power Stone 2 reaches bootstrap in about four seconds on
 9d6680a, versus almost twenty seconds before. This establishes the reported
 preparation improvement, separately from bootstrap and save/return coverage.

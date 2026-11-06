@@ -21,12 +21,14 @@ preservation requirements and unresolved integration work. A newer commit or a
 successful build does not establish that the selected configuration preserves
 accepted behavior.
 
-The current bootstrap test and its five native service cohorts are recorded
-in `docs/shared-native-bootstrap-rollout.md`. Default Standard/native-CDDA
-bindings are exact copies of its qualified GUI inputs. Preserve them in later
-GUI builds for this installation. An explicitly older-cohort GUI must select
-its saved manifest or supply the matching new services; do not silently pair
-a new GUI allowlist with an inherited incompatible Standard module.
+The current Games-only test source is `eeed38bd540e`, recorded in
+`docs/shared-game-launch-performance.md` and `docs/evidence/games-eeed38b`.
+Default Standard/native-CDDA bindings are exact copies of its qualified GUI
+inputs. Preserve them in later GUI builds for this installation. The earlier
+7fc bootstrap candidate remains recorded in `docs/shared-native-bootstrap-rollout.md`.
+An explicitly older-cohort GUI must select its saved manifest or supply the
+matching services; do not silently pair new admission with an incompatible
+inherited Standard module. Preserve the exact accepted Smash components.
 
 Before compiling, identify the accepted source/configuration, the intended
 behavior change, affected module roles, and the decision a new test answers.

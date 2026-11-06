@@ -1,0 +1,190 @@
+{
+  "schema": "kui.native-stage.discovery-cache-scope.v1",
+  "status": "PASS",
+  "elf_sha256": "ac6c4466e5d907e7571197259258be9fd1a0d54f1f0203ab7b00385716c0d17a",
+  "wrapper_bytes": 260,
+  "immutable_leaf_sha256": "2a60e02b1ceff0819a51ec9594126e4241acdd73ecf1bd45363f818f5d51e790",
+  "argument_count": 4,
+  "actual_SH_cases": 792,
+  "unsafe_mutation_rejections": 38,
+  "exact_wrapper_byte_rejections": 260,
+  "private_outputs": {
+    "_native_driver": {
+      "address": "0x8ce55200",
+      "bytes": 104
+    },
+    "_passive_layout": {
+      "address": "0x8ce44f94",
+      "bytes": 440
+    },
+    "_native_heap": {
+      "address": "0x8ce551b8",
+      "bytes": 72
+    },
+    "_native_call": {
+      "address": "0x8ce551a4",
+      "bytes": 20
+    },
+    "_native_exits": {
+      "address": "0x8ce44f60",
+      "bytes": 52
+    },
+    "_native_fixed_hook": {
+      "address": "0x8ce45164",
+      "bytes": 8
+    },
+    "_native_fixed": {
+      "address": "0x8ce45160",
+      "bytes": 4
+    },
+    "_native_arena": {
+      "address": "0x8ce55180",
+      "bytes": 4
+    }
+  },
+  "saved_integer_frame_bytes": 12,
+  "admitted_leaf_stack_headroom": 65536,
+  "ram_publication_lines": 524288,
+  "unknown_SR_MMU_CCR_and_bounds_use_original_leaf": true,
+  "partial_refusal_outputs_published": true,
+  "per_game_constants": false,
+  "actual_C_leaf_stack": {
+    "immutable_leaf_C_bytes": 3084,
+    "relay_C_frame_bytes": 32,
+    "assembly_scope_frame_bytes": 12,
+    "library_allowance_bytes": 64,
+    "guard_bytes": 32,
+    "complete_changed_path_bound_bytes": 3224,
+    "existing_cold_stack_top": "0x8cff0000",
+    "linked_stage_bss_end": "0x8cebe828",
+    "available_above_BSS": 1251288,
+    "no_reservation_or_worker_stack_increase": true,
+    "deepest_path": [
+      "kui_native_stage_discover_image",
+      "kui_vmu_native_discover_layout",
+      "src/core/vmu_native_layout.c:layout_from_bound",
+      "src/core/vmu_native_layout.c:uniform_from_bound",
+      "src/core/vmu_native_layout.c:timers",
+      "src/core/vmu_native_layout.c:exact_literal",
+      "src/core/vmu_native_layout.c:literal",
+      "src/core/vmu_native_layout.c:at"
+    ],
+    "reached_C_functions": 92,
+    "unresolved_indirect_calls": 0,
+    "recursion": false,
+    "actual_immutable_read_callback": {
+      "callback_address": "0x8ce09e50",
+      "caller_window": "0x8ce0c428",
+      "exact_readonly_callback_bytes": 96,
+      "closed_callback_sites": [
+        "src/core/vmu_native_heap.c:read_is",
+        "src/core/vmu_native_heap.c:heap_bottom_halfword"
+      ],
+      "source_sha256": {
+        "src/core/vmu_native_heap.c": "7d99629da1954d1332c1da653a67b9d7139ee488c0cc33e78946f207f88594e2",
+        "src/core/vmu_native_heap_bottom_code.inc": "fb014152c9e2d69b73e40ab497e68dad4a49b4a84b770b8d1c37895b33e9c0c0"
+      }
+    },
+    "paired_SU_CI_reports": 38,
+    "report_sha256": {
+      "stage/src/core/ata.ci": "cc25b8d2a93c8734b7050d53b232b3e560e4208591232560c41c35803b4a8c8a",
+      "stage/src/core/ata.su": "e1c1f113a761ba0890625608e0b6698dd9279d5550457ac94aaec6d2529c8439",
+      "stage/src/core/data.ci": "74c81b3a1a2391813360cca52327eda29ffeae46e426672e06591110bf1b4342",
+      "stage/src/core/data.su": "1f89259477fbd42f1cfd0e3728d23ab7a776f76bde9399328f2c9fbd8fc2b0a0",
+      "stage/src/core/hash.ci": "d4b8e0f552393ec6192c042a7197b3bbaa0d58d731f09e993056488e3d1cd8be",
+      "stage/src/core/hash.su": "d1d0b27d43af985b5753fece2775895b60a7f80b3728ade94c2b242107427d16",
+      "stage/src/core/native_sdk_sci_route.ci": "84f2f4e6a6cf6c9a71f42e23e6fa4cc5620cb53a02473aa94be805253d32dabf",
+      "stage/src/core/native_sdk_sci_route.su": "7b0edc6c4b25bfb7521114dac35d8e8378a7bf67dbe5320f35bd43249ee4bca4",
+      "stage/src/core/retail_image.ci": "de5e2d01348e468ac0c837e8c65738d9e9b2bf8b823817cd712ff4e4be792d5e",
+      "stage/src/core/retail_image.su": "ac53e09caab4a8a762384df2ef15f34de5db1c38ac5abc82367107ea8a44817f",
+      "stage/src/core/retail_observe.ci": "18de7cf6e3699425e5ad76a4c07407ab13df24e45b909dddf13007db7c89cb89",
+      "stage/src/core/retail_observe.su": "329b263e21af83deea86f5288d7a2d16ee1c8bade4fec1acdac466f5cd2d1081",
+      "stage/src/core/vmu_durable.ci": "1317af0ed23c09e343de76046545e2f225e449f2cc302e37742f90fc507e15c4",
+      "stage/src/core/vmu_durable.su": "0fe4e6676ea335f4ec257e0ad50838ee2cc3ba34c32669e6d24fd2ddab1b8f0b",
+      "stage/src/core/vmu_fs_admission.ci": "a3db1d7af4d6be33aaf7b69b02629c48fa9dfbc9a983d9ea73c377052c13b3b7",
+      "stage/src/core/vmu_fs_admission.su": "0e80b2f7275708aabd03d2cfcab9290b658c499e6194dd1d1c4b295fb45de77c",
+      "stage/src/core/vmu_image.ci": "f7a4bfdbaf7cb08c1268c860eb870ca8916a011fc9adfdab98a602457e9baf91",
+      "stage/src/core/vmu_image.su": "97b793ff3f9e9c50204bf489f8aacaf5ad6a118e438f0fe1e79480b5dd2663c3",
+      "stage/src/core/vmu_native_cache_seed.ci": "72cc6eda2896914352888845cecfe03e59e00677f8dae83affca6a54ae0c59d2",
+      "stage/src/core/vmu_native_cache_seed.su": "007591622205dffa793bebdc4fb39ad18ef08cb5a2b1c1e351298ac2df634be7",
+      "stage/src/core/vmu_native_discovery.ci": "c0dff6fd35f91c7b54b37aaa24a0c20b41b6bf6bda6200aa3263e357103b3a4d",
+      "stage/src/core/vmu_native_discovery.su": "654f0e0229d992b75c77cf2fbcc15bfdad699da024f754a536fbfd5f499f7935",
+      "stage/src/core/vmu_native_exit.ci": "f82182be227e5081e7c70203b3f66335300c691e30b59791054cab1a26644f16",
+      "stage/src/core/vmu_native_exit.su": "b685d7d2625a20748c2ce454b804622f6d6ab31bc975379da0238d6300e076df",
+      "stage/src/core/vmu_native_heap.ci": "b1cfb9b5820aa47cf7eafd1fd1ad0804fc92c9292c4bca401784a363fd1e6239",
+      "stage/src/core/vmu_native_heap.su": "11a681a028bde3bd1e8a1771659d16331844b80362356fe2f18a4636ef654ad3",
+      "stage/src/core/vmu_native_heap_budget.ci": "ae2aa4341609ecc82fed564d8fa6f6aac9a64520b59b8c502a2d58bd41c24fad",
+      "stage/src/core/vmu_native_heap_budget.su": "f10ff470fe5b5b68e2145b64b9eccd29f696966420153426d55f41bd49042847",
+      "stage/src/core/vmu_native_layout.ci": "dfcd2d990a9543e7a7d93c1a22f3e346b1b6f2d57759d14d85411f868d1d16d3",
+      "stage/src/core/vmu_native_layout.su": "88d98659a66a256d4ebd8982fdaa3aba3c4b671ee5c0f03e3599279cea62c7ec",
+      "stage/src/core/vmu_native_mode.ci": "c90f12beebf633cbc5b6514fc152e4273ffc568c3e41eb07dd34d9f243296e44",
+      "stage/src/core/vmu_native_mode.su": "b1105b3af0fb2d1912ada67b7388aecb420b6e00e0b7613b52b94689fd303b05",
+      "stage/src/core/vmu_native_patch.ci": "9186696217eafccca9bce4613f2a1647dbcaf9a948652192ba9e2f3255db593a",
+      "stage/src/core/vmu_native_patch.su": "64504e4b25a7786c6cd544efa4c1a4a8e1ed3ae247b04637552fc6ca6a6cbef4",
+      "stage/src/core/vmu_native_program.ci": "382bc5af1f5b6250b46ea839ef1e1ed5102c86ac28b108001af61ef6087c08f3",
+      "stage/src/core/vmu_native_program.su": "7a4534006bf83b515428904f400b37e158947d9eca1b881d9a8840839a54bece",
+      "stage/src/core/vmu_native_relocate.ci": "882e4fb1e5b4c46ce01307d0995d2d5357df7ca8491cec4bea3df77892fdd943",
+      "stage/src/core/vmu_native_relocate.su": "6f48cbdfa5284c8fee796136e223701efdbcd43faf31d8f24a64c8449471514f",
+      "stage/src/core/vmu_native_resolution_cache.ci": "8fa796b071f3ccc623533fbe656bc959a7961408f6bf664023fbc52f3b32894d",
+      "stage/src/core/vmu_native_resolution_cache.su": "56fe8efbc41ad40583caed073f1906b21307713cda82a05641e004c414623668",
+      "stage/src/core/vmu_native_stage_placement.ci": "433d8d3867d0016ddf995e38610e11eac26131743b6450831800094016327d96",
+      "stage/src/core/vmu_native_stage_placement.su": "a441a9de7f0fbcce889a3eea707d2c35dedfd7f194108c22f6dbd0337d55b8fa",
+      "stage/src/core/vmu_persist_profile.ci": "2c7d7557c9abef2f9bad28dd10562f27fb7795aa1d8e0b16863019166a1aa48a",
+      "stage/src/core/vmu_persist_profile.su": "be7446838be92f6dd0e871dabf53d44c84dc83c311c2c77d4baf3b423024f1ad",
+      "stage/src/core/vmu_persist_session.ci": "c2088c7aee4a30dfd12db634e93f6242e86b50dd1273515bc08881c9f577a40f",
+      "stage/src/core/vmu_persist_session.su": "3da8162a9086b5335a1ee1ba278b6565ec91e40e7b541d09a9e3df155bd26434",
+      "stage/src/core/vmu_store.ci": "6d2ec0cbfedf7c515a876cc67a3f1c33d57c88540f55313c2b88e240dc0e6dc5",
+      "stage/src/core/vmu_store.su": "3b587094812cf480a4bb3bbdd9448c5837643e4308b819fab0a8ebf6080baf0c",
+      "stage/src/dreamcast/ata_bus.ci": "1a37eb41d4aa7686045e74e8645beadfa6c464f773b631d7f287f48a82ca1d41",
+      "stage/src/dreamcast/ata_bus.su": "179b03457767d3a8adaa897fb448967bc961bbd56746cd6c9fe7882b2215ebc1",
+      "stage/src/dreamcast/sci_sd_storage.ci": "7d04d721e3b5c7fef18c3559a4c134fb94e828c0beccb6b5401757d0445fcb47",
+      "stage/src/dreamcast/sci_sd_storage.su": "0cc115f86038a6a5ff2dd7aa4d004748e60641b2fce5c00ab3d6e32e4117ad5f",
+      "stage/src/loader/minic.ci": "7d92f538ad20ffb2d52197d02c5e08d47dc7b496c00c5f86cbfd2fe692a4e63c",
+      "stage/src/loader/minic.su": "797258fbeea07041400f3bc624aa2929d017020abf0df8128c5c3124bcecd1a3",
+      "stage/src/loader/retail_display.ci": "1df4c52d691705553d7297a91c4186f73a73d99e9c0e1c614606713781cdd677",
+      "stage/src/loader/retail_display.su": "0332aa3ffb4bf4e1e6505d84fafb4031ace72a39b870b188718872f81eae2145",
+      "stage/src/loader/retail_sd.ci": "d5dc6d1682e112226b7e86470b9627237079a44bbd18428fdb649d999d0b6304",
+      "stage/src/loader/retail_sd.su": "6c41e796744e6ab4ad2829ee3b3681cd950b2af88bb9f93a73429e63bf834d28",
+      "stage/src/loader/retail_storage.ci": "a14b427ca40f6c1bad108ef2920860e300602e819ca3358be462f28735b2c378",
+      "stage/src/loader/retail_storage.su": "2b8310f816303fc089f0ff885cdfd4963765591d1690e6325ef5412c0e085371",
+      "stage/src/loader/sci_sd_bus.ci": "2b5a81dd236e29ad2bddc8bf5b91b77e526cd2598335df99c61157a48d40c3f9",
+      "stage/src/loader/sci_sd_bus.su": "4db31846d87440913d316dee53a77c22dccf62d632ecb125bb1cff224489f701",
+      "stage/src/loader/sd_reader.ci": "d745c0bf78dc189a557c36397b9a370d0b03d68ca6f2cf3bec634fbeb6cb1a7a",
+      "stage/src/loader/sd_reader.su": "4df1c889c33257e065f83bb42995f3f4ac160618522b96219a7bb2f23cbf9ab5",
+      "stage/src/loader/smash_fat_read_cache.ci": "2a704c9d5a61308b255c6fa0a11bdf05d2667a5c99d3b2ac4f57f02e50a8cb92",
+      "stage/src/loader/smash_fat_read_cache.su": "0d8cbcda793d035a3be472949f59fa71c19cfe35c4770646430c978ac918e997",
+      "stage/src/loader/vc2_ce_vmu_stage_cache.ci": "5487cd79759eb75f94c5dd1c001562fbea726960876a7273d7ad901270b43391",
+      "stage/src/loader/vc2_ce_vmu_stage_cache.su": "2b8c0a1b85066401fa92e342a7125574c3a4e9e03eb8174ee8af81050c196b96",
+      "stage/src/loader/vmu_backing.ci": "e203b45aff0d5dfb8596f1a45c8a0e5200de5be0a3b8f0b64a152c06b859003f",
+      "stage/src/loader/vmu_backing.su": "f8b4081822852bdcaab84fe2d65f01ba27bbae9d7c7272733669f1fff610b577",
+      "stage/src/loader/vmu_native_heap_probe_stage.ci": "197b4d2cb222b4b86404c9397f1c5871124919496ae7861bb3a9c9ee297e8fca",
+      "stage/src/loader/vmu_native_heap_probe_stage.su": "8234f6e8d52a78ce3956f7a92e05887891b0e41a472662e55e62ebbbea705f21",
+      "stage/src/loader/vmu_native_trace.ci": "4b89d2497d608072ea023396153032c06ffa5d0127cac976337e9138d705f0a9",
+      "stage/src/loader/vmu_native_trace.su": "e56877f7fcfdde6c977d702f2a52eeb574e75b1fbdfad220276ab9ebe9e87f13",
+      "stage/src/loader/vmu_persist_stage.ci": "9d86fabc35d791315e5c8929ec11f96e44629f2893978e676ffb04fe8a114729",
+      "stage/src/loader/vmu_persist_stage.su": "1319f58a7ac7b4e9caf6acf1662a55f12aa37216ddd35504156a5c140fed80f7"
+    },
+    "live_coherence_capture_outside_scope": true,
+    "actual_selected_C_caller": {
+      "window": "0x8ce04ade",
+      "call": "0x8ce04aea",
+      "source_and_load": "0x8c010000",
+      "size_object": "0x8ce90f64",
+      "detail_stack_offset": 8,
+      "failure_branch": "0x8ce04a4e",
+      "separate_live_continuation": "0x8ce023a0",
+      "live_continuation_only_after_success": true
+    },
+    "negative_graph_controls": 6,
+    "unsafe_caller_mutation_rejections": 8
+  },
+  "linked_live_SDK_install_preservation": {
+    "baseline_elf_sha256": "90f27dd5dabc369ce2a40827c0241de496df76ab70a680f6a6671b872cee1c56",
+    "previous_function_sha256": "6cc2c7711e4b0a545f09c719b2dee828aefd8ff49b3f8f7173ba48b3b0203807",
+    "current_function_sha256": "f4a12dabc53089d1336c843af0a3c2e77512bb30296c43996ebc128467316bc1",
+    "bytes": 544,
+    "normalized_link_address_literals": 5,
+    "complete_live_install_body_preserved": true
+  },
+  "limits": "Actual linked wrapper instructions execute against an ABI-conforming discovery adversary. Compiler-emitted graphs bound the changed C path; immutable leaf semantics have separate C tests. No device timing or console speed is established."
+}

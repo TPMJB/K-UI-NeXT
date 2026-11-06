@@ -50,11 +50,13 @@ checkpoint/readback and final device health remain required.
 
 Use a manual-copy Games test when the owner has excluded updater testing.
 Document how the existing selected bank is bypassed for that test so copied
-root files cannot be mistaken for the effective selected files. Do not modify
-updater behavior, erase saved selections or overwrite user data to achieve it.
+root files cannot be mistaken for the effective selected files. Back up the
+two existing selection records outside their active directory when using a
+manual ROOT test; do not delete or overwrite them. This uses the selector's
+existing no-selection behavior and avoids timing B against the CD loader's
+separate cancellation control. Do not modify updater behavior or user data.
 Include the exact changed-file inventory and expected reader fingerprints.
-Retain the existing root-bypass control for this purpose rather than adding a
-new boot mode. No new splash or menu behavior belongs in the delivery.
+No new boot mode, splash or menu behavior belongs in the delivery.
 
 An installed global claim requires complete applicable route coverage. The
 ordinary CE module still shares `ce-probe.kui` with a personalized writable-VMU

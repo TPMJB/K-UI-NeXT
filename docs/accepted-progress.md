@@ -100,6 +100,31 @@ shared preparation and bootstrap mechanisms across every applicable route;
 record their actual installed coverage and final reader identity. Do not send
 another performance candidate based only on a changed GUI label or model counts.
 
+### Shared Games-only follow-up: eeed38bd540e
+
+The branch now implements shared CE kernel-read reuse, indexed advisory native
+hints, cached immutable discovery on a miss, same-invocation native role-proof
+reuse, zero default cold photo holds and final-reader source reporting.
+All13 cold build roles/16 aliases qualify. Five current native workers and nine
+additional live components preserve their complete initialized code/geometry
+against the retained 7fc cohort, apart from permitted build labels. Accepted
+Smash files remain exact. No startup/menu/splash/updater source changed.
+
+`shared-game-launch-performance.md` and `evidence/games-eeed38b` record scope
+and implementation evidence. Default Standard/CDDA inputs now bind this exact
+cohort. The manual test avoids KUP installation and explicitly backs up the
+two saved selection records so copied physical files cannot be masked by a
+bank. Those records, banks and user data are not overwritten by the archive.
+Ordinary CE's `ce-probe.kui` path collision remains an explicit deployment gap.
+The new binaries have no console speed or compatibility acceptance yet.
+
+Delivered manual test: `KUI-Games-Manual-06NOV2026-1424-CST-eeed38b.zip`,
+SHA256 `17ff15b9fc3ac08255e52549ade2b9936f70e427e99a0643bb09ed3777ae3d28`.
+The archive contains28 software files and its README/BUILD/LICENSE, with no KUP,
+activation records or user data. `evidence/games-eeed38b/delivery.json` records
+the actual final source-reader fingerprints. Back up the two selection records
+outside their active directory for this manual ROOT test; keep them for restore.
+
 ## 0a hardware report: damaged reconstructed block reaches the sector parser
 
 The owner's three0a2ddd9bb9b6 photos show FN12 PIO_TRANSFER in the original VC2

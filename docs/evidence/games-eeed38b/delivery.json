@@ -1,0 +1,43 @@
+{
+  "schema": "kui.games.manual-delivery.v1",
+  "status": "PASS",
+  "filename": "KUI-Games-Manual-06NOV2026-1424-CST-eeed38b.zip",
+  "bytes": 6077853,
+  "sha256": "17ff15b9fc3ac08255e52549ade2b9936f70e427e99a0643bb09ed3777ae3d28",
+  "binary_source_commit": "eeed38bd540e7a1085ca53aabf832e5d7a835efa",
+  "software_files": 28,
+  "archive_files": 31,
+  "KUP_included": false,
+  "activation_records_included": false,
+  "new_binary_console_tested": false,
+  "actual_source_modules": {
+    "KUI/runtime.kui": {
+      "build": "eeed38bd540e",
+      "payload_bytes": 3554304,
+      "payload_crc32": "BA67BC22"
+    },
+    "KUI/apps/games/retail-boot.kui": {
+      "build": "eeed38bd540e",
+      "payload_bytes": 237544,
+      "payload_crc32": "64A9E4CE"
+    },
+    "KUI/apps/games/retail-native-dual.kui": {
+      "build": "eeed38bd540e",
+      "payload_bytes": 289832,
+      "payload_crc32": "D7C8BEDB"
+    },
+    "KUI/apps/games/retail-native-dual-a1.kui": {
+      "build": "eeed38bd540e",
+      "payload_bytes": 289864,
+      "payload_crc32": "E45B0F2B"
+    },
+    "KUI/apps/games/retail-native-standalone.kui": {
+      "build": "eeed38bd540e",
+      "payload_bytes": 48412,
+      "payload_crc32": "E15F2C93"
+    }
+  },
+  "manual_selection": "Back up KUI/system/active0.bin and active1.bin outside KUI/system; restore to return to prior selection",
+  "ordinary_CE_inherited": true,
+  "accepted_Smash_preserved": true
+}
