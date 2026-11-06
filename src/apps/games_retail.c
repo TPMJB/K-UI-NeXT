@@ -436,9 +436,22 @@ static enum kui_game_result extent_sha_crc(const struct kui_game_image *image,
     free(allocated);if(result!=KUI_GAME_OK)return result;
     kui_sha256_digest(&hash,digest);if(source_crc)*source_crc=crc;return KUI_GAME_OK;
 }
-static enum kui_game_result extent_sha(const struct kui_game_image *image,
-    uint32_t lba,uint32_t bytes,uint8_t digest[32]) {
-    return extent_sha_crc(image,lba,bytes,digest,NULL);
+/* One complete, fresh source read may supply its exact-byte CRC later in
+ * this exclusive preparation. Nothing is retained across jobs or learned
+ * from a saved fingerprint. Consume even a refused proof exactly once. */
+struct extent_crc_proof {
+    const struct kui_game_image *image;
+    uint64_t epoch;
+    uint32_t lba,bytes,crc32;
+    bool complete;
+};
+static bool extent_crc_proof_take(struct extent_crc_proof *proof,
+    const struct kui_game_image *image,uint32_t lba,uint32_t bytes,uint32_t *crc) {
+    bool valid=proof->complete && proof->image==image && proof->lba==lba &&
+        proof->bytes==bytes && proof->epoch==kui_media_mutation_epoch();
+    proof->complete=false;
+    if(valid)*crc=proof->crc32;
+    return valid;
 }
 bool kui_games_retail_prepare(const char *path,struct kui_runtime_image *package,
     kui_log_fn log,kui_cancel_fn cancel) {
@@ -908,6 +921,7 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     if(!kui_sd_connect()) {log("Retail boot: storage unavailable");return false;}
     FATFS fs;bool ok=false;const char *problem="cannot mount storage";
     struct kui_retail_manifest *map=NULL;struct kui_game_image *image=NULL;uint8_t *gdi=NULL;
+    struct extent_crc_proof ce_kernel_proof={0};
     struct kui_retail_zso_manifest *zso_map=NULL;
     const char *vmu_package=NULL;
     enum kui_vmu_launch_route vmu_route=KUI_VMU_LAUNCH_ORDINARY;
@@ -1073,10 +1087,14 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
            metadata.boot_bytes>KUI_RETAIL_EXEC_MAX_BYTES) {
             problem="Experimental WinCE CD music requires a WinCE GDI on SCI microSD";goto done;
         }
-        uint8_t kernel_sha[32];
+        uint8_t kernel_sha[32];uint32_t kernel_crc=0u;
+        uint64_t kernel_epoch=kui_media_mutation_epoch();
         log("Experimental CE CD music: checking the complete native kernel identity");
-        r=extent_sha(image,metadata.boot_lba,metadata.boot_bytes,kernel_sha);
+        r=extent_sha_crc(image,metadata.boot_lba,metadata.boot_bytes,kernel_sha,&kernel_crc);
         if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
+        if(kernel_epoch==kui_media_mutation_epoch())
+            ce_kernel_proof=(struct extent_crc_proof){image,kernel_epoch,
+                metadata.boot_lba,metadata.boot_bytes,kernel_crc,true};
         music_profile=ce_music_runtime_profile(image,&metadata,kernel_sha);
         if(music_profile==KUI_WINCE_CDDA_NONE) {
             char hex[65];kui_hex(kernel_sha,32u,hex);
@@ -1188,7 +1206,7 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
         uint8_t menu_sha[32];uint32_t engine_lba=0u,engine_bytes=0u,dir_lba=0u,dir_bytes=0u,rom_lba=0u,rom_bytes=0u;
         if(image->format!=KUI_GAME_IMAGE_GDI || image->compressed || image->scrambled || image->cd_image ||
            map->storage_transport!=KUI_STORAGE_SCI || !kui_smash_native_child_candidate(&metadata) ||
-           extent_sha(image,metadata.boot_lba,metadata.boot_bytes,menu_sha)!=KUI_GAME_OK ||
+           extent_sha_crc(image,metadata.boot_lba,metadata.boot_bytes,menu_sha,NULL)!=KUI_GAME_OK ||
            !kui_smash_native_child_menu_owner(map->ip_crc32,metadata.boot_bytes,menu_sha)) {
             problem="Smash Pack native test requires the exact verified original release";goto done;
         }
@@ -1242,6 +1260,7 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
             if(smash_collection)map->boot_crc32=smash_menu_crc;
             else
 #endif
+            if(!extent_crc_proof_take(&ce_kernel_proof,image,map->boot_lba,map->boot_bytes,&map->boot_crc32))
                 r=extent_crc(image,map->boot_lba,map->boot_bytes,&map->boot_crc32,&failed);
             if(r==KUI_GAME_MODE) log_bad_sector(image,failed,log);
             if(r!=KUI_GAME_OK) {problem=kui_game_result_name(r);goto done;}
@@ -1451,8 +1470,9 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
         kui_native_session_descriptor_find(package->data,package->info.payload_bytes,NULL)==0 &&
         native_cache_source_eligible(image,map,!ce && metadata.native_gd,
             requested_options,patched,package,native_dual);
+    bool indexed_hint=false;
     enum native_cache_result cache=hint_allowed?
-        native_cache_hint_prepare(map,native_dual,package,files.root,log,cancel):NATIVE_CACHE_SKIPPED;
+        native_cache_hint_prepare(map,native_dual,package,files.root,path,&indexed_hint,log,cancel):NATIVE_CACHE_SKIPPED;
     const bool mapping_hint=cache==NATIVE_CACHE_READY;
     if(mapping_hint) {
         kui_smash_launch_timing_metric(KUI_SMASH_UI_MDE_BYTES,map->boot_bytes);
@@ -1496,6 +1516,19 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
             log("New reader: virtual-A2 module cannot admit this executable; using standalone New without virtual VMU");
         }
     }
+    if(cache==NATIVE_CACHE_READY && hint_allowed && !indexed_hint) {
+        uint64_t alias_epoch=kui_media_mutation_epoch();
+        (void)native_cache_alias_publish(path,map,native_dual,package,files.root,cancel);
+        if(alias_epoch!=kui_media_mutation_epoch())source_proof=(struct native_cache_source_proof){0};
+    }
+    /* All module replacements are complete. Preserve the checked source
+     * envelope identity before card, map and session bytes are personalized;
+     * the final launch report must not describe the discarded dual reader. */
+    const struct kui_runtime_info source_module=package->info;
+    if(native_standalone)kui_smash_launch_timing_native(path,KUI_BUILD_ID,metadata.product,
+        "Background New (X), no virtual VMU",false,source_module.crc32,source_module.payload_bytes);
+    kui_smash_launch_timing_source_module(launch_package,source_module.build,
+        source_module.crc32,source_module.payload_bytes);
 #if KUI_VMU_GAME_CARDS
     if(standard_virtual_a2) {
         char product[12];
@@ -1584,6 +1617,8 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
             .encoding=ce?"Windows CE prefix + body":(map->flags&KUI_RETAIL_IMAGE_SCRAMBLED)?"Scrambled (decode)":"Plain",
             .cdda=cdda || ce_excerpt,.cdda_profile=ce_excerpt?kui_wince_cdda_disc(music_profile)->name:
                 cdda?"Native admitted profile":"Off",.package_path=launch_package,
+            .module_build=source_module.build,.module_crc32=source_module.crc32,
+            .module_bytes=source_module.payload_bytes,
             .product=map->product,.title=map->title,.bootfile=map->bootfile,
             .ip_crc32=map->ip_crc32,.ip_bytes=KUI_RETAIL_IP_BYTES,
             .executable_crc32=map->boot_crc32,.executable_bytes=map->boot_bytes,.patches=&applied_patches};

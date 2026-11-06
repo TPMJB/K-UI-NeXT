@@ -26,6 +26,7 @@ static struct {
     unsigned phase;
     char image[512],build[13];
     char product[12],mode[64];
+    char module_path[192],module_build[13];
     struct sample begin,last,end;
     struct account total,phases[KUI_SMASH_UI_PHASES],details[KUI_SMASH_UI_DETAILS];
     uint64_t metrics[KUI_SMASH_UI_METRICS];
@@ -109,6 +110,25 @@ void kui_smash_launch_timing_native(const char *image,const char *build,const ch
     kui_smash_launch_timing_metric(KUI_SMASH_UI_MODULE_CRC32,module_crc32);
     kui_smash_launch_timing_metric(KUI_SMASH_UI_MODULE_BYTES,module_bytes);
 }
+void kui_smash_launch_timing_source_module(const char *path,const char *build,
+    uint32_t payload_crc32,uint32_t payload_bytes) {
+    if(!timing.running || !timing.selected || !path || !build || !payload_bytes)return;
+    size_t path_bytes=0u,build_bytes=0u;
+    while(path_bytes<sizeof(timing.module_path) && path[path_bytes])++path_bytes;
+    while(build_bytes<sizeof(timing.module_build) && build[build_bytes])++build_bytes;
+    if(build_bytes!=12u || path_bytes<12u || path_bytes>=sizeof(timing.module_path) ||
+       memcmp(path,"0:/KUI/",7u) || strcmp(path+path_bytes-4u,".kui") || strstr(path,".."))return;
+    for(size_t i=7u;i<path_bytes;i++) {
+        unsigned char c=(unsigned char)path[i];
+        if(!((c>='a' && c<='z') || (c>='0' && c<='9') || c=='/' || c=='-' || c=='_' || c=='.'))return;
+    }
+    for(unsigned i=0u;i<12u;i++)
+        if(!((build[i]>='0' && build[i]<='9') || (build[i]>='a' && build[i]<='f')))return;
+    memcpy(timing.module_build,build,sizeof(timing.module_build));
+    snprintf(timing.module_path,sizeof(timing.module_path),"%s",path);
+    kui_smash_launch_timing_metric(KUI_SMASH_UI_MODULE_CRC32,payload_crc32);
+    kui_smash_launch_timing_metric(KUI_SMASH_UI_MODULE_BYTES,payload_bytes);
+}
 void kui_smash_launch_timing_report_allowed(bool allowed) {timing.report_allowed=allowed;}
 void kui_smash_launch_timing_phase(enum kui_smash_ui_phase phase) {
     if(!timing.running || phase>=KUI_SMASH_UI_PHASES || phase==timing.phase)return;
@@ -183,6 +203,9 @@ size_t kui_smash_launch_timing_format(char *out,size_t capacity) {
         timing.prepared?"prepared before handoff; game start unconfirmed":"preparation failed");
     if(timing.native)append(&b,"product: %s\nreader: %s\nvirtual_vmu: %s\n",
         timing.product,timing.mode,timing.virtual_vmu?"On":"Off");
+    if(timing.module_path[0])append(&b,"source_module_path: %s\nsource_module_build: %s\n"
+        "module_identity: verified source payload before launch-time patches\n",
+        timing.module_path,timing.module_build);
     static const char *const component_names[KUI_SMASH_UI_COMPONENTS]={
         "retail-smash-menu.kui","retail-smash-native-menu.kui","retail-smash-vc2.kui","retail-smash-swirl.kui"};
     for(unsigned i=0u;i<KUI_SMASH_UI_COMPONENTS;i++)if(timing.components[i].present)

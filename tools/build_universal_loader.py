@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Build and qualify the shared ordinary/WinCE/CDDA loader rollout.
+"""Build and qualify the shared ordinary/WinCE/CDDA/physical-disc rollout.
 
 This is the cold-reader portion of the universal-loader integration. Accepted
 Standard, compact Background, physical-disc VMU and Smash components have their
@@ -59,6 +59,10 @@ def plan(commit, jobs, allow_dirty=False):
         'native_' + profile.replace('-', '_') for profile in PROFILES], command=[
         sys.executable, 'tools/build_native_cdda_compat.py', '--jobs', str(jobs),
         *(['--allow-dirty'] if allow_dirty else [])]))
+    steps.append(dict(name='disc_physical', roles=['disc_physical'], command=[
+        'make', '-f', 'Makefile.disc-native', '-j' + str(jobs), build_id,
+        'KUI_RETAIL_NATIVE_HANDOFF_PAUSE_FRAMES=0',
+        'build/disc-native/native-disc.kui', 'audit']))
     covered = [role for step in steps for role in step['roles']]
     if len(covered) != len(set(covered)) or set(covered) != set(DEFAULT_BUILDS):
         raise ValueError('Build plan does not cover every collected cold-reader role exactly once')

@@ -129,7 +129,8 @@ def audit(history_report=None,checksum_report=None):
     disc_s=(ROOT/'src/loader/disc_vmu_stage_asm.S').read_text()
     inputs={'src/loader/retail_stage.S','src/loader/retail_stage.c','src/loader/disc_stage.S',
         'src/loader/disc_stage.c','src/loader/disc_vmu_stage_asm.S','src/loader/disc_vmu_stage.c',
-        'src/loader/stage_fast_crc32.h','tests/test_global_launch_performance_policy.py'}
+        'src/loader/stage_fast_crc32.h','tests/test_global_launch_performance_policy.py',
+        'tests/test_disc_stage_launch_policy.py','tests/test_cold_handoff_policy.py'}
     rows=[];first_asm=None;first_crc=None
     for profile in PROFILES:
         name=profile[0];defines,makefiles=effective_flags(profile)
@@ -138,11 +139,18 @@ def audit(history_report=None,checksum_report=None):
             asm=preprocess((ROOT/'src/loader/disc_stage.S').read_text(),defines,True)
             require('.Lcache: .long 0x00000909' in compact(asm),'Physical disc cold entry lost its caches')
             require('_kui_disc_vmu_game_resume' not in asm,'Plain physical disc unexpectedly acquired a VMU relay')
-            cold=dict(initial_caches=True,post_bootstrap_relay=False)
+            from test_disc_stage_launch_policy import source_contract
+            normal=source_contract((ROOT/'src/loader/disc_stage.c').read_text(),0)
+            cold=dict(initial_caches=True,post_bootstrap_relay=False,
+                normal_handoff_pause_frames=normal['photo_hold_frames'])
         elif name.startswith('disc-vmu'):
             cold=relay_contract(preprocess(disc_s,defines,True),True)
         else:
             asm=preprocess(retail_s,defines,True);cold=relay_contract(asm)
+            from test_cold_handoff_policy import source_contract
+            normal=source_contract((ROOT/'src/loader/retail_stage.c').read_text(),defines)
+            cold['normal_handoff_pause_frames']=normal['photo_hold_frames']
+            cold['entry_patch_bytes']=normal['entry_patch_bytes']
             if first_asm is None:first_asm=asm
         for old_flag in (0,1):
             selected=[x for x in defines if not x.startswith('-DKUI_NATIVE_STAGE_FAST_CRC=')]

@@ -12,11 +12,50 @@ import hashlib
 from pathlib import Path
 import sys
 
-from check_vmu_native_worker_gateway import CPU, MASK, symbol_bytes
+from check_vmu_native_worker_gateway import CPU, MASK, symbol_bytes, ROOT
 from sh4_delay_slots import validate_delay_slot
 from check_native_general_lean_profile import stage_profile,stage_pins
 
 STAGE, LIMIT = 0x8CE00000, 0x8CFE0000
+
+
+def discovery_name(stage):
+    marker=stage[4].get('__kui_native_cached_discovery')
+    wrapper='_kui_native_stage_cached_discover_image'
+    require(bool(marker)==(wrapper in stage[4]),'Fresh discovery marker/function mismatch')
+    if marker is None:return '_kui_vmu_native_discover_layout'
+    require(marker==(1,0,0,0xfff1) and '_kui_native_stage_discover_image' in stage[4],
+            'Fresh discovery lacks its exact typed immutable leaf')
+    return wrapper
+
+
+def coherence_name(stage):
+    """Select the reviewed image-cohort continuation, never an alias fallback."""
+    checked='_native_sdk_coherence_after_image_proof'
+    full='_native_sdk_coherence_cached_admit'
+    if checked not in stage[4]:
+        require('__kui_native_cached_discovery' not in stage[4] and full in stage[4],
+                'New immutable discovery cannot use an unqualified coherence continuation')
+        return full
+    require(discovery_name(stage)=='_kui_native_stage_cached_discover_image' and
+            stage[4].get('__kui_native_cached_resolution')==(1,0,0,0xfff1) and full not in stage[4],
+            'Checked coherence requires the reviewed fresh image-replay/discovery cohort')
+    return checked
+
+
+def coherence_binding(stage):
+    selected=coherence_name(stage)
+    if selected=='_native_sdk_coherence_cached_admit':return {'same_invocation_image_proof_reused':False}
+    path=ROOT/'src/core/vmu_native_resolution_cache.c'
+    require(hashlib.sha256(path.read_bytes()).hexdigest()==
+            '32dd8684d6a90dad9a184734b537973470ad1b55fa3d72f080f65cd72903d093',
+            'Reprove the fresh SHA/role ordering after changing the replay leaf')
+    _,body,_=symbol_bytes(stage,'_kui_vmu_native_resolution_cache_replay',2)
+    role=stage[4]['_kui_vmu_native_early_p2_calls_valid'][0]
+    require(struct.pack('<I',role) in body,'Actual replay leaf lost fresh EARLY_P2 role validation')
+    return dict(same_invocation_image_proof_reused=True,selected_coherence_target=selected,
+        current_live_slot_admission_retained=True,replay_source_sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
+        replay_leaf_sha256=hashlib.sha256(body).hexdigest(),fresh_role_predicate=hex(role))
 
 
 def replay_name(stage):
@@ -154,7 +193,7 @@ class CacheGateway(CPU):
             (replay_name(stage), "replay"),
             ("_memcpy", "memcpy"), ("_allocation_safe", "allocation"),
             ("_readonly_release_replay_valid", "release"),
-            ("_native_sdk_coherence_cached_admit", "sdk-slot"),
+            (coherence_name(stage), "sdk-slot"),
             ("_native_passive_capture_windows", "capture"))}
         if fixed_fallback:
             self.targets[symbols['_native_fixed_plan_bind'][0]]='fixed-plan'
@@ -399,6 +438,7 @@ class CacheRoute(CacheGateway):
         self.preclear_return = MASK if seed & 1 else 0
         self.preclear_terminal = None
         symbols = stage[4]
+        self.discovery_cached=discovery_name(stage)=='_kui_native_stage_cached_discover_image'
         background='_native_background_boot_region' in symbols
         manifest = symbols["_manifest"][0]
         self.exec_address=symbols["_exec_bytes"][0]
@@ -417,7 +457,7 @@ class CacheRoute(CacheGateway):
             ("_kui_native_heap_base_relay", "restore"), ("_kui_retail_observe_native_ip", "ip"),
             (extent_name, "extent"),
             ("_native_resolution_replay", "cache"), ("_code_sha", "cached"),
-            ("_kui_vmu_native_discover_layout", "cold"), ("_native_report", "refused"))}
+            (discovery_name(stage), "cold"), ("_native_report", "refused"))}
         if "_native_runtime_mode" in symbols:
             self.targets[symbols["_native_runtime_mode"][0]] = "mode"
         from check_native_dual_callbacks import preclear_profile
@@ -473,6 +513,9 @@ class CacheRoute(CacheGateway):
                 self.route = 'preclear-refused'; self.pc = self.before[1]
                 return
         if name in ("cached", "cold", "refused"):
+            if name=='cold' and self.discovery_cached:
+                assert self.r[4:7]==[0x8c010000,self.program_bytes,0x8c010000]
+                assert self.read(self.r[7])==0 and self.r[7]==self.r[15]+8
             if name == 'cached' and self.preclear is not None:
                 assert self.calls[-2:] == ['preclear', 'cached'] and not self.preclear_refusal, \
                     'Code SHA continuation reached before its preclear boundary'
@@ -686,7 +729,7 @@ def check_common_replay_pin(image):
         ('_memcpy',0),('_native_driver',0),('_passive_layout',0),('_native_heap',0),
         ('_native_cached_resolution',544),('_native_cached_resolution',616),('_native_call',0),
         ('_native_cached_resolution',636),('_native_exits',0),('_native_arena_plan_bind',0),
-        ('_native_arena',0),('_allocation_safe',0),('_native_sdk_coherence_cached_admit',0),
+        ('_native_arena',0),('_allocation_safe',0),(coherence_name(image),0),
         ('_native_passive_capture_windows',0),('_native_fixed_plan_bind',0),('_readonly_release_replay_valid',0))
     expected=[]
     for name,offset in bindings:
@@ -702,6 +745,7 @@ def check_common_replay_pin(image):
 def check(stage, *, self_test=False, preclear_directory=None):
     symbols, sections = stage[4], stage[3]
     preclear = bind_preclear(stage, preclear_directory, self_test=self_test)
+    coherence=coherence_binding(stage)
     lean_stage=stage_profile(stage)
     address, size, kind, owner = symbols["_native_cached_resolution"]
     require(kind == 1 and size == 688 and owner < len(sections), "cache metadata must be one typed688B stage object")
@@ -776,7 +820,7 @@ def check(stage, *, self_test=False, preclear_directory=None):
         # Mutate every actual callback literal and an exact memcpy length.
         targets = [symbols[name][0] for name in ("_kui_vmu_native_cache_seed_read",
             replay_name(stage), "_allocation_safe", "_readonly_release_replay_valid",
-            "_native_sdk_coherence_cached_admit",
+            coherence_name(stage),
             "_native_passive_capture_windows")]
         if lean_stage:targets.append(symbols['_native_fixed_plan_bind'][0])
         if arena_route:targets.append(symbols['_native_arena_plan_bind'][0])
@@ -879,6 +923,16 @@ def check(stage, *, self_test=False, preclear_directory=None):
                 resolution_scope.get('actual_SH_cases')==3840 and
                 resolution_scope.get('mutation_rejections')==(26 if self_test else 0),
                 'Common replay scope lacks its complete linked argument/cache/publication proof')
+    discovery_scope={'enabled':False}
+    if discovery_name(stage)=='_kui_native_stage_cached_discover_image':
+        require(preclear_directory is not None,'Fresh discovery scope requires its actual stage artifact directory')
+        path=Path(preclear_directory)/'stage.elf'
+        require(path.read_bytes()==stage[0],'Discovery scope directory differs from parsed stage')
+        from test_native_stage_discovery_scope import audit as discovery_audit
+        discovery_scope=dict(discovery_audit(path),enabled=True)
+        require(discovery_scope.get('status')=='PASS' and discovery_scope.get('argument_count')==4 and
+                discovery_scope.get('actual_SH_cases')==792 and discovery_scope.get('unsafe_mutation_rejections')==38,
+                'Fresh discovery lacks its linked ABI/cache/publication and caller proof')
     return {"enabled": True, "temporary_resolution_address": hex(address), "temporary_resolution_bytes": size,
             "temporary_high_bss_only": True, "wrapper_entry": hex(begin), "wrapper_bytes": len(body),
             "actual_instruction_model_cases": cases, "mutation_rejections": mutations,
@@ -889,6 +943,7 @@ def check(stage, *, self_test=False, preclear_directory=None):
             "normal_and_shortened_extent_routes_checked":True,
             "extent_failure_keeps_source_length_and_refuses":True,"pure_extent_cache_scope":extent_scope,
             "pure_resolution_cache_scope":resolution_scope,
+            "pure_discovery_cache_scope":discovery_scope,"coherence_same_image_proof":coherence,
             "preheap_clear_boundary":dict(enabled=preclear is not None,
                 typed_void_no_arguments=True if preclear else None,
                 exact_call_and_code_sha_window=preclear['window'] if preclear else None,

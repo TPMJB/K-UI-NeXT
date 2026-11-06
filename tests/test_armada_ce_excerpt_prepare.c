@@ -12,12 +12,15 @@ static void fixture_kernel_digest(const struct kui_sha256 *,uint8_t [32]);
 #undef kui_sha256_digest
 #include <assert.h>
 
-/* These helpers deliberately use the legacy read-only preparation API. The
- * shell's reporting API has separate real-filesystem coverage. */
+/* Most helpers use the legacy read-only API. The source-read regression also
+ * exercises GUI reporting, with only its final report publication stubbed. */
+static bool fixture_report_expected;
+static unsigned fixture_reports;
+static struct kui_game_launch_report fixture_report;
 bool kui_game_launch_report_save(const struct kui_game_launch_report *report,
         kui_log_fn log,kui_cancel_fn cancelled) {
-    (void)report;(void)log;(void)cancelled;
-    assert(!"read-only preparation attempted to write a launch report");return false;
+    assert(fixture_report_expected && report && log && cancelled);
+    fixture_report=*report;++fixture_reports;return true;
 }
 
 #define SEED_AT (KUI_RETAIL_STAGE_BLOB_OFFSET+128u)
@@ -33,6 +36,8 @@ static struct kui_runtime_image package;
 static uint8_t *allocation;
 static enum kui_runtime_result (*fixture_runtime_source)(const char *,struct kui_runtime_image *);
 static void (*fixture_sector_source)(const char *,uint64_t,void *,size_t);
+static uint64_t fixture_media_epoch;
+uint64_t kui_media_mutation_epoch(void) {return fixture_media_epoch;}
 #define CHECK(value) do {++checks;assert(value);} while(0)
 
 static uint8_t generated_byte(uint64_t at) {
@@ -402,6 +407,10 @@ static struct {
     bool admit_kernel;
     enum kui_wince_cdda_profile kernel_profile;
     unsigned kernel_hashes;
+    bool count_kernel_reads;
+    bool kernel_epoch_during_read,kernel_epoch_after_hash;
+    unsigned kernel_read_calls,kernel_read_fail_at,kernel_cancel_at;
+    uint64_t kernel_read_bytes;
 } launch;
 static void fixture_kernel_digest(const struct kui_sha256 *hash,uint8_t digest[32]) {
     kui_sha256_digest(hash,digest);
@@ -533,6 +542,15 @@ FRESULT f_read(FIL *file,void *out,UINT bytes,UINT *got) {
         memcpy(out,(launch.descriptor[0]?launch.descriptor:descriptor)+offset,bytes);
     } else {
         unsigned track=0;CHECK(sscanf(launch.name,"track%u.raw",&track)==1);
+        const struct kui_game_image_track *source=&image.tracks[track-1u];
+        uint64_t lba=source->start_lba+offset/source->sector_bytes;
+        if(launch.count_kernel_reads && lba>=metadata.boot_lba &&
+           lba<(uint64_t)metadata.boot_lba+(metadata.boot_bytes+2047u)/2048u) {
+            ++launch.kernel_read_calls;launch.kernel_read_bytes+=bytes;
+            if(launch.kernel_epoch_during_read && launch.kernel_read_calls==1u)++fixture_media_epoch;
+            if(launch.kernel_read_calls==launch.kernel_read_fail_at) {*got=0u;return FR_DISK_ERR;}
+            if(launch.kernel_read_calls==launch.kernel_cancel_at)launch.cancelled=true;
+        }
         if(track==4u && !launch.variant) {
             CHECK(offset==150u*2352u && bytes==150u*2352u);++launch.preloads;
             if(launch.read_fail) {*got=0u;return FR_DISK_ERR;}
@@ -574,6 +592,7 @@ enum kui_runtime_result kui_runtime_read(const char *path,struct kui_runtime_ima
         kui_log_fn log,kui_cancel_fn cancel) {
     CHECK(launch.connected && launch.mounted && !out->data && log && cancel);
     ++launch.package_reads;snprintf(launch.package_path,sizeof(launch.package_path),"%s",path);
+    if(launch.kernel_epoch_after_hash)++fixture_media_epoch;
     if(fixture_runtime_source) return fixture_runtime_source(path,out);
     bool excerpt=!strcmp(path,KUI_GAMES_RETAIL_CE_EXCERPT_PACKAGE) ||
         !strcmp(path,KUI_GAMES_RETAIL_CE_BAM4_PACKAGE) || !strcmp(path,KUI_GAMES_RETAIL_CE_WORMS_PACKAGE) ||
@@ -660,22 +679,22 @@ static void complete_kernel_hashing(void) {
             image.tracks[2].sector_bytes=2048u;image.tracks[2].data_offset=0u;
         }
         kernel_mutation_at=UINT64_MAX;uint8_t digest[32];
-        CHECK(extent_sha(&image,45002u,2085u,digest)==KUI_GAME_OK);
+        CHECK(extent_sha_crc(&image,45002u,2085u,digest,NULL)==KUI_GAME_OK);
         CHECK(reads==1u && !memcmp(digest,expected,sizeof(digest)));
         CHECK(ce_music_runtime_profile(&image,&metadata,digest)==KUI_WINCE_CDDA_NONE);
         kernel_mutation_at=4096u+2084u;
-        CHECK(extent_sha(&image,45002u,2085u,digest)==KUI_GAME_OK);
+        CHECK(extent_sha_crc(&image,45002u,2085u,digest,NULL)==KUI_GAME_OK);
         CHECK(memcmp(digest,expected,sizeof(digest))!=0); /* Final included byte matters. */
         kernel_mutation_at=4096u+2085u;
-        CHECK(extent_sha(&image,45002u,2085u,digest)==KUI_GAME_OK);
+        CHECK(extent_sha_crc(&image,45002u,2085u,digest,NULL)==KUI_GAME_OK);
         CHECK(!memcmp(digest,expected,sizeof(digest))); /* Sector padding is excluded. */
         unsigned before=reads;
-        CHECK(extent_sha(&image,45002u,0u,digest)==KUI_GAME_INVALID);
-        CHECK(extent_sha(&image,45002u,2085u,NULL)==KUI_GAME_INVALID);
-        CHECK(extent_sha(&image,image.tracks[2].end_lba,2085u,digest)!=KUI_GAME_OK);
+        CHECK(extent_sha_crc(&image,45002u,0u,digest,NULL)==KUI_GAME_INVALID);
+        CHECK(extent_sha_crc(&image,45002u,2085u,NULL,NULL)==KUI_GAME_INVALID);
+        CHECK(extent_sha_crc(&image,image.tracks[2].end_lba,2085u,digest,NULL)!=KUI_GAME_OK);
         CHECK(reads==before);
         read_result=KUI_GAME_CANCELLED;
-        CHECK(extent_sha(&image,45002u,2085u,digest)==KUI_GAME_CANCELLED);
+        CHECK(extent_sha_crc(&image,45002u,2085u,digest,NULL)==KUI_GAME_CANCELLED);
     }
 }
 static void launcher_paths(void) {
@@ -920,6 +939,88 @@ static void experimental_ce_launcher_paths(void) {
     }
     puts("PASS experimental WinCE orchestration: unfamiliar products, boot filenames and six-track layout use all four fingerprint-selected adapter fixtures; real unknown SHA, cooked AUDIO, capacity overflow and missing seed refuse cleanly");
 }
+static void kernel_read_reuse(void) {
+    /* The optional runner executes an old-source mutation with two passes,
+     * then verifies that this same one-pass expectation rejects it. */
+    const char *control=getenv("KUI_TEST_CE_KERNEL_READ_PASSES");
+    unsigned passes=control?(unsigned)strtoul(control,NULL,10):1u;
+    CHECK(passes==1u || passes==2u);
+    const uint32_t request=KUI_GAMES_RETAIL_CE_PROBE|KUI_GAMES_RETAIL_CE_EXCERPT|KUI_RETAIL_READER_ASYNC;
+    for(enum kui_wince_cdda_profile profile=KUI_WINCE_CDDA_ARMADA;
+            profile<=KUI_WINCE_CDDA_WORMS_WORLD_PARTY;profile++) {
+        for(unsigned cooked=0u;cooked<2u;cooked++) {
+            launch_setup();launch.stream=launch.variant=true;
+            launch.kernel_profile=profile;launch.count_kernel_reads=true;
+            const struct kui_wince_cdda_disc *disc=kui_wince_cdda_disc(profile);
+            metadata.boot_lba=disc->boot_lba;metadata.boot_bytes=disc->kernel_bytes;
+            image.count=disc->track_count;strcpy(metadata.product,disc->product);
+            size_t at=(size_t)snprintf(launch.descriptor,sizeof(launch.descriptor),"%u\n",image.count);
+            for(unsigned i=0;i<image.count;i++) {
+                uint32_t control=kui_wince_cdda_track_control(profile,i);
+                uint32_t stride=cooked && control?2048u:2352u;
+                uint32_t end=i+1u<image.count?disc->starts[i+1u]:549150u;
+                image.tracks[i]=(struct kui_game_image_track){.number=i+1u,.start_lba=disc->starts[i],
+                    .end_lba=end,.sector_bytes=stride,.control=control,.sector_mode=control?1u:0u,
+                    .data_offset=control && stride==2352u?16u:0u,
+                    .file_bytes=(uint64_t)(end-disc->starts[i])*stride};
+                snprintf(image.tracks[i].name,sizeof(image.tracks[i].name),"track%02u.raw",i+1u);
+                at+=(size_t)snprintf(launch.descriptor+at,sizeof(launch.descriptor)-at,
+                    "%u %u %u %u track%02u.raw 0\n",i+1u,disc->starts[i],control,stride,i+1u);
+                CHECK(at<sizeof(launch.descriptor));
+            }
+            fixture_reports=0u;fixture_report_expected=true;
+            struct kui_runtime_image prepared;
+            CHECK(kui_games_retail_prepare_launch("/Games/ARMADA/ARMADA.gdi",request,NULL,
+                &prepared,record_log,launch_cancel));
+            fixture_report_expected=false;
+            uint32_t sectors=(disc->kernel_bytes+2047u)/2048u;
+            CHECK(launch.kernel_read_calls==passes*((sectors+15u)/16u));
+            CHECK(launch.kernel_read_bytes==(uint64_t)passes*sectors*(cooked?2048u:2352u));
+            struct kui_retail_manifest decoded;
+            CHECK(kui_retail_manifest_decode((uint8_t *)prepared.data+KUI_RETAIL_MAP_OFFSET,&decoded)==KUI_GAME_OK);
+            CHECK(fixture_reports==1u && fixture_report.executable_crc32==decoded.boot_crc32);
+            CHECK(decoded.flags&KUI_RETAIL_IMAGE_BOOT_CRC);
+            CHECK(launch.kernel_hashes==1u && launch.opens==launch.closes && !launch.connected && !launch.mounted);
+            kui_runtime_free(&prepared);
+        }
+    }
+    for(unsigned fault=0u;fault<2u;fault++) {
+        launch_setup();launch.stream=true;launch.count_kernel_reads=true;
+        if(fault)launch.kernel_cancel_at=2u;else launch.kernel_read_fail_at=2u;
+        struct kui_runtime_image prepared;
+        CHECK(!kui_games_retail_prepare_reader("/Games/ARMADA/ARMADA.gdi",request,
+            &prepared,record_log,launch_cancel));
+        CHECK(!prepared.data && !launch.package_reads && !launch.kernel_hashes);
+        CHECK(launch.kernel_read_calls==2u && launch.opens==launch.closes && !launch.connected && !launch.mounted);
+    }
+    for(unsigned when=0u;when<2u;when++) {
+        launch_setup();launch.stream=true;launch.count_kernel_reads=true;
+        launch.kernel_epoch_during_read=when==0u;launch.kernel_epoch_after_hash=when==1u;
+        fixture_reports=0u;fixture_report_expected=true;
+        struct kui_runtime_image prepared;
+        CHECK(kui_games_retail_prepare_launch("/Games/ARMADA/ARMADA.gdi",request,NULL,
+            &prepared,record_log,launch_cancel));
+        fixture_report_expected=false;
+        uint32_t sectors=(metadata.boot_bytes+2047u)/2048u;
+        CHECK(launch.kernel_read_calls==2u*((sectors+15u)/16u));
+        CHECK(launch.kernel_read_bytes==(uint64_t)2u*sectors*2352u);
+        CHECK(fixture_reports==1u && launch.kernel_hashes==1u);
+        CHECK(launch.opens==launch.closes && !launch.connected && !launch.mounted);
+        kui_runtime_free(&prepared);
+    }
+    for(unsigned fault=0u;fault<5u;fault++) {
+        struct extent_crc_proof proof={&image,fixture_media_epoch,45002u,2085u,0x12345678u,true};
+        const struct kui_game_image *source=&image;uint32_t lba=45002u,bytes=2085u,crc=0xaabbccddu;
+        if(fault==1u)source=NULL;
+        if(fault==2u)++lba;
+        if(fault==3u)++bytes;
+        if(fault==4u)++fixture_media_epoch;
+        CHECK(extent_crc_proof_take(&proof,source,lba,bytes,&crc)==(fault==0u));
+        CHECK(crc==(fault==0u?0x12345678u:0xaabbccddu) && !proof.complete);
+        CHECK(!extent_crc_proof_take(&proof,&image,45002u,2085u,&crc));
+    }
+    puts("PASS shared CE kernel source reuse: four profiles x raw/cooked GUI launches, exact byte/CRC reporting, single full read, source failure/cancel refusal, changed image/LBA/length/epoch and one-shot invalidation");
+}
 int main(void) {
     profile_admission();bam4_profile_admission();runtime_profile_admission();
     complete_kernel_hashing();seed_success();seed_rejections();
@@ -930,6 +1031,7 @@ int main(void) {
     stream_launcher_paths();
     converted_ce_launcher_paths();
     experimental_ce_launcher_paths();
+    kernel_read_reuse();
     printf("WinCE music preparation: %u checks; complete real SHA hashing, fingerprint routing, experimental synthetic layouts, exact raw/cooked DATA fixtures, raw AUDIO, source maps, generated preload, seed bounds, package isolation and failed/cancelled reads passed\n",checks);
     return 0;
 }

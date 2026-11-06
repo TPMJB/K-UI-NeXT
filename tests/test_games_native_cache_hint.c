@@ -13,7 +13,7 @@ typedef bool (*kui_cancel_fn)(void);
 #include "kui/vmu_native_cache_seed.h"
 #include "kui/native_dual_reader.h"
 typedef unsigned FRESULT;
-enum {FR_OK,FR_NO_PATH,FR_DISK_ERR,AM_DIR=16u};
+enum {FR_OK,FR_NO_PATH,FR_DISK_ERR,FR_EXIST,FR_INVALID_NAME,AM_DIR=16u};
 typedef struct {unsigned at;} DIR;
 typedef struct {size_t fsize;unsigned fattrib;char fname[256];} FILINFO;
 enum native_cache_result {NATIVE_CACHE_SKIPPED,NATIVE_CACHE_READY,NATIVE_CACHE_CANCELLED};
@@ -23,11 +23,15 @@ static struct {
     unsigned opens,reads,closes,allocations,logs,cancel_checks,cancel_at;
     unsigned directory_padding;
     bool fail_open,fail_read_directory,fail_close,fail_read_file,fail_malloc;
+    unsigned alias_reads,canonical_reads,publishes;
+    bool alias_present,fail_alias_read,fail_publish,fail_directories;
+    char alias_path[128];uint8_t alias_wire[1024];
 } io;
 static uint8_t module[4096],before[4096];
 static struct kui_runtime_image package;
 static struct kui_retail_manifest map;
 static uint8_t image[1024];
+static bool last_indexed;
 static bool cancelled(void) {return ++io.cancel_checks==io.cancel_at;}
 static bool native_cache_cancelled(kui_cancel_fn cancel) {return cancel && cancel();}
 static bool native_cache_source_conflict(const char *root) {
@@ -56,7 +60,13 @@ static FRESULT f_readdir(DIR *dir,FILINFO *entry) {
 }
 static FRESULT f_closedir(DIR *dir) {(void)dir;++io.closes;return io.fail_close?FR_DISK_ERR:FR_OK;}
 static bool native_cache_file_read(const char *path,uint8_t wire[1024]) {
+    if(strstr(path,"/hints/")) {
+        ++io.alias_reads;
+        if(!io.alias_present || io.fail_alias_read || strcmp(path,io.alias_path))return false;
+        memcpy(wire,io.alias_wire,1024u);return true;
+    }
     if(io.fail_read_file)return false;
+    ++io.canonical_reads;
     const char *name=strrchr(path,'/');CHECK(name);++name;
     for(unsigned i=0u;i<count;i++)if(!strcmp(name,nodes[i].name)) {
         CHECK(nodes[i].size==1024u && !(nodes[i].attributes&AM_DIR));
@@ -65,6 +75,24 @@ static bool native_cache_file_read(const char *path,uint8_t wire[1024]) {
     CHECK(false);return false;
 }
 static void logger(const char *format,...) {CHECK(format);++io.logs;}
+static bool native_cache_directories(void) {return !io.fail_directories;}
+static FRESULT f_mkdir(const char *path) {
+    CHECK(!strcmp(path,"0:/KUI/VMU/native-cache/v8/hints"));return FR_OK;
+}
+static FRESULT f_stat(const char *path,FILINFO *entry) {
+    CHECK(!strcmp(path,"0:/KUI/VMU/native-cache/v8/hints"));
+    memset(entry,0,sizeof(*entry));entry->fattrib=AM_DIR;return FR_OK;
+}
+/* The complete temporary/sync/readback/rename publisher has separate actual
+ * I/O fault coverage in test_games_native_cache.c. Keep this seam focused on
+ * advisory selection, unchanged bytes and the no-write fast path. */
+static bool native_cache_file_publish(const char *path,const uint8_t wire[1024],
+    uint8_t compare[1024],kui_cancel_fn cancel) {
+    CHECK(strstr(path,"/hints/") && strlen(path)<sizeof(io.alias_path));++io.publishes;
+    if(io.fail_publish || (cancel && cancel()))return false;
+    strcpy(io.alias_path,path);memcpy(io.alias_wire,wire,1024u);memcpy(compare,wire,1024u);
+    io.alias_present=true;return true;
+}
 static void *hint_malloc(size_t bytes) {++io.allocations;return io.fail_malloc?NULL:malloc(bytes);}
 #define malloc hint_malloc
 #include "../src/apps/games_native_cache_hint.inc"
@@ -92,7 +120,11 @@ static void dual_module(uint32_t lease) {
     memcpy(module+2048u,&cap,sizeof(cap));memcpy(before,module,sizeof(module));map.reader=KUI_RETAIL_READER_ASYNC;
 }
 static enum native_cache_result prepare(bool dual) {
-    enum native_cache_result result=native_cache_hint_prepare(&map,dual,&package,"/Games/Test",logger,cancelled);
+    bool indexed=false;
+    enum native_cache_result result=native_cache_hint_prepare(&map,dual,&package,"/Games/Test",
+        "/Games/Test/Test.gdi",&indexed,logger,cancelled);
+    last_indexed=indexed;
+    if(indexed)CHECK(result==NATIVE_CACHE_READY && io.alias_present && !io.opens && !io.publishes);
     CHECK(io.closes==(io.opens && !io.fail_open?1u:0u));
     if(result!=NATIVE_CACHE_READY)CHECK(!memcmp(module,before,sizeof(module)));
     else CHECK(!memcmp(module,before,128u) && !memcmp(module+1248u,before+1248u,sizeof(module)-1248u));
@@ -164,7 +196,8 @@ static void module_tests(void) {
         if(variant==2u)map.flags|=KUI_RETAIL_IMAGE_SCRAMBLED;
         CHECK(prepare(false)==NATIVE_CACHE_SKIPPED);
     }
-    setup();add_regular('a');CHECK(native_cache_hint_prepare(&map,false,&package,"/KUI/VMU/Game",logger,cancelled)==NATIVE_CACHE_SKIPPED);
+    setup();add_regular('a');CHECK(native_cache_hint_prepare(&map,false,&package,"/KUI/VMU/Game",
+        "/KUI/VMU/Game/Test.gdi",NULL,logger,cancelled)==NATIVE_CACHE_SKIPPED);
     CHECK(!io.opens && !memcmp(module,before,sizeof(module)));
 }
 static void failure_tests(void) {
@@ -183,9 +216,12 @@ static void failure_tests(void) {
 }
 static void stale_hint_tests(void) {
     setup();add_regular('a');CHECK(prepare(false)==NATIVE_CACHE_READY);
+    CHECK(native_cache_alias_publish("/Games/Test/Test.gdi",&map,false,&package,"/Games/Test",cancelled));
     const uint8_t *wire,*pin;struct kui_vmu_native_resolution out;
     CHECK(kui_vmu_native_cache_seed_read(module+128u,1120u,&wire,&pin));
     image[500]^=1u;memset(&out,0xa5,sizeof(out));struct kui_vmu_native_resolution saved=out;
+    io.opens=io.reads=io.closes=io.publishes=0u;
+    CHECK(prepare(false)==NATIVE_CACHE_READY && last_indexed && !io.reads);
     /* Same bytes/load and a valid canonical record are deliberately not
      * sufficient: actual stage replay hashes the newly loaded image. */
     CHECK(!kui_vmu_native_resolution_cache_replay(image,sizeof(image),load,wire,1024u,pin,&out));
@@ -195,6 +231,67 @@ static void stale_hint_tests(void) {
      * This authored image has no SDK: rediscovery refuses it safely. */
     CHECK(!kui_vmu_native_resolution_cache_build(image,sizeof(image),load,fresh,sizeof(fresh),&out));
     CHECK(!memcmp(&saved,&out,sizeof(out)));for(unsigned i=0u;i<sizeof(fresh);i++)CHECK(fresh[i]==0xa5u);
+}
+static void indexed_hint_tests(void) {
+    char key[128],same[128],other[128];
+    setup();CHECK(native_cache_alias_path(key,"/Games/Test/Test.gdi",&map,false,&package));
+    CHECK(native_cache_alias_path(same,"0:\\games\\TEST\\test.GDI",&map,false,&package));
+    CHECK(!strcmp(key,same) && strstr(key,"/v8/hints/") && strlen(key)<120u);
+    for(unsigned field=0u;field<6u;field++) {
+        struct kui_retail_manifest changed=map;
+        if(field==0u)++changed.boot_lba;
+        if(field==1u)++changed.boot_bytes;
+        if(field==2u)++changed.storage_transport;
+        if(field==3u)++changed.reader;
+        if(field==4u)++changed.gdi_crc32;
+        const char *selected=field==5u?"/Games/Other/Test.gdi":"/Games/Test/Test.gdi";
+        CHECK(native_cache_alias_path(other,selected,&changed,false,&package) && strcmp(key,other));
+    }
+    strcpy(other,"unchanged");CHECK(!native_cache_alias_path(other,"/Games/../Test.gdi",&map,false,&package));
+    CHECK(!strcmp(other,"unchanged"));
+    dual_module(KUI_NATIVE_DUAL_COMPACT_LEASE_BYTES);
+    CHECK(native_cache_alias_path(key,"/Games/Test/Test.gdi",&map,true,&package));
+    dual_module(KUI_NATIVE_DUAL_GENERAL_LEASE_BYTES);
+    CHECK(native_cache_alias_path(other,"/Games/Test/Test.gdi",&map,true,&package) && strcmp(key,other));
+    CHECK(native_cache_alias_path(other,"/Games/Test/Test.gdi",&map,false,&package) && strcmp(key,other));
+
+    /* First discovery keeps the complete original bounded directory scan.
+     * The next identical image uses one advisory file regardless of size. */
+    setup();add_regular('a');io.directory_padding=255u;
+    CHECK(prepare(false)==NATIVE_CACHE_READY && !last_indexed && io.reads==257u && io.canonical_reads==1u);
+    CHECK(native_cache_alias_publish("/Games/Test/Test.gdi",&map,false,&package,"/Games/Test",cancelled));
+    CHECK(io.publishes==1u && io.alias_present && !memcmp(io.alias_wire,nodes[0].wire,1024u));
+    io.opens=io.reads=io.closes=io.publishes=io.alias_reads=io.canonical_reads=0u;
+    io.directory_padding=10000u; /* Direct indexing is independent of scan limits. */
+    CHECK(prepare(false)==NATIVE_CACHE_READY && last_indexed);
+    CHECK(io.alias_reads==1u && !io.canonical_reads && !io.reads && !io.publishes);
+    CHECK(native_cache_alias_publish("/Games/Test/Test.gdi",&map,false,&package,"/Games/Test",cancelled));
+    CHECK(!io.publishes); /* A defensive publisher call still cannot rewrite unchanged bytes. */
+
+    /* Malformed or incompatible alias bytes cannot change fallback policy. */
+    for(unsigned fault=0u;fault<4u;fault++) {
+        setup();add_regular('a');CHECK(prepare(false)==NATIVE_CACHE_READY);
+        CHECK(native_cache_alias_publish("/Games/Test/Test.gdi",&map,false,&package,"/Games/Test",cancelled));
+        if(fault==0u)io.alias_wire[300]^=1u;
+        if(fault==1u)io.fail_alias_read=true;
+        if(fault==2u)io.alias_path[0]='1';
+        if(fault==3u) {
+            struct kui_vmu_native_resolution record;mock(image,sizeof(image),&record);
+            record.driver.image_bytes=record.heap.image_bytes=record.exits.image_bytes=768u;
+            CHECK(kui_vmu_native_resolution_cache_encode(&record,io.alias_wire,sizeof(io.alias_wire)));
+        }
+        io.opens=io.reads=io.closes=io.publishes=0u;
+        CHECK(prepare(false)==NATIVE_CACHE_READY && !last_indexed && io.opens==1u && io.reads==2u);
+    }
+    for(unsigned fault=0u;fault<3u;fault++) {
+        setup();add_regular('a');CHECK(prepare(false)==NATIVE_CACHE_READY);
+        uint8_t saved[sizeof(module)];memcpy(saved,module,sizeof(saved));
+        io.fail_publish=fault==0u;io.fail_directories=fault==1u;
+        if(fault==2u){io.cancel_checks=0u;io.cancel_at=1u;}
+        CHECK(!native_cache_alias_publish("/Games/Test/Test.gdi",&map,false,&package,"/Games/Test",cancelled));
+        CHECK(!io.alias_present && !memcmp(saved,module,sizeof(saved)));
+    }
+    puts("PASS indexed native hints: canonical path/extent/epoch/class/lease keys,257-directory-call old control versus one direct read/no writes, unchanged NVR bytes, bad-alias fallback and failed publication");
 }
 static void actual_rediscovery(const char *path) {
     FILE *file=fopen(path,"rb");CHECK(file);CHECK(!fseek(file,0,SEEK_END));long length=ftell(file);CHECK(length>0);
@@ -212,8 +309,40 @@ static void actual_rediscovery(const char *path) {
     CHECK(kui_vmu_native_resolution_cache_build(boot,bytes,load,fresh,sizeof(fresh),&out));
     uint8_t expected[32];digest(boot,bytes,expected);CHECK(!memcmp(out.driver.image_sha256,expected,32u));free(boot);
 }
+static void actual_module_slot(const char *path) {
+    FILE *file=fopen(path,"rb");CHECK(file);CHECK(!fseek(file,0,SEEK_END));long total=ftell(file);CHECK(total>64);
+    rewind(file);uint8_t *envelope=malloc((size_t)total);CHECK(envelope);
+    CHECK(fread(envelope,1,(size_t)total,file)==(size_t)total && !fclose(file));
+    CHECK(!memcmp(envelope,"KUIRUN1\0",8u) && get32(envelope+12u)==64u);
+    size_t bytes=get32(envelope+16u);CHECK(bytes==(size_t)total-64u);
+    CHECK(kui_crc32(0,envelope,60u)==get32(envelope+60u));
+    CHECK(kui_crc32(0,envelope+64u,bytes)==get32(envelope+32u));
+    uint8_t *payload=envelope+64u,*original=malloc(bytes);CHECK(original);memcpy(original,payload,bytes);
+    size_t slot=kui_vmu_native_cache_seed_find(payload,bytes);CHECK(slot!=SIZE_MAX);
+    bool dual=kui_native_dual_descriptor_find(payload,bytes,NULL)==1;
+    setup();add_regular('a');package=(struct kui_runtime_image){.data=payload,.info={.payload_bytes=(uint32_t)bytes}};
+    map.reader=dual?KUI_RETAIL_READER_ASYNC:KUI_RETAIL_READER_STANDARD;
+    bool indexed=false;
+    CHECK(native_cache_hint_prepare(&map,dual,&package,"/Games/Test","/Games/Test/Test.gdi",
+        &indexed,logger,cancelled)==NATIVE_CACHE_READY && !indexed);
+    CHECK(native_cache_alias_publish("/Games/Test/Test.gdi",&map,dual,&package,"/Games/Test",cancelled));
+    memcpy(payload+slot,original+slot,KUI_VMU_NATIVE_CACHE_SEED_BYTES);
+    io.opens=io.reads=io.closes=io.publishes=io.alias_reads=io.canonical_reads=0u;
+    CHECK(native_cache_hint_prepare(&map,dual,&package,"/Games/Test","/Games/Test/Test.gdi",
+        &indexed,logger,cancelled)==NATIVE_CACHE_READY && indexed);
+    CHECK(io.alias_reads==1u && !io.opens && !io.reads && !io.canonical_reads && !io.publishes);
+    CHECK(!memcmp(payload,original,slot));
+    CHECK(!memcmp(payload+slot+KUI_VMU_NATIVE_CACHE_SEED_BYTES,original+slot+KUI_VMU_NATIVE_CACHE_SEED_BYTES,
+        bytes-slot-KUI_VMU_NATIVE_CACHE_SEED_BYTES));
+    printf("PASS actual native module %.12s advisory slot: %s; only its existing seed changed in RAM, indexed hit one read/no writes\n",
+        envelope+40u,path);
+    free(original);free(envelope);
+}
 int main(int argc,char **argv) {
-    inspect_tests();selection_tests();module_tests();failure_tests();stale_hint_tests();
-    if(argc>1)actual_rediscovery(argv[1]);
-    printf("Native mapping hints: %u checks passed%s\n",checks,argc>1?" including successful actual-image rediscovery":"");return 0;
+    inspect_tests();selection_tests();module_tests();failure_tests();stale_hint_tests();indexed_hint_tests();
+    bool modules=argc>1 && !strcmp(argv[1],"--modules");
+    if(modules) {CHECK(argc>2);for(int i=2;i<argc;i++)actual_module_slot(argv[i]);}
+    else if(argc>1)actual_rediscovery(argv[1]);
+    printf("Native mapping hints: %u checks passed%s\n",checks,argc>1?(modules?
+        " including actual packaged module slots":" including successful actual-image rediscovery"):"");return 0;
 }

@@ -91,6 +91,38 @@ static void independent_format(void) {
     assert(kui_game_launch_report_inspect(record,actual,&sequence) && sequence==UINT64_MAX);
     puts("PASS launch report: independent CRC/text fixture, complete byte coverage, truncation and sequence limits");
 }
+static void source_module_format(void) {
+    struct kui_game_launch_report report=launch;
+    report.module_build="fedcba987654";report.module_bytes=48412u;report.module_crc32=UINT32_C(0x89abcdef);
+    static const char fields[]="source module build: fedcba987654\n"
+        "source module payload bytes: 48412\nsource module crc32: 89ABCDEF\n";
+    const char *tail=strstr(fixture_body,"product: ");assert(tail);
+    char body[KUI_GAME_LAUNCH_REPORT_MAX],expected[KUI_GAME_LAUNCH_REPORT_MAX],record[KUI_GAME_LAUNCH_REPORT_MAX];
+    int n=snprintf(body,sizeof(body),"%.*s%s%s",(int)(tail-fixture_body),fixture_body,fields,tail);
+    assert(n>0 && (size_t)n<sizeof(body));
+    size_t bytes=seal(expected,body),actual=encoded(record,&report,42u);uint64_t sequence=0u;
+    assert(bytes==actual && !memcmp(expected,record,bytes));
+    assert(kui_game_launch_report_inspect(expected,bytes,&sequence) && sequence==42u);
+    static const struct {const char *before,*after;} invalid[]={
+        {"fedcba987654","FEDCBA987654"},{"fedcba987654","fedcba98765"},
+        {"48412","0"},{"48412","4294967296"},{"89ABCDEF","89abcdef"},
+        {"source module payload bytes: 48412\n",""},
+        {"source module crc32: 89ABCDEF\n",""},
+        {"source module build: fedcba987654\n",""},
+    };
+    for(unsigned i=0u;i<sizeof(invalid)/sizeof(invalid[0]);i++) {
+        const char *at=strstr(body,invalid[i].before);assert(at);
+        char changed_body[KUI_GAME_LAUNCH_REPORT_MAX];
+        n=snprintf(changed_body,sizeof(changed_body),"%.*s%s%s",(int)(at-body),body,
+            invalid[i].after,at+strlen(invalid[i].before));
+        assert(n>0 && (size_t)n<sizeof(changed_body));
+        actual=seal(record,changed_body);rejected(record,actual);
+    }
+    /* Zero is a possible source CRC, but partial/invalid identities refuse. */
+    report.module_crc32=0u;actual=encoded(record,&report,1u);
+    assert(kui_game_launch_report_inspect(record,actual,&sequence));
+    puts("PASS launch report: independent final source-module identity, legacy readability and strict extension grammar");
+}
 static void grammar(void) {
     static const struct {const char *before,*after;} cases[]={
         {"KUI launch report v1\n","KUI launch report v2\n"},
@@ -145,6 +177,15 @@ static void text_and_bounds(void) {
     char record[KUI_GAME_LAUNCH_REPORT_MAX],normal[KUI_GAME_LAUNCH_REPORT_MAX];
     size_t bytes=encoded(normal,&launch,42);
     struct kui_game_launch_report report=launch;
+    report.module_bytes=1u;encode_rejected(&report,1u,sizeof(record));report=launch;
+    report.module_crc32=1u;encode_rejected(&report,1u,sizeof(record));report=launch;
+    report.module_build="fedcba987654";encode_rejected(&report,1u,sizeof(record));
+    static const char *const invalid_builds[]={"","a","fedcba98765","fedcba9876543","FEDCBA987654"};
+    report.module_bytes=4u;
+    for(unsigned i=0u;i<sizeof(invalid_builds)/sizeof(invalid_builds[0]);i++) {
+        report.module_build=invalid_builds[i];encode_rejected(&report,1u,sizeof(record));
+    }
+    report=launch;
     report.image_path="0:\\GAMES\\\\Toy Commander\\disc.GDI";
     report.package_path="0:/KUI//LOADERS/RETAIL-SCI.BIN";
     assert(encoded(record,&report,42)==bytes && !memcmp(record,normal,bytes));
@@ -339,5 +380,5 @@ static void storage_faults(void) {
     puts("PASS launch report: open/read/short/write/sync/close/reread faults, cancellation and sequence exhaustion preserve authority");
 }
 int main(void) {
-    independent_format();grammar();text_and_bounds();recover_and_alternate();storage_faults();return 0;
+    independent_format();source_module_format();grammar();text_and_bounds();recover_and_alternate();storage_faults();return 0;
 }

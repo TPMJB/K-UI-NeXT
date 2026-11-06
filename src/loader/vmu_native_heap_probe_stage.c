@@ -654,6 +654,10 @@ static void __attribute__((noipa)) native_arm_fixed_call(const uint32_t *frame) 
 #include "smash_native_return_stage.inc"
 #endif
 #endif
+#if KUI_NATIVE_CACHED_EXTENT && KUI_VMU_NATIVE_PASSIVE_PROBE
+#include "native_cold_discovery.inc"
+extern bool kui_native_stage_cached_discover_image(const void *,size_t,uint32_t,uint32_t *);
+#endif
 void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
 #if KUI_SMASH_PHASE_DIAGNOSTIC
     kui_smash_phase_stage_mark(KUI_SMASH_PHASE_RELAY_BEGIN);
@@ -742,6 +746,16 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     else {
         retail_display_line("NO MATCHING NATIVE CACHE - SCANNING");
 #endif
+#if KUI_NATIVE_CACHED_EXTENT && KUI_VMU_NATIVE_PASSIVE_PROBE
+    retail_display_line("RESOLVING MAPLE DRIVER AND BUFFER LAYOUT");
+    /* A missed saved mapping still receives the shared immutable-proof
+     * cache policy. Every recognition predicate and complete source hash
+     * remains; private outputs become visible before live SDK checks. */
+    uint32_t detail=0u;
+    if(!kui_native_stage_cached_discover_image((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
+       exec_bytes,KUI_RETAIL_EXEC_ADDRESS,&detail))native_report(2u,detail);
+    native_passive_prepare_finish();
+#else
 #if KUI_VMU_NATIVE_PASSIVE_PROBE
     retail_display_line("RESOLVING MAPLE DRIVER AND BUFFER LAYOUT");
     if(!kui_vmu_native_discover_layout((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
@@ -782,6 +796,7 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
     retail_display_line("CHECKING DISPLACED INSTRUCTION WINDOW");
     native_passive_prepare();
 #endif
+#endif /* uncached original discovery or shared immutable cached discovery */
 #if KUI_VMU_NATIVE_CACHE_PROBE
     }
 #endif

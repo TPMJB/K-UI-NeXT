@@ -158,7 +158,7 @@ build/dc/smash-launch-timing.config: force-smash-launch-timing-config
 	@mkdir -p $(@D)
 	@printf 'KUI_SMASH_LAUNCH_TIMING=%s\n' '$(KUI_SMASH_LAUNCH_TIMING)' > $@.new
 	@cmp -s $@.new $@ && rm $@.new || mv $@.new $@
-build/dc/src/apps/games_retail.o: src/apps/games_native_cache.inc src/apps/games_native_cache_hint.inc src/apps/games_native_owner_cache.inc include/kui/native_source_owner.h include/kui/vmu_native_cache_seed.h include/kui/vmu_native_resolution_cache.h
+build/dc/src/apps/games_retail.o: src/apps/games_native_cache.inc src/apps/games_native_cache_hint.inc src/apps/games_native_cache_alias.inc src/apps/games_native_owner_cache.inc include/kui/native_source_owner.h include/kui/vmu_native_cache_seed.h include/kui/vmu_native_resolution_cache.h
 build/dc/src/apps/games_retail.o: include/kui/native_standard_route.h include/kui/native_standalone_foreground.h
 build/dc/src/core/repair_copy.o: src/core/repair_resume.inc include/kui/recovery_guard.h
 build/dc/src/core/salvage.o: src/core/salvage_files.inc src/core/salvage_control_trial.inc

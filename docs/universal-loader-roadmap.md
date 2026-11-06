@@ -6,6 +6,13 @@ working while extending shared support. A runtime may use demand delivery
 without a speculative cache. Physical VMUs remain available where virtual
 VMU is not yet supported.
 
+Current scope is **Games only**. Startup/splash, menus, updater implementation
+and branding are frozen. Their older follow-up notes below are deferred and
+do not authorize work during this integration. Prioritize shared launch work,
+complete routed-module coverage and proof of the final reader actually used.
+The current operation-level corrections and the remaining allocation-proof
+cost are recorded in `shared-game-launch-performance.md`.
+
 This work starts at Main `d393b859a9ee23d372daca54ef13c7839072097a` on
 2026-11-06, after acceptance of Smash Pack source `cc81e63ca4d2`.
 The initial implementation branch is `codex/universal-loader-integration`.

@@ -65,6 +65,10 @@ void kui_smash_launch_timing_activate(const char *image,const char *build);
  * descriptive launch context; it never changes the selected reader or VMU. */
 void kui_smash_launch_timing_native(const char *image,const char *build,const char *product,
     const char *mode,bool virtual_vmu,uint32_t module_crc32,uint32_t module_bytes);
+/* Final selected module's verified source header, before launch-time patches.
+ * Replaces the earlier module metrics when a supported fallback changes it. */
+void kui_smash_launch_timing_source_module(const char *path,const char *build,
+    uint32_t payload_crc32,uint32_t payload_bytes);
 void kui_smash_launch_timing_report_allowed(bool allowed);
 void kui_smash_launch_timing_phase(enum kui_smash_ui_phase);
 void kui_smash_launch_timing_metric(enum kui_smash_ui_metric,uint64_t);
@@ -91,6 +95,7 @@ size_t kui_smash_launch_timing_format(char *,size_t);
 #define kui_smash_launch_timing_request(enabled,ms) ((void)0)
 #define kui_smash_launch_timing_activate(image,build) ((void)0)
 #define kui_smash_launch_timing_native(image,build,product,mode,vmu,crc,bytes) ((void)0)
+#define kui_smash_launch_timing_source_module(path,build,crc,bytes) ((void)0)
 #define kui_smash_launch_timing_report_allowed(allowed) ((void)0)
 #define kui_smash_launch_timing_phase(phase) ((void)0)
 #define kui_smash_launch_timing_metric(metric,value) ((void)0)

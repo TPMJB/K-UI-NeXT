@@ -79,9 +79,10 @@ class GlobalRollout(unittest.TestCase):
                         write_rollout({**self.collected_files(), name: b'bad'}, Path(temporary) / 'output')
             self.assertEqual(list(Path(temporary).iterdir()), [])
 
-    def test_complete_twelve_role_fifteen_file_install_contract(self):
-        self.assertEqual(len(DEFAULT_BUILDS), 12)
-        self.assertEqual(len(INSTALL_TARGETS), 15)
+    def test_complete_thirteen_role_sixteen_file_install_contract(self):
+        self.assertEqual(len(DEFAULT_BUILDS), 13)
+        self.assertEqual(len(INSTALL_TARGETS), 16)
+        self.assertIn('KUI/apps/disc/native-disc.kui', INSTALL_TARGETS)
         for name in ('cdda-toy-raw', 'cdda-toy-cooked', 'retail-cdda-mdk2',
                      'cdda-native-toy-raw', 'cdda-native-toy-cooked', 'cdda-native-mdk2'):
             self.assertIn('KUI/apps/games/' + name + '.kui', INSTALL_TARGETS)
@@ -89,6 +90,8 @@ class GlobalRollout(unittest.TestCase):
         self.assertFalse(any('silver' in name or 'vmu-toy' in name for name in INSTALL_TARGETS))
         with self.assertRaisesRegex(ValueError, 'Incomplete'):
             collect({k:v for k,v in DEFAULT_BUILDS.items() if k != 'ce'}, '1'*40)
+        with self.assertRaisesRegex(ValueError, 'Incomplete'):
+            collect({k:v for k,v in DEFAULT_BUILDS.items() if k != 'disc_physical'}, '1'*40)
         with self.assertRaisesRegex(ValueError, 'Incomplete'):
             collect({**DEFAULT_BUILDS, 'old_foreground':Path('irrelevant')}, '1'*40)
 

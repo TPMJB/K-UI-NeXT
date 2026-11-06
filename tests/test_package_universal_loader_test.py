@@ -48,7 +48,8 @@ class UniversalDelivery(unittest.TestCase):
         self.archive_sha = hashlib.sha256(self.accepted.read_bytes()).hexdigest()
         self.cold = {name: envelope(b'new cold reader bytes'.ljust(24, b'\0'), 24, COMMIT[:12])
                      for name in delivery.INSTALL_TARGETS}
-        self.cold['evidence/global-loader-rollout.json'] = b'{"qualified_cold_roles":12}'
+        self.cold['evidence/global-loader-rollout.json'] = json.dumps(
+            dict(qualified_cold_roles=len(delivery.DEFAULT_BUILDS))).encode()
         self.cold_report = dict(status='PASS', source_commit=COMMIT, installed_files=sorted(delivery.INSTALL_TARGETS))
         self.gui()
         for selected in (patch.object(delivery, 'source_state', return_value=dict(commit=COMMIT, dirty=False)),
@@ -74,12 +75,13 @@ class UniversalDelivery(unittest.TestCase):
     def build(self):
         return delivery.build(self.runtime, self.elf, self.accepted, self.output, self.evidence)
 
-    def test_twenty_one_real_replacements_preserve_ce_pilot_and_accepted_smash(self):
+    def test_complete_replacements_preserve_ce_pilot_and_accepted_smash(self):
         report = self.build()
         checked = update.verify(self.output)
         self.assertFalse(checked['full'])
         self.assertEqual(checked['engine_minimum'], 3)
-        self.assertEqual(len(checked['members']), 21)
+        self.assertEqual(len(checked['members']), len(delivery.REPLACEMENTS))
+        self.assertIn('apps/disc/native-disc.kui', {row['path'] for row in checked['members']})
         self.assertEqual({row['path'] for row in checked['members']},
                          {name[4:] for name in delivery.REPLACEMENTS})
         self.assertNotIn('apps/games/ce-probe.kui', {row['path'] for row in checked['members']})
@@ -143,6 +145,13 @@ class UniversalDelivery(unittest.TestCase):
         self.cold.pop(delivery.CE_PROBE)
         with self.assertRaisesRegex(ValueError, 'Cold-reader qualification'):
             self.build()
+        self.assertFalse(self.evidence.exists())
+
+    def test_missing_no_vmu_disc_cannot_publish_an_incomplete_global_test(self):
+        self.cold.pop('KUI/apps/disc/native-disc.kui')
+        with self.assertRaisesRegex(ValueError, 'Cold-reader qualification'):
+            self.build()
+        self.assertFalse(self.output.exists())
         self.assertFalse(self.evidence.exists())
 
     def test_stale_gui_receipt_or_changed_source_cannot_produce_a_candidate(self):

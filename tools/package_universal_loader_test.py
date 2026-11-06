@@ -98,8 +98,8 @@ def build(runtime, runtime_elf, accepted_zip, output, evidence_dir, *, builds=No
     files = {name: body for name, body in cold.items() if name.startswith('KUI/') and name != CE_PROBE}
     files.update(preserved)
     files['KUI/runtime.kui'] = gui
-    require(set(files) == REPLACEMENTS and len(files) == 21,
-            'Universal test must replace exactly fourteen cold aliases, the GUI and six accepted Smash files')
+    require(set(files) == REPLACEMENTS and len(files) == len(REPLACEMENTS),
+            'Universal test must replace the complete cold inventory, GUI and six accepted Smash files')
     output.parent.mkdir(parents=True, exist_ok=True)
     evidence_dir.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='.kui-universal-evidence-', dir=evidence_dir.parent) as temporary:
@@ -126,7 +126,7 @@ def build(runtime, runtime_elf, accepted_zip, output, evidence_dir, *, builds=No
         expected = {name[4:]: body for name, body in files.items()}
         require(checked == {key: value for key, value in package.items() if key in checked} and
                 checked['format'] == 2 and not checked['full'] and checked['engine_minimum'] == 3 and
-                len(checked['members']) == 21 and
+                len(checked['members']) == len(REPLACEMENTS) and
                 {row['path'] for row in checked['members']} == set(expected) and
                 all(row['sha256'] == sha(expected[row['path']]) and row['bytes'] == len(expected[row['path']]) and
                     row['policy'] == (SELF_KUI if row['path'].endswith('.kui') else RAW_SOFTWARE)

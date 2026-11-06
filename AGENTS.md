@@ -1,5 +1,13 @@
 # K-UI work and release requirements
 
+This integration is strictly limited to the Games loading paths: readers,
+game bootstrap, virtual VMU, read-ahead, game compatibility and their build,
+delivery and verification. The owner explicitly excluded startup/splash,
+menus, branding and updater work. Keep those implementations unchanged.
+Apply performance mechanisms to every applicable launch family by default;
+never require another title-specific performance opt-in. Identify the actual
+final reader, not only the GUI build, before interpreting a console result.
+
 The current project goal is one maintained, broadly compatible launcher build
 which incorporates the lessons already established across the readers and VMU
 implementations. Follow `docs/universal-loader-roadmap.md` for integration order

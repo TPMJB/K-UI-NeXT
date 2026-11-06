@@ -1,6 +1,149 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* Shared immutable-image proof scopes. No game, SDK or live I/O state is cached. */
 #include "kui/retail_loader_layout.h"
+#if KUI_NATIVE_CACHED_EXTENT && KUI_VMU_NATIVE_PASSIVE_PROBE && !KUI_NATIVE_PHYSICAL_DISC
+#if !KUI_VMU_NATIVE_CACHED_CODE
+#error "Immutable discovery cache scope requires the native instruction-cached relay"
+#endif
+/* Full fresh discovery on a saved-mapping miss is still immutable image work.
+ * Four ordinary register arguments and the original refusal result are
+ * forwarded unchanged. Admit only privileged/masked, MMU-off, normal-index
+ * CCR=0x100, bounded P1 input/output and a P1 stack with64KiB RAM headroom.
+ * The complete private stage outputs and stack are published by the existing
+ * full-RAM OCBP policy before restoring operand-cache-off execution. No SDK,
+ * card, allocator call or hook publication belongs to this scope. */
+    .text
+    .align 2
+    .global __kui_native_cached_discovery
+    .set __kui_native_cached_discovery,1
+    .global C(kui_native_stage_cached_discover_image)
+    .type C(kui_native_stage_cached_discover_image),@function
+C(kui_native_stage_cached_discover_image):
+    mov.l r8,@-r15
+    mov.l r9,@-r15
+    sts.l pr,@-r15
+    mov #0,r8
+    stc sr,r0
+    mov.l .Ldiscover_sr_mask,r1
+    and r1,r0
+    cmp/eq r1,r0
+    bf .Ldiscover_call
+    mov.l .Ldiscover_mmucr,r1
+    mov.l @r1,r0
+    tst #1,r0
+    bf .Ldiscover_call
+    mov.l .Ldiscover_ccr,r1
+    mov.l @r1,r0
+    mov.l .Ldiscover_expected,r2
+    cmp/eq r2,r0
+    bf .Ldiscover_call
+    mov.l .Ldiscover_load,r0
+    cmp/eq r0,r6
+    bf .Ldiscover_call
+    cmp/eq r4,r6
+    bf .Ldiscover_call
+    mov.l .Ldiscover_ram,r0
+    cmp/hs r0,r4
+    bf .Ldiscover_call
+    mov.l .Ldiscover_ramend,r1
+    cmp/hs r1,r4
+    bt .Ldiscover_call
+    mov r1,r2
+    sub r4,r2
+    cmp/hs r5,r2
+    bf .Ldiscover_call
+    tst r5,r5
+    bt .Ldiscover_call
+    cmp/hs r0,r7
+    bf .Ldiscover_call
+    cmp/hs r1,r7
+    bt .Ldiscover_call
+    mov r7,r2
+    add #4,r2
+    cmp/hi r1,r2
+    bt .Ldiscover_call
+    mov r7,r0
+    tst #3,r0
+    bf .Ldiscover_call
+    cmp/hs r4,r7
+    bf .Ldiscover_output_before
+    mov r4,r0
+    add r5,r0
+    cmp/hs r0,r7
+    bf .Ldiscover_call
+.Ldiscover_output_before:
+    mov.l .Ldiscover_stack_low,r0
+    cmp/hs r0,r15
+    bf .Ldiscover_call
+    mov r15,r0
+    tst #3,r0
+    bf .Ldiscover_call
+    add #12,r0
+    cmp/hi r1,r0
+    bt .Ldiscover_call
+    mov #1,r8
+    mov.l .Ldiscover_p2_address,r0
+    jmp @r0
+    nop
+.Ldiscover_p2:
+    mov.l .Ldiscover_ccr,r1
+    mov.l .Ldiscover_on,r0
+    mov.l r0,@r1
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+.Ldiscover_call:
+    mov.l .Ldiscover_proof,r0
+    jsr @r0
+    nop
+    mov r0,r9
+    tst r8,r8
+    bt .Ldiscover_done
+    mov.l .Ldiscover_ram,r0
+    mov.l .Ldiscover_ramend,r1
+.Ldiscover_purge:
+    ocbp @r0
+    add #32,r0
+    cmp/hs r1,r0
+    bf .Ldiscover_purge
+    mov.l .Ldiscover_ccr,r1
+    mov.l .Ldiscover_restore,r0
+    mov.l r0,@r1
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+.Ldiscover_done:
+    mov r9,r0
+    lds.l @r15+,pr
+    mov.l @r15+,r9
+    mov.l @r15+,r8
+    rts
+    nop
+    .align 2
+.Ldiscover_sr_mask: .long 0x400000f0
+.Ldiscover_mmucr: .long 0xff000010
+.Ldiscover_ccr: .long 0xff00001c
+.Ldiscover_expected: .long 0x100
+.Ldiscover_ram: .long 0x8c000000
+.Ldiscover_ramend: .long KUI_RETAIL_RAM_END
+.Ldiscover_load: .long KUI_RETAIL_EXEC_ADDRESS
+.Ldiscover_stack_low: .long 0x8c010000
+.Ldiscover_p2_address: .long .Ldiscover_p2+0x20000000
+.Ldiscover_on: .long 0x909
+.Ldiscover_proof: .long C(kui_native_stage_discover_image)
+.Ldiscover_restore: .long 0x908
+    .size C(kui_native_stage_cached_discover_image),.-C(kui_native_stage_cached_discover_image)
+#endif
 #if KUI_NATIVE_CACHED_EXTENT && !defined(KUI_RETAIL_CE) && !KUI_SMASH_CE_CHILD && !KUI_NATIVE_PHYSICAL_DISC
 #if !KUI_VMU_NATIVE_CACHED_CODE
 #error "The pure CRC cache scope requires the native instruction-cached relay"

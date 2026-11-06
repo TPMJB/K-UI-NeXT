@@ -84,9 +84,18 @@ test-gui-launch-preparation:
 	python3 tests/test_native_gui_fast_scan.py
 	python3 tests/test_smash_launch_timing.py
 
+.PHONY: test-shared-game-launch
+test-shared-game-launch: test-games-native-cache-hint
+	python3 tests/test_wince_kernel_read_reuse.py
+	python3 tests/test_game_reader_provenance.py
+	python3 tests/test_native_cold_discovery.py
+	python3 tests/test_native_sdk_coherence_reuse.py
+	python3 tests/test_cold_handoff_policy.py
+	python3 tests/test_disc_stage_launch_policy.py
+
 # The ordered integration has one focused entry point. Linked-module admission,
 # stack bounds and real-console acceptance remain separate delivery gates.
-test-universal-loader: test-sci-stream-quarantine test-ce-gd-completion-lifecycle test-runtime-module-bundle-make test-ce-virtual-vram-copy test-ce-crc16-factoring test-package-universal-loader test-gui-launch-preparation
+test-universal-loader: test-sci-stream-quarantine test-ce-gd-completion-lifecycle test-runtime-module-bundle-make test-ce-virtual-vram-copy test-ce-crc16-factoring test-package-universal-loader test-gui-launch-preparation test-shared-game-launch
 	python3 tests/test_global_loader_rollout.py
 	python3 tests/test_build_universal_loader.py
 	python3 tests/test_native_service_inventory.py
@@ -269,9 +278,9 @@ ARMADA_PREPARE_TEST_SOURCES += src/apps/native_session_prepare.c src/core/native
 build/test-games-native-cache: tests/test_games_native_cache.c tests/test_vmu_native_resolution_cache.c src/apps/games_native_cache.inc $(NATIVE_CACHE_SOURCES) src/core/hash.c src/core/data.c
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie -Wl,--wrap=kui_sha256_update -Iinclude tests/test_games_native_cache.c $(NATIVE_CACHE_SOURCES) src/core/hash.c src/core/data.c -o $@
-build/test-games-native-cache-hint: tests/test_games_native_cache_hint.c tests/test_vmu_native_resolution_cache.c src/apps/games_native_cache_hint.inc $(NATIVE_CACHE_SOURCES) src/core/hash.c src/core/data.c
+build/test-games-native-cache-hint: tests/test_games_native_cache_hint.c tests/test_vmu_native_resolution_cache.c src/apps/games_native_cache_hint.inc src/apps/games_native_cache_alias.inc $(NATIVE_CACHE_SOURCES) src/core/hash.c src/core/data.c src/core/game_launch_settings.c src/core/game_ram_patches.c
 	@mkdir -p $(@D)
-	$(CC) $(HOST_FLAGS) $(SANITIZERS) -Iinclude tests/test_games_native_cache_hint.c $(NATIVE_CACHE_SOURCES) src/core/hash.c src/core/data.c -o $@
+	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) tests/test_games_native_cache_hint.c $(NATIVE_CACHE_SOURCES) src/core/hash.c src/core/data.c src/core/game_launch_settings.c src/core/game_ram_patches.c -o $@
 .PHONY: test-games-native-cache-hint
 test-games-native-cache-hint: build/test-games-native-cache-hint
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-games-native-cache-hint $(if $(STARTUP),'$(STARTUP)',)
@@ -728,7 +737,7 @@ build/games-image-probe: tests/games_image_probe.c $(GAMES_IMAGE_PROBE) $(CORE) 
 
 GAMES_RETAIL = src/core/smash_native_child.c src/core/vmu_launch_package.c src/core/retail_zso.c src/apps/game_launch_report.c src/core/game_launch_settings.c src/core/game_ram_patches.c src/apps/games_retail.c src/core/hash.c src/core/retail_image.c src/core/retail_cursor.c src/core/game_image.c src/core/zso.c src/core/lzo1x.c src/core/game_metadata.c $(DESTINATION) src/core/runtime_image.c src/core/runtime_file.c src/core/storage_probe.c src/core/vmu_emulation_settings.c
 GAMES_RETAIL += $(NATIVE_CACHE_SOURCES)
-GAMES_RETAIL += src/core/smash_menu_collection.c src/core/smash_ce_child.c src/core/smash_ce_profile.c src/core/smash_ce_helper.c
+GAMES_RETAIL += src/core/smash_menu_collection.c src/core/smash_menu_loader.c src/core/smash_ce_child.c src/core/smash_ce_profile.c src/core/smash_ce_helper.c
 GAMES_RETAIL += src/apps/native_session_prepare.c src/core/native_session.c src/core/native_return.c src/core/storage_policy.c
 
 NATIVE_SESSION_CORE = src/core/native_session.c src/core/native_return.c src/core/storage_policy.c

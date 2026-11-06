@@ -405,11 +405,58 @@ for _key, _targets in STREAM_BOOT_RELOCS.items():
 WWP_INIT_PURGE_BYTES = bytes.fromhex('e0e14c3519245234018b0b000900a304f9af2074')
 
 
-def stream_boot_relocs(*, wwp=False):
+# Keep the reviewed 120-frame body above as the independent photo control.
+# Removing only its final hold permits the compiler to tail-call the same
+# final display line. Derive that one compiler transformation; never replace
+# the immutable/source/BSS/sole-activation proof with a new unreviewed blob.
+def stream_stage_without_photo(body):
+    if (len(body) != 0x390 or
+            body[0x312:0x31a] != bytes.fromhex('0b4809001dd178e4') or
+            body[0x31a:0x32e] != bytes.fromhex('087f264ff66ef66df66cf66bf66af6692b41f668') or
+            body[0x32e:0x330] != bytes.fromhex('0010')):
+        raise ValueError('CE photo-removal reference tail differs from the reviewed 120-frame body')
+    # Save the line target before restoring r8; use it for the final tail
+    # jump in place of pause(120). Stack/PR/register restoration is identical.
+    result = bytearray(body[:0x312] + bytes.fromhex('8360') + body[0x31a:0x32a] +
+        bytes.fromhex('2b40') + body[0x32c:0x330] + bytes.fromhex('0900') + body[0x330:0x38c])
+    changed = []
+    for begin, end in ((0, 0x19e), (0x254, 0x312)):
+        for at in range(begin, end, 2):
+            opcode = struct.unpack_from('<H', body, at)[0]
+            if opcode >> 12 == 0xd:
+                target = ((at + 4) & ~3) + 4 * (opcode & 255)
+                if 0x330 <= target < 0x38c:
+                    struct.pack_into('<H', result, at, opcode - 1)
+                    changed.append(at)
+            elif opcode >> 12 == 9 and at + 4 + 2 * (opcode & 255) == 0x32e:
+                struct.pack_into('<H', result, at, opcode - 3)
+                changed.append(at)
+    if changed != [0x25c, 0x25e, 0x268, 0x26e, 0x270, 0x272, 0x27c, 0x27e,
+                   0x28c, 0x2a0, 0x2a6, 0x2b4, 0x2ba, 0x2c2, 0x2ce, 0x2d6,
+                   0x2e6, 0x2ec, 0x2f2, 0x2f8, 0x2fe, 0x304, 0x30a, 0x310]:
+        raise ValueError('CE photo-removal PC-relative relocation set changed')
+    return bytes(result)
+
+
+def stream_stage_offset(offset, *, photo_hold):
+    return offset if photo_hold or offset < 0x330 else offset - 4
+
+
+def stream_stage_linked_targets(*, photo_hold):
+    return tuple((stream_stage_offset(offset, photo_hold=photo_hold), original, symbol, message)
+        for offset, original, symbol, message in BAM4_STAGE_LINKED_TARGETS
+        if photo_hold or offset != 0x38c)
+
+
+def stream_boot_relocs(*, wwp=False, photo_hold=True):
     relocations = dict(STREAM_BOOT_RELOCS)
     if wwp:
         key = ('resident', '_kui_retail_resident_init')
         relocations[key] += ((0x26e, '_purge.lto_priv.0', 0),)
+    if not photo_hold:
+        key = ('stage', '_kui_retail_stage_relay')
+        relocations[key] = tuple((stream_stage_offset(offset, photo_hold=False), target, addend)
+            for offset, target, addend in relocations[key])
     return relocations
 
 
@@ -483,7 +530,7 @@ BAM4_STAGE_LINKED_TARGETS = (
 )
 
 
-def stream_boot_bodies(*, bam4=False, worms=False, wwp=False):
+def stream_boot_bodies(*, bam4=False, worms=False, wwp=False, photo_hold=True):
     """Keep the complete startup proof, selecting the admitted ROM header."""
     if sum((bam4, worms, wwp)) > 1:
         raise ValueError('Select only one WinCE title profile')
@@ -521,10 +568,13 @@ def stream_boot_bodies(*, bam4=False, worms=False, wwp=False):
                 raise ValueError('Title startup pin no longer matches reviewed linked literal')
             body[offset:offset + 4] = bytes(4)
         bodies[key] = bytes(body)
+    if not photo_hold:
+        key = ('stage', '_kui_retail_stage_relay')
+        bodies[key] = stream_stage_without_photo(bodies[key])
     return bodies
 
 
-def audit_bam4_stage_literals(code, image, *, original_literals=False):
+def audit_bam4_stage_literals(code, image, *, original_literals=False, photo_hold=True):
     """Prove exact linked targets before normalizing address-only movement.
 
     The title port bodies use zero placeholders. Armada's original whole-body
@@ -532,7 +582,7 @@ def audit_bam4_stage_literals(code, image, *, original_literals=False):
     after the same linked symbol or complete terminal-message proof succeeds.
     No instruction, pool constant or arbitrary in-image target is exempted.
     """
-    for offset, original, symbol, message in BAM4_STAGE_LINKED_TARGETS:
+    for offset, original, symbol, message in stream_stage_linked_targets(photo_hold=photo_hold):
         target = struct.unpack_from('<I', code, offset)[0]
         if not STAGE <= target < STAGE + len(image['payload']):
             raise ValueError('Title startup literal leaves linked stage')
@@ -1049,8 +1099,15 @@ def audit_stream_boot_arm(controller, controller_spans, resident, resident_spans
             not 0x8c008300 + 56 <= descriptor <= 0x8c008300 + len(low) - descriptor_bytes or
             region(low, slot, 4, "stream bus entry") != struct.pack("<I", descriptor)):
         raise ValueError("Missing exact immutable stream descriptor entry at slot 52")
-    bodies = stream_boot_bodies(bam4=bam4, worms=worms, wwp=wwp)
-    relocations = stream_boot_relocs(wwp=wwp)
+    # Absence retains the historical exact 120-frame body for accepted older
+    # modules. New bodies declare their policy explicitly; no other delay is
+    # admitted by this independently pinned boot-arming proof.
+    photo_frames = stage['symbols'].get('__kui_retail_handoff_pause_frames', 120)
+    if photo_frames not in (0, 120):
+        raise ValueError('Stream bootstrap declares an unreviewed photo hold')
+    photo_hold = photo_frames == 120
+    bodies = stream_boot_bodies(bam4=bam4, worms=worms, wwp=wwp, photo_hold=photo_hold)
+    relocations = stream_boot_relocs(wwp=wwp, photo_hold=photo_hold)
     required = STREAM_BOOT_REQUIRED | ({('resident', '_purge.lto_priv.0')} if wwp else set())
     if set(bodies) != required:
         raise ValueError("Missing stream bootstrap complete-body proof")
@@ -1080,7 +1137,7 @@ def audit_stream_boot_arm(controller, controller_spans, resident, resident_spans
                 raise ValueError("Stream bootstrap body targets an unexpected address: " + name)
             code[offset:offset + 4] = bytes(4)
         if image_name == 'stage':
-            audit_bam4_stage_literals(code, image, original_literals=not (bam4 or worms or wwp))
+            audit_bam4_stage_literals(code, image, original_literals=not (bam4 or worms or wwp), photo_hold=photo_hold)
         if code != expected:
             raise ValueError("Stream bootstrap instructions/order/literals changed: " + name)
         pinned.append(image_name + ":" + name)
@@ -1090,7 +1147,8 @@ def audit_stream_boot_arm(controller, controller_spans, resident, resident_spans
             "romhdr_p2": hex(0xac11de70 if worms else 0xac1cd614 if wwp else
                               0xac1ce19c if bam4 else 0xac141420),
             "preserves_controller_zero_check": True, "attach_only_after_relay": True,
-            "bootstrap_audio_and_bus_gated": True, "complete_linked_body_pins": pinned}
+            "bootstrap_audio_and_bus_gated": True, "complete_linked_body_pins": pinned,
+            "photo_hold_frames": photo_frames, "only_final_photo_hold_removed": not photo_hold}
 
 
 def check(directory, *, stream=False, bam4=False, worms=False, wwp=False):
@@ -1242,11 +1300,11 @@ def check(directory, *, stream=False, bam4=False, worms=False, wwp=False):
             "linked_direct_calls": direct_calls}
 
 
-def stream_boot_self_test(*, bam4=False, worms=False, wwp=False):
+def stream_boot_self_test(*, bam4=False, worms=False, wwp=False, photo_hold=False):
     """Reject entry-slot, gate, every compiled guard and ordering bit."""
     STREAM_BASE, _, _, _ = stream_layout(worms=worms)
-    bodies = stream_boot_bodies(bam4=bam4, worms=worms, wwp=wwp)
-    relocations = stream_boot_relocs(wwp=wwp)
+    bodies = stream_boot_bodies(bam4=bam4, worms=worms, wwp=wwp, photo_hold=photo_hold)
+    relocations = stream_boot_relocs(wwp=wwp, photo_hold=photo_hold)
     fixtures = {}
     for image_name, image_base in (("controller", STREAM_BASE),
                                    ("resident", 0x8c008300), ("stage", STAGE)):
@@ -1295,8 +1353,9 @@ def stream_boot_self_test(*, bam4=False, worms=False, wwp=False):
             # Exercise the real address-aware proof with distinct synthetic
             # functions/messages. Historical absolute addresses must not be
             # accepted merely because they appear in the expected body.
+            symbols['__kui_retail_handoff_pause_frames'] = 120 if photo_hold else 0
             relay_start = symbols['_kui_retail_stage_relay'] - image_base
-            for offset, _, symbol, message in BAM4_STAGE_LINKED_TARGETS:
+            for offset, _, symbol, message in stream_stage_linked_targets(photo_hold=photo_hold):
                 payload.extend(bytes(-len(payload) % 4))
                 target = image_base + len(payload)
                 if symbol:
@@ -1351,6 +1410,17 @@ def stream_boot_self_test(*, bam4=False, worms=False, wwp=False):
                 checks += 1
             else:
                 raise AssertionError("Stream bootstrap linked symbol corruption admitted")
+    # Cross-policy control: a historical held body cannot stand in for the
+    # no-hold body, nor can the new body satisfy the explicit photo control.
+    fixture, spans = fixtures['stage']
+    changed = dict(fixture['symbols'])
+    changed['__kui_retail_handoff_pause_frames'] = 0 if photo_hold else 120
+    try:
+        check_boot('stage', dict(fixture, symbols=changed))
+    except ValueError:
+        checks += 1
+    else:
+        raise AssertionError('Crossed stream photo/no-hold body admitted')
     return checks
 
 
@@ -1856,6 +1926,7 @@ def self_test():
     for profile in ({}, {"bam4": True}, {"worms": True}, {"wwp": True}):
         checks += stream_owner_self_test(**profile)
         checks += stream_boot_self_test(**profile)
+        checks += stream_boot_self_test(**profile, photo_hold=True)
     for profile in ({"bam4": True}, {"worms": True}, {"wwp": True}):
         try:
             check(Path('/nonexistent-cdda-profile-audit'), **profile)

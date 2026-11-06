@@ -26,8 +26,12 @@ class UniversalBuild(unittest.TestCase):
         self.assertEqual(len(covered), len(set(covered)))
         self.assertEqual(set(covered), set(builder.DEFAULT_BUILDS))
         commands = [step['command'] for step in selected['steps']]
-        self.assertEqual(commands[2], ['make', '-f', 'Makefile.dc', '-j3',
+        by_name = {step['name']: step['command'] for step in selected['steps']}
+        self.assertEqual(by_name['ce_cdda'], ['make', '-f', 'Makefile.dc', '-j3',
                                       'BUILD_ID=' + COMMIT[:12], 'wince-cdda'])
+        self.assertEqual(by_name['disc_physical'], ['make', '-f', 'Makefile.disc-native', '-j3',
+            'BUILD_ID=' + COMMIT[:12], 'KUI_RETAIL_NATIVE_HANDOFF_PAUSE_FRAMES=0',
+            'build/disc-native/native-disc.kui', 'audit'])
         self.assertFalse(any('all' in command or 'tools/make_update.py' in command
                              or any('smash' in part or 'session-controls' in part for part in command)
                              for command in commands))

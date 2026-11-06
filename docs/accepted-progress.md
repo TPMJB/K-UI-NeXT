@@ -87,9 +87,18 @@ installed and must not be claimed again as missing.
 `shared-native-bootstrap-rollout.md` records the new 26-file candidate,
 five-service coverage, preserved workers/geometry/Smash bytes and qualification.
 The GUI's exact Standard and retained native-CDDA manifests are promoted to
-the default resource paths without rebuilding these binaries. Bootstrap console
-timing remains pending; no universal two-second target or new compatibility
-claim follows from the owner's Smash comparison.
+the default resource paths without rebuilding these binaries. The owner now
+reports no noticeable improvement with the new build ID. The exact final
+reader was not captured, so this neither establishes a bootstrap speedup nor
+diagnoses an updater failure. Treat the bootstrap performance change as
+unaccepted. No universal two-second target or new compatibility claim follows
+from the owner's Smash comparison.
+
+The owner's explicit scope is Games only. Freeze startup/splash, menu,
+branding and updater implementations during this integration. Prioritize
+shared preparation and bootstrap mechanisms across every applicable route;
+record their actual installed coverage and final reader identity. Do not send
+another performance candidate based only on a changed GUI label or model counts.
 
 ## 0a hardware report: damaged reconstructed block reaches the sector parser
 

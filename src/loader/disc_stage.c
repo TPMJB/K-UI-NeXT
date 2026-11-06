@@ -5,6 +5,16 @@
 #include "stage_fast_crc32.h"
 #include <string.h>
 
+/* Normal native handoffs have no timed photo hold. Keep the same explicit
+ * diagnostic opt-in as image stages, without changing fault screens. */
+#ifndef KUI_RETAIL_NATIVE_HANDOFF_PAUSE_FRAMES
+#define KUI_RETAIL_NATIVE_HANDOFF_PAUSE_FRAMES 0
+#endif
+#define STRINGIFY_(value) #value
+#define STRINGIFY(value) STRINGIFY_(value)
+__asm__(".global __kui_disc_handoff_pause_frames\n.set __kui_disc_handoff_pause_frames,"
+        STRINGIFY(KUI_RETAIL_NATIVE_HANDOFF_PAUSE_FRAMES) "\n");
+
 extern uint8_t __disc_stage_binary_end[] __asm__("__disc_stage_binary_end");
 static struct retail_display_state display;
 static struct kui_disc_launch_plan plan;
@@ -58,7 +68,9 @@ void kui_disc_stage_main(void) {
     retail_display_hex("BOOT BYTES",executable_bytes);
     retail_display_hex("ORIGINAL GD VECTOR",gd);
     retail_display_line("ENTERING DISC BOOTSTRAP 2");
-    retail_display_pause(30u);
+#if KUI_RETAIL_NATIVE_HANDOFF_PAUSE_FRAMES
+    retail_display_pause(KUI_RETAIL_NATIVE_HANDOFF_PAUSE_FRAMES);
+#endif
     kui_disc_stage_enter();
 }
 void kui_disc_stage_returned(void) {

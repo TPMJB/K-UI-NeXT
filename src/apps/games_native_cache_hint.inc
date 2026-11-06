@@ -24,8 +24,11 @@ static bool native_cache_hint_admitted(const struct kui_retail_manifest *map,boo
         (dual || (!arena && r->heap.initializer_slot)) &&
         (!arena || native_cache_dual_lease(package)==r->call.entry_bytes);
 }
+#include "games_native_cache_alias.inc"
 static enum native_cache_result native_cache_hint_prepare(const struct kui_retail_manifest *map,
-    bool dual,struct kui_runtime_image *package,const char *source_root,kui_log_fn log,kui_cancel_fn cancel) {
+    bool dual,struct kui_runtime_image *package,const char *source_root,const char *selected,
+    bool *indexed,kui_log_fn log,kui_cancel_fn cancel) {
+    if(indexed)*indexed=false;
     if(native_cache_cancelled(cancel))return NATIVE_CACHE_CANCELLED;
     if(!map || !package || !package->data || native_cache_source_conflict(source_root) ||
        map->storage_transport!=KUI_STORAGE_SCI ||
@@ -37,6 +40,19 @@ static enum native_cache_result native_cache_hint_prepare(const struct kui_retai
     if(slot==SIZE_MAX)return NATIVE_CACHE_SKIPPED;
     struct native_cache_hint_workspace *work=malloc(sizeof(*work));
     if(!work)return NATIVE_CACHE_SKIPPED;
+    char alias[128];
+    bool direct=native_cache_alias_path(alias,selected,map,dual,package) &&
+        native_cache_file_read(alias,work->wire) &&
+        kui_vmu_native_resolution_cache_inspect_config(work->wire,sizeof(work->wire),&work->resolution) &&
+        native_cache_hint_admitted(map,dual,package,&work->resolution);
+    if(native_cache_cancelled(cancel)) {free(work);return NATIVE_CACHE_CANCELLED;}
+    if(direct &&
+       kui_vmu_native_cache_seed_fill((uint8_t *)package->data+slot,
+           KUI_VMU_NATIVE_CACHE_SEED_BYTES,work->wire,sizeof(work->wire))) {
+        if(indexed)*indexed=true;
+        if(log)log("Native VMU mapping: indexed advisory hint selected; detached image SHA and live ownership remain checked");
+        free(work);return NATIVE_CACHE_READY;
+    }
     char directory[64],path[136];
     int length=snprintf(directory,sizeof(directory),"0:/KUI/VMU/native-cache/v%u",
         KUI_VMU_NATIVE_RESOLUTION_DETECTOR_EPOCH);

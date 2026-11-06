@@ -10,6 +10,7 @@ import argparse
 import json
 from pathlib import Path, PurePosixPath
 import sys
+import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,12 +28,15 @@ COMMON = {
     'lzo': ('build/retail-lzo', 'lzo-boot.kui'),
 }
 CE = ('armada', 'bam4', 'worms', 'wwp')
+DISC_PHYSICAL = ('build/disc-native', 'KUI/apps/disc/native-disc.kui')
 DEFAULT_BUILDS = {**{role: ROOT / folder for role, (folder, _) in COMMON.items()},
+    'disc_physical': ROOT / DISC_PHYSICAL[0],
     **{'ce_' + profile: ROOT / ('build/' + profile + '-ce-stream') for profile in CE},
     **{'native_' + profile.replace('-', '_'): ROOT / ('build/native-compat-' + profile)
        for profile in PROFILES}}
 INSTALL_TARGETS = frozenset(
     ['KUI/apps/games/' + name for _, name in COMMON.values()] +
+    [DISC_PHYSICAL[1]] +
     ['KUI/apps/games/ce-cdda-' + profile + '.kui' for profile in CE] +
     ['KUI/apps/games/' + name for _, _, old, new in PROFILES.values() for name in (old, new)])
 
@@ -82,11 +86,13 @@ def write_rollout(files, output):
 def cold(directory, *, native=False):
     from check_vc2_stage_cached_relay import audit as relay
     from test_smash_native_fast_crc import audit as crc
+    from test_cold_handoff_policy import linked_contract as holds
     path = directory / 'stage.elf'
     stage = read_elf(path)
     require(stage[4].get('__kui_retail_cold_fast_crc') == (1, 0, 0, 0xfff1),
             'Rollout stage lost its unconditional cold byte CRC: ' + str(directory))
-    return dict(relay=relay(path, marker_name='__kui_retail_cold_instruction_cache'),
+    return dict(handoff_policy=holds(path),
+                relay=relay(path, marker_name='__kui_retail_cold_instruction_cache'),
                 byte_CRC=crc(path, relay='_kui_toy_pilot_base_relay' if native else
                             '_kui_retail_stage_relay'))
 
@@ -156,6 +162,20 @@ def collect(builds, commit, *, allow_dirty=False, runtime_elf=None):
         files[target] = data
         record.update(install_targets=[target], module_sha256=sha(data))
         records[role] = record
+    # VMU Off uses an independent physical-disc stage, not the VMU service.
+    # Bind its actual embedded stage and retain its original CPU/GD handoff.
+    from test_disc_stage_launch_policy import linked_contract as disc_policy
+    from check_retail_instructions import audit as instruction_audit
+    directory = builds['disc_physical']
+    data, record = linked_module(directory, commit, allow_dirty)
+    record['cold_stage'] = disc_policy((directory / 'stage.elf').read_bytes(), 0)
+    record['linked_instruction_count'] = sum(instruction_audit(name,
+        subprocess.check_output(['sh-elf-objdump', '-d', str(directory / (name + '.elf'))], text=True))
+        for name in ('entry', 'stage'))
+    record.update(install_targets=[DISC_PHYSICAL[1]], module_sha256=sha(data),
+                  no_image_reader_or_virtual_VMU=True)
+    files[DISC_PHYSICAL[1]] = data
+    records['disc_physical'] = record
     from check_armada_ce_excerpt import check as ce_audit
     for profile in CE:
         role = 'ce_' + profile
