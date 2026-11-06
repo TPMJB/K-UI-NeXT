@@ -1,5 +1,46 @@
 # K-UI accepted progress
 
+## Later-reentry candidate: retire collection-native game RAM
+
+The next candidate preserves075e's working initial sequence and cache fix.
+Only the collection-native terminal return gains the existing CE return's
+dead-RAM clear. The call occurs after successful worker retirement, original
+argument capture and hardware/cache quiescence, before any new capsule read.
+It never executes on BUSY/refusal and does not apply to generic session or
+background-reader returns, which may retain live high-RAM objects.
+
+The accepted profile's complete remaining reader/code/data/stack closure is
+below AC010000. The old high game/worker frame is never resumed after this
+boundary. This closes a retirement difference: SAMPLE leaves upper RAM
+intact, and the CE fixed graphics allocator can return its prior contents
+without clearing them. No actual bad graphics-buffer read was captured; the
+change is a supported clean-retirement candidate, not a proven freeze cause.
+
+CE controllers, immutable helpers, raw readers, native worker/reservation,
+original options/Save Game and game read paths are preserved. The native
+terminal controller grows only to add the clear; its low bounds/stack and
+captured context must still pass linked checks. See
+[the retirement note](smash-native-ram-retirement.md).
+
+## 075e hardware result: initial sequence passes; later VC2 freezes after Start
+
+After delivery of075e785e9308, the owner reports playing Sega Swirl, Shining
+Force, Phantasy Star II and VC2 successfully, then every other game in the
+collection successfully. On the subsequent VC2 run, pressing Start to enter
+its main menu caused a small diagonal picture shift and a freeze.
+
+Preserve the one-bit direct cache-entry writeback correction and the working
+games, native options/Save Game, return paths, workers and helpers. The initial
+Swirl → SF → PSII → VC2 sequence is now reported working. The remaining symptom
+is a later VC2 title-to-menu transition; do not call it the same before-title
+failure, infer an exact order for the other eight games, or claim a captured
+PVR register fault from the picture shift alone. No new loading time was given.
+
+The source package remains075e; no additional gameplay fix is established by
+this report. Its current source is available for review in PR31; live Main
+still has the preceding eddbb01 source at this checkpoint. Further changes
+must address a supported later-reentry defect and retain this hardware progress.
+
 ## Warm-entry follow-up: correct terminal cache writeback
 
 The current follow-up starts from the exact published Main eddbb01 tree. It

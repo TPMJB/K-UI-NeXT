@@ -16,6 +16,9 @@ __asm__(".global __kui_smash_return_phase_video_transport\n.set __kui_smash_retu
 static struct kui_smash_menu_return_seed captured;
 static uint32_t smash_return_waits;
 static uint8_t probe[512] __attribute__((aligned(32)));
+#if KUI_SMASH_CARD_SESSION
+extern void kui_smash_native_return_ram_clear(void);
+#endif
 volatile uint32_t kui_smash_menu_return_diagnostic[4];
 extern const uint8_t __smash_menu_return_begin[] __asm__("__smash_menu_return_begin");
 extern const uint8_t __smash_menu_return_binary_end[] __asm__("__smash_menu_return_binary_end");
@@ -86,6 +89,15 @@ int kui_smash_menu_return_main(const uint32_t frame[21]) {
     /* From this successful retirement onward no old SDK callback resumes.
      * Drain owned hardware before replacing executable or firmware bytes. */
     if(!kui_native_return_quiesce())stopped(7u,0u);
+#if KUI_SMASH_CARD_SESSION
+    /* The original helpers and worker are finished; ROOT/video/receipt and
+     * every remaining raw-reader callback now live below AC010000. Retire
+     * the old game RAM before loading anything for the next owner. This
+     * includes the reserved graphics-buffer payload which SAMPLE leaves
+     * intact and the CE fixed allocator does not initialize. Never clear
+     * on BUSY, or reuse this rule for a reader with live high-RAM state. */
+    kui_smash_native_return_ram_clear();
+#endif
     const struct kui_smash_menu_loader_seed *s=&captured.outer;
     uint32_t (*read_card)(uint32_t,uint8_t *,uint32_t)=
         (uint32_t (*)(uint32_t,uint8_t *,uint32_t))(uintptr_t)UINT32_C(0xac008100);

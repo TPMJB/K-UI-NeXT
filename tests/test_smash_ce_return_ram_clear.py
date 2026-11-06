@@ -144,11 +144,12 @@ class Result(ctypes.Structure):
                  'sr_before', 'sr_after', 'mmio_reads', 'mmio_writes')]
 
 
-def audit_leaf(image, compiler='cc'):
-    require(SYMBOL in image[4], 'Missing CE-only RAM-clear leaf symbol')
-    require(image[4].get('__kui_smash_ce_return_ram_clear') == (1, 0, 0, 0xfff1),
-            'Missing exact CE-only RAM-clear ABI marker')
-    address = image[4][SYMBOL][0]
+def audit_leaf(image, compiler='cc', *, symbol=SYMBOL,
+               marker='__kui_smash_ce_return_ram_clear'):
+    require(symbol in image[4], 'Missing RAM-clear leaf symbol')
+    require(image[4].get(marker) == (1, 0, 0, 0xfff1),
+            'Missing exact RAM-clear ABI marker')
+    address = image[4][symbol][0]
     require(0xac008300 <= address < 0xac00c000, 'RAM-clear leaf is not in the private P2 controller')
     # The actual body is32B; bounds are in its immediately following literal
     # pool. No symbol-size or disassembler interpretation is required.
@@ -193,7 +194,7 @@ def audit_leaf(image, compiler='cc'):
         else:
             raise AssertionError('RAM-clear admission accepted mutation: '+label)
     leaf_bytes=max(literals)+4-address
-    return dict(status='PASS', symbol=SYMBOL, address=hex(address),
+    return dict(status='PASS', symbol=symbol, address=hex(address),
                 elf_sha256=sha(image[0]), leaf_bytes=leaf_bytes,
                 leaf_sha256=sha(blob[:leaf_bytes]),
                 instruction_bytes=32, instruction_sha256=sha(blob[:32]),

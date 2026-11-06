@@ -21,6 +21,14 @@ SMASH_RETURN_SRC := src/loader/smash_menu_return_loader.c src/core/smash_menu_re
  src/loader/cold_load_crc32.c src/loader/smash_return_fault_display.c src/core/smash_phase_video.c
 SMASH_RETURN_OBJ := $(patsubst %.c,$(BUILD)/return/%.o,$(SMASH_RETURN_SRC)) \
  $(BUILD)/return_entry.o $(BUILD)/return_hardware_asm.o $(BUILD)/return_cold_load_scope.o
+ifeq ($(SMASH_CARD_SESSION),1)
+# Only this collection profile retains its complete raw-reader closure low.
+# Background/session returns may still own high RAM and do not use this leaf.
+SMASH_RETURN_OBJ += $(BUILD)/return_ram_clear.o
+$(BUILD)/return_ram_clear.o: src/loader/smash_native_return_ram_clear.S src/loader/smash_ce_return_ram_clear.S
+	@mkdir -p $(@D)
+	$(CC) $(FLAGS) -MMD -MP -c $< -o $@
+endif
 $(SMASH_RETURN_OBJ): Makefile.smash-native-menu
 $(BUILD)/return/%.o: %.c
 	@mkdir -p $(@D)
