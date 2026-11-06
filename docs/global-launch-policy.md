@@ -11,6 +11,10 @@ with the instruction cache enabled; the operand cache stays off until the
 original owner's cache state is restored. These defaults do not depend on VMU,
 Background, SDK family or title. Native/disc resident and VMU-worker CRC code
 retains its own existing contract. Every transferred SD block retains CRC16.
+CRC reconstruction after a lost DMA byte does not establish that the rest of
+the received block is correct. Quarantine such blocks before cursor/payload
+delivery and retain the shared bounded same-LBA retry/PIO fallback; do not
+reintroduce reconstructed-byte acceptance in another title or loader.
 
 Measure complete user-visible phases: menu selection to bootstrap, bootstrap
 to the collection menu, and collection selection to Start/Resume. Separate
@@ -82,8 +86,9 @@ original schedulable owner, establish complete idle, and publish a terminal
 replacement only after source-verified retirement. Busy work retains its
 original stack, SR, MMU and continuation; a masked exit hook must not call the
 CE worker directly. Preserve exact ROOT context and original video provenance.
-CE console return remains unqualified until the owner verifies the candidate;
-native return acceptance is recorded separately in `accepted-progress.md`.
+The owner accepted the complete collection flow on2026-11-06 usingcc81e63ca4d2,
+including repeated VC2 launches after all other games in one session. Preserve
+that accepted return/worker/read-recovery baseline in `accepted-progress.md`.
 
 Before delivery, bind clean source/compile receipts and hashes to every actual
 GUI route, physical module and embedded copy. Compare embedded and separately
@@ -96,9 +101,10 @@ Unrelated UI navigation must not synchronously read SD settings or probe a
 device. Open hubs immediately and defer work to the action that needs it;
 lazy settings reads must complete before a toggle can write defaults.
 
-Host and linked proofs do not measure console elapsed time. The next console
-test should compare launch-to-bootstrap on previously slow normal games, then
-bootstrap and selected-game entry for Smash Pack under the same settings.
+Host and linked proofs do not measure console elapsed time. Future performance
+work, when requested, should compare complete launch phases under the same
+settings. Smash Pack is accepted complete; VC2's remaining load latency is an
+optional follow-up and does not require another build or console test now.
 Current Smash completion is scoped to Shining Force, Phantasy Star II,
 Virtua Cop 2 and Sega Swirl. The owner reports that Google says the other
 eight Genesis games have no save support; this is an unverified owner report,

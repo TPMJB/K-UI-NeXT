@@ -49,5 +49,12 @@ Game, return behavior, video-copy policy and updater remain outside the repair.
 Helper transport suffixes and loader checksums must reflect the actual rebuilt
 reader and canonical return data; they are not independent worker revisions.
 
-Software checks cannot establish console acceptance. The owner must still
-confirm fresh-first VC2 and the previously failing repeated-game sequence.
+On2026-11-06 the owner accepted buildcc81e63ca4d2 after
+`VC2 -> Shining Force -> PS2 -> Sega Swirl -> VC2 -> ALL OTHER GAMES -> VC2`
+succeeded in one console session. The collection integration is complete;
+preserve this accepted source and package as recorded in
+`docs/accepted-progress.md`. The exact physical corruption was not captured,
+but both the faulty software acceptance and its recovery were reproduced,
+and the owner has now confirmed the formerly failing use case on hardware.
+The remaining VC2 load latency is an optional future investigation, not a
+reason to reopen gameplay/return work or issue another test package.
