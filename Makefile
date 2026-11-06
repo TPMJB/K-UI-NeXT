@@ -65,7 +65,7 @@ test-sci-stream-quarantine:
 	python3 tests/test_sci_stream_repair_quarantine.py --cc "$(CC)" --report build/sci-stream-quarantine/report.json
 test: test-sci-stream-quarantine
 
-.PHONY: test-ce-virtual-vram-copy test-ce-crc16-factoring test-package-universal-loader test-universal-loader
+.PHONY: test-ce-virtual-vram-copy test-ce-crc16-factoring test-package-universal-loader test-universal-loader test-gui-launch-preparation
 test-ce-virtual-vram-copy:
 	@mkdir -p build/universal-loader-tests
 	HOST_CC="$(CC)" python3 tests/test_ce_virtual_vram_copy.py --output build/universal-loader-tests/ce-virtual-vram-copy.json
@@ -77,9 +77,16 @@ test-ce-crc16-factoring:
 test-package-universal-loader:
 	python3 tests/test_package_universal_loader_test.py
 
+test-gui-launch-preparation:
+	python3 tests/test_vmu_game_card_service.py
+	python3 tests/test_vmu_launch_history.py
+	python3 tests/test_frontend_job_fences.py
+	python3 tests/test_native_gui_fast_scan.py
+	python3 tests/test_smash_launch_timing.py
+
 # The ordered integration has one focused entry point. Linked-module admission,
 # stack bounds and real-console acceptance remain separate delivery gates.
-test-universal-loader: test-sci-stream-quarantine test-ce-gd-completion-lifecycle test-runtime-module-bundle-make test-ce-virtual-vram-copy test-ce-crc16-factoring test-package-universal-loader
+test-universal-loader: test-sci-stream-quarantine test-ce-gd-completion-lifecycle test-runtime-module-bundle-make test-ce-virtual-vram-copy test-ce-crc16-factoring test-package-universal-loader test-gui-launch-preparation
 	python3 tests/test_global_loader_rollout.py
 	python3 tests/test_build_universal_loader.py
 	python3 tests/test_native_service_inventory.py

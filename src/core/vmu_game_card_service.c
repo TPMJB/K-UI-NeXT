@@ -3,12 +3,14 @@
  * FatFs creates files; the established raw ownership scan builds the P2
  * profile; the stage still admits everything again at boot. */
 #include "kui/vmu_game_card_service.h"
+#include "kui/smash_fat_read_cache.h"
 #include "kui/vmu_persist_profile.h"
 #include "kui/hash.h"
 #include "kui/smash_launch_timing.h"
 #include "diskio.h"
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static const char *const card_leaves[3]={"card.vmd","card.journal","identity.bin"};
@@ -140,10 +142,65 @@ static bool card_profile_current(struct kui_vmu_game_card_work *w,unsigned pair,
     }
     return true;
 }
+static int card_raw_read(struct kui_vmu_game_card_raw *raw,uint32_t lba,uint8_t out[512]) {
+    kui_smash_launch_timing_add(KUI_SMASH_UI_RAW_SESSIONS,1u);
+    int result=raw->read_sector(raw->context,lba,out);
+    if(!result)kui_smash_launch_timing_add(KUI_SMASH_UI_RAW_BLOCKS,1u);
+    return result;
+}
+struct card_collect_reader {
+    struct kui_vmu_game_card_raw *raw;
+    struct kui_smash_fat_read_cache *cache;
+};
+static int card_collect_one(void *context,uint32_t lba,uint8_t out[512]) {
+    struct card_collect_reader *r=context;
+    return card_raw_read(r->raw,lba,out);
+}
+static int card_collect_window(void *context,uint32_t lba,uint32_t count,
+    uint8_t *out,uint32_t *verified) {
+    struct card_collect_reader *r=context;
+    *verified=0u;
+    kui_smash_launch_timing_add(KUI_SMASH_UI_RAW_SESSIONS,1u);
+    int result=r->raw->read_sectors(r->raw->context,lba,count,out);
+    /* The mounted-device bridge has no partial-success contract. Never
+     * cache bytes from an errored request or retry it through single reads. */
+    if(!result) {
+        *verified=count;
+        kui_smash_launch_timing_add(KUI_SMASH_UI_RAW_BLOCKS,count);
+    }
+    return result;
+}
+static int card_collect_read(void *context,uint32_t lba,uint8_t out[512]) {
+    struct card_collect_reader *r=context;
+    const struct kui_smash_fat_read_ops ops={r,card_collect_one,card_collect_window};
+    return r->cache?kui_smash_fat_cache_read(r->cache,&ops,lba,out):card_collect_one(r,lba,out);
+}
+struct card_snapshot_reader {
+    struct kui_vmu_game_card_work *work;
+    uint8_t *data;
+    unsigned role;
+    uint32_t first,count;
+};
 static int card_raw_role(void *context,unsigned role,uint32_t logical,uint8_t out[512]) {
-    struct kui_vmu_game_card_work *w=context;uint32_t lba;
-    if(kui_vmu_persist_profile_map_lba(&w->profile,role,logical,&lba)) return -1;
-    return w->raw.read_sector(w->raw.context,lba,out);
+    struct card_snapshot_reader *r=context;
+    struct kui_vmu_game_card_work *w=r->work;
+    if(r->count && role==r->role && logical>=r->first && logical-r->first<r->count) {
+        memcpy(out,r->data+(size_t)(logical-r->first)*512u,512u);return 0;
+    }
+    r->count=0u;uint32_t lba;
+    if(kui_vmu_persist_profile_map_lba(&w->profile,role,logical,&lba))return -1;
+    if(!r->data)return card_raw_read(&w->raw,lba,out);
+    uint32_t count=1u,limit=(card_file_bytes[role]+511u)/512u;
+    while(count<KUI_SMASH_FAT_CACHE_WINDOW_BLOCKS && count<limit-logical) {
+        uint32_t next;
+        if(kui_vmu_persist_profile_map_lba(&w->profile,role,logical+count,&next))return -1;
+        if((uint64_t)lba+count!=next)break;
+        ++count;
+    }
+    struct card_collect_reader physical={.raw=&w->raw};uint32_t verified=0u;
+    if(card_collect_window(&physical,lba,count,r->data,&verified) || verified!=count)return -1;
+    r->role=role;r->first=logical;r->count=count;
+    memcpy(out,r->data,512u);return 0;
 }
 /* The import tool's preparation: unmount, scan ownership, hash a snapshot
  * with a clear journal marker, remount. Nothing is written in between. */
@@ -153,13 +210,22 @@ static int card_collect(struct kui_vmu_game_card_work *w,unsigned pair,uint64_t 
     char pair_path[20];
     snprintf(pair_path,sizeof(pair_path),"/KUI/vmu-test/p%04u",pair);
     log("Virtual card: checking p%04u ownership; keep power on",pair);
-    w->raw.read_sector=NULL;w->raw.context=NULL;
+    w->raw.read_sector=NULL;w->raw.read_sectors=NULL;w->raw.context=NULL;
     if(!platform->raw_begin(platform->context,&w->raw) || !w->raw.read_sector) {
         bool remounted=platform->raw_end(platform->context);
         return card_refuse(choice,remounted?"raw card reads unavailable":
             "raw card reads unavailable and the volume did not remount");
     }
-    struct kui_vmu_fs_input input={.read_sector=w->raw.read_sector,.context=w->raw.context,
+    /* Fresh scratch belongs only to this read-only unmounted operation. The
+     * shared cache learns FAT geometry from the live VBR, never a saved
+     * profile. Low memory and single-only callers retain the original path. */
+    void *allocation=w->raw.read_sectors?malloc(sizeof(struct kui_smash_fat_read_cache)+31u):NULL;
+    struct card_collect_reader reader={.raw=&w->raw};
+    if(allocation) {
+        reader.cache=(struct kui_smash_fat_read_cache *)(((uintptr_t)allocation+31u)&~(uintptr_t)31u);
+        if(!kui_smash_fat_cache_configure(reader.cache,w->raw.card_sectors,first,end))reader.cache=NULL;
+    }
+    struct kui_vmu_fs_input input={.read_sector=card_collect_read,.context=&reader,
         .card_sectors=w->raw.card_sectors,.partition_first=first,.partition_end=end,
         .high_capacity=w->raw.high_capacity?1u:0u,.pair_path=pair_path,
         .forbidden=forbidden,.forbidden_count=forbidden_count};
@@ -172,10 +238,21 @@ static int card_collect(struct kui_vmu_game_card_work *w,unsigned pair,uint64_t 
     kui_smash_launch_timing_metric(KUI_SMASH_UI_DIRECTORY_SECTORS,w->filesystem.stats.directory_sectors);
     int snapshot=0;
     if(!scan) {
+        /* Ownership is complete. Reuse its aligned scratch for one fresh
+         * snapshot pass, with no metadata or earlier-pass cache entries.
+         * Each fill stays inside one role's useful, physically contiguous
+         * run; cluster slack, the next role and file gaps are never read. */
+        struct card_snapshot_reader snapshot_reader={.work=w};
+        if(reader.cache) {
+            kui_smash_fat_cache_begin_epoch(reader.cache);
+            snapshot_reader.data=reader.cache->windows[0].data;
+        }
         KUI_SMASH_TIME_SPAN(snapshot_span,KUI_SMASH_UI_SNAPSHOT);
-        snapshot=kui_vmu_persist_profile_collect_snapshot(&w->profile,card_raw_role,w);
+        snapshot=kui_vmu_persist_profile_collect_snapshot(&w->profile,card_raw_role,&snapshot_reader);
         KUI_SMASH_TIME_END(snapshot_span);
+        snapshot_reader.data=NULL;snapshot_reader.count=0u;
     }
+    free(allocation);reader.cache=NULL;
     int encoded=scan || snapshot?0:kui_vmu_persist_profile_encode(&w->profile,w->wire);
     bool remounted=platform->raw_end(platform->context);
     if(!remounted) return card_refuse(choice,"the volume did not remount after the ownership scan");

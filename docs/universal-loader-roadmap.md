@@ -17,6 +17,11 @@ current publishing destinations.
 
 ## 1. Shared correctness and reproducible deployment — active
 
+Shared GUI preparation is also an immediate integration requirement. The
+owner's Power Stone 2 pre-bootstrap report is tracked in
+`shared-gui-launch-preparation.md`. Audit the actual GUI path before attributing
+delay to cold-stage work; apply fixes to common operations across all routes.
+
 Apply the demonstrated lessons across the actual affected reader families:
 
 - Reject lost-byte-marked SCI receptions before payload delivery; preserve

@@ -10,6 +10,9 @@ static struct kui_volume volume;
 static DSTATUS state = STA_NOINIT;
 static bool attempted,boot_view;
 static const char *problem;
+static uint64_t mutation_epoch=1u;
+uint64_t kui_media_mutation_epoch(void) {return mutation_epoch;}
+static void changed(void) {if(++mutation_epoch==0u)++mutation_epoch;}
 struct read_cache_sector {uint32_t sector;uint8_t data[512];};
 static struct {
     struct read_cache_sector *entries;
@@ -29,6 +32,7 @@ bool kui_media_read_cache_begin(void *scratch,size_t bytes) {
 DWORD get_fattime(void) { return (DWORD)kui_clock_fattime(); }
 
 void kui_media_set(const struct kui_media_ops *ops) {
+    changed();
     kui_media_read_cache_end();
     media = ops ? *ops : (struct kui_media_ops){0};
     memset(&volume, 0, sizeof(volume));
@@ -56,28 +60,32 @@ const char *kui_media_problem(void) { return problem; }
 
 DSTATUS disk_status(BYTE drive) { return drive == 0 ? state : STA_NOINIT; }
 DSTATUS disk_initialize(BYTE drive) {
-    if(drive != 0) return STA_NOINIT;
-    if(attempted) return state; /* A failed card cannot silently recover mid-job. */
+    if(drive != 0) {changed();return STA_NOINIT;}
+    if(attempted) {
+        if(state&STA_NOINIT)changed();
+        return state; /* A failed card cannot silently recover mid-job. */
+    }
     attempted = true;
     if(!media.blocks || !media.read || (!boot_view && (!media.write || !media.sync))) {
-        problem = "Storage device is not connected"; return state;
+        changed();problem = "Storage device is not connected"; return state;
     }
     uint8_t sector[512];
     uint64_t blocks = media.blocks(media.ctx);
     if(!blocks || blocks > UINT32_MAX) {
-        problem = "Cannot read capacity, or card exceeds 32-bit block limit"; return state;
+        changed();problem = "Cannot read capacity, or card exceeds 32-bit block limit"; return state;
     }
     if(boot_view) {
         if(!kui_block_range(volume.start,volume.count,blocks)) {
-            problem="Boot partition no longer fits the connected device";return state;
+            changed();problem="Boot partition no longer fits the connected device";return state;
         }
         state=STA_PROTECT;
         return state;
     }
     if(media.read(media.ctx, 0, 1, sector)) {
-        problem = "Cannot read SD sector zero"; return state;
+        changed();problem = "Cannot read SD sector zero"; return state;
     }
     if(!kui_select_volume(sector, blocks, &volume)) {
+        changed();
         problem = "Unsupported/ambiguous layout: use one MBR FAT32/exFAT partition or superfloppy";
         return state;
     }
@@ -91,6 +99,7 @@ static bool valid(BYTE drive, LBA_t sector, UINT count) {
 }
 static DRESULT finish(int result) {
     if(!result) return RES_OK;
+    changed();
     kui_media_read_cache_end();
     state = STA_NOINIT | (boot_view?STA_PROTECT:0);
     problem = "Storage I/O or sync failed; reconnect before another test";
@@ -98,6 +107,7 @@ static DRESULT finish(int result) {
 }
 DRESULT disk_read(BYTE drive, BYTE *buffer, LBA_t sector, UINT count) {
     if(!buffer || !valid(drive, sector, count)) {
+        changed();
         kui_media_read_cache_end();return RES_PARERR;
     }
     if(count==1u && read_cache.entries)
@@ -117,25 +127,27 @@ DRESULT disk_read(BYTE drive, BYTE *buffer, LBA_t sector, UINT count) {
 DRESULT disk_write(BYTE drive, const BYTE *buffer, LBA_t sector, UINT count) {
     /* Even an unexpected/refused write ends the read-only scope. */
     kui_media_read_cache_end();
+    changed();
     if(!buffer || !valid(drive, sector, count)) return RES_PARERR;
     if(boot_view) return RES_WRPRT;
     return finish(media.write(media.ctx, volume.start + sector, count, buffer));
 }
 DRESULT disk_ioctl(BYTE drive, BYTE command, void *buffer) {
     if(drive != 0 || (state & (STA_NOINIT|STA_NODISK))) {
+        changed();
         kui_media_read_cache_end();return RES_NOTRDY;
     }
     switch(command) {
         case CTRL_SYNC: return boot_view?RES_OK:finish(media.sync(media.ctx));
         case GET_SECTOR_COUNT:
-            if(!buffer) {kui_media_read_cache_end();return RES_PARERR;}
+            if(!buffer) {changed();kui_media_read_cache_end();return RES_PARERR;}
             *(LBA_t *)buffer = volume.count; return RES_OK;
         case GET_SECTOR_SIZE:
-            if(!buffer) {kui_media_read_cache_end();return RES_PARERR;}
+            if(!buffer) {changed();kui_media_read_cache_end();return RES_PARERR;}
             *(WORD *)buffer = 512; return RES_OK;
         case GET_BLOCK_SIZE:
-            if(!buffer) {kui_media_read_cache_end();return RES_PARERR;}
+            if(!buffer) {changed();kui_media_read_cache_end();return RES_PARERR;}
             *(DWORD *)buffer = 1; return RES_OK;
-        default: kui_media_read_cache_end();return RES_PARERR;
+        default: changed();kui_media_read_cache_end();return RES_PARERR;
     }
 }

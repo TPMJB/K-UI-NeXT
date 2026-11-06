@@ -447,6 +447,24 @@ FRESULT f_stat(const TCHAR *path,FILINFO *info) {
     if(!bytes) return FR_NO_FILE;
     memset(info,0,sizeof(*info));info->fsize=bytes;return FR_OK;
 }
+/* This generated filesystem has no saved native mapping directory. A hint
+ * lookup must take its ordinary cache-miss path without opening a directory. */
+FRESULT f_opendir(DIR *directory,const TCHAR *path) {
+    CHECK(launch.connected && launch.mounted && directory && path);
+    char expected[64];
+    snprintf(expected,sizeof(expected),"0:/KUI/VMU/native-cache/v%u",
+        KUI_VMU_NATIVE_RESOLUTION_DETECTOR_EPOCH);
+    CHECK(!strcmp(path,expected));
+    memset(directory,0,sizeof(*directory));return FR_NO_PATH;
+}
+FRESULT f_readdir(DIR *directory,FILINFO *info) {
+    (void)directory;(void)info;
+    CHECK(!"preparation attempted to read an unopened cache directory");return FR_INVALID_OBJECT;
+}
+FRESULT f_closedir(DIR *directory) {
+    (void)directory;
+    CHECK(!"preparation attempted to close an unopened cache directory");return FR_INVALID_OBJECT;
+}
 /* The optional native-cache publisher is compiled into games_retail.c, but
  * these legacy preparation fixtures must remain read-only. Keep the hooks
  * linked and fail if any fixture accidentally reaches a mutation path. */

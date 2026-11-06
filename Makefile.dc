@@ -103,6 +103,7 @@ RUNTIME_OBJECTS += build/dc/src/core/vmu_history_session.o
 RUNTIME_OBJECTS += build/dc/src/core/vmu_game_card.o build/dc/src/core/vmu_game_card_service.o \
     build/dc/src/core/vmu_fs_admission.o build/dc/src/core/vmu_persist_profile.o build/dc/src/loader/vmu_backing.o \
     build/dc/src/core/vmu_game_assign.o build/dc/src/core/vmu_image_merge.o
+RUNTIME_OBJECTS += build/dc/src/loader/smash_fat_read_cache.o
 RUNTIME_OBJECTS += build/dc/src/core/vmu_emulation_settings.o
 RUNTIME_OBJECTS += build/dc/src/core/vmu_import_plan.o build/dc/src/core/vmu_game_candidates.o
 RUNTIME_OBJECTS += build/dc/src/core/native_vmu_standard.o build/dc/src/core/smash_native_child.o
@@ -178,9 +179,12 @@ build/dc/src/apps/vmu_game_info.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
 build/dc/src/apps/vmu_history.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
 build/dc/src/apps/disc_vmu_card.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
 build/dc/src/apps/disc_cards.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
-# Reuse the image launcher's checked aligned decoders for immutable native
-# preflight; keep unaligned reads and every recognition bound unchanged.
-build/dc/src/core/vmu_native_program.o build/dc/src/core/vmu_native_heap.o build/dc/src/core/vmu_native_exit.o: CPPFLAGS += -DKUI_NATIVE_STAGE_FAST_SCAN=1
+# Every GUI caller uses the same checked immutable decoders as the stages.
+# Bind the flag to object rebuilds as well as the production recipe.
+GUI_NATIVE_PROOF_OBJECTS := build/dc/src/core/vmu_native_program.o \
+    build/dc/src/core/vmu_native_heap.o build/dc/src/core/vmu_native_exit.o
+$(GUI_NATIVE_PROOF_OBJECTS): CPPFLAGS += -DKUI_NATIVE_STAGE_FAST_SCAN=1
+$(GUI_NATIVE_PROOF_OBJECTS): Makefile.dc include/kui/native_scan_bytes.h
 build/dc/src/core/disc_launch.o: CPPFLAGS += -DKUI_DISC_STAGE_FAST_CRC32=1
 # These separately linked, opt-in music modules retain their tested CE layout
 # even when the ordinary native loader uses its lower firmware reservation.

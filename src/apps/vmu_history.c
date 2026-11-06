@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kui/vmu_history.h"
+#include "kui/vmu_launch_history.h"
 #include "kui/vmu_backing.h"
 #include "kui/games_storage.h"
 #include "kui/media.h"
@@ -44,6 +45,9 @@ int kui_vmu_history_checkpoint_mounted(const struct kui_vmu_game_selection *card
 int kui_vmu_history_launch_mounted(const struct kui_vmu_game_selection *card,
     struct kui_vmu_history_view *out,kui_log_fn log,kui_cancel_fn cancel) {
     return kui_vmu_history_session_begin(card,seconds(),&platform,out,log,cancel);
+}
+int kui_vmu_history_resume_mounted(struct kui_vmu_history_view *out,kui_log_fn log,kui_cancel_fn cancel) {
+    return kui_vmu_history_session_resume(seconds(),&platform,out,log,cancel);
 }
 void kui_vmu_history_resume_run(struct kui_vmu_history_view *out,kui_log_fn log,kui_cancel_fn cancel) {
     if(!out)return;

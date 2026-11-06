@@ -22,6 +22,13 @@ static FATFS fs;
 static struct kui_volume volume;
 static bool raw_open,cancel_flag;
 static unsigned raw_begins,salt_counter;
+static bool raw_batch_enabled=true,raw_batch_fail,raw_failed;
+static unsigned raw_commands,raw_batches,raw_after_failure;
+static bool raw_capture,raw_fail_at_lba;
+static uint32_t raw_failure_lba;
+struct raw_run {uint32_t lba,count;};
+static struct raw_run raw_runs[2048];
+static unsigned raw_run_count;
 static int write_fail_after=-1;
 static unsigned writes_attempted;
 static unsigned cancel_after,cancel_checks;
@@ -56,8 +63,23 @@ static void mount(void) {
 static void unmount(void) {CHECK(f_mount(NULL,"0:",0)==FR_OK);}
 static int raw_read(void *context,uint32_t lba,uint8_t out[512]) {
     CHECK(context==&disk && raw_open);
+    ++raw_commands;if(raw_failed)++raw_after_failure;
     if(lba>=sectors) return -1;
     memcpy(out,disk+(size_t)lba*512u,512u);return 0;
+}
+static int raw_read_sectors(void *context,uint32_t lba,uint32_t count,uint8_t *out) {
+    CHECK(context==&disk && raw_open && count && count<=16u && !((uintptr_t)out&31u));
+    ++raw_commands;++raw_batches;
+    if(raw_capture) {
+        CHECK(raw_run_count<sizeof(raw_runs)/sizeof(raw_runs[0]));
+        raw_runs[raw_run_count++]=(struct raw_run){lba,count};
+    }
+    if(raw_batch_fail || (raw_fail_at_lba && lba==raw_failure_lba)) {
+        /* A partially received/poisoned window must never become cached. */
+        memset(out,0xa5,(size_t)count*512u);raw_failed=true;return -1;
+    }
+    if((uint64_t)lba+count>sectors)return -1;
+    memcpy(out,disk+(size_t)lba*512u,(size_t)count*512u);return 0;
 }
 static bool identity(void *context,struct kui_vmu_game_card_raw *out) {
     CHECK(context==&volume && !raw_open);
@@ -66,9 +88,12 @@ static bool identity(void *context,struct kui_vmu_game_card_raw *out) {
 }
 static bool raw_begin(void *context,struct kui_vmu_game_card_raw *out) {
     CHECK(context==&volume && !raw_open);
+    CHECK(!out->read_sector && !out->read_sectors && !out->context);
     if(f_mount(NULL,"0:",0)!=FR_OK) return false;
     raw_open=true;++raw_begins;
     out->read_sector=raw_read;out->context=&disk;
+    /* Model legacy platforms that never assign the appended field. */
+    if(raw_batch_enabled)out->read_sectors=raw_read_sectors;
     return true;
 }
 static bool raw_end(void *context) {
@@ -249,6 +274,119 @@ static void imported_destination(unsigned pair,const uint8_t identity[16],const 
 static void restore_disk(const uint8_t *saved) {
     unmount();memcpy(disk,saved,(size_t)sectors*512u);mount();
 }
+static bool fragment_base(void) {
+    if(fs.csize>=256u)return false; /* A128KiB base occupies one cluster. */
+    const char *path=KUI_VMU_GAME_CARD_ROOT "/p0002/card.vmd";
+    static uint8_t image[131072],separator[131072];
+    CHECK(file_read(path,image,sizeof(image))==sizeof(image) && f_unlink(path)==FR_OK);
+    FIL file;UINT done=0;UINT first=(UINT)fs.csize*512u;
+    CHECK(f_open(&file,path,FA_CREATE_NEW|FA_WRITE)==FR_OK);
+    CHECK(f_write(&file,image,first,&done)==FR_OK && done==first);
+    file_write("0:/snapshot-separator.bin",separator,first);
+    CHECK(f_write(&file,image+first,sizeof(image)-first,&done)==FR_OK && done==sizeof(image)-first);
+    CHECK(f_close(&file)==FR_OK);
+    return true;
+}
+static uint32_t snapshot_runs(const uint8_t wire[4096],bool fragmented,unsigned *commands) {
+    struct kui_vmu_persist_profile p;
+    CHECK(!kui_vmu_persist_profile_decode(&p,wire,4096u));
+    unsigned calls[3]={0},blocks[3]={0};uint32_t second_base=0u;
+    const uint32_t limits[3]={256u,2u,1u};
+    for(unsigned n=0;n<raw_run_count;n++) {
+        const struct raw_run *run=&raw_runs[n];
+        for(unsigned role=0;role<3u;role++) {
+            const struct kui_vmu_persist_file *f=&p.files[role];
+            for(unsigned i=0;i<f->useful_count;i++) {
+                const struct kui_vmu_persist_extent *e=&f->useful[i];
+                if(run->lba<e->lba || run->lba-e->lba>=e->blocks)continue;
+                uint32_t logical=e->logical_block+run->lba-e->lba;
+                CHECK(logical<limits[role] && run->count<=limits[role]-logical);
+                for(uint32_t j=0;j<run->count;j++) {
+                    uint32_t mapped;
+                    CHECK(!kui_vmu_persist_profile_map_lba(&p,role,logical+j,&mapped) && mapped==run->lba+j);
+                }
+                ++calls[role];blocks[role]+=run->count;
+                if(!role && calls[role]==2u)second_base=run->lba;
+            }
+        }
+    }
+    CHECK(blocks[0]==256u && blocks[1]==2u && blocks[2]==1u && calls[2]==1u);
+    CHECK(second_base && calls[0]>=16u && calls[0]<=32u && calls[1]<=2u);
+    if(fragmented)CHECK(p.files[0].useful_count>1u && calls[0]>16u);
+    *commands=calls[0]+calls[1]+calls[2];
+    return second_base;
+}
+static void batched_collection(void) {
+    const char *profile=KUI_VMU_GAME_CARD_ROOT "/p0002/retail-persistent-profile-0002.bin";
+    struct kui_vmu_game_card_choice choice;
+    uint8_t single[4096],batched[4096];
+    CHECK(f_unlink(profile)==FR_OK);
+    bool fragmented=fragment_base();
+    uint8_t *start=snapshot();
+    raw_batch_enabled=false;raw_commands=raw_batches=0u;
+    CHECK(select_card("MK-51136",NULL,0,&choice,single)==KUI_VMU_GAME_CARD_READY && choice.collected);
+    CHECK(!raw_batches);
+    unsigned single_commands=raw_commands;
+    struct kui_vmu_fs_stats single_stats=work.filesystem.stats;
+    uint8_t *single_disk=snapshot();
+
+    restore_disk(start);raw_batch_enabled=true;raw_commands=raw_batches=raw_run_count=0u;raw_capture=true;
+    CHECK(select_card("MK-51136",NULL,0,&choice,batched)==KUI_VMU_GAME_CARD_READY && choice.collected);
+    raw_capture=false;
+    CHECK(raw_batches && raw_commands<single_commands);
+    CHECK(!memcmp(single,batched,sizeof(single)) && unchanged(single_disk));
+    CHECK(!memcmp(&single_stats,&work.filesystem.stats,sizeof(single_stats)));
+    unsigned batch_commands=raw_commands,batch_windows=raw_batches;
+    unsigned snapshot_commands;raw_failure_lba=snapshot_runs(batched,fragmented,&snapshot_commands);
+    admitted(batched,2u);
+    free(single_disk);
+
+    /* Same work object and valid cached-looking bytes, but a new raw epoch:
+     * an errored full window cannot fall back or publish any profile. */
+    restore_disk(start);raw_commands=raw_batches=raw_after_failure=0u;
+    raw_batch_fail=true;raw_failed=false;
+    CHECK(select_card("MK-51136",NULL,0,&choice,batched)==KUI_VMU_GAME_CARD_FAILED);
+    CHECK(raw_failed && raw_batches==1u && !raw_after_failure && !raw_open && unchanged(start));
+    for(unsigned i=0;i<sizeof(batched);i++)CHECK(!batched[i]);
+    CHECK(!exists(profile));raw_batch_fail=raw_failed=false;
+    CHECK(select_card("MK-51136",NULL,0,&choice,batched)==KUI_VMU_GAME_CARD_READY && choice.collected);
+    CHECK(!memcmp(single,batched,sizeof(single)));
+
+    /* Fail the second snapshot base run after a verified first window.
+     * The poisoned request must not be hidden by the earlier window. */
+    restore_disk(start);raw_fail_at_lba=true;raw_failed=false;raw_after_failure=0u;
+    CHECK(select_card("MK-51136",NULL,0,&choice,batched)==KUI_VMU_GAME_CARD_FAILED);
+    CHECK(raw_failed && !raw_after_failure && !raw_open && unchanged(start) && !exists(profile));
+    for(unsigned i=0;i<sizeof(batched);i++)CHECK(!batched[i]);
+    raw_fail_at_lba=raw_failed=false;
+
+    /* Fresh data in a later operation must replace all snapshot bytes. */
+    restore_disk(start);FIL changed;UINT done=0;const uint8_t changed_byte=0x68;
+    CHECK(f_open(&changed,KUI_VMU_GAME_CARD_ROOT "/p0002/card.vmd",FA_WRITE)==FR_OK);
+    CHECK(f_lseek(&changed,10u*512u)==FR_OK && f_write(&changed,&changed_byte,1u,&done)==FR_OK && done==1u);
+    CHECK(f_close(&changed)==FR_OK);
+    CHECK(select_card("MK-51136",NULL,0,&choice,batched)==KUI_VMU_GAME_CARD_READY && choice.collected);
+    CHECK(memcmp(single,batched,sizeof(single)));
+
+    /* A subsequent operation must re-read ownership after a real metadata
+     * change, including exFAT's bitmap and FAT32's mirrored table. */
+    CHECK(f_unlink(profile)==FR_OK);clear_allocation(2u);
+    uint8_t *damaged=snapshot();raw_commands=raw_batches=0u;
+    CHECK(select_card("MK-51136",NULL,0,&choice,batched)==KUI_VMU_GAME_CARD_FAILED);
+    CHECK(raw_commands && !raw_open && unchanged(damaged) && !exists(profile));
+    for(unsigned i=0;i<sizeof(batched);i++)CHECK(!batched[i]);
+    free(damaged);
+
+    /* Returning to the single-only API after batched use must also discard
+     * the previous callback and every learned window. */
+    restore_disk(start);raw_batch_enabled=false;raw_batches=0u;
+    CHECK(select_card("MK-51136",NULL,0,&choice,batched)==KUI_VMU_GAME_CARD_READY && choice.collected);
+    CHECK(!raw_batches && !memcmp(single,batched,sizeof(single)));
+    raw_batch_enabled=true;
+    printf("raw ownership batches: single=%u batched=%u windows=%u snapshot=%u/259 fragmented=%u; identical profile/disk/logical admission, fresh epochs and failed-window refusal\n",
+        single_commands,batch_commands,batch_windows,snapshot_commands,fragmented?1u:0u);
+    free(start);
+}
 static void imported_assignments(void) {
     struct kui_vmu_game_card_choice choice;static uint8_t image[131072],verify[131072],wire[4096];
     uint8_t imported_id[16],second_id[16],fresh_salt[16]={0x41};
@@ -398,7 +536,36 @@ static void imported_assignments(void) {
     CHECK(file_read(path,verify,sizeof(verify))==sizeof(image) && !memcmp(image,verify,sizeof(image)));
 }
 
+#if FF_USE_MKFS
+static void format_put32(uint8_t *p,uint32_t value) {
+    for(unsigned i=0;i<4u;i++)p[i]=(uint8_t)(value>>(8u*i));
+}
+static int format_fixture(const char *kind,const char *cluster_text,const char *path) {
+    BYTE format_kind=!strcmp(kind,"fat32")?FM_FAT32:FM_EXFAT;
+    char *tail;unsigned long cluster=strtoul(cluster_text,&tail,10);
+    CHECK(!*tail && cluster && cluster<=131072u);
+    sectors=2048u+131072u+2048u;size_t bytes=(size_t)sectors*512u;
+    disk=calloc(1,bytes);CHECK(disk);
+    disk[446u+4u]=format_kind==FM_FAT32?0x0cu:7u;
+    format_put32(disk+446u+8u,2048u);format_put32(disk+446u+12u,131072u);
+    disk[510]=0x55;disk[511]=0xaa;
+    kui_media_set(&media);uint8_t scratch[8192];
+    MKFS_PARM parameters={.fmt=(BYTE)(format_kind|FM_SFD),.n_fat=format_kind==FM_FAT32?2u:1u,
+        .align=1u,.n_root=512u,.au_size=(DWORD)cluster};
+    CHECK(f_mkfs("0:",&parameters,scratch,sizeof(scratch))==FR_OK);
+    if(format_kind==FM_FAT32) {
+        uint8_t *boot=disk+2048u*512u;unsigned backup=boot[50u]|(unsigned)boot[51u]<<8;
+        CHECK(backup && backup<32u);format_put32(boot+28u,2048u);
+        format_put32(boot+(size_t)backup*512u+28u,2048u);
+    }
+    FILE *output=fopen(path,"wb");CHECK(output && fwrite(disk,1u,bytes,output)==bytes && !fclose(output));
+    free(disk);return 0;
+}
+#endif
 int main(int argc,char **argv) {
+#if FF_USE_MKFS
+    if(argc==5 && !strcmp(argv[1],"--format"))return format_fixture(argv[2],argv[3],argv[4]);
+#endif
     if(argc!=2) {fprintf(stderr,"Usage: %s IMAGE\n",argv[0]);return 2;}
     FILE *file=fopen(argv[1],"rb");CHECK(file);
     CHECK(!fseek(file,0,SEEK_END));long length=ftell(file);CHECK(length>0 && !(length%512));
@@ -541,6 +708,7 @@ int main(int argc,char **argv) {
     CHECK(file_read(KUI_VMU_GAME_CARD_ROOT "/p0005/card.vmd",shared_check,sizeof(shared_check))==131072u);
     CHECK(!memcmp(shared_check,shared_card,sizeof(shared_card)));
     CHECK(!exists(KUI_VMU_GAME_CARD_ROOT "/p0005/game.bin"));
+    batched_collection();
     imported_assignments();
     printf("vmu game card service (%s): %u checks\n",fs.fs_type==FS_EXFAT?"exFAT":"FAT32",checks);
     unmount();free(disk);

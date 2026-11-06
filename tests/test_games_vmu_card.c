@@ -26,6 +26,8 @@ static struct {
     char problem[96];uint8_t fill;
     const struct kui_retail_manifest *map;
 } mock={.candidate_result=KUI_VMU_GAME_CANDIDATES_ABSENT};
+static unsigned raw_many_reads;
+static bool raw_many_fails;
 static struct kui_volume volume={2048u,1000000u,true};
 static FATFS mounted_fs;
 FRESULT f_mount(FATFS *fs,const TCHAR *path,BYTE opt) {
@@ -37,8 +39,11 @@ FRESULT f_mount(FATFS *fs,const TCHAR *path,BYTE opt) {
 }
 const struct kui_volume *kui_media_volume(void) {return &volume;}
 static int raw_read(void *context,uint32_t block,size_t count,uint8_t *data) {
-    CHECK(context==&mock && count==1u && !mock.mounted);
-    ++mock.raw_reads;memset(data,(int)(block&255u),512u);return 0;
+    CHECK(context==&mock && (count==1u || count==3u) && !mock.mounted);
+    if(count==1u) ++mock.raw_reads;else ++raw_many_reads;
+    if(raw_many_fails) {memset(data,0xc7,512u);return -7;}
+    for(size_t i=0;i<count;i++) memset(data+i*512u,(int)((block+i)&255u),512u);
+    return 0;
 }
 bool kui_sd_raw_read_ops(struct kui_media_ops *out) {
     *out=(struct kui_media_ops){.ctx=&mock,.read=raw_read};return true;
@@ -91,6 +96,16 @@ int kui_vmu_game_card_select(const char *product,uint64_t partition_first,uint64
     uint8_t sector[512];
     CHECK(platform->raw_begin(platform->context,&raw) && mock.unmounts==1 && !mock.mounted);
     CHECK(!raw.read_sector(raw.context,0x1234u,sector) && sector[0]==0x34 && mock.raw_reads==1);
+    uint8_t sectors[3u*512u+16u];memset(sectors,0xa5,sizeof(sectors));
+    unsigned many_before=raw_many_reads;
+    CHECK(raw.read_sectors && !raw.read_sectors(raw.context,0x12feu,3u,sectors));
+    CHECK(raw_many_reads==many_before+1u && mock.raw_reads==1);
+    for(size_t i=0;i<3u*512u;i++) CHECK(sectors[i]==(uint8_t)(0xfeu+i/512u));
+    for(size_t i=3u*512u;i<sizeof(sectors);i++) CHECK(sectors[i]==0xa5u);
+    raw_many_fails=true;
+    CHECK(raw.read_sectors(raw.context,0x12feu,3u,sectors)!=0);
+    CHECK(raw_many_reads==many_before+2u && mock.raw_reads==1);
+    raw_many_fails=false;
     CHECK(platform->raw_end(platform->context)==!mock.volume_moves && mock.mounted);
     uint8_t one[16],two[16];platform->salt(platform->context,one);platform->salt(platform->context,two);
     mock.salts_differ=memcmp(one,two,16u)!=0;

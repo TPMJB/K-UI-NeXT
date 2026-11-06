@@ -28,5 +28,9 @@ const char *kui_media_problem(void);
  * across operations: repeated verification passes must reach the device. */
 bool kui_media_read_cache_begin(void *scratch,size_t bytes);
 void kui_media_read_cache_end(void);
+/* Read-only proofs may be carried only inside one exclusive worker operation.
+ * Every attempted write, device/view replacement and I/O/refusal error changes
+ * this generation. It grants no storage/card identity or lifetime by itself. */
+uint64_t kui_media_mutation_epoch(void);
 
 #endif

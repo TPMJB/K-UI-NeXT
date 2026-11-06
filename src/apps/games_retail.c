@@ -17,6 +17,11 @@
 #include "kui/smash_menu_return.h"
 #include "kui/smash_menu_collection.h"
 #include "kui/smash_launch_timing.h"
+#include "kui/vmu_launch_history.h"
+/* Host-only users need no frontend coordinator. Production main references
+ * it strongly; the normal GUI always links the shared app implementation. */
+extern void kui_vmu_launch_history_begin_mounted(kui_log_fn,kui_cancel_fn) __attribute__((weak));
+extern void kui_vmu_launch_history_end(void) __attribute__((weak));
 #include "kui/smash_reader_control.h"
 #include "kui/retail_image.h"
 #include "kui/retail_zso.h"
@@ -553,9 +558,9 @@ static bool fill_ram_patches(struct kui_runtime_image *package,
         KUI_GAME_RAM_PATCH_SEED_BYTES,patches,exec_bytes);
 }
 #include "games_native_cache.inc"
-#include "games_native_owner_cache.inc"
 #include "games_native_cache_hint.inc"
 #if KUI_VMU_GAME_CARDS
+#include "games_native_owner_cache.inc"
 #include "games_vmu_card.inc"
 #include "vc2_ce_vmu_late_prepare.inc"
 #include "vc2_ce_vmu_persist_prepare.inc"
@@ -915,6 +920,11 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
             problem="cannot read the saved VMU emulation setting; check VMU tools";goto done;
         }
         log("Native VMU emulation: %s; background reader selection is unchanged",emulation_enabled?"On":"Off");
+    }
+    if(kui_vmu_launch_history_begin_mounted) {
+        KUI_SMASH_TIME_SPAN(early_resume_time,KUI_SMASH_UI_EARLY_RESUME);
+        kui_vmu_launch_history_begin_mounted(log,cancel);
+        KUI_SMASH_TIME_END(early_resume_time);
     }
 #if !KUI_VMU_GAME_CARDS
     if(native_dual && !emulation_enabled) {
@@ -1586,6 +1596,7 @@ static bool prepare_launch(const char *path,uint32_t reader,const struct kui_gam
     ok=true;
 done:
     kui_smash_launch_timing_phase(KUI_SMASH_UI_FILE_CLEANUP);
+    if(kui_vmu_launch_history_end)kui_vmu_launch_history_end();
     if(!close_reader(&files)) {ok=false;problem="cannot close image reader";}
     if(f_mount(NULL,"0:",0)!=FR_OK) {ok=false;problem="cannot release filesystem";}
     kui_sd_disconnect();free(zso_map);free(gdi);free(image);free(map);

@@ -40,6 +40,7 @@ static volatile uint8_t kui_update_ram_handoff[KUI_UPDATE_HANDOFF_BYTES]
 #include "kui/vmu_import.h"
 #include "kui/vmu_emulation_settings.h"
 #include "kui/vmu_game_info.h"
+#include "kui/vmu_launch_history.h"
 #include "kui/vmu_library.h"
 #include "kui/media.h"
 #include "kui/music_player.h"
@@ -4095,12 +4096,6 @@ static void *worker(void *unused) {
                 disc_launch_failure_report("auto GD Play check failure",&result);
             }
             if(action==56 || action==57 || action==58 || action==104 || action==121 || action==122) {
-                if((action==58 || action==121 || action==122) && vmu_history_resume_needed && vmu_emulation_generation &&
-                   vmu_emulation_ok && vmu_emulation_enabled) {
-                    KUI_SMASH_TIME_SPAN(early_resume_time,KUI_SMASH_UI_EARLY_RESUME);
-                    vmu_history_resume_needed=false;vmu_history_previous_session();
-                    KUI_SMASH_TIME_END(early_resume_time);
-                }
                 kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 struct kui_native_session_request session_request={0};
                 bool session_ready=(action==58 || action==121 || action==122) && !kui_cancelled() &&
@@ -4116,6 +4111,14 @@ static void *worker(void *unused) {
                 else disc_launch_release_menu_memory();
                 kui_sd_set_params(KUI_STORAGE_AUTO,true);
                 struct kui_app_status disc_result;
+                /* Recover on the prepare's mounted owner, after selection
+                 * writes but before launch/card allocation. The request is
+                 * consumed even by CE/CDDA/standalone routes without a card
+                 * boundary. No proof survives this one foreground call. */
+                if((action==58 || action==121 || action==122) && vmu_history_resume_needed && vmu_emulation_generation &&
+                   vmu_emulation_ok && vmu_emulation_enabled) {
+                    kui_vmu_launch_history_request(true);
+                } else kui_vmu_launch_history_request(false);
                 bool prepared=action==121 || action==122?
                     kui_games_smash_native_prepare(action==121?KUI_SMASH_NATIVE_CHILD_PHANTASY_STAR_II:
                         KUI_SMASH_NATIVE_CHILD_SHINING_FORCE,games_path_pending,games_reader_pending,
@@ -4129,6 +4132,8 @@ static void *worker(void *unused) {
                         kui_log,kui_cancelled):action==57?
                     kui_games_image_probe_prepare(games_path_pending,&probe_image,kui_log,kui_cancelled):
                     kui_games_probe_prepare(&probe_image,kui_log,kui_cancelled);
+                if(kui_vmu_launch_history_performed())vmu_history_resume_needed=false;
+                kui_vmu_launch_history_end();
                 kui_smash_launch_timing_phase(KUI_SMASH_UI_POST_PREPARE);
                 if(prepared && kui_cancelled()) {
                     kui_runtime_free(&probe_image);prepared=false;

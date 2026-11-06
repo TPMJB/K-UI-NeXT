@@ -13,6 +13,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCES = ('tests/test_vmu_game_card_service.c', 'src/core/vmu_game_card_service.c',
+           'src/loader/smash_fat_read_cache.c',
            'src/core/vmu_game_card.c', 'src/core/vmu_game_assign.c', 'src/core/vmu_game_candidates.c', 'src/core/vmu_fs_admission.c', 'src/core/vmu_persist_profile.c',
            'src/core/vmu_image.c', 'src/core/retail_image.c', 'src/core/hash.c', 'src/core/data.c',
            'src/core/diskio.c', 'src/core/clock.c', 'src/core/command.c',
@@ -31,18 +32,23 @@ def partitioned(filesystem, kind):
     return bytes(mbr) + bytes(OFFSET * 512 - 512) + data + bytes(1024 * 1024)
 
 
-@unittest.skipUnless(shutil.which('mkfs.fat') and shutil.which('mkfs.exfat'), 'needs mkfs.fat and mkfs.exfat')
 class GameCardService(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.work = tempfile.TemporaryDirectory(prefix='kui-game-card-')
         cls.dir = Path(cls.work.name)
         cls.tool = cls.dir / 'service'
+        config = (ROOT / 'config/ffconf.h').read_text()
+        old = '#define FF_USE_MKFS 0'
+        assert config.count(old) == 1
+        header = cls.dir / 'ffconf-test.h'
+        header.write_text(config.replace(old, '#define FF_USE_MKFS 1'))
         cc = shlex.split(os.environ.get('CC', 'cc'))
         subprocess.run([*cc, '-std=c11', '-O1', '-g', '-Wall', '-Wextra', '-Werror', '-Wpedantic',
                         '-fsanitize=address,undefined', '-fno-omit-frame-pointer',
                         '-ffunction-sections','-fdata-sections','-Wl,--gc-sections',
                         '-I', str(ROOT / 'include'), '-I', str(ROOT / '.deps/fatfs/source'),
+                        '-include', str(header),
                         *[str(ROOT / s) for s in SOURCES], '-o', str(cls.tool)], check=True)
 
     @classmethod
@@ -50,6 +56,15 @@ class GameCardService(unittest.TestCase):
         cls.work.cleanup()
 
     def run_image(self, kind, *arguments):
+        image = self.dir / f'{kind}.img'
+        formatter = 'mkfs.fat' if kind == 'fat32' else 'mkfs.exfat'
+        if not shutil.which(formatter):
+            # Exercise actual FatFs volumes even on minimal SDK/CI hosts.
+            cluster = 512 if kind == 'fat32' else {'4K': 4096, '128K': 131072}[arguments[1]]
+            subprocess.run([str(self.tool), '--format', kind, str(cluster), str(image)],
+                           check=True, capture_output=True,
+                           env=dict(os.environ, ASAN_OPTIONS='detect_leaks=0'))
+            return self.run_service(image)
         filesystem = self.dir / f'{kind}.fs'
         with filesystem.open('wb') as out:
             out.truncate(FS_BYTES)
@@ -58,11 +73,15 @@ class GameCardService(unittest.TestCase):
         else:
             command = ['mkfs.exfat', '-L', 'KUITEST', *arguments]
         subprocess.run([*command, str(filesystem)], check=True, capture_output=True)
-        image = self.dir / f'{kind}.img'
         image.write_bytes(partitioned(filesystem, kind))
+        return self.run_service(image)
+
+    def run_service(self, image):
         run = subprocess.run([str(self.tool), str(image)], capture_output=True, text=True,
                              env=dict(os.environ, ASAN_OPTIONS='detect_leaks=0'))
         self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn('raw ownership batches:', run.stdout)
+        print(run.stdout.strip())
         return run.stdout
 
     def test_fat32(self):

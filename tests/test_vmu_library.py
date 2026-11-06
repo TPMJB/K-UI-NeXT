@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCES = (
     'tests/test_vmu_library.c', 'src/core/vmu_library.c',
     'src/core/vmu_collection.c', 'src/core/vmu_game_card_service.c',
+    'src/loader/smash_fat_read_cache.c',
     'src/core/vmu_game_card.c', 'src/core/vmu_game_assign.c',
     'src/core/vmu_game_candidates.c',
     'src/core/vmu_fs_admission.c', 'src/core/vmu_persist_profile.c',

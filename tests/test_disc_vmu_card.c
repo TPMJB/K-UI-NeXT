@@ -12,6 +12,8 @@
 #include <string.h>
 
 static unsigned checks,calls,exact_calls,identity_reads,raw_reads,mounts,unmounts,active_reads;
+static unsigned raw_many_reads;
+static bool raw_many_fails;
 #define CHECK(x) do {++checks;if(!(x)) {fprintf(stderr,"%s:%u: %s\n",__FILE__,__LINE__,#x);exit(1);}} while(0)
 static FATFS filesystem;
 static struct kui_volume volume={2048u,1000000u,true};
@@ -33,8 +35,11 @@ FRESULT f_mount(FATFS *fs,const TCHAR *path,BYTE opt) {
     mounted=true;if(move_volume) volume.start+=8u;return FR_OK;
 }
 static int raw_read(void *context,uint32_t block,size_t count,uint8_t *data) {
-    CHECK(context==&filesystem && !mounted && count==1u);++raw_reads;
-    memset(data,(int)(block&255u),512u);return 0;
+    CHECK(context==&filesystem && !mounted && (count==1u || count==3u));
+    if(count==1u) ++raw_reads;else ++raw_many_reads;
+    if(raw_many_fails) {memset(data,0xc7,512u);return -7;}
+    for(size_t i=0;i<count;i++) memset(data+i*512u,(int)((block+i)&255u),512u);
+    return 0;
 }
 bool kui_sd_raw_read_ops(struct kui_media_ops *out) {
     CHECK(!mounted);*out=(struct kui_media_ops){.ctx=&filesystem,.read=raw_read};return true;
@@ -78,6 +83,7 @@ static void fixture(void) {
     remount_error=move_volume=bad_profile=bad_path=bad_partition=bad_identity=wrong_key=late_cancel=immediate_cancel=false;
     select_result=KUI_VMU_GAME_CARD_READY;
     calls=exact_calls=identity_reads=raw_reads=mounts=unmounts=active_reads=0u;
+    raw_many_reads=0u;raw_many_fails=false;
     selection=(struct kui_vmu_game_selection){.pair=23u,.selected=true,.candidates_sequence=17u};
     strcpy(selection.product,"MK-51006");memset(selection.identity,0x23,16u);
     memcpy(selection.storage.cid,profile.cid,16u);selection.storage.card_sectors=profile.card_sectors;
@@ -93,6 +99,15 @@ int kui_vmu_game_card_select(const char *product,uint64_t first,uint64_t end,
     CHECK(raw.card_sectors==profile.card_sectors && raw.high_capacity && !memcmp(raw.cid,profile.cid,16u));
     CHECK(platform->raw_begin(platform->context,&raw));uint8_t sector[512];
     CHECK(!raw.read_sector(raw.context,0x1234u,sector) && sector[0]==0x34u);
+    uint8_t sectors[3u*512u+16u];memset(sectors,0xa5,sizeof(sectors));
+    CHECK(raw.read_sectors && !raw.read_sectors(raw.context,0x12feu,3u,sectors));
+    CHECK(raw_many_reads==1u && raw_reads==1u);
+    for(size_t i=0;i<3u*512u;i++) CHECK(sectors[i]==(uint8_t)(0xfeu+i/512u));
+    for(size_t i=3u*512u;i<sizeof(sectors);i++) CHECK(sectors[i]==0xa5u);
+    raw_many_fails=true;
+    CHECK(raw.read_sectors(raw.context,0x12feu,3u,sectors)!=0);
+    CHECK(raw_many_reads==2u && raw_reads==1u);
+    raw_many_fails=false;
     bool ended=platform->raw_end(platform->context);
     if(!ended) return KUI_VMU_GAME_CARD_FAILED;
     uint8_t a[16],b[16];platform->salt(platform->context,a);platform->salt(platform->context,b);CHECK(memcmp(a,b,16u));

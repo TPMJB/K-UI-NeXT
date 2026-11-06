@@ -59,6 +59,22 @@ deployment, new virtual-card support for DOA2 or a CDDA/FMVs performance result.
 Record build/package outcomes and any refused family before offering a new
 installation. Keep accepted Smash gameplay and return results above intact.
 
+### Shared pre-bootstrap follow-up
+
+The owner reports almost twenty seconds before bootstrap in Power Stone 2 on
+the first consolidated test and explicitly rejects per-game performance fixes.
+The follow-up is in `shared-gui-launch-preparation.md`: common GUI card
+admission and snapshot batching, plus launch-scoped reuse of a freshly verified
+frontend recovery checkpoint. It preserves all twenty non-GUI files from the
+72db614 test, the accepted collection and game-time worker geometry.
+
+Existing executable/history batching and aligned GUI decoders are preservation
+requirements, not new achievements. New tests bind those actual defaults and
+compare the new shared paths with single-read/full-checkpoint controls.
+Host operation reductions do not establish the owner's new launch time.
+Console latency and normal launch/save behavior remain pending for this GUI
+candidate; do not call the twenty-second report resolved without that result.
+
 ## 0a hardware report: damaged reconstructed block reaches the sector parser
 
 The owner's three0a2ddd9bb9b6 photos show FN12 PIO_TRANSFER in the original VC2

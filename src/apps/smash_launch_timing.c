@@ -55,7 +55,7 @@ static const char *const metrics[KUI_SMASH_UI_METRICS]={
     "outer_capsule_bytes","child_capsule_bytes","outer_capsule_crc32","child_capsule_crc32",
     "native_profile_flags","module_crc32","module_bytes","executable_source_bytes",
     "executable_sha256_bytes","program_bytes","source_read_callbacks","source_read_bytes","source_seeks",
-    "history_read_calls","history_read_bytes","verify_batch_bytes"};
+    "history_read_calls","history_read_bytes","verify_batch_bytes","raw_sessions","raw_blocks"};
 void kui_smash_launch_timing_clock(uint64_t (*read)(void *),void *context) {
     test_clock=read;test_context=context;
 }
