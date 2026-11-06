@@ -71,9 +71,25 @@ frontend recovery checkpoint. It preserves all twenty non-GUI files from the
 Existing executable/history batching and aligned GUI decoders are preservation
 requirements, not new achievements. New tests bind those actual defaults and
 compare the new shared paths with single-read/full-checkpoint controls.
-Host operation reductions do not establish the owner's new launch time.
-Console latency and normal launch/save behavior remain pending for this GUI
-candidate; do not call the twenty-second report resolved without that result.
+The owner now reports Power Stone 2 reaches bootstrap in about four seconds
+on 9d6680a, versus almost twenty seconds before. Record this as the reported
+preparation improvement, separately from bootstrap and save/return coverage.
+
+### Native bootstrap services: 7fca3e3 candidate
+
+The owner asks to carry the faster Smash bootstrap lessons into shared native
+stages while retaining VMU hooks, and recalls about two seconds through Smash
+bootstrap. Exact dbadd source/binary comparison established three later changes:
+cached whole-executable CRC, fresh metadata/snapshot batching and removal of
+native informational holds. Older cached extent/replay/FAT work was already
+installed and must not be claimed again as missing.
+
+`shared-native-bootstrap-rollout.md` records the new 26-file candidate,
+five-service coverage, preserved workers/geometry/Smash bytes and qualification.
+The GUI's exact Standard and retained native-CDDA manifests are promoted to
+the default resource paths without rebuilding these binaries. Bootstrap console
+timing remains pending; no universal two-second target or new compatibility
+claim follows from the owner's Smash comparison.
 
 ## 0a hardware report: damaged reconstructed block reaches the sector parser
 

@@ -1,0 +1,32 @@
+{
+  "schema": "kui.bootstrap-default-binding-promotion.v1",
+  "binary_source_commit": "7fca3e37f40557066116e88ab817e91ef7dd50d3",
+  "status": "PASS",
+  "binary_rebuilt_or_retagged": false,
+  "inputs": [
+    {
+      "compiled_input": "build/bootstrap-native-standard-manifest.h",
+      "default_input": "resources/updater-bindings/preserved-standard-manifest.h",
+      "sha256": "71002312859ce78867c00aea2e78605676ebe7ddbcc71e4125d28f5c3a32e2e2",
+      "bytes_equal": true
+    },
+    {
+      "compiled_input": "build/bootstrap-native-standard-manifest.json",
+      "default_input": "resources/updater-bindings/preserved-standard-manifest.json",
+      "sha256": "09297fbc6bbd4c3470ef4a796acc2c21828192006774379cf22e6c39c0dfaf48",
+      "bytes_equal": true
+    },
+    {
+      "compiled_input": "build/universal-native-cdda-manifest.h",
+      "default_input": "resources/updater-bindings/native-cdda-manifest.h",
+      "sha256": "468f9ec659cb2e79d98edd0a22d62fa4bbb495b9ddb9ef55299db4a0d5336d53",
+      "bytes_equal": true
+    },
+    {
+      "compiled_input": "build/universal-native-cdda-manifest.json",
+      "default_input": "resources/updater-bindings/native-cdda-manifest.json",
+      "sha256": "19f4874af48833878c89a43ee0ffaf11dc30a188a376eb6fa293745a79922db6",
+      "bytes_equal": true
+    }
+  ]
+}

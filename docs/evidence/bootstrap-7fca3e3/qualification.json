@@ -1,0 +1,1024 @@
+{
+  "schema": "kui.native.bootstrap-service-rollout.v1",
+  "status": "PASS",
+  "source_commit": "7fca3e37f40557066116e88ab817e91ef7dd50d3",
+  "source_tree": "4aa414180692187a036187f3720858dd4dd89c27",
+  "source_dirty": false,
+  "output": "build/deliverables/KUI-Unified-Bootstrap-06NOV2026-1244-CST-7fca3e3.kup",
+  "package_sha256": "52d06112910f84c53b6e1d2ab500c604cafb320b9f181c4b448177df9d82180d",
+  "package_bytes": 6697156,
+  "package": {
+    "format": 2,
+    "build": "544ff4dc9cb8",
+    "channel": "testing",
+    "engine_minimum": 3,
+    "flags": 2,
+    "full": false,
+    "manifest_sha256": "928a740e14b20d11188833ad05dc6b18c55ea180f064dd56319162df119cb189",
+    "payload_bytes": 6692868,
+    "file_bytes": 6697156,
+    "members": [
+      {
+        "path": "runtime.kui",
+        "bytes": 3553856,
+        "sha256": "36458982b586e3e27453d0e501bc5c8620a3777bd21294d82f1a3ac18e94a517",
+        "policy": 3,
+        "build": "7fca3e37f405"
+      },
+      {
+        "path": "apps/disc/native-disc-vmu-a1.kui",
+        "bytes": 176852,
+        "sha256": "1330a42ce1e9db27ff763cba7af20be56b01c70af5f17b4ba3f713a8bbf29dbf",
+        "policy": 3,
+        "build": "7fca3e37f405"
+      },
+      {
+        "path": "apps/disc/native-disc-vmu.kui",
+        "bytes": 176852,
+        "sha256": "31362e33dbd97ef474bf409f7526b5abeec56df4ad66097fab4631a5b64abe90",
+        "policy": 3,
+        "build": "7fca3e37f405"
+      },
+      {
+        "path": "apps/games/cdda-native-mdk2.kui",
+        "bytes": 67176,
+        "sha256": "777b298f67ce1bc398913c827d6c729be339e70d86ade3640ea588a60db1edec",
+        "policy": 3,
+        "build": "72db614495a3"
+      },
+      {
+        "path": "apps/games/cdda-native-toy-cooked.kui",
+        "bytes": 85188,
+        "sha256": "5304a2fdd5864e5ee71924b0aee71bafa839f94f98044eb71e2e1149ecbed837",
+        "policy": 3,
+        "build": "72db614495a3"
+      },
+      {
+        "path": "apps/games/cdda-native-toy-raw.kui",
+        "bytes": 85156,
+        "sha256": "1a85ccce63e5d6e15db57e3586afc066bb47983cb24710ac6eb22550cfb8f8e7",
+        "policy": 3,
+        "build": "72db614495a3"
+      },
+      {
+        "path": "apps/games/cdda-toy-cooked.kui",
+        "bytes": 85188,
+        "sha256": "5304a2fdd5864e5ee71924b0aee71bafa839f94f98044eb71e2e1149ecbed837",
+        "policy": 3,
+        "build": "72db614495a3"
+      },
+      {
+        "path": "apps/games/cdda-toy-raw.kui",
+        "bytes": 85156,
+        "sha256": "1a85ccce63e5d6e15db57e3586afc066bb47983cb24710ac6eb22550cfb8f8e7",
+        "policy": 3,
+        "build": "72db614495a3"
+      },
+      {
+        "path": "apps/games/ce-cdda-armada.kui",
+        "bytes": 135236,
+        "sha256": "305d189323acc5f9e36edf8257227d2906b15ea9a191fbabb24411067d729c3a",
+        "policy": 3,
+        "build": "72db614495a3"
+      },
+      {
+        "path": "apps/games/ce-cdda-bam4.kui",
+        "bytes": 135220,
+        "sha256": "b01509256c52627f8c4c513fc03c58e54dd5ac98ced50aee11de6f632863f81f",
+        "policy": 3,
+        "build": "72db614495a3"
+      },
+      {
+        "path": "apps/games/ce-cdda-worms.kui",
+        "bytes": 136148,
+        "sha256": "b4c843bcbc33888d3ef91a60b7c4c8b4185770fd13be4347dc37be85dde5986b",
+        "policy": 3,
+        "build": "72db614495a3"
+      },
+      {
+        "path": "apps/games/ce-cdda-wwp.kui",
+        "bytes": 135828,
+        "sha256": "1284a4401dade30e68d21336fd9e3a5e72dc74cdb8f2a991152671e432edbf8e",
+        "policy": 3,
+        "build": "72db614495a3"
+      },
+      {
+        "path": "apps/games/lzo-boot.kui",
+        "bytes": 38052,
+        "sha256": "2e51588b00569cf27862de9bc79cb9bba31a7c1a91a3153e9632fc1895e16a02",
+        "policy": 3,
+        "build": "72db614495a3"
+      },
+      {
+        "path": "apps/games/retail-boot.kui",
+        "bytes": 237324,
+        "sha256": "5acdacfa6741157424d7b5aac2a1d099073a81df6d6f289c5e840c505bdd185e",
+        "policy": 3,
+        "build": "7fca3e37f405"
+      },
+      {
+        "path": "apps/games/retail-cdda-mdk2.kui",
+        "bytes": 67176,
+        "sha256": "777b298f67ce1bc398913c827d6c729be339e70d86ade3640ea588a60db1edec",
+        "policy": 3,
+        "build": "72db614495a3"
+      },
+      {
+        "path": "apps/games/retail-native-dual-a1.kui",
+        "bytes": 289716,
+        "sha256": "a4aea3863370512cbbc549ad59b1021d71240ee57760184f0f7ee5462135a1d5",
+        "policy": 3,
+        "build": "7fca3e37f405"
+      },
+      {
+        "path": "apps/games/retail-native-dual.kui",
+        "bytes": 289684,
+        "sha256": "cba8243b159f9002e0beea48d6f7b72f02f275ab555e3fb4498c3303b1c643fc",
+        "policy": 3,
+        "build": "7fca3e37f405"
+      },
+      {
+        "path": "apps/games/retail-native-standalone.kui",
+        "bytes": 48476,
+        "sha256": "d4828ac29d470e9f3d432aca7a92fc20ddb791287139bb575a9db7307ecfb125",
+        "policy": 3,
+        "build": "72db614495a3"
+      },
+      {
+        "path": "apps/games/retail-physical.kui",
+        "bytes": 76124,
+        "sha256": "f5cf6b01625e8bdb0ae36585bf9f1512bf3ecc64a857d88ca652f3a4fb54b238",
+        "policy": 3,
+        "build": "72db614495a3"
+      },
+      {
+        "path": "apps/games/retail-smash-menu.kui",
+        "bytes": 103092,
+        "sha256": "e6d0bef744f007a6cae87a10f9e83b7084801fedbdbc15b93b974ab3a3ee9117",
+        "policy": 3,
+        "build": "cc81e63ca4d2"
+      },
+      {
+        "path": "apps/games/retail-smash-native-menu.kui",
+        "bytes": 271620,
+        "sha256": "b2d633f5254e5db852382f6e1263f283d6dd00434c7841ed852ca9f15e67de2e",
+        "policy": 3,
+        "build": "cc81e63ca4d2"
+      },
+      {
+        "path": "apps/games/retail-smash-swirl.kui",
+        "bytes": 139096,
+        "sha256": "5b8f7f1c36983ad4d08ef63f928375201b289e4825635bc7eea1727217a3881b",
+        "policy": 3,
+        "build": "cc81e63ca4d2"
+      },
+      {
+        "path": "apps/games/retail-smash-vc2.kui",
+        "bytes": 139068,
+        "sha256": "a36421a22e4e3d1da10b82d996816c427f311da90bd5ed633dac7af01e5deca5",
+        "policy": 3,
+        "build": "cc81e63ca4d2"
+      },
+      {
+        "path": "apps/games/smash-swirl-vmu-helper.bin",
+        "bytes": 49152,
+        "sha256": "e125475c098abe25daf97db6b75408a78ae5778f3310e45df0839043c9d01445",
+        "policy": 4,
+        "build": ""
+      },
+      {
+        "path": "apps/games/smash-vc2-vmu-helper.bin",
+        "bytes": 49152,
+        "sha256": "42f49cd45120ea3b7a4df56d0378e9e7529d56337b779f4cdb077b7f4b1f98a5",
+        "policy": 4,
+        "build": ""
+      },
+      {
+        "path": "apps/games/zso-boot.kui",
+        "bytes": 37280,
+        "sha256": "b68812a2e3d0eae380ba41f7cda572714a09311e6a7220db32f27b3320b57af9",
+        "policy": 3,
+        "build": "72db614495a3"
+      }
+    ]
+  },
+  "producer_current_C_consumer": {
+    "file": "build/deliverables/KUI-Unified-Bootstrap-06NOV2026-1244-CST-7fca3e3.kup",
+    "format": 2,
+    "build": "544ff4dc9cb8",
+    "channel": "testing",
+    "engine_minimum": 3,
+    "flags": 2,
+    "full": false,
+    "manifest_sha256": "928a740e14b20d11188833ad05dc6b18c55ea180f064dd56319162df119cb189",
+    "payload_bytes": 6692868,
+    "file_bytes": 6697156,
+    "members": [
+      {
+        "path": "runtime.kui",
+        "bytes": 3553856,
+        "sha256": "36458982b586e3e27453d0e501bc5c8620a3777bd21294d82f1a3ac18e94a517",
+        "policy": 3,
+        "build": "7fca3e37f405"
+      },
+      {
+        "path": "apps/disc/native-disc-vmu-a1.kui",
+        "bytes": 176852,
+        "sha256": "1330a42ce1e9db27ff763cba7af20be56b01c70af5f17b4ba3f713a8bbf29dbf",
+        "policy": 3,
+        "build": "7fca3e37f405"
+      },
+      {
+        "path": "apps/disc/native-disc-vmu.kui",
+        "bytes": 176852,
+        "sha256": "31362e33dbd97ef474bf409f7526b5abeec56df4ad66097fab4631a5b64abe90",
+        "policy": 3,
+        "build": "7fca3e37f405"
+      },
+      {
+        "path": "apps/games/cdda-native-mdk2.kui",
+        "bytes": 67176,
+        "sha256": "777b298f67ce1bc398913c827d6c729be339e70d86ade3640ea588a60db1edec",
+        "policy": 3,
+        "build": "72db614495a3"
+      },
+      {
+        "path": "apps/games/cdda-native-toy-cooked.kui",
+        "bytes": 85188,
+        "sha256": "5304a2fdd5864e5ee71924b0aee71bafa839f94f98044eb71e2e1149ecbed837",
+        "policy": 3,
+        "build": "72db614495a3"
+      },
+      {
+        "path": "apps/games/cdda-native-toy-raw.kui",
+        "bytes": 85156,
+        "sha256": "1a85ccce63e5d6e15db57e3586afc066bb47983cb24710ac6eb22550cfb8f8e7",
+        "policy": 3,
+        "build": "72db614495a3"
+      },
+      {
+        "path": "apps/games/cdda-toy-cooked.kui",
+        "bytes": 85188,
+        "sha256": "5304a2fdd5864e5ee71924b0aee71bafa839f94f98044eb71e2e1149ecbed837",
+        "policy": 3,
+        "build": "72db614495a3"
+      },
+      {
+        "path": "apps/games/cdda-toy-raw.kui",
+        "bytes": 85156,
+        "sha256": "1a85ccce63e5d6e15db57e3586afc066bb47983cb24710ac6eb22550cfb8f8e7",
+        "policy": 3,
+        "build": "72db614495a3"
+      },
+      {
+        "path": "apps/games/ce-cdda-armada.kui",
+        "bytes": 135236,
+        "sha256": "305d189323acc5f9e36edf8257227d2906b15ea9a191fbabb24411067d729c3a",
+        "policy": 3,
+        "build": "72db614495a3"
+      },
+      {
+        "path": "apps/games/ce-cdda-bam4.kui",
+        "bytes": 135220,
+        "sha256": "b01509256c52627f8c4c513fc03c58e54dd5ac98ced50aee11de6f632863f81f",
+        "policy": 3,
+        "build": "72db614495a3"
+      },
+      {
+        "path": "apps/games/ce-cdda-worms.kui",
+        "bytes": 136148,
+        "sha256": "b4c843bcbc33888d3ef91a60b7c4c8b4185770fd13be4347dc37be85dde5986b",
+        "policy": 3,
+        "build": "72db614495a3"
+      },
+      {
+        "path": "apps/games/ce-cdda-wwp.kui",
+        "bytes": 135828,
+        "sha256": "1284a4401dade30e68d21336fd9e3a5e72dc74cdb8f2a991152671e432edbf8e",
+        "policy": 3,
+        "build": "72db614495a3"
+      },
+      {
+        "path": "apps/games/lzo-boot.kui",
+        "bytes": 38052,
+        "sha256": "2e51588b00569cf27862de9bc79cb9bba31a7c1a91a3153e9632fc1895e16a02",
+        "policy": 3,
+        "build": "72db614495a3"
+      },
+      {
+        "path": "apps/games/retail-boot.kui",
+        "bytes": 237324,
+        "sha256": "5acdacfa6741157424d7b5aac2a1d099073a81df6d6f289c5e840c505bdd185e",
+        "policy": 3,
+        "build": "7fca3e37f405"
+      },
+      {
+        "path": "apps/games/retail-cdda-mdk2.kui",
+        "bytes": 67176,
+        "sha256": "777b298f67ce1bc398913c827d6c729be339e70d86ade3640ea588a60db1edec",
+        "policy": 3,
+        "build": "72db614495a3"
+      },
+      {
+        "path": "apps/games/retail-native-dual-a1.kui",
+        "bytes": 289716,
+        "sha256": "a4aea3863370512cbbc549ad59b1021d71240ee57760184f0f7ee5462135a1d5",
+        "policy": 3,
+        "build": "7fca3e37f405"
+      },
+      {
+        "path": "apps/games/retail-native-dual.kui",
+        "bytes": 289684,
+        "sha256": "cba8243b159f9002e0beea48d6f7b72f02f275ab555e3fb4498c3303b1c643fc",
+        "policy": 3,
+        "build": "7fca3e37f405"
+      },
+      {
+        "path": "apps/games/retail-native-standalone.kui",
+        "bytes": 48476,
+        "sha256": "d4828ac29d470e9f3d432aca7a92fc20ddb791287139bb575a9db7307ecfb125",
+        "policy": 3,
+        "build": "72db614495a3"
+      },
+      {
+        "path": "apps/games/retail-physical.kui",
+        "bytes": 76124,
+        "sha256": "f5cf6b01625e8bdb0ae36585bf9f1512bf3ecc64a857d88ca652f3a4fb54b238",
+        "policy": 3,
+        "build": "72db614495a3"
+      },
+      {
+        "path": "apps/games/retail-smash-menu.kui",
+        "bytes": 103092,
+        "sha256": "e6d0bef744f007a6cae87a10f9e83b7084801fedbdbc15b93b974ab3a3ee9117",
+        "policy": 3,
+        "build": "cc81e63ca4d2"
+      },
+      {
+        "path": "apps/games/retail-smash-native-menu.kui",
+        "bytes": 271620,
+        "sha256": "b2d633f5254e5db852382f6e1263f283d6dd00434c7841ed852ca9f15e67de2e",
+        "policy": 3,
+        "build": "cc81e63ca4d2"
+      },
+      {
+        "path": "apps/games/retail-smash-swirl.kui",
+        "bytes": 139096,
+        "sha256": "5b8f7f1c36983ad4d08ef63f928375201b289e4825635bc7eea1727217a3881b",
+        "policy": 3,
+        "build": "cc81e63ca4d2"
+      },
+      {
+        "path": "apps/games/retail-smash-vc2.kui",
+        "bytes": 139068,
+        "sha256": "a36421a22e4e3d1da10b82d996816c427f311da90bd5ed633dac7af01e5deca5",
+        "policy": 3,
+        "build": "cc81e63ca4d2"
+      },
+      {
+        "path": "apps/games/smash-swirl-vmu-helper.bin",
+        "bytes": 49152,
+        "sha256": "e125475c098abe25daf97db6b75408a78ae5778f3310e45df0839043c9d01445",
+        "policy": 4,
+        "build": ""
+      },
+      {
+        "path": "apps/games/smash-vc2-vmu-helper.bin",
+        "bytes": 49152,
+        "sha256": "42f49cd45120ea3b7a4df56d0378e9e7529d56337b779f4cdb077b7f4b1f98a5",
+        "policy": 4,
+        "build": ""
+      },
+      {
+        "path": "apps/games/zso-boot.kui",
+        "bytes": 37280,
+        "sha256": "b68812a2e3d0eae380ba41f7cda572714a09311e6a7220db32f27b3320b57af9",
+        "policy": 3,
+        "build": "72db614495a3"
+      }
+    ],
+    "consumer": {
+      "format": 2,
+      "package": "544ff4dc9cb8",
+      "members": 26,
+      "flags": 2,
+      "full": false,
+      "engine_minimum": 3,
+      "decoder": "current-source",
+      "source_sha256": "0774a89d0c86eea7c88fd35671d84cdf651ccef74af7a55cd3e65e3de429ac58"
+    },
+    "mode": "test"
+  },
+  "baseline_package": {
+    "path": "build/deliverables/KUI-Unified-Launch-06NOV2026-1215-CST-9d6680a.kup",
+    "sha256": "73f2b1b1f330e0f4b7af39e6839ab39ffba08cfd8ebd2b1a16d43a935bf73b2b",
+    "package": "19dad9fd5555"
+  },
+  "preserved_non_GUI_files": {
+    "apps/games/cdda-native-mdk2.kui": {
+      "path": "apps/games/cdda-native-mdk2.kui",
+      "bytes": 67176,
+      "sha256": "777b298f67ce1bc398913c827d6c729be339e70d86ade3640ea588a60db1edec",
+      "policy": 3,
+      "build": "72db614495a3"
+    },
+    "apps/games/cdda-native-toy-cooked.kui": {
+      "path": "apps/games/cdda-native-toy-cooked.kui",
+      "bytes": 85188,
+      "sha256": "5304a2fdd5864e5ee71924b0aee71bafa839f94f98044eb71e2e1149ecbed837",
+      "policy": 3,
+      "build": "72db614495a3"
+    },
+    "apps/games/cdda-native-toy-raw.kui": {
+      "path": "apps/games/cdda-native-toy-raw.kui",
+      "bytes": 85156,
+      "sha256": "1a85ccce63e5d6e15db57e3586afc066bb47983cb24710ac6eb22550cfb8f8e7",
+      "policy": 3,
+      "build": "72db614495a3"
+    },
+    "apps/games/cdda-toy-cooked.kui": {
+      "path": "apps/games/cdda-toy-cooked.kui",
+      "bytes": 85188,
+      "sha256": "5304a2fdd5864e5ee71924b0aee71bafa839f94f98044eb71e2e1149ecbed837",
+      "policy": 3,
+      "build": "72db614495a3"
+    },
+    "apps/games/cdda-toy-raw.kui": {
+      "path": "apps/games/cdda-toy-raw.kui",
+      "bytes": 85156,
+      "sha256": "1a85ccce63e5d6e15db57e3586afc066bb47983cb24710ac6eb22550cfb8f8e7",
+      "policy": 3,
+      "build": "72db614495a3"
+    },
+    "apps/games/ce-cdda-armada.kui": {
+      "path": "apps/games/ce-cdda-armada.kui",
+      "bytes": 135236,
+      "sha256": "305d189323acc5f9e36edf8257227d2906b15ea9a191fbabb24411067d729c3a",
+      "policy": 3,
+      "build": "72db614495a3"
+    },
+    "apps/games/ce-cdda-bam4.kui": {
+      "path": "apps/games/ce-cdda-bam4.kui",
+      "bytes": 135220,
+      "sha256": "b01509256c52627f8c4c513fc03c58e54dd5ac98ced50aee11de6f632863f81f",
+      "policy": 3,
+      "build": "72db614495a3"
+    },
+    "apps/games/ce-cdda-worms.kui": {
+      "path": "apps/games/ce-cdda-worms.kui",
+      "bytes": 136148,
+      "sha256": "b4c843bcbc33888d3ef91a60b7c4c8b4185770fd13be4347dc37be85dde5986b",
+      "policy": 3,
+      "build": "72db614495a3"
+    },
+    "apps/games/ce-cdda-wwp.kui": {
+      "path": "apps/games/ce-cdda-wwp.kui",
+      "bytes": 135828,
+      "sha256": "1284a4401dade30e68d21336fd9e3a5e72dc74cdb8f2a991152671e432edbf8e",
+      "policy": 3,
+      "build": "72db614495a3"
+    },
+    "apps/games/lzo-boot.kui": {
+      "path": "apps/games/lzo-boot.kui",
+      "bytes": 38052,
+      "sha256": "2e51588b00569cf27862de9bc79cb9bba31a7c1a91a3153e9632fc1895e16a02",
+      "policy": 3,
+      "build": "72db614495a3"
+    },
+    "apps/games/retail-cdda-mdk2.kui": {
+      "path": "apps/games/retail-cdda-mdk2.kui",
+      "bytes": 67176,
+      "sha256": "777b298f67ce1bc398913c827d6c729be339e70d86ade3640ea588a60db1edec",
+      "policy": 3,
+      "build": "72db614495a3"
+    },
+    "apps/games/retail-native-standalone.kui": {
+      "path": "apps/games/retail-native-standalone.kui",
+      "bytes": 48476,
+      "sha256": "d4828ac29d470e9f3d432aca7a92fc20ddb791287139bb575a9db7307ecfb125",
+      "policy": 3,
+      "build": "72db614495a3"
+    },
+    "apps/games/retail-physical.kui": {
+      "path": "apps/games/retail-physical.kui",
+      "bytes": 76124,
+      "sha256": "f5cf6b01625e8bdb0ae36585bf9f1512bf3ecc64a857d88ca652f3a4fb54b238",
+      "policy": 3,
+      "build": "72db614495a3"
+    },
+    "apps/games/retail-smash-menu.kui": {
+      "path": "apps/games/retail-smash-menu.kui",
+      "bytes": 103092,
+      "sha256": "e6d0bef744f007a6cae87a10f9e83b7084801fedbdbc15b93b974ab3a3ee9117",
+      "policy": 3,
+      "build": "cc81e63ca4d2"
+    },
+    "apps/games/retail-smash-native-menu.kui": {
+      "path": "apps/games/retail-smash-native-menu.kui",
+      "bytes": 271620,
+      "sha256": "b2d633f5254e5db852382f6e1263f283d6dd00434c7841ed852ca9f15e67de2e",
+      "policy": 3,
+      "build": "cc81e63ca4d2"
+    },
+    "apps/games/retail-smash-swirl.kui": {
+      "path": "apps/games/retail-smash-swirl.kui",
+      "bytes": 139096,
+      "sha256": "5b8f7f1c36983ad4d08ef63f928375201b289e4825635bc7eea1727217a3881b",
+      "policy": 3,
+      "build": "cc81e63ca4d2"
+    },
+    "apps/games/retail-smash-vc2.kui": {
+      "path": "apps/games/retail-smash-vc2.kui",
+      "bytes": 139068,
+      "sha256": "a36421a22e4e3d1da10b82d996816c427f311da90bd5ed633dac7af01e5deca5",
+      "policy": 3,
+      "build": "cc81e63ca4d2"
+    },
+    "apps/games/smash-swirl-vmu-helper.bin": {
+      "path": "apps/games/smash-swirl-vmu-helper.bin",
+      "bytes": 49152,
+      "sha256": "e125475c098abe25daf97db6b75408a78ae5778f3310e45df0839043c9d01445",
+      "policy": 4,
+      "build": ""
+    },
+    "apps/games/smash-vc2-vmu-helper.bin": {
+      "path": "apps/games/smash-vc2-vmu-helper.bin",
+      "bytes": 49152,
+      "sha256": "42f49cd45120ea3b7a4df56d0378e9e7529d56337b779f4cdb077b7f4b1f98a5",
+      "policy": 4,
+      "build": ""
+    },
+    "apps/games/zso-boot.kui": {
+      "path": "apps/games/zso-boot.kui",
+      "bytes": 37280,
+      "sha256": "b68812a2e3d0eae380ba41f7cda572714a09311e6a7220db32f27b3320b57af9",
+      "policy": 3,
+      "build": "72db614495a3"
+    }
+  },
+  "preserved_non_GUI_count": 20,
+  "new_service_count": 5,
+  "new_service_cohort": {
+    "standard": {
+      "directory": "build/bootstrap-standard-sci",
+      "makefile": "Makefile.vmu-native-vmu-lite-paced",
+      "installed_path": "KUI/apps/games/retail-boot.kui",
+      "virtual_slot": 2,
+      "module": {
+        "build": "7fca3e37f405",
+        "bytes": 237324,
+        "sha256": "5acdacfa6741157424d7b5aac2a1d099073a81df6d6f289c5e840c505bdd185e",
+        "elf_sha256": "33be15ab5815e1bbba58c36ebdb8ed62c5eb82a7d5aa51b41e42c1521a2fa953",
+        "compile_receipt_sha256": "486f259cf6aee476329eeb5d1241dc3277d681fdb05482574585d6d24105ff83"
+      },
+      "build_command": [
+        "make",
+        "-f",
+        "Makefile.vmu-native-vmu-lite-paced",
+        "-j2",
+        "BUILD=build/bootstrap-standard-sci",
+        "BUILD_ID=7fca3e37f405",
+        "VMU_TRANSPORT=1",
+        "VMU_SCI_RX_POLICY=paced",
+        "all"
+      ]
+    },
+    "background_a2": {
+      "directory": "build/bootstrap-background-a2",
+      "makefile": "Makefile.vmu-native-background-compact",
+      "installed_path": "KUI/apps/games/retail-native-dual.kui",
+      "virtual_slot": 2,
+      "module": {
+        "build": "7fca3e37f405",
+        "bytes": 289684,
+        "sha256": "cba8243b159f9002e0beea48d6f7b72f02f275ab555e3fb4498c3303b1c643fc",
+        "elf_sha256": "1e76aabd5a4ff8f23c595690d2c4576d42870e6e50cdf0a6dad4d500d9457529",
+        "compile_receipt_sha256": "61b0b17286fed88fd602b544e40471c85111a3451e196e7895e3d17829902eae"
+      },
+      "build_command": [
+        "make",
+        "-f",
+        "Makefile.vmu-native-background-compact",
+        "-j2",
+        "BUILD=build/bootstrap-background-a2",
+        "BUILD_ID=7fca3e37f405",
+        "all"
+      ]
+    },
+    "background_a1": {
+      "directory": "build/bootstrap-background-a1",
+      "makefile": "Makefile.vmu-native-background-compact-a1",
+      "installed_path": "KUI/apps/games/retail-native-dual-a1.kui",
+      "virtual_slot": 1,
+      "module": {
+        "build": "7fca3e37f405",
+        "bytes": 289716,
+        "sha256": "a4aea3863370512cbbc549ad59b1021d71240ee57760184f0f7ee5462135a1d5",
+        "elf_sha256": "8ce4b5c55498c6fd4acf4d12c33d029c35197f8e63e99d51e7f8b3bcdf8c4a41",
+        "compile_receipt_sha256": "6a710c60bbf1e0212dcbdf928347f387bfb58fed839584fd7d22b7b80f935430"
+      },
+      "build_command": [
+        "make",
+        "-f",
+        "Makefile.vmu-native-background-compact-a1",
+        "-j2",
+        "BUILD=build/bootstrap-background-a1",
+        "BUILD_ID=7fca3e37f405",
+        "all"
+      ]
+    },
+    "disc_a2": {
+      "directory": "build/bootstrap-disc-a2",
+      "makefile": "Makefile.disc-vmu",
+      "installed_path": "KUI/apps/disc/native-disc-vmu.kui",
+      "virtual_slot": 2,
+      "module": {
+        "build": "7fca3e37f405",
+        "bytes": 176852,
+        "sha256": "31362e33dbd97ef474bf409f7526b5abeec56df4ad66097fab4631a5b64abe90",
+        "elf_sha256": "1fcffaedc53f27e55b660eda42f1b7c2e90c548170e5953d26d3bb1b42589ff1",
+        "compile_receipt_sha256": "7e7787789c6698eb1bc46a5135a895f78ce0fc970a000133d792787228e0ceb4"
+      },
+      "build_command": [
+        "make",
+        "-f",
+        "Makefile.disc-vmu",
+        "-j2",
+        "BUILD=build/bootstrap-disc-a2",
+        "BUILD_ID=7fca3e37f405",
+        "disc-vmu"
+      ]
+    },
+    "disc_a1": {
+      "directory": "build/bootstrap-disc-a1",
+      "makefile": "Makefile.disc-vmu-a1",
+      "installed_path": "KUI/apps/disc/native-disc-vmu-a1.kui",
+      "virtual_slot": 1,
+      "module": {
+        "build": "7fca3e37f405",
+        "bytes": 176852,
+        "sha256": "1330a42ce1e9db27ff763cba7af20be56b01c70af5f17b4ba3f713a8bbf29dbf",
+        "elf_sha256": "79e747942a487e08fe375ba3c95eb7a6e86509189a1789d9babf1e4817f9b2ea",
+        "compile_receipt_sha256": "3e2223b0dbaf34cc24ff95872dd70326010ad6ae9c0d94d668cf12caf1fb2869"
+      },
+      "build_command": [
+        "make",
+        "-f",
+        "Makefile.disc-vmu-a1",
+        "-j2",
+        "BUILD=build/bootstrap-disc-a1",
+        "BUILD_ID=7fca3e37f405",
+        "disc-vmu"
+      ]
+    }
+  },
+  "GUI": {
+    "link": {
+      "build": "7fca3e37f405",
+      "bytes": 3553856,
+      "sha256": "36458982b586e3e27453d0e501bc5c8620a3777bd21294d82f1a3ac18e94a517",
+      "elf_sha256": "e5aaa519389c8371d5c5ea7185f7989dcfc8d5e5429c9462b87a2913c8197082",
+      "compile_receipt_sha256": "acb36b3680c8ed6fcaa2c30359247e94ead82db34404ceb703e3fc7d969c3d58"
+    },
+    "header": {
+      "format": 1,
+      "build": "7fca3e37f405",
+      "payload_bytes": 3553792,
+      "memory_bytes": 7853360,
+      "crc32": "d9f97db3"
+    },
+    "compile_receipt": {
+      "commit": "7fca3e37f40557066116e88ab817e91ef7dd50d3",
+      "source_dirty": false,
+      "elf_sha256": "e5aaa519389c8371d5c5ea7185f7989dcfc8d5e5429c9462b87a2913c8197082"
+    },
+    "full_forced_GUI_rebuild": true,
+    "KUI_SMASH_LAUNCH_TIMING": 1,
+    "optimization": {
+      "actual_linked_producers": [
+        "GNU C11 15.2.0 -m4-single -ml -mfsrra -mfsca -matomic-model=soft-gusa -g -O2 -std=c11 -fno-PIE -fomit-frame-pointer -ffunction-sections -fdata-sections -ftls-model=local-exec",
+        "GNU C17 15.2.0 -m4-single -ml -mfsrra -mfsca -matomic-model=soft-gusa -g -O2 -std=gnu17 -fno-PIE -fomit-frame-pointer -ffunction-sections -fdata-sections -ftls-model=local-exec",
+        "GNU C23 15.2.0 -g -O2 -ffunction-sections -fdata-sections -fbuiltin -fno-math-errno",
+        "GNU C23 15.2.0 -g -O2 -fno-builtin -ffunction-sections -fdata-sections",
+        "GNU C23 15.2.0 -g -g -g -O2 -O2 -O2 -fbuilding-libgcc -fno-stack-protector -fexceptions -fnon-call-exceptions -fvisibility=hidden",
+        "GNU C23 15.2.0 -g -g -g -O2 -O2 -O2 -fbuilding-libgcc -fno-stack-protector -fvisibility=hidden"
+      ],
+      "optimized": true
+    }
+  },
+  "runtime_Standard_binding": {
+    "normalized_payload_sha256": "c3105081067573bb4d3d6dc421e69b7a8d6748d21c1888a2bad9d50a24618b45",
+    "actual_scalar_word_comparisons": 8,
+    "all_mismatches_use_historical_fallback": true,
+    "recognizer_sha256": "e56b1a4ea3c03db544b72dc60d0d5704f2a0c2d98fc781293268489ae2d32e4d",
+    "compiler_folded_digest_array": true
+  },
+  "runtime_native_CDDA_binding": {
+    "status": "PASS",
+    "profiles": [
+      "toy-raw",
+      "toy-cooked",
+      "mdk2"
+    ],
+    "exact_table_bytes": 180,
+    "exact_table_sha256": "d16db5f26401c498f7557cbd24ed13db06cc38f493aded41ba3b37f6df8076a6",
+    "runtime_elf_sha256": "e5aaa519389c8371d5c5ea7185f7989dcfc8d5e5429c9462b87a2913c8197082"
+  },
+  "Standard_manifest": {
+    "path": "build/bootstrap-native-standard-manifest.json",
+    "sha256": "09297fbc6bbd4c3470ef4a796acc2c21828192006774379cf22e6c39c0dfaf48",
+    "header_sha256": "71002312859ce78867c00aea2e78605676ebe7ddbcc71e4125d28f5c3a32e2e2",
+    "normalized_payload_sha256": "c3105081067573bb4d3d6dc421e69b7a8d6748d21c1888a2bad9d50a24618b45"
+  },
+  "accepted_Smash": {
+    "build": "cc81e63ca4d2",
+    "rebuilt": false,
+    "exact_six_files_preserved": true,
+    "GUI_embedded_four_exact": true,
+    "bundle_sha256": "3d22cc80c99ebc0fb77ca25d64054e5f4245d1c66dca7c786e9070c352688f39",
+    "linked_bundle": {
+      "start": 2350961344,
+      "end": 2351374389,
+      "bytes": 413045,
+      "SH_PC_relative_loads": {
+        "_kui_runtime_module_bundle_read": [
+          {
+            "instruction": 2349065788,
+            "literal": 2349065840,
+            "value": 2350961344
+          },
+          {
+            "instruction": 2349065796,
+            "literal": 2349065844,
+            "value": 2351374389
+          },
+          {
+            "instruction": 2349065808,
+            "literal": 2349065844,
+            "value": 2351374389
+          }
+        ],
+        "_kui_runtime_module_bundle_contains": [
+          {
+            "instruction": 2349065040,
+            "literal": 2349065088,
+            "value": 2350961344
+          },
+          {
+            "instruction": 2349065046,
+            "literal": 2349065092,
+            "value": 2351374389
+          }
+        ]
+      }
+    }
+  },
+  "worker_preservation": {
+    "path": "build/bootstrap-service-evidence/worker-preservation.json",
+    "sha256": "7562e91e1befa8e701018e72b639b16d124db7224bed1e67f1c940d78f491b13",
+    "all_five_PASS": true
+  },
+  "linked_bootstrap_proofs": {
+    "path": "build/bootstrap-audit/index.json",
+    "sha256": "61e8c87fa293b4a263683a213c9af683356b7cef4426dbb057ab32fb06f4a601",
+    "all_five_PASS": true
+  },
+  "safety_reports": {
+    "build/bootstrap-service-evidence/additional-component-preservation.json": "cfaca809fbe1b7a3d3c39d246bc976638da8ab824c651dde454df86224349a0f",
+    "build/bootstrap-service-evidence/background-a1-safety.json": "b982c75130398ef0d3a01b5580a75ebd53274f0d72e30216bc2e99da13d74fa3",
+    "build/bootstrap-service-evidence/background-a2-safety.json": "47f69364ca89e3570659806596e52431480b47c26fe298b8bfc6b4aee84ca019",
+    "build/bootstrap-service-evidence/disc_a1-safety.json": "cbf0aa2b1d2b3decfc7f1a1ff7dc0b972dd897efafe84e1bf6513ce7919887b7",
+    "build/bootstrap-service-evidence/disc_a2-safety.json": "3c30c4fd649b7282ec687dee1901c1bd2271dedfb3c9e000e57b118f5ac4b7f9",
+    "build/bootstrap-service-evidence/standard-cohort-admission.json": "7ca88ad7e63da07e30c49f6202178c3967b6fb5da7f39078bde39bf54d281bc9",
+    "build/bootstrap-service-evidence/standard-safety.json": "36ac17b9876162d0df0252f64b6a8731b59ae1905e69f9625ffb9978654ac8b1",
+    "build/bootstrap-service-evidence/worker-preservation.json": "7562e91e1befa8e701018e72b639b16d124db7224bed1e67f1c940d78f491b13"
+  },
+  "retained_manifest_sha256": {
+    "build/bootstrap-native-standard-manifest.h": "71002312859ce78867c00aea2e78605676ebe7ddbcc71e4125d28f5c3a32e2e2",
+    "build/bootstrap-native-standard-manifest.json": "09297fbc6bbd4c3470ef4a796acc2c21828192006774379cf22e6c39c0dfaf48",
+    "build/universal-native-cdda-manifest.h": "468f9ec659cb2e79d98edd0a22d62fa4bbb495b9ddb9ef55299db4a0d5336d53",
+    "build/universal-native-cdda-manifest.json": "19f4874af48833878c89a43ee0ffaf11dc30a188a376eb6fa293745a79922db6"
+  },
+  "staged_software_QA_archive": {
+    "path": "build/bootstrap-service-delivery/staged-software-QA.zip",
+    "sha256": "3aa8ffe9cdf4050a5d28223f67e70b0182dbaf49b9ce50c66031d2becc662f39",
+    "software_files": 26,
+    "delivery_artifact": false
+  },
+  "preserved_geometry": {
+    "worker_bytes": 73728,
+    "compact_lease_bytes": 290816,
+    "compact_cache_bytes": 196608,
+    "compact_worker_stack_bytes": 3072,
+    "optional_session_controls_installed": false
+  },
+  "excluded_ce_probe": "Preserve effective personalized Armada virtual-VMU adapter at ce-probe.kui",
+  "SCIF_module_installed": false,
+  "partial_update_retains_other_effective_software": true,
+  "REMOVE_entries": false,
+  "full_global_rollout": false,
+  "console_timing_measured": false,
+  "new_binary_hardware_tested": false,
+  "Standard_historical_symbol_metadata_comparator_refusal_retained": true,
+  "source_sha256": {
+    "tools/package_physical_disc_test.py": "5b837d8b50de7671abf4f10f05765fd26a732ff8928ef7fc7fb645e8bb548885",
+    "tests/test_update_gui_flow.py": "2aef4be4f61833c5afd261939abc095e8b8526b5ab4b8538a17e27615e42510a",
+    "tools/runtime_package.py": "c885e08e5a167b02dcaa6884084d11ef4cad70161f423d0d8876d92330ecd0b5",
+    "tests/test_smash_packaged_admission.py": "fec03d17b4e644359c3f2be0c5fd8af426cbf1ab8a02f508ee62abc96411d25e",
+    "Makefile.vmu-native-vmu-lite-paced": "9dba08f420831855eb85c114ad9c689d104eff6f84f6dc1d937f77473392625d",
+    "Makefile.vmu-native-background-compact-a1": "4dd1cfe546cb07cbb2bf0b6f0713a3259d773778c390a862a0dc2d0cc4a93ee5",
+    "Makefile.dc": "5fa8c867160ee4f4a9c8934b85c0ac52a92ede7aea7df72ea2eca5758c603e59",
+    "tools/native_standard_manifest.py": "cc526450435cab09f08a1190ff210a3280383c967c45902c029f1042a70f7fec",
+    "tools/package_smash_collection_update.py": "5ffd01b533cee827861db956d16e0c120905066ff7c4091ab3e75c04aed297ef",
+    "Makefile.disc-vmu-a1": "dc3afed2d3f8105006acee5e6450da5ed926675d950149193ceadcec4002b9b6",
+    "tools/update_package.py": "dea445568e462ec3c46565d7bd9f30e0a20cb288cf2111ec029e7986760a3daf",
+    "Makefile.disc-vmu": "6eb309e5763cb3f60285da5e489c1e36ff47fdc40c14566d6a20b7122676fe4d",
+    "Makefile.vmu-native-background-compact": "49e29e6631c02edb093d6afeb1758cb984b4a51154eaf0528b71db233e355dad",
+    "tools/check_native_vmu_only.py": "40d37355b204d9eb61989b3abf80b2e833d0ce6823df6765a28facf783ffb613",
+    "tools/native_cdda_manifest.py": "65c33bdb35d0bb86ef0750e4658ea86f2530043fe56f48fe471e553e334a7698",
+    "tools/check_native_compact_delivery.py": "f288a09ce5adf617c80fa2ccaf00fb4df762914ab7aec115f6549a67fddb97a6",
+    "tools/make_update.py": "be3587a72cddde156f3c739247f822ae32420e5b45c636c39ae12af276ff7630"
+  },
+  "qualification": {
+    "status": "PASS",
+    "live_worker_preservation": "All five pass exact independent reference comparators; only recorded display labels and compact slot markers differ.",
+    "service_safety_reports": {
+      "build/bootstrap-service-evidence/additional-component-preservation.json": "cfaca809fbe1b7a3d3c39d246bc976638da8ab824c651dde454df86224349a0f",
+      "build/bootstrap-service-evidence/background-a1-safety.json": "b982c75130398ef0d3a01b5580a75ebd53274f0d72e30216bc2e99da13d74fa3",
+      "build/bootstrap-service-evidence/background-a2-safety.json": "47f69364ca89e3570659806596e52431480b47c26fe298b8bfc6b4aee84ca019",
+      "build/bootstrap-service-evidence/disc_a1-safety.json": "cbf0aa2b1d2b3decfc7f1a1ff7dc0b972dd897efafe84e1bf6513ce7919887b7",
+      "build/bootstrap-service-evidence/disc_a2-safety.json": "3c30c4fd649b7282ec687dee1901c1bd2271dedfb3c9e000e57b118f5ac4b7f9",
+      "build/bootstrap-service-evidence/standard-cohort-admission.json": "7ca88ad7e63da07e30c49f6202178c3967b6fb5da7f39078bde39bf54d281bc9",
+      "build/bootstrap-service-evidence/standard-safety.json": "36ac17b9876162d0df0252f64b6a8731b59ae1905e69f9625ffb9978654ac8b1",
+      "build/bootstrap-service-evidence/worker-preservation.json": "7562e91e1befa8e701018e72b639b16d124db7224bed1e67f1c940d78f491b13"
+    },
+    "Standard_production_cohort_admission": {
+      "report": "build/bootstrap-service-evidence/standard-cohort-admission.json",
+      "sha256": "7ca88ad7e63da07e30c49f6202178c3967b6fb5da7f39078bde39bf54d281bc9",
+      "gate_off_checks": 9,
+      "gate_on_checks": 1415,
+      "sanitizers": [
+        "address",
+        "undefined"
+      ]
+    },
+    "linked_bootstrap_models": {
+      "report": "build/bootstrap-audit/index.json",
+      "sha256": "61e8c87fa293b4a263683a213c9af683356b7cef4426dbb057ab32fb06f4a601",
+      "roles": [
+        "standard-sci",
+        "background-a2",
+        "background-a1",
+        "disc-a2",
+        "disc-a1"
+      ],
+      "all_PASS": true
+    },
+    "inherited_source_and_allowed_SCI_delta": {
+      "report": "build/bootstrap-audit/inherited-bootstrap-audit.json",
+      "sha256": "2fb9bea66a875ba46f28b08162ac6df8b224235d0db0cc496d39eb194823d446",
+      "complete_preprocessing_cases": 157,
+      "byte_identical_cases": 148,
+      "display_noop_cases": 7,
+      "allowed_compact_New_and_Legacy_SCI_guard_cases": 2,
+      "other_effective_differences": false
+    },
+    "actual_staged_Smash_admission": {
+      "report": "build/bootstrap-service-delivery/smash-production-admission.json",
+      "sha256": "4e3825c83a2c25e253b3f99f9226e61118c60a87af69f90289fd14303bff1b98",
+      "modules": 4,
+      "matched_helpers": 2,
+      "exit_status": 0
+    },
+    "exact_GUI_FatFs_flow": {
+      "log": "build/bootstrap-service-delivery/exact-gui-flow.log",
+      "sha256": "6774cd75cbfb72e7bdc4fdb0a46a41d62030ac0682ac081351c981207cc954bf",
+      "command": [
+        "python3",
+        "tests/test_update_gui_flow.py",
+        "--runtime",
+        "build/kui-runtime.kui",
+        "--package",
+        "build/deliverables/KUI-Unified-Bootstrap-06NOV2026-1244-CST-7fca3e3.kup"
+      ],
+      "exit_status": 0,
+      "filesystems": {
+        "fat32": {
+          "checks": 5742,
+          "GUI": "7fca3e37f405",
+          "package": "544ff4dc9cb8",
+          "members": 26
+        },
+        "exfat": {
+          "checks": 5742,
+          "GUI": "7fca3e37f405",
+          "package": "544ff4dc9cb8",
+          "members": 26
+        }
+      },
+      "SH_payloads_executed": false
+    },
+    "actual_GUI_Standard_CDDA_and_bundle_bindings": true
+  },
+  "deployed_deltas": [
+    "Cached complete-executable CRC in the three native image service stages.",
+    "Fresh metadata memo and verified32-block snapshot runs in all five service stages.",
+    "Removed two30-frame default holds in the three native image stages.",
+    "Accepted shared SCI lost-byte quarantine reaches the rebuilt compact New/X and Legacy/Y low readers."
+  ],
+  "already_inherited_optimizations_preserved": [
+    "Byte-table full CRC.",
+    "Aligned immutable decoders.",
+    "Scoped pure extent and seven-argument resolution replay.",
+    "Fresh FAT ownership windows and complete validation."
+  ],
+  "Standard_strict_metadata_comparison_limit": "The unchanged historical full symbol-record comparator refuses only zero-size .LM source-line labels and nonallocated debug/source fingerprints. Independent complete normalized PT_LOAD bytes/headers, allocated geometry and functional symbols match; actual Standard linked safety and production admission pass. The comparator was not edited or disabled.",
+  "evidence_sha256": {
+    "exact-gui-flow.log": "6774cd75cbfb72e7bdc4fdb0a46a41d62030ac0682ac081351c981207cc954bf",
+    "package-path.txt": "e52285c5af495a954b7960076c1fe6d81596225c97c1e85688ac6df4f29f2087",
+    "producer-current-consumer.log": "af1917c215cec3eb171b9b66deb148238900905f2a4d3da3eaf9032ba654e41d",
+    "qualification/bootstrap-audit/active-source-inputs.json": "8d4ac586a910fdf58dde2250cb973aacd119daec1a671e98e478c55b5e22393f",
+    "qualification/bootstrap-audit/background-a1/cached_extent.json": "ab0bf3ee9974ea6b0f84dcd57e8e836582201af4ebf6eebf7e1bc63877b84a3e",
+    "qualification/bootstrap-audit/background-a1/cached_replay.json": "d3b2c68398a417b26fbf93c38af98175925ae8e380b29bc19c8a7e8cd6beb955",
+    "qualification/bootstrap-audit/background-a1/fresh_fat_cache.json": "417032fb94168bf538d322d0a41aae177ef6c3eaaa54b960e31b1a722f034f77",
+    "qualification/bootstrap-audit/background-a1/full_crc.json": "60f7e4ad495dbb4fe276ce4b00d20dd6ead4c364c0180a0ca17454e83310a93f",
+    "qualification/bootstrap-audit/background-a1/selected_scope_calls.json": "af379f6dcc1591a9c48121eb64600150f4bb2e8b9796a11f73c444bddca3f21a",
+    "qualification/bootstrap-audit/background-a1/snapshot_epoch.json": "de1fb2ab9695b107beb01e8367a3ae238c2b0234a1b0af1cc27032a4fd6200d4",
+    "qualification/bootstrap-audit/background-a1/snapshot_stream.json": "9d167cf5ffd182e85b6a1c22212aa3cf350af61580979da054fb0281c94aaebf",
+    "qualification/bootstrap-audit/background-a1/summary.json": "1557ba1a87c4df08280de67f770c1dc16dde4950c07db6380e5f4b52404c50e3",
+    "qualification/bootstrap-audit/background-a1/verified_fat_window.json": "285c2b1125fc62ae0040a090bbbe5d3ec0b99ee0673b877426da4ba4463a834a",
+    "qualification/bootstrap-audit/background-a2/cached_extent.json": "ab0bf3ee9974ea6b0f84dcd57e8e836582201af4ebf6eebf7e1bc63877b84a3e",
+    "qualification/bootstrap-audit/background-a2/cached_replay.json": "0bdcb7187eb161e7575c801c37a88fb53e28ef867cd21a0e5f8881366377647e",
+    "qualification/bootstrap-audit/background-a2/fresh_fat_cache.json": "86fd56d26f1b0cfd19c827df3f211523c9b25309a3ec0ee91b6e2d4e71c512ec",
+    "qualification/bootstrap-audit/background-a2/full_crc.json": "5375d6cfeca0d7d97ed47f15c0ddfe87668dfa4b73b1d6b17dcd01d98e525368",
+    "qualification/bootstrap-audit/background-a2/selected_scope_calls.json": "1d370c7acbb263d3aaa3db5ee98a64568151dbe4b4b570f52c2e6c797735b0be",
+    "qualification/bootstrap-audit/background-a2/snapshot_epoch.json": "7b38f90aa4c0c67d01b34f831abe6839f3fc09677c06e7db04eae88cd1a26b53",
+    "qualification/bootstrap-audit/background-a2/snapshot_stream.json": "8f92a081aa2d236fb90b64c36094fb248d3d83aa8d1754d22697246e056045cb",
+    "qualification/bootstrap-audit/background-a2/summary.json": "87262d94ec44d480a817ada5bac49d789d5b464fe1ab1372791aeb4af8dacbb6",
+    "qualification/bootstrap-audit/background-a2/verified_fat_window.json": "82bcb670fa5a73a11833a0a896e940ec8a87da56e4870f3e875524a9eadda0c3",
+    "qualification/bootstrap-audit/complete-worker-and-legacy-preprocessing.json": "140016013daa712da3c36cbdbaacb09d707669bf8c11ffcf222237c1cb55b374",
+    "qualification/bootstrap-audit/dbadd-raw-scopes.json": "813089b23f591a6bbcca1fcf2bc17d3ef55b013400cc066621a6b4e2f548830f",
+    "qualification/bootstrap-audit/disc-a1/cached_extent.json": "4bae7d195f8a9c3d6e9d5eb8681a8f96b5da04dc88002c78641d951324a9f002",
+    "qualification/bootstrap-audit/disc-a1/cached_replay.json": "6cbbb91ca51f581998343af147af8522db12919b5e1975321dbdf90ca3f3a1e6",
+    "qualification/bootstrap-audit/disc-a1/fresh_fat_cache.json": "d072dcbd8e3dbdf0bf7f3cde1b1e1af151c733edc8d683802eaeb0d5cc57acbe",
+    "qualification/bootstrap-audit/disc-a1/full_crc.json": "a0133033e2e90c864e15bfa6effb05c033bc8ddef81409601802fc1f4094e52b",
+    "qualification/bootstrap-audit/disc-a1/selected_scope_calls.json": "51744664d1ac27dbf34463ffbc91f6c97e7b46e454b85a6ce0629e39e46bd4e1",
+    "qualification/bootstrap-audit/disc-a1/snapshot_epoch.json": "dda2466e8dd8ae2431a2331f4b1c54ab80860d8b4dff660c4f262a62c3912204",
+    "qualification/bootstrap-audit/disc-a1/summary.json": "b68906f301784d63debebec6844d98538838107d363e82be847557ef0a3737d4",
+    "qualification/bootstrap-audit/disc-a1/verified_fat_window.json": "a705caa286b808bcc73dcc685bc0b2eca281952eabcc16f4954210d16eb4e3af",
+    "qualification/bootstrap-audit/disc-a2/cached_extent.json": "4bae7d195f8a9c3d6e9d5eb8681a8f96b5da04dc88002c78641d951324a9f002",
+    "qualification/bootstrap-audit/disc-a2/cached_replay.json": "228d630112c79d3044a74648474678375ae8c043909aefff6ddafd3c56272bdf",
+    "qualification/bootstrap-audit/disc-a2/fresh_fat_cache.json": "746c8fb155913844fe844a7a43d24097c425e4aa0928f02aae3836656c761136",
+    "qualification/bootstrap-audit/disc-a2/full_crc.json": "addd12ea348dfe3f3089fcca92e02e8b0ad804b94bbf88be83d2f1c828122edb",
+    "qualification/bootstrap-audit/disc-a2/selected_scope_calls.json": "51744664d1ac27dbf34463ffbc91f6c97e7b46e454b85a6ce0629e39e46bd4e1",
+    "qualification/bootstrap-audit/disc-a2/snapshot_epoch.json": "2c379d8b9f91c2d74a27c4d412a72afb85fd93481690828a370311429814c43b",
+    "qualification/bootstrap-audit/disc-a2/summary.json": "94756bb4ab1347c30048a20eaf335379030d27e972479b7f6453eb68cee4eae7",
+    "qualification/bootstrap-audit/disc-a2/verified_fat_window.json": "bb9df3229e76abb88da04e1206fed5c74097747f4329d6f1a590133d4b235cde",
+    "qualification/bootstrap-audit/fat-source-oracle.json": "2676fc20877f15c5e7e639be5dd55b7d0a508612f79981a3bbda0101aac86548",
+    "qualification/bootstrap-audit/index.json": "61e8c87fa293b4a263683a213c9af683356b7cef4426dbb057ab32fb06f4a601",
+    "qualification/bootstrap-audit/inherited-bootstrap-audit.json": "2fb9bea66a875ba46f28b08162ac6df8b224235d0db0cc496d39eb194823d446",
+    "qualification/bootstrap-audit/native-hold-policy.json": "3037f62bf9e52c51b46478ef56bfefdddb18df560d6e30efeafb99fff0b8c5d5",
+    "qualification/bootstrap-audit/reader-preprocessing.json": "fb37787117a317894dc75b292096170aa9f0d922e49a89bdb0df0c01343240f4",
+    "qualification/bootstrap-audit/snapshot-source-oracle.json": "0a6cbd365641b403a912b3d0d3f6fd2a82823c1bf5895dfa2618a5fef3e71d61",
+    "qualification/bootstrap-audit/standard-sci/cached_extent.json": "1afec3b29bdffe8b69d35e9b5cd12833e670a1079533c5f90c10a51e2d8f6bd6",
+    "qualification/bootstrap-audit/standard-sci/cached_replay.json": "851fe7e6de9899e1a97a6ecb2c2d547197d8ecc5cd5ffa19b98cd5afe7c35009",
+    "qualification/bootstrap-audit/standard-sci/fresh_fat_cache.json": "8671540456757355b00d1be882be777ccc73c5e33d7dc2ce16f32e4b9ead2fd2",
+    "qualification/bootstrap-audit/standard-sci/full_crc.json": "9138f42dd6f50f30724c7a09888afa06a94d694147c8b30381b01202f629722a",
+    "qualification/bootstrap-audit/standard-sci/selected_scope_calls.json": "e0baf3bfdc91fd87f9c11f3669cdb92cf3328dffcec7a892a7a7bdd0204944ea",
+    "qualification/bootstrap-audit/standard-sci/snapshot_epoch.json": "28b6423856229a6605d63c628630e53c8da52e48b0ec366a1a9358e5cbb039f8",
+    "qualification/bootstrap-audit/standard-sci/snapshot_stream.json": "d44cbfdb838e273dc6b12c0cb3e566d8465cc6f95a764f914cb94ae8be9cc464",
+    "qualification/bootstrap-audit/standard-sci/summary.json": "499e114e31d0a548356b8e247b8b8d052e46b5e59455060ee4908433b5a76d5d",
+    "qualification/bootstrap-audit/standard-sci/verified_fat_window.json": "78c57f65b53f5662ce653f2533bd51a031011411a06141d3ae4a4d7ba097215c",
+    "qualification/bootstrap-audit/worker-preprocessing.json": "eb0e0d17c58184b613dd6cd2c706059afbccc394fa2d920242204e38774a69ce",
+    "qualification/bootstrap-service-evidence/additional-component-preservation.json": "cfaca809fbe1b7a3d3c39d246bc976638da8ab824c651dde454df86224349a0f",
+    "qualification/bootstrap-service-evidence/background-a1-safety.json": "b982c75130398ef0d3a01b5580a75ebd53274f0d72e30216bc2e99da13d74fa3",
+    "qualification/bootstrap-service-evidence/background-a2-safety.json": "47f69364ca89e3570659806596e52431480b47c26fe298b8bfc6b4aee84ca019",
+    "qualification/bootstrap-service-evidence/disc_a1-safety.json": "cbf0aa2b1d2b3decfc7f1a1ff7dc0b972dd897efafe84e1bf6513ce7919887b7",
+    "qualification/bootstrap-service-evidence/disc_a2-safety.json": "3c30c4fd649b7282ec687dee1901c1bd2271dedfb3c9e000e57b118f5ac4b7f9",
+    "qualification/bootstrap-service-evidence/standard-cohort-admission.json": "7ca88ad7e63da07e30c49f6202178c3967b6fb5da7f39078bde39bf54d281bc9",
+    "qualification/bootstrap-service-evidence/standard-safety.json": "36ac17b9876162d0df0252f64b6a8731b59ae1905e69f9625ffb9978654ac8b1",
+    "qualification/bootstrap-service-evidence/worker-preservation.json": "7562e91e1befa8e701018e72b639b16d124db7224bed1e67f1c940d78f491b13",
+    "qualification/manifests/bootstrap-native-standard-manifest.h": "71002312859ce78867c00aea2e78605676ebe7ddbcc71e4125d28f5c3a32e2e2",
+    "qualification/manifests/bootstrap-native-standard-manifest.json": "09297fbc6bbd4c3470ef4a796acc2c21828192006774379cf22e6c39c0dfaf48",
+    "qualification/manifests/universal-native-cdda-manifest.h": "468f9ec659cb2e79d98edd0a22d62fa4bbb495b9ddb9ef55299db4a0d5336d53",
+    "qualification/manifests/universal-native-cdda-manifest.json": "19f4874af48833878c89a43ee0ffaf11dc30a188a376eb6fa293745a79922db6",
+    "smash-production-admission.json": "4e3825c83a2c25e253b3f99f9226e61118c60a87af69f90289fd14303bff1b98",
+    "smash-production-admission.log": "1df53a1eb90c178bd38904916aa6a35e1cb6e9fac6837bb66401e984625c35be",
+    "staged-software-QA.zip": "3aa8ffe9cdf4050a5d28223f67e70b0182dbaf49b9ce50c66031d2becc662f39"
+  },
+  "compiled_explicit_manifest_inputs": {
+    "build/bootstrap-native-standard-manifest.h": "71002312859ce78867c00aea2e78605676ebe7ddbcc71e4125d28f5c3a32e2e2",
+    "build/bootstrap-native-standard-manifest.json": "09297fbc6bbd4c3470ef4a796acc2c21828192006774379cf22e6c39c0dfaf48",
+    "build/universal-native-cdda-manifest.h": "468f9ec659cb2e79d98edd0a22d62fa4bbb495b9ddb9ef55299db4a0d5336d53",
+    "build/universal-native-cdda-manifest.json": "19f4874af48833878c89a43ee0ffaf11dc30a188a376eb6fa293745a79922db6"
+  },
+  "subsequent_default_manifest_preservation_commit": "May copy exact compiled Standard and retained72db CDDA header/report bytes into default resource paths without rebuilding or retagging these artifacts; that metadata commit is separate from this clean compiled source.",
+  "qualified_at_UTC": "2026-11-06T18:49:41.739123+00:00",
+  "limits": [
+    "New console bootstrap time and normal launch/save/return observations remain pending.",
+    "The actual GUI updater flow validates SH payload bytes without executing them.",
+    "Accepted cc81 Smash files and embedded modules were preserved exactly; no Smash worker was rebuilt.",
+    "The new SCIF VMU companion was not installed, and ce-probe.kui remains inherited to preserve the personalized Armada adapter.",
+    "Compact reader-only/VMU-off selection still retains its existing284KiB reservation; no memory-release claim is made."
+  ]
+}

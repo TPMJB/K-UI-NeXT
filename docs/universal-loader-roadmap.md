@@ -21,6 +21,10 @@ Shared GUI preparation is also an immediate integration requirement. The
 owner's Power Stone 2 pre-bootstrap report is tracked in
 `shared-gui-launch-preparation.md`. Audit the actual GUI path before attributing
 delay to cold-stage work; apply fixes to common operations across all routes.
+The owner reports preparation is now about four seconds. The next actual
+five-service bootstrap rollout and remaining console check are recorded in
+`shared-native-bootstrap-rollout.md`; later GUI builds must retain its exact
+default admission bindings.
 
 Apply the demonstrated lessons across the actual affected reader families:
 

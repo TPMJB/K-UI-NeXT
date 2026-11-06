@@ -1,0 +1,1352 @@
+{
+  "schema": "kui.bootstrap.inherited-source-audit.v1",
+  "status": "PASS",
+  "scope": "Read-only source and authenticated inherited module audit; not qualification of replacement binaries or console latency.",
+  "current_source_commit": "7fca3e37f40557066116e88ab817e91ef7dd50d3",
+  "inherited_source_commit": "dbadd024e2ff2b61f0052ead008b6a4a987d41f7",
+  "archive": {
+    "path": "/workspace/scratch/bf5994e80308/bootstrap-archive/K-UI/K-UI-Startup-Next-Test-72KiB-dbadd024e2ff.zip",
+    "sha256": "23c3a4387c44980682b643f62d732e60eb4037dc307822b7d8a75f0a009d94ed",
+    "bytes": 36069133,
+    "source_tar_sha256": "ecb55d81f66042b11ba63a4372d5fe4814f8dabd9611b7bb7ca152958ffbd294",
+    "source_root": "/workspace/scratch/bf5994e80308/bootstrap-archive/source-dbadd/K-UI",
+    "current_stage_ELFs_in_archive": false,
+    "actual_linked_reports_present": true
+  },
+  "old_modules": {
+    "standard": {
+      "path": "KUI/apps/games/retail-boot.kui",
+      "bytes": 233964,
+      "sha256": "d8eb11d3047c26a626beed43b0d403a65cb7b748f36434dff636c9e0a75f5b6d",
+      "build": "dbadd024e2ff",
+      "actual_old_helpers_verified_against_linked_report": {
+        "_kui_smash_fat_cache_read": {
+          "stage_offset": 99760,
+          "bytes": 1020,
+          "sha256": "89d14084c0f1edc946cb19b90e256944e815b3c5824a6d79900b902e8e86fe79"
+        },
+        "_kui_smash_fat_cache_begin_epoch": {
+          "stage_offset": 99550,
+          "bytes": 34,
+          "sha256": "8a1afde9b83c1223ea37c5c359d801a2179260a1338827fa716b3c79673368b4"
+        },
+        "_kui_smash_fat_cache_configure": {
+          "stage_offset": 99584,
+          "bytes": 176,
+          "sha256": "242734c8b100364ec7552bc7124c7974d04a5dae807206bd59f811f079ff80ba"
+        },
+        "_native_persist_fat_read_one": {
+          "stage_offset": 2124,
+          "bytes": 36,
+          "sha256": "ff1cc4e6cabb78e87be8d4ebfd6ad0ceb6e77af906f7453ba0d6662455f385d9"
+        },
+        "_native_persist_fat_read_window": {
+          "stage_offset": 2480,
+          "bytes": 176,
+          "sha256": "0c0f295966c0621029c3cdf1b66dc87f53d079c861c3287468920d90c28aa793"
+        },
+        "_native_persist_read": {
+          "stage_offset": 2068,
+          "bytes": 56,
+          "sha256": "9a7c940ac1233e645efb64b52770546cff89348e81592c97e601c9aaad9466c8"
+        },
+        "_native_persist_identity": {
+          "stage_offset": 2160,
+          "bytes": 96,
+          "sha256": "e9c978ba815c35ef620d3021ebaeab3c6bb6b345da4cc729e5a0c3d09acb6d72"
+        },
+        "_native_persist_write": {
+          "stage_offset": 1996,
+          "bytes": 72,
+          "sha256": "b6269e3acb798abbf21075ddc6273ee617c10adcb0682e1c534fcbdb7bdefd66"
+        },
+        "_native_persist_sync": {
+          "stage_offset": 1904,
+          "bytes": 56,
+          "sha256": "61f1952a4fbd3aae786ac39315e4cf0495406c81082546fd7734e33685b75f12"
+        }
+      },
+      "linked_report_stage_elf_sha256": "7e41d257e58c9681a450be13c18ecb13e9e68928dbdae3e0c70d9ea2e519388e",
+      "inherited_evidence": {
+        "pure_resolution": {
+          "schema": "kui.native-stage.proof-cache-scope.v1",
+          "status": "PASS",
+          "elf_sha256": "7e41d257e58c9681a450be13c18ecb13e9e68928dbdae3e0c70d9ea2e519388e",
+          "wrapper_bytes": 156,
+          "pure_leaf_sha256": "3956303110a1dfe4984673c1c1c917a2de49d61aab53c02e534db89bef6a0a73",
+          "actual_SH_cases": 3840,
+          "mutation_rejections": 26,
+          "argument_count": 7,
+          "caller_stack_unchanged": true,
+          "private_frame_bytes": 24,
+          "unknown_CCR_unchanged": true,
+          "per_game_constants": false,
+          "limits": "Actual scope instructions execute; the real immutable replay leaf is an ABI adversary. No console timing is established."
+        },
+        "pure_extent": {
+          "enabled": true,
+          "entry": "0x8ce1996c",
+          "bytes": 140,
+          "actual_instruction_model_cases": 6144,
+          "mutation_rejections": 20,
+          "complete_linked_assembly_pinned": true,
+          "eligible_entry_ccr": "0x100",
+          "proof_ccr": "0x101",
+          "other_ccr_profiles_unchanged": true,
+          "same_pure_extent_proof": true,
+          "full_ram_purge_bytes": 16777216,
+          "cache_write_nops": [
+            8,
+            8
+          ],
+          "callee_preserved_integer_frame_bytes": 12,
+          "operand_cache_restored_off": true,
+          "proof_output_published_before_cache_restore": true,
+          "console_speed_verified": false
+        },
+        "fast_crc": {
+          "schema": "kui.smash-native.fast-crc.v1",
+          "status": "PASS",
+          "elf_sha256": "7e41d257e58c9681a450be13c18ecb13e9e68928dbdae3e0c70d9ea2e519388e",
+          "helper": "0x8ce00138",
+          "helper_bytes": 144,
+          "helper_sha256": "48bfa5da88428a91ada790a3b38fdd54aa017e83841b3bf2e94f399382132028",
+          "byte_table": "0x8ce299e8",
+          "table_bytes": 1024,
+          "table_sha256": "12f3e0576d447eb37b36d82ba0c1c5481b8f0d12fdc70347ce4a076b229d4c86",
+          "actual_SH_cases": 128,
+          "instructions": 363128,
+          "one_table_read_per_byte": true,
+          "independent_oracle": "zlib.crc32",
+          "whole_image_relay_bound": true,
+          "hardware_timing_verified": false
+        },
+        "fresh_fat_cache": {
+          "schema": "kui.smash-menu.fat-cache-linked.v1",
+          "status": "PASS",
+          "profile": "native",
+          "elf_sha256": "7e41d257e58c9681a450be13c18ecb13e9e68928dbdae3e0c70d9ea2e519388e",
+          "cache_bss": "0x8ce477e0",
+          "cache_bytes": 16512,
+          "actual_helpers": {
+            "_kui_smash_fat_cache_read": {
+              "entry": "0x8ce185b0",
+              "bytes": 1020,
+              "sha256": "89d14084c0f1edc946cb19b90e256944e815b3c5824a6d79900b902e8e86fe79"
+            },
+            "_kui_smash_fat_cache_begin_epoch": {
+              "entry": "0x8ce184de",
+              "bytes": 34,
+              "sha256": "8a1afde9b83c1223ea37c5c359d801a2179260a1338827fa716b3c79673368b4"
+            },
+            "_kui_smash_fat_cache_configure": {
+              "entry": "0x8ce18500",
+              "bytes": 176,
+              "sha256": "242734c8b100364ec7552bc7124c7974d04a5dae807206bd59f811f079ff80ba"
+            },
+            "_native_persist_fat_read_one": {
+              "entry": "0x8ce0084c",
+              "bytes": 36,
+              "sha256": "ff1cc4e6cabb78e87be8d4ebfd6ad0ceb6e77af906f7453ba0d6662455f385d9"
+            },
+            "_native_persist_fat_read_window": {
+              "entry": "0x8ce009b0",
+              "bytes": 176,
+              "sha256": "0c0f295966c0621029c3cdf1b66dc87f53d079c861c3287468920d90c28aa793"
+            },
+            "_native_persist_read": {
+              "entry": "0x8ce00814",
+              "bytes": 56,
+              "sha256": "9a7c940ac1233e645efb64b52770546cff89348e81592c97e601c9aaad9466c8"
+            },
+            "_native_persist_identity": {
+              "entry": "0x8ce00870",
+              "bytes": 96,
+              "sha256": "e9c978ba815c35ef620d3021ebaeab3c6bb6b345da4cc729e5a0c3d09acb6d72"
+            },
+            "_native_persist_write": {
+              "entry": "0x8ce007cc",
+              "bytes": 72,
+              "sha256": "b6269e3acb798abbf21075ddc6273ee617c10adcb0682e1c534fcbdb7bdefd66"
+            },
+            "_native_persist_sync": {
+              "entry": "0x8ce00770",
+              "bytes": 56,
+              "sha256": "61f1952a4fbd3aae786ac39315e4cf0495406c81082546fd7734e33685b75f12"
+            }
+          },
+          "actual_initial_read_sessions": [
+            [
+              "one",
+              100,
+              1
+            ],
+            [
+              "window",
+              132,
+              16
+            ],
+            [
+              "window",
+              148,
+              1
+            ],
+            [
+              "window",
+              149,
+              16
+            ],
+            [
+              "window",
+              165,
+              1
+            ]
+          ],
+          "epochs_drop_geometry_and_data": true,
+          "independent_copies_and_bounded_tail": true,
+          "verified_prefix_only": true,
+          "failed_stream_not_cached": true,
+          "stage_identity_write_sync_invalidation_bound": true,
+          "stage_bounded_stream_and_stop_bound": true,
+          "compiler_graph_sha256": {
+            "stage/src/loader/vmu_native_heap_probe_stage.ci": "d15250b1016b78aff694c0b0f4154e6f419b4e8f8a87c3ada9e34c6603285618",
+            "stage/src/loader/smash_fat_read_cache.ci": "9c1fc5326052d057f049963d68338851a0ca1d9b81273992691c3150e769bc42"
+          },
+          "limits": "Actual compiled cache/epoch C and libc execute; physical callbacks are fixtures. Full filesystem correctness is separately tested by actual old/new admission under sanitizers."
+        }
+      }
+    },
+    "background_a1": {
+      "path": "KUI/apps/games/retail-native-dual-a1.kui",
+      "bytes": 286304,
+      "sha256": "6c73126e1ef83335d972c90277fabad6574b1aba425aa6acaf74d5af17390eca",
+      "build": "dbadd024e2ff",
+      "actual_old_helpers_verified_against_linked_report": {
+        "_kui_smash_fat_cache_read": {
+          "stage_offset": 105832,
+          "bytes": 1020,
+          "sha256": "3fcecedbf6a6354fd1e272ae927f4d986cbf39995cabec6c1499fec7f93644de"
+        },
+        "_kui_smash_fat_cache_begin_epoch": {
+          "stage_offset": 105622,
+          "bytes": 34,
+          "sha256": "8a1afde9b83c1223ea37c5c359d801a2179260a1338827fa716b3c79673368b4"
+        },
+        "_kui_smash_fat_cache_configure": {
+          "stage_offset": 105656,
+          "bytes": 176,
+          "sha256": "695092998233dbc18c8f68aa2d691019300ae4cacb76ec6a557cbc60b6f98cce"
+        },
+        "_native_persist_fat_read_one": {
+          "stage_offset": 1660,
+          "bytes": 36,
+          "sha256": "de658c71d983f5aefd374f8a2f5202e41bcb4f294b6384cbbc3eb866efea3d85"
+        },
+        "_native_persist_fat_read_window": {
+          "stage_offset": 2764,
+          "bytes": 176,
+          "sha256": "23daf85c59d8837d6425c8d8d3511a6edb0fb83d3d408e321983f146037c3bae"
+        },
+        "_native_persist_read": {
+          "stage_offset": 1604,
+          "bytes": 56,
+          "sha256": "ee846e7797313bc17c2bc452d6a58ba81e02431d62992a98975fd41b5155c062"
+        },
+        "_native_persist_identity": {
+          "stage_offset": 1696,
+          "bytes": 96,
+          "sha256": "ce984811992d55c1cb19150cd91ebbe1e7741756fe5abbe7ff6911b9eae521e6"
+        },
+        "_native_persist_write": {
+          "stage_offset": 1532,
+          "bytes": 72,
+          "sha256": "1b216599ce86f8e366f18ece7a48c1640b1a4d781ed2060e5cd1c80e80834c1b"
+        },
+        "_native_persist_sync": {
+          "stage_offset": 1440,
+          "bytes": 56,
+          "sha256": "2901af765d175997342a1d1eebf787514f25b2c6c14eac6b8ce819d79e2a7011"
+        }
+      },
+      "linked_report_stage_elf_sha256": "532c2a5f8d8580b0c52264600ac8c5a2acd0ecf525bfebc91748833067590d7f",
+      "inherited_evidence": {
+        "pure_resolution": {
+          "schema": "kui.native-stage.proof-cache-scope.v1",
+          "status": "PASS",
+          "elf_sha256": "532c2a5f8d8580b0c52264600ac8c5a2acd0ecf525bfebc91748833067590d7f",
+          "wrapper_bytes": 156,
+          "pure_leaf_sha256": "e7c062106b31cdcbef7194f46edd8b5dae2078ee8fee391d9ad7dd5c2301e77f",
+          "actual_SH_cases": 3840,
+          "mutation_rejections": 26,
+          "argument_count": 7,
+          "caller_stack_unchanged": true,
+          "private_frame_bytes": 24,
+          "unknown_CCR_unchanged": true,
+          "per_game_constants": false,
+          "limits": "Actual scope instructions execute; the real immutable replay leaf is an ABI adversary. No console timing is established."
+        },
+        "pure_extent": {
+          "enabled": true,
+          "entry": "0x8ce1c340",
+          "bytes": 140,
+          "actual_instruction_model_cases": 6144,
+          "mutation_rejections": 20,
+          "complete_linked_assembly_pinned": true,
+          "eligible_entry_ccr": "0x100",
+          "proof_ccr": "0x101",
+          "other_ccr_profiles_unchanged": true,
+          "same_pure_extent_proof": true,
+          "full_ram_purge_bytes": 16777216,
+          "cache_write_nops": [
+            8,
+            8
+          ],
+          "callee_preserved_integer_frame_bytes": 12,
+          "operand_cache_restored_off": true,
+          "proof_output_published_before_cache_restore": true,
+          "console_speed_verified": false
+        },
+        "fast_crc": {
+          "schema": "kui.smash-native.fast-crc.v1",
+          "status": "PASS",
+          "elf_sha256": "532c2a5f8d8580b0c52264600ac8c5a2acd0ecf525bfebc91748833067590d7f",
+          "helper": "0x8ce001e8",
+          "helper_bytes": 144,
+          "helper_sha256": "bf452da1166846207538cd59099d344e4e83aa7c017454bab3373ba847494882",
+          "byte_table": "0x8ce2f6ec",
+          "table_bytes": 1024,
+          "table_sha256": "12f3e0576d447eb37b36d82ba0c1c5481b8f0d12fdc70347ce4a076b229d4c86",
+          "actual_SH_cases": 128,
+          "instructions": 363128,
+          "one_table_read_per_byte": true,
+          "independent_oracle": "zlib.crc32",
+          "whole_image_relay_bound": true,
+          "hardware_timing_verified": false
+        },
+        "fresh_fat_cache": {
+          "schema": "kui.smash-menu.fat-cache-linked.v1",
+          "status": "PASS",
+          "profile": "native",
+          "elf_sha256": "532c2a5f8d8580b0c52264600ac8c5a2acd0ecf525bfebc91748833067590d7f",
+          "cache_bss": "0x8ce54460",
+          "cache_bytes": 16512,
+          "actual_helpers": {
+            "_kui_smash_fat_cache_read": {
+              "entry": "0x8ce19d68",
+              "bytes": 1020,
+              "sha256": "3fcecedbf6a6354fd1e272ae927f4d986cbf39995cabec6c1499fec7f93644de"
+            },
+            "_kui_smash_fat_cache_begin_epoch": {
+              "entry": "0x8ce19c96",
+              "bytes": 34,
+              "sha256": "8a1afde9b83c1223ea37c5c359d801a2179260a1338827fa716b3c79673368b4"
+            },
+            "_kui_smash_fat_cache_configure": {
+              "entry": "0x8ce19cb8",
+              "bytes": 176,
+              "sha256": "695092998233dbc18c8f68aa2d691019300ae4cacb76ec6a557cbc60b6f98cce"
+            },
+            "_native_persist_fat_read_one": {
+              "entry": "0x8ce0067c",
+              "bytes": 36,
+              "sha256": "de658c71d983f5aefd374f8a2f5202e41bcb4f294b6384cbbc3eb866efea3d85"
+            },
+            "_native_persist_fat_read_window": {
+              "entry": "0x8ce00acc",
+              "bytes": 176,
+              "sha256": "23daf85c59d8837d6425c8d8d3511a6edb0fb83d3d408e321983f146037c3bae"
+            },
+            "_native_persist_read": {
+              "entry": "0x8ce00644",
+              "bytes": 56,
+              "sha256": "ee846e7797313bc17c2bc452d6a58ba81e02431d62992a98975fd41b5155c062"
+            },
+            "_native_persist_identity": {
+              "entry": "0x8ce006a0",
+              "bytes": 96,
+              "sha256": "ce984811992d55c1cb19150cd91ebbe1e7741756fe5abbe7ff6911b9eae521e6"
+            },
+            "_native_persist_write": {
+              "entry": "0x8ce005fc",
+              "bytes": 72,
+              "sha256": "1b216599ce86f8e366f18ece7a48c1640b1a4d781ed2060e5cd1c80e80834c1b"
+            },
+            "_native_persist_sync": {
+              "entry": "0x8ce005a0",
+              "bytes": 56,
+              "sha256": "2901af765d175997342a1d1eebf787514f25b2c6c14eac6b8ce819d79e2a7011"
+            }
+          },
+          "actual_initial_read_sessions": [
+            [
+              "one",
+              100,
+              1
+            ],
+            [
+              "window",
+              132,
+              16
+            ],
+            [
+              "window",
+              148,
+              1
+            ],
+            [
+              "window",
+              149,
+              16
+            ],
+            [
+              "window",
+              165,
+              1
+            ]
+          ],
+          "epochs_drop_geometry_and_data": true,
+          "independent_copies_and_bounded_tail": true,
+          "verified_prefix_only": true,
+          "failed_stream_not_cached": true,
+          "stage_identity_write_sync_invalidation_bound": true,
+          "stage_bounded_stream_and_stop_bound": true,
+          "compiler_graph_sha256": {
+            "stage/src/loader/vmu_native_heap_probe_stage.ci": "a57446a326fcfbac938f87d80266339c95b835e139afce21c64e346c0f5abfda",
+            "stage/src/loader/smash_fat_read_cache.ci": "9c1fc5326052d057f049963d68338851a0ca1d9b81273992691c3150e769bc42"
+          },
+          "limits": "Actual compiled cache/epoch C and libc execute; physical callbacks are fixtures. Full filesystem correctness is separately tested by actual old/new admission under sanitizers."
+        }
+      }
+    },
+    "background_a2": {
+      "path": "KUI/apps/games/retail-native-dual.kui",
+      "bytes": 286272,
+      "sha256": "6c30616508516294ace74a483aef94bfa474d0681901656e6fa8fb98c79d5153",
+      "build": "dbadd024e2ff",
+      "actual_old_helpers_verified_against_linked_report": {
+        "_kui_smash_fat_cache_read": {
+          "stage_offset": 105832,
+          "bytes": 1020,
+          "sha256": "d8f7576d119ed7049c5c03ed36457d7d05e0ecf9df1765b23941150242da12ba"
+        },
+        "_kui_smash_fat_cache_begin_epoch": {
+          "stage_offset": 105622,
+          "bytes": 34,
+          "sha256": "8a1afde9b83c1223ea37c5c359d801a2179260a1338827fa716b3c79673368b4"
+        },
+        "_kui_smash_fat_cache_configure": {
+          "stage_offset": 105656,
+          "bytes": 176,
+          "sha256": "695092998233dbc18c8f68aa2d691019300ae4cacb76ec6a557cbc60b6f98cce"
+        },
+        "_native_persist_fat_read_one": {
+          "stage_offset": 1660,
+          "bytes": 36,
+          "sha256": "07d22c131163ae3a73d4e78d0ebd842a401a5a2a3f9113097d2ddb94aa23ddc7"
+        },
+        "_native_persist_fat_read_window": {
+          "stage_offset": 2764,
+          "bytes": 176,
+          "sha256": "2e9884e1cdae1fbfde851fd036bfaf589a6f6c2ea2fe79376e068617b39bbd9f"
+        },
+        "_native_persist_read": {
+          "stage_offset": 1604,
+          "bytes": 56,
+          "sha256": "4c8c873e3314d3bfdb25295f515cab8cfee7d7e2884b82887019a3da05048d04"
+        },
+        "_native_persist_identity": {
+          "stage_offset": 1696,
+          "bytes": 96,
+          "sha256": "131babdf6c99d4d600ad487259ec2b893d905bfd92f2dc53075cd1a8a63f98c4"
+        },
+        "_native_persist_write": {
+          "stage_offset": 1532,
+          "bytes": 72,
+          "sha256": "78faa50f4ded74b365e603c563b79a5a968a1018e0c877a218e2298593f18052"
+        },
+        "_native_persist_sync": {
+          "stage_offset": 1440,
+          "bytes": 56,
+          "sha256": "26695908ca9ff9179908663cb35a9ee93af9ef18bb155139b44da1845d88d88a"
+        }
+      },
+      "linked_report_stage_elf_sha256": "89aaa5bff83bcc3b689a66a7ff39aca398ceaba1ea48b51bd350e71a960ec44c",
+      "inherited_evidence": {
+        "pure_resolution": {
+          "schema": "kui.native-stage.proof-cache-scope.v1",
+          "status": "PASS",
+          "elf_sha256": "89aaa5bff83bcc3b689a66a7ff39aca398ceaba1ea48b51bd350e71a960ec44c",
+          "wrapper_bytes": 156,
+          "pure_leaf_sha256": "e7c062106b31cdcbef7194f46edd8b5dae2078ee8fee391d9ad7dd5c2301e77f",
+          "actual_SH_cases": 3840,
+          "mutation_rejections": 26,
+          "argument_count": 7,
+          "caller_stack_unchanged": true,
+          "private_frame_bytes": 24,
+          "unknown_CCR_unchanged": true,
+          "per_game_constants": false,
+          "limits": "Actual scope instructions execute; the real immutable replay leaf is an ABI adversary. No console timing is established."
+        },
+        "pure_extent": {
+          "enabled": true,
+          "entry": "0x8ce1c340",
+          "bytes": 140,
+          "actual_instruction_model_cases": 6144,
+          "mutation_rejections": 20,
+          "complete_linked_assembly_pinned": true,
+          "eligible_entry_ccr": "0x100",
+          "proof_ccr": "0x101",
+          "other_ccr_profiles_unchanged": true,
+          "same_pure_extent_proof": true,
+          "full_ram_purge_bytes": 16777216,
+          "cache_write_nops": [
+            8,
+            8
+          ],
+          "callee_preserved_integer_frame_bytes": 12,
+          "operand_cache_restored_off": true,
+          "proof_output_published_before_cache_restore": true,
+          "console_speed_verified": false
+        },
+        "fast_crc": {
+          "schema": "kui.smash-native.fast-crc.v1",
+          "status": "PASS",
+          "elf_sha256": "89aaa5bff83bcc3b689a66a7ff39aca398ceaba1ea48b51bd350e71a960ec44c",
+          "helper": "0x8ce001e8",
+          "helper_bytes": 144,
+          "helper_sha256": "16824dfcbdb73c1998e6133c60ffc332350e4c9f26c9fa66c84edee9a2340018",
+          "byte_table": "0x8ce2f6cc",
+          "table_bytes": 1024,
+          "table_sha256": "12f3e0576d447eb37b36d82ba0c1c5481b8f0d12fdc70347ce4a076b229d4c86",
+          "actual_SH_cases": 128,
+          "instructions": 363128,
+          "one_table_read_per_byte": true,
+          "independent_oracle": "zlib.crc32",
+          "whole_image_relay_bound": true,
+          "hardware_timing_verified": false
+        },
+        "fresh_fat_cache": {
+          "schema": "kui.smash-menu.fat-cache-linked.v1",
+          "status": "PASS",
+          "profile": "native",
+          "elf_sha256": "89aaa5bff83bcc3b689a66a7ff39aca398ceaba1ea48b51bd350e71a960ec44c",
+          "cache_bss": "0x8ce54440",
+          "cache_bytes": 16512,
+          "actual_helpers": {
+            "_kui_smash_fat_cache_read": {
+              "entry": "0x8ce19d68",
+              "bytes": 1020,
+              "sha256": "d8f7576d119ed7049c5c03ed36457d7d05e0ecf9df1765b23941150242da12ba"
+            },
+            "_kui_smash_fat_cache_begin_epoch": {
+              "entry": "0x8ce19c96",
+              "bytes": 34,
+              "sha256": "8a1afde9b83c1223ea37c5c359d801a2179260a1338827fa716b3c79673368b4"
+            },
+            "_kui_smash_fat_cache_configure": {
+              "entry": "0x8ce19cb8",
+              "bytes": 176,
+              "sha256": "695092998233dbc18c8f68aa2d691019300ae4cacb76ec6a557cbc60b6f98cce"
+            },
+            "_native_persist_fat_read_one": {
+              "entry": "0x8ce0067c",
+              "bytes": 36,
+              "sha256": "07d22c131163ae3a73d4e78d0ebd842a401a5a2a3f9113097d2ddb94aa23ddc7"
+            },
+            "_native_persist_fat_read_window": {
+              "entry": "0x8ce00acc",
+              "bytes": 176,
+              "sha256": "2e9884e1cdae1fbfde851fd036bfaf589a6f6c2ea2fe79376e068617b39bbd9f"
+            },
+            "_native_persist_read": {
+              "entry": "0x8ce00644",
+              "bytes": 56,
+              "sha256": "4c8c873e3314d3bfdb25295f515cab8cfee7d7e2884b82887019a3da05048d04"
+            },
+            "_native_persist_identity": {
+              "entry": "0x8ce006a0",
+              "bytes": 96,
+              "sha256": "131babdf6c99d4d600ad487259ec2b893d905bfd92f2dc53075cd1a8a63f98c4"
+            },
+            "_native_persist_write": {
+              "entry": "0x8ce005fc",
+              "bytes": 72,
+              "sha256": "78faa50f4ded74b365e603c563b79a5a968a1018e0c877a218e2298593f18052"
+            },
+            "_native_persist_sync": {
+              "entry": "0x8ce005a0",
+              "bytes": 56,
+              "sha256": "26695908ca9ff9179908663cb35a9ee93af9ef18bb155139b44da1845d88d88a"
+            }
+          },
+          "actual_initial_read_sessions": [
+            [
+              "one",
+              100,
+              1
+            ],
+            [
+              "window",
+              132,
+              16
+            ],
+            [
+              "window",
+              148,
+              1
+            ],
+            [
+              "window",
+              149,
+              16
+            ],
+            [
+              "window",
+              165,
+              1
+            ]
+          ],
+          "epochs_drop_geometry_and_data": true,
+          "independent_copies_and_bounded_tail": true,
+          "verified_prefix_only": true,
+          "failed_stream_not_cached": true,
+          "stage_identity_write_sync_invalidation_bound": true,
+          "stage_bounded_stream_and_stop_bound": true,
+          "compiler_graph_sha256": {
+            "stage/src/loader/vmu_native_heap_probe_stage.ci": "a57446a326fcfbac938f87d80266339c95b835e139afce21c64e346c0f5abfda",
+            "stage/src/loader/smash_fat_read_cache.ci": "9c1fc5326052d057f049963d68338851a0ca1d9b81273992691c3150e769bc42"
+          },
+          "limits": "Actual compiled cache/epoch C and libc execute; physical callbacks are fixtures. Full filesystem correctness is separately tested by actual old/new admission under sanitizers."
+        }
+      }
+    },
+    "disc_a1": {
+      "path": "KUI/apps/disc/native-disc-vmu-a1.kui",
+      "bytes": 173684,
+      "sha256": "76a7c418680fff149f3835a2d521c57a6cd9d6b54db54d4222a0a0240805b6f1",
+      "build": "dbadd024e2ff",
+      "actual_old_helpers_verified_against_linked_report": {
+        "_kui_smash_fat_cache_read": {
+          "stage_offset": 91476,
+          "bytes": 1020,
+          "sha256": "77844de55ad5a3fcf845abefce06caf118c9bda1807fa29b63196a13278913e2"
+        },
+        "_kui_smash_fat_cache_begin_epoch": {
+          "stage_offset": 91266,
+          "bytes": 34,
+          "sha256": "8a1afde9b83c1223ea37c5c359d801a2179260a1338827fa716b3c79673368b4"
+        },
+        "_kui_smash_fat_cache_configure": {
+          "stage_offset": 91300,
+          "bytes": 176,
+          "sha256": "ce4095705366886632a24a53139eb00ba74a71167de42482fde3769df5384d3f"
+        },
+        "_persist_fat_read_one": {
+          "stage_offset": 2276,
+          "bytes": 56,
+          "sha256": "af3a2881aab227270123b9e37985fc625544b55b2934de630a5cbaf2a21d1980"
+        },
+        "_persist_fat_read_window": {
+          "stage_offset": 2100,
+          "bytes": 176,
+          "sha256": "efbf98a5dde0dc8bcebd4fb6ab8873984b030c19e021ac9f258fc60549218bc0"
+        },
+        "_persist_read": {
+          "stage_offset": 1732,
+          "bytes": 56,
+          "sha256": "f216c51339d9f341667fd083808731945b8a89a8012a2a1c53a09e902712d99a"
+        },
+        "_persist_identity": {
+          "stage_offset": 1788,
+          "bytes": 92,
+          "sha256": "ea9a4a6177e6a5a60910563737ecec993de07f5f29fb4136bdaed56d5c62afc3"
+        },
+        "_persist_write": {
+          "stage_offset": 2004,
+          "bytes": 96,
+          "sha256": "da9aaedb72614be51bb5b54c3a7f975c4e377726b96840d3126c64c441e775b0"
+        },
+        "_persist_sync": {
+          "stage_offset": 1940,
+          "bytes": 64,
+          "sha256": "3bf6e2bd8fc439969b3226701a60f33986134960e3e73055c508af2367f4cc52"
+        }
+      },
+      "linked_report_stage_elf_sha256": "12ac85b7efc0a7db3bc0bb6f87be5ca6bdb8c8926c194f01c5a2e9eb052f3c27",
+      "inherited_evidence": {
+        "pure_resolution": {
+          "schema": "kui.native-stage.proof-cache-scope.v1",
+          "status": "PASS",
+          "elf_sha256": "12ac85b7efc0a7db3bc0bb6f87be5ca6bdb8c8926c194f01c5a2e9eb052f3c27",
+          "wrapper_bytes": 156,
+          "pure_leaf_sha256": "2a430211cc38b2ef096314d246c87f09c766b606c9292d70634c669584758cc3",
+          "actual_SH_cases": 3840,
+          "mutation_rejections": 26,
+          "argument_count": 7,
+          "caller_stack_unchanged": true,
+          "private_frame_bytes": 24,
+          "unknown_CCR_unchanged": true,
+          "per_game_constants": false,
+          "limits": "Actual scope instructions execute; the real immutable replay leaf is an ABI adversary. No console timing is established."
+        },
+        "pure_extent": {
+          "enabled": true,
+          "entry": "0x8ce16b34",
+          "bytes": 140,
+          "actual_instruction_model_cases": 6144,
+          "mutation_rejections": 20,
+          "complete_linked_assembly_pinned": true,
+          "eligible_entry_ccr": "0x100",
+          "proof_ccr": "0x101",
+          "other_ccr_profiles_unchanged": true,
+          "same_pure_extent_proof": true,
+          "full_ram_purge_bytes": 16777216,
+          "cache_write_nops": [
+            8,
+            8
+          ],
+          "callee_preserved_integer_frame_bytes": 12,
+          "operand_cache_restored_off": true,
+          "proof_output_published_before_cache_restore": true,
+          "console_speed_verified": false
+        },
+        "fast_crc": {
+          "status": "PASS",
+          "elf_sha256": "12ac85b7efc0a7db3bc0bb6f87be5ca6bdb8c8926c194f01c5a2e9eb052f3c27",
+          "helpers": [
+            {
+              "entry": "0x8ce00ee8",
+              "bytes": 140,
+              "sha256": "7aca9c838ce87ac52dc22af573bb56788b8fb4f33951202a8e0ae8446ebcc963",
+              "table": "0x8ce26814",
+              "actual_SH_cases": 64
+            },
+            {
+              "entry": "0x8ce02b28",
+              "bytes": 140,
+              "sha256": "d31f2f617628517438a4defc18d2db558872378b965c0b4ac5af3fa899b56343",
+              "table": "0x8ce26cfc",
+              "actual_SH_cases": 64
+            }
+          ],
+          "source_callers": [
+            {
+              "name": "_fingerprint",
+              "address": "0x8ce02bb4",
+              "helpers": [
+                "0x8ce02b28"
+              ],
+              "sha256": "70d75c90612e65f545484420e793b336c8e96d736f1b293f6050a6d22ee647c4"
+            },
+            {
+              "name": "_kui_disc_vmu_stage_relay",
+              "address": "0x8ce02634",
+              "helpers": [
+                "0x8ce00ee8"
+              ],
+              "sha256": "0f14c1ed0a98da405deee444cb0a26734320446f3ff95f0f7b3f4dc5fe9503d5"
+            }
+          ],
+          "one_table_lookup_per_byte": true,
+          "oracle": "zlib.crc32",
+          "hardware_timing_verified": false
+        },
+        "fresh_fat_cache": {
+          "schema": "kui.smash-menu.fat-cache-linked.v1",
+          "status": "PASS",
+          "profile": "disc",
+          "elf_sha256": "12ac85b7efc0a7db3bc0bb6f87be5ca6bdb8c8926c194f01c5a2e9eb052f3c27",
+          "cache_bss": "0x8ce28b60",
+          "cache_bytes": 16512,
+          "actual_helpers": {
+            "_kui_smash_fat_cache_read": {
+              "entry": "0x8ce16554",
+              "bytes": 1020,
+              "sha256": "77844de55ad5a3fcf845abefce06caf118c9bda1807fa29b63196a13278913e2"
+            },
+            "_kui_smash_fat_cache_begin_epoch": {
+              "entry": "0x8ce16482",
+              "bytes": 34,
+              "sha256": "8a1afde9b83c1223ea37c5c359d801a2179260a1338827fa716b3c79673368b4"
+            },
+            "_kui_smash_fat_cache_configure": {
+              "entry": "0x8ce164a4",
+              "bytes": 176,
+              "sha256": "ce4095705366886632a24a53139eb00ba74a71167de42482fde3769df5384d3f"
+            },
+            "_persist_fat_read_one": {
+              "entry": "0x8ce008e4",
+              "bytes": 56,
+              "sha256": "af3a2881aab227270123b9e37985fc625544b55b2934de630a5cbaf2a21d1980"
+            },
+            "_persist_fat_read_window": {
+              "entry": "0x8ce00834",
+              "bytes": 176,
+              "sha256": "efbf98a5dde0dc8bcebd4fb6ab8873984b030c19e021ac9f258fc60549218bc0"
+            },
+            "_persist_read": {
+              "entry": "0x8ce006c4",
+              "bytes": 56,
+              "sha256": "f216c51339d9f341667fd083808731945b8a89a8012a2a1c53a09e902712d99a"
+            },
+            "_persist_identity": {
+              "entry": "0x8ce006fc",
+              "bytes": 92,
+              "sha256": "ea9a4a6177e6a5a60910563737ecec993de07f5f29fb4136bdaed56d5c62afc3"
+            },
+            "_persist_write": {
+              "entry": "0x8ce007d4",
+              "bytes": 96,
+              "sha256": "da9aaedb72614be51bb5b54c3a7f975c4e377726b96840d3126c64c441e775b0"
+            },
+            "_persist_sync": {
+              "entry": "0x8ce00794",
+              "bytes": 64,
+              "sha256": "3bf6e2bd8fc439969b3226701a60f33986134960e3e73055c508af2367f4cc52"
+            }
+          },
+          "actual_initial_read_sessions": [
+            [
+              "one",
+              100,
+              1
+            ],
+            [
+              "window",
+              132,
+              16
+            ],
+            [
+              "window",
+              148,
+              1
+            ],
+            [
+              "window",
+              149,
+              16
+            ],
+            [
+              "window",
+              165,
+              1
+            ]
+          ],
+          "epochs_drop_geometry_and_data": true,
+          "independent_copies_and_bounded_tail": true,
+          "verified_prefix_only": true,
+          "failed_stream_not_cached": true,
+          "stage_identity_write_sync_invalidation_bound": true,
+          "stage_bounded_stream_and_stop_bound": true,
+          "compiler_graph_sha256": {
+            "disc/src/loader/disc_vmu_stage.ci": "acb219510d7e76bb8b5c1c8998045a9c05b857f3802e66a2bc006ae579672bb7",
+            "disc/src/loader/smash_fat_read_cache.ci": "9c1fc5326052d057f049963d68338851a0ca1d9b81273992691c3150e769bc42"
+          },
+          "limits": "Actual compiled cache/epoch C and libc execute; physical callbacks are fixtures. Full filesystem correctness is separately tested by actual old/new admission under sanitizers."
+        }
+      }
+    },
+    "disc_a2": {
+      "path": "KUI/apps/disc/native-disc-vmu.kui",
+      "bytes": 173684,
+      "sha256": "5db64b110d6962950f9e104cb9de7323fbe3f0f4c3fd4fb6242e30d55e02e3f7",
+      "build": "dbadd024e2ff",
+      "actual_old_helpers_verified_against_linked_report": {
+        "_kui_smash_fat_cache_read": {
+          "stage_offset": 91476,
+          "bytes": 1020,
+          "sha256": "77844de55ad5a3fcf845abefce06caf118c9bda1807fa29b63196a13278913e2"
+        },
+        "_kui_smash_fat_cache_begin_epoch": {
+          "stage_offset": 91266,
+          "bytes": 34,
+          "sha256": "8a1afde9b83c1223ea37c5c359d801a2179260a1338827fa716b3c79673368b4"
+        },
+        "_kui_smash_fat_cache_configure": {
+          "stage_offset": 91300,
+          "bytes": 176,
+          "sha256": "ce4095705366886632a24a53139eb00ba74a71167de42482fde3769df5384d3f"
+        },
+        "_persist_fat_read_one": {
+          "stage_offset": 2276,
+          "bytes": 56,
+          "sha256": "af3a2881aab227270123b9e37985fc625544b55b2934de630a5cbaf2a21d1980"
+        },
+        "_persist_fat_read_window": {
+          "stage_offset": 2100,
+          "bytes": 176,
+          "sha256": "efbf98a5dde0dc8bcebd4fb6ab8873984b030c19e021ac9f258fc60549218bc0"
+        },
+        "_persist_read": {
+          "stage_offset": 1732,
+          "bytes": 56,
+          "sha256": "f216c51339d9f341667fd083808731945b8a89a8012a2a1c53a09e902712d99a"
+        },
+        "_persist_identity": {
+          "stage_offset": 1788,
+          "bytes": 92,
+          "sha256": "ea9a4a6177e6a5a60910563737ecec993de07f5f29fb4136bdaed56d5c62afc3"
+        },
+        "_persist_write": {
+          "stage_offset": 2004,
+          "bytes": 96,
+          "sha256": "da9aaedb72614be51bb5b54c3a7f975c4e377726b96840d3126c64c441e775b0"
+        },
+        "_persist_sync": {
+          "stage_offset": 1940,
+          "bytes": 64,
+          "sha256": "3bf6e2bd8fc439969b3226701a60f33986134960e3e73055c508af2367f4cc52"
+        }
+      },
+      "linked_report_stage_elf_sha256": "0241f1a28d7982ace2d7da0cc8469f0527b94ec4d2265e8150e665048895c3c1",
+      "inherited_evidence": {
+        "pure_resolution": {
+          "schema": "kui.native-stage.proof-cache-scope.v1",
+          "status": "PASS",
+          "elf_sha256": "0241f1a28d7982ace2d7da0cc8469f0527b94ec4d2265e8150e665048895c3c1",
+          "wrapper_bytes": 156,
+          "pure_leaf_sha256": "2a430211cc38b2ef096314d246c87f09c766b606c9292d70634c669584758cc3",
+          "actual_SH_cases": 3840,
+          "mutation_rejections": 26,
+          "argument_count": 7,
+          "caller_stack_unchanged": true,
+          "private_frame_bytes": 24,
+          "unknown_CCR_unchanged": true,
+          "per_game_constants": false,
+          "limits": "Actual scope instructions execute; the real immutable replay leaf is an ABI adversary. No console timing is established."
+        },
+        "pure_extent": {
+          "enabled": true,
+          "entry": "0x8ce16b34",
+          "bytes": 140,
+          "actual_instruction_model_cases": 6144,
+          "mutation_rejections": 20,
+          "complete_linked_assembly_pinned": true,
+          "eligible_entry_ccr": "0x100",
+          "proof_ccr": "0x101",
+          "other_ccr_profiles_unchanged": true,
+          "same_pure_extent_proof": true,
+          "full_ram_purge_bytes": 16777216,
+          "cache_write_nops": [
+            8,
+            8
+          ],
+          "callee_preserved_integer_frame_bytes": 12,
+          "operand_cache_restored_off": true,
+          "proof_output_published_before_cache_restore": true,
+          "console_speed_verified": false
+        },
+        "fast_crc": {
+          "status": "PASS",
+          "elf_sha256": "0241f1a28d7982ace2d7da0cc8469f0527b94ec4d2265e8150e665048895c3c1",
+          "helpers": [
+            {
+              "entry": "0x8ce00ee8",
+              "bytes": 140,
+              "sha256": "7aca9c838ce87ac52dc22af573bb56788b8fb4f33951202a8e0ae8446ebcc963",
+              "table": "0x8ce26814",
+              "actual_SH_cases": 64
+            },
+            {
+              "entry": "0x8ce02b28",
+              "bytes": 140,
+              "sha256": "d31f2f617628517438a4defc18d2db558872378b965c0b4ac5af3fa899b56343",
+              "table": "0x8ce26cfc",
+              "actual_SH_cases": 64
+            }
+          ],
+          "source_callers": [
+            {
+              "name": "_fingerprint",
+              "address": "0x8ce02bb4",
+              "helpers": [
+                "0x8ce02b28"
+              ],
+              "sha256": "70d75c90612e65f545484420e793b336c8e96d736f1b293f6050a6d22ee647c4"
+            },
+            {
+              "name": "_kui_disc_vmu_stage_relay",
+              "address": "0x8ce02634",
+              "helpers": [
+                "0x8ce00ee8"
+              ],
+              "sha256": "0f14c1ed0a98da405deee444cb0a26734320446f3ff95f0f7b3f4dc5fe9503d5"
+            }
+          ],
+          "one_table_lookup_per_byte": true,
+          "oracle": "zlib.crc32",
+          "hardware_timing_verified": false
+        },
+        "fresh_fat_cache": {
+          "schema": "kui.smash-menu.fat-cache-linked.v1",
+          "status": "PASS",
+          "profile": "disc",
+          "elf_sha256": "0241f1a28d7982ace2d7da0cc8469f0527b94ec4d2265e8150e665048895c3c1",
+          "cache_bss": "0x8ce28b60",
+          "cache_bytes": 16512,
+          "actual_helpers": {
+            "_kui_smash_fat_cache_read": {
+              "entry": "0x8ce16554",
+              "bytes": 1020,
+              "sha256": "77844de55ad5a3fcf845abefce06caf118c9bda1807fa29b63196a13278913e2"
+            },
+            "_kui_smash_fat_cache_begin_epoch": {
+              "entry": "0x8ce16482",
+              "bytes": 34,
+              "sha256": "8a1afde9b83c1223ea37c5c359d801a2179260a1338827fa716b3c79673368b4"
+            },
+            "_kui_smash_fat_cache_configure": {
+              "entry": "0x8ce164a4",
+              "bytes": 176,
+              "sha256": "ce4095705366886632a24a53139eb00ba74a71167de42482fde3769df5384d3f"
+            },
+            "_persist_fat_read_one": {
+              "entry": "0x8ce008e4",
+              "bytes": 56,
+              "sha256": "af3a2881aab227270123b9e37985fc625544b55b2934de630a5cbaf2a21d1980"
+            },
+            "_persist_fat_read_window": {
+              "entry": "0x8ce00834",
+              "bytes": 176,
+              "sha256": "efbf98a5dde0dc8bcebd4fb6ab8873984b030c19e021ac9f258fc60549218bc0"
+            },
+            "_persist_read": {
+              "entry": "0x8ce006c4",
+              "bytes": 56,
+              "sha256": "f216c51339d9f341667fd083808731945b8a89a8012a2a1c53a09e902712d99a"
+            },
+            "_persist_identity": {
+              "entry": "0x8ce006fc",
+              "bytes": 92,
+              "sha256": "ea9a4a6177e6a5a60910563737ecec993de07f5f29fb4136bdaed56d5c62afc3"
+            },
+            "_persist_write": {
+              "entry": "0x8ce007d4",
+              "bytes": 96,
+              "sha256": "da9aaedb72614be51bb5b54c3a7f975c4e377726b96840d3126c64c441e775b0"
+            },
+            "_persist_sync": {
+              "entry": "0x8ce00794",
+              "bytes": 64,
+              "sha256": "3bf6e2bd8fc439969b3226701a60f33986134960e3e73055c508af2367f4cc52"
+            }
+          },
+          "actual_initial_read_sessions": [
+            [
+              "one",
+              100,
+              1
+            ],
+            [
+              "window",
+              132,
+              16
+            ],
+            [
+              "window",
+              148,
+              1
+            ],
+            [
+              "window",
+              149,
+              16
+            ],
+            [
+              "window",
+              165,
+              1
+            ]
+          ],
+          "epochs_drop_geometry_and_data": true,
+          "independent_copies_and_bounded_tail": true,
+          "verified_prefix_only": true,
+          "failed_stream_not_cached": true,
+          "stage_identity_write_sync_invalidation_bound": true,
+          "stage_bounded_stream_and_stop_bound": true,
+          "compiler_graph_sha256": {
+            "disc/src/loader/disc_vmu_stage.ci": "acb219510d7e76bb8b5c1c8998045a9c05b857f3802e66a2bc006ae579672bb7",
+            "disc/src/loader/smash_fat_read_cache.ci": "9c1fc5326052d057f049963d68338851a0ca1d9b81273992691c3150e769bc42"
+          },
+          "limits": "Actual compiled cache/epoch C and libc execute; physical callbacks are fixtures. Full filesystem correctness is separately tested by actual old/new admission under sanitizers."
+        }
+      }
+    }
+  },
+  "source_sha256": {
+    "Makefile.vmu-native-compat": {
+      "old_sha256": "bf8daf1771e42b3b219a3fbe2a1d194b463eca46ed91a0f7bce4cacf1d928d1d",
+      "current_sha256": "bf8daf1771e42b3b219a3fbe2a1d194b463eca46ed91a0f7bce4cacf1d928d1d"
+    },
+    "Makefile.vmu-native-vmu-lite-paced": {
+      "old_sha256": "9dba08f420831855eb85c114ad9c689d104eff6f84f6dc1d937f77473392625d",
+      "current_sha256": "9dba08f420831855eb85c114ad9c689d104eff6f84f6dc1d937f77473392625d"
+    },
+    "Makefile.vmu-native-background-compact": {
+      "old_sha256": "49e29e6631c02edb093d6afeb1758cb984b4a51154eaf0528b71db233e355dad",
+      "current_sha256": "49e29e6631c02edb093d6afeb1758cb984b4a51154eaf0528b71db233e355dad"
+    },
+    "Makefile.vmu-native-background-compact-a1": {
+      "old_sha256": "4dd1cfe546cb07cbb2bf0b6f0713a3259d773778c390a862a0dc2d0cc4a93ee5",
+      "current_sha256": "4dd1cfe546cb07cbb2bf0b6f0713a3259d773778c390a862a0dc2d0cc4a93ee5"
+    },
+    "Makefile.disc-vmu": {
+      "old_sha256": "ecc44948efe8c4b6fc3beb1ed4a526fc5a2f40230885bcdd18e9eb86c2612b30",
+      "current_sha256": "6eb309e5763cb3f60285da5e489c1e36ff47fdc40c14566d6a20b7122676fe4d"
+    },
+    "Makefile.disc-vmu-a1": {
+      "old_sha256": "dc3afed2d3f8105006acee5e6450da5ed926675d950149193ceadcec4002b9b6",
+      "current_sha256": "dc3afed2d3f8105006acee5e6450da5ed926675d950149193ceadcec4002b9b6"
+    },
+    "Makefile.vmu-native-persistent": {
+      "old_sha256": "2c55e9d8f47fb4996c47e660719b356ff62354a19a37fd3524ea87fdf5658c65",
+      "current_sha256": "51650e35a49bedda42ef2392586f5b16ffa9a0bc9d646ac7ead21a7e7ba995ca"
+    },
+    "src/loader/retail_stage.c": {
+      "old_sha256": "6942488104eaa8f479c678ba229a840e624bf142d5d36446520aff8ad27b386c",
+      "current_sha256": "331e80fd634898965a07747c1f86d068096bc8caa100e19e90121a97ebf7b7ad"
+    },
+    "src/loader/native_proof_cache_scope.inc": {
+      "old_sha256": "2b75df499f694d756ced66df17fa49e3ef08babff060e5b8dfaf9e270c26d0b2",
+      "current_sha256": "a1c7056cb5316078efb522531a1b28314e4d349cd1646d4ff068dd1fbfac1632"
+    },
+    "src/loader/vmu_native_persist_stage.inc": {
+      "old_sha256": "d210c04063f5ae92d302b81bc22c3a4bcd6804a5a1a23aa7ecc7f84b796245d5",
+      "current_sha256": "01309bf1c45a32a473436f565f79b2867fd3524a73623de235a18c019159c549"
+    },
+    "src/loader/disc_vmu_stage.c": {
+      "old_sha256": "54d566e944ab506b522310d71e3f6b67586b18ccca73de9b0c4efc637496f286",
+      "current_sha256": "1cfff050a12e30fad71fbf255489b0f289374a34af0fa7e703a0738d5c42a32e"
+    },
+    "src/loader/vc2_ce_vmu_stage_cache.c": {
+      "old_sha256": "4c84b15dd2532583631c1b46feb6c667217c6dcdddaa4b029d9254b4406dc9b5",
+      "current_sha256": "4daff4b65c5b6be53e751465563c45c4640a3c5ecaf39009bdc419b7ce879ab9"
+    },
+    "include/kui/vc2_ce_vmu_stage_cache.h": {
+      "old_sha256": "712c8b52327ab07137bfd6714c4917476ac7074b9a827805f72fef0b0a93ee3a",
+      "current_sha256": "d61d16abcfbc53bbfd5613c5ff83caac4f47e819859b7951246ac1818bef9e8c"
+    },
+    "src/loader/sci_stream.c": {
+      "old_sha256": "b57e1efdc25e1af74922b5d65da6e9f0370f289129f26b0bcfac6b092961dc41",
+      "current_sha256": "9bc86d5fc16bf9240bf56f2770083643c8d1c0675bdc58c3432a308ec3ea57db"
+    },
+    "src/core/retail_gd.c": {
+      "old_sha256": "475de755ce2c8540dc271c6a5d1edaa2fcff67a7099795966c767a6cc2e50839",
+      "current_sha256": "9424cee0631959b092091aa9d2aef5a66695d97544377bd1948577dec9ff8b3f"
+    },
+    "src/core/retail_image.c": {
+      "old_sha256": "4394b6a0ad8c2fc8f1f9c31824ed01e7ccd801092be954c63ecbc1207eba9491",
+      "current_sha256": "632d19e0f78e474bed87249ad80a7a1b827c18cd98f07f9b9c21e81da1999986"
+    },
+    "src/loader/retail_async.c": {
+      "old_sha256": "575c82a2204fa9c55db5804b0e01571634a1171e339085ebf2de5e7e96b60fc2",
+      "current_sha256": "ef38074ed91ffdea34c87adf886625b2b48d41854d837f1bb1142e6760c84ec4"
+    },
+    "src/loader/sci_sd_bus.c": {
+      "old_sha256": "5071558eaf627576f74e30922df1c2bc2f53989c688440accbec595030bcd271",
+      "current_sha256": "274ceb0cb16dc30fb8e3df46601444893668b1ec4bb3a9d617f73c1a60e18845"
+    },
+    "src/loader/retail_display.c": {
+      "old_sha256": "6b0ecf628220e527a86d84461d3e00daafd5b28c3d0096b1b38502d3d4abf6eb",
+      "current_sha256": "76c8304a661d0724998dd12a86b316fad8527aaa8f3c8ded479fb04aa5ce5736"
+    },
+    "src/loader/minic.c": {
+      "old_sha256": "c7bcc5f088f74eac7bcb6bc90fc68b65e77670a09f79c50bcf13e889cf4875cc",
+      "current_sha256": "331caa10ead8e0fe84f6f9f6bb15d30ecc7c28c0fab80bf70791e5ca61b2e259"
+    },
+    "src/core/data.c": {
+      "old_sha256": "07ee1b7bcbcadd20dced6d9ad441815558d8b417939d0706a753375b4bc6d16c",
+      "current_sha256": "2899e0f28ea7af1dd8cc0dc72a4f9dfed32a33f2e21908505c70e050b43941a5"
+    }
+  },
+  "preceding_updates": {
+    "build/universal-test-evidence/universal-loader-test.json": {
+      "report_sha256": "aa1aafbb8bdafb1abb8b357b4e1069bb837c0b975b564b846590ea91a3a36e14",
+      "source_commit": "72db614495a3e289b76ae45be544dd7355fcbd6d",
+      "package_sha256": "2f580a4dea6f1ad01b4c092c8f2f007d660dc45078f54dee4d53338dd319c217",
+      "five_service_paths_all_omitted": true
+    },
+    "docs/evidence/shared-prebootstrap-9d6680a.json": {
+      "report_sha256": "3959934ec3f944d50fe7cd0892a11615f221d6541c00fd2c795c904e54696877",
+      "source_commit": "9d6680a1c190b96dbdce1ac7e7de45dc04824e99",
+      "package_sha256": "73f2b1b1f330e0f4b7af39e6839ab39ffba08cfd8ebd2b1a16d43a935bf73b2b",
+      "five_service_paths_all_omitted": true
+    }
+  },
+  "already_inherited": [
+    "Full-byte CRC32 and aligned source decoders",
+    "Instruction-cached cold execution",
+    "Seven-argument immutable resolution replay operand-cache scope",
+    "Immutable program extent operand-cache scope",
+    "Fresh live-VBR FAT16 windows with mirror/ownership checks and identity/write/sync epoch invalidation"
+  ],
+  "uninstalled_shared_cold_deltas": [
+    {
+      "change": "Bounded operand-cached post-BOOT2 whole-executable CRC",
+      "roles": [
+        "standard",
+        "background_a1",
+        "background_a2"
+      ],
+      "current_sources": [
+        "src/loader/retail_stage.c:57",
+        "src/loader/retail_stage.c:2430",
+        "src/loader/native_proof_cache_scope.inc:4"
+      ],
+      "retained": "Complete CRC bytes; guarded CPU/MMU/CCR/RAM domain; original uncached fallback; no device or live SDK callback enters scope."
+    },
+    {
+      "change": "Fresh metadata memo, aligned metadata receiver and32-sector validation snapshots",
+      "roles": [
+        "standard",
+        "background_a1",
+        "background_a2",
+        "disc_a1",
+        "disc_a2"
+      ],
+      "current_sources": [
+        "src/loader/vmu_native_persist_stage.inc:24",
+        "src/loader/vmu_native_persist_stage.inc:54",
+        "src/loader/vmu_native_persist_stage.inc:116",
+        "src/loader/disc_vmu_stage.c:155",
+        "src/loader/disc_vmu_stage.c:166",
+        "src/loader/disc_vmu_stage.c:202"
+      ],
+      "temporary_stage_scratch_bytes": 165472,
+      "retained": "Fresh semantic ownership and complete pre/post-checkpoint validation; identity/write/sync/phase invalidation; everySDCRC; no retained worker lease increase."
+    },
+    {
+      "change": "Remove two ordinary native30-frame informational holds",
+      "roles": [
+        "standard",
+        "background_a1",
+        "background_a2"
+      ],
+      "old_source": "src/loader/retail_stage.c:236,1482,2425 in archivedsource",
+      "current_source": "src/loader/retail_stage.c:245",
+      "current_default_frames": 0,
+      "diagnostic_opt_in": "KUI_RETAIL_NATIVE_HANDOFF_PAUSE_FRAMES",
+      "disc_delta": false,
+      "CE_existing_policy_preserved": true
+    }
+  ],
+  "geometry": {
+    "standard": {
+      "worker_bytes": 73728,
+      "cache_bytes": 0,
+      "manifest_slots": 64,
+      "SCI_RX": "paced"
+    },
+    "compact_background": {
+      "worker_bytes": 73728,
+      "lease_bytes": 290816,
+      "cache_bytes": 196608,
+      "worker_stack_bytes": 3072,
+      "engines": [
+        "New/X",
+        "Legacy/Y"
+      ],
+      "optional_session_controls": false
+    },
+    "disc": {
+      "worker_bytes": 73728,
+      "slots": [
+        "A1",
+        "A2"
+      ]
+    }
+  },
+  "source_closure": {
+    "compiler": "/workspace/scratch/a9e6097dd88c/sdk-restored/.deps/sh-elf/bin/sh-elf-gcc",
+    "comparison": "ActualSHpreprocessing, common audit buildlabel, source paths relative to each rooted source tree. Allselected C source closures include their current/old headers. Binary identity remains separately required.",
+    "complete_worker_and_compact_legacy_cases": 157,
+    "byte_identical_cases": 148,
+    "display_noop_only_cases": 7,
+    "errors": 0,
+    "remaining_effective_active_reader_delta": "Compact New/X and Legacy/Y: reject a reconstructed lost-DMA-byte block using if(((uint32_t)crc ^ sent) | lost), retaining existing bounded sameLBAretry/PIOfallback. This is required accepted sharedSCIcorrectness, not startup tuning.",
+    "other_effective_differences_found": false,
+    "worker_preprocessing_report": "complete-worker-and-legacy-preprocessing.json",
+    "changed_new_reader_report": "reader-preprocessing.json",
+    "binary_freeze_decision": "Keep exact worker/reference comparison; validate changed compact lowSCI engines explicitly. Do not weaken byte/body guard or infer speed from worker equivalence."
+  },
+  "independent_reference_ELFs": {
+    "evidence/reference-945/standard/native-worker.elf": {
+      "bytes": 824828,
+      "sha256": "f10f77786cd8a7563a826b543cc6100f37154a09fe8c7a4f236f7d0a720ca436"
+    },
+    "evidence/reference-945/standard/resident-sci.elf": {
+      "bytes": 145040,
+      "sha256": "8c4ae19a836f203cfe039b571f522e9d13fb65215c72e52c5e05560b75397f22"
+    },
+    "evidence/reference-945/disc_a1/native-worker.elf": {
+      "bytes": 825964,
+      "sha256": "d3267d438951477e16ad7487f10d5686448fad52a751b1335805d3fc776f5433"
+    },
+    "evidence/reference-945/disc_a1/support/support.elf": {
+      "bytes": 56768,
+      "sha256": "e9834eaaddf2da0467dfbbfc7e7af5a3b9534cb47f727b74d0f5336d91d26a37"
+    },
+    "evidence/reference-945/disc_a2/native-worker.elf": {
+      "bytes": 825952,
+      "sha256": "1806a27362c4081386fcb1043f5aeeb0eb72245ded28ab5ca87d813fbd63115c"
+    },
+    "evidence/reference-945/disc_a2/support/support.elf": {
+      "bytes": 56768,
+      "sha256": "e9834eaaddf2da0467dfbbfc7e7af5a3b9534cb47f727b74d0f5336d91d26a37"
+    },
+    "evidence/reference-945/smash_outer/resident-sci.elf": {
+      "bytes": 179336,
+      "sha256": "4604e39dbdabd1ff3264ce2fcbebac2013f19c5608ae16d0674fec9f9d99d0a4"
+    },
+    "evidence/reference-945/smash_child/native-worker.elf": {
+      "bytes": 831240,
+      "sha256": "144059ce1f41ed6e9a5c65157d84ad49eb237c0dceeda6f06099ddf6528970f3"
+    },
+    "evidence/reference-945/smash_child/resident-sci.elf": {
+      "bytes": 148804,
+      "sha256": "9055662cc4471833845f03d5231896b2a0175eed47f394627a0e953cf4de4568"
+    },
+    "evidence/reference-compact-a1/native-worker.elf": {
+      "bytes": 851288,
+      "sha256": "888a880a3e2897d49626bde713c8fa862664734a7cb8553dfb3b8b6515451899"
+    },
+    "evidence/reference-compact-a2/native-worker.elf": {
+      "bytes": 851268,
+      "sha256": "a4b44a6e126ac5a7ea6b228696e735a54bed2a2810b9f61d915a157ebf0faecf"
+    }
+  },
+  "safe_rollout": {
+    "roles": [
+      "standard",
+      "background_a1",
+      "background_a2",
+      "disc_a1",
+      "disc_a2"
+    ],
+    "Smash": "Preserve acceptedcc81e63ca4d2 exactsixfiles andfour embeddedmodules",
+    "SCIF_installed": false,
+    "Standard_GUI_admission": "Generate exactnewStandardmanifest andlinknewGUI; retain existing historicaladmission aspolicyrequires.",
+    "qualification": [
+      "Currentlinkedcache/CRC/FAT/snapshot/epoch/instruction/stack models",
+      "Completeworker/componentgeometry andembed/reloc equality againstauthenticatedrefs",
+      "ExplicitsharedSCIquarantinechangedlowreaderaudit",
+      "Currentpackageproducer/currentCconsumer andactualGUIrouteadmission",
+      "Separate consolebootstrap timing andsave/lifecycle observations"
+    ],
+    "existing_eightfile_packager_note": "Historical fixedeightfileperformancepackager includesoldSmashrebuild roles; final composition must preserve acceptedSmashbytes andcurrentother readers instead."
+  },
+  "limits": [
+    "No replacement service stage was built by thisaudit. Parentbuildteam owns newbinaryqualification.",
+    "Actualoldmodulefunctionbytes were matched againstarchived linkedreports; archive lacks their currentstageELFs.",
+    "Genericcollectionallocationepoch/GINadoption cannot be copied to an ordinarygame without its source-backed lifecycle contract.",
+    "Nativepureproofcache policy cannot become a blanket liveCE/MMUcache policy."
+  ],
+  "current_source_dirty": false,
+  "audit_evidence_sha256": {
+    "active-source-inputs.json": "8d4ac586a910fdf58dde2250cb973aacd119daec1a671e98e478c55b5e22393f",
+    "worker-preprocessing.json": "eb0e0d17c58184b613dd6cd2c706059afbccc394fa2d920242204e38774a69ce",
+    "reader-preprocessing.json": "fb37787117a317894dc75b292096170aa9f0d922e49a89bdb0df0c01343240f4",
+    "complete-worker-and-legacy-preprocessing.json": "140016013daa712da3c36cbdbaacb09d707669bf8c11ffcf222237c1cb55b374",
+    "dbadd-raw-scopes.json": "813089b23f591a6bbcca1fcf2bc17d3ef55b013400cc066621a6b4e2f548830f"
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "schema": "kui.bootstrap.default-admission-preservation.v1",
+  "status": "PASS",
+  "promotion_receipt_sha256": "b36cb9880732afdd77b4148d2dd553443db1a17bd7952e29c9899053fb5d9178",
+  "all_four_promoted_files_equal_compiled_inputs": true,
+  "host_ASan_UBSan_fixtures": [
+    {
+      "fixture": "standard",
+      "default_header_enabled": false,
+      "header_path": "resources/updater-bindings/preserved-standard-manifest.h",
+      "header_sha256": "71002312859ce78867c00aea2e78605676ebe7ddbcc71e4125d28f5c3a32e2e2",
+      "output": "Standard build manifest: 9 checks passed; current cohort only, code immutable, valid profile mutable",
+      "modules": {
+        "build/bootstrap-service-delivery/staged/KUI/apps/games/retail-boot.kui": "5acdacfa6741157424d7b5aac2a1d099073a81df6d6f289c5e840c505bdd185e"
+      }
+    },
+    {
+      "fixture": "standard",
+      "default_header_enabled": true,
+      "header_path": "resources/updater-bindings/preserved-standard-manifest.h",
+      "header_sha256": "71002312859ce78867c00aea2e78605676ebe7ddbcc71e4125d28f5c3a32e2e2",
+      "output": "Standard build manifest: 1415 checks passed; current cohort only, code immutable, valid profile mutable",
+      "modules": {
+        "build/bootstrap-service-delivery/staged/KUI/apps/games/retail-boot.kui": "5acdacfa6741157424d7b5aac2a1d099073a81df6d6f289c5e840c505bdd185e"
+      }
+    },
+    {
+      "fixture": "native-cdda",
+      "default_header_enabled": false,
+      "header_path": "resources/updater-bindings/native-cdda-manifest.h",
+      "header_sha256": "468f9ec659cb2e79d98edd0a22d62fa4bbb495b9ddb9ef55299db4a0d5336d53",
+      "output": "PASS exact native CDDA cohort: all three aliases, gate-off, cross-profile, modified code/build/geometry/descriptor refusal",
+      "modules": {
+        "build/bootstrap-service-delivery/staged/KUI/apps/games/cdda-native-toy-raw.kui": "1a85ccce63e5d6e15db57e3586afc066bb47983cb24710ac6eb22550cfb8f8e7",
+        "build/bootstrap-service-delivery/staged/KUI/apps/games/cdda-native-toy-cooked.kui": "5304a2fdd5864e5ee71924b0aee71bafa839f94f98044eb71e2e1149ecbed837",
+        "build/bootstrap-service-delivery/staged/KUI/apps/games/cdda-native-mdk2.kui": "777b298f67ce1bc398913c827d6c729be339e70d86ade3640ea588a60db1edec"
+      }
+    },
+    {
+      "fixture": "native-cdda",
+      "default_header_enabled": true,
+      "header_path": "resources/updater-bindings/native-cdda-manifest.h",
+      "header_sha256": "468f9ec659cb2e79d98edd0a22d62fa4bbb495b9ddb9ef55299db4a0d5336d53",
+      "output": "PASS exact native CDDA cohort: all three aliases, gate-off, cross-profile, modified code/build/geometry/descriptor refusal",
+      "modules": {
+        "build/bootstrap-service-delivery/staged/KUI/apps/games/cdda-native-toy-raw.kui": "1a85ccce63e5d6e15db57e3586afc066bb47983cb24710ac6eb22550cfb8f8e7",
+        "build/bootstrap-service-delivery/staged/KUI/apps/games/cdda-native-toy-cooked.kui": "5304a2fdd5864e5ee71924b0aee71bafa839f94f98044eb71e2e1149ecbed837",
+        "build/bootstrap-service-delivery/staged/KUI/apps/games/cdda-native-mdk2.kui": "777b298f67ce1bc398913c827d6c729be339e70d86ade3640ea588a60db1edec"
+      }
+    }
+  ],
+  "default_make_dry_run": {
+    "log": "build/bootstrap-audit/default-binding-make-dry-run.log",
+    "sha256": "b32fc3fc891d0229ff2f52b31db0c1ba90c5158723a4901881ceb3465ef1bdfd",
+    "actual_default_resource_paths": true
+  },
+  "reader_GUI_binaries_rebuilt": false,
+  "source_edited": false,
+  "source_sha256": {
+    "Makefile.dc": "5fa8c867160ee4f4a9c8934b85c0ac52a92ede7aea7df72ea2eca5758c603e59",
+    "tests/test_native_standard_manifest.c": "70d40a844253aeab43f8c6c5320fc3f6af2b8b186ede49524e82bd6b1c90b835",
+    "src/core/native_vmu_standard.c": "41911c74bbea62c23f974d7c5ddb77c3811317803768f6ed091a08dd73986ddd",
+    "src/core/vmu_game_card.c": "a7409858eb0eec2f6243a68d759b8fb5b7165a9aa2222d214f595e9a466d4ae7",
+    "src/core/vmu_persist_profile.c": "a0468429007a0a7024b2251766149555b492032c0a37b407db2c3fb78f483f89",
+    "src/core/runtime_image.c": "e2c25e03ada0ad5067d326817e0109da1665b7905de1e65d338056c222b3dd8a",
+    "src/core/retail_image.c": "632d19e0f78e474bed87249ad80a7a1b827c18cd98f07f9b9c21e81da1999986",
+    "src/core/hash.c": "1dda19d3dc6a645396d24484cd8842c72bba811dce38f317660a2eeda7dc0d67",
+    "src/core/data.c": "2899e0f28ea7af1dd8cc0dc72a4f9dfed32a33f2e21908505c70e050b43941a5",
+    "tests/test_native_cdda_manifest.c": "7aa60017169ce4c6a8a7c141383badf3488fb8f83fc267925ccabce3cb826d33",
+    "src/core/games_cdda_profile.h": "9278478d560c5b4144d5ba5f902902c8ffb124aaaac2ef7b1fa1fce095200104"
+  }
+}

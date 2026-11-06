@@ -1,0 +1,117 @@
+{
+  "schema": "kui.bootstrap-services.worker-preservation.v1",
+  "status": "PASS",
+  "source_commit": "7fca3e37f40557066116e88ab817e91ef7dd50d3",
+  "source_dirty": false,
+  "reference_archive_sha256": "23c3a4387c44980682b643f62d732e60eb4037dc307822b7d8a75f0a009d94ed",
+  "roles": {
+    "standard": {
+      "status": "PASS",
+      "candidate": "build/bootstrap-standard-sci/native-worker.elf",
+      "reference": "/workspace/scratch/bf5994e80308/bootstrap-archive/extracted/evidence/reference-945/standard/native-worker.elf",
+      "proof": {
+        "reference_elf_sha256": "f10f77786cd8a7563a826b543cc6100f37154a09fe8c7a4f236f7d0a720ca436",
+        "candidate_elf_sha256": "d81b8efd84431ed25314afc4bd9af06bc79bd418fccd27077c697d4149c22049",
+        "normalized_initialized_load_sha256": "fa5574bafeb6d113f08ba7365dd6b126be19179ff4a93d909c2ab2021f83aafa",
+        "complete_initialized_bytes_headers_and_symbol_ownership_identical": true,
+        "permitted_display_build_label_addresses": [
+          "0x8c10bae2"
+        ],
+        "permitted_display_build_label_bytes": 12
+      }
+    },
+    "background_a2": {
+      "status": "PASS",
+      "candidate": "build/bootstrap-background-a2/native-worker.elf",
+      "reference": "/workspace/scratch/bf5994e80308/bootstrap-archive/extracted/evidence/reference-compact-a2/native-worker.elf",
+      "proof": {
+        "reference_commit": "3a6ae064bb3f456da8d71587a8db0ce974f139cf",
+        "reference_source_tree": "c931fc2b2152d3d8428d65edaef6828384774faf",
+        "reference_build": {
+          "compiler": "sh-elf-gcc 15.2.0",
+          "makefile": "Makefile.vmu-native-background-compact",
+          "target": "native-worker.elf",
+          "additional_compiler_flags": []
+        },
+        "historical_compact_profile_main_commit": "0045dd96937ee7485ecd4fe0432b28babea8646a",
+        "main_worker_byte_equivalence_claimed": false,
+        "reference_elf_sha256": "a4b44a6e126ac5a7ea6b228696e735a54bed2a2810b9f61d915a157ebf0faecf",
+        "candidate_elf_sha256": "d7ea9f9c661f06aa2ebf0f805e4edaab87e89f4f217ece64d9355dfd304a1ed1",
+        "normalized_initialized_load_sha256": "93ac4c5352682bdf5398ef9f6bfa78ba6c0d65be9a98723b3a7452912bb7cf30",
+        "complete_initialized_bytes_and_headers_identical": true,
+        "complete_symbol_source_type_ownership_identical": true,
+        "complete_allocated_and_BSS_geometry_identical": true,
+        "permitted_changes": {
+          "display_build_label_address": "0x8c10bece",
+          "display_build_label_bytes": 12,
+          "added_absolute_virtual_slot": 2
+        }
+      }
+    },
+    "background_a1": {
+      "status": "PASS",
+      "candidate": "build/bootstrap-background-a1/native-worker.elf",
+      "reference": "/workspace/scratch/bf5994e80308/bootstrap-archive/extracted/evidence/reference-compact-a1/native-worker.elf",
+      "proof": {
+        "reference_commit": "3a6ae064bb3f456da8d71587a8db0ce974f139cf",
+        "reference_source_tree": "c931fc2b2152d3d8428d65edaef6828384774faf",
+        "reference_build": {
+          "compiler": "sh-elf-gcc 15.2.0",
+          "makefile": "Makefile.vmu-native-background-compact-a1",
+          "target": "native-worker.elf",
+          "additional_compiler_flags": []
+        },
+        "historical_compact_profile_main_commit": "0045dd96937ee7485ecd4fe0432b28babea8646a",
+        "main_worker_byte_equivalence_claimed": false,
+        "reference_elf_sha256": "888a880a3e2897d49626bde713c8fa862664734a7cb8553dfb3b8b6515451899",
+        "candidate_elf_sha256": "4cc655430dc591be1d6f18b343d22ff822e9a2d73ad55e6a44f723181c2b3f86",
+        "normalized_initialized_load_sha256": "eeb7282bd60edac67a35994784298c750c8b8f47eea8fcb06ca99f3f9f77d2d2",
+        "complete_initialized_bytes_and_headers_identical": true,
+        "complete_symbol_source_type_ownership_identical": true,
+        "complete_allocated_and_BSS_geometry_identical": true,
+        "permitted_changes": {
+          "display_build_label_address": "0x8c10bece",
+          "display_build_label_bytes": 12,
+          "added_absolute_virtual_slot": 1
+        }
+      }
+    },
+    "disc_a2": {
+      "status": "PASS",
+      "candidate": "build/bootstrap-disc-a2/native-worker.elf",
+      "reference": "/workspace/scratch/bf5994e80308/bootstrap-archive/extracted/evidence/reference-945/disc_a2/native-worker.elf",
+      "proof": {
+        "reference_elf_sha256": "1806a27362c4081386fcb1043f5aeeb0eb72245ded28ab5ca87d813fbd63115c",
+        "candidate_elf_sha256": "d8eedf0f71a4b2bd0b3b1d8bca50bd22fbea5e0cf848d642beb43ea3ea271e43",
+        "normalized_initialized_load_sha256": "6ffa5793a2ac6e3ec5b666010200d2e8bfe66f96cae13ad0083e7cf4694dab70",
+        "complete_initialized_bytes_headers_and_symbol_ownership_identical": true,
+        "permitted_display_build_label_addresses": [
+          "0x8c10bb62"
+        ],
+        "permitted_display_build_label_bytes": 12
+      }
+    },
+    "disc_a1": {
+      "status": "PASS",
+      "candidate": "build/bootstrap-disc-a1/native-worker.elf",
+      "reference": "/workspace/scratch/bf5994e80308/bootstrap-archive/extracted/evidence/reference-945/disc_a1/native-worker.elf",
+      "proof": {
+        "reference_elf_sha256": "d3267d438951477e16ad7487f10d5686448fad52a751b1335805d3fc776f5433",
+        "candidate_elf_sha256": "4271f10890c79efb9e82efdacf63d6788592a5506591360f0c3541487f509cb3",
+        "normalized_initialized_load_sha256": "62f8e2248990f65281a15f2b166c742414c06c02597691c6f480295cfec435f6",
+        "complete_initialized_bytes_headers_and_symbol_ownership_identical": true,
+        "permitted_display_build_label_addresses": [
+          "0x8c10bb62"
+        ],
+        "permitted_display_build_label_bytes": 12
+      }
+    }
+  },
+  "source_tree": "4aa414180692187a036187f3720858dd4dd89c27",
+  "source_sha256": {
+    "tools/check_native_compact_delivery.py": "f288a09ce5adf617c80fa2ccaf00fb4df762914ab7aec115f6549a67fddb97a6",
+    "tools/check_vmu_native_worker_gateway.py": "5980f8d1a959126f68c36a380db19dd24d586ddc07217e3f1c55e89db7f95e50"
+  },
+  "scope": "All five live native worker bodies only; stage/resident/support embedding, full profile geometry and changed cold work require separate qualification.",
+  "SCIF_worker_preservation_claimed": false
+}

@@ -1,0 +1,36 @@
+{
+  "standard_low": {
+    "status": "RUNTIME_BYTES_IDENTICAL_DEBUG_METADATA_DIFFERS",
+    "error": "Component source/type/symbol ownership changed",
+    "candidate_sha256": "ea139f097647f0fc8adbc73814bde76ac010ee85b5d6e9b6ef841af62ecd8ff5",
+    "reference_sha256": "8c4ae19a836f203cfe039b571f522e9d13fb65215c72e52c5e05560b75397f22",
+    "runtime_initialized_loads_headers_identical": true,
+    "allocated_sections_and_BSS_identical": true,
+    "all_allocated_functional_symbol_ownership_identical": true,
+    "strict_checker_refusal_explained": "Only zero-size .LM source-line labels and source-fingerprint/debug symbols outside allocated sections differ; strict historical symbol-record comparator remains unchanged and its refusal is retained.",
+    "metadata_difference_records": 1018,
+    "normalized_initialized_load_sha256": "0815e0cbeae0dab05fcec24791d51fe8539a34d39887ad079231b55f93d5352d"
+  },
+  "disc_a2_support": {
+    "status": "PASS_UNCHANGED",
+    "proof": {
+      "reference_elf_sha256": "e9834eaaddf2da0467dfbbfc7e7af5a3b9534cb47f727b74d0f5336d91d26a37",
+      "candidate_elf_sha256": "b5ee083f0b4105376d784cda03412ef1e56c5fd62435f445a8898cb70debbb5e",
+      "normalized_initialized_load_sha256": "b65046eeb74707807ca5074974963c91aa57a7f9bd8bfc4cf1e517412a9bcc84",
+      "complete_initialized_bytes_headers_and_symbol_ownership_identical": true,
+      "permitted_display_build_label_addresses": [],
+      "permitted_display_build_label_bytes": 0
+    }
+  },
+  "disc_a1_support": {
+    "status": "PASS_UNCHANGED",
+    "proof": {
+      "reference_elf_sha256": "e9834eaaddf2da0467dfbbfc7e7af5a3b9534cb47f727b74d0f5336d91d26a37",
+      "candidate_elf_sha256": "b5ee083f0b4105376d784cda03412ef1e56c5fd62435f445a8898cb70debbb5e",
+      "normalized_initialized_load_sha256": "b65046eeb74707807ca5074974963c91aa57a7f9bd8bfc4cf1e517412a9bcc84",
+      "complete_initialized_bytes_headers_and_symbol_ownership_identical": true,
+      "permitted_display_build_label_addresses": [],
+      "permitted_display_build_label_bytes": 0
+    }
+  }
+}

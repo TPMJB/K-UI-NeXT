@@ -1,37 +1,37 @@
 {
   "schema": "kui.native.standard-build-manifest.v1",
-  "source_commit": "dbadd024e2ff2b61f0052ead008b6a4a987d41f7",
+  "source_commit": "7fca3e37f40557066116e88ab817e91ef7dd50d3",
   "source_dirty": false,
-  "build": "dbadd024e2ff",
+  "build": "7fca3e37f405",
   "profile": "paced-SCI-VMU-lite-A2",
-  "payload_bytes": 233900,
-  "memory_bytes": 233900,
-  "profile_payload_offset": 114848,
-  "normalized_payload_sha256": "daefe0b98f7a328d84f26e95bb7028f40d8538b492f61ce2f34038d2cdc9418e",
-  "module_sha256": "d8eb11d3047c26a626beed43b0d403a65cb7b748f36434dff636c9e0a75f5b6d",
-  "module_bytes": 233964,
+  "payload_bytes": 237260,
+  "memory_bytes": 237260,
+  "profile_payload_offset": 118208,
+  "normalized_payload_sha256": "c3105081067573bb4d3d6dc421e69b7a8d6748d21c1888a2bad9d50a24618b45",
+  "module_sha256": "5acdacfa6741157424d7b5aac2a1d099073a81df6d6f289c5e840c505bdd185e",
+  "module_bytes": 237324,
   "profile_bytes": 4096,
   "provenance": {
-    "commit": "dbadd024e2ff2b61f0052ead008b6a4a987d41f7",
+    "commit": "7fca3e37f40557066116e88ab817e91ef7dd50d3",
     "source_dirty": false,
-    "compile_provenance_sha256": "34d959012988fcf94aba5342b3c11398795e8ef809a226f76708448b2c447add",
-    "elf_sha256": "78d9409d8c797e9cf5605c824fa327bbf92ddbbf73aef5a15ef14fc6f736d9ef"
+    "compile_provenance_sha256": "486f259cf6aee476329eeb5d1241dc3277d681fdb05482574585d6d24105ff83",
+    "elf_sha256": "33be15ab5815e1bbba58c36ebdb8ed62c5eb82a7d5aa51b41e42c1521a2fa953"
   },
   "launch_mutable_spans": [
     [
-      114848,
+      118208,
       4096
     ]
   ],
   "build_labels_normalized": false,
   "unknown_installed_modules_refused": true,
   "artifacts_sha256": {
-    "entry.elf": "78d9409d8c797e9cf5605c824fa327bbf92ddbbf73aef5a15ef14fc6f736d9ef",
-    "stage.elf": "7e41d257e58c9681a450be13c18ecb13e9e68928dbdae3e0c70d9ea2e519388e",
-    "native-worker.elf": "0288ee54c9516972f2e4a8107c30c450ec3c58900bd2377d8c38725be6b32f1f",
-    "resident-sci.elf": "c91c2fee13c6f25198669b45006c10b1d666f8ba71f9ce38e4d902d723d04b53",
-    "retail-native-vmu-lite-paced.kui": "d8eb11d3047c26a626beed43b0d403a65cb7b748f36434dff636c9e0a75f5b6d"
+    "entry.elf": "33be15ab5815e1bbba58c36ebdb8ed62c5eb82a7d5aa51b41e42c1521a2fa953",
+    "stage.elf": "d6919f5132d814cb7ebebb49ec693c07201852d9384d5c4dbb8ade6a1b35cb97",
+    "native-worker.elf": "d81b8efd84431ed25314afc4bd9af06bc79bd418fccd27077c697d4149c22049",
+    "resident-sci.elf": "ea139f097647f0fc8adbc73814bde76ac010ee85b5d6e9b6ef841af62ecd8ff5",
+    "retail-native-vmu-lite-paced.kui": "5acdacfa6741157424d7b5aac2a1d099073a81df6d6f289c5e840c505bdd185e"
   },
   "full_linked_family_audit_required_for_delivery": true,
-  "header_sha256": "9f74bad8ba9937d41b18acab59df23d8e872f9b43648b504c893b398d8c9de00"
+  "header_sha256": "71002312859ce78867c00aea2e78605676ebe7ddbcc71e4125d28f5c3a32e2e2"
 }

@@ -13,6 +13,13 @@ preservation requirements and unresolved integration work. A newer commit or a
 successful build does not establish that the selected configuration preserves
 accepted behavior.
 
+The current bootstrap test and its five native service cohorts are recorded
+in `docs/shared-native-bootstrap-rollout.md`. Default Standard/native-CDDA
+bindings are exact copies of its qualified GUI inputs. Preserve them in later
+GUI builds for this installation. An explicitly older-cohort GUI must select
+its saved manifest or supply the matching new services; do not silently pair
+a new GUI allowlist with an inherited incompatible Standard module.
+
 Before compiling, identify the accepted source/configuration, the intended
 behavior change, affected module roles, and the decision a new test answers.
 Check actual GUI selection and module presence/absence. Preserve accepted
