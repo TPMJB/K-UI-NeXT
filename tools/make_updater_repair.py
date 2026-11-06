@@ -192,12 +192,17 @@ def build_repair(stage, output, *, kup_output=None, channel="testing"):
         entries["updater-repair.json"] = (json.dumps(evidence, indent=2) + "\n").encode()
         entries["START-HERE.txt"] = (
             "K-UI CURRENT UPDATER BOOTSTRAP\n\n"
+            "Prefer normal KUP installation when your updater works. This manual fallback\n"
+            "includes the current updater and the same test software as the supplied KUP.\n\n"
             "Power off and copy this ZIP's KUI folder to the SD card root. Merge folders\n"
             "and replace the supplied files, including both KUI/system activation files.\n"
             "The copied boot.kui and runtime.kui are identical current-engine GUIs.\n"
             "Both activation records select this copied ROOT software so an older bank\n"
             "cannot immediately replace it with its obsolete updater.\n\n"
             "Existing bank folders, cards, saves, preferences and games remain in place.\n"
+            "Selecting ROOT makes bank-only software inactive and clears the previous\n"
+            "selection. Updates installed only in a bank may need reinstalling; this\n"
+            "fallback does not preserve automatic rollback to that selection.\n\n"
             "Only the declared immutable software and generated boot/selection controls\n"
             "are supplied. Reader/module/helper bytes are copied exactly, never rebuilt\n"
             "or retagged. The GUI's declared build is " + gui_info["build"] + ".\n\n"
