@@ -17,18 +17,24 @@ import zlib
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / "tests"), str(ROOT / "tools")]
 from check_vmu_native_worker_gateway import read_elf
+from test_smash_ce_return_ram_clear import audit_leaf as ram_clear_audit
 from test_smash_menu_loader_runtime import RuntimeCPU, FIRMWARE, FIRMWARE_ADDRESSES,session_flow,card_receipt as forward_card_receipt,phase_video_seed
 
 RESET, ENTRY, TARGET = 0x8c0117f0, 0xac008300, 0xac010000
 RAW, RETIRE, STOP, CALLER = 0xac008100, 0x8c300000, 0xac007000, 0x8c003000
 CONTEXT, IP, CCR = 0x8c19ee60, 0x8c0080f0, 0xff00001c
-TAGS = {0xf4000008 + 32*i for i in range(512)}
+TAGS = {0xf4000000 + 32*i for i in range(512)}
 DMA = {0xffa0000c + 16*i for i in range(4)}
 G2_ENABLE = {0xa05f7800 + 32*i + 20 for i in range(4)}
 G2_ACTIVE = {0xa05f7800 + 32*i + 24 for i in range(4)}
 IRQ_MASKS = {0xa05f6910 + 16*bank + 4*kind for bank in range(3) for kind in range(3)}
 PVR_DIAGNOSTIC_READS = {0xa05f8044, 0xa05f805c, 0xa05f80d0, 0xa05f8050, 0xa05f8054}
 PVR_BORDER = 0xa05f8040
+NATIVE_CLEAR_SYMBOL = '_kui_smash_native_return_ram_clear'
+NATIVE_CLEAR_MARKER = '__kui_smash_native_return_ram_clear'
+NATIVE_POISON = 0xacfd0000
+NATIVE_POISON_BYTES = 0x10000
+_NATIVE_CLEAR_PROOFS = {}
 READ_REGS = TAGS | DMA | G2_ENABLE | G2_ACTIVE | PVR_DIAGNOSTIC_READS | {0xff000010, 0xa05f7418, 0xa05f6c14, 0xa05f6c18, 0xa05f6808, 0xa05f7c18, 0xa05f6820, 0xa0702c00}
 WRITE_REGS = TAGS | DMA | G2_ENABLE | IRQ_MASKS | {PVR_BORDER, 0xff000010, 0xa05f6c14, 0xa05f7c14, 0xa0702c00}
 
@@ -57,6 +63,27 @@ def capsule(session=False,video=False):
     return bytes(data)
 
 
+def native_ram_clear_flow(symbols):
+    marker = symbols.get(NATIVE_CLEAR_MARKER)
+    assert marker is None or marker == (1, 0, 0, 0xfff1), 'Bad native RAM-clear marker'
+    assert (NATIVE_CLEAR_SYMBOL in symbols) == (marker is not None), 'Partial native RAM-clear ABI'
+    return marker is not None
+
+
+def native_ram_clear_proof(image, segments, symbols):
+    if not native_ram_clear_flow(symbols):
+        return None
+    assert session_flow(symbols), 'Native RAM clear is collection-session only'
+    key = hashlib.sha256(image).hexdigest()
+    if key not in _NATIVE_CLEAR_PROOFS:
+        # audit_leaf needs the actual parsed segment/symbol views and full ELF
+        # bytes. It executes every linked store before any bulk substitution.
+        parsed = (image, None, segments, None, symbols)
+        _NATIVE_CLEAR_PROOFS[key] = ram_clear_audit(parsed,
+            symbol=NATIVE_CLEAR_SYMBOL, marker=NATIVE_CLEAR_MARKER)
+    return _NATIVE_CLEAR_PROOFS[key]
+
+
 class ReturnCPU(RuntimeCPU):
     def __init__(self, data, kind):
         self.hardware = {}
@@ -69,6 +96,11 @@ class ReturnCPU(RuntimeCPU):
         self.retired_success = False
         self.private_min_sp = 0xac00c000
         self.return_progress = []
+        self.native_ram_clear_entry = None
+        self.native_ram_clear_calls = 0
+        self.native_ram_clear_at = None
+        self.native_ram_clear_leaf = None
+        self.native_ram_clear_low_exact = False
 
     def read(self, address, count=4):
         physical = address & 0x1fffffff
@@ -91,7 +123,39 @@ class ReturnCPU(RuntimeCPU):
             return
         super().write(address, value, count)
 
+    def native_ram_clear(self):
+        # The complete loop is independently executed once per ELF. This
+        # containing proof applies only its verified bulk RAM effect here.
+        assert self.native_ram_clear_leaf and self.native_ram_clear_leaf['status'] == 'PASS'
+        assert self.native_ram_clear_calls == 0 and not self.raw_calls
+        assert self.retired_success and len(self.original_helpers) == 3
+        assert self.original_ccr == 0 and not self.hardware.get(0xff000010, 0) & 1
+        assert self.pc == self.native_ram_clear_entry and 0xac008300 <= self.pc < 0xac00b800
+        assert 0xac00b800 <= self.r[15] < 0xac00c000 and self.sr & 0x100000f0 == 0x100000f0
+        assert {0xa05f7c18, 0xa05f6820, 0xa05f6808} <= set(self.mmio_reads)
+        assert all((address, 0) in self.hardware_writes for address in G2_ENABLE | IRQ_MASKS)
+        assert (0xa05f6c14, 0) in self.hardware_writes and (0xa05f7c14, 0) in self.hardware_writes
+        assert all(any(a == address and not value & 1 for a, value in self.hardware_writes)
+                   for address in DMA)
+        low = self.block(0xac000000, 0x10000)
+        self.store_block(TARGET, bytes(0xff0000))
+        assert self.block(0xac000000, 0x10000) == low
+        self.native_ram_clear_low_exact = True
+        self.native_ram_clear_at = self.instructions
+        self.native_ram_clear_calls += 1
+        self.r[:3] = [0xad000000, 0xad000000, 0]
+        self.flag(True)
+        self.pc = self.pr
+
+    def check_native_clear_before_read(self):
+        if self.native_ram_clear_entry is not None:
+            assert self.native_ram_clear_calls == 1 and self.native_ram_clear_at is not None
+            assert not any(self.block(NATIVE_POISON, NATIVE_POISON_BYTES)), 'FD-window old-game poison survived'
+            if not self.raw_calls:
+                assert not any(self.block(TARGET, 0xff0000)), 'Old RAM survived before the first raw read'
+
     def raw_read(self):
+        self.check_native_clear_before_read()
         lba, destination, blocks = self.r[4:7]
         assert 1 <= blocks <= 4096
         self.raw_calls.append((lba, destination, blocks))
@@ -110,6 +174,9 @@ class ReturnCPU(RuntimeCPU):
             super().plain(op, pc)
 
     def step(self):
+        if self.native_ram_clear_entry is not None and self.pc == self.native_ram_clear_entry:
+            self.native_ram_clear()
+            return
         sp = self.r[15] & 0x1fffffff
         if 0x0c00b800 <= sp < 0x0c00c000:
             self.private_min_sp = min(self.private_min_sp, sp | 0xa0000000)
@@ -126,7 +193,14 @@ def prepare(image, segments, symbols, mde, kind):
     actual = bytearray(expected)
     if kind == "bad_capsule_crc":
         actual[1700] ^= 1
+    proof = native_ram_clear_proof(image, segments, symbols)
     cpu = ReturnCPU(bytes(actual), kind)
+    if proof is not None:
+        cpu.native_ram_clear_entry = symbols[NATIVE_CLEAR_SYMBOL][0]
+        cpu.native_ram_clear_leaf = proof
+    # Authored stale state in the unretired original GIN/upper-RAM window.
+    # Current clear must remove it; the actual075e control must retain it.
+    cpu.store_block(NATIVE_POISON, bytes([0xa5]) * NATIVE_POISON_BYTES)
     cpu.store_block(0x8c010000, mde)
     for segment in segments:
         if segment[0] == 1:
@@ -218,6 +292,7 @@ def exercise(image, segments, symbols, mde, kind,return_cpu=False):
             assert (cpu.sr, cpu.gbr, cpu.vbr, cpu.r[15]) == (before[1], before[5], before[6], before[0][15]-84)
             assert cpu.block(0x8c010000, len(mde)) == owner and cpu.block(IP, 16) == old_ip
             assert not cpu.original_helpers and not cpu.raw_calls and not cpu.hardware_writes and not cpu.cache_writes
+            assert cpu.native_ram_clear_calls == 0
             if kind == 'busy_irq_progress':
                 cpu.irq_progress = True
         if cpu.pc in helpers:
@@ -263,6 +338,18 @@ def exercise(image, segments, symbols, mde, kind,return_cpu=False):
     result.update(private_min_sp=hex(cpu.private_min_sp),
                   observed_private_stack_bytes=0xac00c000-cpu.private_min_sp,
                   private_stack_guard_unchanged=True)
+    result.update(native_ram_clear_calls=cpu.native_ram_clear_calls,
+                  native_ram_clear_before_raw=bool(cpu.native_ram_clear_calls and cpu.raw_calls),
+                  native_ram_clear_low64KiB_exact=cpu.native_ram_clear_low_exact,
+                  old_FD_window_retained=cpu.block(NATIVE_POISON, NATIVE_POISON_BYTES) == bytes([0xa5]) * NATIVE_POISON_BYTES)
+    if native_ram_clear_flow(symbols):
+        expected_clear = kind in ('sf_return', 'psii_return', 'sf_return_again',
+                                 'busy_irq_progress', 'bad_capsule_crc', 'bad_video_slot')
+        assert cpu.native_ram_clear_calls == int(expected_clear), 'Clear crossed terminal/refusal boundary'
+        if expected_clear:
+            assert cpu.native_ram_clear_low_exact and not result['old_FD_window_retained']
+        else:
+            assert result['old_FD_window_retained'], 'Pre-terminal refusal cleared old game RAM'
     firmware = [cpu.read(address) for address in FIRMWARE_ADDRESSES]
     if kind in ("sf_return", "psii_return", "sf_return_again", "busy_irq_progress"):
         assert cpu.pc == TARGET and not reason
@@ -346,12 +433,15 @@ def main():
               "bad_return_seed", "changed_retire_pointer", "changed_stop_pointer"]
     if phase_video_flow(symbols):kinds += ['changed_phase_video','malformed_phase_video','old_video_runtime_abi','bad_video_slot']
     cases = [exercise(image, segments, symbols, mde, kind) for kind in kinds]
+    leaf = native_ram_clear_proof(image, segments, symbols)
     report = dict(schema="kui.smash-menu.return-runtime.v1", passed=True,
+                  linked_native_ram_clear=leaf,
                   elf_sha256=hashlib.sha256(image).hexdigest(), original_mde_sha256=hashlib.sha256(mde).hexdigest(),
                   source_reset_entry=hex(RESET), cases=cases,
                   limits=["The production worker retirement gateway and raw SD hardware are substituted by explicit return values and a four-block fixture; separate production worker/raw tests establish those bodies.",
                           "The timeout fixture starts the private retry counter at 4095 and checks its final increment/refusal; it does not execute 4096 complete C passes.",
                           "Observed private-stack usage includes actual return C and original parser/setter helpers; substituted raw-reader and worker-gateway stack closure comes from their separate linked audits.",
+                          "The verified native RAM-clear leaf bulk effect is applied once after its separate complete linked-store proof; the containing run proves call order, not physical RAM/bus timing.",
                           "DMA and cache MMIO execute against idle register models; cache timing, register banking and actual downstream menu/game/VMU execution remain hardware checks."])
     rendered = json.dumps(report, indent=2) + "\n"
     if args.report:

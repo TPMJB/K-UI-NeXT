@@ -104,6 +104,17 @@ static void success(void) {
     CHECK(kui_vc2_ce_vmu_loan_end(true)==0);
     CHECK(loan.claims==2u && loan.releases==2u);
 }
+static void idle_control_window(void) {
+    ready();
+    /* The real loan can overlap a driver's ordinary DRIVE/control call. */
+    struct kui_retail_gd *service=&low.region.shared.service;
+    service->token=0u;service->command=0u;service->status=KUI_GD_NOT_FOUND;
+    service->completed_bytes=0u;service->outputs[0]=0u;
+    CHECK(!service->pending && !service->executing);
+    CHECK(kui_vc2_ce_vmu_loan_begin(&copied)==0);
+    CHECK(*ACTIVE==2u && loan.state==LOAN_WRITER);
+    CHECK(kui_vc2_ce_vmu_loan_end(true)==0 && *ACTIVE==0u);
+}
 static void busy_state(unsigned index) {
     ready();
     switch(index) {
@@ -243,7 +254,7 @@ static void output_bounds(void) {
     CHECK(loan.state==LOAN_IDLE && loan.magic==LOAN_MAGIC);
 }
 int main(void) {
-    success();for(unsigned i=0u;i<16u;++i)busy_state(i);
+    success();idle_control_window();for(unsigned i=0u;i<16u;++i)busy_state(i);
     contexts();binding();for(unsigned i=0u;i<13u;++i)unhealthy(i);
     restore_failures();cache_order();output_bounds();
     printf("VC2_FOREGROUND_LOAN_JSON {\"checks\":%u,\"busy_states\":16,"

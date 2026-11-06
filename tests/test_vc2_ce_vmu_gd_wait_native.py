@@ -31,7 +31,7 @@ LIMIT=1024
 
 
 class CPU(BaseCPU):
-    def __init__(self,code,*,function=0,sleeps=2,admitted=True,state=2,changed_state=None,seed=1):
+    def __init__(self,code,*,function=0,sleeps=2,admitted=True,state=2,changed_state=None,seed=1,caller_pr=None):
         super().__init__(seed,0x01cf0000,1)
         self.binary=code
         self.pc=ENTRY
@@ -40,7 +40,7 @@ class CPU(BaseCPU):
         self.r[8]=self.r[15]=FRAME;self.r[9]=3
         self.sr=0x400080f0
         self.incoming_sr=0x40008000
-        self.caller_pr=0x01cf1f52
+        self.caller_pr=caller_pr if caller_pr is not None else (0x01cf23ce if function==4 else 0x01cf1f52)
         self.initial_args=self.r[4:8].copy()
         self.initial_special=(self.gbr,self.mach,self.macl)
         self.initial_saved=self.r[8:15].copy()
@@ -92,7 +92,7 @@ class CPU(BaseCPU):
 
     def admit(self):
         assert self.sr&0xf0==0xf0
-        assert self.r[4:8]==[self.caller_pr,self.incoming_sr,self.initial_args[0],3]
+        assert self.r[4:8]==[self.caller_pr,self.incoming_sr,self.initial_args[0],3|(self.initial_args[3]<<8)]
         self.admit_calls.append(self.r[4:8].copy())
         self.homes();target=self.pr;self.clobber()
         self.r[0]=SLEEP if self.admitted else 0
@@ -117,6 +117,10 @@ class CPU(BaseCPU):
 
     def plain(self,word,pc):
         n=(word>>8)&15;m=(word>>4)&15
+        if word&0xf0ff==0x4001:
+            self.t(self.r[n]&1);self.r[n]>>=1;return
+        if word&0xf0ff==0x4018:
+            self.r[n]=(self.r[n]<<8)&MASK;return
         if word&0xf00f==0x200b:
             self.r[n]|=self.r[m];return
         if word&0xf00f==0x2008:
@@ -206,12 +210,36 @@ SECTIONS { . = 0xacfce000; .gate : { KEEP(*(.gd_wait.entry)) }
     def cpu(self,**kwargs):return CPU(self.code,**kwargs).run()
 
     def test_non_request_keeps_legacy_busy_without_push_or_callback(self):
-        for function in (1,2,7,0xffffffff):
+        for function in (1,2):
             cpu=self.cpu(function=function)
             self.assertEqual(cpu.stop,'legacy')
             self.assertEqual(cpu.r[15],FRAME)
             self.assertEqual(cpu.r[4:8],cpu.initial_args)
             self.assertFalse(cpu.writes or cpu.admit_calls or cpu.sleep_calls or cpu.polls)
+
+    def test_drive_query_waits_for_storage_loan_without_fabricating_error(self):
+        for sleeps in (1,2,8):
+            cpu=self.cpu(function=4,sleeps=sleeps)
+            self.assertEqual(cpu.stop,'retry')
+            self.assertEqual(len(cpu.sleep_calls),sleeps)
+            self.assertEqual(cpu.r[4:8],cpu.initial_args)
+            self.assertEqual(cpu.r[15],FRAME)
+            self.assertEqual((cpu.gbr,cpu.mach,cpu.macl),cpu.initial_special)
+            self.assertEqual(cpu.admit_calls,[[cpu.caller_pr,cpu.incoming_sr,cpu.initial_args[0],0x403]])
+
+    def test_all_source_control_calls_retry_with_original_arguments(self):
+        controls=((0x1522,3),(0x174e,7),(0x1788,6),(0x1846,8),(0x1924,13),
+                  (0x194a,11),(0x1978,12),(0x1bb0,6),(0x1be6,11),(0x1ee0,3),(0x23ce,4))
+        for site,function in controls:
+            for sleeps in (0,1,8):
+                cpu=self.cpu(function=function,caller_pr=0x01cf0000|site,
+                             sleeps=sleeps,state=2 if sleeps else 0)
+                self.assertEqual(cpu.stop,'retry')
+                self.assertEqual(len(cpu.sleep_calls),sleeps)
+                self.assertEqual(cpu.r[4:8],cpu.initial_args)
+                self.assertEqual(cpu.r[15],FRAME)
+                self.assertEqual((cpu.gbr,cpu.mach,cpu.macl),cpu.initial_special)
+                self.assertEqual(cpu.r[8:11],cpu.initial_saved[:3])
 
     def test_request_yields_on_existing_ce_frame_then_retries_raw_args(self):
         for sleeps in (1,2,8,31):
