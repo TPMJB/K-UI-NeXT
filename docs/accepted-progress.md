@@ -1,5 +1,29 @@
 # K-UI accepted progress
 
+## 91fa hardware rejection: repeated VC2 fails before its VMU message
+
+The owner tested the delivered91fa package and reported this exact sequence:
+`VC2 -> Menu -> Play -> return to main -> Sega Swirl -> Shining Force -> PS2 -> Vectorman -> VC2 -> VC2 loading screen -> Dead`.
+The first VC2 visit reached play and returned. The later visit froze after the
+bottom-right Loading message disappeared, before the visible VMU message.
+On a working run, that interval contains another approximately5–7 seconds of
+SD activity before the VMU message and opening credits. No new LED behavior,
+error code, framebuffer color or failing instruction was reported for the
+failed run. Do not infer those details.
+
+91fa is not accepted as a reliable VC2 fix. Its reproduced drive-status/VMU
+loan defect remains a valid software correction; this report does not establish
+that defect as the freeze cause. The latest failure is specifically before
+the visible VMU check, which does not prove virtual-card code is inactive.
+Trace the loading-to-VMU handoff and repeated-launch state against this exact
+sequence. Do not request another console run merely to recheck a speculative
+reset or a code path already excluded by actual compiled configuration.
+
+The separate audit's generic CE completion fixes do not alter this native
+foreground/MMU/PIO configuration. Shipping those alone would not constitute
+a new VC2 test. Preserve current workers, options/Save Game, graphics policy,
+loading improvements and working returns while obtaining new evidence.
+
 ## Broader audit follow-up; delivered91fa remains unchanged
 
 The owner requested a systematic shared loader/VMU review after the repeated
