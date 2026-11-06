@@ -1,5 +1,21 @@
 # K-UI accepted progress
 
+## Broader audit follow-up; delivered91fa remains unchanged
+
+The owner requested a systematic shared loader/VMU review after the repeated
+VC2 regressions. The delivered91fa package fixes the verified VC2 GD-control
+arbitration race and preserves its actual embedded/staged four-module quorum.
+It is still awaiting console confirmation; no later audit fix is in that ZIP.
+
+The separate audit source corrects stale GUI bundle-object selection, a shared
+CE removed-callback flag that blocks VMU loans, and a missing DMA-end wake on
+failure of an active CE transfer. Old-source controls reproduce all three;
+new regressions are part of the normal test targets. Native GD preprocessing,
+current workers and all collection gameplay/return code remain preserved.
+Affected installed CE cohorts have not been rebuilt by this audit. See the
+[findings, evidence and open gaps](shared-loader-audit-2026-11-06.md) before
+assembling another update or claiming these source fixes have rolled out.
+
 ## Current hardware failure: VC2 also fails as the first selection
 
 The owner now reports VC2 loading its VMU and then freezing on a cropped white

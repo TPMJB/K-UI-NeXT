@@ -901,6 +901,9 @@ void kui_retail_gd_stream_progress(struct kui_retail_gd *s, uint32_t total, uint
     if(error) s->error = error;
     else if(s->completed_bytes < s->request_bytes) return;
     s->status = s->error ? KUI_GD_FAILED : KUI_GD_COMPLETED;
+    /* A failed active piece releases the DMA thread as well as the request's
+     * interrupt thread. No further piece can produce its DMA-end wake. */
+    if(s->error && s->xfer_left) s->interrupts |= KUI_RETAIL_GD_IRQ_DMA_END;
     s->pending = 0; s->xfer_left = 0; s->diag.last_error = s->error;
     s->interrupts |= KUI_RETAIL_GD_IRQ_DRIVE;
 }
@@ -1120,6 +1123,11 @@ int32_t kui_retail_gd_dispatch(struct kui_retail_gd *s, uint32_t r4,
     case KUI_GD_PIO_CALLBACK: /* Function and its argument; 0 removes it. */
 #if KUI_NATIVE_GD_PIO_STREAM
         if(r4 && !guest(s,r4,2u,2u,0))break;
+#endif
+#if defined(KUI_RETAIL_CE) || KUI_NATIVE_GD_PIO_STREAM
+        /* Removing a registration also cancels its undelivered callback.
+         * Keeping a due flag with no callback can never be drained by EXEC
+         * and would permanently prevent an otherwise idle VMU loan. */
         if(!r4)s->callback_due=0;
 #endif
         s->pio_callback = r4; s->pio_argument = r5; result = 0;

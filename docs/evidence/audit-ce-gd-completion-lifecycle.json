@@ -1,0 +1,114 @@
+{
+  "schema": "kui.ce.gd-completion-lifecycle.v1",
+  "status": "PASS",
+  "baseline_ref": "91fa7cc6922b1e5274ac0e622fc9e9980763499c",
+  "source_sha256": {
+    "src/loader/retail_async.c": "e17b7517e5d442d01a3488ce0de322a10116c4c2c3332464d60ee237715fa4cf",
+    "src/loader/sci_stream.c": "b57e1efdc25e1af74922b5d65da6e9f0370f289129f26b0bcfac6b092961dc41",
+    "src/core/retail_cursor.c": "701ac44935b96320a0869b4f056f371a6b048d6a0ecacb10e40d0bee49be9a90",
+    "src/core/retail_image.c": "08b6e2db82bf77f91c2ad944235d3233e96eff59f711d782984a605e1018455c",
+    "src/core/retail_gd.c": "9424cee0631959b092091aa9d2aef5a66695d97544377bd1948577dec9ff8b3f",
+    "tests/test_ce_gd_completion_lifecycle.c": "8a2300bf8bf26f151e2d5adf1797e4567e45b69d5f9eee99847e8ebd6d321ec7",
+    "tests/test_retail_async_ce.c": "421e2e30a6b0b441062535c1bdd2bffeb5c1cfeade9789c04e9489e3db6b97c9",
+    "tests/sci_stream_model.h": "f09e95ab340a61e23f5c548eca90ab545c8643010d0cdce365bc525ec75c02c7"
+  },
+  "runs": {
+    "current": {
+      "callback-clear": {
+        "exit_code": 0,
+        "result": {
+          "case": "callback-clear",
+          "callback_due": 0,
+          "loan_result": 0
+        }
+      },
+      "dma-failure-active-piece": {
+        "exit_code": 0,
+        "result": {
+          "case": "dma-failure-active-piece",
+          "drive_wakes": 1,
+          "dma_end_wakes": 1,
+          "error": 1
+        }
+      },
+      "dma-failure-no-piece": {
+        "exit_code": 0,
+        "result": {
+          "case": "dma-failure-no-piece",
+          "drive_wakes": 1,
+          "dma_end_wakes": 0,
+          "error": 1
+        }
+      }
+    },
+    "baseline": {
+      "callback-clear": {
+        "exit_code": 1,
+        "result": {
+          "case": "callback-clear",
+          "callback_due": 1,
+          "loan_result": 1
+        }
+      },
+      "dma-failure-active-piece": {
+        "exit_code": 1,
+        "result": {
+          "case": "dma-failure-active-piece",
+          "drive_wakes": 1,
+          "dma_end_wakes": 0,
+          "error": 1
+        }
+      },
+      "dma-failure-no-piece": {
+        "exit_code": 0,
+        "result": {
+          "case": "dma-failure-no-piece",
+          "drive_wakes": 1,
+          "dma_end_wakes": 0,
+          "error": 1
+        }
+      }
+    }
+  },
+  "hardware_executed": false,
+  "limits": [
+    "SCI timing, CPU mappings, interrupt handoff and source card bytes use the existing authored fixture.",
+    "Production GD dispatch, read_part, stream error handling and VMU loan execute; no CE kernel or complete game executes."
+  ],
+  "baseline_core_sha256": "475de755ce2c8540dc271c6a5d1edaa2fcff67a7099795966c767a6cc2e50839",
+  "native_preservation": {
+    "native-sync": {
+      "preprocessed_identical": true,
+      "sha256": "4db709c81e6fdd53633bda8e8a1a56e50c0961ec5f9863c4e2711c8ac17c1b49",
+      "defines": []
+    },
+    "native-background": {
+      "preprocessed_identical": true,
+      "sha256": "e137d6450d348fadb5599a46e7cad72bde72f15b14459e884af2c2ac4833275d",
+      "defines": [
+        "KUI_RETAIL_GD_ASYNC=1"
+      ]
+    },
+    "native-session": {
+      "preprocessed_identical": true,
+      "sha256": "acb98bd0cd4ef361868a4b09b99f209b954445ae80a14617f29dd9fa50738ff8",
+      "defines": [
+        "KUI_RETAIL_GD_ASYNC=1",
+        "KUI_NATIVE_SESSION_CONTROLS=1"
+      ]
+    },
+    "native-mmu-stream": {
+      "preprocessed_identical": true,
+      "sha256": "ea5145c305a9c8378fbdf69520d21060a84b709900a0d630df34939440820992",
+      "defines": [
+        "KUI_RETAIL_GD_ASYNC=1",
+        "KUI_NATIVE_OCRAM_BOOTSTRAP=1",
+        "KUI_NATIVE_GD_LEGACY_STREAM=1",
+        "KUI_NATIVE_GD_MMU_BUFFERS=1",
+        "KUI_NATIVE_GD_DMA_STREAM=1",
+        "KUI_NATIVE_GD_PIO_STREAM=1",
+        "KUI_NATIVE_GD_VRAM_DMA=1"
+      ]
+    }
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "schema": "kui.shared-vmu.lifecycle-focused-audit.v1",
+  "source_commit": "91fa7cc6922b1e5274ac0e622fc9e9980763499c",
+  "source_clean": true,
+  "production_edits": false,
+  "new_confirmed_defects": [],
+  "checks": [
+    {
+      "route": "Native async VMU loan",
+      "sequence": "IMASK15 -> GD lock -> stop receiver -> release reader port -> owned provider transaction -> verify/release -> loan_end -> unlock",
+      "result": "No unmasked GD caller can observe the native temporary owner; VC2 control race does not generalize to this route."
+    },
+    {
+      "route": "Generic CE async VMU loan",
+      "sequence": "claim under saved-SR guard -> storage_deferred -> unlock for I/O -> accept real pending request tokens -> loan_end clears deferral and wakes driver",
+      "result": "Ordinary controls reach core dispatch; accepted new reads retain metadata without accessing SCI until loan ends."
+    },
+    {
+      "route": "Shared deferred mailbox",
+      "sequence": "immutable copied request -> PENDING -> RUNNING outside guard -> verified provider result -> DONE -> identical protocol retry consumes result",
+      "result": "BUSY promises no acquisition; changed jobs cannot discard completion; uncertain provider result or poison prevents success ACK and requires restart."
+    },
+    {
+      "route": "Native and CE save providers",
+      "sequence": "marker invalidate+sync -> payload+sync -> commit marker+sync -> base+sync -> exact readback -> port restore -> loan_end -> final protocol ACK",
+      "result": "No ACK before full durable result and verified release. Protocol RESET does not clear storage fault."
+    },
+    {
+      "route": "Collection Return",
+      "sequence": "refuse active protocol/worker/mailbox -> stop live Maple work -> retire owner -> terminal reload",
+      "result": "Native refuses protocol.active; CE additionally refuses commit_attempted and non-IDLE queue. No accepted save is silently discarded by terminal return."
+    },
+    {
+      "route": "CE read cache",
+      "sequence": "deferred worker only -> current owner/context -> per-block CRC on hit -> durable commit success invalidates tag",
+      "result": "Cached data cannot bypass provider quarantine or retain pre-commit block data after success."
+    }
+  ],
+  "execution": {
+    "deferred_focused": {
+      "status": "PASS",
+      "assertions": 14266,
+      "cases": [
+        "strict_abandoned_read",
+        "busy_error_and_uncertain_commit",
+        "owner_fault_latch"
+      ]
+    },
+    "ce_provider_focused": {
+      "status": "PASS",
+      "assertions": 8735,
+      "fresh_state_cases": [
+        "complete_path",
+        "unverified_port_release"
+      ]
+    },
+    "sanitizers": [
+      "address",
+      "undefined"
+    ],
+    "boundaries": "Existing independently authored SPI/SR/stack/loan models; production mailbox/protocol/provider/SD/store code. No hardware scheduler, analog SPI timing or console boot is modeled."
+  },
+  "existing_capability_gap": {
+    "description": "CE protocol endpoint deliberately excludes RESET/KILL; documented existing scope, not newly discovered regression. Native durable endpoint supports RESET without clearing fault.",
+    "documentation": "docs/armada-ce-vmu-write-integration.md"
+  },
+  "source_hashes": {
+    "src/core/vmu_deferred_io.c": "d429692a8ff660060e54fb8ba1197f4c255720091680cd0013998f6b68d290d2",
+    "src/core/vmu_emulation.c": "8926fa0ab66067f15507b9826708bb1fc89a02eacbff38a8c97bcb214aeaf29a",
+    "src/core/armada_ce_vmu_write.c": "d7bed33722c61ff357d61c18ab86985f054da70c31a006a267a1d9b247097b35",
+    "src/core/vmu_store.c": "c3a8cda8948153dcf0249e601818a10c4e5028dc018320e79f6db021cf9a004d",
+    "src/core/vmu_durable.c": "59ad7c67755b54abb80b4c301f7e35f1f0d3403ab871c6609fd81104e0d59cb0",
+    "src/core/vmu_persist_session.c": "89bb40972d6bf722e7890a608b526e84ea3a84070ce8f3430e9fb0a4f76c504a",
+    "src/loader/retail_async.c": "e17b7517e5d442d01a3488ce0de322a10116c4c2c3332464d60ee237715fa4cf",
+    "src/loader/vmu_native_background_resident.c": "18e50e8d732fe449ba75a2d2374cb5a4dfa11233be5a47b7f8aac2ebbb5e0c5e",
+    "src/loader/vmu_native_passive.c": "7a231211fbfe36c50ae62410a804f941c7af44e88b35819ab05cfb42d5506f85",
+    "src/loader/native_session_worker.inc": "8ae17c95484b8ad5e49591ff966b04ab769384b59e824dd2bf0b0b33a52cfaf8",
+    "src/loader/armada_ce_vmu_runtime.c": "b6cd8d37cd866f5e370d79f72b8325f8ca144f869ea8db068339bdde700dc135",
+    "src/loader/armada_ce_vmu_sd.c": "413b723523c9996b7555ef8b6a70bda8bdd656c32f07d14a9996dee46435b053",
+    "src/loader/vc2_ce_vmu_loan.c": "8c29e6d2e15dfc0055146ae380aa6b1153d831ef805c80492a7c44c2ed4b1bc5",
+    "src/loader/smash_ce_return_view.c": "eef4294deafde14e54a6cf935983799752e16bd17d1e7feba10312462e9199c1",
+    "tests/test_vc2_ce_vmu_read_cache.c": "bd27a7d3de21942e233ef43416d78027bbd86471994d4b796e950526cd4280d4"
+  },
+  "execution_hashes": {
+    "deferred-focused.c": "9753c7614c72095e715e51502d50d4ddf8eaf8fdd3e466dd5897d5e7705d1fc8",
+    "deferred-focused.log": "ac7e20e86fccfd398cca0400ff4b403bd2df4814716e7beea832cf54f0aa4d6d",
+    "ce-provider-focused.log": "1f54e3077a60f191b58e725bdc09631df1226817a90a10d083e297e72ab523c5",
+    "deferred-focused": "eea8c7ff215732330b344ad89d5b67a82be95b9d1e8cbcedce296d6f90c086a9",
+    "ce-provider-focused.c": "bbe62333b0c84b45fb0c9b6784a406c503e75c1d89c74cb97ab0b8db6cc83280",
+    "ce-provider-focused": "04f1343b0c450fc3a2b6b1b971930ca3867d28d7b00cbebb9bf2f6160a7679df"
+  },
+  "conclusion": "No second supported production defect found in this bounded lifecycle audit. Preserve91fa package unchanged; do not infer universal console compatibility from these checks."
+}
