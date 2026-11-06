@@ -91,7 +91,16 @@ replace them or change accepted worker geometry.
 
 ## Required delivery path
 
-Every NEW test/release update must use the current Main producer:
+Deliver manual-copy ZIPs by default for this owner. This is the standing rule
+for future sessions, not a one-off exception. Include the intended physical
+`KUI/` software tree and an exact changed/retained inventory. A GUI replacement
+must include identical `KUI/boot.kui` and `KUI/runtime.kui`. Exclude KUPs,
+activation records, banks and user data unless the owner explicitly requests
+that separate operation. Do not convert a ZIP request into updater repair.
+Use America/Chicago date/time with CST/CDT and the actual component build in
+new filenames; retain existing delivered filenames and hashes unchanged.
+
+Only when the owner explicitly requests KUP delivery, use the current Main producer:
 
     python3 tools/make_update.py staged/KUI test.kup
     python3 tools/make_update.py staged/KUI release.kup --full --channel stable
@@ -101,9 +110,9 @@ build-legacy command is only for engine bootstrap/migration fixtures. Never
 qualify a new delivery with a frozen old decoder or a Python-only verifier.
 The producer compiles the actual current C consumer and validates the exact
 output before publishing it. Keep its source fingerprint/report with evidence.
-Deliver the standalone .kup by default, unless the owner explicitly requests a
-manual-copy test ZIP as recorded in docs/accepted-progress.md. An optional KUP ZIP has exactly one .kup;
-source/evidence archives are separate from the install payload.
+An explicitly requested KUP ZIP has exactly one .kup. Source/evidence archives
+are separate from the install payload. The producer's KUP defaults do not
+override the owner's standing manual-copy ZIP delivery rule.
 
 Use the actual staged software inventory, not a compiled count/catalog.
 Changed .kui components retain their real embedded builds; do not retag them
@@ -111,10 +120,13 @@ or rebuild settled readers merely to obtain one cohort label. Raw helpers,
 release audio/assets and catalogues are typed and pinned by full SHA. Stage
 only intended software; never cards, saves, preferences, credentials or games.
 A GUI replacement must contain engine revision3 and matching
-reader admission. Reader-only tests preserve the effective GUI automatically.
+reader admission. A reader-only ZIP requires an identified matching running
+GUI and source route; do not assume a saved bank uses copied ROOT files.
 Do not disable game ABI/admission guards to force a package to run.
 
-## Update semantics
+## Explicit KUP operation semantics
+
+This section documents the retained updater, not the default delivery workflow.
 
 Partial updates retain the effective running software, including checked
 bank replacements and deliberate absence. They never revert omitted bank
@@ -131,8 +143,9 @@ the fixed root, preserving bank folders and user data. A root-only replacement
 does not update an already selected GUI's compiled updater implementation.
 Use the actual running fallback for partial overlays; stale saved selection must not
 prevent a valid root-based test. Preserve old banks and user files during
-engine setup; do not silently install optional workers. Future tests then use
-only .kup selection and Restart K-UI. Restart uses worker 126; update uses 120.
+engine setup; do not silently install optional workers. KUP selection and
+Restart K-UI apply only to an explicitly requested updater operation. Normal
+manual ZIP tests use cold direct ROOT boot. Restart uses worker 126; update uses 120.
 
 Read-only software open/stat wrappers are GUI-only. Writes and all user data
 bypass them; raw pinned reads are verified before use. Root setup/verification
@@ -157,11 +170,12 @@ root/inherited reads, never a pinned bank replacement. Run the actual
 update_work/production-filesystem flow and the real settings APIs when changing
 updater integration.
 
-For the one-time manual bootstrap use the current implementation:
+For an explicitly requested updater-engine bootstrap only, use:
 
     python3 tools/make_updater_repair.py staged/KUI repair.zip --kup-output test.kup
 
-It generates identical physical boot.kui/runtime.kui, ROOT selection records,
+This is not the normal manual-copy ZIP producer. It generates identical
+physical boot.kui/runtime.kui, ROOT selection records,
 and one embedded KUP identical to the standalone output. Historical repair,
 switch, add-on and test-bundle CLIs require --legacy-fixture and are not ordinary
 delivery tools.

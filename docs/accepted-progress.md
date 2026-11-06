@@ -1,5 +1,15 @@
 # K-UI accepted progress
 
+## Standing delivery rule — 2026-11-06
+
+The owner uses manual-copy ZIPs as the default delivery workflow. This persists
+across sessions and supersedes historical wording that treats ZIP delivery as
+a one-off exception or instructs future tests to use KUPs. KUP delivery or
+updater-engine repair requires a separate explicit request. A GUI ZIP includes
+both identical physical aliases; normal ZIP delivery excludes activation
+records, banks and user data. The current Games/boot implementation is unchanged
+by this documentation correction.
+
 ## Sega Smash Pack accepted: cc81e63ca4d2, 2026-11-06
 
 The owner accepts the collection integration as complete after this exact
@@ -764,8 +774,9 @@ components; this test does not replace Standard, Background, disc or CDDA reader
 CE helpers retain their exact canonical SHA256 and actual `ab1b145b33b4` component
 label. That unchanged helper is not an older replacement VMU worker.
 
-The owner requested a **manual ZIP**, superseding the usual KUP delivery for this
-test. It must contain identical current GUI bytes at `KUI/runtime.kui` and
+Historically the owner requested a **manual ZIP** for this test; the standing
+ZIP rule above now applies beyond that individual request. That historical
+package required identical GUI bytes at `KUI/runtime.kui` and
 `KUI/boot.kui`, BOTH valid ROOT activation slots, four matching Smash modules,
 and the two exact accepted prepared CE helpers. Keep banks and all user data.
 The GUI must embed those same four modules: an older embedded bundle can take
