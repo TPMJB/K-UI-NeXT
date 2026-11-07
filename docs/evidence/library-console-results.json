@@ -169,6 +169,15 @@
       "build": "",
       "source": "disc file listing, 7 Nov 2026",
       "known_blocker": "demo disc: its menu starts several separate game programs (native and Windows CE); the checks cover the menu only"
+    },
+    {
+      "product": "T1401N",
+      "title": "Soulcalibur",
+      "route": "",
+      "result": "",
+      "build": "",
+      "source": "owner, 7 Nov 2026",
+      "known_blocker": "incomplete dump (its data track ends before the boot file); set aside for now"
     }
   ]
 }

@@ -17,6 +17,7 @@ evidence, not console compatibility.
 import argparse
 from collections import Counter
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -43,7 +44,7 @@ NOTES = dict(sweep.GATE_NOTES, placement_384k='284 KiB lease does not fit',
              live_bind_384k='live layout bind refused',
              sdk_sci_family='no SDK SCI family (reader interrupt route)',
              loader='boot file is only a loader; its game program is requested (bundler v2.1)',
-             loader_program='boot file is only a loader; second-program check pending')
+             loader_program='boot file is only a loader; the stage binds the loader, not the program it starts')
 
 
 def product_key(product):
@@ -105,6 +106,27 @@ def cd_music(row, profile):
     return f'native profile ({name})' if name else 'no profile: CD music Off'
 
 
+def program_files(blob, row):
+    """The requested program files of a v2.1 game bundle, checked against its hashes."""
+    with zipfile.ZipFile(io.BytesIO(blob)) as archive:
+        infos = {info.filename: info for info in archive.infolist()}
+        if 'startup-info.json' not in infos:
+            raise sweep.SweepError(f"{row['slug']}: game ZIP has no startup-info.json")
+        report = json.loads(sweep.bounded_read(archive, infos['startup-info.json'], sweep.INFO_LIMIT,
+                                               'startup-info.json'))
+        hashes = {item.get('path'): item.get('sha256') for item in report.get('files', [])
+                  if isinstance(item, dict)}
+        result = {}
+        for name in row['requested_files']:
+            if name not in infos or name not in hashes:
+                raise sweep.SweepError(f"{row['slug']}: requested file {name} is missing")
+            data = sweep.bounded_read(archive, infos[name], sweep.BOOT_LIMIT, name)
+            if hashlib.sha256(data).hexdigest() != hashes[name]:
+                raise sweep.SweepError(f"{row['slug']}: {name} differs from its hash")
+            result[name] = data
+    return result
+
+
 def routes(gates, family, arena):
     """(Background X/Y with virtual VMU, without VMU, first blocker) as the launcher decides."""
     structural = bool(gates.get('structural_384k_models_passed'))
@@ -120,7 +142,7 @@ def routes(gates, family, arena):
 
 def build(parts, work, stage_end, console_path=CONSOLE):
     work.mkdir(parents=True, exist_ok=True)
-    rows, startups, kernels, runs = [], {}, {}, []
+    rows, startups, kernels, programs, runs = [], {}, {}, {}, []
     (work / 'startups').mkdir(exist_ok=True)
     for group in group_runs(parts):
         library, merged, blobs, missing = sweep.read_parts(group)
@@ -136,6 +158,15 @@ def build(parts, work, stage_end, console_path=CONSOLE):
                     path = work / 'startups' / (key[:16] + '.bin')
                     path.write_bytes(sweep.open_game(blobs[row['archive']], row))
                     startups[key] = path
+                if row.get('requested_files'):
+                    row['programs'] = []
+                    for name, data in program_files(blobs[row['archive']], row).items():
+                        digest = hashlib.sha256(data).hexdigest()
+                        if digest not in programs:
+                            path = work / 'startups' / ('program-' + digest[:16] + '.bin')
+                            path.write_bytes(data)
+                            programs[digest] = path
+                        row['programs'].append((name, digest))
             if row['status'] == 'bundled' and row.get('windows_ce'):
                 key = row['startup_key']
                 if key not in kernels:
@@ -144,27 +175,37 @@ def build(parts, work, stage_end, console_path=CONSOLE):
                     kernels[key] = path
             rows.append(row)
     gates, families, arenas = {}, {}, {}
-    if startups:
-        report = audit([(key[:16], path) for key, path in startups.items()], STAGE_BEGIN, stage_end,
+    checked = {**startups, **programs}
+    if checked:
+        report = audit([(key[:16], path) for key, path in checked.items()], STAGE_BEGIN, stage_end,
                        selected_layout=BACKGROUND_COMPACT)
         by_slug = {row['slug']: row for row in report['results']}
-        gates = {key: by_slug[key[:16]] for key in startups}
+        gates = {key: by_slug[key[:16]] for key in checked}
         families = {key: value.get('sdk_sci_family') == 1
-                    for key, value in sweep.sci_families(startups, work).items()}
-        arenas = arena_plans(startups, work)
+                    for key, value in sweep.sci_families(checked, work).items()}
+        arenas = arena_plans(checked, work)
     audio = audio_profiles({**startups, **kernels}, work) if startups or kernels else {}
     console = {product_key(game['product']): game
                for game in json.loads(Path(console_path).read_text())['games']}
     loaders = {product_key(item['product']) for item in json.loads(REQUESTS.read_text())['requests']}
     games, seen = [], {}
-    for row in rows:
+    # A later upload that adds a loader's program files supersedes the boot-only row.
+    with_programs = {row['boot_sha256']: row.get('slug') for row in rows if row.get('programs')}
+    # An image a later run read supersedes an earlier failure; repeated failures keep the last.
+    read_sources = {row['source'] for row in rows if row['status'] != 'error'}
+    last_error = {row['source']: index for index, row in enumerate(rows) if row['status'] == 'error'}
+    for index, row in enumerate(rows):
+        if row['status'] == 'error' and (row['source'] in read_sources or last_error[row['source']] != index):
+            continue
         out = {key: row[key] for key in ('source', 'status', 'title', 'product', 'version', 'region',
                                          'disc', 'boot_filename', 'boot_bytes', 'boot_sha256',
                                          'windows_ce', 'cdda_tracks', 'duplicate_of', 'error', 'format')
                if key in row}
         key = row.get('boot_sha256')
         if key in startups and row['status'] in ('bundled', 'already_sent') and not row.get('windows_ce'):
-            if key in seen:
+            if key in with_programs and not row.get('programs'):
+                out.update(status='duplicate', duplicate_of=with_programs[key])
+            elif key in seen:
                 out.update(status='duplicate', duplicate_of=seen[key])
             else:
                 seen[key] = row.get('slug') or row.get('title') or row['source']
@@ -182,9 +223,17 @@ def build(parts, work, stage_end, console_path=CONSOLE):
                 out['cd_music'] = cd_music(row, audio.get(key, {}))
                 if product_key(row.get('product')) in loaders:
                     # The gates above describe the loader, not the game program.
-                    out.update(background_vmu='not known', without_vmu='not known',
-                               blocker='loader_program' if row.get('requested_files') else 'loader',
+                    out.update(background_vmu='not established (loader)', without_vmu='not established (loader)',
+                               blocker='loader_program' if row.get('programs') else 'loader',
                                **{'class': 'loader'})
+                    out['programs'] = []
+                    for name, digest in row.get('programs', []):
+                        pg = gates[digest]
+                        vmu, new, refusal = routes(pg, families[digest], arenas[digest])
+                        out['programs'].append(dict(path=name, bytes=programs[digest].stat().st_size,
+                                                    sha256=digest, first_refusal=pg.get('first_refusal'),
+                                                    sdk_sci_family=families[digest], arena_plan=arenas[digest],
+                                                    background_vmu=vmu, without_vmu=new, blocker=refusal))
         elif row.get('windows_ce') and row.get('startup_key') in kernels:
             key = row['startup_key']
             if key in seen:
@@ -225,6 +274,17 @@ def cell(text):
     return str(text if text is not None else '').replace('|', '/')
 
 
+def blocker_text(g):
+    text = NOTES.get(g.get('blocker'), g.get('blocker') or '')
+    if g.get('programs'):
+        text += '. Its programs: ' + '; '.join(
+            f"{program['path'].rsplit('/', 1)[-1]} ({program['bytes'] // 1024:,} KiB) "
+            + (NOTES.get(program['blocker'], program['blocker']) if program['blocker'] else 'passes the Background gates')
+            + ('' if program['sdk_sci_family'] or program['blocker'] == 'sdk_sci_family' else ', no SDK SCI family')
+            for program in g['programs'])
+    return text
+
+
 def markdown(report):
     order = {'background_vmu': 0, 'new_only': 1, 'blocked': 2, 'loader': 3, 'windows_ce': 4}
     checked = sorted((g for g in report['games'] if g['class'] in order),
@@ -241,7 +301,7 @@ def markdown(report):
     for g in checked:
         console = g.get('console')
         lines.append(f"| {cell(g.get('title'))} | {cell(g.get('product'))} | {g['boot_bytes'] // 1024:,} | "
-                     f"{g['background_vmu']} | {g['without_vmu']} | {cell(NOTES.get(g.get('blocker'), g.get('blocker') or ''))} | "
+                     f"{g['background_vmu']} | {g['without_vmu']} | {cell(blocker_text(g))} | "
                      f"{cell(g.get('cd_music'))} | {cell(recorded(console))} |")
     rest, seen, cooked, other = [], set(), 0, 0
     checked_products = {product_key(g.get('product')) for g in checked}
@@ -264,9 +324,12 @@ def markdown(report):
         for g in rest:
             lines.append(f"| {cell(g.get('title') or Path(g['source']).name)} | {cell(product_key(g.get('product')))} | "
                          f"{cell(g['reason'])} | {cell(recorded(g.get('console')))} |")
+    if any(run['schema'] != sweep.SCHEMA for run in report['runs']):
+        cooked = 0  # a v2 run read the 2048-byte copies the v1 bundler could not
     if cooked or other:
-        lines += ['', f'Also listed: {cooked} 2048-byte GDI copies the v1 bundler could not read '
-                  f'(the v2 bundler reads them) and {other} files in other image formats.']
+        lines += ['', (f'Also listed: {cooked} 2048-byte GDI copies the v1 bundler could not read '
+                       '(the v2 bundler reads them) and ' if cooked else 'Also listed: ') +
+                  f'{other} files in other image formats.']
     return '\n'.join(lines) + '\n'
 
 

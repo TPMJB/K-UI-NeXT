@@ -10,7 +10,7 @@ import sys
 import tempfile
 import unittest
 
-from games_fixture import RAW, make_fixture
+from games_fixture import DATA, RAW, SESSION, make_fixture, record
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'tools')]
@@ -93,6 +93,41 @@ class TableTests(unittest.TestCase):
         self.assertIn('known limit: test limit', text)
         self.assertIn('| Beta Fixture | BETA-0001 |', text)
         self.assertNotIn('/', ''.join(g['title'] for g in checked))
+
+
+class LoaderTests(unittest.TestCase):
+    def test_program_files_supersede_a_boot_only_row(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)
+            games = folder / 'Games'
+            make_fixture(games / 'Kappa', title=b'Kappa Loader Fixture')
+            patch(games / 'Kappa', 0, 64, b'KAPPA-01  ')
+            used = sum(len(r) for r in (record(b'\0', SESSION + 20, DATA, True), record(b'\1', SESSION + 20, DATA, True),
+                                        record(b'1ST_READ.BIN;1', SESSION + 21, DATA * 2)))
+            patch(games / 'Kappa', 20, used, record(b'GAME.BIN;1', SESSION + 22, 2048))
+            requests = folder / 'requests.json'
+            requests.write_text(json.dumps({'requests': [{'product': 'KAPPA-01', 'paths': ['GAME.BIN']}]}))
+            first, second = folder / 'first', folder / 'second'
+            first.mkdir()
+            second.mkdir()
+            _, boot_only = library.build(games, first, 'Library-startup', 0, log=lambda line: None)
+            _, with_program = library.build(games, second, 'Library-startup', 0, log=lambda line: None,
+                                            requests_path=requests)
+            console = folder / 'console.json'
+            console.write_text(json.dumps({'games': []}))
+            saved = table.REQUESTS
+            table.REQUESTS = requests
+            try:
+                report = table.build(boot_only + with_program, folder / 'work', 0x8cebe748, console)
+            finally:
+                table.REQUESTS = saved
+        rows = [g for g in report['games'] if g.get('title') == 'Kappa Loader Fixture']
+        self.assertEqual([(g['status'], g['class']) for g in rows],
+                         [('duplicate', 'not_checked'), ('bundled', 'loader')])
+        loader = rows[1]
+        self.assertEqual(loader['background_vmu'], 'not established (loader)')
+        self.assertEqual([program['path'] for program in loader['programs']], ['GAME.BIN'])
+        self.assertIn('Its programs: GAME.BIN', table.blocker_text(loader))
 
 
 if __name__ == '__main__':

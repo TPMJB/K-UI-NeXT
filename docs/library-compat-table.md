@@ -24,9 +24,10 @@ and joins the console results already recorded in
 - Static gates are necessary, not sufficient. "Known limit" marks a blocker the
   roadmap or disc layout shows that the static model does not check.
 
-Generated 7 Nov 2026 from `Library-startup-01` (28 Oct 2026) and run
-`401cd6d5` (7 Nov 2026, bundler v2, 22 new startups), compact Background stage
-end `0x8cebe748`. The admission sources match Main `d393b859` and
+Generated 7 Nov 2026 from `Library-startup-01` (28 Oct 2026), run `401cd6d5`
+(bundler v2, 22 new startups) and run `2d6d4dcb` (bundler v2.1: Quake III and
+Test Drive Le Mans program files; Shenmue disc 1 and Skies of Arcadia disc 1
+now read), compact Background stage end `0x8cebe748`. The admission sources match Main `d393b859` and
 `codex/universal-loader-integration`.
 
 | Game | Product | Boot KiB | Background X/Y + virtual VMU | Without VMU | Blocker | CD music | Console (recorded) |
@@ -67,8 +68,8 @@ end `0x8cebe748`. The admission sources match Main `d393b859` and
 | SHENMUE | MK-51059 | 4,936 | refused | refused | Maple driver family not resolved | no profile: CD music Off |  |
 | SHENMUE2 EU | MK-5118450 | 3,121 | refused | refused | Maple driver family not resolved | no profile: CD music Off |  |
 | SOUL REAVER | T36802N | 3,374 | refused | refused | 284 KiB lease does not fit | no profile: CD music Off |  |
-| QUAKE III ARENA | MK-51061 | 96 | not known | not known | boot file is only a loader; its game program is requested (bundler v2.1) | no profile: CD music Off |  |
-| TEST DRIVE LE MANS | T15123N | 105 | not known | not known | boot file is only a loader; its game program is requested (bundler v2.1) | no profile: CD music Off |  |
+| QUAKE III ARENA | MK-51061 | 96 | not established (loader) | not established (loader) | boot file is only a loader; the stage binds the loader, not the program it starts. Its programs: Q3_USA.BIN (1,285 KiB) terminal exits not resolved; INTRO.BIN (346 KiB) terminal exits not resolved | no profile: CD music Off |  |
+| TEST DRIVE LE MANS | T15123N | 105 | not established (loader) | not established (loader) | boot file is only a loader; the stage binds the loader, not the program it starts. Its programs: LEMANS24.BIN (2,229 KiB) Maple layout not resolved; FMV.BIN (487 KiB) SDK heap family not resolved | no profile: CD music Off |  |
 | ARMADA | T40301N 00 | 1,224 | Windows CE reader | — |  | CE profile (Armada) | boots; intro movie playback is poor (under investigation) (Windows CE) |
 | BUST A MOVE 4 | T-8117N | 1,788 | Windows CE reader | — |  | CE profile (Bust-A-Move 4) |  |
 | NIGHTMARE CREATURES II | T9504M | 2,368 | Windows CE reader | — |  | no profile: CD music Off |  |
@@ -77,11 +78,9 @@ end `0x8cebe748`. The admission sources match Main `d393b859` and
 
 | Not checked yet | Product | Why | Console (recorded) |
 | --- | --- | --- | --- |
-| SHENMUE | MK-51059 | not read: Unsafe ISO filename |  |
-| SKIES OF ARCADIA DISC 1 | MK-51052 | not read: Unsafe ISO filename |  |
-| SOULCALIBUR | T1401N | not read: Startup extent leaves the data tracks |  |
+| SOULCALIBUR | T1401N | not read: Startup extent leaves the data tracks at LBA 547203 (tracks 0-300, 450-976 audio, 45000-171916) | known limit: incomplete dump (its data track ends before the boot file); set aside for now |
 
-Also listed: 36 2048-byte GDI copies the v1 bundler could not read (the v2 bundler reads them) and 89 files in other image formats.
+Also listed: 89 files in other image formats.
 
 ## What it says
 
@@ -109,13 +108,19 @@ Also listed: 36 2048-byte GDI copies the v1 bundler could not read (the v2 bundl
 - **CD music is the largest missing feature.** 12 native games and Nightmare
   Creatures II have CD-audio tracks and no CD-music profile, so they play with
   CD music Off (where the game uses CD audio at all).
-- **Loaders:** Quake III's and Test Drive Le Mans' boot files only load the
-  game program; bundler v2.1 requests `QUAKE3/Q3_USA.BIN`/`INTRO.BIN` and
-  `LEMANS24.BIN`/`FMV.BIN`.
-- **Not read:** Shenmue disc 1 and Skies of Arcadia disc 1 (an extractor
-  regression on unusual file names elsewhere on the disc, fixed in v2.1; Skies
-  disc 1 is already checked from the first upload) and Soulcalibur (its boot
-  extent leaves the image's data tracks; v2.1 reports the exact LBA).
+- **Loaders (Quake III, Test Drive Le Mans):** the boot file is a small Katana
+  program that loads the game program to the same address and jumps to it.
+  The stage binds hooks to the boot file only, so any Background or New
+  binding goes stale when the program replaces it; Standard is the safe route
+  until the stage rebinds on that load. Quake III's loader itself passes every
+  gate, so the launcher would currently admit it on Background. The programs:
+  `Q3_USA.BIN` and `INTRO.BIN` stop at terminal exits; `LEMANS24.BIN` at the
+  Maple layout and `FMV.BIN` at the heap family. All four have the SDK SCI
+  family. This is the same executable-loader lifetime that blocks Sonic
+  Adventure's shared VMU.
+- **Shenmue disc 1 and Skies of Arcadia disc 1** read with v2.1: Shenmue
+  disc 1 shares discs 2 and 3's startup, and Skies disc 1 its known one.
+  Soulcalibur is an incomplete dump and is set aside.
 
 ## Regenerate
 

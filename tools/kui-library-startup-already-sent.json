@@ -1,6 +1,6 @@
 {
   "schema": "kui.library-startup.already-sent.v1",
-  "note": "Startups already received (Library-startup-01, 28 Oct 2026; run 401cd6d5, 7 Nov 2026): native boot-file SHA256 values and Windows CE startup keys. Hashes only; no game bytes.",
+  "note": "Startups already received (Library-startup-01, 28 Oct 2026; runs 401cd6d5 and 2d6d4dcb, 7 Nov 2026): native boot-file SHA256 values and Windows CE startup keys. Hashes only; no game bytes.",
   "startups": [
     {
       "title": "ARMADA",
@@ -83,6 +83,10 @@
       "boot_sha256": "5c7506857fdea9062ae322dd20bb4691ca5bcee1e066e90029666eb5c994f088"
     },
     {
+      "title": "QUAKE III ARENA (with program files)",
+      "startup_key": "bceaf262d1b4cfa47e70031493035c578bfd521a79bf911363b7b76ade9423f3"
+    },
+    {
       "title": "RAYMAN 2 THE GREAT ESCAPE",
       "boot_sha256": "9e34357880d5fbbca1559ce8797baed66c6b4370e967b2af23f07cba9b3a7099"
     },
@@ -145,6 +149,10 @@
     {
       "title": "TEST DRIVE LE MANS",
       "boot_sha256": "955a20882f7669c0f17646d2b445d32f56440a4f6dcf82e02a0b4c8d594b8713"
+    },
+    {
+      "title": "TEST DRIVE LE MANS (with program files)",
+      "startup_key": "51c7cd42ba322100dd15b8e93c99783b1acf31bb783936be033548a21f09fdd1"
     },
     {
       "title": "THE HOUSE OF THE DEAD 2",
