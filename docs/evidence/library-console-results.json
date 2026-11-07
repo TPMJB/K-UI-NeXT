@@ -70,11 +70,10 @@
     {
       "product": "T15108N",
       "title": "Silver",
-      "route": "Standard, exact VMU adapter",
-      "result": "works with its exact Standard VMU adapter",
-      "build": "",
-      "source": "roadmap section 3",
-      "known_blocker": "executable reclamation, exit consumers and lock behavior block the shared module (integration roadmap section 3; not owner-confirmed)"
+      "route": "virtual VMU",
+      "result": "works: saves survive power-off, reboot and reload (tested before the prefetch work)",
+      "build": "3c80d14a0529",
+      "source": "owner, 7 Nov 2026; docs/universal-vmu-review-2026-11-01.md; docs/VMU-RESET-HANDOFF.md"
     },
     {
       "product": "MK-51035",
@@ -97,11 +96,10 @@
     {
       "product": "T3601N",
       "title": "Dead or Alive 2",
-      "route": "standalone demand reader",
-      "result": "works without virtual VMU",
+      "route": "Background loader with virtual VMU, no prefetch",
+      "result": "works with virtual VMU; Background loader plus prefetch did not fit in RAM, so it runs with the Background loader only",
       "build": "",
-      "source": "roadmap section 3",
-      "known_blocker": "memory ownership not proved; earlier apparent free arenas were contradicted (integration roadmap section 3; not owner-confirmed)"
+      "source": "owner, 7 Nov 2026"
     },
     {
       "product": "T1216N",

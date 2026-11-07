@@ -44,7 +44,7 @@ now read), compact Background stage end `0x8cebe748`. The admission sources matc
 | RECORD OF LODOSS WAR | T40218N | 3,392 | virtual VMU | — |  | no profile: CD music Off | virtual VMU shown; saving and loading work; FMVs and gameplay flawless (New with virtual VMU) |
 | RESIDENT EVIL CODE VERONICA | T1204N | 3,823 | virtual VMU | — |  | — | saves, power-cycle reload and Disc 2 verified (Background New (X), virtual VMU) |
 | SEGA SMASH PACK VOLUME 1 | MK-51146 | 207 | virtual VMU | — |  | Smash collection route | hardware-accepted (Smash collection) |
-| SILVER | T15108N | 2,886 | virtual VMU | — |  | — | works with its exact Standard VMU adapter (Standard, exact VMU adapter); known limit: executable reclamation, exit consumers and lock behavior block the shared module (integration roadmap section 3; not owner-confirmed) |
+| SILVER | T15108N | 2,886 | virtual VMU | — |  | — | works: saves survive power-off, reboot and reload (tested before the prefetch work) (virtual VMU) |
 | SKIES OF ARCADIA DISC 1 | MK-51052 | 5,332 | virtual VMU | — |  | — | launches every boot and reloads saves; see docs/native-skies-read-fix.md for the opening Cupil hang (virtual VMU) |
 | SONIC ADVENTURE | MK-51000 | 6,592 | virtual VMU | — |  | — | works with the Background reader and virtual VMU (Background reader, virtual VMU) |
 | SONIC ADVENTURE 2 | MK-51117 | 1,541 | virtual VMU | — |  | — | saves and loads; gameplay was choppy with input lag on that build (virtual VMU) |
@@ -53,7 +53,7 @@ now read), compact Background stage end `0x8cebe748`. The admission sources matc
 | TIME STALKERS | MK-51011 | 645 | virtual VMU | — |  | — | boots, saves and reloads (Background New (X), virtual VMU in A1) |
 | TOY COMMANDER | MK-57020 | 730 | virtual VMU | — |  | native profile (Toy Commander) | sees imported saves, creates new saves and loads them after reboot; CD music works; intro movies still stall (virtual VMU; native CDDA) |
 | CRAZY TAXI | MK-51035 | 1,433 | refused | New, no virtual VMU | no heap initializer slot (fixed RAM; needs a RAM map) | — | works without virtual VMU (standalone New); known limit: needs a reviewed retained arena (integration roadmap section 3; not owner-confirmed) |
-| DEAD OR ALIVE 2 | T3601N | 1,773 | refused | New, no virtual VMU | SDK heap family not resolved | — | works without virtual VMU (standalone demand reader); known limit: memory ownership not proved; earlier apparent free arenas were contradicted (integration roadmap section 3; not owner-confirmed) |
+| DEAD OR ALIVE 2 | T3601N | 1,773 | refused | New, no virtual VMU | SDK heap family not resolved | — | works with virtual VMU; Background loader plus prefetch did not fit in RAM, so it runs with the Background loader only (Background loader with virtual VMU, no prefetch) |
 | FROGGER 2 | T40604N | 818 | refused | New, no virtual VMU | SDK heap family not resolved | no profile: CD music Off |  |
 | GENERATOR 2 | MK-51057 | 159 | refused | New, no virtual VMU | terminal exits not resolved | no profile: CD music Off | known limit: demo disc: its menu starts several separate game programs (native and Windows CE); the checks cover the menu only |
 | MDK2 | T12502N | 733 | refused | New, no virtual VMU | Maple driver family not resolved | native profile (MDK2) |  |
@@ -91,8 +91,13 @@ Also listed: 89 files in other image formats.
 - **Known limits from the integration roadmap's section 3 are not
   owner-confirmed.** Its Sonic Adventure line ("executable-loader and exit
   lifetime still block shared VMU") is wrong: the owner reports Sonic
-  Adventure working with the Background reader and virtual VMU. Treat the
-  remaining entries from that table as claims to confirm.
+  Adventure working with the Background reader and virtual VMU, and Silver
+  working with virtual VMU. Treat the remaining entries from that table as
+  claims to confirm.
+- **Dead or Alive 2 works with virtual VMU on the Background loader without
+  prefetch**, a combination this table does not model: it checks only the
+  combined module that also carries the 192 KiB read-ahead cache, which DOA2
+  refuses (owner: Background plus prefetch did not fit in RAM).
 - **Blockers among the 16 native startups (15 games) without a Background route:**
   - Maple driver family unresolved (5 startups, 4 games): Shenmue (two
     startups), Shenmue II, MDK2 and Blue Stinger. Shenmue's three startups are
