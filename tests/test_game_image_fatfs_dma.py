@@ -9,11 +9,24 @@ or elapsed-time effect is inferred from these host callbacks.
 """
 import hashlib,json,os,pathlib,shlex,subprocess,sys,tempfile
 ROOT=pathlib.Path(__file__).resolve().parents[1]
+SOURCE='src/core/game_image.c'
 ORIGINAL='a72faa150b6c91a1b26fa10b1b7ff9413c3be87f'
-def run(command,**kwargs):
-    p=subprocess.run(command,cwd=ROOT,text=True,capture_output=True,**kwargs)
+ORIGINAL_SHA256='8ca73620fcb221c913bff66935f3fc6fbb85c4095c28b8cb18b7822e60004b3d'
+ORIGINAL_PATCH='tests/fixtures/game-image-before-dma-alignment.patch'
+FATFS='.deps/fatfs/source'
+def run(command,*,cwd=ROOT,**kwargs):
+    p=subprocess.run(command,cwd=cwd,text=True,capture_output=True,**kwargs)
     if p.returncode:raise AssertionError(shlex.join(map(str,command))+'\n'+p.stdout+p.stderr)
     return p.stdout
+def original_source(tmp):
+    # Recover the exact old implementation without depending on Git history.
+    original=tmp/SOURCE
+    original.parent.mkdir(parents=True)
+    original.write_bytes((ROOT/SOURCE).read_bytes())
+    run(['git','apply','--no-index',str(ROOT/ORIGINAL_PATCH)],cwd=tmp)
+    if hashlib.sha256(original.read_bytes()).hexdigest()!=ORIGINAL_SHA256:
+        raise AssertionError('Pre-alignment game_image.c does not match the historical source')
+    return original
 def main():
     with tempfile.TemporaryDirectory(prefix='kui-fatfs-dma-') as temporary:
         tmp=pathlib.Path(temporary)
@@ -22,17 +35,17 @@ def main():
         bus=(ROOT/'src/loader/sci_sd_bus.c').read_text();at=bus.index('static uint32_t dma_address(')
         end=bus.index('\nstatic void purge_buffer',at);gate=bus[at:end]
         (tmp/'sci-dma-address.inc').write_text(gate)
-        original=tmp/'old-game-image.c';original.write_text(run(['git','show',ORIGINAL+':src/core/game_image.c']))
+        original=original_source(tmp)
         env=dict(os.environ,ASAN_OPTIONS='detect_leaks=0',UBSAN_OPTIONS='halt_on_error=1')
         flags=[*shlex.split(os.environ.get('HOST_CC','cc')),'-std=c11','-O1','-g','-Wall','-Wextra','-Werror','-Wpedantic',
             '-fsanitize=address,undefined','-fno-sanitize-recover=all','-fno-omit-frame-pointer','-fno-pie','-no-pie',
-            '-include',str(tmp/'formatter-ffconf.h'),'-Iinclude','-Itests','-Ifatfs/source','-I'+str(tmp)]
+            '-include',str(tmp/'formatter-ffconf.h'),'-Iinclude','-Itests','-I'+FATFS,'-I'+str(tmp)]
         rows=[]
-        for label,source in [('old',original),('current',ROOT/'src/core/game_image.c')]:
+        for label,source in [('old',original),('current',ROOT/SOURCE)]:
             binary=tmp/label
             run([*flags,'-DEXPECT_ALIGNED='+str(int(label=='current')),
                 'tests/test_game_image_fatfs_dma.c',str(source),'src/core/zso.c','src/core/lzo1x.c','src/core/data.c',
-                'fatfs/source/ff.c','fatfs/source/ffunicode.c','-Wl,--wrap=malloc,--wrap=free','-o',str(binary)])
+                FATFS+'/ff.c',FATFS+'/ffunicode.c','-Wl,--wrap=malloc,--wrap=free','-o',str(binary)])
             for fs in ('fat32','exfat'):
                 for fragmented in (False,True):
                     card=tmp/(label+'-'+fs+'-'+str(fragmented)+'.img')
@@ -49,8 +62,9 @@ def main():
             old_source_commit=ORIGINAL,old_source_sha256=hashlib.sha256(original.read_bytes()).hexdigest(),
             actual_production_dma_address_function_sha256=hashlib.sha256(gate.encode()).hexdigest(),
             source_sha256={n:hashlib.sha256((ROOT/n).read_bytes()).hexdigest() for n in (
-                'src/core/game_image.c','src/loader/sci_sd_bus.c','tests/test_game_image_fatfs_dma.c',
-                'tests/test_game_image_fatfs_dma.py','tests/format_fatfs_fixture.c','fatfs/source/ff.c','config/ffconf.h')},
+                SOURCE,'src/loader/sci_sd_bus.c','tests/test_game_image_fatfs_dma.c',
+                'tests/test_game_image_fatfs_dma.py',ORIGINAL_PATCH,'tests/format_fatfs_fixture.c',
+                FATFS+'/ff.c',FATFS+'/ffunicode.c','config/ffconf.h')},
             unchanged_callback_counts_and_payloads=True,console_timing_measured=False,
             scope='Production converter and FatFs read path; original SCI address-admission predicate executes with a host physical-address seam. Busy-channel and hardware timing are not modeled here.')
         if len(sys.argv)>1:pathlib.Path(sys.argv[1]).write_text(json.dumps(report,indent=2)+'\n')
