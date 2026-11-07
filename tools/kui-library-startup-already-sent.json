@@ -1,0 +1,90 @@
+{
+  "schema": "kui.library-startup.already-sent.v1",
+  "note": "Boot-file SHA256 values of native startups already received (Library-startup-01, 28 Oct 2026). Hashes only; no game bytes.",
+  "startups": [
+    {
+      "title": "BLUE STINGER",
+      "boot_sha256": "491fd69cd64100786372169e95e50ca2733bbfb88a54ef15da6a1f66297f5593"
+    },
+    {
+      "title": "CRAZY TAXI",
+      "boot_sha256": "67daaabc743ad6da0515cc25363eaf5e6624fba9353cda4dabfe2ee5c610c044"
+    },
+    {
+      "title": "CRAZY TAXI 2",
+      "boot_sha256": "8057a8e37636ad78b1fc70ee590bd314686546b13ffe100623d86b572aec53c1"
+    },
+    {
+      "title": "DEAD OR ALIVE 2",
+      "boot_sha256": "105056d9ffef86bf5e470fa28dc5907443156f9ab1c6bc009f73661d9c047a85"
+    },
+    {
+      "title": "ELEMENTAL GIMMICK GEAR",
+      "boot_sha256": "2589fa5b63072473d190767903e08c9cde8e7acfc1e2b524fd4943332cbd0630"
+    },
+    {
+      "title": "EVOLUTION - THE WORLD OF SACRED DEVICE",
+      "boot_sha256": "ffb5a8e5ff5547026d93649e1f9058b7ee5e29d8d0ff8a89335701f7e9647f35"
+    },
+    {
+      "title": "EVOLUTION2",
+      "boot_sha256": "16b45fcc84992a60d5a64bf64bf22b699b27306b95f177ba3d9730ca380069ae"
+    },
+    {
+      "title": "JET GRIND RADIO",
+      "boot_sha256": "8b294765225fc32020dd59010464a730b710d0bd79f69c79f16218cc4feac6a6"
+    },
+    {
+      "title": "POWER STONE 2 USA",
+      "boot_sha256": "a3dcd09a96045839dbbc35697eb4336e4eba79b52203a46bb2f8ee9a4ba2eed8"
+    },
+    {
+      "title": "PSO",
+      "boot_sha256": "11dc59ee0278675decf5e0bf1fa30646f889a0e5a7f10251f3c3a697e42a28e5"
+    },
+    {
+      "title": "RAYMAN 2 THE GREAT ESCAPE",
+      "boot_sha256": "9e34357880d5fbbca1559ce8797baed66c6b4370e967b2af23f07cba9b3a7099"
+    },
+    {
+      "title": "RESIDENT EVIL CODE VERONICA",
+      "boot_sha256": "199b72af9bcd7fb80d401d4645c731e595970a0dcbcfd98e1bec187f4382fbbb"
+    },
+    {
+      "title": "SILVER",
+      "boot_sha256": "4460c60597d6c1f587c125c2dd4b2b491d0a568f31b52c91bce7d8c74f9d550d"
+    },
+    {
+      "title": "SKIES OF ARCADIA DISC 1",
+      "boot_sha256": "4218c07829d63080be2da86413ec023e6d77001c13a1494648db6e2e5cb73611"
+    },
+    {
+      "title": "SONIC ADVENTURE",
+      "boot_sha256": "8a65a81fb0f862da473c0e3489c063defb4dac25b9ee382d13108cd59635b86e"
+    },
+    {
+      "title": "SONIC ADVENTURE 2",
+      "boot_sha256": "6919ed8bc96782d041be41ba86f90bf86d99632b8b7787391969721bc0991736"
+    },
+    {
+      "title": "SPAWN IN THE DEMONS HAND",
+      "boot_sha256": "8f085c28f6a579662f95b65b0611f1dc08dded35fd5c6e676821c72a5384ed5f"
+    },
+    {
+      "title": "SWORD OF THE BERSERK GUTS RAGE",
+      "boot_sha256": "5211c62a000b7d96e2c17f2a04b14511e4ce47c6cb585a2da89716786000b7ca"
+    },
+    {
+      "title": "THE HOUSE OF THE DEAD 2",
+      "boot_sha256": "37817967c2949de6ca4c83522f7eff36fb18ea17a5f06d995f6e93319511ee6f"
+    },
+    {
+      "title": "TIME STALKERS",
+      "boot_sha256": "a9fa66b6bcc482dfaa47683d552e42f24a8200c8efa5ed905d8184eedeba3ac0"
+    },
+    {
+      "title": "ZOMBIE REVENGE",
+      "boot_sha256": "53ba792a409a0796db47e4b8b1b2a00019a3c4647558068c55612b4b17c5ea96"
+    }
+  ]
+}

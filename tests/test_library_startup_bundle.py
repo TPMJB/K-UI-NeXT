@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Whole-folder startup bundling and the sweep's part reader, on original
-synthetic GDIs: native, duplicate, Windows CE, CD audio, broken and CDI."""
+"""Whole-folder startup bundling (v2) and the sweep's part reader, on original
+synthetic images: native raw GDI, duplicate, Windows CE, CD audio, cooked
+2048-byte GDI, Redump-style CUE, already-sent, broken, CDI and a loose ISO."""
 import hashlib
 import importlib.util
 import io
@@ -12,7 +13,7 @@ import tempfile
 import unittest
 import zipfile
 
-from games_fixture import RAW, SESSION, make_fixture, raw_sector
+from games_fixture import DATA, RAW, SESSION, make_fixture, raw_sector
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location('library_startup_bundle',
@@ -27,6 +28,27 @@ def patch(folder, sector, offset, content):
     with (folder / 'track03.bin').open('r+b') as track:
         track.seek(sector * RAW + 16 + offset)
         track.write(content)
+
+
+def cook(folder):
+    """The 2048-byte ISO-track copy of a fixture, as common converters write it."""
+    for raw_name, iso_name in (('track01.bin', 'track01.iso'), ('track03.bin', 'track03.iso')):
+        raw = (folder / raw_name).read_bytes()
+        (folder / iso_name).write_bytes(b''.join(raw[i + 16:i + 16 + DATA] for i in range(0, len(raw), RAW)))
+        (folder / raw_name).unlink()
+    (folder / 'disc.gdi').write_text(
+        '3\n1 0 4 2048 track01.iso 0\n2 4 0 2352 track02.raw 0\n3 45000 4 2048 track03.iso 0\n',
+        encoding='ascii')
+
+
+def as_cue(folder):
+    """A per-track BIN/CUE descriptor for the same fixture, without the GDI."""
+    (folder / 'disc.gdi').unlink()
+    (folder / 'game.cue').write_text('\n'.join([
+        'REM SINGLE-DENSITY AREA', 'FILE "track01.bin" BINARY', '  TRACK 01 MODE1/2352',
+        '    INDEX 01 00:00:00', 'FILE "track02.raw" BINARY', '  TRACK 02 AUDIO',
+        '    INDEX 01 00:00:00', 'REM HIGH-DENSITY AREA', 'FILE "track03.bin" BINARY',
+        '  TRACK 03 MODE1/2352', '    INDEX 01 00:00:00']) + '\n', encoding='ascii')
 
 
 class LibraryStartupBundleTests(unittest.TestCase):
@@ -53,11 +75,20 @@ class LibraryStartupBundleTests(unittest.TestCase):
             '5\n1 0 4 2352 track01.bin 0\n2 4 0 2352 track02.raw 0\n'
             '3 45000 4 2352 track03.bin 0\n4 45070 0 2352 track04.raw 0\n'
             '5 45080 4 2352 track05.bin 0\n', encoding='ascii')
+        make_fixture(self.games / 'Zeta-2048', title=b'Zeta Cooked Fixture')
+        patch(self.games / 'Zeta-2048', 21, 0, b'ZETA')
+        cook(self.games / 'Zeta-2048')
+        make_fixture(self.games / 'Eta (USA)', title=b'Eta Cue Fixture')
+        patch(self.games / 'Eta (USA)', 21, 0, b'ETA')
+        as_cue(self.games / 'Eta (USA)')
         (self.games / 'Broken').mkdir()
         (self.games / 'Broken' / 'disc.gdi').write_text('not a gdi\n')
         (self.games / 'Broken' / '._disc.gdi').write_bytes(b'\0\5\26\7')
         (self.games / 'Epsilon').mkdir()
         (self.games / 'Epsilon' / 'game.cdi').write_bytes(b'')
+        (self.games / 'Loose').mkdir()
+        (self.games / 'Loose' / 'game.iso').write_bytes(b'')
+        (self.games / 'Loose' / 'stray.bin').write_bytes(b'')
         self.output = self.folder / 'out'
         self.output.mkdir()
 
@@ -66,7 +97,7 @@ class LibraryStartupBundleTests(unittest.TestCase):
                 for path in self.games.rglob('*') if path.is_file()}
 
     def build(self, **options):
-        settings = dict(name='Library-startup', part_mb=0, include_cdda=False)
+        settings = dict(name='Library-startup', part_mb=0)
         settings.update(options)
         return library.build(self.games, self.output, log=lambda line: None, **settings)
 
@@ -78,41 +109,75 @@ class LibraryStartupBundleTests(unittest.TestCase):
         self.assertEqual(status, {
             'Alpha/disc.gdi': 'bundled', 'Alpha copy/disc.gdi': 'duplicate',
             'Beta/disc.gdi': 'bundled', 'Broken/disc.gdi': 'error',
-            'Delta CDDA/disc.gdi': 'cdda', 'Gamma CE/disc.gdi': 'windows_ce',
-            'Epsilon/game.cdi': 'other_format'})
+            'Delta CDDA/disc.gdi': 'bundled', 'Eta (USA)/game.cue': 'bundled',
+            'Gamma CE/disc.gdi': 'bundled', 'Zeta-2048/disc.gdi': 'bundled',
+            'Epsilon/game.cdi': 'other_format', 'Loose/game.iso': 'other_format'})
         by = {row['source']: row for row in rows}
         self.assertEqual(by['Alpha copy/disc.gdi']['duplicate_of'], by['Alpha/disc.gdi']['slug'])
-        self.assertEqual(by['Gamma CE/disc.gdi']['title'], 'Gamma Windows CE Fixture')
+        self.assertEqual(by['Alpha copy/disc.gdi']['disc'], '2/2')
+        self.assertEqual(by['Alpha/disc.gdi']['disc'], '1/1')
+        self.assertIs(by['Gamma CE/disc.gdi']['windows_ce'], True)
+        self.assertIs(by['Alpha/disc.gdi']['windows_ce'], False)
         self.assertEqual(by['Delta CDDA/disc.gdi']['cdda_tracks'], 1)
+        self.assertEqual(by['Zeta-2048/disc.gdi']['data_encoding'], 'cooked2048')
+        self.assertEqual(by['Eta (USA)/game.cue']['descriptor_format'], 'cue')
         self.assertEqual(by['Beta/disc.gdi']['slug'], '003-BETA-0001-Beta-Fixture')
         self.assertEqual([path.name for path in created], ['Library-startup-01.zip'])
         self.assertEqual(list(self.output.iterdir()), created, 'no staging files remain')
         with zipfile.ZipFile(created[0]) as archive:
-            self.assertEqual(archive.namelist(), ['library.json', 'games/001-KUI-TEST-Alpha-Fixture.zip',
-                                                  'games/003-BETA-0001-Beta-Fixture.zip'])
+            names = archive.namelist()
             info = json.loads(archive.read('library.json'))
-            inner = archive.read('games/001-KUI-TEST-Alpha-Fixture.zip')
+            inner = archive.read(by['Alpha/disc.gdi']['archive'])
+            cue_inner = archive.read(by['Eta (USA)/game.cue']['archive'])
+        self.assertEqual(names[0], 'library.json')
+        self.assertEqual(len(names), 1 + sum(row['status'] == 'bundled' for row in rows))
         self.assertEqual((info['schema'], info['part'], info['parts']), (library.SCHEMA, 1, 1))
         self.assertEqual(info['games'], rows)
         with zipfile.ZipFile(io.BytesIO(inner)) as game:
-            self.assertEqual(game.namelist(), ['IP.BIN', 'disc.gdi', '1ST_READ.BIN', 'startup-info.json'])
+            self.assertEqual(game.namelist(), ['1ST_READ.BIN', 'IP.BIN', 'disc.gdi', 'startup-info.json'])
             boot = game.read('1ST_READ.BIN')
+            report = json.loads(game.read('startup-info.json'))
         self.assertEqual(boot, bytes((i * 17 + 3) & 255 for i in range(2048)) +
                          bytes((i * 29 + 7) & 255 for i in range(2048)))
         self.assertEqual(hashlib.sha256(boot).hexdigest(), by['Alpha/disc.gdi']['boot_sha256'])
+        self.assertEqual([item['path'] for item in report['inventory']], ['1ST_READ.BIN'])
+        self.assertIs(report['audio_payload_copied'], False)
+        with zipfile.ZipFile(io.BytesIO(cue_inner)) as game:
+            self.assertIn('disc.cue', game.namelist())
         with self.assertRaisesRegex(ValueError, 'already holds'):
             self.build()
 
-    def test_cdda_included_on_request_and_parts_split(self):
-        rows, created = self.build(include_cdda=True, part_mb=0.001)
+    def test_already_sent_startups_are_listed_not_copied(self):
+        first, _ = self.build()
+        beta = next(row for row in first if row['source'] == 'Beta/disc.gdi')
+        known = self.folder / 'already-sent.json'
+        known.write_text(json.dumps({'startups': [{'title': 'Beta', 'boot_sha256': beta['boot_sha256']}]}))
+        self.output = self.folder / 'out2'
+        self.output.mkdir()
+        rows, created = self.build(known_path=known)
+        row = next(row for row in rows if row['source'] == 'Beta/disc.gdi')
+        self.assertEqual(row['status'], 'already_sent')
+        self.assertNotIn('archive', row)
+        self.assertEqual(row['boot_sha256'], beta['boot_sha256'])
+        with zipfile.ZipFile(created[0]) as archive:
+            self.assertEqual(json.loads(archive.read('library.json'))['already_sent'], 1)
+            self.assertNotIn(beta['archive'], archive.namelist())
+        known.write_text(json.dumps({'startups': ['not-a-hash']}))
+        self.output = self.folder / 'out3'
+        self.output.mkdir()
+        with self.assertRaisesRegex(ValueError, 'malformed SHA256'):
+            self.build(known_path=known)
+
+    def test_parts_split_and_every_part_lists_every_game(self):
+        rows, created = self.build(part_mb=0.001)
         bundled = [row for row in rows if row['status'] == 'bundled']
-        self.assertEqual(len(bundled), 3)
-        self.assertEqual(len(created), 3, 'each game exceeds the tiny part limit alone')
-        self.assertEqual(sorted(row['part'] for row in bundled), [1, 2, 3])
+        self.assertEqual(len(bundled), 6)
+        self.assertEqual(len(created), 6, 'each game exceeds the tiny part limit alone')
+        self.assertEqual(sorted(row['part'] for row in bundled), [1, 2, 3, 4, 5, 6])
         for number, path in enumerate(created, 1):
             with zipfile.ZipFile(path) as archive:
                 info = json.loads(archive.read('library.json'))
-                self.assertEqual((info['part'], info['parts'], info['games']), (number, 3, rows))
+                self.assertEqual((info['part'], info['parts'], info['games']), (number, 6, rows))
                 self.assertEqual(len(archive.namelist()), 2)
 
     def test_plan_parts_packs_in_order(self):
@@ -120,16 +185,27 @@ class LibraryStartupBundleTests(unittest.TestCase):
         parts = library.plan_parts(rows + [dict(status='error')], 8)
         self.assertEqual([[row['archive_bytes'] for row in part] for part in parts], [[4, 4], [3], [9], [1]])
 
+    def test_trim_keeps_required_and_bounds_optional_files(self):
+        entries = {'IP.BIN': b'i', 'disc.gdi': b'g', '1ST_READ.BIN': b'b', 'SOUND.DRV': b'd' * 10,
+                   'BIG.DLL': b'x' * (library.OPTIONAL_BUDGET + 1), 'DATA.LIB': b'l'}
+        report = {'required_files': ['1ST_READ.BIN'], 'omitted_files': [],
+                  'files': [{'path': name, 'lba': None} for name in entries]}
+        kept, report = library.trim_optional(dict(entries), report)
+        self.assertEqual(list(kept), ['IP.BIN', 'disc.gdi', '1ST_READ.BIN', 'SOUND.DRV'])
+        self.assertEqual([item['path'] for item in report['omitted_files']], ['BIG.DLL', 'DATA.LIB'])
+        self.assertEqual([item['path'] for item in report['files']], list(kept))
+        self.assertEqual((report['selected_file_count'], report['archive_file_count']), (2, 5))
+
     def test_sweep_reads_parts_and_refuses_tampering(self):
-        rows, created = self.build(include_cdda=True, part_mb=0.001)
+        rows, created = self.build(part_mb=0.001)
         info, merged, blobs, missing = sweep.read_parts(created)
         self.assertEqual((merged, missing), (rows, []))
-        boots = {row['slug']: sweep.open_game(blobs[row['archive']], row)
-                 for row in merged if row['status'] == 'bundled'}
+        native = [row for row in merged if row['status'] == 'bundled' and not row['windows_ce']]
+        boots = {row['slug']: sweep.open_game(blobs[row['archive']], row) for row in native}
         self.assertEqual({slug: hashlib.sha256(data).hexdigest() for slug, data in boots.items()},
-                         {row['slug']: row['boot_sha256'] for row in rows if row['status'] == 'bundled'})
+                         {row['slug']: row['boot_sha256'] for row in native})
         info, merged, blobs, missing = sweep.read_parts(created[:2])
-        self.assertEqual(missing, [3])
+        self.assertEqual(missing, [3, 4, 5, 6])
         with self.assertRaisesRegex(sweep.SweepError, 'given twice'):
             sweep.read_parts([created[0], created[0]])
         evil = self.folder / 'evil.zip'
@@ -139,7 +215,8 @@ class LibraryStartupBundleTests(unittest.TestCase):
             target.writestr('../escape.zip', b'')
         with self.assertRaisesRegex(sweep.SweepError, 'unexpected entry'):
             sweep.read_parts([evil])
-        row = next(row for row in merged if row['status'] == 'bundled')
+        row = next(row for row in merged if row['status'] == 'bundled' and row['part'] in (1, 2)
+                   and not row['windows_ce'])
         changed = io.BytesIO()
         with zipfile.ZipFile(io.BytesIO(blobs[row['archive']])) as source, \
                 zipfile.ZipFile(changed, 'w') as target:
@@ -158,12 +235,14 @@ class LibraryStartupBundleTests(unittest.TestCase):
         self.assertEqual(json.loads(output.read_text()), report)
         self.assertEqual([row['source'] for row in report['results']], [row['source'] for row in rows])
         for row in report['results']:
-            if row['status'] == 'bundled':
+            if row['status'] == 'bundled' and not row['windows_ce']:
                 self.assertEqual(row['class'], 'blocked', 'synthetic boot files resolve no launch record')
                 self.assertIn(row['first_refusal'], sweep.GATE_NOTES)
             else:
                 self.assertEqual(row['class'], 'not_native', row['source'])
-        self.assertEqual(report['counts'], {'blocked': 2, 'not_native': 5})
+        ce = next(row for row in report['results'] if row['source'] == 'Gamma CE/disc.gdi')
+        self.assertEqual(ce['now'], 'Windows CE (separate reader)')
+        self.assertEqual(report['counts'], {'blocked': 5, 'not_native': 5})
         self.assertEqual(len(markdown.read_text().splitlines()), len(rows) + 2)
 
     def test_verdicts_follow_launcher_order(self):
@@ -178,6 +257,8 @@ class LibraryStartupBundleTests(unittest.TestCase):
         for fields, expected in cases:
             self.assertEqual(sweep.verdict({**base, **fields})[1], expected, fields)
         self.assertEqual(sweep.verdict(dict(status='windows_ce'))[1], 'not_native')
+        self.assertEqual(sweep.verdict(dict(status='bundled', windows_ce=True))[1], 'not_native')
+        self.assertEqual(sweep.verdict(dict(status='already_sent'))[1], 'not_native')
 
 
 if __name__ == '__main__':

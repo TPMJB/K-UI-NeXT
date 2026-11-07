@@ -27,15 +27,16 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 KNOWN = ROOT / 'docs/evidence/native-console-known.json'
 SCHEMA = 'kui.native-library-startup.v1'
+SCHEMAS = (SCHEMA, 'kui.library-startup.v2')
 SLUG = re.compile(r'[0-9]{3,4}-[A-Za-z0-9-]{0,56}')
 ARCHIVE = re.compile(r'games/([0-9]{3,4}-[A-Za-z0-9-]{0,56})\.zip')
 RUN_ID = re.compile(r'[0-9a-f]{32}')
 LIBRARY_LIMIT = 8 * 1024 * 1024
-INNER_LIMIT = 16 * 1024 * 1024
+INNER_LIMIT = 48 * 1024 * 1024
 BOOT_LIMIT = 12 * 1024 * 1024
 GDI_LIMIT = 64 * 1024
 INFO_LIMIT = 4 * 1024 * 1024
-STATUSES = ('bundled', 'duplicate', 'windows_ce', 'cdda', 'error', 'other_format')
+STATUSES = ('bundled', 'duplicate', 'windows_ce', 'cdda', 'error', 'other_format', 'already_sent')
 SCI_SOURCES = ('tools/native_sci_family_probe.c', 'src/core/native_sdk_sci_family.c',
                'src/core/hash.c', 'src/core/data.c')
 GATE_NOTES = {
@@ -81,7 +82,7 @@ def read_parts(paths):
             if any(not ARCHIVE.fullmatch(name) for name in names[1:]):
                 raise SweepError(f'{path.name}: unexpected entry name')
             library = json.loads(bounded_read(archive, infos[0], LIBRARY_LIMIT, 'library.json'))
-            if (library.get('schema') != SCHEMA or not RUN_ID.fullmatch(str(library.get('run_id'))) or
+            if (library.get('schema') not in SCHEMAS or not RUN_ID.fullmatch(str(library.get('run_id'))) or
                     type(library.get('part')) is not int or type(library.get('parts')) is not int or
                     not 1 <= library['part'] <= library['parts'] <= 999 or
                     type(library.get('games')) is not list):
@@ -125,21 +126,26 @@ def read_parts(paths):
 def open_game(blob, row):
     """The checked boot file of one single-game bundle."""
     with zipfile.ZipFile(io.BytesIO(blob)) as archive:
-        infos = archive.infolist()
-        expected = ['IP.BIN', 'disc.gdi', row['boot_path'], 'startup-info.json']
-        if [info.filename for info in infos] != expected:
+        infos = {info.filename: info for info in archive.infolist()}
+        names = list(infos)
+        descriptor = 'disc.cue' if 'disc.cue' in infos else 'disc.gdi'
+        # v1 bundles hold exactly these four; v2 adds CE EXEs/runtime files.
+        if (len(set(names)) != len(archive.infolist()) or names[-1] != 'startup-info.json' or
+                any(name not in infos for name in ('IP.BIN', descriptor, row['boot_path'])) or
+                any(name.startswith('/') or '..' in name.split('/') or '\\' in name for name in names)):
             raise SweepError(f"{row['slug']}: game ZIP entries differ from the bundle layout")
-        ip = bounded_read(archive, infos[0], 32768, 'IP.BIN')
-        gdi = bounded_read(archive, infos[1], GDI_LIMIT, 'disc.gdi')
-        boot = bounded_read(archive, infos[2], BOOT_LIMIT, 'boot file')
-        report = json.loads(bounded_read(archive, infos[3], INFO_LIMIT, 'startup-info.json'))
+        ip = bounded_read(archive, infos['IP.BIN'], 32768, 'IP.BIN')
+        gdi = bounded_read(archive, infos[descriptor], GDI_LIMIT, descriptor)
+        boot = bounded_read(archive, infos[row['boot_path']], BOOT_LIMIT, 'boot file')
+        report = json.loads(bounded_read(archive, infos['startup-info.json'], INFO_LIMIT,
+                                         'startup-info.json'))
     files = {entry.get('path'): entry for entry in report.get('files', []) if type(entry) is dict}
     if (len(ip) != 32768 or report.get('windows_ce') is not False or
             report.get('boot_path') != row['boot_path'] or
             hashlib.sha256(boot).hexdigest() != row['boot_sha256'] or
             hashlib.sha256(ip).hexdigest() != row['ip_sha256'] or
             any(files.get(name, {}).get('sha256') != hashlib.sha256(data).hexdigest()
-                for name, data in (('IP.BIN', ip), ('disc.gdi', gdi), (row['boot_path'], boot)))):
+                for name, data in (('IP.BIN', ip), (descriptor, gdi), (row['boot_path'], boot)))):
         raise SweepError(f"{row['slug']}: game ZIP contents differ from its hashes")
     return boot
 
@@ -169,9 +175,12 @@ def sci_families(startups, work):
 def verdict(row):
     """What New (X) does with this game now, by the launcher's own order."""
     status = row['status']
+    if status == 'bundled' and row.get('windows_ce'):
+        status = 'windows_ce'
     if status != 'bundled':
         return {'duplicate': 'same startup as ' + str(row.get('duplicate_of')),
                 'windows_ce': 'Windows CE (separate reader)',
+                'already_sent': 'startup sent in an earlier upload',
                 'cdda': 'CD audio (out of scope)',
                 'error': 'not read: ' + str(row.get('error')),
                 'other_format': 'not a GDI (' + str(row.get('format')) + ')',
@@ -209,7 +218,7 @@ def sweep(parts, work, stage_end, output, markdown, known=KNOWN):
     for row in rows:
         if row['status'] == 'bundled' and row['part'] in missing:
             row['status'] = 'not_uploaded'
-        if row['status'] != 'bundled':
+        if row['status'] != 'bundled' or row.get('windows_ce'):
             continue
         path = work / 'startups' / (row['slug'] + '.bin')
         path.write_bytes(open_game(blobs[row['archive']], row))
@@ -235,7 +244,8 @@ def sweep(parts, work, stage_end, output, markdown, known=KNOWN):
     for row in rows:
         out = {key: row[key] for key in ('source', 'status', 'slug', 'title', 'product', 'version',
                                          'region', 'boot_filename', 'boot_bytes', 'boot_sha256',
-                                         'cdda_tracks', 'duplicate_of', 'error', 'format')
+                                         'cdda_tracks', 'duplicate_of', 'error', 'format',
+                                         'windows_ce', 'disc')
                if key in row}
         if row.get('slug') in startups:
             out.update({key: structural[row['slug']].get(key) for key in keep})

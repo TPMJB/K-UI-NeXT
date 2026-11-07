@@ -3,7 +3,7 @@
 """Copy saves from a shared virtual card onto each game's own card.
 
 Usage: python3 kui-game-cards.py /path/to/SD --shared KUI/vmu-test/p0005 --games /path/to/SD/Games
-Keep this script beside kui-library-startup-bundle.py, kui-native-startup-bundle.py
+Keep this script beside kui-library-startup-bundle.py, kui-cdda-startup-bundle.py
 and explain_vmu_image.py. K-UI gives each game its own 200-block virtual card,
 a /KUI/vmu-test/pNNNN pair whose game.bin names the game's product number.
 This tool reads the shared card (replaying its journal), suggests a game for
