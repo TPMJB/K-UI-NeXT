@@ -16,7 +16,9 @@
 #define KUI_GAME_SUBCHANNEL_BYTES 2448u
 /* Shared UI read policy, independent of title, container and SDK family.
  * Raw sectors are fetched in bounded consecutive windows, then every sector's
- * header/subheader is checked before its user bytes are published. */
+ * header/subheader is checked before its user bytes are published. Internal
+ * conversion buffers match the source offset modulo 32 so partial filesystem
+ * sectors do not force following SCI block reads out of DMA. */
 #define KUI_GAME_READ_WINDOW_SECTORS 16u
 /* Same upper FAD as the existing raw-sector validation; exclusive LBA end. */
 #define KUI_GAME_LBA_LIMIT (719999u - 150u + 1u)

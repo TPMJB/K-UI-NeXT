@@ -1189,6 +1189,11 @@ test-game-image-workspace: build/test-game-image-workspace
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-game-image-workspace
 test: test-game-image-workspace
 
+.PHONY: test-game-image-fatfs-dma
+test-game-image-fatfs-dma:
+	python3 tests/test_game_image_fatfs_dma.py
+test: test-game-image-fatfs-dma
+
 build/test-game-metadata: tests/test_game_metadata.c src/core/game_metadata.c include/kui/game_metadata.h
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) $(INCLUDES) src/core/game_metadata.c tests/test_game_metadata.c -o $@
