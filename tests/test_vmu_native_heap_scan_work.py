@@ -10,6 +10,7 @@ Original executable inputs are optional, private and never copied into reports.
 """
 import argparse
 import ctypes as ct
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -21,6 +22,27 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'src/core/vmu_native_heap.c'
 BASELINE = 'f8807cb1656137cc5fad7854802d685ea168736f'
+BASELINE_SHA256 = '7d99629da1954d1332c1da653a67b9d7139ee488c0cc33e78946f207f88594e2'
+GATED = '''        /* Most halfwords cannot start either allocator. Keep that cheap gate
+         * ahead of the candidate's scratch initialization: the cold stage's
+         * freestanding memset otherwise clears 72 bytes at every offset. */
+        uint16_t op=h16(p+at);
+        bool dispatch=op==0x2fe6u && h16(p+at+2u)==0x6e53u;
+        if(!dispatch && op!=0x741fu) continue;
+        struct kui_vmu_native_heap h={0};
+        if(dispatch) {
+            if(!candidate(p,n,base,at,&h)) continue;
+        } else {
+            if(!direct_candidate(p,n,base,at,&h)) continue;
+        }
+'''
+UNGATED = '''        struct kui_vmu_native_heap h={0};
+        if(h16(p+at)==0x2fe6u && h16(p+at+2u)==0x6e53u) {
+            if(!candidate(p,n,base,at,&h)) continue;
+        } else if(h16(p+at)==0x741fu) {
+            if(!direct_candidate(p,n,base,at,&h)) continue;
+        } else continue;
+'''
 INITIALIZER = 'struct kui_vmu_native_heap h={0};'
 LOAD = 0x8c010000
 METADATA_BYTES = 72
@@ -33,6 +55,20 @@ def run(command, **kwargs):
         raise AssertionError('Command failed: ' + shlex.join(list(map(str, command))) +
                              '\n' + result.stdout + result.stderr)
     return result.stdout
+
+
+def baseline_source(ref):
+    if ref is not None:
+        return run(['git', 'show', ref + ':src/core/vmu_native_heap.c'])
+    # Reconstruct the exact pre-gate translation unit in shallow CI checkouts.
+    source = SOURCE.read_bytes()
+    gated = GATED.encode()
+    if source.count(gated) != 1:
+        raise AssertionError('Exact heap gate hunk changed; supply --baseline-ref')
+    baseline = source.replace(gated, UNGATED.encode())
+    if hashlib.sha256(baseline).hexdigest() != BASELINE_SHA256:
+        raise AssertionError(f'Reconstructed heap source differs from {BASELINE}; supply --baseline-ref')
+    return baseline.decode()
 
 
 WRAPPERS = r'''
@@ -181,10 +217,10 @@ def check_originals(before, after, paths):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, default=SOURCE)
-    parser.add_argument('--baseline-ref', default=BASELINE)
+    parser.add_argument('--baseline-ref', help='Optional Git ref for the historical control')
     parser.add_argument('--original', type=Path, action='append', default=[])
     args = parser.parse_args()
-    baseline = run(['git', 'show', args.baseline_ref + ':src/core/vmu_native_heap.c'])
+    baseline = baseline_source(args.baseline_ref)
     candidate = args.source.read_text()
     compiler = shlex.split(os.environ.get('HOST_CC', 'cc'))
     results = []
