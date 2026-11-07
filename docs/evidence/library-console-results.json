@@ -121,7 +121,7 @@
       "product": "T-36805N",
       "title": "Sword of the Berserk: Guts' Rage",
       "route": "virtual VMU in A1",
-      "result": "tested by the owner; the game loads only from A1",
+      "result": "works; the game only uses a card in A1 and ignores a virtual card in A2",
       "build": "",
       "source": "owner, 7 Nov 2026; docs/universal-vmu-review-2026-11-01.md"
     },
@@ -228,7 +228,7 @@
       "product": "T17716N",
       "title": "Grandia II",
       "route": "virtual VMU",
-      "result": "tested by the owner with virtual VMU; boot confirmed in v1.8.5",
+      "result": "works with virtual VMU",
       "build": "",
       "source": "owner, 7 Nov 2026; docs/release-v1.8.5-notes.md"
     }

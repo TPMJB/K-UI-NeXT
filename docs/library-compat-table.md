@@ -36,7 +36,7 @@ now read), compact Background stage end `0x8cebe748`. The admission sources matc
 | ELEMENTAL GIMMICK GEAR | T41601N | 670 | virtual VMU | — |  | — | saves and loads (Background, virtual VMU in A1) |
 | EVOLUTION - THE WORLD OF SACRED DEVICE | T17706N | 2,093 | virtual VMU | — |  | — | save and load succeed; FMV slowdown reported (virtual VMU (A1 builds)) |
 | EVOLUTION2 | T1711N | 3,961 | virtual VMU | — |  | — | save and load succeed; FMV slowdown reported (virtual VMU (A1 builds)) |
-| GRANDIA2 | T17716N | 1,249 | virtual VMU | — |  | no profile: CD music Off | tested by the owner with virtual VMU; boot confirmed in v1.8.5 (virtual VMU) |
+| GRANDIA2 | T17716N | 1,249 | virtual VMU | — |  | no profile: CD music Off | works with virtual VMU (virtual VMU) |
 | JET GRIND RADIO | MK-51058 | 3,003 | virtual VMU | — |  | — | virtual A2 works (virtual VMU (A2)) |
 | POWER STONE 2 USA | T1211N | 3,024 | virtual VMU | — |  | — | saves and loads after a complete reboot (SD, card p0005); physical-disc virtual VMU also saves and reloads (SD virtual VMU and physical disc) |
 | PSO | MK-51100 | 3,694 | virtual VMU | — |  | — | works; intro video slow (native) |
@@ -48,7 +48,7 @@ now read), compact Background stage end `0x8cebe748`. The admission sources matc
 | SKIES OF ARCADIA DISC 1 | MK-51052 | 5,332 | virtual VMU | — |  | — | launches every boot and reloads saves; see docs/native-skies-read-fix.md for the opening Cupil hang (virtual VMU) |
 | SONIC ADVENTURE | MK-51000 | 6,592 | virtual VMU | — |  | — | works with the Background reader and virtual VMU (Background reader, virtual VMU) |
 | SONIC ADVENTURE 2 | MK-51117 | 1,541 | virtual VMU | — |  | — | saves and loads; gameplay was choppy with input lag on that build (virtual VMU) |
-| SWORD OF THE BERSERK GUTS RAGE | T-36805N | 1,641 | virtual VMU | — |  | — | tested by the owner; the game loads only from A1 (virtual VMU in A1) |
+| SWORD OF THE BERSERK GUTS RAGE | T-36805N | 1,641 | virtual VMU | — |  | — | works; the game only uses a card in A1 and ignores a virtual card in A2 (virtual VMU in A1) |
 | THE HOUSE OF THE DEAD 2 | MK-51002 | 793 | virtual VMU (fixed arena) | — |  | — | saves and reloads after power-off; one freeze at the first boss (Original mode, VMU On) and minor lag; VMU Off did not crash (Background, virtual VMU (fixed arena)); known limit: residual lag; bounded scheduling work (integration roadmap section 3; not owner-confirmed) |
 | TIME STALKERS | MK-51011 | 645 | virtual VMU | — |  | — | boots, saves and reloads (Background New (X), virtual VMU in A1) |
 | TOY COMMANDER | MK-57020 | 730 | virtual VMU | — |  | native profile (Toy Commander) | sees imported saves, creates new saves and loads them after reboot; CD music works; intro movies still stall (virtual VMU; native CDDA) |
