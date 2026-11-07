@@ -1634,6 +1634,11 @@ build/test-vmu-sci-bus: tests/test_vmu_sci_bus.c tests/test_sci_sd_bus.c src/loa
 	$(CC) $(HOST_FLAGS) $(SANITIZERS) -fno-pie -no-pie -ffunction-sections -fdata-sections -DKUI_SCI_SD_TEST=1 -DKUI_RETAIL_TRANSPORT=1 -DKUI_VMU_EXPERIMENTAL=1 -Iinclude -Isrc/loader tests/test_vmu_sci_bus.c src/loader/sci_sd_bus.c -Wl,--gc-sections -o $@
 
 .PHONY: test-vmu-native-phase
+.PHONY: test-vmu-native-heap-scan-work
+test-vmu-native-heap-scan-work:
+	python3 tests/test_vmu_native_heap_scan_work.py
+test: test-vmu-native-heap-scan-work
+
 test-vmu-native-phase: build/test-vmu-native-phase
 	ASAN_OPTIONS=detect_leaks=0 ./build/test-vmu-native-phase
 build/test-vmu-native-phase: tests/test_vmu_native_phase.c src/loader/vmu_native_phase.inc src/core/vmu_native_profile.c include/kui/vmu_native_profile.h
