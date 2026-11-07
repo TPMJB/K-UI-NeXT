@@ -1,0 +1,165 @@
+{
+  "schema": "kui.library-console-results.v1",
+  "note": "Console outcomes already recorded, keyed by IP product number. Each names its source. Owner reports are what the owner saw on hardware; they are not complete acceptance unless stated. Absence here means no recorded console result, not a failure. known_blocker records a limit the static gates do not model.",
+  "games": [
+    {
+      "product": "T1204N",
+      "title": "Resident Evil Code: Veronica",
+      "route": "Background New (X), virtual VMU",
+      "result": "saves, power-cycle reload and Disc 2 verified",
+      "build": "2322fda6f92e",
+      "source": "docs/evidence/native-console-known.json"
+    },
+    {
+      "product": "MK-51136",
+      "title": "Crazy Taxi 2",
+      "route": "virtual VMU, own game card",
+      "result": "works on its own game card",
+      "build": "b9db89ba5fe4",
+      "source": "docs/evidence/native-console-known.json"
+    },
+    {
+      "product": "MK-51058",
+      "title": "Jet Grind Radio",
+      "route": "virtual VMU (A2)",
+      "result": "virtual A2 works",
+      "build": "e4cc4914bc6a",
+      "source": "docs/evidence/native-console-known.json"
+    },
+    {
+      "product": "MK-51100",
+      "title": "Phantasy Star Online",
+      "route": "native",
+      "result": "works; intro video slow",
+      "build": "c2e6f07cb52e",
+      "source": "docs/evidence/native-console-known.json; roadmap section 3"
+    },
+    {
+      "product": "MK-51002",
+      "title": "The House of the Dead 2",
+      "route": "Background, virtual VMU (fixed arena)",
+      "result": "saves and reloads after power-off; one freeze at the first boss (Original mode, VMU On) and minor lag; VMU Off did not crash",
+      "build": "test 7c",
+      "source": "owner report, 6 Nov 2026; roadmap section 3",
+      "known_blocker": "residual lag; bounded scheduling work (roadmap section 3)"
+    },
+    {
+      "product": "MK-51011",
+      "title": "Time Stalkers",
+      "route": "Background New (X), virtual VMU in A1",
+      "result": "boots, saves and reloads",
+      "build": "",
+      "source": "owner; roadmap section 3 ('Keep successful image results'); docs/universal-vmu-test.md"
+    },
+    {
+      "product": "T41601N",
+      "title": "Elemental Gimmick Gear",
+      "route": "Background, virtual VMU in A1",
+      "result": "saves and loads",
+      "build": "",
+      "source": "owner; roadmap section 3; docs/universal-vmu-test.md"
+    },
+    {
+      "product": "MK-51000",
+      "title": "Sonic Adventure",
+      "route": "ordinary / standalone New",
+      "result": "historical play reports; no shared virtual VMU yet",
+      "build": "",
+      "source": "roadmap section 3",
+      "known_blocker": "executable loader and exit lifetime still block shared virtual VMU (roadmap section 3)"
+    },
+    {
+      "product": "T15108N",
+      "title": "Silver",
+      "route": "Standard, exact VMU adapter",
+      "result": "works with its exact Standard VMU adapter",
+      "build": "",
+      "source": "roadmap section 3",
+      "known_blocker": "executable reclamation, exit consumers and lock behavior block the shared module (roadmap section 3)"
+    },
+    {
+      "product": "MK-51035",
+      "title": "Crazy Taxi",
+      "route": "standalone New",
+      "result": "works without virtual VMU",
+      "build": "",
+      "source": "roadmap section 3",
+      "known_blocker": "needs a reviewed retained arena (roadmap section 3)"
+    },
+    {
+      "product": "MK-51038",
+      "title": "Zombie Revenge",
+      "route": "standalone New",
+      "result": "works without virtual VMU",
+      "build": "",
+      "source": "roadmap section 3",
+      "known_blocker": "six-input Maple layout and allocator/reservation (roadmap section 3)"
+    },
+    {
+      "product": "T3601N",
+      "title": "Dead or Alive 2",
+      "route": "standalone demand reader",
+      "result": "works without virtual VMU",
+      "build": "",
+      "source": "roadmap section 3",
+      "known_blocker": "memory ownership not proved; earlier apparent free arenas were contradicted (roadmap section 3)"
+    },
+    {
+      "product": "T1216N",
+      "title": "Spawn: In the Demon's Hand",
+      "route": "native",
+      "result": "boots; intro problems; audio distortion observed",
+      "build": "",
+      "source": "roadmap section 3"
+    },
+    {
+      "product": "T1211N",
+      "title": "Power Stone 2",
+      "route": "physical disc",
+      "result": "saves and reloads from the physical disc (SCI)",
+      "build": "",
+      "source": "roadmap section 5"
+    },
+    {
+      "product": "T-36805N",
+      "title": "Sword of the Berserk: Guts' Rage",
+      "route": "virtual VMU",
+      "result": "card in A2 not seen; the game asks for A1. Per-game A1 option added since; not retested here",
+      "build": "",
+      "source": "owner report (session task 45)"
+    },
+    {
+      "product": "MK-51146",
+      "title": "Sega Smash Pack Volume 1",
+      "route": "Smash collection",
+      "result": "hardware-accepted",
+      "build": "cc81e63ca4d2",
+      "source": "main merge d393b859"
+    },
+    {
+      "product": "T40301N",
+      "title": "Armada",
+      "route": "Windows CE",
+      "result": "boots; intro movie playback is poor (under investigation)",
+      "build": "",
+      "source": "roadmap section 4"
+    },
+    {
+      "product": "MK-57020",
+      "title": "Toy Commander",
+      "route": "native CDDA",
+      "result": "boots; intro movie playback is poor (under investigation)",
+      "build": "",
+      "source": "roadmap section 4"
+    },
+    {
+      "product": "T13001N",
+      "title": "Blue Stinger",
+      "route": "",
+      "result": "",
+      "build": "",
+      "source": "roadmap section 3",
+      "known_blocker": "earlier interrupt-table initializer and its ownership (roadmap section 3)"
+    }
+  ]
+}
