@@ -13,7 +13,7 @@ import tempfile
 import unittest
 import zipfile
 
-from games_fixture import DATA, RAW, SESSION, make_fixture, raw_sector
+from games_fixture import DATA, RAW, SESSION, make_fixture, raw_sector, record
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location('library_startup_bundle',
@@ -28,6 +28,13 @@ def patch(folder, sector, offset, content):
     with (folder / 'track03.bin').open('r+b') as track:
         track.seek(sector * RAW + 16 + offset)
         track.write(content)
+
+
+def add_root_records(folder, *records):
+    """Append directory records after the fixture's three root entries."""
+    used = sum(len(r) for r in (record(b"\0", SESSION + 20, DATA, True), record(b"\1", SESSION + 20, DATA, True),
+                                record(b"1ST_READ.BIN;1", SESSION + 21, DATA * 2)))
+    patch(folder, 20, used, b''.join(records))
 
 
 def cook(folder):
@@ -147,11 +154,61 @@ class LibraryStartupBundleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'already holds'):
             self.build()
 
+    def test_unusual_names_elsewhere_on_the_disc_do_not_stop_extraction(self):
+        theta = self.games / 'Theta'
+        make_fixture(theta, title=b'Theta Names Fixture')
+        patch(theta, 21, 0, b'THETA')
+        add_root_records(theta, record(b'README.;1', SESSION + 22, 16), record(b'AUX.DAT;1', SESSION + 22, 16),
+                         record(b'CON.DRV;1', SESSION + 22, 16))
+        rows, created = self.build()
+        row = next(row for row in rows if row['source'] == 'Theta/disc.gdi')
+        self.assertEqual(row['status'], 'bundled', row.get('error'))
+        with zipfile.ZipFile(created[0]) as archive:
+            with zipfile.ZipFile(io.BytesIO(archive.read(row['archive']))) as game:
+                self.assertEqual(game.namelist(), ['1ST_READ.BIN', 'IP.BIN', 'disc.gdi', 'startup-info.json'])
+                report = json.loads(game.read('startup-info.json'))
+        listed = {item['path']: item for item in report['inventory']}
+        self.assertIn('README', listed, 'the separator dot of an extensionless name is dropped')
+        self.assertTrue(listed['AUX.DAT'].get('unsafe_name'))
+        self.assertEqual([(item['path'], item['reason']) for item in report['omitted_files']],
+                         [('CON.DRV', 'unsafe_name')])
+
+    def test_requested_program_files_are_copied_even_for_a_sent_boot(self):
+        iota = self.games / 'Iota'
+        make_fixture(iota, title=b'Iota Loader Fixture')
+        patch(iota, 0, 64, b'IOTA-0001 ')
+        patch(iota, 21, 0, b'IOTA')
+        add_root_records(iota, record(b'GAME.BIN;1', SESSION + 22, 64))
+        first, _ = self.build()
+        boot = next(row for row in first if row['source'] == 'Iota/disc.gdi')['boot_sha256']
+        known = self.folder / 'already-sent.json'
+        known.write_text(json.dumps({'startups': [boot]}))
+        requests = self.folder / 'requests.json'
+        requests.write_text(json.dumps({'requests': [
+            {'product': 'IOTA-0001', 'paths': ['GAME.BIN', 'MISSING.BIN']}]}))
+        self.output = self.folder / 'out2'
+        self.output.mkdir()
+        rows, created = self.build(known_path=known, requests_path=requests)
+        row = next(row for row in rows if row['source'] == 'Iota/disc.gdi')
+        self.assertEqual((row['status'], row['requested_files']), ('bundled', ['GAME.BIN']),
+                         'a requested program is new even when the boot file was sent')
+        with zipfile.ZipFile(created[0]) as archive:
+            with zipfile.ZipFile(io.BytesIO(archive.read(row['archive']))) as game:
+                self.assertIn('GAME.BIN', game.namelist())
+        known.write_text(json.dumps({'startups': [{'startup_key': row['startup_key']}]}))
+        self.output = self.folder / 'out3'
+        self.output.mkdir()
+        rows, _ = self.build(known_path=known, requests_path=requests)
+        self.assertEqual(next(r for r in rows if r['source'] == 'Iota/disc.gdi')['status'], 'already_sent')
+
     def test_already_sent_startups_are_listed_not_copied(self):
         first, _ = self.build()
         beta = next(row for row in first if row['source'] == 'Beta/disc.gdi')
         known = self.folder / 'already-sent.json'
-        known.write_text(json.dumps({'startups': [{'title': 'Beta', 'boot_sha256': beta['boot_sha256']}]}))
+        gamma = next(row for row in first if row['source'] == 'Gamma CE/disc.gdi')
+        known.write_text(json.dumps({'startups': [{'title': 'Beta', 'boot_sha256': beta['boot_sha256']},
+                                                  {'title': 'Gamma', 'startup_key': gamma['startup_key']},
+                                                  {'title': 'not CE', 'boot_sha256': gamma['boot_sha256']}]}))
         self.output = self.folder / 'out2'
         self.output.mkdir()
         rows, created = self.build(known_path=known)
@@ -159,8 +216,10 @@ class LibraryStartupBundleTests(unittest.TestCase):
         self.assertEqual(row['status'], 'already_sent')
         self.assertNotIn('archive', row)
         self.assertEqual(row['boot_sha256'], beta['boot_sha256'])
+        self.assertEqual(next(row for row in rows if row['source'] == 'Gamma CE/disc.gdi')['status'],
+                         'already_sent', 'a CE startup matches by its startup key')
         with zipfile.ZipFile(created[0]) as archive:
-            self.assertEqual(json.loads(archive.read('library.json'))['already_sent'], 1)
+            self.assertEqual(json.loads(archive.read('library.json'))['already_sent'], 3)
             self.assertNotIn(beta['archive'], archive.namelist())
         known.write_text(json.dumps({'startups': ['not-a-hash']}))
         self.output = self.folder / 'out3'

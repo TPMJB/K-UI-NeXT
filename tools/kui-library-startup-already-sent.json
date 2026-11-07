@@ -1,10 +1,18 @@
 {
   "schema": "kui.library-startup.already-sent.v1",
-  "note": "Boot-file SHA256 values of native startups already received (Library-startup-01, 28 Oct 2026). Hashes only; no game bytes.",
+  "note": "Startups already received (Library-startup-01, 28 Oct 2026; run 401cd6d5, 7 Nov 2026): native boot-file SHA256 values and Windows CE startup keys. Hashes only; no game bytes.",
   "startups": [
+    {
+      "title": "ARMADA",
+      "startup_key": "032e67812643ba793b36f255a0ce6eadd05314f5318117252e16c962e8537054"
+    },
     {
       "title": "BLUE STINGER",
       "boot_sha256": "491fd69cd64100786372169e95e50ca2733bbfb88a54ef15da6a1f66297f5593"
+    },
+    {
+      "title": "BUST A MOVE 4",
+      "startup_key": "77d6e1be627be9fd09fa0a3e97f2b61f23a987342ab01592796d9b0674cf1a1f"
     },
     {
       "title": "CRAZY TAXI",
@@ -31,8 +39,36 @@
       "boot_sha256": "16b45fcc84992a60d5a64bf64bf22b699b27306b95f177ba3d9730ca380069ae"
     },
     {
+      "title": "FROGGER 2",
+      "boot_sha256": "74ba3244472763a07131d7b12463575f536c1089c2ede902a350b04cc40bd84c"
+    },
+    {
+      "title": "GENERATOR 2",
+      "boot_sha256": "90dfaa341e5908d4fd40af438fd4e244d2ee066554b95b30e0b4fca144e48722"
+    },
+    {
+      "title": "GRANDIA2",
+      "boot_sha256": "dd583571969d275b479e33edfd98ed5e2097d16c37ff6aaba59a7abaf057dc45"
+    },
+    {
       "title": "JET GRIND RADIO",
       "boot_sha256": "8b294765225fc32020dd59010464a730b710d0bd79f69c79f16218cc4feac6a6"
+    },
+    {
+      "title": "MDK2",
+      "boot_sha256": "ac5826c9a371de04207748e60e49e0a3c13a39468902f89d8c1c82e1f544bb48"
+    },
+    {
+      "title": "NIGHTMARE CREATURES II",
+      "startup_key": "4c15fcd2a80bf5352f80ad717d67aabfc7317611c9981a6768e62a44abbb3797"
+    },
+    {
+      "title": "OMIKRON THE NOMAD SOUL",
+      "boot_sha256": "5567589856f88d448bdd4fe640133cac208357ab29f17308bd7363ef359cbb6c"
+    },
+    {
+      "title": "POWER STONE",
+      "boot_sha256": "66003bf4aa549c8b78692080b46ffa1446432762609da9bc8c323633079546a5"
     },
     {
       "title": "POWER STONE 2 USA",
@@ -43,12 +79,40 @@
       "boot_sha256": "11dc59ee0278675decf5e0bf1fa30646f889a0e5a7f10251f3c3a697e42a28e5"
     },
     {
+      "title": "QUAKE III ARENA",
+      "boot_sha256": "5c7506857fdea9062ae322dd20bb4691ca5bcee1e066e90029666eb5c994f088"
+    },
+    {
       "title": "RAYMAN 2 THE GREAT ESCAPE",
       "boot_sha256": "9e34357880d5fbbca1559ce8797baed66c6b4370e967b2af23f07cba9b3a7099"
     },
     {
+      "title": "RECORD OF LODOSS WAR",
+      "boot_sha256": "b05853a539011b02fff09062441372a924f4ac2465abc498d69631d4b137bdf5"
+    },
+    {
       "title": "RESIDENT EVIL CODE VERONICA",
       "boot_sha256": "199b72af9bcd7fb80d401d4645c731e595970a0dcbcfd98e1bec187f4382fbbb"
+    },
+    {
+      "title": "RUSH 2049",
+      "boot_sha256": "336c97aa409e4b38582c43077381b1c99d6a64bbec630e3be7a9829adda8e688"
+    },
+    {
+      "title": "SEGA SMASH PACK VOLUME 1",
+      "boot_sha256": "3a311b189a4870ccbefc4fcd306e2d38e5ae810ae5edd225af6b9aa6d5df5f10"
+    },
+    {
+      "title": "SHENMUE",
+      "boot_sha256": "ca98879a97df87b668836bbfa597d38c6f9efc3fd45160208b8d5d866325f32c"
+    },
+    {
+      "title": "SHENMUE",
+      "boot_sha256": "c3dbf4924d0dceac5e7155299cbc291af7eff2825aa0ef15a798e4ab3d451a63"
+    },
+    {
+      "title": "SHENMUE2 EU",
+      "boot_sha256": "4004da908c85d358b3c92c888501c8e872e70afcc6141141bff05bfe9e255fe3"
     },
     {
       "title": "SILVER",
@@ -67,6 +131,10 @@
       "boot_sha256": "6919ed8bc96782d041be41ba86f90bf86d99632b8b7787391969721bc0991736"
     },
     {
+      "title": "SOUL REAVER",
+      "boot_sha256": "775dc1d401c907f44ce1754017150e9b333dcccf32f563ed69cb4d7be8cb25d9"
+    },
+    {
       "title": "SPAWN IN THE DEMONS HAND",
       "boot_sha256": "8f085c28f6a579662f95b65b0611f1dc08dded35fd5c6e676821c72a5384ed5f"
     },
@@ -75,12 +143,32 @@
       "boot_sha256": "5211c62a000b7d96e2c17f2a04b14511e4ce47c6cb585a2da89716786000b7ca"
     },
     {
+      "title": "TEST DRIVE LE MANS",
+      "boot_sha256": "955a20882f7669c0f17646d2b445d32f56440a4f6dcf82e02a0b4c8d594b8713"
+    },
+    {
       "title": "THE HOUSE OF THE DEAD 2",
       "boot_sha256": "37817967c2949de6ca4c83522f7eff36fb18ea17a5f06d995f6e93319511ee6f"
     },
     {
       "title": "TIME STALKERS",
       "boot_sha256": "a9fa66b6bcc482dfaa47683d552e42f24a8200c8efa5ed905d8184eedeba3ac0"
+    },
+    {
+      "title": "TONY HAWKS PRO SKATER 2",
+      "boot_sha256": "5f56ecf0e681fa1e8c3d07cfd84c14984a0a23cecfd629a61286a80f1c9d63fc"
+    },
+    {
+      "title": "TOY COMMANDER",
+      "boot_sha256": "ee68a326da964fec5892b7226311f2293fd3a0bbf5bac496ec82991964d49bbd"
+    },
+    {
+      "title": "WORMS ARMAGEDDON",
+      "startup_key": "6768dbd72c2bc6f954d187582737b93902bb567a1d3abbd96e926d06bd827e60"
+    },
+    {
+      "title": "WORMS WORLD PARTY",
+      "startup_key": "286991eae263574cd44fb46971ae0a679172f554ed38d97518868e33d9d04182"
     },
     {
       "title": "ZOMBIE REVENGE",

@@ -160,6 +160,15 @@
       "build": "",
       "source": "roadmap section 3",
       "known_blocker": "earlier interrupt-table initializer and its ownership (roadmap section 3)"
+    },
+    {
+      "product": "MK-51057",
+      "title": "Generator Vol. 2",
+      "route": "",
+      "result": "",
+      "build": "",
+      "source": "disc file listing, 7 Nov 2026",
+      "known_blocker": "demo disc: its menu starts several separate game programs (native and Windows CE); the checks cover the menu only"
     }
   ]
 }

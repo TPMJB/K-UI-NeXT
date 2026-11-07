@@ -75,16 +75,18 @@ class TableTests(unittest.TestCase):
     def test_runs_merge_and_every_row_is_classified(self):
         report = table.build(self.first + self.second, self.folder / 'work', 0x8cebe748, self.console)
         self.assertEqual(len(report['runs']), 2)
-        checked = [g for g in report['games'] if g['class'] != 'not_checked']
+        checked = [g for g in report['games'] if g['class'] in ('background_vmu', 'new_only', 'blocked')]
         self.assertEqual(sorted(g['title'] for g in checked), ['Alpha Fixture', 'Beta Fixture'],
                          'each startup is checked once; repeats across runs are duplicates')
         for g in checked:
             self.assertEqual(g['class'], 'blocked', 'synthetic boot files resolve no launch record')
             self.assertIsNotNone(g['blocker'])
         repeats = [g for g in report['games'] if g['status'] == 'duplicate']
-        self.assertEqual(len(repeats), 2)
+        self.assertEqual(len(repeats), 3, 'Alpha, Beta and the CE game repeat in the second run')
         ce = [g for g in report['games'] if g.get('windows_ce')]
-        self.assertTrue(ce and all(g['class'] == 'not_checked' for g in ce))
+        self.assertEqual([(g['class'], g['status']) for g in ce],
+                         [('windows_ce', 'bundled'), ('not_checked', 'duplicate')])
+        self.assertEqual((ce[0]['background_vmu'], ce[0]['cd_music']), ('Windows CE reader', '—'))
         beta = next(g for g in checked if g['title'] == 'Beta Fixture')
         self.assertEqual(beta['console']['result'], 'works')
         text = table.markdown(report)

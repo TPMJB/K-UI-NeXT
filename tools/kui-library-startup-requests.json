@@ -1,0 +1,12 @@
+{
+  "schema": "kui.library-startup.requests.v1",
+  "note": "Extra program files to copy for games whose boot file is only a loader. Exact ISO paths per IP product number; a path absent from a disc is skipped. No other assets are requested.",
+  "requests": [
+    {"product": "MK-51061", "title": "Quake III Arena",
+     "paths": ["QUAKE3/Q3_USA.BIN", "QUAKE3/INTRO.BIN"],
+     "why": "96 KiB 1ST_READ.BIN loads the game program"},
+    {"product": "T15123N", "title": "Test Drive Le Mans",
+     "paths": ["LEMANS24.BIN", "FMV.BIN"],
+     "why": "105 KiB 1ST_READ.BIN loads the game program and a movie player"}
+  ]
+}

@@ -123,8 +123,8 @@ def read_parts(paths):
     return first, rows, {name: blob for name, (_, blob) in blobs.items()}, missing
 
 
-def open_game(blob, row):
-    """The checked boot file of one single-game bundle."""
+def open_game(blob, row, windows_ce=False):
+    """The checked boot file of one single-game bundle (a CE kernel when windows_ce)."""
     with zipfile.ZipFile(io.BytesIO(blob)) as archive:
         infos = {info.filename: info for info in archive.infolist()}
         names = list(infos)
@@ -140,7 +140,7 @@ def open_game(blob, row):
         report = json.loads(bounded_read(archive, infos['startup-info.json'], INFO_LIMIT,
                                          'startup-info.json'))
     files = {entry.get('path'): entry for entry in report.get('files', []) if type(entry) is dict}
-    if (len(ip) != 32768 or report.get('windows_ce') is not False or
+    if (len(ip) != 32768 or report.get('windows_ce') is not windows_ce or
             report.get('boot_path') != row['boot_path'] or
             hashlib.sha256(boot).hexdigest() != row['boot_sha256'] or
             hashlib.sha256(ip).hexdigest() != row['ip_sha256'] or

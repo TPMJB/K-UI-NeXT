@@ -72,6 +72,39 @@ def identifier(raw):
     return safe_basename(name)
 
 
+def listed_name(raw):
+    """A directory entry's name for the inventory and traversal.
+
+    Only copied files must also be safe ZIP names (copy_safe). Listing a name
+    never writes it to the host, so unusual names elsewhere on the disc do not
+    stop extraction. The separator dot of an extensionless ISO name
+    (``NAME.;1``) is dropped, as the drive firmware matches it."""
+    try:
+        name = raw.decode('ascii').upper()
+    except UnicodeDecodeError:
+        name = raw.decode('latin-1').upper()
+    if ';' in name:
+        name, version = name.split(';', 1)
+        if version != '1':
+            raise ValueError(f'Unsupported or ambiguous ISO file version: {raw!r}')
+    if name.endswith('.') and name.count('.') == 1:
+        name = name[:-1]
+    if (not name or name in ('.', '..') or
+            any(ord(c) < 32 or c in '/\\' for c in name)):
+        raise ValueError(f'Unusable ISO filename {raw!r}')
+    return name
+
+
+def copy_safe(path):
+    """Whether every component of an ISO path is a safe extracted ZIP name."""
+    try:
+        for part in path.split('/'):
+            safe_basename(part)
+    except ValueError:
+        return False
+    return True
+
+
 def include_path(path):
     """Resolve an ISO path, never a path in the host filesystem."""
     if not isinstance(path, str) or not path or '\\' in path:
@@ -387,7 +420,9 @@ def extract(gdi, include=()):
         while count:
             track = next((t for t in tracks if t[0] <= lba < t[1]), None)
             if not track or track[2] != 4:
-                raise ValueError('Startup extent leaves the data tracks')
+                ranges = ', '.join(f"{t[0]}-{t[1]}{'' if t[2] == 4 else ' audio'}" for t in tracks)
+                raise ValueError(f'Startup extent leaves the data tracks at LBA {lba} '
+                                 f'(tracks {ranges})')
             take = min(count, track[1] - lba)
             with track[3].open('rb') as source:
                 stride = track[4]
@@ -437,6 +472,7 @@ def extract(gdi, include=()):
         raise ValueError('Invalid ISO root directory record')
     pending = [('', root_lba, root_size)]
     seen_directories, seen_paths, selected = set(), set(), {}
+    unsafe_omitted = []
     inventory = []
     scanned, directory_bytes = 0, 0
     while pending:
@@ -468,7 +504,7 @@ def extract(gdi, include=()):
                 if file_flags != 2:
                     raise ValueError('Invalid ISO dot directory entry')
                 continue
-            name = identifier(raw_name)
+            name = listed_name(raw_name)
             path = prefix + name
             if len(path) > 65535:
                 raise ValueError('ISO path exceeds the ZIP filename limit')
@@ -477,6 +513,8 @@ def extract(gdi, include=()):
             seen_paths.add(path)
             inventory.append({'path': path, 'lba': extent, 'bytes': file_size,
                               'flags': file_flags})
+            if not copy_safe(path):
+                inventory[-1]['unsafe_name'] = True
             if file_flags & 2:
                 if file_flags != 2:
                     raise ValueError('Unsupported ISO directory flags')
@@ -484,6 +522,14 @@ def extract(gdi, include=()):
                     raise ValueError('ISO directory count exceeds the bounded extraction limit')
                 pending.append((path + '/', extent, file_size))
             elif (name == boot_name or runtime_candidate(name) or path in requested):
+                required_file = (name == boot_name or path in requested or
+                                 (windows_ce and name.endswith('.EXE')))
+                if not copy_safe(path):
+                    if required_file:
+                        raise ValueError(f'Required file has an unsafe ISO name: {path!r}')
+                    unsafe_omitted.append({'path': path, 'lba': extent, 'bytes': file_size,
+                                           'reason': 'unsafe_name'})
+                    continue
                 if file_flags:
                     raise ValueError('Selected file has unsupported or multi-extent ISO flags')
                 if not file_size:
@@ -573,7 +619,7 @@ def extract(gdi, include=()):
                         'to keep the startup bundle bounded. See omitted_files and '
                         'inventory; extensions alone do not prove runtime code.')
     selected = included
-    omitted.sort(key=lambda item: item['path'])
+    omitted = sorted(omitted + unsafe_omitted, key=lambda item: item['path'])
     reserved = {'ip.bin', 'disc.gdi', 'disc.cue', 'startup-info.json'}
     if any(path.split('/', 1)[0].casefold() in reserved for path in selected):
         raise ValueError('Selected ISO boot/runtime path conflicts with generated bundle metadata')

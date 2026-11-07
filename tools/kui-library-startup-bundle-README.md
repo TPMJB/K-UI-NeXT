@@ -1,4 +1,4 @@
-# Whole-library startup bundle (v2)
+# Whole-library startup bundle (v2.1)
 
 One command inventories every Dreamcast image below a folder and collects what
 K-UI needs to check each game against its launch routes: the disc header
@@ -11,6 +11,8 @@ Keep these files together in one folder:
 - `kui-library-startup-bundle.py`
 - `kui-cdda-startup-bundle.py` (reads each image)
 - `already-sent.json` (startups already received; they are listed, not copied)
+- `requests.json` (extra program files for the few games whose boot file is
+  only a loader, such as Quake III and Test Drive Le Mans)
 
 Then run Python 3 against your games folder:
 
@@ -35,7 +37,11 @@ What it does with each image:
   header details, not copied again. Use `--resend-all` to copy it anyway.
 - **Same startup as an earlier image** (a second disc with the same boot file,
   or a 2048-byte copy of a raw GDI): listed as a duplicate, not copied again.
+- **Requested program files** (`requests.json`): copied for those games even
+  when their boot file was already sent.
 - **Anything it cannot read:** listed with the reason; the rest continue.
+  Unusual file names elsewhere on a disc no longer stop it; only the copied
+  files need ordinary names.
 - **CDI, CHD, CSO, ZSO and other formats:** listed by name only. To include
   one of those games, convert it to GDI or CUE/BIN first.
 

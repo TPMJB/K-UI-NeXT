@@ -35,10 +35,15 @@ CONSOLE = ROOT / 'docs/evidence/library-console-results.json'
 ARENA_SOURCES = ('tools/native_arena_plan_probe.c', 'src/core/vmu_native_heap.c',
                  'src/core/vmu_native_program.c', 'src/core/vmu_native_exit.c',
                  'src/core/vmu_native_patch.c', 'src/core/hash.c', 'src/core/data.c')
+AUDIO_SOURCES = ('tools/library_audio_profile_probe.c', 'src/core/hash.c', 'src/core/data.c')
+SMASH_PRODUCT = 'MK-51146'
+REQUESTS = ROOT / 'tools/kui-library-startup-requests.json'
 STAGE_BEGIN = 0x8ce00000
 NOTES = dict(sweep.GATE_NOTES, placement_384k='284 KiB lease does not fit',
              live_bind_384k='live layout bind refused',
-             sdk_sci_family='no SDK SCI family (reader interrupt route)')
+             sdk_sci_family='no SDK SCI family (reader interrupt route)',
+             loader='boot file is only a loader; its game program is requested (bundler v2.1)',
+             loader_program='boot file is only a loader; second-program check pending')
 
 
 def product_key(product):
@@ -74,6 +79,32 @@ def arena_plans(startups, work):
     return result
 
 
+def audio_profiles(files, work):
+    """CD-music contract per boot file, from the production fingerprints."""
+    executable = work / 'audio-profile-probe'
+    subprocess.run([*shlex.split(os.environ.get('HOST_CC', 'cc')), '-std=c11', '-O2', '-Wall', '-Wextra',
+                    '-Werror', '-Wpedantic', '-I', str(ROOT / 'include'),
+                    *[str(ROOT / name) for name in AUDIO_SOURCES], '-o', str(executable)], check=True)
+    result = {}
+    for key, path in files.items():
+        run = subprocess.run([str(executable), str(path)], capture_output=True, text=True)
+        result[key] = json.loads(run.stdout) if run.returncode == 0 else {}
+    return result
+
+
+def cd_music(row, profile):
+    """What the launcher offers for CD music on this disc."""
+    if not row.get('cdda_tracks'):
+        return '—'
+    if product_key(row.get('product')) == SMASH_PRODUCT:
+        return 'Smash collection route'
+    if row.get('windows_ce'):
+        name = profile.get('ce_music_profile')
+        return f'CE profile ({name})' if name else 'no profile: CD music Off'
+    name = profile.get('native_cdda_binding')
+    return f'native profile ({name})' if name else 'no profile: CD music Off'
+
+
 def routes(gates, family, arena):
     """(Background X/Y with virtual VMU, without VMU, first blocker) as the launcher decides."""
     structural = bool(gates.get('structural_384k_models_passed'))
@@ -89,7 +120,7 @@ def routes(gates, family, arena):
 
 def build(parts, work, stage_end, console_path=CONSOLE):
     work.mkdir(parents=True, exist_ok=True)
-    rows, startups, runs = [], {}, []
+    rows, startups, kernels, runs = [], {}, {}, []
     (work / 'startups').mkdir(exist_ok=True)
     for group in group_runs(parts):
         library, merged, blobs, missing = sweep.read_parts(group)
@@ -105,6 +136,12 @@ def build(parts, work, stage_end, console_path=CONSOLE):
                     path = work / 'startups' / (key[:16] + '.bin')
                     path.write_bytes(sweep.open_game(blobs[row['archive']], row))
                     startups[key] = path
+            if row['status'] == 'bundled' and row.get('windows_ce'):
+                key = row['startup_key']
+                if key not in kernels:
+                    path = work / 'startups' / ('ce-' + key[:16] + '.bin')
+                    path.write_bytes(sweep.open_game(blobs[row['archive']], row, windows_ce=True))
+                    kernels[key] = path
             rows.append(row)
     gates, families, arenas = {}, {}, {}
     if startups:
@@ -115,8 +152,10 @@ def build(parts, work, stage_end, console_path=CONSOLE):
         families = {key: value.get('sdk_sci_family') == 1
                     for key, value in sweep.sci_families(startups, work).items()}
         arenas = arena_plans(startups, work)
+    audio = audio_profiles({**startups, **kernels}, work) if startups or kernels else {}
     console = {product_key(game['product']): game
                for game in json.loads(Path(console_path).read_text())['games']}
+    loaders = {product_key(item['product']) for item in json.loads(REQUESTS.read_text())['requests']}
     games, seen = [], {}
     for row in rows:
         out = {key: row[key] for key in ('source', 'status', 'title', 'product', 'version', 'region',
@@ -140,10 +179,24 @@ def build(parts, work, stage_end, console_path=CONSOLE):
                 out['blocker'] = blocker
                 out['class'] = ('background_vmu' if out['background_vmu'] != 'refused' else
                                 'new_only' if out['without_vmu'] != 'refused' else 'blocked')
+                out['cd_music'] = cd_music(row, audio.get(key, {}))
+                if product_key(row.get('product')) in loaders:
+                    # The gates above describe the loader, not the game program.
+                    out.update(background_vmu='not known', without_vmu='not known',
+                               blocker='loader_program' if row.get('requested_files') else 'loader',
+                               **{'class': 'loader'})
+        elif row.get('windows_ce') and row.get('startup_key') in kernels:
+            key = row['startup_key']
+            if key in seen:
+                out.update(status='duplicate', duplicate_of=seen[key])
+            else:
+                seen[key] = row.get('slug') or row.get('title') or row['source']
+                out.update(background_vmu='Windows CE reader', without_vmu='—', blocker=None,
+                           cd_music=cd_music(row, audio.get(key, {})), **{'class': 'windows_ce'})
         if 'class' not in out:
             out['class'] = 'not_checked'
             out['reason'] = (
-                'Windows CE: separate reader; kernel profile check pending' if row.get('windows_ce') else
+                'Windows CE: startup not received yet' if row.get('windows_ce') else
                 'same startup as ' + str(row.get('duplicate_of')) if out['status'] == 'duplicate' else
                 'startup not received yet' if out['status'] in ('windows_ce', 'cdda', 'already_sent', 'not_uploaded') else
                 'not read: ' + str(row.get('error')) if out['status'] == 'error' else
@@ -173,11 +226,11 @@ def cell(text):
 
 
 def markdown(report):
-    order = {'background_vmu': 0, 'new_only': 1, 'blocked': 2}
+    order = {'background_vmu': 0, 'new_only': 1, 'blocked': 2, 'loader': 3, 'windows_ce': 4}
     checked = sorted((g for g in report['games'] if g['class'] in order),
                      key=lambda g: (order[g['class']], str(g.get('title')).upper()))
-    lines = ['| Game | Product | Boot KiB | Background X/Y + virtual VMU | Without VMU | Blocker | Console (recorded) |',
-             '| --- | --- | ---: | --- | --- | --- | --- |']
+    lines = ['| Game | Product | Boot KiB | Background X/Y + virtual VMU | Without VMU | Blocker | CD music | Console (recorded) |',
+             '| --- | --- | ---: | --- | --- | --- | --- | --- |']
     def recorded(console):
         if not console:
             return ''
@@ -189,8 +242,9 @@ def markdown(report):
         console = g.get('console')
         lines.append(f"| {cell(g.get('title'))} | {cell(g.get('product'))} | {g['boot_bytes'] // 1024:,} | "
                      f"{g['background_vmu']} | {g['without_vmu']} | {cell(NOTES.get(g.get('blocker'), g.get('blocker') or ''))} | "
-                     f"{cell(recorded(console))} |")
+                     f"{cell(g.get('cd_music'))} | {cell(recorded(console))} |")
     rest, seen, cooked, other = [], set(), 0, 0
+    checked_products = {product_key(g.get('product')) for g in checked}
     for g in sorted((g for g in report['games'] if g['class'] == 'not_checked'),
                     key=lambda g: str(g.get('title') or g['source']).upper()):
         if g['status'] == 'other_format':
@@ -199,6 +253,8 @@ def markdown(report):
         if g['reason'] == V1_COOKED:
             cooked += 1  # the v1 bundler's 2048-byte copies; v2 reads them
             continue
+        if product_key(g.get('product')) in checked_products and not g['reason'].startswith('not read'):
+            continue  # an earlier upload or another disc already checked this game
         key = (g.get('title'), product_key(g.get('product')), g['reason'])
         if key not in seen:
             seen.add(key)

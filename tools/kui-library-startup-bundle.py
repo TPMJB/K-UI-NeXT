@@ -9,7 +9,7 @@ and Windows CE games, with or without CD audio, are all bundled: IP.BIN, the
 IP-selected boot file, Windows CE EXEs, small runtime/sound-driver files and
 the disc's file listing (names and sizes only). No audio, movies or other game
 assets are copied. Startups listed in already-sent.json beside this script are
-not copied again. Other image formats are listed by name. Writes
+not copied again; extra program files named per product in requests.json are. Other image formats are listed by name. Writes
 Library-startup-01.zip, -02.zip ... of at most --part-mb MiB each, without
 overwriting. Requires only Python3's standard library. Source tracks are read
 only. This prepares analysis evidence, not a game patch or a compatibility
@@ -27,7 +27,7 @@ import tempfile
 import uuid
 import zipfile
 
-LIBRARY_VERSION = '2'
+LIBRARY_VERSION = '2.1'
 SCHEMA = 'kui.library-startup.v2'
 DESCRIPTOR_LIMIT = 4096
 WALK_LIMIT = 1000000
@@ -39,6 +39,7 @@ TRACK_FORMATS = ('.iso', '.bin', '.raw')
 SLUG = re.compile(r'[0-9]{3,4}-[A-Za-z0-9-]{0,56}')
 SHA256 = re.compile(r'[0-9a-f]{64}')
 KNOWN_NAME = 'already-sent.json'
+REQUESTS_NAME = 'requests.json'
 
 
 def load_extractor():
@@ -188,22 +189,53 @@ def game_zip(entries, report, method):
 
 
 def load_known(path):
-    """Boot-file SHA256 values whose native startups were already sent."""
+    """Startups already sent: native boot-file SHA256 values, and startup keys
+    (any game, including Windows CE, whose kernels can be shared)."""
     if path is None or not path.is_file():
         return set()
     data = json.loads(path.read_text(encoding='utf-8'))
-    values = [item.get('boot_sha256') if isinstance(item, dict) else item
-              for item in data.get('startups', [])]
-    if any(not SHA256.fullmatch(str(value)) for value in values):
-        raise ValueError(f'{path.name} holds a malformed SHA256')
-    return set(values)
+    values = set()
+    for item in data.get('startups', []):
+        if isinstance(item, dict):
+            entry = [('boot', item['boot_sha256'])] if 'boot_sha256' in item else []
+            entry += [('key', item['startup_key'])] if 'startup_key' in item else []
+        else:
+            entry = [('boot', item)]
+        if not entry or any(not SHA256.fullmatch(str(value)) for _, value in entry):
+            raise ValueError(f'{path.name} holds a malformed SHA256')
+        values.update(entry)
+    return values
 
 
-def classify(descriptor, root, index, method, staging, known):
+def product_key(product):
+    return str(product or '').split(' ')[0].upper()
+
+
+def load_requests(path):
+    """Exact extra ISO files per product, for games whose boot is a loader."""
+    if path is None or not path.is_file():
+        return {}
+    data = json.loads(path.read_text(encoding='utf-8'))
+    requests = {}
+    for item in data.get('requests', []):
+        paths = item.get('paths')
+        if not isinstance(paths, list) or not all(isinstance(value, str) for value in paths):
+            raise ValueError(f'{path.name} holds a malformed request')
+        requests.setdefault(product_key(item.get('product')), []).extend(
+            disc.include_path(value) for value in paths)
+    return requests
+
+
+def classify(descriptor, root, index, method, staging, known, requests=None):
     """One library row; writes the inner ZIP into staging when bundled."""
     row = {'source': descriptor.relative_to(root).as_posix(), 'status': 'error'}
     try:
         entries, report = disc.extract(descriptor)
+        wanted = (requests or {}).get(product_key(report['product']), [])
+        listed = {item['path'] for item in report['inventory'] if not item['flags'] & 2}
+        wanted = [path for path in wanted if path in listed]
+        if wanted:
+            entries, report = disc.extract(descriptor, wanted)
         entries, report = trim_optional(entries, report)
     except Exception as error:  # one unreadable disc must not stop the library
         row['error'] = str(error) if isinstance(error, (OSError, ValueError)) else \
@@ -228,7 +260,10 @@ def classify(descriptor, root, index, method, staging, known):
                copied_files=len(entries) - 2)
     if report['windows_ce']:
         row['application_candidates'] = report['application_candidates']
-    if not report['windows_ce'] and row['boot_sha256'] in known:
+    if wanted:
+        row['requested_files'] = wanted
+    if ('key', row['startup_key']) in known or \
+            (not report['windows_ce'] and not wanted and ('boot', row['boot_sha256']) in known):
         row['status'] = 'already_sent'
         return row
     row['slug'] = slug(index, row['product'], row['title'])
@@ -302,7 +337,7 @@ def describe(row):
     return f"{kind}; {row['boot_filename']} {row['boot_bytes']:,} bytes, {row['copied_files']} files"
 
 
-def build(root, output_dir, name, part_mb, known_path=None, log=print):
+def build(root, output_dir, name, part_mb, known_path=None, log=print, requests_path=None):
     root, output_dir = Path(root), Path(output_dir)
     if root.is_symlink() or not root.is_dir():
         raise ValueError(f'{root} is not a folder')
@@ -311,6 +346,7 @@ def build(root, output_dir, name, part_mb, known_path=None, log=print):
     if any(output_dir.glob(f'{name}-*.zip')):
         raise ValueError(f'{output_dir} already holds {name}-*.zip files; choose another --output-dir')
     known = load_known(known_path)
+    requests = load_requests(requests_path)
     descriptors, others = find_images(root)
     if not descriptors and not others:
         raise ValueError(f'No .gdi or .cue files below {root}')
@@ -319,7 +355,7 @@ def build(root, output_dir, name, part_mb, known_path=None, log=print):
     with tempfile.TemporaryDirectory(prefix='.kui-library-', dir=output_dir) as work:
         staging = Path(work)
         for index, descriptor in enumerate(descriptors, 1):
-            row = classify(descriptor, root, index, method, staging, known)
+            row = classify(descriptor, root, index, method, staging, known, requests)
             if row['status'] in ('bundled', 'already_sent'):
                 key = row['startup_key']
                 if key in by_key:
@@ -373,7 +409,8 @@ def main():
     known = None if args.resend_all else Path(__file__).resolve().with_name(KNOWN_NAME)
     try:
         rows, created = build(args.folder, args.output_dir, args.name, args.part_mb,
-                              known_path=known, log=lambda line: print(line, flush=True))
+                              known_path=known, log=lambda line: print(line, flush=True),
+                              requests_path=Path(__file__).resolve().with_name(REQUESTS_NAME))
     except (OSError, ValueError, zipfile.BadZipFile, UnicodeError) as error:
         parser.exit(1, f'Bundling stopped: {error}\n')
     except KeyboardInterrupt:
