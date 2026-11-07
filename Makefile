@@ -622,8 +622,12 @@ build/test-retail-boot: tests/test_retail_boot.c src/loader/retail_boot.h src/co
 
 # The real relay uses fixed P1 RAM addresses within ASan's shadow mapping.
 # Keep UBSan and execute the production source rather than relocating its RAM.
-RETAIL_RELAY_FLAGS = -fsanitize=undefined -fno-omit-frame-pointer -ffunction-sections -fdata-sections
+# Host tests execute the real CRC leaf; the privileged SH cache scope is
+# exercised separately by tests/test_native_stage_cached_crc.py.
+RETAIL_RELAY_FLAGS = -fsanitize=undefined -fno-omit-frame-pointer -ffunction-sections -fdata-sections \
+	-Dkui_native_stage_cached_crc32=kui_retail_stage_crc32_leaf
 RETAIL_RELAY_DEPS = src/core/game_ram_patches.c include/kui/game_ram_patches.h tests/test_retail_relay.c src/loader/retail_stage.c src/loader/retail_boot.h src/loader/retail_display.h src/loader/retail_storage.h include/kui/retail_loader_layout.h include/kui/retail_image.h src/core/retail_image.c
+RETAIL_RELAY_DEPS += src/loader/native_cold_cache_policy.h src/loader/stage_fast_crc32.h
 build/test-retail-relay: $(RETAIL_RELAY_DEPS)
 	@mkdir -p $(@D)
 	$(CC) $(HOST_FLAGS) $(RETAIL_RELAY_FLAGS) -Iinclude -Isrc/loader tests/test_retail_relay.c src/core/retail_image.c src/core/game_ram_patches.c -Wl,--gc-sections -o $@
