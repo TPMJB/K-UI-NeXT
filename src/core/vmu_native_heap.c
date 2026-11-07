@@ -154,12 +154,18 @@ enum kui_vmu_native_heap_result kui_vmu_native_heap_discover(
        (base&3u) || !span(base,(uint32_t)n)) return KUI_VMU_NATIVE_HEAP_INVALID;
     const uint8_t *p=image;struct kui_vmu_native_heap found={0};unsigned count=0;
     for(size_t at=0;at<n && n-at>=0x1d0u;at+=2u) {
+        /* Most halfwords cannot start either allocator. Keep that cheap gate
+         * ahead of the candidate's scratch initialization: the cold stage's
+         * freestanding memset otherwise clears 72 bytes at every offset. */
+        uint16_t op=h16(p+at);
+        bool dispatch=op==0x2fe6u && h16(p+at+2u)==0x6e53u;
+        if(!dispatch && op!=0x741fu) continue;
         struct kui_vmu_native_heap h={0};
-        if(h16(p+at)==0x2fe6u && h16(p+at+2u)==0x6e53u) {
+        if(dispatch) {
             if(!candidate(p,n,base,at,&h)) continue;
-        } else if(h16(p+at)==0x741fu) {
+        } else {
             if(!direct_candidate(p,n,base,at,&h)) continue;
-        } else continue;
+        }
         if(++count>1u) return KUI_VMU_NATIVE_HEAP_AMBIGUOUS;
         found=h;
     }

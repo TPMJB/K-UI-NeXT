@@ -2,12 +2,14 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Physical Standard descriptor ABI, profile exclusion and linked binding refusals."""
 import os
+import json
 from pathlib import Path
 import shlex
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'tools'))
 import check_retail_physical as tool
@@ -54,6 +56,61 @@ class PhysicalStandard(unittest.TestCase):
             with self.assertRaises(ValueError):tool.no_virtual_runtime({'stage':(*stage[:4],symbols)},module)
         for magic in (b'KUIVMUP2',b'KUINVM01',b'KUINVS01'):
             with self.assertRaises(ValueError):tool.no_virtual_runtime({'stage':stage},module+magic)
+
+    def test_only_bound_exact_cold_crc_names_are_stage_only(self):
+        stage,module=fixture();symbols=dict(stage[4])
+        symbols.update({name:(1,0,0,0xfff1) for name in tool.COLD_CRC_SYMBOLS})
+        cold=(*stage[:4],symbols)
+        with self.assertRaises(ValueError):tool.no_virtual_runtime({'stage':cold},module)
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'stage.elf';path.write_bytes(b'other stage')
+            with self.assertRaises(ValueError):tool.cold_crc_scope(cold,path)
+        with patch.object(tool,'cold_crc_scope',return_value={'bound':True}) as proof:
+            self.assertEqual(tool.no_virtual_runtime({'stage':cold},module,stage_path='actual'),{'bound':True})
+            proof.assert_called_once_with(cold,'actual')
+        for owner in ('entry','resident-sci','resident-scia'):
+            with patch.object(tool,'cold_crc_scope',return_value={'bound':True}):
+                with self.assertRaises(ValueError):tool.no_virtual_runtime({'stage':cold,owner:cold},module)
+        for name in ('_kui_native_stage_cached_crc32_extra','__kui_native_cached_boot_crc_extra',
+                     '_kui_vmu_worker','_native_runtime_mode','__kui_native_cached_discovery'):
+            extra=dict(symbols);extra[name]=(1,0,0,0xfff1)
+            with patch.object(tool,'cold_crc_scope',return_value={'bound':True}):
+                with self.assertRaises(ValueError):tool.no_virtual_runtime({'stage':(*stage[:4],extra)},module)
+        sys.path.insert(0,str(ROOT/'tests'))
+        import test_native_stage_cached_crc as checker
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'stage.elf';path.write_bytes(stage[0])
+            for result in ({'status':'REFUSED','elf_sha256':tool.sha(stage[0])},
+                           {'status':'PASS','elf_sha256':'0'*64}):
+                with patch.object(checker,'audit',return_value=result):
+                    with self.assertRaises(ValueError):tool.cold_crc_scope(cold,path)
+
+    def test_clean_compile_receipts_allow_only_explicit_auditor_edits(self):
+        stage,_=fixture();commit='f8807cb1656137cc5fad7854802d685ea168736f'
+        changed=['tools/check_retail_physical.py','tests/test_retail_physical.py']
+        def git(command,**_):
+            if command[1]=='rev-parse':return commit+'\n'
+            if command[1]=='status':return b' M tools/check_retail_physical.py\n'
+            if command[1]=='diff':return b'\0'.join(p.encode() for p in changed)+b'\0'
+            if command[1]=='ls-files':return b''
+            self.fail('Unexpected git command')
+        with tempfile.TemporaryDirectory() as directory:
+            p=Path(directory);receipt=dict(commit=commit,source_dirty=False,elf_sha256=tool.sha(stage[0]))
+            (p/'entry.compile.json').write_text(json.dumps(receipt))
+            (p/'plain-layout-config').write_text('LOW=1 TRACE=0 SONIC=0 BUILD='+commit[:12])
+            with patch.object(tool.subprocess,'check_output',side_effect=git):
+                before=(p/'entry.compile.json').read_bytes()
+                result=tool.source_provenance(p,{'entry':stage},False)
+                self.assertFalse(result['source_dirty'])
+                self.assertEqual(result['audit_only_worktree']['changed_paths'],sorted(changed))
+                self.assertEqual((p/'entry.compile.json').read_bytes(),before)
+                with self.assertRaises(ValueError):tool.source_provenance(p,{'entry':stage},False,permit_audit_only=False)
+                for bad in ('src/loader/retail_stage.c','Makefile.dc','docs/other.md','new-unknown.py'):
+                    changed.append(bad)
+                    with self.assertRaises(ValueError):tool.source_provenance(p,{'entry':stage},False)
+                    changed.pop()
+                receipt['elf_sha256']='0'*64;(p/'entry.compile.json').write_text(json.dumps(receipt))
+                with self.assertRaises(ValueError):tool.source_provenance(p,{'entry':stage},False)
 
     def test_reviewed_linked_guard_accepts_only_reader_zero_and_three_transports(self):
         for reader in (*range(8),0xffffffff):

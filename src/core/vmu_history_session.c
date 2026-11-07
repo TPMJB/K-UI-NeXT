@@ -4,6 +4,12 @@
 #include "kui/destination.h"
 #include "kui/hash.h"
 #include "kui/smash_launch_timing.h"
+#include "kui/vmu_launch_history.h"
+/* Standalone receipt users retain the complete path when the GUI's
+ * explicitly scoped coordinator is not linked. */
+extern int kui_vmu_launch_history_reuse(const struct kui_vmu_game_selection *,
+    const struct kui_vmu_history_platform *,struct kui_vmu_history_view *,kui_cancel_fn)
+    __attribute__((weak));
 #include <stdio.h>
 #include <string.h>
 
@@ -144,6 +150,26 @@ int kui_vmu_history_session_begin(const struct kui_vmu_game_selection *card,uint
         KUI_SMASH_TIME_END(resume);
         snprintf(out->notice,sizeof(out->notice),"Previous-session history is not confirmed; receipt retained for retry.");
         return result;
+    }
+    if(!previous.pending && kui_vmu_launch_history_reuse &&
+       kui_vmu_launch_history_reuse(card,platform,out,cancel)>0) {
+        /* Frontend recovery completed in this very mounted launch operation.
+         * The coordinator rechecks exact identity and rejects every write,
+         * I/O error or device change since that verified checkpoint. Only the
+         * unchanged checkpoint/view is reused; allocation and durable pending
+         * receipt publication are still performed afresh below. */
+        KUI_SMASH_TIME_END(resume);
+        KUI_SMASH_TIME_SPAN(replace_receipt,KUI_SMASH_UI_HISTORY_RECEIPT);
+        result=publish(&previous,card,card,platform,log,cancel);
+        KUI_SMASH_TIME_END(replace_receipt);
+        if(result<0) {
+            out->known=false;
+            snprintf(out->notice,sizeof(out->notice),"Session receipt was not verified; launch refused. Checkpoint kept.");
+            return result;
+        }
+        log("VMU history: reused this launch's verified recovery checkpoint");
+        snprintf(out->notice,sizeof(out->notice),"Pre-launch checkpoint and session receipt verified.");
+        return KUI_VMU_HISTORY_OK;
     }
     if(previous.pending && same_card(&previous.card,card)) {
         /* This one exclusively owned operation has just recovered and fully

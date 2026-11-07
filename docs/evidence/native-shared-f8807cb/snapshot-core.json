@@ -1,0 +1,56 @@
+{
+  "schema": "kui.shared-stage.checkpoint-snapshot.v1",
+  "status": "PASS",
+  "hardware_timing_measured": false,
+  "policy_cases": [
+    {
+      "policy": "conservative",
+      "source_title_flag": 1,
+      "cases": [
+        "snapshot_policy=0 imported=0 recovery=0 fs_reads=41 other_reads=1055 writes=1 syncs=2 identities=13",
+        "snapshot_policy=0 imported=0 recovery=1 fs_reads=41 other_reads=1056 writes=2 syncs=4 identities=16",
+        "snapshot_policy=0 imported=1 recovery=0 fs_reads=43 other_reads=1055 writes=1 syncs=2 identities=13",
+        "snapshot_policy=0 imported=1 recovery=1 fs_reads=43 other_reads=1056 writes=2 syncs=4 identities=16",
+        "PASS real-core stage snapshot equivalence, current CRC/SHA, pending recovery, imported saves, and final fault guards"
+      ]
+    },
+    {
+      "policy": "exclusive-checkpoint",
+      "source_title_flag": 0,
+      "cases": [
+        "snapshot_policy=1 imported=0 recovery=0 fs_reads=41 other_reads=529 writes=1 syncs=2 identities=11",
+        "snapshot_policy=1 imported=0 recovery=1 fs_reads=41 other_reads=530 writes=2 syncs=4 identities=14",
+        "snapshot_policy=1 imported=1 recovery=0 fs_reads=43 other_reads=529 writes=1 syncs=2 identities=11",
+        "snapshot_policy=1 imported=1 recovery=1 fs_reads=43 other_reads=530 writes=2 syncs=4 identities=14",
+        "PASS real-core stage snapshot equivalence, current CRC/SHA, pending recovery, imported saves, and final fault guards"
+      ]
+    }
+  ],
+  "sealed_handoff_bytes": 5088,
+  "sealed_handoffs_sha256": "86d80fb165024525f7a36a7077ffaff40ae64d96e685b545ddd58cac43b6ab1b",
+  "old_policy_control_refused": true,
+  "non_filesystem_sector_callbacks_before": 1055,
+  "non_filesystem_sector_callbacks_after": 529,
+  "removed_callbacks_per_clean_prepare": 526,
+  "unknown_backend_mutation_still_refused": true,
+  "invalidated_snapshot_uses_full_refresh": true,
+  "final_health_identity_and_marker_checks_retained": true,
+  "current_imported_and_recovered_contents_equal": true,
+  "source_sha256": {
+    "tests/test_vmu_stage_snapshot_policy.c": "167f5b81df9e2a054b0843f961c136ccac7d8a619e14e6680c20dc0a4e8ddd0c",
+    "src/loader/vmu_persist_stage.c": "9e9ac236018a3cb3b03702a823fa5bebd5ac23cbcc23a53bb1fd37b2477b3ec7",
+    "src/core/vmu_durable.c": "59ad7c67755b54abb80b4c301f7e35f1f0d3403ab871c6609fd81104e0d59cb0",
+    "src/core/vmu_persist_session.c": "89bb40972d6bf722e7890a608b526e84ea3a84070ce8f3430e9fb0a4f76c504a",
+    "src/core/vmu_fs_admission.c": "1235fa96c5458ed5dab82d3eecd34f6f4dba6c886a4f89de6fd67182ca3f2274",
+    "src/core/vmu_persist_profile.c": "a0468429007a0a7024b2251766149555b492032c0a37b407db2c3fb78f483f89",
+    "src/core/vmu_store.c": "c3a8cda8948153dcf0249e601818a10c4e5028dc018320e79f6db021cf9a004d",
+    "src/core/vmu_image.c": "01859a217004630fe207ddbe440b1e5894ece0ac05b25e9021a9e47bc4d04b41",
+    "src/core/hash.c": "1dda19d3dc6a645396d24484cd8842c72bba811dce38f317660a2eeda7dc0d67",
+    "src/core/retail_image.c": "632d19e0f78e474bed87249ad80a7a1b827c18cd98f07f9b9c21e81da1999986",
+    "include/kui/vmu_persist_stage.h": "158601d2481968c9761f1ea6234427c4b2a365705cd6658708a334df52cf8afb",
+    "src/loader/vmu_native_persist_stage.inc": "4d0ee1349e35dadbd224174c382042579f0b4df2012b331d003bf3869a8d7d98",
+    "src/loader/disc_vmu_stage.c": "281f7d4a9c4be916376a92607ed3c7c8d2962b4cc0587b6ec5dae2df497cac83",
+    "src/loader/vc2_ce_vmu_persist_stage.inc": "2822a4acd1c9036361e2334ffec00fa1c12746f9a8eb50074f3ef32e9638ccea",
+    "src/loader/smash_card_session_stage.inc": "bc6ac93d04414fa169a8035684b9f2f2b3c7a90ef65b184d3c01e0b69bb32895"
+  }
+}

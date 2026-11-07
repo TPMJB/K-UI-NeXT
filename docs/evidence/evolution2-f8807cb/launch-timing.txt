@@ -1,0 +1,64 @@
+KUI native UI launch timing v1
+build: f8807cb16561
+image: /Games/EVOLUTION2/EVOLUTION2.gdi
+state: prepared before handoff; game start unconfirmed
+product: T1711N
+reader: Background New
+virtual_vmu: On
+source_module_path: 0:/KUI/apps/games/retail-native-dual.kui
+source_module_build: f8807cb16561
+module_identity: verified source payload before launch-time patches
+scope: controller launch action to worker handoff-ready
+wall_clock: KOS monotonic milliseconds
+report_io: excluded from all measured intervals
+prfc: observation starts at request publication; nominal CPU ms are not calibrated wall time
+counter_scope: source callbacks/bytes/seeks are attempted file I/O; history calls are read attempts and bytes are delivered; executable SHA bytes count GUI source/prefix hashes
+total.action_to_ready: calls=1 ms=21704 cycles=4324711120 cpu_nominal_ms=21623 flags=00000003
+phase.request_setup: calls=1 ms=221 cycles=44125612 cpu_nominal_ms=220 flags=00000003
+phase.metadata: calls=1 ms=226 cycles=45172952 cpu_nominal_ms=225 flags=00000003
+phase.menu_proof: calls=1 ms=0 cycles=3608 cpu_nominal_ms=0 flags=00000003
+phase.track_map: calls=1 ms=120 cycles=23996100 cpu_nominal_ms=119 flags=00000003
+phase.prepare_other: calls=1 ms=234 cycles=46789124 cpu_nominal_ms=233 flags=00000003
+phase.child_module: calls=0 ms=unavailable cycles=unavailable cpu_nominal_ms=unavailable flags=00000000
+phase.mde_read_hash: calls=1 ms=8788 cycles=1753046300 cpu_nominal_ms=8765 flags=00000003
+phase.mde_extent: calls=1 ms=4721 cycles=941821740 cpu_nominal_ms=4709 flags=00000003
+phase.mde_proof: calls=1 ms=2733 cycles=545657972 cpu_nominal_ms=2728 flags=00000003
+phase.shared_card: calls=1 ms=3641 cycles=726055024 cpu_nominal_ms=3630 flags=00000003
+phase.capsules: calls=0 ms=unavailable cycles=unavailable cpu_nominal_ms=unavailable flags=00000000
+phase.report_cleanup: calls=1 ms=83 cycles=16640464 cpu_nominal_ms=83 flags=00000003
+phase.post_prepare: calls=1 ms=0 cycles=2816 cpu_nominal_ms=0 flags=00000003
+phase.activity: calls=1 ms=122 cycles=24534984 cpu_nominal_ms=122 flags=00000003
+phase.audio_shutdown: calls=1 ms=28 cycles=87652 cpu_nominal_ms=0 flags=00000003
+phase.module_load: calls=1 ms=406 cycles=81121068 cpu_nominal_ms=405 flags=00000003
+phase.module_verify: calls=1 ms=184 cycles=36392012 cpu_nominal_ms=181 flags=00000003
+phase.ip_check: calls=1 ms=147 cycles=29342296 cpu_nominal_ms=146 flags=00000003
+phase.session_prepare: calls=1 ms=49 cycles=9911008 cpu_nominal_ms=49 flags=00000003
+phase.file_cleanup: calls=1 ms=1 cycles=10388 cpu_nominal_ms=0 flags=00000003
+details: nested intervals; do not add to flat phases
+detail.history_total: calls=1 ms=3246 cycles=647804260 cpu_nominal_ms=3239 flags=00000003
+detail.history_resume: calls=1 ms=2732 cycles=545453924 cpu_nominal_ms=2727 flags=00000003
+detail.history_receipt: calls=1 ms=514 cycles=102323976 cpu_nominal_ms=511 flags=00000003
+detail.profile_cache: calls=1 ms=31 cycles=6219292 cpu_nominal_ms=31 flags=00000003
+detail.sdk_replay: calls=1 ms=2057 cycles=410292692 cpu_nominal_ms=2051 flags=00000003
+detail.early_history_resume: calls=1 ms=0 cycles=1676 cpu_nominal_ms=0 flags=00000003
+detail.executable_read: calls=1 ms=6621 cycles=1320695572 cpu_nominal_ms=6603 flags=00000003
+detail.executable_sha256: calls=2 ms=4049 cycles=807932036 cpu_nominal_ms=4038 flags=00000003
+detail.executable_crc32: calls=1 ms=145 cycles=29147452 cpu_nominal_ms=145 flags=00000003
+detail.program_extent: calls=1 ms=4721 cycles=941808484 cpu_nominal_ms=4709 flags=00000003
+metric.sdk_cache_hit: 1
+metric.mde_bytes: 4057056
+metric.profile_cache_hit: 1
+metric.module_crc32: 0x9B37B199
+metric.module_bytes: 290040
+metric.executable_source_bytes: 4057056
+metric.executable_sha256_bytes: 8081344
+metric.program_bytes: 4024288
+metric.source_read_callbacks: 145
+metric.source_read_bytes: 4739448
+metric.source_seeks: 4
+metric.history_read_calls: 33
+metric.history_read_bytes: 789056
+metric.verify_batch_bytes: 32768
+clock_begin: flags=00000803 pmcr=0000C023 frqcr=00000E0A hi=00000000 lo=4B0CAD78
+clock_end: flags=00000803 pmcr=0000C023 frqcr=00000E0A hi=00000001 lo=4CD28848
+crc32: 6FBE0A44

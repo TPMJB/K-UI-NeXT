@@ -3,6 +3,7 @@
 __asm__(".global __kui_smash_swirl_ce_vmu\n.set __kui_smash_swirl_ce_vmu,1\n");
 #endif
 #include "kui/retail_loader_layout.h"
+#include "native_cold_cache_policy.h"
 #include "kui/retail_image.h"
 #if KUI_SMASH_NATIVE_MENU
 #include "kui/smash_menu_return_loader.h"
@@ -54,7 +55,7 @@ __asm__(".global __kui_smash_reader_control03\n.set __kui_smash_reader_control03
 #include "stage_fast_crc32.h"
 #define kui_retail_crc32 kui_stage_crc32
 __asm__(".global __kui_retail_cold_fast_crc\n.set __kui_retail_cold_fast_crc,1\n");
-#if KUI_NATIVE_CACHED_EXTENT && !defined(KUI_RETAIL_CE) && !KUI_SMASH_CE_CHILD && !KUI_NATIVE_PHYSICAL_DISC
+#if KUI_NATIVE_COLD_CRC_CACHE
 /* Only this immutable-byte leaf runs with operand caching enabled. The
  * assembly scope admits the known relay CPU/cache profile and publishes its
  * private stack before restoring it. No media or live ownership operation
@@ -242,24 +243,25 @@ const struct kui_native_dual_capability kui_native_dual_reader_capability
 extern const uint8_t __retail_trampoline_start[] __asm__("__retail_trampoline_start");
 extern const uint8_t __retail_trampoline_end[] __asm__("__retail_trampoline_end");
 extern void kui_retail_bootstrap_enter(void) __attribute__((noreturn));
-/* Native handoff screens require no timed hold. Faults still leave their
- * stopped screen visible. An explicitly requested photo diagnostic can opt
- * into a native frame hold without changing the ordinary launch policy. */
+/* Native and CE handoff screens require no timed hold. Faults still leave
+ * their stopped screen visible. The existing explicit photo diagnostic may
+ * opt in without changing the ordinary launch policy. */
 #ifndef KUI_RETAIL_NATIVE_HANDOFF_PAUSE_FRAMES
-#define KUI_RETAIL_NATIVE_HANDOFF_PAUSE_FRAMES 0u
+#define KUI_RETAIL_NATIVE_HANDOFF_PAUSE_FRAMES 0
 #endif
 #define HANDOFF_PAUSE_FRAMES KUI_RETAIL_NATIVE_HANDOFF_PAUSE_FRAMES
+#define STEP_PAUSE_FRAMES HANDOFF_PAUSE_FRAMES
+#define KUI_HANDOFF_STRINGIFY_(value) #value
+#define KUI_HANDOFF_STRINGIFY(value) KUI_HANDOFF_STRINGIFY_(value)
+__asm__(".global __kui_retail_handoff_pause_frames\n.set __kui_retail_handoff_pause_frames,"
+        KUI_HANDOFF_STRINGIFY(KUI_RETAIL_NATIVE_HANDOFF_PAUSE_FRAMES) "\n");
 #ifdef KUI_RETAIL_CE
-/* The Windows CE boot test holds each handoff screen for two seconds, so a
- * reset right afterwards still leaves the last step in a photograph. It
- * places only the trampoline's first 64 bytes (all of its code): the CE body
+/* Place only the trampoline's first 64 bytes (all of its code): the CE body
  * keeps its "ECEC" signature and ROM header pointer at offset 0x40 while
  * bootstrap 2 runs. */
-#define STEP_PAUSE_FRAMES 120u
 #define ENTRY_PATCH_BYTES 64u
 extern const uint8_t __retail_ce_vbr[] __asm__("__retail_ce_vbr");
 #else
-#define STEP_PAUSE_FRAMES HANDOFF_PAUSE_FRAMES
 #define ENTRY_PATCH_BYTES KUI_RETAIL_TRAMPOLINE_BYTES
 #endif
 extern void kui_retail_stage_sync(void);
@@ -2427,7 +2429,7 @@ void kui_retail_stage_relay(const uint32_t *frame,uint32_t ccr) {
 #endif
     uint8_t *boot=(uint8_t *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS;
     memcpy(boot,original_entry,ENTRY_PATCH_BYTES);
-#if KUI_NATIVE_CACHED_EXTENT && !defined(KUI_RETAIL_CE) && !KUI_SMASH_CE_CHILD && !KUI_NATIVE_PHYSICAL_DISC
+#if KUI_NATIVE_COLD_CRC_CACHE
     uint32_t crc=kui_native_stage_cached_crc32(0,boot,exec_bytes);
 #else
     uint32_t crc=kui_retail_crc32(0,boot,exec_bytes);

@@ -70,7 +70,10 @@ int kui_vmu_history_checkpoint_mounted(const struct kui_vmu_game_selection *,
  * recovery of the exact same card also supplies its pre-launch checkpoint;
  * the old pending receipt stays durable until its new pending generation is
  * synced and read back. Different cards receive independent full checkpoints.
- * No checkpoint or allocation proof is reused across operations or launches.
+ * The GUI may also reuse its just-completed frontend recovery checkpoint
+ * inside the same mounted launch operation, with fresh identity and an
+ * unchanged device/write/error epoch. No checkpoint or allocation proof is
+ * reused across worker jobs or launches; allocation admission remains fresh.
  * Failure refuses a history-enabled launch. */
 int kui_vmu_history_session_begin(const struct kui_vmu_game_selection *,uint64_t local_seconds,
     const struct kui_vmu_history_platform *,struct kui_vmu_history_view *,kui_log_fn,kui_cancel_fn);

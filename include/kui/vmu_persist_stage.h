@@ -28,6 +28,19 @@ struct kui_vmu_persist_stage_workspace {
     uint32_t started,phase;
     int result;
 };
+/* Caller-owned, cold-call policy; never decode this from a card or launch
+ * record. The snapshot capability requires exclusive serialized device use
+ * and callbacks whose successful writes change ONLY the requested sector.
+ * Identity, health and sync must not mutate base-image data. A checkpoint
+ * then changes only its admitted journal marker, preserving the fresh
+ * recovered/validated/hashed snapshot. Unknown backends use NULL/flags=0
+ * and retain the independent post-checkpoint validation and full hash.
+ * No session, worker, handoff or persistent-record ABI changes. */
+#define KUI_VMU_PERSIST_STAGE_POLICY_VERSION 1u
+#define KUI_VMU_PERSIST_STAGE_CHECKPOINT_SNAPSHOT 1u
+struct kui_vmu_persist_stage_policy {uint32_t version,bytes,flags,reserved;};
+_Static_assert(sizeof(struct kui_vmu_persist_stage_policy)==16u,"Cold stage policy size");
+extern const struct kui_vmu_persist_stage_policy kui_vmu_persist_stage_exclusive_checkpoint;
 /* No I/O. Protects ALL manifest extents (including every mapped audio track)
  * from ALL target whole-cluster allocations, including journal/identity slack.
  * Exact-title admission remains independently mandatory in the caller. */
@@ -41,6 +54,10 @@ int kui_vmu_persist_stage_admit(const struct kui_vmu_persist_profile *,
 int kui_vmu_persist_stage_prepare(const struct kui_vmu_persist_profile *,
     const struct kui_retail_manifest *,const struct kui_vmu_persist_session_ops *,
     struct kui_vmu_persist_stage_workspace *,struct kui_vmu_durable_handoff *);
+int kui_vmu_persist_stage_prepare_policy(const struct kui_vmu_persist_profile *,
+    const struct kui_retail_manifest *,const struct kui_vmu_persist_session_ops *,
+    const struct kui_vmu_persist_stage_policy *,
+    struct kui_vmu_persist_stage_workspace *,struct kui_vmu_durable_handoff *);
 /* Collection-only new-owner preparation. The lifecycle owner supplies the
  * trusted live-generation expected fields documented by session_attach.
  * Rechecks every game/audio extent against all target whole allocations,
@@ -53,6 +70,10 @@ int kui_vmu_persist_stage_attach(const struct kui_vmu_persist_profile *,
     const struct kui_retail_manifest *,const struct kui_vmu_persist_attach_source *,
     const struct kui_vmu_persist_attach_ops *,
     struct kui_vmu_persist_stage_workspace *,struct kui_vmu_durable_handoff *);
+int kui_vmu_persist_stage_attach_policy(const struct kui_vmu_persist_profile *,
+    const struct kui_retail_manifest *,const struct kui_vmu_persist_attach_source *,
+    const struct kui_vmu_persist_attach_ops *,const struct kui_vmu_persist_stage_policy *,
+    struct kui_vmu_persist_stage_workspace *,struct kui_vmu_durable_handoff *);
 /* Collection lifecycle transfer of already established allocation authority.
  * Rechecks all child/game extents against complete allocations, consumes the
  * trusted live epoch, and performs fresh journal/image/checkpoint/final-CID
@@ -63,6 +84,10 @@ int kui_vmu_persist_stage_rebind(const struct kui_vmu_persist_profile *,
     const struct kui_retail_manifest *,struct kui_vmu_persist_allocation_transfer *,
     const struct kui_vmu_persist_session_ops *,struct kui_vmu_persist_stage_workspace *,
     struct kui_vmu_durable_handoff *);
+int kui_vmu_persist_stage_rebind_policy(const struct kui_vmu_persist_profile *,
+    const struct kui_retail_manifest *,struct kui_vmu_persist_allocation_transfer *,
+    const struct kui_vmu_persist_session_ops *,const struct kui_vmu_persist_stage_policy *,
+    struct kui_vmu_persist_stage_workspace *,struct kui_vmu_durable_handoff *);
 /* Physical-disc variant. All game content is on the GD-ROM, so admission has
  * no SD image map or protected game extents. The complete live filesystem,
  * card identity, selected pair, journal recovery and sealed handoff checks are
@@ -73,6 +98,10 @@ int kui_vmu_persist_disc_stage_admit(const struct kui_vmu_persist_profile *,
     uint32_t transport);
 int kui_vmu_persist_disc_stage_prepare(const struct kui_vmu_persist_profile *,
     uint32_t transport,const struct kui_vmu_persist_session_ops *,
+    struct kui_vmu_persist_stage_workspace *,struct kui_vmu_durable_handoff *);
+int kui_vmu_persist_disc_stage_prepare_policy(const struct kui_vmu_persist_profile *,
+    uint32_t transport,const struct kui_vmu_persist_session_ops *,
+    const struct kui_vmu_persist_stage_policy *,
     struct kui_vmu_persist_stage_workspace *,struct kui_vmu_durable_handoff *);
 /* Installer rechecks a mutable prepared result against the immutable embedded
  * P2 identity/maps, preserving its newly computed hashes after bootstrap. */

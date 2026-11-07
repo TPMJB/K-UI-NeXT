@@ -26,6 +26,12 @@ static size_t bounded(const char *text,size_t limit) {
 static bool text_valid(const char *text,size_t limit,bool empty) {
     return text && bounded(text,limit)<=limit && (empty || text[0]);
 }
+static bool module_build_valid(const char *build) {
+    if(!build || bounded(build,12u)!=12u)return false;
+    for(unsigned i=0u;i<12u;i++)
+        if(!((build[i]>='0' && build[i]<='9') || (build[i]>='a' && build[i]<='f')))return false;
+    return !build[12];
+}
 static void append(struct builder *b,const char *format,...) {
     if(!b->ok) return;
     va_list args;va_start(args,format);
@@ -48,6 +54,8 @@ static bool format(struct codec *codec,size_t *size,const struct kui_game_launch
        !text_valid(r->encoding,32,false) || !text_valid(r->cdda_profile,64,false) ||
        !text_valid(r->product,64,true) || !text_valid(r->title,128,true) ||
        !text_valid(r->bootfile,128,false) ||
+       (r->module_build?(!module_build_valid(r->module_build) || !r->module_bytes):
+           (r->module_crc32 || r->module_bytes)) ||
        !kui_game_launch_settings_normalize(codec->image,r->image_path) ||
        !kui_game_launch_settings_normalize(codec->package,r->package_path)) return false;
     struct builder b={codec->text,0,sizeof(codec->text),true};
@@ -57,6 +65,8 @@ static bool format(struct codec *codec,size_t *size,const struct kui_game_launch
     text_field(&b,"reader",r->reader);text_field(&b,"storage",r->storage);
     text_field(&b,"encoding",r->encoding);append(&b,"cd music: %s\n",r->cdda?"on":"off");
     text_field(&b,"profile",r->cdda_profile);append(&b,"package: %s\n",codec->package);
+    if(r->module_build)append(&b,"source module build: %s\nsource module payload bytes: %" PRIu32
+        "\nsource module crc32: %08" PRIX32 "\n",r->module_build,r->module_bytes,r->module_crc32);
     text_field(&b,"product",r->product);text_field(&b,"title",r->title);text_field(&b,"bootfile",r->bootfile);
     append(&b,"ip bytes: %" PRIu32 "\nip crc32: %08" PRIX32 "\n",r->ip_bytes,r->ip_crc32);
     append(&b,"source executable bytes: %" PRIu32 "\nsource executable crc32: %08" PRIX32 "\n",
@@ -148,6 +158,17 @@ static bool number_field(struct cursor *c,const char *name) {
 static bool crc_field(struct cursor *c,const char *name) {
     uint32_t value=0;return literal(c,name) && literal(c,": ") && hex32(c,&value) && literal(c,"\n");
 }
+static bool source_module_fields(struct cursor *c) {
+    static const char prefix[]="source module build: ";
+    if((size_t)(c->end-c->at)<sizeof(prefix)-1u || memcmp(c->at,prefix,sizeof(prefix)-1u))return true;
+    c->at+=sizeof(prefix)-1u;
+    if(c->end-c->at<13)return false;
+    for(unsigned i=0u;i<12u;i++)
+        if(!((c->at[i]>='0' && c->at[i]<='9') || (c->at[i]>='a' && c->at[i]<='f')))return false;
+    c->at+=12u;
+    return literal(c,"\n") && number_field(c,"source module payload bytes") &&
+        crc_field(c,"source module crc32");
+}
 bool kui_game_launch_report_inspect(const void *record,size_t size,uint64_t *sequence) {
     if(!record || !sequence || !size || size>=KUI_GAME_LAUNCH_REPORT_MAX) return false;
     struct cursor c={record,(const char *)record+size};uint64_t n=0;
@@ -156,7 +177,7 @@ bool kui_game_launch_report_inspect(const void *record,size_t size,uint64_t *seq
        !field(&c,"reader",64,false) || !field(&c,"storage",32,false) || !field(&c,"encoding",32,false) ||
        !literal(&c,"cd music: ")) return false;
     if(!literal(&c,"on\n") && !literal(&c,"off\n")) return false;
-    if(!field(&c,"profile",64,false) || !path_field(&c,"package") ||
+    if(!field(&c,"profile",64,false) || !path_field(&c,"package") || !source_module_fields(&c) ||
        !field(&c,"product",64,true) || !field(&c,"title",128,true) || !field(&c,"bootfile",128,false) ||
        !number_field(&c,"ip bytes") || !crc_field(&c,"ip crc32") ||
        !number_field(&c,"source executable bytes") || !crc_field(&c,"source executable crc32")) return false;

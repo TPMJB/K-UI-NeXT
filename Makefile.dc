@@ -103,6 +103,7 @@ RUNTIME_OBJECTS += build/dc/src/core/vmu_history_session.o
 RUNTIME_OBJECTS += build/dc/src/core/vmu_game_card.o build/dc/src/core/vmu_game_card_service.o \
     build/dc/src/core/vmu_fs_admission.o build/dc/src/core/vmu_persist_profile.o build/dc/src/loader/vmu_backing.o \
     build/dc/src/core/vmu_game_assign.o build/dc/src/core/vmu_image_merge.o
+RUNTIME_OBJECTS += build/dc/src/loader/smash_fat_read_cache.o
 RUNTIME_OBJECTS += build/dc/src/core/vmu_emulation_settings.o
 RUNTIME_OBJECTS += build/dc/src/core/vmu_import_plan.o build/dc/src/core/vmu_game_candidates.o
 RUNTIME_OBJECTS += build/dc/src/core/native_vmu_standard.o build/dc/src/core/smash_native_child.o
@@ -157,7 +158,7 @@ build/dc/smash-launch-timing.config: force-smash-launch-timing-config
 	@mkdir -p $(@D)
 	@printf 'KUI_SMASH_LAUNCH_TIMING=%s\n' '$(KUI_SMASH_LAUNCH_TIMING)' > $@.new
 	@cmp -s $@.new $@ && rm $@.new || mv $@.new $@
-build/dc/src/apps/games_retail.o: src/apps/games_native_cache.inc src/apps/games_native_cache_hint.inc src/apps/games_native_owner_cache.inc include/kui/native_source_owner.h include/kui/vmu_native_cache_seed.h include/kui/vmu_native_resolution_cache.h
+build/dc/src/apps/games_retail.o: src/apps/games_native_cache.inc src/apps/games_native_cache_hint.inc src/apps/games_native_cache_alias.inc src/apps/games_native_owner_cache.inc include/kui/native_source_owner.h include/kui/vmu_native_cache_seed.h include/kui/vmu_native_resolution_cache.h
 build/dc/src/apps/games_retail.o: include/kui/native_standard_route.h include/kui/native_standalone_foreground.h
 build/dc/src/core/repair_copy.o: src/core/repair_resume.inc include/kui/recovery_guard.h
 build/dc/src/core/salvage.o: src/core/salvage_files.inc src/core/salvage_control_trial.inc
@@ -178,9 +179,12 @@ build/dc/src/apps/vmu_game_info.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
 build/dc/src/apps/vmu_history.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
 build/dc/src/apps/disc_vmu_card.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
 build/dc/src/apps/disc_cards.o: CPPFLAGS += -DKUI_VMU_GAME_CARDS=1
-# Reuse the image launcher's checked aligned decoders for immutable native
-# preflight; keep unaligned reads and every recognition bound unchanged.
-build/dc/src/core/vmu_native_program.o build/dc/src/core/vmu_native_heap.o build/dc/src/core/vmu_native_exit.o: CPPFLAGS += -DKUI_NATIVE_STAGE_FAST_SCAN=1
+# Every GUI caller uses the same checked immutable decoders as the stages.
+# Bind the flag to object rebuilds as well as the production recipe.
+GUI_NATIVE_PROOF_OBJECTS := build/dc/src/core/vmu_native_program.o \
+    build/dc/src/core/vmu_native_heap.o build/dc/src/core/vmu_native_exit.o
+$(GUI_NATIVE_PROOF_OBJECTS): CPPFLAGS += -DKUI_NATIVE_STAGE_FAST_SCAN=1
+$(GUI_NATIVE_PROOF_OBJECTS): Makefile.dc include/kui/native_scan_bytes.h
 build/dc/src/core/disc_launch.o: CPPFLAGS += -DKUI_DISC_STAGE_FAST_CRC32=1
 # These separately linked, opt-in music modules retain their tested CE layout
 # even when the ordinary native loader uses its lower firmware reservation.
@@ -667,7 +671,7 @@ $(ZSO_DIR)/resident-sci.bin: $(ZSO_DIR)/resident-sci.elf
 	sh-elf-objcopy -O binary $< $@
 $(ZSO_DIR)/stage/%.o: %.c
 	@mkdir -p $(@D)
-	sh-elf-gcc $(ZSO_FLAGS) -MMD -MP -c $< -o $@
+	sh-elf-gcc $(ZSO_FLAGS) -fcallgraph-info=su -MMD -MP -c $< -o $@
 $(ZSO_DIR)/stage/src/loader/retail_display.o: force-build-id
 $(ZSO_DIR)/stage/retail_stage_asm.o: src/loader/retail_stage.S $(ZSO_DIR)/resident-sci.bin
 	@mkdir -p $(@D)
@@ -718,7 +722,7 @@ $(LZO_DIR)/resident-sci.bin: $(LZO_DIR)/resident-sci.elf
 	sh-elf-objcopy -O binary $< $@
 $(LZO_DIR)/stage/%.o: %.c
 	@mkdir -p $(@D)
-	sh-elf-gcc $(LZO_FLAGS) -MMD -MP -c $< -o $@
+	sh-elf-gcc $(LZO_FLAGS) -fcallgraph-info=su -MMD -MP -c $< -o $@
 $(LZO_DIR)/stage/src/loader/retail_display.o: force-build-id
 $(LZO_DIR)/stage/retail_stage_asm.o: src/loader/retail_stage.S $(LZO_DIR)/resident-sci.bin
 	@mkdir -p $(@D)
@@ -745,7 +749,7 @@ RETAIL_PHYSICAL_STAGE := $(RETAIL_PHYSICAL_DIR)/retail_stage.o \
 retail-physical: $(RETAIL_PHYSICAL_DIR)/retail-physical.kui
 $(RETAIL_PHYSICAL_DIR)/retail_stage.o: src/loader/retail_stage.c include/kui/native_physical_capability.h build/retail/layout-config
 	@mkdir -p $(@D)
-	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SKIES_DEFS) -DKUI_GAME_RAM_PATCHES_STAGE=$(if $(filter-out 0,$(KUI_RETAIL_STARTUP_TRACE) $(KUI_RETAIL_SONIC_STACK_TEST) $(KUI_RETAIL_RETURN_TRACE)),0,1) -DKUI_RETAIL_PHYSICAL_CAPABILITY=1 -MMD -MP -c $< -o $@
+	sh-elf-gcc $(RETAIL_FLAGS) $(RETAIL_SKIES_DEFS) -DKUI_GAME_RAM_PATCHES_STAGE=$(if $(filter-out 0,$(KUI_RETAIL_STARTUP_TRACE) $(KUI_RETAIL_SONIC_STACK_TEST) $(KUI_RETAIL_RETURN_TRACE)),0,1) -DKUI_RETAIL_PHYSICAL_CAPABILITY=1 -fcallgraph-info=su -MMD -MP -c $< -o $@
 $(RETAIL_PHYSICAL_DIR)/retail_stage_asm.o: src/loader/retail_stage.S $(RETAIL_RESIDENT_BINS) build/retail/layout-config
 	@mkdir -p $(@D)
 	sh-elf-gcc $(RETAIL_FLAGS) -MMD -MP -c $< -o $@

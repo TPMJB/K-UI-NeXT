@@ -1,0 +1,2 @@
+PASS startup first frame: real main prefix and original artwork, cold/chained mode reset, bounded complete frame before setup/preflight, unchanged service ownership
+PASS original-source control: exact 7c9c039 startup prefix reaches setup with a blank frame and is rejected

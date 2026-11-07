@@ -349,7 +349,12 @@ enum kui_game_result kui_game_image_read(const struct kui_game_image *image,
     if(!out || needed > size) return KUI_GAME_INVALID;
     unsigned char *destination = out;
     uint32_t cursor = lba, remaining = count;
-    unsigned char raw[KUI_GAME_SUBCHANNEL_BYTES];
+    /* FatFs copies an initial partial 512-byte sector before submitting its
+     * direct block reads. Match the file offset's residue, rather than just
+     * aligning the allocation: those direct destinations then stay 32-byte
+     * aligned for SCI DMA, including odd raw-sector offsets. */
+    enum { FILE_BUFFER_ALIGNMENT = 32u };
+    unsigned char raw[KUI_GAME_SUBCHANNEL_BYTES + FILE_BUFFER_ALIGNMENT - 1u];
     unsigned char *window = NULL;
     unsigned window_sectors = count < KUI_GAME_READ_WINDOW_SECTORS ? count : KUI_GAME_READ_WINDOW_SECTORS;
     bool allocation_tried = false;
@@ -372,12 +377,16 @@ enum kui_game_result kui_game_image_read(const struct kui_game_image *image,
              * is no speculative read-ahead or state shared across requests. */
             if(take > 1u && !allocation_tried) {
                 allocation_tried = true;
-                window = malloc((size_t)window_sectors * KUI_GAME_SUBCHANNEL_BYTES);
+                window = malloc((size_t)window_sectors * KUI_GAME_SUBCHANNEL_BYTES +
+                                FILE_BUFFER_ALIGNMENT - 1u);
             }
             for(uint32_t sector = 0; sector < take;) {
                 uint32_t group = window ? window_sectors : 1u;
                 if(group > take - sector) group = take - sector;
-                unsigned char *source = window ? window : raw;
+                unsigned char *base = window ? window : raw;
+                size_t padding = (size_t)((offset - (uintptr_t)base) &
+                                          (FILE_BUFFER_ALIGNMENT - 1u));
+                unsigned char *source = base + padding;
                 result = image->files.read(image->files.ctx, track->name, offset,
                                            source, (size_t)group * track->sector_bytes);
                 if(result != KUI_GAME_OK) goto finished;

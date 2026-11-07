@@ -1,0 +1,258 @@
+{
+  "schema": "kui.native.physical-standard.audit.v1",
+  "source_provenance": {
+    "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+    "source_dirty": false,
+    "elf_sha256": "9566509d1cfae4273a99ee70e964406c00cba7d92fb8b2a7ab8faab82e0dee0e",
+    "audit_only_worktree": {
+      "changed_paths": [
+        "tests/test_retail_physical.py",
+        "tools/check_retail_physical.py"
+      ],
+      "sha256": {
+        "tests/test_retail_physical.py": "56de82ebe4af46108fe918422cd7a79d53673b3e4a880d3217f825b683e751cb",
+        "tools/check_retail_physical.py": "9371cb6863a113ab27789384ee2e2f18a7e823846134b7f99e2f324d227d6330"
+      },
+      "production_tree_unchanged": true,
+      "compiled_receipts_unmodified": true,
+      "original_strict_dirty_policy_would_refuse": true
+    }
+  },
+  "runtime": {
+    "format": 1,
+    "build": "f8807cb16561",
+    "payload_bytes": 76272,
+    "memory_bytes": 76272,
+    "crc32": "6a85a797"
+  },
+  "module_sha256": "2791f9052bc89fb87103eff71608f3c8e7ab9d04ab470154a43d1b3f21af199f",
+  "reader": 0,
+  "transport_mask": 7,
+  "lease_bytes": 0,
+  "worker_bytes": 0,
+  "virtual_cards": 0,
+  "background_reader_enabled": false,
+  "prefetch_enabled": false,
+  "descriptor": {
+    "module_offset": 30880,
+    "bytes": 32,
+    "allocated_read_only": true,
+    "unique_complete_descriptor": true
+  },
+  "existing_plain_resident_bytes_identical": true,
+  "resident_images": {
+    "scif": {
+      "elf_sha256": "a73aae5cb5a78b69a329db999ef791139c0480d306ee734aa1cc8431291c075b",
+      "binary_sha256": "f0e778a04725531cb17e58b24d67890e83d207f21b090c8c289e19bc1e16b854"
+    },
+    "sci": {
+      "elf_sha256": "61fb0e6a2ca40a99d70ce27c4b22f4dab010a21c6eaad5c741ba54c2c4fcb9b7",
+      "binary_sha256": "7f3228be6790fb56821df711c87b630e478ed1ba1be40463d6069a30ead120d5"
+    },
+    "ide": {
+      "elf_sha256": "ea17446f5086dda4b53cb9d7ae7ebd8182edac461c828f7a961f67a3fe4d0557",
+      "binary_sha256": "8f6a542fc1ab98b2b69f08c7f337d8a94bf7b2b04bc3e337c6ea481c2448cf19"
+    },
+    "scia": {
+      "elf_sha256": "4b6adfc2f3675c36732a2bdb811be171e390597b0b6b98373aac4b7035cd91ea",
+      "binary_sha256": "fe758a9f0449b46249dbe18c31d3bf2e41dc633d3cb9a6ed306e883144d5812b"
+    }
+  },
+  "standard_only_runtime_guard": true,
+  "standard_only_guard": {
+    "exact_immutable_body": true,
+    "body_bytes": 24,
+    "body_sha256": "097df8d3be76ccbbea7779cd364b8427c6ddf5c293a6cfa2050e6a05a0faf0ae",
+    "actual_stage_call_bound": true,
+    "actual_stage_result_checked": true,
+    "instruction_cases": 81,
+    "reader": 0,
+    "transport_mask": 7
+  },
+  "ram_patch_seed_blank": true,
+  "ram_patch_seed": {
+    "module_offset": 31640,
+    "bytes": 64,
+    "initialized_data": true,
+    "blank": true
+  },
+  "layout": {
+    "stage": {
+      "payload_bytes": 68080,
+      "memory_end": "0x8ce3db68",
+      "unresolved_symbols": 0
+    },
+    "entry": {
+      "payload_bytes": 76272,
+      "memory_end": "0x8c0229f0",
+      "unresolved_symbols": 0
+    },
+    "resident-scif": {
+      "payload_bytes": 10668,
+      "memory_end": "0x8c007610",
+      "unresolved_symbols": 0
+    },
+    "resident-sci": {
+      "payload_bytes": 11140,
+      "memory_end": "0x8c0077f4",
+      "unresolved_symbols": 0
+    },
+    "resident-ide": {
+      "payload_bytes": 10428,
+      "memory_end": "0x8c007500",
+      "unresolved_symbols": 0
+    },
+    "resident-scia": {
+      "payload_bytes": 12268,
+      "memory_end": "0x8c007b80",
+      "unresolved_symbols": 0
+    },
+    "resident_stacks": {
+      "scif": {
+        "conservative_bytes": 1068,
+        "available_bytes": 1232,
+        "assembly_allowance": 256,
+        "retained_c_frames": 49
+      },
+      "sci": {
+        "conservative_bytes": 1108,
+        "available_bytes": 1232,
+        "assembly_allowance": 256,
+        "retained_c_frames": 42
+      },
+      "ide": {
+        "conservative_bytes": 1072,
+        "available_bytes": 1232,
+        "assembly_allowance": 256,
+        "retained_c_frames": 50
+      },
+      "scia": {
+        "worst_bytes": 220,
+        "available_bytes": 304,
+        "margin": 64,
+        "call_graph": true
+      }
+    }
+  },
+  "instruction_audit": {
+    "resident-scif": 4408,
+    "resident-sci": 4637,
+    "resident-ide": 4271,
+    "resident-scia": 4926,
+    "stage": 8649,
+    "entry": 16
+  },
+  "compiler_callgraphs": {
+    "complete_files": 2
+  },
+  "mutation_rejections": 0,
+  "artifact_sha256": {
+    "retail-physical.kui": "2791f9052bc89fb87103eff71608f3c8e7ab9d04ab470154a43d1b3f21af199f",
+    "entry.elf": "9566509d1cfae4273a99ee70e964406c00cba7d92fb8b2a7ab8faab82e0dee0e",
+    "entry.map": "62c887674676917f99ec3b1ca99564776737eab199930766eb2bb3539d2d2474",
+    "entry.compile.json": "4b8aee85785f84b0a7dea5b8e531e4ac9713acedfa1fb50b40a718c311a160bc",
+    "stage.elf": "016f36617b6ec9421e2fc9a896a3eea74c0ed4d1b0fd9e3330bc0c6dcc94faf2",
+    "stage.bin": "f478c624f2a2233316ccd6460f5432c56644c8fefc94a0dc98a1cc567ef9f9fa",
+    "stage.map": "d7b34b62745119739ed49f430b1fce92fe8ecc024721ad0345524979590a666e",
+    "stage.compile.json": "1eb45e8cd67e1c705d7bb1e7f5a803768ea9b3582b1c7eb2f826bf61c7dab403",
+    "plain-layout-config": "f85c347c419a8ddbbee7c163ae894d61a9f6ee21c20507fadc2cb7f702985a1e",
+    "resident-scif.elf": "a73aae5cb5a78b69a329db999ef791139c0480d306ee734aa1cc8431291c075b",
+    "resident-scif.bin": "f0e778a04725531cb17e58b24d67890e83d207f21b090c8c289e19bc1e16b854",
+    "resident-scif.map": "2e9ae4229b6abba895fc6304c4a8fabf4ebf4768ccab8a91f6fbc91281d1641c",
+    "resident-scif.compile.json": "cc00e2f967c172aa0c620fbfd3098dc702ca45bfdb15ab6686512d2e5933134b",
+    "resident-sci.elf": "61fb0e6a2ca40a99d70ce27c4b22f4dab010a21c6eaad5c741ba54c2c4fcb9b7",
+    "resident-sci.bin": "7f3228be6790fb56821df711c87b630e478ed1ba1be40463d6069a30ead120d5",
+    "resident-sci.map": "eb552e697e10bfb1a06d519319bc2a51bbe9ccf072e86e7b9678b99e511bc283",
+    "resident-sci.compile.json": "7fcb427979dc055c509f2772da36cc7386a028a1a0679ba627ffb5639645c6bb",
+    "resident-ide.elf": "ea17446f5086dda4b53cb9d7ae7ebd8182edac461c828f7a961f67a3fe4d0557",
+    "resident-ide.bin": "8f6a542fc1ab98b2b69f08c7f337d8a94bf7b2b04bc3e337c6ea481c2448cf19",
+    "resident-ide.map": "e134d3f7f9303edb0ea65bdcafcceef92e7e034ab2f8d682813068b660ccce36",
+    "resident-ide.compile.json": "28b561adc3f6d0bd950989094bea98958d56b723c3eabe307728cebee0f4135c",
+    "resident-scia.elf": "4b6adfc2f3675c36732a2bdb811be171e390597b0b6b98373aac4b7035cd91ea",
+    "resident-scia.bin": "fe758a9f0449b46249dbe18c31d3bf2e41dc633d3cb9a6ed306e883144d5812b",
+    "resident-scia.map": "3754b86f09cd4b33501dd42c6d4cc2097495a9a678b11c687eaf746674fadfca",
+    "resident-scia.compile.json": "743bee13a0e4115847f0b8298aa1bb6463eadbaf041fcd6a4e5b7f76c8c6723d"
+  },
+  "cold_crc_scope": {
+    "proof": {
+      "schema": "kui.native-stage.cached-crc.v1",
+      "status": "PASS",
+      "elf_sha256": "016f36617b6ec9421e2fc9a896a3eea74c0ed4d1b0fd9e3330bc0c6dcc94faf2",
+      "wrapper": "0x8ce01308",
+      "wrapper_bytes": 216,
+      "actual_SH_wrapper_cases": 636,
+      "unsafe_mutation_rejections": 11,
+      "actual_SH_crc": {
+        "schema": "kui.smash-native.fast-crc.v1",
+        "status": "PASS",
+        "elf_sha256": "016f36617b6ec9421e2fc9a896a3eea74c0ed4d1b0fd9e3330bc0c6dcc94faf2",
+        "helper": "0x8ce0010c",
+        "helper_bytes": 144,
+        "helper_sha256": "ed4fa47df23171ebc0e15f09e741ec7e3761cd4927c8c38caa641aee8cc744bc",
+        "byte_table": "0x8ce05460",
+        "table_bytes": 1024,
+        "complete_readonly_table_candidates": 1,
+        "helper_bound_tables": 1,
+        "table_sha256": "12f3e0576d447eb37b36d82ba0c1c5481b8f0d12fdc70347ce4a076b229d4c86",
+        "actual_SH_cases": 128,
+        "instructions": 363128,
+        "one_table_read_per_byte": true,
+        "independent_oracle": "zlib.crc32",
+        "whole_image_relay_bound": true,
+        "observed_private_stack_bytes": 8,
+        "hardware_timing_verified": false
+      },
+      "source_bytes_unchanged": true,
+      "pure_leaf_instruction_mutation_rejections": 152,
+      "actual_complete_image_caller": {
+        "relay": "_kui_retail_stage_relay",
+        "load": "0x8ce010b0",
+        "call": "0x8ce010b8",
+        "source": "0x8c010000",
+        "size_object": "0x8ce10a0c",
+        "previous_crc": 0,
+        "target": "_kui_native_stage_cached_crc32",
+        "target_address": "0x8ce01308"
+      },
+      "unsafe_caller_mutation_rejections": 6,
+      "bound_leaf_outgoing_calls": 0,
+      "bound_leaf_stack_store_offsets": [
+        4,
+        14
+      ],
+      "fallback_arguments_and_result_unchanged": true,
+      "published_private_stack_lines": [
+        5,
+        6
+      ],
+      "private_stack_headroom": 128,
+      "bound_leaf_stack_bytes": 8,
+      "ccr_write_nops": [
+        8,
+        8
+      ],
+      "worker_or_low_resident_changes": false,
+      "console_timing_verified": false,
+      "limits": [
+        "The wrapper leaf is an ABI adversary; the exact bound CRC instructions are separately executed against zlib.",
+        "The exact private-stack publication loop is folded after checking all four instructions, its complete address span, and every dirty write.",
+        "This privileged cold-stage scope does not establish userspace invocation, hardware cache timing or console speed."
+      ]
+    },
+    "proof_source_sha256": {
+      "tests/test_native_stage_cached_crc.py": "4c0dc2a85df24e7db8032b3702f2159b3c64b0022bd96a026d1af4fcf56747b7",
+      "tests/test_smash_native_fast_crc.py": "a16f6e4e819b41706abb37b2bbc65032ed08e9fd9859b083ab8f827dce17db08",
+      "tools/check_vmu_native_cache_gateway.py": "36fd36276089348ddc1481743ebf5632cf9c14a9f83f226ed5e6db5c415947d0",
+      "tools/check_retail_physical.py": "9371cb6863a113ab27789384ee2e2f18a7e823846134b7f99e2f324d227d6330"
+    },
+    "stage_sha256": "016f36617b6ec9421e2fc9a896a3eea74c0ed4d1b0fd9e3330bc0c6dcc94faf2",
+    "allowed_stage_symbols": [
+      "__kui_native_cached_boot_crc",
+      "_kui_native_stage_cached_crc32"
+    ]
+  },
+  "console_execution_verified": false,
+  "original_strict_provenance_refusal": "Final physical Standard audit requires clean committed source",
+  "original_prefix_refusal": "Physical loader contains a VMU/native-worker symbol: stage:_kui_native_stage_cached_crc32",
+  "focused_tests_log_sha256": "315f62cd87195fca0aafb72ca8a787ce0b5aa791e7ed3ba75cc77d6b2ceb0246"
+}

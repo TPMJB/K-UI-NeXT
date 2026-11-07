@@ -1,0 +1,425 @@
+{
+  "schema": "kui.ce.actual-delivery-inventory.v1",
+  "status": "PASS",
+  "delivery": {
+    "filename": "KUI-Shared-Game-Launch-06NOV2026-2210-UTC-f8807cb.zip",
+    "bytes": 6087588,
+    "sha256": "dc607c3e89ab6bac5c718b738bca9990ffd85ec39abb308140de280c4a7503e9",
+    "software_count": 28,
+    "BUILD_json_sha256": "61c17ee06470341ebdd2f3e8487a2314677a191f9d6187e66d550ec3ecfa86cd",
+    "BUILD_declares_four_CE_modules_retained": true,
+    "unchanged_CE_build": "eeed38bd540e",
+    "CE_rebuilt_for_f880": false
+  },
+  "findings": {
+    "four_CE_CDDA_modules": "The delivered bytes contain the VRAM-safe payload sink and folded CRC; these changes are not source-only for the four music profiles.",
+    "generic_CE": "The generic ce-probe module contains both compiled changes but is absent from this ZIP. No claim is made about an inherited personalized/root CE adapter.",
+    "CRC_performance": "The folded table is a resident-size tradeoff and adds per-byte instructions plus a data-dependent conditional. It is not a throughput improvement; full-table restoration remains pending."
+  },
+  "metric_definitions": {
+    "primitive_update_instructions": "Original full256 table: 12; delivered folded128: 18 or 20, depending on index high bit; isolated CRC update only.",
+    "actual_loop_instructions": "Includes authored linked load/index/CRC update and loop bookkeeping: music SCIA 19 or 22; generic SCIA 20 or 23. Static SH instruction-path counts, not cycles or hardware timing.",
+    "stack_accesses": "All per-byte stack loads/stores, distinct from accumulator spills. Music: 0; generic: 2 temporary-index accesses and 0 accumulator spills.",
+    "table": "128 little-endian uint16 entries = 256 bytes; all data bytes still participate in the full CRC16-0x1021 recurrence."
+  },
+  "hardware_executed": false,
+  "limits": [
+    "Actual ZIP/module/ELF/binary embedding, linked SH width/routing/mapper instructions and CRC-loop ownership are verified.",
+    "RAM/virtual-address/MMU-AT fixtures model selection and guards; no CE kernel, TLB permission handler, bus/cache behavior, SD hardware or commercial game executes.",
+    "No throughput, hardware timing or FMV cause is inferred. Folded CRC cost remains; original full-table restoration is pending all-family guarded fit and qualification."
+  ],
+  "roles": {
+    "armada": {
+      "logical_path": "KUI/apps/games/ce-cdda-armada.kui",
+      "in_delivered_ZIP": true,
+      "module_bytes": 135156,
+      "module_sha256": "91b1d4e43b866928767cb7e602fb41bee37c495c153452eeb4756851aa4f4807",
+      "runtime": {
+        "format": 1,
+        "build": "eeed38bd540e",
+        "payload_bytes": 135092,
+        "memory_bytes": 135092,
+        "crc32": "1fd9b3ad"
+      },
+      "entry_elf_sha256": "f27b16323601b6c4ac610343729bcb0036c05f35205fb7f3bd3742c1dc24b52a",
+      "stage_elf_sha256": "848f14b08e8047ef9a468d4f2f461e125adfa54b89a37d289e3c7b20a9eb7a7a",
+      "stage_binary_sha256": "f07a3fe591446323a8e693e2f95ceb5ad2fe318575d946be1e687b9253e63877",
+      "resident_SCIA_bounds": {
+        "__retail_resident_binary_end": "0x8c00c3c4",
+        "__retail_resident_bss_end": "0x8c00d7e0",
+        "__retail_hook_stack_bottom": "0x8c00d800",
+        "__retail_hook_stack": "0x8c00e000"
+      },
+      "entry_stage_SCI_SCIA_embedding_PASS": true,
+      "residents": {
+        "sci": {
+          "elf_sha256": "c0abc5f6713d974e03e6325bf05d3b20c05f281c97808c9742cbbd56733336c6",
+          "binary_sha256": "826b50bc95edf1255abaf5797411899f9ab35233774dc188d7d01b4d9c13da90",
+          "caller_symbol": "_file_read",
+          "caller_code_sha256": "80097744a24a97957b192d3aa32c4a79c75ef5987fbe8dd166294572938bcdd4",
+          "map_guest_code_sha256": "e9893d150473f6789580cec4076be6c3532ebc60f0554143482c4897d5a75430",
+          "sink_code_sha256": "e847568056ddadaf781215f9de2865155f58f6a1f2f2678f0525055c37f888d2",
+          "sink_bytes": 122,
+          "only_halfword_payload_store_sites": 3,
+          "emitted_sink_boundary_cases_PASS": 150,
+          "byte_or_long_store_mutations_refused": 6,
+          "helper_stack_bytes": 8,
+          "actual_caller_routing_and_mapper_fixtures_PASS": true,
+          "old_byte_copy_literal_mutation_reproduced": true,
+          "CRC16": {
+            "stream_table_present": false,
+            "scope": "Synchronous SCI has its existing SD reader; the folded SCI-stream table belongs to SCI-async."
+          }
+        },
+        "scia": {
+          "elf_sha256": "6927c253feb7d0cd23edcc4ef6455369f490901abf972f9a746386bcae4a5cda",
+          "binary_sha256": "c97d8904ee0c73b34443fa299df779e8e84d1915238bf496ca0e48f6dfd2e86f",
+          "caller_symbol": "_place",
+          "caller_code_sha256": "dc37455d69f62efd2358188e3a560eb071b87601debdf44d495aa3194739b4b5",
+          "map_guest_code_sha256": "2d1d41be79f168ef9567143aa6e5799858a557458e8ed70a2ed404bee22ac222",
+          "sink_code_sha256": "3ee2020adfbc7701406a72234da8d334d690bb74ce69c2d5b5845b879ebaa7fd",
+          "sink_bytes": 122,
+          "only_halfword_payload_store_sites": 3,
+          "emitted_sink_boundary_cases_PASS": 150,
+          "byte_or_long_store_mutations_refused": 6,
+          "helper_stack_bytes": 8,
+          "actual_caller_routing_and_mapper_fixtures_PASS": true,
+          "old_byte_copy_literal_mutation_reproduced": true,
+          "CRC16": {
+            "table_entries": 128,
+            "table_bytes": 256,
+            "table_sha256": "33aa4a378936b23fbb76a9431b16a8089a5cf90f9eafbe569ea1e0cfe785497e",
+            "loop_sha256": "fb9d0764bd5e7e82094c109ea2f7b7673a7067ff9e53adf4ce7d89d82eee9818",
+            "owner_symbols": [
+              "_kui_sci_stream_take"
+            ],
+            "per_byte_crc_index_conditional_sites": 1,
+            "per_byte_dynamic_instructions_including_loop": [
+              19,
+              22
+            ],
+            "per_byte_stack_accesses": 0,
+            "accumulator_spills": 0
+          }
+        }
+      }
+    },
+    "bam4": {
+      "logical_path": "KUI/apps/games/ce-cdda-bam4.kui",
+      "in_delivered_ZIP": true,
+      "module_bytes": 135140,
+      "module_sha256": "f3b689d0f03b7c580f258f1ab4ca9423f0db1184f7028caa9c1c73e62e46dec4",
+      "runtime": {
+        "format": 1,
+        "build": "eeed38bd540e",
+        "payload_bytes": 135076,
+        "memory_bytes": 135076,
+        "crc32": "b8df86f5"
+      },
+      "entry_elf_sha256": "571defd301a5a27360786b58eb2f0d65e8b354cbccb9565509eb666ffce42b3e",
+      "stage_elf_sha256": "f6df3474e56c3a0ad9d2f162637c15a78833185ff45a04cb5540b07e256223ef",
+      "stage_binary_sha256": "4214f4281a733ae547034741c6a7c458073c89e1c33f32c1958a8089a2880a61",
+      "resident_SCIA_bounds": {
+        "__retail_resident_binary_end": "0x8c00c3c4",
+        "__retail_resident_bss_end": "0x8c00d7e0",
+        "__retail_hook_stack_bottom": "0x8c00d800",
+        "__retail_hook_stack": "0x8c00e000"
+      },
+      "entry_stage_SCI_SCIA_embedding_PASS": true,
+      "residents": {
+        "sci": {
+          "elf_sha256": "c0abc5f6713d974e03e6325bf05d3b20c05f281c97808c9742cbbd56733336c6",
+          "binary_sha256": "826b50bc95edf1255abaf5797411899f9ab35233774dc188d7d01b4d9c13da90",
+          "caller_symbol": "_file_read",
+          "caller_code_sha256": "80097744a24a97957b192d3aa32c4a79c75ef5987fbe8dd166294572938bcdd4",
+          "map_guest_code_sha256": "e9893d150473f6789580cec4076be6c3532ebc60f0554143482c4897d5a75430",
+          "sink_code_sha256": "e847568056ddadaf781215f9de2865155f58f6a1f2f2678f0525055c37f888d2",
+          "sink_bytes": 122,
+          "only_halfword_payload_store_sites": 3,
+          "emitted_sink_boundary_cases_PASS": 150,
+          "byte_or_long_store_mutations_refused": 6,
+          "helper_stack_bytes": 8,
+          "actual_caller_routing_and_mapper_fixtures_PASS": true,
+          "old_byte_copy_literal_mutation_reproduced": true,
+          "CRC16": {
+            "stream_table_present": false,
+            "scope": "Synchronous SCI has its existing SD reader; the folded SCI-stream table belongs to SCI-async."
+          }
+        },
+        "scia": {
+          "elf_sha256": "6927c253feb7d0cd23edcc4ef6455369f490901abf972f9a746386bcae4a5cda",
+          "binary_sha256": "c97d8904ee0c73b34443fa299df779e8e84d1915238bf496ca0e48f6dfd2e86f",
+          "caller_symbol": "_place",
+          "caller_code_sha256": "dc37455d69f62efd2358188e3a560eb071b87601debdf44d495aa3194739b4b5",
+          "map_guest_code_sha256": "2d1d41be79f168ef9567143aa6e5799858a557458e8ed70a2ed404bee22ac222",
+          "sink_code_sha256": "3ee2020adfbc7701406a72234da8d334d690bb74ce69c2d5b5845b879ebaa7fd",
+          "sink_bytes": 122,
+          "only_halfword_payload_store_sites": 3,
+          "emitted_sink_boundary_cases_PASS": 150,
+          "byte_or_long_store_mutations_refused": 6,
+          "helper_stack_bytes": 8,
+          "actual_caller_routing_and_mapper_fixtures_PASS": true,
+          "old_byte_copy_literal_mutation_reproduced": true,
+          "CRC16": {
+            "table_entries": 128,
+            "table_bytes": 256,
+            "table_sha256": "33aa4a378936b23fbb76a9431b16a8089a5cf90f9eafbe569ea1e0cfe785497e",
+            "loop_sha256": "fb9d0764bd5e7e82094c109ea2f7b7673a7067ff9e53adf4ce7d89d82eee9818",
+            "owner_symbols": [
+              "_kui_sci_stream_take"
+            ],
+            "per_byte_crc_index_conditional_sites": 1,
+            "per_byte_dynamic_instructions_including_loop": [
+              19,
+              22
+            ],
+            "per_byte_stack_accesses": 0,
+            "accumulator_spills": 0
+          }
+        }
+      }
+    },
+    "worms": {
+      "logical_path": "KUI/apps/games/ce-cdda-worms.kui",
+      "in_delivered_ZIP": true,
+      "module_bytes": 136068,
+      "module_sha256": "1a03c4a2b079dd8ba098aa50085471376d2591f7405bdcee519cc205c70eb933",
+      "runtime": {
+        "format": 1,
+        "build": "eeed38bd540e",
+        "payload_bytes": 136004,
+        "memory_bytes": 136004,
+        "crc32": "f3219805"
+      },
+      "entry_elf_sha256": "b6761e62f4e253b26ae9c0ecd615e70e10b1a7a5fcce6ebbdcf369b1836d0bdc",
+      "stage_elf_sha256": "bb36230dcf0309ae6a688edc0a93b23dd8c6c3fb18228150ac6b253de8ec1ec9",
+      "stage_binary_sha256": "714495975d04598aab357ac8196749e2bad456702cb2567cc3ae006ac51bc95e",
+      "resident_SCIA_bounds": {
+        "__retail_resident_binary_end": "0x8c00c3c4",
+        "__retail_resident_bss_end": "0x8c00d7e0",
+        "__retail_hook_stack_bottom": "0x8c00d800",
+        "__retail_hook_stack": "0x8c00e000"
+      },
+      "entry_stage_SCI_SCIA_embedding_PASS": true,
+      "residents": {
+        "sci": {
+          "elf_sha256": "c0abc5f6713d974e03e6325bf05d3b20c05f281c97808c9742cbbd56733336c6",
+          "binary_sha256": "826b50bc95edf1255abaf5797411899f9ab35233774dc188d7d01b4d9c13da90",
+          "caller_symbol": "_file_read",
+          "caller_code_sha256": "80097744a24a97957b192d3aa32c4a79c75ef5987fbe8dd166294572938bcdd4",
+          "map_guest_code_sha256": "e9893d150473f6789580cec4076be6c3532ebc60f0554143482c4897d5a75430",
+          "sink_code_sha256": "e847568056ddadaf781215f9de2865155f58f6a1f2f2678f0525055c37f888d2",
+          "sink_bytes": 122,
+          "only_halfword_payload_store_sites": 3,
+          "emitted_sink_boundary_cases_PASS": 150,
+          "byte_or_long_store_mutations_refused": 6,
+          "helper_stack_bytes": 8,
+          "actual_caller_routing_and_mapper_fixtures_PASS": true,
+          "old_byte_copy_literal_mutation_reproduced": true,
+          "CRC16": {
+            "stream_table_present": false,
+            "scope": "Synchronous SCI has its existing SD reader; the folded SCI-stream table belongs to SCI-async."
+          }
+        },
+        "scia": {
+          "elf_sha256": "32d0ed6e32f8b17979716a7cb006e7a3527db54fa7bec0bef276529c0025e029",
+          "binary_sha256": "d3f7d18657443a678408dc5156e547af41515313d0b229345a4c761a1d1ca9c3",
+          "caller_symbol": "_place",
+          "caller_code_sha256": "dc37455d69f62efd2358188e3a560eb071b87601debdf44d495aa3194739b4b5",
+          "map_guest_code_sha256": "a7691e059794b5896b709445d6d7acb20469c855ea841b5e46f2860f4ca5521d",
+          "sink_code_sha256": "3ee2020adfbc7701406a72234da8d334d690bb74ce69c2d5b5845b879ebaa7fd",
+          "sink_bytes": 122,
+          "only_halfword_payload_store_sites": 3,
+          "emitted_sink_boundary_cases_PASS": 150,
+          "byte_or_long_store_mutations_refused": 6,
+          "helper_stack_bytes": 8,
+          "actual_caller_routing_and_mapper_fixtures_PASS": true,
+          "old_byte_copy_literal_mutation_reproduced": true,
+          "CRC16": {
+            "table_entries": 128,
+            "table_bytes": 256,
+            "table_sha256": "33aa4a378936b23fbb76a9431b16a8089a5cf90f9eafbe569ea1e0cfe785497e",
+            "loop_sha256": "fb9d0764bd5e7e82094c109ea2f7b7673a7067ff9e53adf4ce7d89d82eee9818",
+            "owner_symbols": [
+              "_kui_sci_stream_take"
+            ],
+            "per_byte_crc_index_conditional_sites": 1,
+            "per_byte_dynamic_instructions_including_loop": [
+              19,
+              22
+            ],
+            "per_byte_stack_accesses": 0,
+            "accumulator_spills": 0
+          }
+        }
+      }
+    },
+    "wwp": {
+      "logical_path": "KUI/apps/games/ce-cdda-wwp.kui",
+      "in_delivered_ZIP": true,
+      "module_bytes": 135748,
+      "module_sha256": "39cf505fb35ae0650595de87533972ba4a83386e14cb52e26eb8d80b743ce6e4",
+      "runtime": {
+        "format": 1,
+        "build": "eeed38bd540e",
+        "payload_bytes": 135684,
+        "memory_bytes": 135684,
+        "crc32": "dd3cc6ec"
+      },
+      "entry_elf_sha256": "462f69e5bf294e4fdf14dacf2c12fd486e924c6b9a36dfdf35759fde67022304",
+      "stage_elf_sha256": "6ee41b4f7bbbb0b149113cfad714645104cab5d113256264d28dd55bbfd473e1",
+      "stage_binary_sha256": "efe2f6cd77e3dba0868011cbdc11c5649d0c28c7870e83cf28ac3fd7796a75f9",
+      "resident_SCIA_bounds": {
+        "__retail_resident_binary_end": "0x8c00c3c4",
+        "__retail_resident_bss_end": "0x8c00d7e0",
+        "__retail_hook_stack_bottom": "0x8c00d800",
+        "__retail_hook_stack": "0x8c00e000"
+      },
+      "entry_stage_SCI_SCIA_embedding_PASS": true,
+      "residents": {
+        "sci": {
+          "elf_sha256": "c7fb603d979fce5c0327f841b04d2578eafe03062ea7a002c2bc962d1be351ab",
+          "binary_sha256": "a65c41c0db3c30e4f501f071052a5ffc59979e3e19ccebcdf2a3412ae0ab41c4",
+          "caller_symbol": "_file_read",
+          "caller_code_sha256": "80097744a24a97957b192d3aa32c4a79c75ef5987fbe8dd166294572938bcdd4",
+          "map_guest_code_sha256": "e9893d150473f6789580cec4076be6c3532ebc60f0554143482c4897d5a75430",
+          "sink_code_sha256": "e847568056ddadaf781215f9de2865155f58f6a1f2f2678f0525055c37f888d2",
+          "sink_bytes": 122,
+          "only_halfword_payload_store_sites": 3,
+          "emitted_sink_boundary_cases_PASS": 150,
+          "byte_or_long_store_mutations_refused": 6,
+          "helper_stack_bytes": 8,
+          "actual_caller_routing_and_mapper_fixtures_PASS": true,
+          "old_byte_copy_literal_mutation_reproduced": true,
+          "CRC16": {
+            "stream_table_present": false,
+            "scope": "Synchronous SCI has its existing SD reader; the folded SCI-stream table belongs to SCI-async."
+          }
+        },
+        "scia": {
+          "elf_sha256": "a50d422ce5fa3bab5af09e0745d5a8543932c04507d34bc3da27e13b1e30b3e3",
+          "binary_sha256": "d05b8a9665dcc4f9a1e2622db686057b5027fa5e88ee263b1fd60e4c50e516e9",
+          "caller_symbol": "_place",
+          "caller_code_sha256": "3adfb04b01b17fa84ab94f9b879b010d6eb38174395e0f457a82dc0bbb5f4aa3",
+          "map_guest_code_sha256": "2d1d41be79f168ef9567143aa6e5799858a557458e8ed70a2ed404bee22ac222",
+          "sink_code_sha256": "3ee2020adfbc7701406a72234da8d334d690bb74ce69c2d5b5845b879ebaa7fd",
+          "sink_bytes": 122,
+          "only_halfword_payload_store_sites": 3,
+          "emitted_sink_boundary_cases_PASS": 150,
+          "byte_or_long_store_mutations_refused": 6,
+          "helper_stack_bytes": 8,
+          "actual_caller_routing_and_mapper_fixtures_PASS": true,
+          "old_byte_copy_literal_mutation_reproduced": true,
+          "CRC16": {
+            "table_entries": 128,
+            "table_bytes": 256,
+            "table_sha256": "33aa4a378936b23fbb76a9431b16a8089a5cf90f9eafbe569ea1e0cfe785497e",
+            "loop_sha256": "fb9d0764bd5e7e82094c109ea2f7b7673a7067ff9e53adf4ce7d89d82eee9818",
+            "owner_symbols": [
+              "_kui_sci_stream_take"
+            ],
+            "per_byte_crc_index_conditional_sites": 1,
+            "per_byte_dynamic_instructions_including_loop": [
+              19,
+              22
+            ],
+            "per_byte_stack_accesses": 0,
+            "accumulator_spills": 0
+          }
+        }
+      }
+    },
+    "generic": {
+      "logical_path": "KUI/apps/games/ce-probe.kui",
+      "in_delivered_ZIP": false,
+      "module_bytes": 85196,
+      "module_sha256": "6c42d39c91428e55f6456673467d9d936f6698a4cbfb34cb282319c7c8a7cd99",
+      "runtime": {
+        "format": 1,
+        "build": "eeed38bd540e",
+        "payload_bytes": 85132,
+        "memory_bytes": 85132,
+        "crc32": "8658cb5c"
+      },
+      "entry_elf_sha256": "43e8297a02269c9a673fbd80d9f50cd0b9dc2536e71d75235fa051fa72525bb1",
+      "stage_elf_sha256": "07555cf2423708f8ebd18ad1ec31f57c36b27951fcdff9d698ec186994334b30",
+      "stage_binary_sha256": "4c55f4095374df1c22606bd080e94fb4f3661675965098d7a8750f9130c26852",
+      "resident_SCIA_bounds": {
+        "__retail_resident_binary_end": "0x8c00c264",
+        "__retail_resident_bss_end": "0x8c00d680",
+        "__retail_hook_stack_bottom": "0x8c00d800",
+        "__retail_hook_stack": "0x8c00e000"
+      },
+      "entry_stage_SCI_SCIA_embedding_PASS": true,
+      "residents": {
+        "sci": {
+          "elf_sha256": "c0abc5f6713d974e03e6325bf05d3b20c05f281c97808c9742cbbd56733336c6",
+          "binary_sha256": "826b50bc95edf1255abaf5797411899f9ab35233774dc188d7d01b4d9c13da90",
+          "caller_symbol": "_file_read",
+          "caller_code_sha256": "80097744a24a97957b192d3aa32c4a79c75ef5987fbe8dd166294572938bcdd4",
+          "map_guest_code_sha256": "e9893d150473f6789580cec4076be6c3532ebc60f0554143482c4897d5a75430",
+          "sink_code_sha256": "e847568056ddadaf781215f9de2865155f58f6a1f2f2678f0525055c37f888d2",
+          "sink_bytes": 122,
+          "only_halfword_payload_store_sites": 3,
+          "emitted_sink_boundary_cases_PASS": 150,
+          "byte_or_long_store_mutations_refused": 6,
+          "helper_stack_bytes": 8,
+          "actual_caller_routing_and_mapper_fixtures_PASS": true,
+          "old_byte_copy_literal_mutation_reproduced": true,
+          "CRC16": {
+            "stream_table_present": false,
+            "scope": "Synchronous SCI has its existing SD reader; the folded SCI-stream table belongs to SCI-async."
+          }
+        },
+        "scia": {
+          "elf_sha256": "39a192a7522bddbf30160d70a29a5519cbbdfaa932d9f3bbfdfa1ebaaf0ebe60",
+          "binary_sha256": "7daf023bed1be6bf299b08db7e56cc23c37e0148eebbd458dc4aac717cc8a4d9",
+          "caller_symbol": "_place",
+          "caller_code_sha256": "ef97f49018fb5eab050f35b74f056fcc392c0d7b9e14d76e7073b19daefe12a7",
+          "map_guest_code_sha256": "41a0e50fba8a786cfb7760688e3e9fb1be36962b5800be08b06aed6c92d1c80e",
+          "sink_code_sha256": "3ee2020adfbc7701406a72234da8d334d690bb74ce69c2d5b5845b879ebaa7fd",
+          "sink_bytes": 122,
+          "only_halfword_payload_store_sites": 3,
+          "emitted_sink_boundary_cases_PASS": 150,
+          "byte_or_long_store_mutations_refused": 6,
+          "helper_stack_bytes": 8,
+          "actual_caller_routing_and_mapper_fixtures_PASS": true,
+          "old_byte_copy_literal_mutation_reproduced": true,
+          "CRC16": {
+            "table_entries": 128,
+            "table_bytes": 256,
+            "table_sha256": "33aa4a378936b23fbb76a9431b16a8089a5cf90f9eafbe569ea1e0cfe785497e",
+            "loop_sha256": "26fab2c537afc1e28afbb266a05b79dcd1ea0dc25a4e2c04ff86efb7c405bff7",
+            "owner_symbols": [
+              "_deliver"
+            ],
+            "per_byte_crc_index_conditional_sites": 1,
+            "per_byte_dynamic_instructions_including_loop": [
+              20,
+              23
+            ],
+            "per_byte_stack_accesses": 2,
+            "accumulator_spills": 0
+          }
+        }
+      },
+      "deployment_limit": "This ZIP does not install ce-probe.kui. The personalized writable CE pilot/ordinary root CE adapter is inherited; its actual installed bytes are not observed by this archive audit."
+    }
+  },
+  "provenance": {
+    "full_audit_relative_path": "build/ce-delivered-f880-audit/audit.json",
+    "full_audit_sha256": "a0c90818bc7c4a5262914a71c3b3d1301ba8c7782c464a4f25369ae1bd6bebca",
+    "detailed_summary_relative_path": "build/ce-delivered-f880-audit/summary.json",
+    "detailed_summary_sha256": "42050e906bf7fcca684a7376ba4077d0bdad900f922064f78c53020af9552645",
+    "producer": {
+      "relative_path": "build/ce-delivered-f880-audit/audit.py",
+      "sha256": "931d2c0400aa1631b5ec28a727d0cf44af42d5b2c8b15a27d3e612ee1aaf2846",
+      "checker_sha256": {
+        "tools/check_ce_virtual_vram_width.py": "55e6df865263d68c4dfd7fad2d74591e4d1db1eb039eef6e6963229430189b8a",
+        "tests/test_ce_crc16_factoring.py": "8fee4352669ee4add455bca78617c4159122912ba78638a5152ff2bf5348a5b0",
+        "tests/test_smash_epoch_high_wrapper.py": "d62ba79c0eea1f0f95edfe980a7b18427f4ae6165bc1b268db531ed110375283",
+        "tests/test_smash_native_gin_linked.py": "a85273fdc0164a11720d6fc099f2671a0bb0c06a9087b2ac23450ef135222676"
+      }
+    }
+  }
+}

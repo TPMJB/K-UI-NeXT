@@ -6,6 +6,7 @@
 #include "kui/retail_image.h"
 #include "kui/retail_cursor.h"
 #include "kui/game_launch_report.h"
+#include "kui/smash_launch_timing.h"
 #include "kui/retail_zso.h"
 #include "kui/native_dual_reader.h"
 #include "kui/native_standalone_capability.h"
@@ -22,6 +23,13 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+#if KUI_SMASH_LAUNCH_TIMING
+/* The provenance test exercises production formatting, never host MMIO. */
+uint16_t kui_smash_phase_clock_test_read16(uint32_t address) {(void)address;return 0u;}
+uint32_t kui_smash_phase_clock_test_read32(uint32_t address) {(void)address;return 0u;}
+uint32_t kui_smash_phase_clock_test_sr(void) {return 0u;}
+#endif
 
 /* Real FatFs preparation, followed by complete reads through the freestanding
  * reader using physical card blocks only. No open FatFs file survives handoff. */
@@ -239,11 +247,16 @@ FRESULT __wrap_f_read(FIL *file, void *buffer, UINT bytes, UINT *got) {
                 }
                 if(phase==1u && test.hash_reads[phase]==1u && fault("native-dual-retry-report")) {test.injected=true;return FR_DISK_ERR;}
                 if(phase==1u && test.hash_reads[phase]==1u && fault("native-dual-cancel-source"))test.cancelled=test.injected=true;
-                if(phase==1u && native_standard_case()) {
-                    if(test.hash_reads[phase]==2u && (fault("native-standard-retry-report") || fault("native-standard-crc-fail"))) {test.injected=true;return FR_DISK_ERR;}
-                    if(test.hash_reads[phase]==4u && fault("native-standard-crc-fail")) {test.injected=true;return FR_DISK_ERR;}
-                    if(test.hash_reads[phase]==2u && fault("native-standard-short-report")) {assert(*got);--*got;test.injected=true;}
-                    if(test.hash_reads[phase]==2u && fault("native-standard-cancel-source"))test.cancelled=test.injected=true;
+                if(phase==1u && native_standard_case() && before==test.hash_begin[phase]) {
+                    /* Shared checksum batching reads this two-sector boot in
+                     * one callback. Fault the independently known boot LBA
+                     * and source/CRC phase, rather than old sector ordinals. */
+                    bool source=test.native_source_passes && !test.direct_crc_passes;
+                    if((source && fault("native-standard-retry-report")) || fault("native-standard-crc-fail")) {
+                        test.injected=true;return FR_DISK_ERR;
+                    }
+                    if(source && fault("native-standard-short-report")) {assert(*got);--*got;test.injected=true;}
+                    if(source && fault("native-standard-cancel-source"))test.cancelled=test.injected=true;
                 }
                 if(checksum_case() && phase==1u && test.hash_reads[phase]==2u) {
                     if(strstr(test.fault,"read-fail")) {test.injected=true;return FR_DISK_ERR;}
@@ -1060,10 +1073,11 @@ static void check_native_standard(const char *directory) {
     assert(result==success && test.ordinary_package_opens==1u && !test.dual_package_opens && !test.family_calls);
     bool eligible=!strstr(test.fault,"-seed-") && !fault("native-standard-scif-report");
     bool fallback=fault("native-standard-retry-report") || fault("native-standard-short-report") || fault("native-standard-crc-fail");
-    unsigned expected_reads=fallback?4u:2u;
+    unsigned expected_reads=fallback?2u:1u;
     assert(test.native_source_passes==(eligible?1u:0u));
     assert(test.direct_crc_passes==(!eligible || fallback?1u:0u));
-    assert(test.hash_reads[0]==16u && test.hash_reads[1]==expected_reads && test.hash_max[1]==track_stride(2));
+    assert(test.hash_reads[0]==1u && test.hash_max[0]==16u*track_stride(2) &&
+        test.hash_reads[1]==expected_reads && test.hash_max[1]==2u*track_stride(2));
     if(result) {
         check_mapping(directory,&image);host_write(directory,"standard-payload.bin",image.data,image.info.payload_bytes);
         assert(test.writes && !test.cancelled);
@@ -1205,7 +1219,14 @@ int main(int argc, char **argv) {
         kui_media_set(&media); assert(kui_mount(&fs, log_line)); seed(argv[2]);
         assert(f_mount(NULL, "0:", 0) == FR_OK); kui_media_set(NULL);
     } else {
-        assert(!strcmp(argv[3], "check")); test.active = true; check(argv[2]);
+        assert(!strcmp(argv[3], "check")); test.active = true;
+        kui_smash_launch_timing_request(true,0u);
+        check(argv[2]);
+#if KUI_SMASH_LAUNCH_TIMING
+        kui_smash_launch_timing_freeze(true,log_line);
+        char timing[8192];size_t timing_bytes=kui_smash_launch_timing_format(timing,sizeof(timing));
+        if(timing_bytes)host_write(argv[2],"launch-timing.txt",timing,timing_bytes);
+#endif
         assert((launch_case() || zso_case() || native_dual_report() || native_standard_case() || !test.writes) && !test.files && !test.report_write && !test.connected && test.connects == test.disconnects);
         if(strstr(test.fault, "-fail") || !strncmp(test.fault, "sector-", 7) ||
             !strcmp(test.fault, "cancel-map") || !strcmp(test.fault, "cancel-ip") || !strcmp(test.fault, "size-change")) assert(test.injected);

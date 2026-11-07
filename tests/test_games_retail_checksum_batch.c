@@ -104,7 +104,7 @@ static void exact_matrix(void) {
         reset_calls();crc=0u;
         assert(extent_sha_crc(&image,FIRST,bytes,actual,&crc)==KUI_GAME_OK && !memcmp(actual,expected,32u) && crc==reference_crc(logical,bytes));
         assert(logical_calls==calls && physical_calls==calls && max_logical<=16u && !ui_live);
-        reset_calls();assert(extent_sha(&image,FIRST,bytes,actual)==KUI_GAME_OK && !memcmp(actual,expected,32u));
+        reset_calls();assert(extent_sha_crc(&image,FIRST,bytes,actual,NULL)==KUI_GAME_OK && !memcmp(actual,expected,32u));
         assert(physical_calls==calls && !ui_live && ui_peak<=32768u && ui_allocations==ui_releases);
     }
     puts("Actual launcher checksum matrix PASS:6 physical layouts x5 container labels x7 sizes x2 tails;257 sectors use17 reads,33 use3");

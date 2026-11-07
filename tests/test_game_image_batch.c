@@ -23,7 +23,7 @@ static void batch_free(void *p) {if(p) {assert(live);--live;++releases;}free(p);
 #define SECTORS 257u
 #define FILE_BYTES (SECTORS*2448u+2048u)
 static uint8_t files[2][FILE_BYTES],actual[SECTORS*2352u+2u],oracle[SECTORS*2352u+2u];
-struct request {unsigned file;uint64_t offset;size_t bytes;};
+struct request {unsigned file;uint64_t offset;size_t bytes;uintptr_t destination;};
 static struct request requests[SECTORS];
 static struct kui_game_image image;
 static unsigned reads,fail_at,nested_reads;
@@ -48,7 +48,7 @@ static enum kui_game_result read_file(void *context,const char *name,uint64_t of
         uint64_t end=t->file_offset+(uint64_t)(t->end_lba-t->start_lba)*t->sector_bytes;
         if(file_index(t->name)==file && offset>=t->file_offset && offset+bytes<=end)bounded=true;
     }
-    assert(bounded);requests[reads++]=(struct request){file,offset,bytes};
+    assert(bounded);requests[reads++]=(struct request){file,offset,bytes,(uintptr_t)out};
     if(fail_at && reads==fail_at) {memset(out,0xddu,bytes);return failure;}
     memcpy(out,files[file]+offset,bytes);
     if(nested && !inside) {
@@ -109,6 +109,10 @@ static void verify(uint32_t first,uint32_t count,enum kui_game_sector_format for
     assert(reads==expected_reads && !memcmp(actual+1u,oracle,(size_t)count*width));
     assert(actual[0]==0x77u && actual[1u+(size_t)count*width]==0x77u && !live);
 }
+static void verify_alignment(void) {
+    for(unsigned i=0u;i<reads;i++)
+        assert((requests[i].destination&31u)==(requests[i].offset&31u));
+}
 static void formats_and_counts(void) {
     static const struct {unsigned stride,mode;enum kui_game_sector_format format;bool buffered;} cases[]={
         {2352,1,KUI_GAME_SECTOR_MODE1,true},{2352,2,KUI_GAME_SECTOR_MODE1,true},
@@ -124,13 +128,28 @@ static void formats_and_counts(void) {
         bool batch=cases[kind].buffered && counts[n]>1u;
         unsigned calls=cases[kind].buffered?(counts[n]+15u)/16u:1u;
         verify(45000u,counts[n],cases[kind].format,calls);
-        assert(allocations==(unsigned)batch && releases==allocations && maximum_allocation<=16u*2448u);
+        assert(allocations==(unsigned)batch && releases==allocations && maximum_allocation<=16u*2448u+31u);
+        if(cases[kind].buffered)verify_alignment();
         if(batch)for(unsigned i=0;i<reads;i++) {
             assert(requests[i].bytes && requests[i].bytes<=16u*cases[kind].stride);
             assert(requests[i].bytes%cases[kind].stride==0u);
         }
     }
     puts("Batch matrix:10physical-layout/output cases x7request sizes x5container labels;257raw sectors use17 bounded reads");
+}
+static void conversion_alignment(void) {
+    static const unsigned strides[]={2336u,2352u,2448u};
+    for(unsigned kind=0u;kind<sizeof(strides)/sizeof(strides[0]);kind++)
+    for(unsigned offset=0u;offset<512u;offset++)
+    for(unsigned denied=0u;denied<2u;denied++) {
+        unsigned mode=strides[kind]==2336u?2u:1u;
+        fresh(strides[kind],mode,35u,offset);deny_allocation=denied;
+        verify(45001u,33u,KUI_GAME_SECTOR_MODE1,denied?33u:3u);
+        verify_alignment();
+        fresh(strides[kind],mode,1u,offset);
+        verify(45000u,1u,KUI_GAME_SECTOR_MODE1,1u);verify_alignment();
+    }
+    puts("Conversion alignment: all512filesystem offsets,2336/2352/2448strides, oddsector start, batching and single-sector/OOMfallback");
 }
 static void boundaries_and_fallback(void) {
     fresh(2352u,1u,65u,497u);verify(45003u,17u,KUI_GAME_SECTOR_MODE1,2u);
@@ -185,7 +204,7 @@ static void failure_and_preflight(void) {
     for(size_t i=0;i<sizeof(actual);i++)assert(actual[i]==0x77u);
 }
 int main(void) {
-    formats_and_counts();boundaries_and_fallback();failure_and_preflight();
+    formats_and_counts();conversion_alignment();boundaries_and_fallback();failure_and_preflight();
     puts("PASS common image batch: byte-identical layouts,16sector bound, track/offset boundaries, OOMfallback, reentry, cancel/poisonedI/O andeveryheader validation");
     return 0;
 }

@@ -1,0 +1,325 @@
+{
+  "schema": "kui.smash.packaged-admission.v1",
+  "status": "PASS",
+  "source_commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+  "source_dirty": false,
+  "package_path": "build/native-shared-final/qualification-cohort-f8807cb.zip",
+  "package_sha256": "97a9ec1573e82a55d908381fa7384f120d97a8e26cd7f062d2bc7ce4fcf9c657",
+  "package_bytes": 6083643,
+  "source_sha256": {
+    "tests/test_smash_packaged_admission.py": "fec03d17b4e644359c3f2be0c5fd8af426cbf1ab8a02f508ee62abc96411d25e",
+    "tests/test_smash_menu_collection_prepare.c": "efca57499c7f0f581dd5a4c1a2aa671fa10bf9b36610c5cd8351e421c1da6eb5",
+    "tests/test_smash_ce_core.c": "3604caa693a1fae5874228d4324a8a2b74fdb0a8f0f655a38207750d301036d9",
+    "tests/test_smash_ce_core.py": "988776a0cb6e5cdec21413f52ec12d6da7f191937cc99917895a52f17694e4ed",
+    "Makefile.smash-menu-ui-tests": "09e64c4de1409400d88804d089942304ac487eb277c63c0739a5e216d2ddae78",
+    "src/apps/games_retail.c": "649970e1c9bb0e7affdb4a0f5ddae75926c5d230b28768bc9a3335816d3f0721",
+    "src/apps/smash_menu_collection_prepare.inc": "49ad14daa777516d280ca4b24282034faace7797b4910696429916ff405f6d24",
+    "src/apps/smash_menu_capsule_prepare.inc": "963c80caa8ac37531db6d150b0b324302d97965e8e5e07d2066d6f473cdc014f",
+    "src/core/smash_menu_collection.c": "bb12eb08c1a588958a809c66f4fb8af48766a1bcca978496d327118db7d2cb58",
+    "src/core/smash_ce_child.c": "f4195482522457fe210f3a08f35c17dcff2a4eb258f7d0fb74d11bc9b5d8a34f",
+    "src/core/smash_menu_loader.c": "14adbd4dda9bfb53a3ba9e199a984a312434baf70939ef0c4024596ae4bff63e",
+    "src/core/smash_menu_return.c": "adb5a8c127dc68634d6a8eeb2e4973abd7f33d3d954d1e94bd260884fc5a0147",
+    "src/core/smash_native_menu.c": "2c905bee2ea5d84b7ad88158e3ce101148c831c0268324db01be67929dd47e99",
+    "src/core/smash_ce_profile.c": "04d46c0ec0de555425604a29888b24f2690ef983e84b7ab6270c6a61259613f2",
+    "src/core/smash_ce_helper.c": "e96f002712cbd4412b3309f493aa2407184db4fc7bcf7da5863fe89404df54ef",
+    "include/kui/smash_ce_helper.h": "bb11b2af54dcca5efd916cfcf659c50150830cbb83065162fcdd0018b89b3f19",
+    "include/kui/native_standard_route.h": "8ab49484775eff0cd097773eaa679ee8a817e9db048fa75e62fefa487856f87a",
+    "include/kui/native_standalone_foreground.h": "ce451ea9428b28568a239be26ca589f3b4621f31f6d69a2b39cf34f1f87da709",
+    "include/kui/smash_menu_loader_capability.h": "ea37b549191b9150c1a235dacc4ac9cf1835032f8c16229d720c0d6ccef90206",
+    "include/kui/smash_menu_collection.h": "8975e8d9dfa26c72f4c746ea223d333d6050060bb6bfa1334e18a83351148c2c",
+    "include/kui/smash_ce_child.h": "a9df09cc3b0b196395094788fbd0413280027bb908b3b117868cee71bc7e4743",
+    "include/kui/smash_ce_profile.h": "6d01c1b60cea83398a102e71b23aa571b95cd03997f5ae039727e569a4c9eafe",
+    "tools/runtime_package.py": "c885e08e5a167b02dcaa6884084d11ef4cad70161f423d0d8876d92330ecd0b5",
+    "tools/smash_ce_profile.py": "6f97e964869840b64939c933358cac44c50b2f74991a94daed37326096d6b2d4"
+  },
+  "baseline_install_files": {
+    "KUI/apps/disc/native-disc-vmu-a1.kui": {
+      "sha256": "51525354ca5326fb33f37c329f3c9222a2d00d7a5cea3193d4daf034c9baabe6",
+      "bytes": 177092
+    },
+    "KUI/apps/disc/native-disc-vmu.kui": {
+      "sha256": "e89205da1b8a804ead660d9ed1a69574b98c28dabc7dd3ff73a282bc21ecd5c1",
+      "bytes": 177092
+    },
+    "KUI/apps/disc/native-disc.kui": {
+      "sha256": "2d58e931996c9ec679643746a90260f4f294ddc792504b39e7442b67e08adeca",
+      "bytes": 15756
+    },
+    "KUI/apps/games/cdda-native-mdk2.kui": {
+      "sha256": "fc0ddf1191de5dc3368abc59853cbbf6047b9a530f9e9d55405e2bc880e97c56",
+      "bytes": 67396
+    },
+    "KUI/apps/games/cdda-native-toy-cooked.kui": {
+      "sha256": "910e7c7895263db072b5d949325dc6cfc13fac9f39e03b17ade34a0cc883b105",
+      "bytes": 85408
+    },
+    "KUI/apps/games/cdda-native-toy-raw.kui": {
+      "sha256": "3356b8cf7e5b032f18b24977c1ea6e615934518c39b7f7f6c920c99a0e132ba2",
+      "bytes": 85376
+    },
+    "KUI/apps/games/cdda-toy-cooked.kui": {
+      "sha256": "910e7c7895263db072b5d949325dc6cfc13fac9f39e03b17ade34a0cc883b105",
+      "bytes": 85408
+    },
+    "KUI/apps/games/cdda-toy-raw.kui": {
+      "sha256": "3356b8cf7e5b032f18b24977c1ea6e615934518c39b7f7f6c920c99a0e132ba2",
+      "bytes": 85376
+    },
+    "KUI/apps/games/ce-cdda-armada.kui": {
+      "sha256": "91b1d4e43b866928767cb7e602fb41bee37c495c153452eeb4756851aa4f4807",
+      "bytes": 135156
+    },
+    "KUI/apps/games/ce-cdda-bam4.kui": {
+      "sha256": "f3b689d0f03b7c580f258f1ab4ca9423f0db1184f7028caa9c1c73e62e46dec4",
+      "bytes": 135140
+    },
+    "KUI/apps/games/ce-cdda-worms.kui": {
+      "sha256": "1a03c4a2b079dd8ba098aa50085471376d2591f7405bdcee519cc205c70eb933",
+      "bytes": 136068
+    },
+    "KUI/apps/games/ce-cdda-wwp.kui": {
+      "sha256": "39cf505fb35ae0650595de87533972ba4a83386e14cb52e26eb8d80b743ce6e4",
+      "bytes": 135748
+    },
+    "KUI/apps/games/lzo-boot.kui": {
+      "sha256": "471b38e454a1dc6acc78e94c9009e4d398b57ecbdff145800b469c9f0a0bd1ab",
+      "bytes": 38284
+    },
+    "KUI/apps/games/retail-boot.kui": {
+      "sha256": "bdc9c9f9389bf71e68efd6c065ef3eb31453b5544378b2ded0590ddec60275b1",
+      "bytes": 237816
+    },
+    "KUI/apps/games/retail-cdda-mdk2.kui": {
+      "sha256": "fc0ddf1191de5dc3368abc59853cbbf6047b9a530f9e9d55405e2bc880e97c56",
+      "bytes": 67396
+    },
+    "KUI/apps/games/retail-native-dual-a1.kui": {
+      "sha256": "f8ad6a5232c548ad306faec8127db3bc6ca53cd892ce2cefa6b65c2c1b54341d",
+      "bytes": 290136
+    },
+    "KUI/apps/games/retail-native-dual.kui": {
+      "sha256": "09c1480c6c470166b3e584f54218d98679ef4a34a8765d47bde4d2187889481a",
+      "bytes": 290104
+    },
+    "KUI/apps/games/retail-native-standalone.kui": {
+      "sha256": "8b1c64c09a481e1b732e4d446661c0869d9607f86107b3e7ea8dae9db62eb559",
+      "bytes": 49088
+    },
+    "KUI/apps/games/retail-physical.kui": {
+      "sha256": "2791f9052bc89fb87103eff71608f3c8e7ab9d04ab470154a43d1b3f21af199f",
+      "bytes": 76336
+    },
+    "KUI/apps/games/retail-smash-menu.kui": {
+      "sha256": "e6d0bef744f007a6cae87a10f9e83b7084801fedbdbc15b93b974ab3a3ee9117",
+      "bytes": 103092
+    },
+    "KUI/apps/games/retail-smash-native-menu.kui": {
+      "sha256": "b2d633f5254e5db852382f6e1263f283d6dd00434c7841ed852ca9f15e67de2e",
+      "bytes": 271620
+    },
+    "KUI/apps/games/retail-smash-swirl.kui": {
+      "sha256": "5b8f7f1c36983ad4d08ef63f928375201b289e4825635bc7eea1727217a3881b",
+      "bytes": 139096
+    },
+    "KUI/apps/games/retail-smash-vc2.kui": {
+      "sha256": "a36421a22e4e3d1da10b82d996816c427f311da90bd5ed633dac7af01e5deca5",
+      "bytes": 139068
+    },
+    "KUI/apps/games/smash-swirl-vmu-helper.bin": {
+      "sha256": "e125475c098abe25daf97db6b75408a78ae5778f3310e45df0839043c9d01445",
+      "bytes": 49152
+    },
+    "KUI/apps/games/smash-vc2-vmu-helper.bin": {
+      "sha256": "42f49cd45120ea3b7a4df56d0378e9e7529d56337b779f4cdb077b7f4b1f98a5",
+      "bytes": 49152
+    },
+    "KUI/apps/games/zso-boot.kui": {
+      "sha256": "25c288ab713ea31bfb3a72d1d858da26de3b50bd1cecfd2943f16b67ae8460ba",
+      "bytes": 37512
+    },
+    "KUI/boot.kui": {
+      "sha256": "c4363bfd071f4c5d02b302437dc34682b0ece9cb0f4ef336f3d435db94811550",
+      "bytes": 3554464
+    },
+    "KUI/runtime.kui": {
+      "sha256": "c4363bfd071f4c5d02b302437dc34682b0ece9cb0f4ef336f3d435db94811550",
+      "bytes": 3554464
+    }
+  },
+  "preserved_files": {
+    "KUI/apps/disc/native-disc-vmu-a1.kui": {
+      "sha256": "51525354ca5326fb33f37c329f3c9222a2d00d7a5cea3193d4daf034c9baabe6",
+      "bytes": 177092
+    },
+    "KUI/apps/disc/native-disc-vmu.kui": {
+      "sha256": "e89205da1b8a804ead660d9ed1a69574b98c28dabc7dd3ff73a282bc21ecd5c1",
+      "bytes": 177092
+    },
+    "KUI/apps/disc/native-disc.kui": {
+      "sha256": "2d58e931996c9ec679643746a90260f4f294ddc792504b39e7442b67e08adeca",
+      "bytes": 15756
+    },
+    "KUI/apps/games/cdda-native-mdk2.kui": {
+      "sha256": "fc0ddf1191de5dc3368abc59853cbbf6047b9a530f9e9d55405e2bc880e97c56",
+      "bytes": 67396
+    },
+    "KUI/apps/games/cdda-native-toy-cooked.kui": {
+      "sha256": "910e7c7895263db072b5d949325dc6cfc13fac9f39e03b17ade34a0cc883b105",
+      "bytes": 85408
+    },
+    "KUI/apps/games/cdda-native-toy-raw.kui": {
+      "sha256": "3356b8cf7e5b032f18b24977c1ea6e615934518c39b7f7f6c920c99a0e132ba2",
+      "bytes": 85376
+    },
+    "KUI/apps/games/cdda-toy-cooked.kui": {
+      "sha256": "910e7c7895263db072b5d949325dc6cfc13fac9f39e03b17ade34a0cc883b105",
+      "bytes": 85408
+    },
+    "KUI/apps/games/cdda-toy-raw.kui": {
+      "sha256": "3356b8cf7e5b032f18b24977c1ea6e615934518c39b7f7f6c920c99a0e132ba2",
+      "bytes": 85376
+    },
+    "KUI/apps/games/ce-cdda-armada.kui": {
+      "sha256": "91b1d4e43b866928767cb7e602fb41bee37c495c153452eeb4756851aa4f4807",
+      "bytes": 135156
+    },
+    "KUI/apps/games/ce-cdda-bam4.kui": {
+      "sha256": "f3b689d0f03b7c580f258f1ab4ca9423f0db1184f7028caa9c1c73e62e46dec4",
+      "bytes": 135140
+    },
+    "KUI/apps/games/ce-cdda-worms.kui": {
+      "sha256": "1a03c4a2b079dd8ba098aa50085471376d2591f7405bdcee519cc205c70eb933",
+      "bytes": 136068
+    },
+    "KUI/apps/games/ce-cdda-wwp.kui": {
+      "sha256": "39cf505fb35ae0650595de87533972ba4a83386e14cb52e26eb8d80b743ce6e4",
+      "bytes": 135748
+    },
+    "KUI/apps/games/lzo-boot.kui": {
+      "sha256": "471b38e454a1dc6acc78e94c9009e4d398b57ecbdff145800b469c9f0a0bd1ab",
+      "bytes": 38284
+    },
+    "KUI/apps/games/retail-boot.kui": {
+      "sha256": "bdc9c9f9389bf71e68efd6c065ef3eb31453b5544378b2ded0590ddec60275b1",
+      "bytes": 237816
+    },
+    "KUI/apps/games/retail-cdda-mdk2.kui": {
+      "sha256": "fc0ddf1191de5dc3368abc59853cbbf6047b9a530f9e9d55405e2bc880e97c56",
+      "bytes": 67396
+    },
+    "KUI/apps/games/retail-native-dual-a1.kui": {
+      "sha256": "f8ad6a5232c548ad306faec8127db3bc6ca53cd892ce2cefa6b65c2c1b54341d",
+      "bytes": 290136
+    },
+    "KUI/apps/games/retail-native-dual.kui": {
+      "sha256": "09c1480c6c470166b3e584f54218d98679ef4a34a8765d47bde4d2187889481a",
+      "bytes": 290104
+    },
+    "KUI/apps/games/retail-native-standalone.kui": {
+      "sha256": "8b1c64c09a481e1b732e4d446661c0869d9607f86107b3e7ea8dae9db62eb559",
+      "bytes": 49088
+    },
+    "KUI/apps/games/retail-physical.kui": {
+      "sha256": "2791f9052bc89fb87103eff71608f3c8e7ab9d04ab470154a43d1b3f21af199f",
+      "bytes": 76336
+    },
+    "KUI/apps/games/retail-smash-menu.kui": {
+      "sha256": "e6d0bef744f007a6cae87a10f9e83b7084801fedbdbc15b93b974ab3a3ee9117",
+      "bytes": 103092
+    },
+    "KUI/apps/games/retail-smash-native-menu.kui": {
+      "sha256": "b2d633f5254e5db852382f6e1263f283d6dd00434c7841ed852ca9f15e67de2e",
+      "bytes": 271620
+    },
+    "KUI/apps/games/retail-smash-swirl.kui": {
+      "sha256": "5b8f7f1c36983ad4d08ef63f928375201b289e4825635bc7eea1727217a3881b",
+      "bytes": 139096
+    },
+    "KUI/apps/games/retail-smash-vc2.kui": {
+      "sha256": "a36421a22e4e3d1da10b82d996816c427f311da90bd5ed633dac7af01e5deca5",
+      "bytes": 139068
+    },
+    "KUI/apps/games/smash-swirl-vmu-helper.bin": {
+      "sha256": "e125475c098abe25daf97db6b75408a78ae5778f3310e45df0839043c9d01445",
+      "bytes": 49152
+    },
+    "KUI/apps/games/smash-vc2-vmu-helper.bin": {
+      "sha256": "42f49cd45120ea3b7a4df56d0378e9e7529d56337b779f4cdb077b7f4b1f98a5",
+      "bytes": 49152
+    },
+    "KUI/apps/games/zso-boot.kui": {
+      "sha256": "25c288ab713ea31bfb3a72d1d858da26de3b50bd1cecfd2943f16b67ae8460ba",
+      "bytes": 37512
+    },
+    "KUI/boot.kui": {
+      "sha256": "c4363bfd071f4c5d02b302437dc34682b0ece9cb0f4ef336f3d435db94811550",
+      "bytes": 3554464
+    }
+  },
+  "runtime": {
+    "path": "build/native-shared-final/runtime.kui",
+    "sha256": "c4363bfd071f4c5d02b302437dc34682b0ece9cb0f4ef336f3d435db94811550",
+    "bytes": 3554464,
+    "header": {
+      "format": 1,
+      "build": "f8807cb16561",
+      "payload_bytes": 3554400,
+      "memory_bytes": 7854160,
+      "crc32": "0af73915"
+    }
+  },
+  "module_headers": {
+    "KUI/apps/games/retail-smash-menu.kui": {
+      "format": 1,
+      "build": "cc81e63ca4d2",
+      "payload_bytes": 103028,
+      "memory_bytes": 103028,
+      "crc32": "79a3821d"
+    },
+    "KUI/apps/games/retail-smash-native-menu.kui": {
+      "format": 1,
+      "build": "cc81e63ca4d2",
+      "payload_bytes": 271556,
+      "memory_bytes": 271556,
+      "crc32": "ca10f8d3"
+    },
+    "KUI/apps/games/retail-smash-vc2.kui": {
+      "format": 1,
+      "build": "cc81e63ca4d2",
+      "payload_bytes": 139004,
+      "memory_bytes": 139004,
+      "crc32": "4d9a5460"
+    },
+    "KUI/apps/games/retail-smash-swirl.kui": {
+      "format": 1,
+      "build": "cc81e63ca4d2",
+      "payload_bytes": 139032,
+      "memory_bytes": 139032,
+      "crc32": "a1ac3591"
+    }
+  },
+  "actual_outer_production_GUI_probe": true,
+  "actual_child_production_module_readers": true,
+  "helper_owners": {
+    "vc2": {
+      "helper_sha256": "42f49cd45120ea3b7a4df56d0378e9e7529d56337b779f4cdb077b7f4b1f98a5",
+      "owner_sha256": "1d0defc14033815db6709d1edf52efa60c975b66c1cd6402db0c6cde498063e1",
+      "exact_packaged_pair": true,
+      "changed_helper_refused": true
+    },
+    "swirl": {
+      "helper_sha256": "e125475c098abe25daf97db6b75408a78ae5778f3310e45df0839043c9d01445",
+      "owner_sha256": "79e5f2ede0cbfcda35694d427dd59c30bb56ab159453677013e24182fb065a6d",
+      "exact_packaged_pair": true,
+      "changed_helper_refused": true
+    }
+  },
+  "wrong_version_size_and_nonblank_seeds_refused": true,
+  "host_sanitizers": "ASan/UBSan",
+  "core_stdout": "PASS CE core: exact original argv/IP, opaque tail, capture and immutable refusals, unique blank seeds, full SAMPLE SHA owner\nPASS collection core: three normalized plans, all12 cross-run overlaps,32-bit boundaries, code CRC coherence, seals and blank-only discovery\n",
+  "stdout": "cc -std=c11 -O1 -g -Wall -Wextra -Werror -Wpedantic -fsanitize=address,undefined -fno-sanitize-recover=all -fno-pie -no-pie -ffunction-sections -fdata-sections -DKUI_VMU_GAME_CARDS=1 -DKUI_RETAIL_EXTENDED_MAP=1 -Iinclude -I.deps/fatfs/source -Isrc/dreamcast tests/test_smash_menu_collection_prepare.c \\\n src/core/smash_native_child.c src/core/smash_native_menu.c src/core/smash_genesis_save_header.c src/core/smash_card_session.c src/core/smash_menu_loader.c src/core/retail_image.c src/core/runtime_image.c src/core/data.c \\\n src/core/smash_menu_return.c src/core/smash_menu_collection.c src/core/smash_ce_child.c src/core/smash_ce_profile.c src/core/smash_ce_helper.c \\\n -Wl,--gc-sections -Wl,--wrap=kui_runtime_resolve_path -o /tmp/smash-packaged-admission-0bbpsu67/host/test-collection\nASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 /tmp/smash-packaged-admission-0bbpsu67/host/test-collection /tmp/smash-packaged-admission-0bbpsu67/retail-smash-menu.kui /tmp/smash-packaged-admission-0bbpsu67/retail-smash-native-menu.kui /tmp/smash-packaged-admission-0bbpsu67/retail-smash-vc2.kui /tmp/smash-packaged-admission-0bbpsu67/retail-smash-swirl.kui\nActual packaged Smash menu loader: production source-bound selection OK\nActual packaged native child: production module admission OK\nActual packaged VC2 child: production module admission and refusals OK\nActual packaged Swirl child: production module admission and refusals OK\nSmash menu collection preparation: OK\n",
+  "limits": [
+    "Exact shipped bytes execute the production GUI selector, child admission and core finders.",
+    "Runtime-file I/O and original-disc proof use read-only seams; this is not console/game execution."
+  ]
+}

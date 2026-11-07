@@ -1,0 +1,3 @@
+current: PASS root startup: actual prefix matches 2.0 splash/STOP/worker/chime lifecycle; no ordinary updater preflight; nonempty/corrupt RAM contexts retain checked routing
+v2: PASS root startup: actual prefix matches 2.0 splash/STOP/worker/chime lifecycle; no ordinary updater preflight; nonempty/corrupt RAM contexts retain checked routing
+PASS frozen f7229 control: early artwork still reaches forbidden ordinary-root preflight and is rejected

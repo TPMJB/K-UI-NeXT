@@ -549,8 +549,8 @@ def main():
                         assert (fixture / "after-emulation-a.bin").read_bytes() == preference
                         count = re.search(r"Native Standard exact source: (\d+) raw/cooked reads; max (\d+) bytes; reporting=1; prepared=(\d+)", output)
                         assert count and int(count[3]) == int(prepared)
-                        expected_reads = 4 if case in ("native-standard-retry-report", "native-standard-short-report", "native-standard-crc-fail") else 2
-                        assert int(count[1]) == expected_reads and int(count[2]) == (2048 if "cooked" in case else 2352)
+                        expected_reads = 2 if case in ("native-standard-retry-report", "native-standard-short-report", "native-standard-crc-fail") else 1
+                        assert int(count[1]) == expected_reads and int(count[2]) == 2 * (2048 if "cooked" in case else 2352)
                         for name in ("retail-boot.kui", "ce-probe.kui", "disc.gdi", "track01.bin", "music track02.raw", "track03.bin"):
                             assert (fixture / ("after-" + name)).read_bytes() == (fixture / name).read_bytes()
                         if prepared:

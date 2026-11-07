@@ -78,6 +78,26 @@ static int attach_stage(void) {
     struct kui_vmu_persist_attach_ops ops=attach_ops();
     return kui_vmu_persist_stage_attach(&card.expected,&card.game,&attached.source,&ops,&card.work,&card.handoff);
 }
+static void attach_snapshot_policy(void) {
+    for(unsigned recovery=0u;recovery<2u;recovery++) {
+        struct kui_vmu_durable_handoff expected;
+        attach_fresh();if(recovery)stage_seed_real_marker();else card.base[123][7]^=0x71u;
+        assert(!attach_stage());expected=card.handoff;
+        unsigned reads=card.reads,writes=card.writes,syncs=card.syncs;
+        attach_fresh();if(recovery)stage_seed_real_marker();else card.base[123][7]^=0x71u;
+        struct kui_vmu_persist_attach_ops ops=attach_ops();
+        assert(!kui_vmu_persist_stage_attach_policy(&card.expected,&card.game,&attached.source,&ops,
+            &kui_vmu_persist_stage_exclusive_checkpoint,&card.work,&card.handoff));
+        assert(!memcmp(&expected,&card.handoff,sizeof(expected)) && card.reads+526u==reads);
+        assert(card.writes==writes && card.syncs==syncs && !attached.writes_before_admission);
+    }
+    /* The extended entry retains the complete witness and identity fences. */
+    attach_fresh();attached.header[120]^=1u;
+    struct kui_vmu_persist_attach_ops ops=attach_ops();
+    assert(kui_vmu_persist_stage_attach_policy(&card.expected,&card.game,&attached.source,&ops,
+        &kui_vmu_persist_stage_exclusive_checkpoint,&card.work,&card.handoff));
+    stage_handoff_zero();assert(!card.writes && !card.syncs);
+}
 static void attach_current_image_and_real_recovery(void) {
     attach_fresh();card.base[123][7]=0x71u;
     assert(!attach_session());assert(card.work.session.ready && card.work.session.snapshot_valid);
@@ -209,7 +229,7 @@ int main(int argc,char **argv) {
     assert(argc==1);
     ownership_hash_canonical_equivalence();attach_current_image_and_real_recovery();
     attach_refuse_before_any_recovery_write();attach_partial_journal_and_power_cuts();
-    attach_identity_fences_and_argument_guards();
+    attach_identity_fences_and_argument_guards();attach_snapshot_policy();
     puts("PASS collection attach: complete fresh witness/profile/CID fences, no writes before verified admission, current image/real journal recovery, power-cut reopen,1272-byte handoff, whole-cluster protection and canonical ownership SHA");
     return 0;
 }

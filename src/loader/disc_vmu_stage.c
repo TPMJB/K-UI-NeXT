@@ -246,8 +246,10 @@ static void native_persist_prepare(const uint8_t *wire) {
     retail_display_line("CHECKING SELECTED VMU OWNERSHIP / JOURNAL");
     const struct kui_vmu_persist_session_ops ops={&native_persist_card,persist_identity,
         persist_read,persist_write,persist_sync,persist_healthy};
-    int prepared=kui_vmu_persist_disc_stage_prepare(&native_persist_profile,plan.vmu_transport,
-        &ops,&native_persist_work,&native_persist_handoff);
+    /* The acquired raw port has no other writer; these callbacks write only
+     * the requested sector and checkpoint writes only the journal marker. */
+    int prepared=kui_vmu_persist_disc_stage_prepare_policy(&native_persist_profile,plan.vmu_transport,
+        &ops,&kui_vmu_persist_stage_exclusive_checkpoint,&native_persist_work,&native_persist_handoff);
     enum kui_loader_sd_result stopped_stream=kui_loader_sd_stream_stop(&native_persist_card,&disc_fat_read_stream);
     healthy=persist_healthy(&native_persist_card);kui_sci_sd_release();
     if(prepared || stopped_stream!=KUI_LOADER_SD_OK || !healthy || kui_sci_sd_faulted()) {

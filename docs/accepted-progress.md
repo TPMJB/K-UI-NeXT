@@ -1,5 +1,38 @@
 # K-UI accepted progress
 
+## Standing delivery rule — 2026-11-06
+
+The owner uses manual-copy ZIPs as the default delivery workflow. This persists
+across sessions and supersedes historical wording that treats ZIP delivery as
+a one-off exception or instructs future tests to use KUPs. KUP delivery or
+updater-engine repair requires a separate explicit request. A GUI ZIP includes
+both identical physical aliases; normal ZIP delivery excludes activation
+records, banks and user data. The current Games/boot implementation is unchanged
+by this documentation correction.
+
+## Current console checkpoint — f8807cb16561
+
+The delivered `KUI-Shared-Game-Launch-06NOV2026-2210-UTC-f8807cb.zip`
+(SHA256 `dc607c3e89ab6bac5c718b738bca9990ffd85ec39abb308140de280c4a7503e9`)
+remains the unchanged native timing candidate. Host/linked qualification is
+recorded under `evidence/native-shared-f8807cb`. The owner's Evolution 2 capture
+now measures 21.704 seconds before handoff on Background New, VMU On, actual
+module payload CRC `9B37B199`; the owner reports another approximately 35 seconds
+inside bootstrap, about 55 seconds total. The latter interval has no phase
+capture. See [the measured baseline and shared preflight gap](evolution2-f8807cb-measurement.md).
+This is a slow console baseline, not performance acceptance. Sonic live-IRQ
+acceptance and a same-configuration repeat comparison remain unavailable.
+Capture GUI/module identity and both launch phases with usual matching options;
+retain the automatically generated launch record. Existing operation-count
+improvements must not be presented as measured console speed-ups.
+
+The subsequent [read-only review](review-06nov2026.md) confirms that all four
+delivered CE/CDDA modules already contain the VRAM-copy and folded-CRC changes;
+ordinary `ce-probe.kui` remains omitted. It also confirms that menu Restart
+may select a stale bank, while cold ROOT boot bypasses selectors. The physical
+card is unavailable, so existing banks are not assumed present or absent.
+Claude's original-backed SA1 result is recorded as an external report only.
+
 ## Sega Smash Pack accepted: cc81e63ca4d2, 2026-11-06
 
 The owner accepts the collection integration as complete after this exact
@@ -39,6 +72,91 @@ before applying the existing shared batching/card-admission lessons. Work
 counts alone do not establish a user-visible speedup. See
 [the shared policy](global-launch-policy.md) and
 [the accepted read-recovery repair](sci-damaged-block-reread.md).
+
+## Universal loader integration started: 2026-11-06
+
+The owner requested an ordered roadmap and implementation toward one broadly
+compatible maintained build. Start from Main `d393b859a9ee`; the roadmap is
+`universal-loader-roadmap.md`. Shared correctness and reproducible deployment
+come before new service memory layouts, native SDK extensions, coordinated
+CDDA streaming and broader lifecycle/format/transport coverage.
+
+The first integration targets generic CE payload-write width, a recorded
+ordinary/CE/CDDA build plan, fail-closed cold-rollout output and actual native
+service geometry reporting. It preserves the accepted collection components
+and existing worker reservations. The already merged CE completion fixes and
+SCI lost-byte guard remain required in affected rebuilt readers.
+
+This entry records authorized scope, not console acceptance, completed global
+deployment, new virtual-card support for DOA2 or a CDDA/FMVs performance result.
+Record build/package outcomes and any refused family before offering a new
+installation. Keep accepted Smash gameplay and return results above intact.
+
+### Shared pre-bootstrap follow-up
+
+The owner reports almost twenty seconds before bootstrap in Power Stone 2 on
+the first consolidated test and explicitly rejects per-game performance fixes.
+The follow-up is in `shared-gui-launch-preparation.md`: common GUI card
+admission and snapshot batching, plus launch-scoped reuse of a freshly verified
+frontend recovery checkpoint. It preserves all twenty non-GUI files from the
+72db614 test, the accepted collection and game-time worker geometry.
+
+Existing executable/history batching and aligned GUI decoders are preservation
+requirements, not new achievements. New tests bind those actual defaults and
+compare the new shared paths with single-read/full-checkpoint controls.
+The owner now reports Power Stone 2 reaches bootstrap in about four seconds
+on 9d6680a, versus almost twenty seconds before. Record this as the reported
+preparation improvement, separately from bootstrap and save/return coverage.
+
+### Native bootstrap services: 7fca3e3 candidate
+
+The owner asks to carry the faster Smash bootstrap lessons into shared native
+stages while retaining VMU hooks, and recalls about two seconds through Smash
+bootstrap. Exact dbadd source/binary comparison established three later changes:
+cached whole-executable CRC, fresh metadata/snapshot batching and removal of
+native informational holds. Older cached extent/replay/FAT work was already
+installed and must not be claimed again as missing.
+
+`shared-native-bootstrap-rollout.md` records the new 26-file candidate,
+five-service coverage, preserved workers/geometry/Smash bytes and qualification.
+The GUI's exact Standard and retained native-CDDA manifests are promoted to
+the default resource paths without rebuilding these binaries. The owner now
+reports no noticeable improvement with the new build ID. The exact final
+reader was not captured, so this neither establishes a bootstrap speedup nor
+diagnoses an updater failure. Treat the bootstrap performance change as
+unaccepted. No universal two-second target or new compatibility claim follows
+from the owner's Smash comparison.
+
+The owner's explicit scope is Games only. Freeze startup/splash, menu,
+branding and updater implementations during this integration. Prioritize
+shared preparation and bootstrap mechanisms across every applicable route;
+record their actual installed coverage and final reader identity. Do not send
+another performance candidate based only on a changed GUI label or model counts.
+
+### Shared Games-only follow-up: eeed38bd540e
+
+The branch now implements shared CE kernel-read reuse, indexed advisory native
+hints, cached immutable discovery on a miss, same-invocation native role-proof
+reuse, zero default cold photo holds and final-reader source reporting.
+All13 cold build roles/16 aliases qualify. Five current native workers and nine
+additional live components preserve their complete initialized code/geometry
+against the retained 7fc cohort, apart from permitted build labels. Accepted
+Smash files remain exact. No startup/menu/splash/updater source changed.
+
+`shared-game-launch-performance.md` and `evidence/games-eeed38b` record scope
+and implementation evidence. Default Standard/CDDA inputs now bind this exact
+cohort. The manual test avoids KUP installation and explicitly backs up the
+two saved selection records so copied physical files cannot be masked by a
+bank. Those records, banks and user data are not overwritten by the archive.
+Ordinary CE's `ce-probe.kui` path collision remains an explicit deployment gap.
+The new binaries have no console speed or compatibility acceptance yet.
+
+Delivered manual test: `KUI-Games-Manual-06NOV2026-1424-CST-eeed38b.zip`,
+SHA256 `17ff15b9fc3ac08255e52549ade2b9936f70e427e99a0643bb09ed3777ae3d28`.
+The archive contains28 software files and its README/BUILD/LICENSE, with no KUP,
+activation records or user data. `evidence/games-eeed38b/delivery.json` records
+the actual final source-reader fingerprints. Back up the two selection records
+outside their active directory for this manual ROOT test; keep them for restore.
 
 ## 0a hardware report: damaged reconstructed block reaches the sector parser
 
@@ -679,8 +797,9 @@ components; this test does not replace Standard, Background, disc or CDDA reader
 CE helpers retain their exact canonical SHA256 and actual `ab1b145b33b4` component
 label. That unchanged helper is not an older replacement VMU worker.
 
-The owner requested a **manual ZIP**, superseding the usual KUP delivery for this
-test. It must contain identical current GUI bytes at `KUI/runtime.kui` and
+Historically the owner requested a **manual ZIP** for this test; the standing
+ZIP rule above now applies beyond that individual request. That historical
+package required identical GUI bytes at `KUI/runtime.kui` and
 `KUI/boot.kui`, BOTH valid ROOT activation slots, four matching Smash modules,
 and the two exact accepted prepared CE helpers. Keep banks and all user data.
 The GUI must embed those same four modules: an older embedded bundle can take

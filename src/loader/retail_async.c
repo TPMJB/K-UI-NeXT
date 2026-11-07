@@ -7,6 +7,9 @@
 #include "kui/native_sci_priority.h"
 #include "kui/native_sdk_sci_runtime.h"
 #include "kui/smash_menu_loader.h"
+#ifdef KUI_RETAIL_CE
+#include "kui/retail_ce_payload_copy.h"
+#endif
 #if KUI_SMASH_MENU_LOADER
 #include "smash_menu_handoff_symbols.h"
 #endif
@@ -439,7 +442,7 @@ static void place(const uint8_t *bytes, uint32_t count) {
     uint8_t *out = e.piece_direct ? e.piece_direct + e.piece_filled :
         s->ops.map(s->ops.context, e.piece_destination + e.piece_filled, count, 1);
     if(!out) {e.failed = KUI_GD_ERROR_MEMORY; return;}
-    memcpy(out, bytes, count);
+    kui_retail_ce_payload_copy(out,bytes,count);
     e.piece_filled += count;
 }
 /* Drain oldest bytes first, and touch virtual destinations only while CE's

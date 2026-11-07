@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-06",
+  "kind": "owner-reported hardware observations",
+  "preparation": {
+    "game": "Power Stone 2",
+    "candidate": "9d6680a1c190",
+    "phase": "selection to bootstrap",
+    "previous_seconds_approximate": 20,
+    "current_seconds_approximate": 4,
+    "instrumented_capture": false
+  },
+  "bootstrap_reference": {
+    "title": "Sega Smash Pack",
+    "reported_seconds_approximate": 2,
+    "virtual_vmu_hooks": true,
+    "build_and_child_not_specified": true,
+    "instrumented_capture": false
+  },
+  "scope": "Preparation timing is accepted for the reported Power Stone 2 run. This does not establish all-game, save/load, return, or bootstrap timing acceptance."
+}

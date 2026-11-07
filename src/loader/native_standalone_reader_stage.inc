@@ -36,6 +36,10 @@ const struct kui_native_standalone_capability kui_native_standalone_reader_capab
 #endif
 static struct kui_native_sdk_sci_family standalone_family;
 static bool standalone_family_found;
+#if KUI_NATIVE_COLD_SDK_CACHE
+extern int kui_native_stage_cached_sdk_family(const void *,size_t,uint32_t,
+    struct kui_native_sdk_sci_family *);
+#endif
 #define STANDALONE_ROLE_VECTOR standalone_family.vector
 #define STANDALONE_ROLE_NORMAL standalone_family.normal
 #define STANDALONE_ROLE_FPU standalone_family.fpu
@@ -60,7 +64,13 @@ static uint32_t standalone_word(uint32_t address) {
  * relay has restored the executable, the second call must find the same roles. */
 static void __attribute__((noipa)) standalone_source_check(void) {
     struct kui_native_sdk_sci_family found;
-    int result=kui_native_sdk_sci_family_find((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
+    int result=
+#if KUI_NATIVE_COLD_SDK_CACHE
+        kui_native_stage_cached_sdk_family
+#else
+        kui_native_sdk_sci_family_find
+#endif
+        ((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
         exec_bytes,KUI_RETAIL_EXEC_ADDRESS,&found);
     if(result!=1)stopped("NEW STANDALONE NEEDS SDK SCI FAMILY",(uint32_t)result);
     if(standalone_family_found && memcmp(&found,&standalone_family,sizeof(found)))

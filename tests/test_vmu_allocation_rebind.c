@@ -72,6 +72,26 @@ static int rebind_stage(void) {
     struct kui_vmu_persist_session_ops ops=rebind_ops();
     return kui_vmu_persist_stage_rebind(&card.expected,&card.game,&rebound.transfer,&ops,&card.work,&card.handoff);
 }
+static void rebind_snapshot_policy(void) {
+    for(unsigned recovery=0u;recovery<2u;recovery++) {
+        struct kui_vmu_durable_handoff expected;
+        rebind_fresh();if(recovery)stage_seed_real_marker();else card.base[123][7]^=0x71u;
+        assert(!rebind_stage());expected=card.handoff;
+        unsigned reads=card.reads,writes=card.writes,syncs=card.syncs;
+        rebind_fresh();if(recovery)stage_seed_real_marker();else card.base[123][7]^=0x71u;
+        struct kui_vmu_persist_session_ops ops=rebind_ops();
+        assert(!kui_vmu_persist_stage_rebind_policy(&card.expected,&card.game,&rebound.transfer,&ops,
+            &kui_vmu_persist_stage_exclusive_checkpoint,&card.work,&card.handoff));
+        assert(!memcmp(&expected,&card.handoff,sizeof(expected)) && card.reads+526u==reads);
+        assert(card.writes==writes && card.syncs==syncs && !rebound.metadata_reads);
+        assert(rebound.transfer.state==KUI_VMU_ALLOCATION_TRANSFER_CONSUMED);
+    }
+    rebind_fresh();rebound.mutate_final_transfer=1u;
+    struct kui_vmu_persist_session_ops ops=rebind_ops();
+    assert(kui_vmu_persist_stage_rebind_policy(&card.expected,&card.game,&rebound.transfer,&ops,
+        &kui_vmu_persist_stage_exclusive_checkpoint,&card.work,&card.handoff));
+    stage_handoff_zero();assert(rebound.transfer.state==KUI_VMU_ALLOCATION_TRANSFER_POISONED);
+}
 static void rebind_current_image_recovery_and_reuse(void) {
     rebind_fresh();card.base[123][7]=0x71u;
     assert(!rebind_session() && card.work.session.ready && card.work.session.snapshot_valid);
@@ -197,6 +217,7 @@ static void rebind_argument_aliases(void) {
 int main(void) {
     rebind_current_image_recovery_and_reuse();rebind_invalid_transfer_before_io();
     rebind_callback_fences_and_poison();rebind_partial_journal_and_power_loss();rebind_argument_aliases();
+    rebind_snapshot_policy();
     puts("PASS allocation epoch rebind: zero host metadata IO, current image/per-block CRCs, real recovery, one-shot/alias/callback/role/CID fences, fresh1272 handoff; faulted epoch requires ordinary fresh admission");
     return 0;
 }

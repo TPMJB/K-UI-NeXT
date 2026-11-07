@@ -62,16 +62,22 @@ void __attribute__((noipa)) kui_native_standalone_bind(void) {
     const uint32_t owner=KUI_NATIVE_STANDALONE_SOURCE_VBR;
 #endif
     const volatile uint32_t *original=(const void *)(uintptr_t)source->vector;
-    /* The early family publishes its one common handler as both roles: its
-     * live INTEVT copy is 13 words, R0 scratch at 11 and the common at 12. */
-    const bool early=source->normal==source->fpu;
+    /* The early family has a 13-word INTEVT stub before its plain handler.
+     * Its independently proved alternate can be the nesting handler, so
+     * equality of the two role words does not identify this vector shape. */
+    const bool early=(source->normal&UINT32_C(0x1fffffff))==
+        (source->vector&UINT32_C(0x1fffffff))+UINT32_C(0x34);
+    #if KUI_NATIVE_STANDALONE_STRUCTURAL
+    if(early && source->vector<KUI_RETAIL_EXEC_ADDRESS+UINT32_C(0x34))return;
+#endif
     const unsigned words=early?13u:24u,scratch=early?11u:20u,common=early?12u:22u;
     for(unsigned word=0u;word<words;++word) {
         if(word==scratch)continue; /* Copied vector's original mutable R0 scratch. */
         uint32_t live=rd32(owner+UINT32_C(0x600)+4u*word);
         if(word==common) {
             if((live!=source->normal && live!=source->fpu) ||
-               (original[word]!=source->normal && original[word]!=source->fpu))return;
+               (original[word]!=source->normal && original[word]!=source->fpu) ||
+               (early && (live!=original[word] || original[-1]!=live)))return;
         } else if(live!=original[word])return;
     }
     const uint32_t slots=owner+KUI_NATIVE_SDK_SCI_ERI_SLOT_OFFSET;

@@ -1,0 +1,197 @@
+{
+  "status": "PASS",
+  "source_commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+  "source_tree": "a0e4108e38d8013ee5c5e600a9835b46cb7d1f1c",
+  "equivalent_public_commit": "e79da8cee44d95cda518721df7a97a83965ee2c3",
+  "filename": "KUI-Shared-Game-Launch-06NOV2026-2210-UTC-f8807cb.zip",
+  "path": "build/deliverables/KUI-Shared-Game-Launch-06NOV2026-2210-UTC-f8807cb.zip",
+  "sha256": "dc607c3e89ab6bac5c718b738bca9990ffd85ec39abb308140de280c4a7503e9",
+  "bytes": 6087588,
+  "archive_members": 31,
+  "software_members": 28,
+  "changed_software_paths": [
+    "KUI/apps/disc/native-disc-vmu-a1.kui",
+    "KUI/apps/disc/native-disc-vmu.kui",
+    "KUI/apps/games/cdda-native-mdk2.kui",
+    "KUI/apps/games/cdda-native-toy-cooked.kui",
+    "KUI/apps/games/cdda-native-toy-raw.kui",
+    "KUI/apps/games/cdda-toy-cooked.kui",
+    "KUI/apps/games/cdda-toy-raw.kui",
+    "KUI/apps/games/lzo-boot.kui",
+    "KUI/apps/games/retail-boot.kui",
+    "KUI/apps/games/retail-cdda-mdk2.kui",
+    "KUI/apps/games/retail-native-dual-a1.kui",
+    "KUI/apps/games/retail-native-dual.kui",
+    "KUI/apps/games/retail-native-standalone.kui",
+    "KUI/apps/games/retail-physical.kui",
+    "KUI/apps/games/zso-boot.kui",
+    "KUI/boot.kui",
+    "KUI/runtime.kui"
+  ],
+  "retained_software_paths": [
+    "KUI/apps/disc/native-disc.kui",
+    "KUI/apps/games/ce-cdda-armada.kui",
+    "KUI/apps/games/ce-cdda-bam4.kui",
+    "KUI/apps/games/ce-cdda-worms.kui",
+    "KUI/apps/games/ce-cdda-wwp.kui",
+    "KUI/apps/games/retail-smash-menu.kui",
+    "KUI/apps/games/retail-smash-native-menu.kui",
+    "KUI/apps/games/retail-smash-swirl.kui",
+    "KUI/apps/games/retail-smash-vc2.kui",
+    "KUI/apps/games/smash-swirl-vmu-helper.bin",
+    "KUI/apps/games/smash-vc2-vmu-helper.bin"
+  ],
+  "all_software_bytes_identical_to_qualification_archive": true,
+  "strict_inventory_and_archive_matches": true,
+  "stale_standalone_archive_refused": true,
+  "all_member_hash_inventory": {
+    "KUI/apps/disc/native-disc-vmu-a1.kui": {
+      "bytes": 177092,
+      "sha256": "51525354ca5326fb33f37c329f3c9222a2d00d7a5cea3193d4daf034c9baabe6"
+    },
+    "KUI/apps/disc/native-disc-vmu.kui": {
+      "bytes": 177092,
+      "sha256": "e89205da1b8a804ead660d9ed1a69574b98c28dabc7dd3ff73a282bc21ecd5c1"
+    },
+    "KUI/apps/disc/native-disc.kui": {
+      "bytes": 15756,
+      "sha256": "2d58e931996c9ec679643746a90260f4f294ddc792504b39e7442b67e08adeca"
+    },
+    "KUI/apps/games/cdda-native-mdk2.kui": {
+      "bytes": 67396,
+      "sha256": "fc0ddf1191de5dc3368abc59853cbbf6047b9a530f9e9d55405e2bc880e97c56"
+    },
+    "KUI/apps/games/cdda-native-toy-cooked.kui": {
+      "bytes": 85408,
+      "sha256": "910e7c7895263db072b5d949325dc6cfc13fac9f39e03b17ade34a0cc883b105"
+    },
+    "KUI/apps/games/cdda-native-toy-raw.kui": {
+      "bytes": 85376,
+      "sha256": "3356b8cf7e5b032f18b24977c1ea6e615934518c39b7f7f6c920c99a0e132ba2"
+    },
+    "KUI/apps/games/cdda-toy-cooked.kui": {
+      "bytes": 85408,
+      "sha256": "910e7c7895263db072b5d949325dc6cfc13fac9f39e03b17ade34a0cc883b105"
+    },
+    "KUI/apps/games/cdda-toy-raw.kui": {
+      "bytes": 85376,
+      "sha256": "3356b8cf7e5b032f18b24977c1ea6e615934518c39b7f7f6c920c99a0e132ba2"
+    },
+    "KUI/apps/games/ce-cdda-armada.kui": {
+      "bytes": 135156,
+      "sha256": "91b1d4e43b866928767cb7e602fb41bee37c495c153452eeb4756851aa4f4807"
+    },
+    "KUI/apps/games/ce-cdda-bam4.kui": {
+      "bytes": 135140,
+      "sha256": "f3b689d0f03b7c580f258f1ab4ca9423f0db1184f7028caa9c1c73e62e46dec4"
+    },
+    "KUI/apps/games/ce-cdda-worms.kui": {
+      "bytes": 136068,
+      "sha256": "1a03c4a2b079dd8ba098aa50085471376d2591f7405bdcee519cc205c70eb933"
+    },
+    "KUI/apps/games/ce-cdda-wwp.kui": {
+      "bytes": 135748,
+      "sha256": "39cf505fb35ae0650595de87533972ba4a83386e14cb52e26eb8d80b743ce6e4"
+    },
+    "KUI/apps/games/lzo-boot.kui": {
+      "bytes": 38284,
+      "sha256": "471b38e454a1dc6acc78e94c9009e4d398b57ecbdff145800b469c9f0a0bd1ab"
+    },
+    "KUI/apps/games/retail-boot.kui": {
+      "bytes": 237816,
+      "sha256": "bdc9c9f9389bf71e68efd6c065ef3eb31453b5544378b2ded0590ddec60275b1"
+    },
+    "KUI/apps/games/retail-cdda-mdk2.kui": {
+      "bytes": 67396,
+      "sha256": "fc0ddf1191de5dc3368abc59853cbbf6047b9a530f9e9d55405e2bc880e97c56"
+    },
+    "KUI/apps/games/retail-native-dual-a1.kui": {
+      "bytes": 290136,
+      "sha256": "f8ad6a5232c548ad306faec8127db3bc6ca53cd892ce2cefa6b65c2c1b54341d"
+    },
+    "KUI/apps/games/retail-native-dual.kui": {
+      "bytes": 290104,
+      "sha256": "09c1480c6c470166b3e584f54218d98679ef4a34a8765d47bde4d2187889481a"
+    },
+    "KUI/apps/games/retail-native-standalone.kui": {
+      "bytes": 49088,
+      "sha256": "8b1c64c09a481e1b732e4d446661c0869d9607f86107b3e7ea8dae9db62eb559"
+    },
+    "KUI/apps/games/retail-physical.kui": {
+      "bytes": 76336,
+      "sha256": "2791f9052bc89fb87103eff71608f3c8e7ab9d04ab470154a43d1b3f21af199f"
+    },
+    "KUI/apps/games/retail-smash-menu.kui": {
+      "bytes": 103092,
+      "sha256": "e6d0bef744f007a6cae87a10f9e83b7084801fedbdbc15b93b974ab3a3ee9117"
+    },
+    "KUI/apps/games/retail-smash-native-menu.kui": {
+      "bytes": 271620,
+      "sha256": "b2d633f5254e5db852382f6e1263f283d6dd00434c7841ed852ca9f15e67de2e"
+    },
+    "KUI/apps/games/retail-smash-swirl.kui": {
+      "bytes": 139096,
+      "sha256": "5b8f7f1c36983ad4d08ef63f928375201b289e4825635bc7eea1727217a3881b"
+    },
+    "KUI/apps/games/retail-smash-vc2.kui": {
+      "bytes": 139068,
+      "sha256": "a36421a22e4e3d1da10b82d996816c427f311da90bd5ed633dac7af01e5deca5"
+    },
+    "KUI/apps/games/smash-swirl-vmu-helper.bin": {
+      "bytes": 49152,
+      "sha256": "e125475c098abe25daf97db6b75408a78ae5778f3310e45df0839043c9d01445"
+    },
+    "KUI/apps/games/smash-vc2-vmu-helper.bin": {
+      "bytes": 49152,
+      "sha256": "42f49cd45120ea3b7a4df56d0378e9e7529d56337b779f4cdb077b7f4b1f98a5"
+    },
+    "KUI/apps/games/zso-boot.kui": {
+      "bytes": 37512,
+      "sha256": "25c288ab713ea31bfb3a72d1d858da26de3b50bd1cecfd2943f16b67ae8460ba"
+    },
+    "KUI/boot.kui": {
+      "bytes": 3554464,
+      "sha256": "c4363bfd071f4c5d02b302437dc34682b0ece9cb0f4ef336f3d435db94811550"
+    },
+    "KUI/runtime.kui": {
+      "bytes": 3554464,
+      "sha256": "c4363bfd071f4c5d02b302437dc34682b0ece9cb0f4ef336f3d435db94811550"
+    },
+    "README-FIRST.txt": {
+      "bytes": 3737,
+      "sha256": "85b0a9d2772d9035d9da7c3b846cb7733bcede3c1b341a4543bf18e2503b7fe9"
+    },
+    "BUILD.json": {
+      "bytes": 69705,
+      "sha256": "61c17ee06470341ebdd2f3e8487a2314677a191f9d6187e66d550ec3ecfa86cd"
+    },
+    "LICENSE.txt": {
+      "bytes": 35149,
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    }
+  },
+  "required_gate_statuses": {
+    "build/native-shared-final/GUI-standard-admission.json": "PASS",
+    "build/native-shared-final/GUI-fallback-admission.json": true,
+    "build/native-shared-final/Smash-packaged-admission.json": "PASS",
+    "build/native-shared-final/shared-service-policy.json": "PASS",
+    "build/native-shared-final/five-vmu-layout.json": "PASS",
+    "build/native-shared-final/seven-native-layout.json": "PASS",
+    "build/native-shared-final/live-component-preservation.json": "PASS",
+    "build/native-shared-final/passive-cold-kernel-delta.json": "PASS",
+    "build/native-cold-final-qualification/qualification.json": "PASS",
+    "build/native-snapshot-final-qualification/linked-policy.json": "PASS",
+    "build/native-snapshot-final-qualification/immutable-policy-owners.json": "PASS",
+    "build/vmu-stage-snapshot-host/snapshot-policy.json": "PASS",
+    "build/return-runtime-batching.json": "PASS",
+    "build/cooked-native-hints/qualification.json": "PASS"
+  },
+  "hardware_tested": false,
+  "artifact_saved": true,
+  "download_url": "https://chatgpt.com/library?file_id=libfile_ccae114f72cc8191a636862e1120ec7d&account_id=personal",
+  "compiled_source_commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+  "equivalent_public_source_commit": "e79da8cee44d95cda518721df7a97a83965ee2c3",
+  "main_changed": false,
+  "hardware_timing_measured": false,
+  "sonic_live_background_confirmed": false
+}

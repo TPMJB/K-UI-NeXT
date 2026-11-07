@@ -1,0 +1,50 @@
+{
+  "build": "a0dc9a62e79f",
+  "bytes": 48588,
+  "sha256": "8a1eb7faad51b5e5167226cb4e521c478cfd3fa2d38901b3cb84e1e85c88576a",
+  "elf_sha256": "5a11677712302228bef5963f4457b4688909461318b83e8b9b159f92a0256bda",
+  "compile_receipt_sha256": "98e50e67ac2a3c66f25e2c8c2f8cbca38f171d4dd34ebffb6c7550d2a9873218",
+  "cold_stage": {
+    "handoff_policy": {
+      "stage_sha256": "219a58ed194e757a9c84e9acd35dcc75360620e27fca87c2e3a05efb82e2ce47",
+      "photo_hold_frames": 0,
+      "linked_pause_implementations": 0,
+      "console_timing_measured": false
+    },
+    "relay": {
+      "status": "PASS",
+      "linked_elf_sha256": "219a58ed194e757a9c84e9acd35dcc75360620e27fca87c2e3a05efb82e2ce47",
+      "owner_state_cases": 18,
+      "rejected_controlling_mutations": 24,
+      "relay_instruction_cache_enabled": true,
+      "relay_operand_cache_enabled": false,
+      "complete_pre_relay_ram_publication": true,
+      "ccr_writes_through_p2": true,
+      "original_trampoline_frame_and_p2_target_checked": true,
+      "eight_nops_after_each_ccr_write": true,
+      "exact_owner_frame_and_ccr_restored": true,
+      "c_relay_body_executed": false,
+      "real_cpu_cache_or_timing_measured": false
+    },
+    "byte_CRC": {
+      "schema": "kui.smash-native.fast-crc.v1",
+      "status": "PASS",
+      "elf_sha256": "219a58ed194e757a9c84e9acd35dcc75360620e27fca87c2e3a05efb82e2ce47",
+      "helper": "0x8ce000f4",
+      "helper_bytes": 144,
+      "helper_sha256": "9bde6616984af6609a2ccb6683002c72ff4a2619312e7412124c95bcb7787975",
+      "byte_table": "0x8ce06258",
+      "table_bytes": 1024,
+      "complete_readonly_table_candidates": 1,
+      "helper_bound_tables": 1,
+      "table_sha256": "12f3e0576d447eb37b36d82ba0c1c5481b8f0d12fdc70347ce4a076b229d4c86",
+      "actual_SH_cases": 128,
+      "instructions": 363128,
+      "one_table_read_per_byte": true,
+      "independent_oracle": "zlib.crc32",
+      "whole_image_relay_bound": true,
+      "observed_private_stack_bytes": 8,
+      "hardware_timing_verified": false
+    }
+  }
+}

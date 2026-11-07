@@ -1,0 +1,65 @@
+{
+  "schema": "kui.native.standard-build-manifest.test.v1",
+  "status": "PASS",
+  "manifest": {
+    "schema": "kui.native.standard-build-manifest.v1",
+    "source_commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+    "source_dirty": false,
+    "build": "f8807cb16561",
+    "profile": "paced-SCI-VMU-lite-A2",
+    "payload_bytes": 237752,
+    "memory_bytes": 237752,
+    "profile_payload_offset": 118752,
+    "normalized_payload_sha256": "d7dedf99e674c0990716184f56016e65509c3364fcdfd086922e6021bb922c71",
+    "module_sha256": "bdc9c9f9389bf71e68efd6c065ef3eb31453b5544378b2ded0590ddec60275b1",
+    "module_bytes": 237816,
+    "profile_bytes": 4096,
+    "provenance": {
+      "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+      "source_dirty": false,
+      "compile_provenance_sha256": "da807dc6981924bd4359eed93c2f65ebfa11b5eeb87f3ba1e87c0bce24563065",
+      "elf_sha256": "71afe06e5a6166f840c9a254c59b6498b46991413760fcd0cbf066736f9db1ce"
+    },
+    "launch_mutable_spans": [
+      [
+        118752,
+        4096
+      ]
+    ],
+    "build_labels_normalized": false,
+    "unknown_installed_modules_refused": true,
+    "artifacts_sha256": {
+      "entry.elf": "71afe06e5a6166f840c9a254c59b6498b46991413760fcd0cbf066736f9db1ce",
+      "stage.elf": "bf7f6b51739b02cabe22cf8294f3d55b7f29dead915dd741d50615f75b8a7091",
+      "native-worker.elf": "0503a67006ec555f4efd9056e9027b9ccd64add2ce83106f78c8d7fa9e2f1e3b",
+      "resident-sci.elf": "c10a7f8b203d7bc9c0e666f0c70ae7cc29ba6f2a3f7f9e97a3d6d21018ec4145",
+      "retail-native-vmu-lite-paced.kui": "bdc9c9f9389bf71e68efd6c065ef3eb31453b5544378b2ded0590ddec60275b1"
+    },
+    "full_linked_family_audit_required_for_delivery": true
+  },
+  "sanitizer_runs": [
+    {
+      "manifest_enabled": false,
+      "output": "Standard build manifest: 9 checks passed; current cohort only, code immutable, valid profile mutable"
+    },
+    {
+      "manifest_enabled": true,
+      "output": "Standard build manifest: 1418 checks passed; current cohort only, code immutable, valid profile mutable"
+    }
+  ],
+  "current_module_only": true,
+  "no_installed_module_self_authorization": true,
+  "source_sha256": {
+    "tests/test_native_standard_manifest.c": "70d40a844253aeab43f8c6c5320fc3f6af2b8b186ede49524e82bd6b1c90b835",
+    "src/core/native_vmu_standard.c": "41911c74bbea62c23f974d7c5ddb77c3811317803768f6ed091a08dd73986ddd",
+    "src/core/vmu_game_card.c": "a7409858eb0eec2f6243a68d759b8fb5b7165a9aa2222d214f595e9a466d4ae7",
+    "src/core/vmu_persist_profile.c": "a0468429007a0a7024b2251766149555b492032c0a37b407db2c3fb78f483f89",
+    "src/core/runtime_image.c": "e2c25e03ada0ad5067d326817e0109da1665b7905de1e65d338056c222b3dd8a",
+    "src/core/retail_image.c": "632d19e0f78e474bed87249ad80a7a1b827c18cd98f07f9b9c21e81da1999986",
+    "src/core/hash.c": "1dda19d3dc6a645396d24484cd8842c72bba811dce38f317660a2eeda7dc0d67",
+    "src/core/data.c": "2899e0f28ea7af1dd8cc0dc72a4f9dfed32a33f2e21908505c70e050b43941a5",
+    "include/kui/native_vmu_standard.h": "91725890746838dee4f9eb5e43c293ffc7dbbbcbef2e0a9bb48d49102b1ff6f1",
+    "tools/native_standard_manifest.py": "cc526450435cab09f08a1190ff210a3280383c967c45902c029f1042a70f7fec",
+    "tests/test_native_standard_manifest.py": "a1d9e6a95b176545ed6721c5bd755019b4142851eeaea8c0dbf0684a33164fe7"
+  }
+}

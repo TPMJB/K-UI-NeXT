@@ -90,7 +90,8 @@ def source_guards():
     source=(ROOT/'src/loader/smash_card_session_stage.inc').read_text()
     child=source[source.index('static int smash_card_session_prepare('):source.index('\n#else\n#include "kui/smash_menu_return.h"')]
     for forbidden in ('kui_vmu_fs_admit(', 'kui_vmu_fs_witness_replay(', 'kui_smash_session_file_load('):assert forbidden not in child
-    assert child.index('kui_vmu_persist_stage_rebind(')<child.index('kui_smash_card_receipt_transfer(')
+    assert child.index('kui_vmu_persist_stage_rebind_policy(')<child.index('kui_smash_card_receipt_transfer(')
+    assert '&kui_vmu_persist_stage_exclusive_checkpoint' in child
     outer=source[source.index('static void smash_card_session_outer_prepare(void)'):]
     assert outer.index('kui_retail_storage_acquire(')<outer.index('smash_card_identity_matches(')<outer.index('kui_smash_card_receipt_transfer(')
     assert outer.index('smash_card_identity_matches(')<outer.index('kui_smash_card_receipt_ce_return(')
@@ -136,8 +137,13 @@ def native_descriptor_case(elf,run,build,mode):
     struct.pack_into('<Q',card_wire,32,p['card_sectors']);card_wire[40]=p['high_capacity'];card_wire[41]=1
     m.put(card,card_wire);m.c.pc=symbol(elf,'_native_persist_storage_init');m.c.pr=RETURN
     m.c.r[15]=STACK;m.c.r[4]=card;m.c.r[5]=1
-    rebind=symbol(elf,'_kui_vmu_persist_stage_rebind')
+    policy_api='_kui_vmu_persist_stage_rebind_policy' in elf[4]
+    rebind=symbol(elf,'_kui_vmu_persist_stage_rebind_policy' if policy_api else '_kui_vmu_persist_stage_rebind')
     assert m.execute(stop=RETURN,break_pc=rebind,budget=10000000)==1
+    if policy_api:
+        policy=struct.unpack('<I',m.block(m.c.r[15],4))[0]
+        assert policy==symbol(elf,'_kui_vmu_persist_stage_exclusive_checkpoint')
+        assert struct.unpack('<4I',m.block(policy,16))==(1,16,1,0)
     transfer=m.c.r[6];data=m.block(transfer,160)
     assert struct.unpack_from('<4I',data)==(0x31544156,1,160,1)
     assert struct.unpack_from('<3Q',data,16)==(p['card_sectors'],p['partition_first'],p['partition_end'])
@@ -158,7 +164,8 @@ def native_descriptor_case(elf,run,build,mode):
         assert struct.unpack('<I',m.block(symbol(elf,'_smash_card_attaches'),4))[0]==1
     else:assert result==1 and after==receipt(binding,admission)
     return {'case':mode,'descriptor_bytes':160,'sequence':2,'previous_owner':1,'next_owner':2,
-            'receipt_advanced':mode=='success','actual_sh_instructions':int(m.c.steps)}
+            'receipt_advanced':mode=='success','explicit_checkpoint_policy':policy_api,
+            'actual_sh_instructions':int(m.c.steps)}
 def audit(native_build,outer_build,run):
     native=read_elf(native_build/'stage.elf');outer=read_elf(outer_build/'stage.elf')
     hashes={str(p):sha(p.read_bytes()) for p in (native_build/'stage.elf',outer_build/'stage.elf')}

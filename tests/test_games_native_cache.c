@@ -485,9 +485,35 @@ static void actual_frontend(const char *path) {
 #ifndef KUI_GAMES_NATIVE_CACHE_TEST_MAIN
 #define KUI_GAMES_NATIVE_CACHE_TEST_MAIN main
 #endif
+static void advisory_alias_publication_faults(void) {
+    uint8_t boot[1024],wire[1024],compare[1024];
+    for(unsigned i=0u;i<sizeof(boot);i++)boot[i]=(uint8_t)(i*17u+1u);
+    struct kui_vmu_native_resolution record;mock(boot,sizeof(boot),&record);
+    CHECK(kui_vmu_native_resolution_cache_encode(&record,wire,sizeof(wire)));
+    static const char path[]="0:/KUI/VMU/native-cache/v8/hints/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.nvr";
+    for(unsigned fault=FAIL_NONE;fault<=FAIL_MKDIR;fault++) {
+        setup(boot,sizeof(boot));CHECK(f_mkdir("0:/KUI/VMU/native-cache/v8/hints")==FR_OK);
+        io.fail=fault;
+        bool saved=native_cache_file_publish(path,wire,compare,cancelled);
+        CHECK(saved==(fault==FAIL_NONE) && io.opens==io.closed);
+        int final=node_find(path);
+        if(saved)CHECK(final>=0 && disk[final].size==1024u && !memcmp(disk[final].data,wire,1024u));
+        else CHECK(final<0);
+    }
+    for(unsigned cancel_when=1u;cancel_when<=8u;cancel_when++) {
+        setup(boot,sizeof(boot));CHECK(f_mkdir("0:/KUI/VMU/native-cache/v8/hints")==FR_OK);
+        io.cancel_when=cancel_when;
+        (void)native_cache_file_publish(path,wire,compare,cancelled);
+        int final=node_find(path);
+        CHECK(io.opens==io.closed);
+        CHECK(final<0 || (disk[final].size==1024u && !memcmp(disk[final].data,wire,1024u)));
+    }
+    puts("PASS actual advisory alias publisher: nested path, temporary/sync/exact readback/rename, every I/O failure and cancellation boundary; no partial final record");
+}
 int KUI_GAMES_NATIVE_CACHE_TEST_MAIN(int argc,char **argv) {
     CHECK(argc>=1 && argc<=4);codec_and_trust_tests();gates_and_hits();dual_gates_and_hits();
     fixed_arena_needs_dual();arena_needs_compact_dual();
+    advisory_alias_publication_faults();
     for(int i=1;i<argc;i++) actual_frontend(argv[i]);
     printf("Native launcher cache: %u checks passed%s\n",checks,argc>1?" including actual-image rebuild/publication faults":"");return 0;
 }

@@ -1,0 +1,745 @@
+{
+  "schema": "kui.seven-native.final-layout.v1",
+  "source_commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+  "status": "PASS",
+  "families": [
+    {
+      "role": "physical",
+      "build_directory": "build/retail-physical",
+      "artifact_sha256": {
+        "resident-ide.elf": "ea17446f5086dda4b53cb9d7ae7ebd8182edac461c828f7a961f67a3fe4d0557",
+        "resident-scif.elf": "a73aae5cb5a78b69a329db999ef791139c0480d306ee734aa1cc8431291c075b",
+        "resident-scia.elf": "4b6adfc2f3675c36732a2bdb811be171e390597b0b6b98373aac4b7035cd91ea",
+        "entry.elf": "9566509d1cfae4273a99ee70e964406c00cba7d92fb8b2a7ab8faab82e0dee0e",
+        "resident-sci.elf": "61fb0e6a2ca40a99d70ce27c4b22f4dab010a21c6eaad5c741ba54c2c4fcb9b7",
+        "stage.elf": "016f36617b6ec9421e2fc9a896a3eea74c0ed4d1b0fd9e3330bc0c6dcc94faf2"
+      },
+      "compile_receipt_sha256": "4b8aee85785f84b0a7dea5b8e531e4ac9713acedfa1fb50b40a718c311a160bc",
+      "linked_module": {
+        "compile": {
+          "elf_sha256": "9566509d1cfae4273a99ee70e964406c00cba7d92fb8b2a7ab8faab82e0dee0e",
+          "compile_sha256": "4b8aee85785f84b0a7dea5b8e531e4ac9713acedfa1fb50b40a718c311a160bc",
+          "provenance": {
+            "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+            "source_dirty": false,
+            "elf_sha256": "9566509d1cfae4273a99ee70e964406c00cba7d92fb8b2a7ab8faab82e0dee0e"
+          }
+        },
+        "envelope": {
+          "format": 1,
+          "build": "f8807cb16561",
+          "payload_bytes": 76272,
+          "memory_bytes": 76272,
+          "crc32": "6a85a797"
+        },
+        "artifacts_sha256": {
+          "resident-ide.elf": "ea17446f5086dda4b53cb9d7ae7ebd8182edac461c828f7a961f67a3fe4d0557",
+          "resident-scif.elf": "a73aae5cb5a78b69a329db999ef791139c0480d306ee734aa1cc8431291c075b",
+          "resident-scia.elf": "4b6adfc2f3675c36732a2bdb811be171e390597b0b6b98373aac4b7035cd91ea",
+          "entry.elf": "9566509d1cfae4273a99ee70e964406c00cba7d92fb8b2a7ab8faab82e0dee0e",
+          "resident-sci.elf": "61fb0e6a2ca40a99d70ce27c4b22f4dab010a21c6eaad5c741ba54c2c4fcb9b7",
+          "stage.elf": "016f36617b6ec9421e2fc9a896a3eea74c0ed4d1b0fd9e3330bc0c6dcc94faf2"
+        },
+        "stage_bin_sha256": "f478c624f2a2233316ccd6460f5432c56644c8fefc94a0dc98a1cc567ef9f9fa"
+      },
+      "linked_module_sha256": "2791f9052bc89fb87103eff71608f3c8e7ab9d04ab470154a43d1b3f21af199f",
+      "status": "PASS",
+      "original_gate_refusal": "ValueError: Physical loader contains a VMU/native-worker symbol: stage:_kui_native_stage_cached_crc32",
+      "gate": {
+        "schema": "kui.native.physical-standard.audit.v1",
+        "source_provenance": {
+          "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+          "source_dirty": false,
+          "elf_sha256": "9566509d1cfae4273a99ee70e964406c00cba7d92fb8b2a7ab8faab82e0dee0e",
+          "audit_only_worktree": {
+            "changed_paths": [
+              "tests/test_retail_physical.py",
+              "tools/check_retail_physical.py"
+            ],
+            "sha256": {
+              "tests/test_retail_physical.py": "56de82ebe4af46108fe918422cd7a79d53673b3e4a880d3217f825b683e751cb",
+              "tools/check_retail_physical.py": "9371cb6863a113ab27789384ee2e2f18a7e823846134b7f99e2f324d227d6330"
+            },
+            "production_tree_unchanged": true,
+            "compiled_receipts_unmodified": true,
+            "original_strict_dirty_policy_would_refuse": true
+          }
+        },
+        "runtime": {
+          "format": 1,
+          "build": "f8807cb16561",
+          "payload_bytes": 76272,
+          "memory_bytes": 76272,
+          "crc32": "6a85a797"
+        },
+        "module_sha256": "2791f9052bc89fb87103eff71608f3c8e7ab9d04ab470154a43d1b3f21af199f",
+        "reader": 0,
+        "transport_mask": 7,
+        "lease_bytes": 0,
+        "worker_bytes": 0,
+        "virtual_cards": 0,
+        "background_reader_enabled": false,
+        "prefetch_enabled": false,
+        "descriptor": {
+          "module_offset": 30880,
+          "bytes": 32,
+          "allocated_read_only": true,
+          "unique_complete_descriptor": true
+        },
+        "existing_plain_resident_bytes_identical": true,
+        "resident_images": {
+          "scif": {
+            "elf_sha256": "a73aae5cb5a78b69a329db999ef791139c0480d306ee734aa1cc8431291c075b",
+            "binary_sha256": "f0e778a04725531cb17e58b24d67890e83d207f21b090c8c289e19bc1e16b854"
+          },
+          "sci": {
+            "elf_sha256": "61fb0e6a2ca40a99d70ce27c4b22f4dab010a21c6eaad5c741ba54c2c4fcb9b7",
+            "binary_sha256": "7f3228be6790fb56821df711c87b630e478ed1ba1be40463d6069a30ead120d5"
+          },
+          "ide": {
+            "elf_sha256": "ea17446f5086dda4b53cb9d7ae7ebd8182edac461c828f7a961f67a3fe4d0557",
+            "binary_sha256": "8f6a542fc1ab98b2b69f08c7f337d8a94bf7b2b04bc3e337c6ea481c2448cf19"
+          },
+          "scia": {
+            "elf_sha256": "4b6adfc2f3675c36732a2bdb811be171e390597b0b6b98373aac4b7035cd91ea",
+            "binary_sha256": "fe758a9f0449b46249dbe18c31d3bf2e41dc633d3cb9a6ed306e883144d5812b"
+          }
+        },
+        "standard_only_runtime_guard": true,
+        "standard_only_guard": {
+          "exact_immutable_body": true,
+          "body_bytes": 24,
+          "body_sha256": "097df8d3be76ccbbea7779cd364b8427c6ddf5c293a6cfa2050e6a05a0faf0ae",
+          "actual_stage_call_bound": true,
+          "actual_stage_result_checked": true,
+          "instruction_cases": 81,
+          "reader": 0,
+          "transport_mask": 7
+        },
+        "ram_patch_seed_blank": true,
+        "ram_patch_seed": {
+          "module_offset": 31640,
+          "bytes": 64,
+          "initialized_data": true,
+          "blank": true
+        },
+        "layout": {
+          "stage": {
+            "payload_bytes": 68080,
+            "memory_end": "0x8ce3db68",
+            "unresolved_symbols": 0
+          },
+          "entry": {
+            "payload_bytes": 76272,
+            "memory_end": "0x8c0229f0",
+            "unresolved_symbols": 0
+          },
+          "resident-scif": {
+            "payload_bytes": 10668,
+            "memory_end": "0x8c007610",
+            "unresolved_symbols": 0
+          },
+          "resident-sci": {
+            "payload_bytes": 11140,
+            "memory_end": "0x8c0077f4",
+            "unresolved_symbols": 0
+          },
+          "resident-ide": {
+            "payload_bytes": 10428,
+            "memory_end": "0x8c007500",
+            "unresolved_symbols": 0
+          },
+          "resident-scia": {
+            "payload_bytes": 12268,
+            "memory_end": "0x8c007b80",
+            "unresolved_symbols": 0
+          },
+          "resident_stacks": {
+            "scif": {
+              "conservative_bytes": 1068,
+              "available_bytes": 1232,
+              "assembly_allowance": 256,
+              "retained_c_frames": 49
+            },
+            "sci": {
+              "conservative_bytes": 1108,
+              "available_bytes": 1232,
+              "assembly_allowance": 256,
+              "retained_c_frames": 42
+            },
+            "ide": {
+              "conservative_bytes": 1072,
+              "available_bytes": 1232,
+              "assembly_allowance": 256,
+              "retained_c_frames": 50
+            },
+            "scia": {
+              "worst_bytes": 220,
+              "available_bytes": 304,
+              "margin": 64,
+              "call_graph": true
+            }
+          }
+        },
+        "instruction_audit": {
+          "resident-scif": 4408,
+          "resident-sci": 4637,
+          "resident-ide": 4271,
+          "resident-scia": 4926,
+          "stage": 8649,
+          "entry": 16
+        },
+        "compiler_callgraphs": {
+          "complete_files": 2
+        },
+        "mutation_rejections": 0,
+        "artifact_sha256": {
+          "retail-physical.kui": "2791f9052bc89fb87103eff71608f3c8e7ab9d04ab470154a43d1b3f21af199f",
+          "entry.elf": "9566509d1cfae4273a99ee70e964406c00cba7d92fb8b2a7ab8faab82e0dee0e",
+          "entry.map": "62c887674676917f99ec3b1ca99564776737eab199930766eb2bb3539d2d2474",
+          "entry.compile.json": "4b8aee85785f84b0a7dea5b8e531e4ac9713acedfa1fb50b40a718c311a160bc",
+          "stage.elf": "016f36617b6ec9421e2fc9a896a3eea74c0ed4d1b0fd9e3330bc0c6dcc94faf2",
+          "stage.bin": "f478c624f2a2233316ccd6460f5432c56644c8fefc94a0dc98a1cc567ef9f9fa",
+          "stage.map": "d7b34b62745119739ed49f430b1fce92fe8ecc024721ad0345524979590a666e",
+          "stage.compile.json": "1eb45e8cd67e1c705d7bb1e7f5a803768ea9b3582b1c7eb2f826bf61c7dab403",
+          "plain-layout-config": "f85c347c419a8ddbbee7c163ae894d61a9f6ee21c20507fadc2cb7f702985a1e",
+          "resident-scif.elf": "a73aae5cb5a78b69a329db999ef791139c0480d306ee734aa1cc8431291c075b",
+          "resident-scif.bin": "f0e778a04725531cb17e58b24d67890e83d207f21b090c8c289e19bc1e16b854",
+          "resident-scif.map": "2e9ae4229b6abba895fc6304c4a8fabf4ebf4768ccab8a91f6fbc91281d1641c",
+          "resident-scif.compile.json": "cc00e2f967c172aa0c620fbfd3098dc702ca45bfdb15ab6686512d2e5933134b",
+          "resident-sci.elf": "61fb0e6a2ca40a99d70ce27c4b22f4dab010a21c6eaad5c741ba54c2c4fcb9b7",
+          "resident-sci.bin": "7f3228be6790fb56821df711c87b630e478ed1ba1be40463d6069a30ead120d5",
+          "resident-sci.map": "eb552e697e10bfb1a06d519319bc2a51bbe9ccf072e86e7b9678b99e511bc283",
+          "resident-sci.compile.json": "7fcb427979dc055c509f2772da36cc7386a028a1a0679ba627ffb5639645c6bb",
+          "resident-ide.elf": "ea17446f5086dda4b53cb9d7ae7ebd8182edac461c828f7a961f67a3fe4d0557",
+          "resident-ide.bin": "8f6a542fc1ab98b2b69f08c7f337d8a94bf7b2b04bc3e337c6ea481c2448cf19",
+          "resident-ide.map": "e134d3f7f9303edb0ea65bdcafcceef92e7e034ab2f8d682813068b660ccce36",
+          "resident-ide.compile.json": "28b561adc3f6d0bd950989094bea98958d56b723c3eabe307728cebee0f4135c",
+          "resident-scia.elf": "4b6adfc2f3675c36732a2bdb811be171e390597b0b6b98373aac4b7035cd91ea",
+          "resident-scia.bin": "fe758a9f0449b46249dbe18c31d3bf2e41dc633d3cb9a6ed306e883144d5812b",
+          "resident-scia.map": "3754b86f09cd4b33501dd42c6d4cc2097495a9a678b11c687eaf746674fadfca",
+          "resident-scia.compile.json": "743bee13a0e4115847f0b8298aa1bb6463eadbaf041fcd6a4e5b7f76c8c6723d"
+        },
+        "cold_crc_scope": {
+          "proof": {
+            "schema": "kui.native-stage.cached-crc.v1",
+            "status": "PASS",
+            "elf_sha256": "016f36617b6ec9421e2fc9a896a3eea74c0ed4d1b0fd9e3330bc0c6dcc94faf2",
+            "wrapper": "0x8ce01308",
+            "wrapper_bytes": 216,
+            "actual_SH_wrapper_cases": 636,
+            "unsafe_mutation_rejections": 11,
+            "actual_SH_crc": {
+              "schema": "kui.smash-native.fast-crc.v1",
+              "status": "PASS",
+              "elf_sha256": "016f36617b6ec9421e2fc9a896a3eea74c0ed4d1b0fd9e3330bc0c6dcc94faf2",
+              "helper": "0x8ce0010c",
+              "helper_bytes": 144,
+              "helper_sha256": "ed4fa47df23171ebc0e15f09e741ec7e3761cd4927c8c38caa641aee8cc744bc",
+              "byte_table": "0x8ce05460",
+              "table_bytes": 1024,
+              "complete_readonly_table_candidates": 1,
+              "helper_bound_tables": 1,
+              "table_sha256": "12f3e0576d447eb37b36d82ba0c1c5481b8f0d12fdc70347ce4a076b229d4c86",
+              "actual_SH_cases": 128,
+              "instructions": 363128,
+              "one_table_read_per_byte": true,
+              "independent_oracle": "zlib.crc32",
+              "whole_image_relay_bound": true,
+              "observed_private_stack_bytes": 8,
+              "hardware_timing_verified": false
+            },
+            "source_bytes_unchanged": true,
+            "pure_leaf_instruction_mutation_rejections": 152,
+            "actual_complete_image_caller": {
+              "relay": "_kui_retail_stage_relay",
+              "load": "0x8ce010b0",
+              "call": "0x8ce010b8",
+              "source": "0x8c010000",
+              "size_object": "0x8ce10a0c",
+              "previous_crc": 0,
+              "target": "_kui_native_stage_cached_crc32",
+              "target_address": "0x8ce01308"
+            },
+            "unsafe_caller_mutation_rejections": 6,
+            "bound_leaf_outgoing_calls": 0,
+            "bound_leaf_stack_store_offsets": [
+              4,
+              14
+            ],
+            "fallback_arguments_and_result_unchanged": true,
+            "published_private_stack_lines": [
+              5,
+              6
+            ],
+            "private_stack_headroom": 128,
+            "bound_leaf_stack_bytes": 8,
+            "ccr_write_nops": [
+              8,
+              8
+            ],
+            "worker_or_low_resident_changes": false,
+            "console_timing_verified": false,
+            "limits": [
+              "The wrapper leaf is an ABI adversary; the exact bound CRC instructions are separately executed against zlib.",
+              "The exact private-stack publication loop is folded after checking all four instructions, its complete address span, and every dirty write.",
+              "This privileged cold-stage scope does not establish userspace invocation, hardware cache timing or console speed."
+            ]
+          },
+          "proof_source_sha256": {
+            "tests/test_native_stage_cached_crc.py": "4c0dc2a85df24e7db8032b3702f2159b3c64b0022bd96a026d1af4fcf56747b7",
+            "tests/test_smash_native_fast_crc.py": "a16f6e4e819b41706abb37b2bbc65032ed08e9fd9859b083ab8f827dce17db08",
+            "tools/check_vmu_native_cache_gateway.py": "36fd36276089348ddc1481743ebf5632cf9c14a9f83f226ed5e6db5c415947d0",
+            "tools/check_retail_physical.py": "9371cb6863a113ab27789384ee2e2f18a7e823846134b7f99e2f324d227d6330"
+          },
+          "stage_sha256": "016f36617b6ec9421e2fc9a896a3eea74c0ed4d1b0fd9e3330bc0c6dcc94faf2",
+          "allowed_stage_symbols": [
+            "__kui_native_cached_boot_crc",
+            "_kui_native_stage_cached_crc32"
+          ]
+        },
+        "console_execution_verified": false,
+        "original_strict_provenance_refusal": "Final physical Standard audit requires clean committed source",
+        "original_prefix_refusal": "Physical loader contains a VMU/native-worker symbol: stage:_kui_native_stage_cached_crc32",
+        "focused_tests_log_sha256": "315f62cd87195fca0aafb72ca8a787ce0b5aa791e7ed3ba75cc77d6b2ceb0246"
+      }
+    },
+    {
+      "role": "zso",
+      "build_directory": "build/retail-zso",
+      "artifact_sha256": {
+        "entry.elf": "3a72bf5fcfc04015470e4d552c160071cd8a2f58b96eade0409671c10700e6e0",
+        "resident-sci.elf": "2949d685061750116c48fca7d4bc32972391d4d0ba4be3cd4b0a33b222e9ec0b",
+        "stage.elf": "f7fb2ed63a8910d31a5ce9f62455341db29badbd5e12e1ebc29a5fb1e141ce57"
+      },
+      "compile_receipt_sha256": "fc8000fdbeba4c47fa5edee6fc3a6cf274ffd180161ad8c4bdbc0bbe11cdfe19",
+      "linked_module": {
+        "compile": {
+          "elf_sha256": "3a72bf5fcfc04015470e4d552c160071cd8a2f58b96eade0409671c10700e6e0",
+          "compile_sha256": "fc8000fdbeba4c47fa5edee6fc3a6cf274ffd180161ad8c4bdbc0bbe11cdfe19",
+          "provenance": {
+            "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+            "source_dirty": false,
+            "elf_sha256": "3a72bf5fcfc04015470e4d552c160071cd8a2f58b96eade0409671c10700e6e0"
+          }
+        },
+        "envelope": {
+          "format": 1,
+          "build": "f8807cb16561",
+          "payload_bytes": 37448,
+          "memory_bytes": 37448,
+          "crc32": "92970ba2"
+        },
+        "artifacts_sha256": {
+          "entry.elf": "3a72bf5fcfc04015470e4d552c160071cd8a2f58b96eade0409671c10700e6e0",
+          "resident-sci.elf": "2949d685061750116c48fca7d4bc32972391d4d0ba4be3cd4b0a33b222e9ec0b",
+          "stage.elf": "f7fb2ed63a8910d31a5ce9f62455341db29badbd5e12e1ebc29a5fb1e141ce57"
+        },
+        "stage_bin_sha256": "10f8d97c6e57d8db9b2031b3738e3b2e1f71ae8abe5658b78b4d9172e14a8ed0"
+      },
+      "linked_module_sha256": "25c288ab713ea31bfb3a72d1d858da26de3b50bd1cecfd2943f16b67ae8460ba",
+      "gate": {
+        "resident-sci": {
+          "payload_bytes": 11900,
+          "memory_end": "0x8c0074e8",
+          "unresolved_symbols": 0
+        },
+        "stage": {
+          "payload_bytes": 29256,
+          "memory_end": "0x8ce33b48",
+          "unresolved_symbols": 0
+        },
+        "entry": {
+          "payload_bytes": 37448,
+          "memory_end": "0x8c019248",
+          "unresolved_symbols": 0
+        },
+        "contract": {
+          "stage_bytes": 29256,
+          "stage_address": "0x8ce00000",
+          "resident_address": "0x8c004000",
+          "resident_limit": "0x8c007800",
+          "manifest_bytes": 4096,
+          "manifest_magic": "KUIRZS01",
+          "manifest_slots": 32,
+          "physical_file_fragments": 31,
+          "transport": "SCI",
+          "reader": "Standard",
+          "codec": "standard LZ4 ZISO v1; independent 2048-byte blocks",
+          "abi": "Opt-in native ZSO first slice; console compatibility requires testing"
+        },
+        "resident_stack": {
+          "conservative_bytes": 1132,
+          "available_bytes": 1232,
+          "assembly_allowance": 256,
+          "retained_c_frames": 46,
+          "initialization": {
+            "frame_bytes": 84,
+            "resident_entry_bytes": 36,
+            "wrapper_bytes": 56,
+            "stage_bootstrap_bytes": 92,
+            "init_call": "0x8ce00b9c",
+            "owner_boot_call": "0x8ce00bb6",
+            "runtime_incoming_edges": 0,
+            "conservative_bytes": 3412,
+            "available_bytes": 65488
+          }
+        },
+        "instruction_audit": {
+          "instructions": 11074,
+          "bootstrap_fpscr_setups": 1,
+          "integer_only": true
+        }
+      },
+      "status": "PASS"
+    },
+    {
+      "role": "lzo",
+      "build_directory": "build/retail-lzo",
+      "artifact_sha256": {
+        "entry.elf": "905851467c55b5039007f1fc2fb23881fbbec13bcd21e37d53327dbc70202d2a",
+        "resident-sci.elf": "8b6c909057ae78cf273e744150023e6327c195ba51cc9ca1189092668908e3ba",
+        "stage.elf": "0de53493bcdc72b354877a8d1db5861a4c0c42e260f5452799b09220d8a38fae"
+      },
+      "compile_receipt_sha256": "53a95b56ce8135b6368d218b59156eae088c5ca9bec695fcdcee6db8db8b249c",
+      "linked_module": {
+        "compile": {
+          "elf_sha256": "905851467c55b5039007f1fc2fb23881fbbec13bcd21e37d53327dbc70202d2a",
+          "compile_sha256": "53a95b56ce8135b6368d218b59156eae088c5ca9bec695fcdcee6db8db8b249c",
+          "provenance": {
+            "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+            "source_dirty": false,
+            "elf_sha256": "905851467c55b5039007f1fc2fb23881fbbec13bcd21e37d53327dbc70202d2a"
+          }
+        },
+        "envelope": {
+          "format": 1,
+          "build": "f8807cb16561",
+          "payload_bytes": 38220,
+          "memory_bytes": 38220,
+          "crc32": "b3f5aa7d"
+        },
+        "artifacts_sha256": {
+          "entry.elf": "905851467c55b5039007f1fc2fb23881fbbec13bcd21e37d53327dbc70202d2a",
+          "resident-sci.elf": "8b6c909057ae78cf273e744150023e6327c195ba51cc9ca1189092668908e3ba",
+          "stage.elf": "0de53493bcdc72b354877a8d1db5861a4c0c42e260f5452799b09220d8a38fae"
+        },
+        "stage_bin_sha256": "4a0e6d14b4dd1eba7156b044e30cffd973d91deddb3767ac82b07eda132888d8"
+      },
+      "linked_module_sha256": "471b38e454a1dc6acc78e94c9009e4d398b57ecbdff145800b469c9f0a0bd1ab",
+      "gate": {
+        "resident-sci": {
+          "payload_bytes": 12288,
+          "memory_end": "0x8c007668",
+          "unresolved_symbols": 0
+        },
+        "stage": {
+          "payload_bytes": 30028,
+          "memory_end": "0x8ce33e48",
+          "unresolved_symbols": 0
+        },
+        "entry": {
+          "payload_bytes": 38220,
+          "memory_end": "0x8c01954c",
+          "unresolved_symbols": 0
+        },
+        "contract": {
+          "stage_bytes": 30028,
+          "stage_address": "0x8ce00000",
+          "resident_address": "0x8c004000",
+          "resident_limit": "0x8c007800",
+          "manifest_bytes": 4096,
+          "manifest_magic": "KUIRLS01",
+          "manifest_slots": 32,
+          "physical_file_fragments": 31,
+          "transport": "SCI",
+          "reader": "Standard",
+          "codec": "historical LZO1X ZISO v0/v1; independent 2048-byte blocks",
+          "abi": "Opt-in native ZSO first slice; console compatibility requires testing"
+        },
+        "resident_stack": {
+          "conservative_bytes": 1140,
+          "available_bytes": 1232,
+          "assembly_allowance": 256,
+          "retained_c_frames": 47,
+          "initialization": {
+            "frame_bytes": 84,
+            "resident_entry_bytes": 36,
+            "wrapper_bytes": 56,
+            "stage_bootstrap_bytes": 92,
+            "init_call": "0x8ce00b9c",
+            "owner_boot_call": "0x8ce00bb6",
+            "runtime_incoming_edges": 0,
+            "conservative_bytes": 3416,
+            "available_bytes": 65488
+          }
+        },
+        "instruction_audit": {
+          "instructions": 11456,
+          "bootstrap_fpscr_setups": 1,
+          "integer_only": true
+        }
+      },
+      "status": "PASS"
+    },
+    {
+      "role": "standalone",
+      "build_directory": "build/native-standalone-general",
+      "artifact_sha256": {
+        "entry.elf": "aa8c2e8662537feff5bb43f1e9cdd465e4d62779c88bcb09d71ddc35b6284cd3",
+        "resident-sci.elf": "c5ae8a6dda16540315aaa1708b28f05da939cb86e88f8b5a14a30282706bc15b",
+        "stage.elf": "6e9e4312d209157b00b06d3a99664ba87fb6c30461478936c9fc44f42a984533"
+      },
+      "compile_receipt_sha256": "a406b1cf35f62374d2937952427a164930d363a269c59cad26271953af74651d",
+      "linked_module": {
+        "compile": {
+          "elf_sha256": "aa8c2e8662537feff5bb43f1e9cdd465e4d62779c88bcb09d71ddc35b6284cd3",
+          "compile_sha256": "a406b1cf35f62374d2937952427a164930d363a269c59cad26271953af74651d",
+          "provenance": {
+            "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+            "source_dirty": false,
+            "elf_sha256": "aa8c2e8662537feff5bb43f1e9cdd465e4d62779c88bcb09d71ddc35b6284cd3"
+          }
+        },
+        "envelope": {
+          "format": 1,
+          "build": "f8807cb16561",
+          "payload_bytes": 49024,
+          "memory_bytes": 49024,
+          "crc32": "b62be122"
+        },
+        "artifacts_sha256": {
+          "entry.elf": "aa8c2e8662537feff5bb43f1e9cdd465e4d62779c88bcb09d71ddc35b6284cd3",
+          "resident-sci.elf": "c5ae8a6dda16540315aaa1708b28f05da939cb86e88f8b5a14a30282706bc15b",
+          "stage.elf": "6e9e4312d209157b00b06d3a99664ba87fb6c30461478936c9fc44f42a984533"
+        },
+        "stage_bin_sha256": "d38774e26b087652a4877ed7241b9bbce1fae072c54724f2c592d1f30305daf2"
+      },
+      "linked_module_sha256": "8b1c64c09a481e1b732e4d446661c0869d9607f86107b3e7ea8dae9db62eb559",
+      "gate": {
+        "status": "PASS",
+        "layout": {
+          "stage_memory_end": "0x8ce37108",
+          "resident_memory_end": "0x8c007b80",
+          "region_bytes": 1888,
+          "manifest_bytes": 1020,
+          "stack_bottom": "0x8c007ba0",
+          "stack_top": "0x8c007d00",
+          "bss_spare_bytes": 32
+        },
+        "resident_stack": {
+          "worst_bytes": 220,
+          "margin": 64,
+          "available_bytes": 304,
+          "paths": {
+            "kui_retail_resident_dispatch": {
+              "bytes": 212,
+              "path": "kui_retail_resident_dispatch(44) -> deliver(80) -> kui_sci_stream_fetch.constprop.0(44) -> command(20) -> byte(0) -> transfer(24)"
+            },
+            "kui_retail_async_irq": {
+              "bytes": 220,
+              "path": "kui_retail_async_irq(8) -> deliver(80) -> kui_sci_stream_fetch.constprop.0(44) -> command(20) -> byte(0) -> transfer(24)"
+            },
+            "kui_retail_menu_return": {
+              "bytes": 156,
+              "path": "kui_retail_menu_return(8) -> native_reader_report(20) -> retail_display_values(76) -> retail_display_line(52)"
+            }
+          },
+          "compiler_graphs": {
+            "resident-sci.elf.ltrans0.ltrans.ci": "d3b2a5fee10ed9e1fc63a2df0e20fb7a3d2c670869129deb76d027722119391e"
+          }
+        },
+        "embedded_resident_exact": true,
+        "structural_no_virtual_VMU_or_cache": true,
+        "module": {
+          "format": 1,
+          "build": "f8807cb16561",
+          "payload_bytes": 49024,
+          "memory_bytes": 49024,
+          "crc32": "b62be122"
+        },
+        "module_sha256": "8b1c64c09a481e1b732e4d446661c0869d9607f86107b3e7ea8dae9db62eb559"
+      },
+      "status": "PASS"
+    },
+    {
+      "role": "toy-raw",
+      "build_directory": "build/native-compat-toy-raw",
+      "artifact_sha256": {
+        "worker.elf": "82e7782b147ae969a4e2eb4cdfd9663e5262b63feab96cbdd1f07af8f4c8820b",
+        "entry.elf": "e0a23d004cb594d86ec80a8b7c936916843be7a79e60d5e3b9ccad8e9de4d216",
+        "resident-sci.elf": "2b0d0056b7fa6260085604f20cac29f03c7052098067c866b36bb63c381029a9",
+        "stage.elf": "45aedae99459b3c23595192fa5ccc1c5506ee7c297305512fe65825fa50f9cf8"
+      },
+      "compile_receipt_sha256": "5a0f8beb4d257943a197ca06153f6b5b4f0351ce06e126e53f49303f300aafc8",
+      "linked_module": {
+        "compile": {
+          "elf_sha256": "e0a23d004cb594d86ec80a8b7c936916843be7a79e60d5e3b9ccad8e9de4d216",
+          "compile_sha256": "5a0f8beb4d257943a197ca06153f6b5b4f0351ce06e126e53f49303f300aafc8",
+          "provenance": {
+            "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+            "source_dirty": false,
+            "elf_sha256": "e0a23d004cb594d86ec80a8b7c936916843be7a79e60d5e3b9ccad8e9de4d216"
+          }
+        },
+        "envelope": {
+          "format": 1,
+          "build": "f8807cb16561",
+          "payload_bytes": 85312,
+          "memory_bytes": 85312,
+          "crc32": "0f2775eb"
+        },
+        "artifacts_sha256": {
+          "worker.elf": "82e7782b147ae969a4e2eb4cdfd9663e5262b63feab96cbdd1f07af8f4c8820b",
+          "entry.elf": "e0a23d004cb594d86ec80a8b7c936916843be7a79e60d5e3b9ccad8e9de4d216",
+          "resident-sci.elf": "2b0d0056b7fa6260085604f20cac29f03c7052098067c866b36bb63c381029a9",
+          "stage.elf": "45aedae99459b3c23595192fa5ccc1c5506ee7c297305512fe65825fa50f9cf8"
+        },
+        "stage_bin_sha256": "289d1a9d3bd4698017a4fd328a13a162b9c743e3c73d79546bf67c78d12f1427"
+      },
+      "linked_module_sha256": "3356b8cf7e5b032f18b24977c1ea6e615934518c39b7f7f6c920c99a0e132ba2",
+      "gate": {
+        "profile": "toy-raw",
+        "experimental": true,
+        "console_tested": false,
+        "descriptor_bytes": 128,
+        "package": {
+          "format": 1,
+          "build": "f8807cb16561",
+          "payload_bytes": 85312,
+          "memory_bytes": 85312,
+          "crc32": "0f2775eb"
+        },
+        "unchanged_reference_playback_sha256": {
+          "resident-sci": "bfd04b5ef91c20a22c31755a2d5873e9cd5a79e71f1644769fea95913eded7a0",
+          "worker": "d519158d16162adabb00901612e5b76412102030237dea4ddd1ffedaa56e53d3"
+        },
+        "private_worker_stack_upper_bound": 4904,
+        "private_worker_stack_capacity": 8192,
+        "reference_directory": "build/native-reference-toy-raw"
+      },
+      "status": "PASS"
+    },
+    {
+      "role": "toy-cooked",
+      "build_directory": "build/native-compat-toy-cooked",
+      "artifact_sha256": {
+        "worker.elf": "82e7782b147ae969a4e2eb4cdfd9663e5262b63feab96cbdd1f07af8f4c8820b",
+        "entry.elf": "5f957a967a75f63fd01f49df59b094c91f2c75b8c6b4aa42382b8db58aaa3480",
+        "resident-sci.elf": "2b0d0056b7fa6260085604f20cac29f03c7052098067c866b36bb63c381029a9",
+        "stage.elf": "e44565c7118a00e737652a0b71bd25f3df170235a9bd86243ce0ca731fe01ba4"
+      },
+      "compile_receipt_sha256": "f49955dbbf4acd334961c5298e19a6904e9c9e7e1f34498c7ffde0e000fc1621",
+      "linked_module": {
+        "compile": {
+          "elf_sha256": "5f957a967a75f63fd01f49df59b094c91f2c75b8c6b4aa42382b8db58aaa3480",
+          "compile_sha256": "f49955dbbf4acd334961c5298e19a6904e9c9e7e1f34498c7ffde0e000fc1621",
+          "provenance": {
+            "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+            "source_dirty": false,
+            "elf_sha256": "5f957a967a75f63fd01f49df59b094c91f2c75b8c6b4aa42382b8db58aaa3480"
+          }
+        },
+        "envelope": {
+          "format": 1,
+          "build": "f8807cb16561",
+          "payload_bytes": 85344,
+          "memory_bytes": 85344,
+          "crc32": "4a77a2c6"
+        },
+        "artifacts_sha256": {
+          "worker.elf": "82e7782b147ae969a4e2eb4cdfd9663e5262b63feab96cbdd1f07af8f4c8820b",
+          "entry.elf": "5f957a967a75f63fd01f49df59b094c91f2c75b8c6b4aa42382b8db58aaa3480",
+          "resident-sci.elf": "2b0d0056b7fa6260085604f20cac29f03c7052098067c866b36bb63c381029a9",
+          "stage.elf": "e44565c7118a00e737652a0b71bd25f3df170235a9bd86243ce0ca731fe01ba4"
+        },
+        "stage_bin_sha256": "68afef60f63338422d6037e2f6d4f4b8c9ba3cb0d8ed4f01f339150f2ce3ed54"
+      },
+      "linked_module_sha256": "910e7c7895263db072b5d949325dc6cfc13fac9f39e03b17ade34a0cc883b105",
+      "gate": {
+        "profile": "toy-cooked",
+        "experimental": true,
+        "console_tested": false,
+        "descriptor_bytes": 128,
+        "package": {
+          "format": 1,
+          "build": "f8807cb16561",
+          "payload_bytes": 85344,
+          "memory_bytes": 85344,
+          "crc32": "4a77a2c6"
+        },
+        "unchanged_reference_playback_sha256": {
+          "resident-sci": "bfd04b5ef91c20a22c31755a2d5873e9cd5a79e71f1644769fea95913eded7a0",
+          "worker": "d519158d16162adabb00901612e5b76412102030237dea4ddd1ffedaa56e53d3"
+        },
+        "private_worker_stack_upper_bound": 4904,
+        "private_worker_stack_capacity": 8192,
+        "reference_directory": "build/native-reference-toy-cooked"
+      },
+      "status": "PASS"
+    },
+    {
+      "role": "mdk2",
+      "build_directory": "build/native-compat-mdk2",
+      "artifact_sha256": {
+        "worker.elf": "e121aef9af0dfdb751dbdc1e264bd02775d4d8f346b4834addc294616715226c",
+        "entry.elf": "a327fcf2667e59555c64fc46edeb6ad92a62cf1bfd082d992269aefd1d9d022d",
+        "resident-sci.elf": "239b8f1697ccdda3c60da7622519ce58ff71ff5b4cc95ba3dfbaa64557641d6e",
+        "stage.elf": "4970cdd2266ad5e93f2500a70f0fe5027e2e1cd1fcebcd5897d59a01a0c07067"
+      },
+      "compile_receipt_sha256": "ffa3297a3f998b2552198cb323f711c8f62f7f3c1d3c27bbd71081fab1dad076",
+      "linked_module": {
+        "compile": {
+          "elf_sha256": "a327fcf2667e59555c64fc46edeb6ad92a62cf1bfd082d992269aefd1d9d022d",
+          "compile_sha256": "ffa3297a3f998b2552198cb323f711c8f62f7f3c1d3c27bbd71081fab1dad076",
+          "provenance": {
+            "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+            "source_dirty": false,
+            "elf_sha256": "a327fcf2667e59555c64fc46edeb6ad92a62cf1bfd082d992269aefd1d9d022d"
+          }
+        },
+        "envelope": {
+          "format": 1,
+          "build": "f8807cb16561",
+          "payload_bytes": 67332,
+          "memory_bytes": 67332,
+          "crc32": "af320cfd"
+        },
+        "artifacts_sha256": {
+          "worker.elf": "e121aef9af0dfdb751dbdc1e264bd02775d4d8f346b4834addc294616715226c",
+          "entry.elf": "a327fcf2667e59555c64fc46edeb6ad92a62cf1bfd082d992269aefd1d9d022d",
+          "resident-sci.elf": "239b8f1697ccdda3c60da7622519ce58ff71ff5b4cc95ba3dfbaa64557641d6e",
+          "stage.elf": "4970cdd2266ad5e93f2500a70f0fe5027e2e1cd1fcebcd5897d59a01a0c07067"
+        },
+        "stage_bin_sha256": "da19995ef6778a2c6453df4000002365802192e41b8d15d982260dc21f26eec1"
+      },
+      "linked_module_sha256": "fc0ddf1191de5dc3368abc59853cbbf6047b9a530f9e9d55405e2bc880e97c56",
+      "gate": {
+        "profile": "mdk2",
+        "experimental": true,
+        "console_tested": false,
+        "descriptor_bytes": 128,
+        "package": {
+          "format": 1,
+          "build": "f8807cb16561",
+          "payload_bytes": 67332,
+          "memory_bytes": 67332,
+          "crc32": "af320cfd"
+        },
+        "unchanged_reference_playback_sha256": {
+          "resident-sci": "dc7fc162e5714fd12444ef897782024ddea3ca5d3b24591c1b6a6b4177973e6a",
+          "worker": "618ad2647ae38a06a76e2cd954dca56336e008a938a58acc09d58760049eb545"
+        },
+        "private_worker_stack_upper_bound": 3684,
+        "private_worker_stack_capacity": 8192,
+        "reference_directory": "build/native-reference-mdk2"
+      },
+      "status": "PASS"
+    }
+  ],
+  "console_execution": false,
+  "physical_auditor_sha256": "9371cb6863a113ab27789384ee2e2f18a7e823846134b7f99e2f324d227d6330",
+  "physical_focused_tests_sha256": "56de82ebe4af46108fe918422cd7a79d53673b3e4a880d3217f825b683e751cb",
+  "original_refusal_report_sha256": "8bdd06fa23f611cf761981ed03108092b0b67d4a3f7828f7374ffe90f1605615",
+  "production_or_binary_changes_for_gate_fix": false
+}

@@ -22,13 +22,16 @@
  * raw_end: raw_begin unmounts FatFs and supplies absolute single-sector
  * reads of the same card; raw_end remounts "0:" and must fail unless the
  * volume has the same start and length. salt fills 16 bytes that differ
- * between calls (clock and counter). */
+ * between calls (clock and counter). Optional read_sectors returns success
+ * only after every requested sector passed the device's existing CRC checks
+ * and its stream stopped healthily. An error publishes no readable prefix. */
 struct kui_vmu_game_card_raw {
     int (*read_sector)(void *context,uint32_t lba,uint8_t out[512]);
     void *context;
     uint8_t cid[16];
     uint64_t card_sectors;
     bool high_capacity;
+    int (*read_sectors)(void *context,uint32_t lba,uint32_t count,uint8_t *out);
 };
 struct kui_vmu_game_card_platform {
     void *context;

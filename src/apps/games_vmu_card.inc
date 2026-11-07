@@ -42,6 +42,10 @@ static int games_card_read(void *context,uint32_t lba,uint8_t out[512]) {
     struct games_card_platform *p=context;
     return p->raw.read && !p->raw.read(p->raw.ctx,lba,1u,out)?0:-1;
 }
+static int games_card_read_sectors(void *context,uint32_t lba,uint32_t count,uint8_t *out) {
+    struct games_card_platform *p=context;
+    return p->raw.read && !p->raw.read(p->raw.ctx,lba,count,out)?0:-1;
+}
 /* CMD10 while the mounted volume is idle, as the import tool pins its card. */
 static bool games_card_identity(void *context,struct kui_vmu_game_card_raw *out) {
     struct kui_vmu_sd_identity id;(void)context;
@@ -52,7 +56,7 @@ static bool games_card_identity(void *context,struct kui_vmu_game_card_raw *out)
 static bool games_card_raw_begin(void *context,struct kui_vmu_game_card_raw *out) {
     struct games_card_platform *p=context;
     if(f_mount(NULL,"0:",0)!=FR_OK || !kui_sd_raw_read_ops(&p->raw) || !p->raw.read) return false;
-    out->read_sector=games_card_read;out->context=p;
+    out->read_sector=games_card_read;out->read_sectors=games_card_read_sectors;out->context=p;
     return true;
 }
 static bool games_card_raw_end(void *context) {

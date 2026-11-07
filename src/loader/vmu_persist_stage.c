@@ -7,6 +7,17 @@ extern void kui_smash_phase_stage_mark(uint32_t);
 #include <string.h>
 
 _Static_assert(sizeof(struct kui_vmu_persist_stage_workspace)<=65536u,"High-stage preparation scratch bound");
+const struct kui_vmu_persist_stage_policy kui_vmu_persist_stage_exclusive_checkpoint={
+    KUI_VMU_PERSIST_STAGE_POLICY_VERSION,sizeof(struct kui_vmu_persist_stage_policy),
+    KUI_VMU_PERSIST_STAGE_CHECKPOINT_SNAPSHOT,0u};
+
+static bool vmu_persist_stage_policy_valid(const struct kui_vmu_persist_stage_policy *p) {
+    return !p || (p->version==KUI_VMU_PERSIST_STAGE_POLICY_VERSION && p->bytes==sizeof(*p) &&
+        !(p->flags&~KUI_VMU_PERSIST_STAGE_CHECKPOINT_SNAPSHOT) && !p->reserved);
+}
+static bool vmu_persist_stage_snapshot_policy(const struct kui_vmu_persist_stage_policy *p) {
+    return p && (p->flags&KUI_VMU_PERSIST_STAGE_CHECKPOINT_SNAPSHOT);
+}
 
 /* Only this isolated native stage needs the scanner's dot-entry comparison.
  * Ordinary minic and every existing release/observer mode remain unchanged. */
@@ -83,24 +94,28 @@ static int vmu_persist_stage_fail(struct kui_vmu_persist_stage_workspace *w,
 }
 static int vmu_persist_stage_finish(const struct kui_vmu_persist_profile *,
     const struct kui_vmu_persist_session_ops *,struct kui_vmu_persist_stage_workspace *,
-    struct kui_vmu_durable_handoff *);
+    struct kui_vmu_durable_handoff *,bool);
 static int vmu_persist_stage_prepare(const struct kui_vmu_persist_profile *p,
     const struct kui_retail_manifest *m,uint32_t transport,bool physical_disc,
     const struct kui_vmu_persist_session_ops *ops,
+    const struct kui_vmu_persist_stage_policy *policy,
     struct kui_vmu_persist_stage_workspace *w,struct kui_vmu_durable_handoff *out) {
     /* A disjoint output is cleared even for invalid ordinary arguments. An
      * aliased output cannot be cleared without damaging a live input/state. */
     if(!out || (w && vmu_persist_stage_overlap(w,sizeof(*w),out,sizeof(*out))) ||
        (p && vmu_persist_stage_overlap(out,sizeof(*out),p,sizeof(*p))) ||
        (m && vmu_persist_stage_overlap(out,sizeof(*out),m,sizeof(*m))) ||
-       (ops && vmu_persist_stage_overlap(out,sizeof(*out),ops,sizeof(*ops)))) return KUI_VMU_PERSIST_STAGE_ARGUMENT;
+       (ops && vmu_persist_stage_overlap(out,sizeof(*out),ops,sizeof(*ops))) ||
+       (policy && vmu_persist_stage_overlap(out,sizeof(*out),policy,sizeof(*policy)))) return KUI_VMU_PERSIST_STAGE_ARGUMENT;
     memset(out,0,sizeof(*out));
     if(!w || !out || !p || (!m && !physical_disc) || !ops || !ops->identity || !ops->healthy ||
-       !ops->read_sector || !ops->write_sector || !ops->sync ||
+       !ops->read_sector || !ops->write_sector || !ops->sync || !vmu_persist_stage_policy_valid(policy) ||
        vmu_persist_stage_overlap(w,sizeof(*w),p,sizeof(*p)) ||
        (m && vmu_persist_stage_overlap(w,sizeof(*w),m,sizeof(*m))) ||
-       vmu_persist_stage_overlap(w,sizeof(*w),ops,sizeof(*ops))) return KUI_VMU_PERSIST_STAGE_ARGUMENT;
+       vmu_persist_stage_overlap(w,sizeof(*w),ops,sizeof(*ops)) ||
+       (policy && vmu_persist_stage_overlap(w,sizeof(*w),policy,sizeof(*policy)))) return KUI_VMU_PERSIST_STAGE_ARGUMENT;
     if(w->started) return KUI_VMU_PERSIST_STAGE_ARGUMENT;
+    const bool reuse_snapshot=vmu_persist_stage_snapshot_policy(policy);
     memset(w,0,sizeof(*w));w->started=1u;w->phase=KUI_VMU_PERSIST_STAGE_PREFLIGHT;
     if(physical_disc?kui_vmu_persist_disc_stage_admit(p,transport):kui_vmu_persist_stage_admit(p,m))
         return vmu_persist_stage_fail(w,out,KUI_VMU_PERSIST_STAGE_MAPPING);
@@ -116,30 +131,28 @@ static int vmu_persist_stage_prepare(const struct kui_vmu_persist_profile *p,
     w->phase=KUI_VMU_PERSIST_STAGE_RECOVER;
     int result=kui_vmu_persist_session_init(&w->session,p,&input,ops,&w->filesystem,&w->image);
     if(result) return vmu_persist_stage_fail(w,out,KUI_VMU_PERSIST_STAGE_SESSION);
-    return vmu_persist_stage_finish(p,ops,w,out);
+    return vmu_persist_stage_finish(p,ops,w,out,reuse_snapshot);
 }
 static int vmu_persist_stage_finish(const struct kui_vmu_persist_profile *p,
     const struct kui_vmu_persist_session_ops *ops,struct kui_vmu_persist_stage_workspace *w,
-    struct kui_vmu_durable_handoff *out) {
+    struct kui_vmu_durable_handoff *out,bool reuse_snapshot) {
 #if KUI_SMASH_PHASE_DIAGNOSTIC
     kui_smash_phase_stage_mark(KUI_SMASH_PHASE_SESSION_DONE);
 #endif
+    /* Only a live snapshot established by this new session can cross the
+     * checked marker-only checkpoint. Commits and faults clear validity;
+     * invalid snapshots and unknown backend contracts take the full refresh.
+     * The local policy was copied before any callback, never retained. */
+    const bool fresh_snapshot=reuse_snapshot && w->session.snapshot_valid;
     w->phase=KUI_VMU_PERSIST_STAGE_CHECKPOINT;
     if(kui_vmu_persist_session_checkpoint(&w->session)) return vmu_persist_stage_fail(w,out,KUI_VMU_PERSIST_STAGE_SESSION);
 #if KUI_SMASH_PHASE_DIAGNOSTIC
     kui_smash_phase_stage_mark(KUI_SMASH_PHASE_CHECKPOINT_DONE);
 #endif
     w->phase=KUI_VMU_PERSIST_STAGE_SNAPSHOT;
-#if KUI_VC2_VMU_PERSIST
-    /* VC2's init already recovered, validated and hashed the complete image.
-     * This exclusive session has not committed a block since that snapshot;
-     * checkpoint only syncs and clears the journal marker. Preserve its live
-     * base hashes instead of reading the same image twice before every boot.
-     * The normal final marker/CID/health checks below still run. */
-    if(!w->session.snapshot_valid) return vmu_persist_stage_fail(w,out,KUI_VMU_PERSIST_STAGE_SESSION);
-#else
-    if(kui_vmu_persist_session_refresh(&w->session,&w->image)) return vmu_persist_stage_fail(w,out,KUI_VMU_PERSIST_STAGE_SESSION);
-#endif
+    if((!fresh_snapshot || !w->session.snapshot_valid) &&
+       kui_vmu_persist_session_refresh(&w->session,&w->image))
+        return vmu_persist_stage_fail(w,out,KUI_VMU_PERSIST_STAGE_SESSION);
 #if KUI_SMASH_PHASE_DIAGNOSTIC
     kui_smash_phase_stage_mark(KUI_SMASH_PHASE_REFRESH_DONE);
 #endif
@@ -166,25 +179,27 @@ static int vmu_persist_stage_finish(const struct kui_vmu_persist_profile *p,
        kui_vmu_persist_stage_handoff_matches(p,out)) return vmu_persist_stage_fail(w,out,KUI_VMU_PERSIST_STAGE_HANDOFF);
     w->result=0;return 0;
 }
-int kui_vmu_persist_stage_attach(const struct kui_vmu_persist_profile *p,
+int kui_vmu_persist_stage_attach_policy(const struct kui_vmu_persist_profile *p,
     const struct kui_retail_manifest *m,const struct kui_vmu_persist_attach_source *source,
     const struct kui_vmu_persist_attach_ops *ops,
+    const struct kui_vmu_persist_stage_policy *policy,
     struct kui_vmu_persist_stage_workspace *w,struct kui_vmu_durable_handoff *out) {
     if(!out)return KUI_VMU_PERSIST_STAGE_ARGUMENT;
-    const void *inputs[]={p,m,source,ops,source?source->header:NULL,source?source->records:NULL};
+    const void *inputs[]={p,m,source,ops,source?source->header:NULL,source?source->records:NULL,policy};
     const size_t input_bytes[]={sizeof(*p),sizeof(*m),sizeof(*source),sizeof(*ops),
-        KUI_VMU_FS_WITNESS_HEADER_BYTES,source?source->records_bytes:0u};
+        KUI_VMU_FS_WITNESS_HEADER_BYTES,source?source->records_bytes:0u,sizeof(*policy)};
     if(w && vmu_persist_stage_overlap(w,sizeof(*w),out,sizeof(*out)))
         return KUI_VMU_PERSIST_STAGE_ARGUMENT;
-    for(unsigned i=0u;i<6u;i++)if(inputs[i] &&
+    for(unsigned i=0u;i<7u;i++)if(inputs[i] &&
        vmu_persist_stage_overlap(out,sizeof(*out),inputs[i],input_bytes[i]))
         return KUI_VMU_PERSIST_STAGE_ARGUMENT;
     memset(out,0,sizeof(*out));
-    if(!p || !m || !source || !ops || !w)return KUI_VMU_PERSIST_STAGE_ARGUMENT;
-    for(unsigned i=0u;i<6u;i++)if(inputs[i] &&
+    if(!p || !m || !source || !ops || !w || !vmu_persist_stage_policy_valid(policy))return KUI_VMU_PERSIST_STAGE_ARGUMENT;
+    for(unsigned i=0u;i<7u;i++)if(inputs[i] &&
        vmu_persist_stage_overlap(w,sizeof(*w),inputs[i],input_bytes[i]))
         return KUI_VMU_PERSIST_STAGE_ARGUMENT;
     if(w->started)return KUI_VMU_PERSIST_STAGE_ARGUMENT;
+    const bool reuse_snapshot=vmu_persist_stage_snapshot_policy(policy);
     uint8_t ownership[32];memcpy(ownership,source->ownership_sha256,32u);
     memset(w,0,sizeof(*w));w->started=1u;w->phase=KUI_VMU_PERSIST_STAGE_PREFLIGHT;
     if(kui_vmu_persist_stage_admit(p,m))
@@ -196,7 +211,7 @@ int kui_vmu_persist_stage_attach(const struct kui_vmu_persist_profile *p,
     int result=kui_vmu_persist_session_attach(&w->session,p,source,ops,
         (void *)aligned,scratch_bytes,&w->image);
     if(result)return vmu_persist_stage_fail(w,out,KUI_VMU_PERSIST_STAGE_SESSION);
-    result=vmu_persist_stage_finish(p,&w->session.ops,w,out);
+    result=vmu_persist_stage_finish(p,&w->session.ops,w,out,reuse_snapshot);
     if(result)return result;
     uint8_t current[32];
     if(kui_vmu_persist_profile_ownership_sha256(p,current) || memcmp(current,ownership,32u))
@@ -252,28 +267,31 @@ static bool vmu_persist_rebind_finish_health(void *context) {
     bool result=s->io.healthy(s->io.context);
     return vmu_persist_rebind_finish_guard(s,profile) && result;
 }
-int kui_vmu_persist_stage_rebind(const struct kui_vmu_persist_profile *p,
+int kui_vmu_persist_stage_rebind_policy(const struct kui_vmu_persist_profile *p,
     const struct kui_retail_manifest *m,struct kui_vmu_persist_allocation_transfer *transfer,
     const struct kui_vmu_persist_session_ops *ops,
+    const struct kui_vmu_persist_stage_policy *policy,
     struct kui_vmu_persist_stage_workspace *w,struct kui_vmu_durable_handoff *out) {
     if(!out)return KUI_VMU_PERSIST_STAGE_ARGUMENT;
-    const void *inputs[]={p,m,transfer,ops};
-    const size_t input_bytes[]={sizeof(*p),sizeof(*m),sizeof(*transfer),sizeof(*ops)};
+    const void *inputs[]={p,m,transfer,ops,policy};
+    const size_t input_bytes[]={sizeof(*p),sizeof(*m),sizeof(*transfer),sizeof(*ops),sizeof(*policy)};
     if(w && vmu_persist_stage_overlap(w,sizeof(*w),out,sizeof(*out)))
         return KUI_VMU_PERSIST_STAGE_ARGUMENT;
-    for(unsigned i=0u;i<4u;i++)if(inputs[i] &&
+    for(unsigned i=0u;i<5u;i++)if(inputs[i] &&
        vmu_persist_stage_overlap(out,sizeof(*out),inputs[i],input_bytes[i]))
         return KUI_VMU_PERSIST_STAGE_ARGUMENT;
     memset(out,0,sizeof(*out));
     if(!p || !m || !transfer || !ops || !w || !ops->identity || !ops->healthy ||
-       !ops->read_sector || !ops->write_sector || !ops->sync)return KUI_VMU_PERSIST_STAGE_ARGUMENT;
-    for(unsigned i=0u;i<4u;i++) {
+       !ops->read_sector || !ops->write_sector || !ops->sync || !vmu_persist_stage_policy_valid(policy))return KUI_VMU_PERSIST_STAGE_ARGUMENT;
+    for(unsigned i=0u;i<5u;i++) {
+        if(!inputs[i])continue;
         if(vmu_persist_stage_overlap(w,sizeof(*w),inputs[i],input_bytes[i]))
             return KUI_VMU_PERSIST_STAGE_ARGUMENT;
         if(i!=2u && vmu_persist_stage_overlap(transfer,sizeof(*transfer),inputs[i],input_bytes[i]))
             return KUI_VMU_PERSIST_STAGE_ARGUMENT;
     }
     if(w->started)return KUI_VMU_PERSIST_STAGE_ARGUMENT;
+    const bool reuse_snapshot=vmu_persist_stage_snapshot_policy(policy);
     struct kui_vmu_persist_allocation_transfer pinned=*transfer;
     memset(w,0,sizeof(*w));w->started=1u;w->phase=KUI_VMU_PERSIST_STAGE_PREFLIGHT;
     if(kui_vmu_persist_stage_admit(p,m))
@@ -290,7 +308,7 @@ int kui_vmu_persist_stage_rebind(const struct kui_vmu_persist_profile *p,
     w->session.ops=(struct kui_vmu_persist_session_ops){&scope,vmu_persist_rebind_finish_identity,
         vmu_persist_rebind_finish_read,vmu_persist_rebind_finish_write,vmu_persist_rebind_finish_sync,
         vmu_persist_rebind_finish_health};
-    result=vmu_persist_stage_finish(profile,&w->session.ops,w,out);
+    result=vmu_persist_stage_finish(profile,&w->session.ops,w,out,reuse_snapshot);
     if(!result && !vmu_persist_rebind_finish_guard(&scope,1))
         result=vmu_persist_stage_fail(w,out,KUI_VMU_PERSIST_STAGE_HANDOFF);
     w->session.ops=scope.io;
@@ -306,10 +324,34 @@ int kui_vmu_persist_stage_rebind(const struct kui_vmu_persist_profile *p,
 int kui_vmu_persist_stage_prepare(const struct kui_vmu_persist_profile *p,
     const struct kui_retail_manifest *m,const struct kui_vmu_persist_session_ops *ops,
     struct kui_vmu_persist_stage_workspace *w,struct kui_vmu_durable_handoff *out) {
-    return vmu_persist_stage_prepare(p,m,0u,false,ops,w,out);
+    return vmu_persist_stage_prepare(p,m,0u,false,ops,NULL,w,out);
 }
 int kui_vmu_persist_disc_stage_prepare(const struct kui_vmu_persist_profile *p,
     uint32_t transport,const struct kui_vmu_persist_session_ops *ops,
     struct kui_vmu_persist_stage_workspace *w,struct kui_vmu_durable_handoff *out) {
-    return vmu_persist_stage_prepare(p,NULL,transport,true,ops,w,out);
+    return vmu_persist_stage_prepare(p,NULL,transport,true,ops,NULL,w,out);
+}
+int kui_vmu_persist_stage_prepare_policy(const struct kui_vmu_persist_profile *p,
+    const struct kui_retail_manifest *m,const struct kui_vmu_persist_session_ops *ops,
+    const struct kui_vmu_persist_stage_policy *policy,
+    struct kui_vmu_persist_stage_workspace *w,struct kui_vmu_durable_handoff *out) {
+    return vmu_persist_stage_prepare(p,m,0u,false,ops,policy,w,out);
+}
+int kui_vmu_persist_disc_stage_prepare_policy(const struct kui_vmu_persist_profile *p,
+    uint32_t transport,const struct kui_vmu_persist_session_ops *ops,
+    const struct kui_vmu_persist_stage_policy *policy,
+    struct kui_vmu_persist_stage_workspace *w,struct kui_vmu_durable_handoff *out) {
+    return vmu_persist_stage_prepare(p,NULL,transport,true,ops,policy,w,out);
+}
+int kui_vmu_persist_stage_attach(const struct kui_vmu_persist_profile *p,
+    const struct kui_retail_manifest *m,const struct kui_vmu_persist_attach_source *source,
+    const struct kui_vmu_persist_attach_ops *ops,
+    struct kui_vmu_persist_stage_workspace *w,struct kui_vmu_durable_handoff *out) {
+    return kui_vmu_persist_stage_attach_policy(p,m,source,ops,NULL,w,out);
+}
+int kui_vmu_persist_stage_rebind(const struct kui_vmu_persist_profile *p,
+    const struct kui_retail_manifest *m,struct kui_vmu_persist_allocation_transfer *transfer,
+    const struct kui_vmu_persist_session_ops *ops,
+    struct kui_vmu_persist_stage_workspace *w,struct kui_vmu_durable_handoff *out) {
+    return kui_vmu_persist_stage_rebind_policy(p,m,transfer,ops,NULL,w,out);
 }

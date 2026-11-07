@@ -1,10 +1,47 @@
 # K-UI work and release requirements
 
+The owner explicitly rejects the early-artwork workaround: it hid the added
+boot delay rather than restoring the original splash/chime sequence. Undo that
+workaround and the synchronous version-selection insertion on ordinary CD/root
+startup. Match the v2.0.0 direct startup lifecycle without moving that same work
+behind the splash. Explicit checked RAM restart handoffs retain their bank
+adoption/validation. Cold CD boot now runs the physical ROOT files directly;
+saved bank activation is not part of that original boot path. Preserve every
+Games component and deliver both physical GUI aliases. No menu/bootloader
+redesign or additional updater implementation changes are authorized.
+
+This integration is strictly limited to the Games loading paths: readers,
+game bootstrap, virtual VMU, read-ahead, game compatibility and their build,
+delivery and verification. The owner explicitly excluded startup/splash,
+menus, branding and updater work. Keep those implementations unchanged.
+Apply performance mechanisms to every applicable launch family by default;
+never require another title-specific performance opt-in. Identify the actual
+final reader, not only the GUI build, before interpreting a console result.
+
+The current project goal is one maintained, broadly compatible launcher build
+which incorporates the lessons already established across the readers and VMU
+implementations. Follow `docs/universal-loader-roadmap.md` for integration order
+and remaining coverage. Optional VMU and read-ahead depend on each runtime's
+proved capabilities; preserve working demand-only and exact-adapter routes
+while extending shared support.
+
 Read `docs/accepted-progress.md` before selecting a build recipe, assembling an
 update, or requesting console tests. It records component-specific acceptance,
 preservation requirements and unresolved integration work. A newer commit or a
 successful build does not establish that the selected configuration preserves
 accepted behavior.
+
+The current native test source is `f8807cb16561`, recorded in
+`docs/shared-launch-coverage-restoration.md` and `docs/evidence/native-shared-f8807cb`.
+It is host/linked-qualified, not console-accepted. All twelve changed native
+cold families and their actual GUI are one qualified cohort. The eleven
+retained CE/Smash/no-VMU physical-disc files remain exact prior bytes.
+Default Standard/native-CDDA bindings are exact copies of its qualified GUI
+inputs. Preserve them in later GUI builds for this installation. The earlier
+7fc bootstrap candidate remains recorded in `docs/shared-native-bootstrap-rollout.md`.
+An explicitly older-cohort GUI must select its saved manifest or supply the
+matching services; do not silently pair new admission with an incompatible
+inherited Standard module. Preserve the exact accepted Smash components.
 
 Before compiling, identify the accepted source/configuration, the intended
 behavior change, affected module roles, and the decision a new test answers.
@@ -26,6 +63,38 @@ establish support on the others. Label unresolved behavior explicitly.
 Do not repeat settled compatibility matrices for an unrelated GUI/updater
 change. Use production routing, filesystem and package checks for preservation;
 request console tests only for changed behavior and observable new questions.
+
+## Console measurement checkpoint
+
+Keep the delivered `f8807cb16561` native candidate unchanged while its console
+baseline is pending. Do not stack another performance/compatibility change or
+replace that ZIP on the strength of host counts alone. Read-only audits and
+documentation may continue. A separately requested fix must identify its
+baseline and changed behavior explicitly.
+
+After this checkpoint, make one behavior change per source commit and obtain
+the relevant console comparison before stacking the next behavior change.
+Keep evidence/documentation commits separate from compiled changes. Compare
+first and repeat launches on two or three representative games with the same
+image format, storage, reader and VMU options. Record K-UI-to-bootstrap and
+bootstrap-to-game separately, plus gameplay/save results when affected.
+Record the actual GUI and selected module path/build/payload CRC; a filename,
+build label, host instruction count or compile success is not a console timing.
+`launch-timing.txt` excludes its own final report I/O and the later bootstrap.
+If the combined candidate regresses, isolate or revert against the measured
+baseline instead of adding another combined optimization.
+
+## Original executable evidence
+
+For a changed SDK/game family, run the relevant production/linked tests against
+the actual supplied executables that are available. Stored hashes, authored
+fixtures and a successful compile complement that evidence; they do not replace
+an available original. Keep an input inventory with full hashes and distinguish
+original-backed execution, authored models, linked admission and console tests.
+If an original is unavailable, state that limit explicitly. Never distribute
+private game executables, disc data or saves in source/evidence/test packages.
+An external reviewer's original-backed result is attributed to that reviewer,
+not reported as a local test or Dreamcast execution.
 
 Startup performance is a shared loader requirement. Batch consecutive reads
 and keep every SD block CRC check by default across supported launch families;
@@ -54,7 +123,23 @@ replace them or change accepted worker geometry.
 
 ## Required delivery path
 
-Every NEW test/release update must use the current Main producer:
+Deliver manual-copy ZIPs by default for this owner. This is the standing rule
+for future sessions, not a one-off exception. Include the intended physical
+`KUI/` software tree and an exact changed/retained inventory. A GUI replacement
+must include identical `KUI/boot.kui` and `KUI/runtime.kui`. Exclude KUPs,
+activation records, banks and user data unless the owner explicitly requests
+that separate operation. Do not convert a ZIP request into updater repair.
+Use America/Chicago date/time with CST/CDT and the actual component build in
+new filenames; retain existing delivered filenames and hashes unchanged.
+
+Validate a manual ZIP through cold CD/root boot. Menu Restart K-UI separately
+selects saved banks by activation sequence and can launch an older compatible
+bank instead of the copied ROOT. Do not delete/move banks or selectors to test
+this by default. Confirm the GUI and actual final module path/build/payload CRC;
+a matching GUI label alone does not prove a matching reader cohort. Existing
+startup report files can be stale because direct ROOT boot does not write them.
+
+Only when the owner explicitly requests KUP delivery, use the current Main producer:
 
     python3 tools/make_update.py staged/KUI test.kup
     python3 tools/make_update.py staged/KUI release.kup --full --channel stable
@@ -64,9 +149,9 @@ build-legacy command is only for engine bootstrap/migration fixtures. Never
 qualify a new delivery with a frozen old decoder or a Python-only verifier.
 The producer compiles the actual current C consumer and validates the exact
 output before publishing it. Keep its source fingerprint/report with evidence.
-Deliver the standalone .kup by default, unless the owner explicitly requests a
-manual-copy test ZIP as recorded in docs/accepted-progress.md. An optional KUP ZIP has exactly one .kup;
-source/evidence archives are separate from the install payload.
+An explicitly requested KUP ZIP has exactly one .kup. Source/evidence archives
+are separate from the install payload. The producer's KUP defaults do not
+override the owner's standing manual-copy ZIP delivery rule.
 
 Use the actual staged software inventory, not a compiled count/catalog.
 Changed .kui components retain their real embedded builds; do not retag them
@@ -74,10 +159,13 @@ or rebuild settled readers merely to obtain one cohort label. Raw helpers,
 release audio/assets and catalogues are typed and pinned by full SHA. Stage
 only intended software; never cards, saves, preferences, credentials or games.
 A GUI replacement must contain engine revision3 and matching
-reader admission. Reader-only tests preserve the effective GUI automatically.
+reader admission. A reader-only ZIP requires an identified matching running
+GUI and source route; do not assume a saved bank uses copied ROOT files.
 Do not disable game ABI/admission guards to force a package to run.
 
-## Update semantics
+## Explicit KUP operation semantics
+
+This section documents the retained updater, not the default delivery workflow.
 
 Partial updates retain the effective running software, including checked
 bank replacements and deliberate absence. They never revert omitted bank
@@ -94,8 +182,9 @@ the fixed root, preserving bank folders and user data. A root-only replacement
 does not update an already selected GUI's compiled updater implementation.
 Use the actual running fallback for partial overlays; stale saved selection must not
 prevent a valid root-based test. Preserve old banks and user files during
-engine setup; do not silently install optional workers. Future tests then use
-only .kup selection and Restart K-UI. Restart uses worker 126; update uses 120.
+engine setup; do not silently install optional workers. KUP selection and
+Restart K-UI apply only to an explicitly requested updater operation. Normal
+manual ZIP tests use cold direct ROOT boot. Restart uses worker 126; update uses 120.
 
 Read-only software open/stat wrappers are GUI-only. Writes and all user data
 bypass them; raw pinned reads are verified before use. Root setup/verification
@@ -120,11 +209,12 @@ root/inherited reads, never a pinned bank replacement. Run the actual
 update_work/production-filesystem flow and the real settings APIs when changing
 updater integration.
 
-For the one-time manual bootstrap use the current implementation:
+For an explicitly requested updater-engine bootstrap only, use:
 
     python3 tools/make_updater_repair.py staged/KUI repair.zip --kup-output test.kup
 
-It generates identical physical boot.kui/runtime.kui, ROOT selection records,
+This is not the normal manual-copy ZIP producer. It generates identical
+physical boot.kui/runtime.kui, ROOT selection records,
 and one embedded KUP identical to the standalone output. Historical repair,
 switch, add-on and test-bundle CLIs require --legacy-fixture and are not ordinary
 delivery tools.

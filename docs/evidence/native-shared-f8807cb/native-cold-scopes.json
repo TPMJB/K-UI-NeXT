@@ -1,0 +1,233 @@
+{
+  "schema": "kui.native-cold.final-linked-qualification.v1",
+  "status": "PASS",
+  "source_commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+  "source_tree": "a0e4108e38d8013ee5c5e600a9835b46cb7d1f1c",
+  "roles": [
+    {
+      "role": "physical",
+      "build_directory": "build/retail-physical",
+      "source_compile_receipt": {
+        "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+        "source_dirty": false,
+        "elf_sha256": "9566509d1cfae4273a99ee70e964406c00cba7d92fb8b2a7ab8faab82e0dee0e"
+      },
+      "entry_sha256": "9566509d1cfae4273a99ee70e964406c00cba7d92fb8b2a7ab8faab82e0dee0e",
+      "stage_sha256": "016f36617b6ec9421e2fc9a896a3eea74c0ed4d1b0fd9e3330bc0c6dcc94faf2",
+      "old_stage_sha256": "6680442d92179afc1307906d68e9f4d2d653995c3ffbd29c3f030efbda1a06eb",
+      "receipt_sha256": "4b8aee85785f84b0a7dea5b8e531e4ac9713acedfa1fb50b40a718c311a160bc",
+      "qualification_report": "build/native-cold-final-qualification/physical-cached-crc.json",
+      "qualification_sha256": "5dbffafafcb1bd932806eed5fc0b661a4d99e305b9deb186e182138e1b4fd52f",
+      "CLI": [
+        "python3",
+        "tests/test_native_stage_cached_crc.py",
+        "--elf",
+        "build/retail-physical/stage.elf",
+        "--relay",
+        "_kui_retail_stage_relay",
+        "--old-elf",
+        "build/native-cold-cache-audit/old/physical-stage.elf",
+        "--report",
+        "build/native-cold-final-qualification/physical-cached-crc.json"
+      ]
+    },
+    {
+      "role": "zso",
+      "build_directory": "build/retail-zso",
+      "source_compile_receipt": {
+        "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+        "source_dirty": false,
+        "elf_sha256": "3a72bf5fcfc04015470e4d552c160071cd8a2f58b96eade0409671c10700e6e0"
+      },
+      "entry_sha256": "3a72bf5fcfc04015470e4d552c160071cd8a2f58b96eade0409671c10700e6e0",
+      "stage_sha256": "f7fb2ed63a8910d31a5ce9f62455341db29badbd5e12e1ebc29a5fb1e141ce57",
+      "old_stage_sha256": "3e589e4a94ff9928035b5765fc2a1c0218a2b2a75303356b6ab6a3343eb9b19c",
+      "receipt_sha256": "fc8000fdbeba4c47fa5edee6fc3a6cf274ffd180161ad8c4bdbc0bbe11cdfe19",
+      "qualification_report": "build/native-cold-final-qualification/zso-cached-crc.json",
+      "qualification_sha256": "05d40b2ea17ee6290d9e4bb7180f9a0bf891ff0acad9cbbe056e6bb70ad476a2",
+      "CLI": [
+        "python3",
+        "tests/test_native_stage_cached_crc.py",
+        "--elf",
+        "build/retail-zso/stage.elf",
+        "--relay",
+        "_kui_retail_stage_relay",
+        "--old-elf",
+        "build/native-cold-cache-audit/old/zso-stage.elf",
+        "--report",
+        "build/native-cold-final-qualification/zso-cached-crc.json"
+      ]
+    },
+    {
+      "role": "lzo",
+      "build_directory": "build/retail-lzo",
+      "source_compile_receipt": {
+        "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+        "source_dirty": false,
+        "elf_sha256": "905851467c55b5039007f1fc2fb23881fbbec13bcd21e37d53327dbc70202d2a"
+      },
+      "entry_sha256": "905851467c55b5039007f1fc2fb23881fbbec13bcd21e37d53327dbc70202d2a",
+      "stage_sha256": "0de53493bcdc72b354877a8d1db5861a4c0c42e260f5452799b09220d8a38fae",
+      "old_stage_sha256": "a69f7e6d398b202b6f5155496b92f3a4b1e7e8b62461f74b6ca25b3e7eecfd0f",
+      "receipt_sha256": "53a95b56ce8135b6368d218b59156eae088c5ca9bec695fcdcee6db8db8b249c",
+      "qualification_report": "build/native-cold-final-qualification/lzo-cached-crc.json",
+      "qualification_sha256": "2ebe8e3838254734107fe38f381b88d0c5d6abc2b8c8ecc1388bb7f7ebcc003a",
+      "CLI": [
+        "python3",
+        "tests/test_native_stage_cached_crc.py",
+        "--elf",
+        "build/retail-lzo/stage.elf",
+        "--relay",
+        "_kui_retail_stage_relay",
+        "--old-elf",
+        "build/native-cold-cache-audit/old/lzo-stage.elf",
+        "--report",
+        "build/native-cold-final-qualification/lzo-cached-crc.json"
+      ]
+    },
+    {
+      "role": "standalone",
+      "build_directory": "build/native-standalone-general",
+      "source_compile_receipt": {
+        "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+        "source_dirty": false,
+        "elf_sha256": "aa8c2e8662537feff5bb43f1e9cdd465e4d62779c88bcb09d71ddc35b6284cd3"
+      },
+      "entry_sha256": "aa8c2e8662537feff5bb43f1e9cdd465e4d62779c88bcb09d71ddc35b6284cd3",
+      "stage_sha256": "6e9e4312d209157b00b06d3a99664ba87fb6c30461478936c9fc44f42a984533",
+      "old_stage_sha256": "219a58ed194e757a9c84e9acd35dcc75360620e27fca87c2e3a05efb82e2ce47",
+      "receipt_sha256": "a406b1cf35f62374d2937952427a164930d363a269c59cad26271953af74651d",
+      "qualification_report": "build/native-cold-final-qualification/standalone-cached-crc.json",
+      "qualification_sha256": "37ce9d0f67ba9323001a1660f2824f3af70d1437b0c957df894e5706f979b142",
+      "CLI": [
+        "python3",
+        "tests/test_native_stage_cached_crc.py",
+        "--elf",
+        "build/native-standalone-general/stage.elf",
+        "--relay",
+        "_kui_retail_stage_relay",
+        "--old-elf",
+        "build/native-cold-cache-audit/old/standalone-stage.elf",
+        "--report",
+        "build/native-cold-final-qualification/standalone-cached-crc.json"
+      ]
+    },
+    {
+      "role": "mdk2",
+      "build_directory": "build/native-compat-mdk2",
+      "source_compile_receipt": {
+        "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+        "source_dirty": false,
+        "elf_sha256": "a327fcf2667e59555c64fc46edeb6ad92a62cf1bfd082d992269aefd1d9d022d"
+      },
+      "entry_sha256": "a327fcf2667e59555c64fc46edeb6ad92a62cf1bfd082d992269aefd1d9d022d",
+      "stage_sha256": "4970cdd2266ad5e93f2500a70f0fe5027e2e1cd1fcebcd5897d59a01a0c07067",
+      "old_stage_sha256": "6b278c2b7bc327771667cb45cfc2aa41e90ef1093f3d983e38fe414cb8c8f48d",
+      "receipt_sha256": "ffa3297a3f998b2552198cb323f711c8f62f7f3c1d3c27bbd71081fab1dad076",
+      "qualification_report": "build/native-cold-final-qualification/mdk2-cached-crc.json",
+      "qualification_sha256": "ce684bd057053bc7784b0cb544493f2a39839a633cb53813525ce26b9eabe0d7",
+      "CLI": [
+        "python3",
+        "tests/test_native_stage_cached_crc.py",
+        "--elf",
+        "build/native-compat-mdk2/stage.elf",
+        "--relay",
+        "_kui_toy_pilot_base_relay",
+        "--old-elf",
+        "build/native-cold-cache-audit/old/mdk2-stage.elf",
+        "--report",
+        "build/native-cold-final-qualification/mdk2-cached-crc.json"
+      ]
+    },
+    {
+      "role": "toy-raw",
+      "build_directory": "build/native-compat-toy-raw",
+      "source_compile_receipt": {
+        "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+        "source_dirty": false,
+        "elf_sha256": "e0a23d004cb594d86ec80a8b7c936916843be7a79e60d5e3b9ccad8e9de4d216"
+      },
+      "entry_sha256": "e0a23d004cb594d86ec80a8b7c936916843be7a79e60d5e3b9ccad8e9de4d216",
+      "stage_sha256": "45aedae99459b3c23595192fa5ccc1c5506ee7c297305512fe65825fa50f9cf8",
+      "old_stage_sha256": "41931f1fd6dfe78bd2458652dd950fa4e244d9af89361d9371efd14522b6c055",
+      "receipt_sha256": "5a0f8beb4d257943a197ca06153f6b5b4f0351ce06e126e53f49303f300aafc8",
+      "qualification_report": "build/native-cold-final-qualification/toy-raw-cached-crc.json",
+      "qualification_sha256": "4efd73122b403d32f2af0924e0efbd7a135290f20585e9d37cb46d7cdccfcba6",
+      "CLI": [
+        "python3",
+        "tests/test_native_stage_cached_crc.py",
+        "--elf",
+        "build/native-compat-toy-raw/stage.elf",
+        "--relay",
+        "_kui_toy_pilot_base_relay",
+        "--old-elf",
+        "build/native-cold-cache-audit/old/toy-raw-stage.elf",
+        "--report",
+        "build/native-cold-final-qualification/toy-raw-cached-crc.json"
+      ]
+    },
+    {
+      "role": "toy-cooked",
+      "build_directory": "build/native-compat-toy-cooked",
+      "source_compile_receipt": {
+        "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+        "source_dirty": false,
+        "elf_sha256": "5f957a967a75f63fd01f49df59b094c91f2c75b8c6b4aa42382b8db58aaa3480"
+      },
+      "entry_sha256": "5f957a967a75f63fd01f49df59b094c91f2c75b8c6b4aa42382b8db58aaa3480",
+      "stage_sha256": "e44565c7118a00e737652a0b71bd25f3df170235a9bd86243ce0ca731fe01ba4",
+      "old_stage_sha256": "c319edd38ea033d4d43b2911a6cc291b687e5748c0d7a772eca6b9151c475187",
+      "receipt_sha256": "f49955dbbf4acd334961c5298e19a6904e9c9e7e1f34498c7ffde0e000fc1621",
+      "qualification_report": "build/native-cold-final-qualification/toy-cooked-cached-crc.json",
+      "qualification_sha256": "e0f6e29f87695a8a95edba8c5397bfa97d41814d01729eff5477d55779d5c38c",
+      "CLI": [
+        "python3",
+        "tests/test_native_stage_cached_crc.py",
+        "--elf",
+        "build/native-compat-toy-cooked/stage.elf",
+        "--relay",
+        "_kui_toy_pilot_base_relay",
+        "--old-elf",
+        "build/native-cold-cache-audit/old/toy-cooked-stage.elf",
+        "--report",
+        "build/native-cold-final-qualification/toy-cooked-cached-crc.json"
+      ]
+    }
+  ],
+  "standalone_sdk": {
+    "report": "build/native-cold-final-qualification/standalone-sdk.json",
+    "sha256": "cd281265df302ea43fb7f786875bf0cb4839de460e7db41577eb66e45a0ef6bd",
+    "stage_sha256": "6e9e4312d209157b00b06d3a99664ba87fb6c30461478936c9fc44f42a984533",
+    "wrapper_cases": 648,
+    "guard_publication_negatives": 14,
+    "actual_closed_stack_bytes": 944
+  },
+  "early_sdk": {
+    "report": "build/native-cold-final-qualification/early-sdk-linked.json",
+    "sha256": "7d3e0f0328bfb2844e130252189b6d2b7d5b09ce70c6ab38837e691f850b3fee",
+    "originals": 3,
+    "handler_modes": 6,
+    "stage_and_pure_production_C_composition": "independent linked cache audit before real-original semantic caller and linked binder probes",
+    "old_resident_build": "eeed38bd540e",
+    "new_resident_sha256": "c5ae8a6dda16540315aaa1708b28f05da939cb86e88f8b5a14a30282706bc15b"
+  },
+  "source_sha256": {
+    "src/loader/native_cold_cache_policy.h": "2dba06d19d8fe6ec7a00b2ce94ea4c1dc21f1882bba7519726f440693c5f02fc",
+    "src/loader/native_sdk_cache_scope.inc": "9f30033bf519477ba2f9b3d25af22027403f5cd1d699c7de16fd0624b180fd1c",
+    "src/loader/native_proof_cache_scope.inc": "b6bdd13ca799b850d6b9717f19a714f19be9bd8d879a74dcca4f4acecd0b1309",
+    "src/loader/retail_stage.c": "6fed45f2e0cdebc2e8b68909710e1979b636e8f3c8d222b4d37f41b52bd8e513",
+    "src/loader/retail_stage.S": "c9df0ee45d834849759e94ef60a68e266757b24a9042697f47d27238177b5116",
+    "src/loader/native_standalone_reader_stage.inc": "610afc73a462ff6f7d48a63b624f490976083c883be92a0dffb043853759d67d",
+    "tests/test_native_stage_cached_crc.py": "4c0dc2a85df24e7db8032b3702f2159b3c64b0022bd96a026d1af4fcf56747b7",
+    "tests/test_native_standalone_sdk_cache.py": "2b233ee0b9ae1c078f79c8e8473f188a1dad9b30543306830a642eda6eeb39b1",
+    "tests/test_native_standalone_early_irq.py": "dc523d2e1d07c48023b7af1fb412f26c36465f16a593370683e8000a23ed22cc"
+  },
+  "hardware_timing_measured": false,
+  "all_services_or_GUI_admission_covered": false,
+  "worker_geometry_changed": false,
+  "limits": [
+    "Seven additional native cold families only; five VMU services have separate qualification.",
+    "No CE or live-disc operand cache scope introduced.",
+    "No console timing or current-console selected-reader inference."
+  ]
+}

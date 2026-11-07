@@ -1,0 +1,6861 @@
+{
+  "schema": "kui.actual-delivered-live-preservation.v1",
+  "status": "PASS",
+  "source_commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+  "actual_old_archive_sha256": "573bb632d8f09f6051bc56ad7a99d0b50a36b2338c47a333561d0c7a9ff0e704",
+  "baseline_authentication": {
+    "physical": {
+      "old_directory": "old-source-reproduction/build/retail-physical",
+      "actual_shipped_member": "KUI/apps/games/retail-physical.kui",
+      "whole_reconstructed_module_equal_to_shipped": true,
+      "whole_module_sha256": "809bfdbc3a3b6fdf4169a4a37929d9f3573734f9c401c8d3cb9094421c13fe71",
+      "old_entry_sha256": "a20e5a03fe225d18539d7a172e7a834a96684b0d49c94a6593a06f8ae9f0553b",
+      "old_stage_sha256": "272ef86ad7df706d4052aac5a7cc66fb62934a473606e5370cc278ae1ff7d3ea"
+    },
+    "zso": {
+      "old_directory": "old-source-reproduction/build/retail-zso",
+      "actual_shipped_member": "KUI/apps/games/zso-boot.kui",
+      "whole_reconstructed_module_equal_to_shipped": true,
+      "whole_module_sha256": "fd6cf9249c2f18e4ab6d4c8bcf28349bc71548350eff53adf4d21b80a1553062",
+      "old_entry_sha256": "51d43406f9c3505a6ff0500ebe2dc7dbba0b562782f3f6e96b42ffed8520dac8",
+      "old_stage_sha256": "02e88f1a6d2d24ff01b6447c834115973f1ed7261d1875bd070261365a043272"
+    },
+    "lzo": {
+      "old_directory": "old-source-reproduction/build/retail-lzo",
+      "actual_shipped_member": "KUI/apps/games/lzo-boot.kui",
+      "whole_reconstructed_module_equal_to_shipped": true,
+      "whole_module_sha256": "bdf77337ce16a2637b7eaa78c7e88dac7fe420c00c5688812eaf4d7447c2af84",
+      "old_entry_sha256": "4175ea940694cd6b28e46f2478343867dbb97fc452f2d85413f63765c0db2e39",
+      "old_stage_sha256": "60c6ac99328283a2cf9b726f2fb962f30b5ef4b9cb54c03595043f637e056cbc"
+    },
+    "standalone": {
+      "old_directory": "build/native-shared-final-baseline/standalone-a0dc",
+      "actual_shipped_member": "KUI/apps/games/retail-native-standalone.kui",
+      "whole_reconstructed_module_equal_to_shipped": true,
+      "whole_module_sha256": "8a1eb7faad51b5e5167226cb4e521c478cfd3fa2d38901b3cb84e1e85c88576a",
+      "old_entry_sha256": "5a11677712302228bef5963f4457b4688909461318b83e8b9b159f92a0256bda",
+      "old_stage_sha256": "cfd4a5416ee52a6adefec97561c629af95cea26156abf8c5f2cd08f12039344f"
+    },
+    "toy_raw": {
+      "old_directory": "old-source-reproduction/build/native-compat-toy-raw",
+      "actual_shipped_member": "KUI/apps/games/cdda-native-toy-raw.kui",
+      "whole_reconstructed_module_equal_to_shipped": true,
+      "whole_module_sha256": "923404c18b21a80e1adb1eafd902e1fb9a0ba7a389b102732d4727bc565dfc95",
+      "old_entry_sha256": "b23c87f065defb525d4b140ff3b2b0f1b8ae8c63bcff3e1f2fdd269adda226a7",
+      "old_stage_sha256": "88ef50b01b6b616d0b82fefe1aac214f3152260025627ee12356c058f2759a93"
+    },
+    "toy_cooked": {
+      "old_directory": "old-source-reproduction/build/native-compat-toy-cooked",
+      "actual_shipped_member": "KUI/apps/games/cdda-native-toy-cooked.kui",
+      "whole_reconstructed_module_equal_to_shipped": true,
+      "whole_module_sha256": "108a3707c60b985307daddf7fd36c9c6d650974358ab94b1ed08fb2050d4c3b6",
+      "old_entry_sha256": "079a72df49ac22ca4b743f90bc3dec1562df8e6e9297682cdeb70eb662f18c21",
+      "old_stage_sha256": "a1193bfaf99f02e67b6022ab396c4cb7f57add63ef660a415c809de07cee0be8"
+    },
+    "mdk2": {
+      "old_directory": "old-source-reproduction/build/native-compat-mdk2",
+      "actual_shipped_member": "KUI/apps/games/cdda-native-mdk2.kui",
+      "whole_reconstructed_module_equal_to_shipped": true,
+      "whole_module_sha256": "33a924482f0efbd491d86f0eb9b1cc05e61ce6cd00fc48aeba09677a03644c51",
+      "old_entry_sha256": "ace40ed4df8ebecea2c303a76c44598fdc063cb74575e5b272d1a3c6aeb02ff2",
+      "old_stage_sha256": "30a2bf218eec06609bb465a62fcd8916d1e2c09bb95e892f40599ebff1c6cd52"
+    },
+    "standard": {
+      "old_directory": "build/native-shared-final-baseline/games-standard-sci",
+      "actual_shipped_member": "KUI/apps/games/retail-boot.kui",
+      "whole_reconstructed_module_equal_to_shipped": true,
+      "whole_module_sha256": "95978bab1155608d94a707402e31fe82e999faa9dfc5dd01966457756e6a3209",
+      "old_entry_sha256": "8c77b7cb9bd57f11af1bd75ec90e8f9fb73075fb3a21eb20d82bfab523aa68ef",
+      "old_stage_sha256": "d7e245f31fa88118d165c01d5c3955604b032674f8188ccec282d5c47ad0a3e1"
+    },
+    "background_a2": {
+      "old_directory": "build/native-shared-final-baseline/games-background-a2",
+      "actual_shipped_member": "KUI/apps/games/retail-native-dual.kui",
+      "whole_reconstructed_module_equal_to_shipped": true,
+      "whole_module_sha256": "212333df086ee965098a0677775b25177e06c8767f0c2f2dfe17b8392744de22",
+      "old_entry_sha256": "38261ddd41f076feeed07a97484224b6c519cc1ee0d5e83bde3ba62ad6ead0f0",
+      "old_stage_sha256": "f73f08f3345a747f6d08716856f659a32e420093272521d4f65307106b98a525"
+    },
+    "background_a1": {
+      "old_directory": "build/native-shared-final-baseline/games-background-a1",
+      "actual_shipped_member": "KUI/apps/games/retail-native-dual-a1.kui",
+      "whole_reconstructed_module_equal_to_shipped": true,
+      "whole_module_sha256": "e45daaecbfc5da96b8da87123daa89ab786e16187b7b640412dd13a01c7c54f4",
+      "old_entry_sha256": "222cb76e79df6be22b3f692a3907331bf41d50cdf21fafef079b1bf43af64d5c",
+      "old_stage_sha256": "54651f93f240cda2f46563dbdad3d4a361f0003db81396594d4389fe5f6c5989"
+    },
+    "disc_a2": {
+      "old_directory": "build/native-shared-final-baseline/games-disc-a2",
+      "actual_shipped_member": "KUI/apps/disc/native-disc-vmu.kui",
+      "whole_reconstructed_module_equal_to_shipped": true,
+      "whole_module_sha256": "15ff0d3ad2f8890e2ad4f727658704a9210620d37fb2b571de542ac639f9854e",
+      "old_entry_sha256": "20b849a409c93458d329344d6d7dd65da16ce1117676c3db81a09c1901aecde1",
+      "old_stage_sha256": "fb71b1e4ad7639b124a59cbaef7c8d51d239bfb5e17b472c40331c42ce9346d0"
+    },
+    "disc_a1": {
+      "old_directory": "build/native-shared-final-baseline/games-disc-a1",
+      "actual_shipped_member": "KUI/apps/disc/native-disc-vmu-a1.kui",
+      "whole_reconstructed_module_equal_to_shipped": true,
+      "whole_module_sha256": "2e519ee282e9c54cfbf40caa395480d20970203613d43056525b594fc5a6c46a",
+      "old_entry_sha256": "4965a9cbd67a69603da3acb335013e673865366d009ce947339cbf4e0197e069",
+      "old_stage_sha256": "b8d35d5bf3cdb2a1041ca78493b129429285693751dbcf81b4a96b470d710bab"
+    }
+  },
+  "components": {
+    "physical": {
+      "resident-scif.elf": {
+        "status": "PASS",
+        "installed_live_component": true,
+        "reference_authentication": "exact_old_shipped_module_and_ELF_bin_embedding",
+        "strict_existing_comparator": {
+          "status": "PASS",
+          "reference_elf_sha256": "7061f2f158ab7376fbbcfde24abb73069e47096363eeb0463b4854cc13676f5e",
+          "candidate_elf_sha256": "a73aae5cb5a78b69a329db999ef791139c0480d306ee734aa1cc8431291c075b",
+          "normalized_initialized_load_sha256": "a1769d841d33b4373fe2f1264718a581330362d5c247eadb56491fe4645b478b",
+          "complete_initialized_bytes_headers_and_symbol_ownership_identical": true,
+          "permitted_display_build_label_addresses": [
+            "0x8c006852"
+          ],
+          "permitted_display_build_label_bytes": 12
+        },
+        "reference_elf_sha256": "7061f2f158ab7376fbbcfde24abb73069e47096363eeb0463b4854cc13676f5e",
+        "candidate_elf_sha256": "a73aae5cb5a78b69a329db999ef791139c0480d306ee734aa1cc8431291c075b",
+        "normalized_initialized_load_sha256": "a1769d841d33b4373fe2f1264718a581330362d5c247eadb56491fe4645b478b",
+        "complete_initialized_bytes_headers_and_allocated_BSS_geometry_identical": true,
+        "all_non_debug_CU_symbol_source_type_ownership_identical": true,
+        "permitted_runtime_changes": {
+          "display_label_addresses": [
+            "0x8c006852"
+          ],
+          "display_label_bytes": 12
+        },
+        "debug_CU_metadata": {
+          "only_unallocated_weak_NOTYPE_CU_checksum_names_normalized": true,
+          "reference": [],
+          "candidate": []
+        }
+      },
+      "resident-sci.elf": {
+        "status": "PASS",
+        "installed_live_component": true,
+        "reference_authentication": "exact_old_shipped_module_and_ELF_bin_embedding",
+        "strict_existing_comparator": {
+          "status": "REFUSED",
+          "error": "Component source/type/symbol ownership changed"
+        },
+        "reference_elf_sha256": "e82944da78860753798582cc3fa921ca151b15c3f0d0768295ac657e5fc80345",
+        "candidate_elf_sha256": "61fb0e6a2ca40a99d70ce27c4b22f4dab010a21c6eaad5c741ba54c2c4fcb9b7",
+        "normalized_initialized_load_sha256": "329bf2c4aec0c415fcf70b393b2073edef59d102167ab7bc3f96defb4d0b83f1",
+        "complete_initialized_bytes_headers_and_allocated_BSS_geometry_identical": true,
+        "all_non_debug_CU_symbol_source_type_ownership_identical": true,
+        "permitted_runtime_changes": {
+          "display_label_addresses": [
+            "0x8c0068e6"
+          ],
+          "display_label_bytes": 12
+        },
+        "debug_CU_metadata": {
+          "only_unallocated_weak_NOTYPE_CU_checksum_names_normalized": true,
+          "reference": [
+            {
+              "original": [
+                "",
+                "_minic.c.15c21a7c",
+                26077,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                11268,
+                37716,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 26077
+            },
+            {
+              "original": [
+                "",
+                "_retail_display.c.6199a000",
+                30411,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                11268,
+                37716,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 30411
+            },
+            {
+              "original": [
+                "",
+                "_retail_gd.c.503723d0",
+                21686,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                11268,
+                37716,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 21686
+            },
+            {
+              "original": [
+                "",
+                "_retail_image.c.f345865d",
+                26563,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                11268,
+                37716,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 26563
+            },
+            {
+              "original": [
+                "",
+                "_retail_pace.c.00e2046e",
+                25486,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                11268,
+                37716,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 25486
+            },
+            {
+              "original": [
+                "",
+                "_retail_resident.c.e9e2b3b2",
+                15433,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                11268,
+                37716,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 15433
+            },
+            {
+              "original": [
+                "",
+                "_retail_sd.c.9721819a",
+                34449,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                11268,
+                37716,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 34449
+            },
+            {
+              "original": [
+                "",
+                "_sci_sd_bus.c.81a02bf4",
+                35966,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                11268,
+                37716,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 35966
+            },
+            {
+              "original": [
+                "",
+                "_sd_reader.c.b74e9d67",
+                31468,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                11268,
+                37716,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 31468
+            }
+          ],
+          "candidate": [
+            {
+              "original": [
+                "",
+                "_minic.c.d1553f41",
+                26077,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                11268,
+                37716,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 26077
+            },
+            {
+              "original": [
+                "",
+                "_retail_display.c.f13ee244",
+                30411,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                11268,
+                37716,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 30411
+            },
+            {
+              "original": [
+                "",
+                "_retail_gd.c.157ac94b",
+                21686,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                11268,
+                37716,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 21686
+            },
+            {
+              "original": [
+                "",
+                "_retail_image.c.508beae9",
+                26563,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                11268,
+                37716,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 26563
+            },
+            {
+              "original": [
+                "",
+                "_retail_pace.c.7cfbf40f",
+                25486,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                11268,
+                37716,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 25486
+            },
+            {
+              "original": [
+                "",
+                "_retail_resident.c.076ce754",
+                15433,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                11268,
+                37716,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 15433
+            },
+            {
+              "original": [
+                "",
+                "_retail_sd.c.852f97c8",
+                34449,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                11268,
+                37716,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 34449
+            },
+            {
+              "original": [
+                "",
+                "_sci_sd_bus.c.e515e4b2",
+                35966,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                11268,
+                37716,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 35966
+            },
+            {
+              "original": [
+                "",
+                "_sd_reader.c.f7b28d1b",
+                31468,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                11268,
+                37716,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 31468
+            }
+          ]
+        }
+      },
+      "resident-ide.elf": {
+        "status": "PASS",
+        "installed_live_component": true,
+        "reference_authentication": "exact_old_shipped_module_and_ELF_bin_embedding",
+        "strict_existing_comparator": {
+          "status": "PASS",
+          "reference_elf_sha256": "071e2917847dfa57f7f46a6ea548ab7230247630d04b81ac492dd8938d951e03",
+          "candidate_elf_sha256": "ea17446f5086dda4b53cb9d7ae7ebd8182edac461c828f7a961f67a3fe4d0557",
+          "normalized_initialized_load_sha256": "f3c8ad58cb70c63f6500c91d0f1454c95bd2d30c0c4794676b740d2bdc1f4bcc",
+          "complete_initialized_bytes_headers_and_symbol_ownership_identical": true,
+          "permitted_display_build_label_addresses": [
+            "0x8c00670e"
+          ],
+          "permitted_display_build_label_bytes": 12
+        },
+        "reference_elf_sha256": "071e2917847dfa57f7f46a6ea548ab7230247630d04b81ac492dd8938d951e03",
+        "candidate_elf_sha256": "ea17446f5086dda4b53cb9d7ae7ebd8182edac461c828f7a961f67a3fe4d0557",
+        "normalized_initialized_load_sha256": "f3c8ad58cb70c63f6500c91d0f1454c95bd2d30c0c4794676b740d2bdc1f4bcc",
+        "complete_initialized_bytes_headers_and_allocated_BSS_geometry_identical": true,
+        "all_non_debug_CU_symbol_source_type_ownership_identical": true,
+        "permitted_runtime_changes": {
+          "display_label_addresses": [
+            "0x8c00670e"
+          ],
+          "display_label_bytes": 12
+        },
+        "debug_CU_metadata": {
+          "only_unallocated_weak_NOTYPE_CU_checksum_names_normalized": true,
+          "reference": [],
+          "candidate": []
+        }
+      },
+      "resident-scia.elf": {
+        "status": "PASS",
+        "installed_live_component": true,
+        "reference_authentication": "exact_old_shipped_module_and_ELF_bin_embedding",
+        "strict_existing_comparator": {
+          "status": "REFUSED",
+          "error": "Component source/type/symbol ownership changed"
+        },
+        "reference_elf_sha256": "64eaa67c8f821182246e342fc7b00b9c56f042c294a9e721eb95c5eb8ba59e30",
+        "candidate_elf_sha256": "4b6adfc2f3675c36732a2bdb811be171e390597b0b6b98373aac4b7035cd91ea",
+        "normalized_initialized_load_sha256": "7d03a1ae6e2c6a1dfa9527710e2d56c2f2ba2fb15c62c07297df61af3ad84fb3",
+        "complete_initialized_bytes_headers_and_allocated_BSS_geometry_identical": true,
+        "all_non_debug_CU_symbol_source_type_ownership_identical": true,
+        "permitted_runtime_changes": {
+          "display_label_addresses": [
+            "0x8c006c86"
+          ],
+          "display_label_bytes": 12
+        },
+        "debug_CU_metadata": {
+          "only_unallocated_weak_NOTYPE_CU_checksum_names_normalized": true,
+          "reference": [
+            {
+              "original": [
+                "",
+                "_minic.c.15c21a7c",
+                24280,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12396,
+                47269,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 24280
+            },
+            {
+              "original": [
+                "",
+                "_retail_async.c.b23b366b",
+                41039,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12396,
+                47269,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 41039
+            },
+            {
+              "original": [
+                "",
+                "_retail_cursor.c.e55e7fd8",
+                33211,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12396,
+                47269,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 33211
+            },
+            {
+              "original": [
+                "",
+                "_retail_display.c.19ab776c",
+                27396,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12396,
+                47269,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27396
+            },
+            {
+              "original": [
+                "",
+                "_retail_gd.c.13837b1d",
+                20593,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12396,
+                47269,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 20593
+            },
+            {
+              "original": [
+                "",
+                "_retail_image.c.1e21cff4",
+                24766,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12396,
+                47269,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 24766
+            },
+            {
+              "original": [
+                "",
+                "_retail_resident.c.356fa83f",
+                14363,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12396,
+                47269,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 14363
+            },
+            {
+              "original": [
+                "",
+                "_sci_sd_bus.c.d174f3cf",
+                28397,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12396,
+                47269,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 28397
+            },
+            {
+              "original": [
+                "",
+                "_sci_stream.c.fc85cd48",
+                34869,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12396,
+                47269,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 34869
+            }
+          ],
+          "candidate": [
+            {
+              "original": [
+                "",
+                "_minic.c.d1553f41",
+                24280,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12396,
+                47269,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 24280
+            },
+            {
+              "original": [
+                "",
+                "_retail_async.c.1d1f63cc",
+                41039,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12396,
+                47269,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 41039
+            },
+            {
+              "original": [
+                "",
+                "_retail_cursor.c.67499316",
+                33211,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12396,
+                47269,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 33211
+            },
+            {
+              "original": [
+                "",
+                "_retail_display.c.45f8b56f",
+                27396,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12396,
+                47269,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27396
+            },
+            {
+              "original": [
+                "",
+                "_retail_gd.c.01302544",
+                20593,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12396,
+                47269,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 20593
+            },
+            {
+              "original": [
+                "",
+                "_retail_image.c.aa099c64",
+                24766,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12396,
+                47269,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 24766
+            },
+            {
+              "original": [
+                "",
+                "_retail_resident.c.55c5293c",
+                14363,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12396,
+                47269,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 14363
+            },
+            {
+              "original": [
+                "",
+                "_sci_sd_bus.c.7b93feca",
+                28397,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12396,
+                47269,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 28397
+            },
+            {
+              "original": [
+                "",
+                "_sci_stream.c.f32e9e4c",
+                34869,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12396,
+                47269,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 34869
+            }
+          ]
+        }
+      }
+    },
+    "zso": {
+      "resident-sci.elf": {
+        "status": "PASS",
+        "installed_live_component": true,
+        "reference_authentication": "exact_old_shipped_module_and_ELF_bin_embedding",
+        "strict_existing_comparator": {
+          "status": "REFUSED",
+          "error": "Component source/type/symbol ownership changed"
+        },
+        "reference_elf_sha256": "bb955fce33debaa5188c4ceaa63d4b6a6dcf5c71ec55c79e8db8cc7ba5601562",
+        "candidate_elf_sha256": "2949d685061750116c48fca7d4bc32972391d4d0ba4be3cd4b0a33b222e9ec0b",
+        "normalized_initialized_load_sha256": "526d9d25e12dc78dfe5d7f55f0d73a7366204d92c0fae634ad31555224f68c30",
+        "complete_initialized_bytes_headers_and_allocated_BSS_geometry_identical": true,
+        "all_non_debug_CU_symbol_source_type_ownership_identical": true,
+        "permitted_runtime_changes": {
+          "display_label_addresses": [
+            "0x8c006bde"
+          ],
+          "display_label_bytes": 12
+        },
+        "debug_CU_metadata": {
+          "only_unallocated_weak_NOTYPE_CU_checksum_names_normalized": true,
+          "reference": [
+            {
+              "original": [
+                "",
+                "_minic.c.15c21a7c",
+                27016,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12028,
+                39136,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27016
+            },
+            {
+              "original": [
+                "",
+                "_retail_display.c.6199a000",
+                27502,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12028,
+                39136,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27502
+            },
+            {
+              "original": [
+                "",
+                "_retail_gd.c.d6c1dde9",
+                22625,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12028,
+                39136,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 22625
+            },
+            {
+              "original": [
+                "",
+                "_retail_pace.c.00e2046e",
+                26425,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12028,
+                39136,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 26425
+            },
+            {
+              "original": [
+                "",
+                "_retail_resident.c.38cb2248",
+                16197,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12028,
+                39136,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 16197
+            },
+            {
+              "original": [
+                "",
+                "_retail_sd.c.9721819a",
+                31540,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12028,
+                39136,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 31540
+            },
+            {
+              "original": [
+                "",
+                "_retail_zso.c.d0b26997",
+                34807,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12028,
+                39136,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 34807
+            },
+            {
+              "original": [
+                "",
+                "_sci_sd_bus.c.81a02bf4",
+                33057,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12028,
+                39136,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 33057
+            },
+            {
+              "original": [
+                "",
+                "_sd_reader.c.b74e9d67",
+                28559,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12028,
+                39136,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 28559
+            },
+            {
+              "original": [
+                "",
+                "_zso.c.edf57830",
+                37692,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12028,
+                39136,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 37692
+            }
+          ],
+          "candidate": [
+            {
+              "original": [
+                "",
+                "_minic.c.d1553f41",
+                27016,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12028,
+                39136,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27016
+            },
+            {
+              "original": [
+                "",
+                "_retail_display.c.f13ee244",
+                27502,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12028,
+                39136,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27502
+            },
+            {
+              "original": [
+                "",
+                "_retail_gd.c.8f227a5c",
+                22625,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12028,
+                39136,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 22625
+            },
+            {
+              "original": [
+                "",
+                "_retail_pace.c.7cfbf40f",
+                26425,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12028,
+                39136,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 26425
+            },
+            {
+              "original": [
+                "",
+                "_retail_resident.c.4075ec2c",
+                16197,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12028,
+                39136,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 16197
+            },
+            {
+              "original": [
+                "",
+                "_retail_sd.c.852f97c8",
+                31540,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12028,
+                39136,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 31540
+            },
+            {
+              "original": [
+                "",
+                "_retail_zso.c.e8b590e0",
+                34807,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12028,
+                39136,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 34807
+            },
+            {
+              "original": [
+                "",
+                "_sci_sd_bus.c.e515e4b2",
+                33057,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12028,
+                39136,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 33057
+            },
+            {
+              "original": [
+                "",
+                "_sd_reader.c.f7b28d1b",
+                28559,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12028,
+                39136,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 28559
+            },
+            {
+              "original": [
+                "",
+                "_zso.c.e8b6c234",
+                37692,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12028,
+                39136,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 37692
+            }
+          ]
+        }
+      }
+    },
+    "lzo": {
+      "resident-sci.elf": {
+        "status": "PASS",
+        "installed_live_component": true,
+        "reference_authentication": "exact_old_shipped_module_and_ELF_bin_embedding",
+        "strict_existing_comparator": {
+          "status": "REFUSED",
+          "error": "Component source/type/symbol ownership changed"
+        },
+        "reference_elf_sha256": "2b45df470b515bd3f1156c43d50f3e12e772795f1d2377ec5a744828a7da7597",
+        "candidate_elf_sha256": "8b6c909057ae78cf273e744150023e6327c195ba51cc9ca1189092668908e3ba",
+        "normalized_initialized_load_sha256": "95327fcb3e35c793ed01afd9e3b8323d62486ca239a10d7d0364986f9065910a",
+        "complete_initialized_bytes_headers_and_allocated_BSS_geometry_identical": true,
+        "all_non_debug_CU_symbol_source_type_ownership_identical": true,
+        "permitted_runtime_changes": {
+          "display_label_addresses": [
+            "0x8c006d62"
+          ],
+          "display_label_bytes": 12
+        },
+        "debug_CU_metadata": {
+          "only_unallocated_weak_NOTYPE_CU_checksum_names_normalized": true,
+          "reference": [
+            {
+              "original": [
+                "",
+                "_lzo1x.c.e44bb35a",
+                39175,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12416,
+                39839,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 39175
+            },
+            {
+              "original": [
+                "",
+                "_minic.c.15c21a7c",
+                27319,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12416,
+                39839,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27319
+            },
+            {
+              "original": [
+                "",
+                "_retail_display.c.6199a000",
+                27805,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12416,
+                39839,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27805
+            },
+            {
+              "original": [
+                "",
+                "_retail_gd.c.d6c1dde9",
+                22928,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12416,
+                39839,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 22928
+            },
+            {
+              "original": [
+                "",
+                "_retail_pace.c.00e2046e",
+                26728,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12416,
+                39839,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 26728
+            },
+            {
+              "original": [
+                "",
+                "_retail_resident.c.38cb2248",
+                16500,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12416,
+                39839,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 16500
+            },
+            {
+              "original": [
+                "",
+                "_retail_sd.c.9721819a",
+                31843,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12416,
+                39839,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 31843
+            },
+            {
+              "original": [
+                "",
+                "_retail_zso.c.d0b26997",
+                35110,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12416,
+                39839,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 35110
+            },
+            {
+              "original": [
+                "",
+                "_sci_sd_bus.c.81a02bf4",
+                33360,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12416,
+                39839,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 33360
+            },
+            {
+              "original": [
+                "",
+                "_sd_reader.c.b74e9d67",
+                28862,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12416,
+                39839,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 28862
+            },
+            {
+              "original": [
+                "",
+                "_zso.c.02d9aa77",
+                37995,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12416,
+                39839,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 37995
+            }
+          ],
+          "candidate": [
+            {
+              "original": [
+                "",
+                "_lzo1x.c.1b26c4f1",
+                39175,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12416,
+                39839,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 39175
+            },
+            {
+              "original": [
+                "",
+                "_minic.c.d1553f41",
+                27319,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12416,
+                39839,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27319
+            },
+            {
+              "original": [
+                "",
+                "_retail_display.c.f13ee244",
+                27805,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12416,
+                39839,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27805
+            },
+            {
+              "original": [
+                "",
+                "_retail_gd.c.8f227a5c",
+                22928,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12416,
+                39839,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 22928
+            },
+            {
+              "original": [
+                "",
+                "_retail_pace.c.7cfbf40f",
+                26728,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12416,
+                39839,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 26728
+            },
+            {
+              "original": [
+                "",
+                "_retail_resident.c.4075ec2c",
+                16500,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12416,
+                39839,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 16500
+            },
+            {
+              "original": [
+                "",
+                "_retail_sd.c.852f97c8",
+                31843,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12416,
+                39839,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 31843
+            },
+            {
+              "original": [
+                "",
+                "_retail_zso.c.e8b590e0",
+                35110,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12416,
+                39839,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 35110
+            },
+            {
+              "original": [
+                "",
+                "_sci_sd_bus.c.e515e4b2",
+                33360,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12416,
+                39839,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 33360
+            },
+            {
+              "original": [
+                "",
+                "_sd_reader.c.f7b28d1b",
+                28862,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12416,
+                39839,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 28862
+            },
+            {
+              "original": [
+                "",
+                "_zso.c.fbfa22d2",
+                37995,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12416,
+                39839,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 37995
+            }
+          ]
+        }
+      }
+    },
+    "standalone": {
+      "resident-sci.elf": {
+        "status": "PASS",
+        "installed_live_component": true,
+        "reference_authentication": "exact_old_shipped_module_and_ELF_bin_embedding",
+        "strict_existing_comparator": {
+          "status": "PASS",
+          "reference_elf_sha256": "456da14d997ef1b443222f436babc33c534a6fcc5afe1b2202d5fd0cde9946e9",
+          "candidate_elf_sha256": "c5ae8a6dda16540315aaa1708b28f05da939cb86e88f8b5a14a30282706bc15b",
+          "normalized_initialized_load_sha256": "eada733055dca7c831a89ee1dfb0fd3d5ed52b5271950b352ebfb4f2a30274a8",
+          "complete_initialized_bytes_headers_and_symbol_ownership_identical": true,
+          "permitted_display_build_label_addresses": [
+            "0x8c006e96"
+          ],
+          "permitted_display_build_label_bytes": 12
+        },
+        "reference_elf_sha256": "456da14d997ef1b443222f436babc33c534a6fcc5afe1b2202d5fd0cde9946e9",
+        "candidate_elf_sha256": "c5ae8a6dda16540315aaa1708b28f05da939cb86e88f8b5a14a30282706bc15b",
+        "normalized_initialized_load_sha256": "eada733055dca7c831a89ee1dfb0fd3d5ed52b5271950b352ebfb4f2a30274a8",
+        "complete_initialized_bytes_headers_and_allocated_BSS_geometry_identical": true,
+        "all_non_debug_CU_symbol_source_type_ownership_identical": true,
+        "permitted_runtime_changes": {
+          "display_label_addresses": [
+            "0x8c006e96"
+          ],
+          "display_label_bytes": 12
+        },
+        "debug_CU_metadata": {
+          "only_unallocated_weak_NOTYPE_CU_checksum_names_normalized": true,
+          "reference": [
+            {
+              "original": [
+                "",
+                "_minic.c.d1553f41",
+                24238,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                59,
+                1,
+                0,
+                0,
+                12400,
+                47689,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 24238
+            },
+            {
+              "original": [
+                "",
+                "_retail_async.c.af4cdaa1",
+                41100,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                59,
+                1,
+                0,
+                0,
+                12400,
+                47689,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 41100
+            },
+            {
+              "original": [
+                "",
+                "_retail_cursor.c.67499316",
+                33228,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                59,
+                1,
+                0,
+                0,
+                12400,
+                47689,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 33228
+            },
+            {
+              "original": [
+                "",
+                "_retail_display.c.2d1a6539",
+                27354,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                59,
+                1,
+                0,
+                0,
+                12400,
+                47689,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27354
+            },
+            {
+              "original": [
+                "",
+                "_retail_gd.c.01302544",
+                20551,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                59,
+                1,
+                0,
+                0,
+                12400,
+                47689,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 20551
+            },
+            {
+              "original": [
+                "",
+                "_retail_image.c.aa099c64",
+                24724,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                59,
+                1,
+                0,
+                0,
+                12400,
+                47689,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 24724
+            },
+            {
+              "original": [
+                "",
+                "_retail_resident.c.6582e920",
+                14338,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                59,
+                1,
+                0,
+                0,
+                12400,
+                47689,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 14338
+            },
+            {
+              "original": [
+                "",
+                "_sci_sd_bus.c.20d899ff",
+                28370,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                59,
+                1,
+                0,
+                0,
+                12400,
+                47689,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 28370
+            },
+            {
+              "original": [
+                "",
+                "_sci_stream.c.7f825098",
+                34886,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                59,
+                1,
+                0,
+                0,
+                12400,
+                47689,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 34886
+            }
+          ],
+          "candidate": [
+            {
+              "original": [
+                "",
+                "_minic.c.d1553f41",
+                24238,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                59,
+                1,
+                0,
+                0,
+                12400,
+                47689,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 24238
+            },
+            {
+              "original": [
+                "",
+                "_retail_async.c.af4cdaa1",
+                41100,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                59,
+                1,
+                0,
+                0,
+                12400,
+                47689,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 41100
+            },
+            {
+              "original": [
+                "",
+                "_retail_cursor.c.67499316",
+                33228,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                59,
+                1,
+                0,
+                0,
+                12400,
+                47689,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 33228
+            },
+            {
+              "original": [
+                "",
+                "_retail_display.c.2d1a6539",
+                27354,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                59,
+                1,
+                0,
+                0,
+                12400,
+                47689,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27354
+            },
+            {
+              "original": [
+                "",
+                "_retail_gd.c.01302544",
+                20551,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                59,
+                1,
+                0,
+                0,
+                12400,
+                47689,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 20551
+            },
+            {
+              "original": [
+                "",
+                "_retail_image.c.aa099c64",
+                24724,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                59,
+                1,
+                0,
+                0,
+                12400,
+                47689,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 24724
+            },
+            {
+              "original": [
+                "",
+                "_retail_resident.c.6582e920",
+                14338,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                59,
+                1,
+                0,
+                0,
+                12400,
+                47689,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 14338
+            },
+            {
+              "original": [
+                "",
+                "_sci_sd_bus.c.20d899ff",
+                28370,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                59,
+                1,
+                0,
+                0,
+                12400,
+                47689,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 28370
+            },
+            {
+              "original": [
+                "",
+                "_sci_stream.c.7f825098",
+                34886,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                59,
+                1,
+                0,
+                0,
+                12400,
+                47689,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 34886
+            }
+          ]
+        }
+      }
+    },
+    "toy_raw": {
+      "resident-sci.elf": {
+        "status": "PASS",
+        "installed_live_component": true,
+        "reference_authentication": "exact_old_shipped_module_and_ELF_bin_embedding",
+        "strict_existing_comparator": {
+          "status": "REFUSED",
+          "error": "Component source/type/symbol ownership changed"
+        },
+        "reference_elf_sha256": "5bc4f084c2312ac510435480ce8357f368590dd631fcbe80c559a1305fb2094d",
+        "candidate_elf_sha256": "2b0d0056b7fa6260085604f20cac29f03c7052098067c866b36bb63c381029a9",
+        "normalized_initialized_load_sha256": "b74e259dd11632dbfa4ab9e56793631daf39a87ff9144040a590d47e22f41d01",
+        "complete_initialized_bytes_headers_and_allocated_BSS_geometry_identical": true,
+        "all_non_debug_CU_symbol_source_type_ownership_identical": true,
+        "permitted_runtime_changes": {
+          "display_label_addresses": [
+            "0x8c006c52"
+          ],
+          "display_label_bytes": 12
+        },
+        "debug_CU_metadata": {
+          "only_unallocated_weak_NOTYPE_CU_checksum_names_normalized": true,
+          "reference": [
+            {
+              "original": [
+                "",
+                "_minic.c.f2dcfd54",
+                28430,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 28430
+            },
+            {
+              "original": [
+                "",
+                "_retail_display.c.50de4f95",
+                31553,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 31553
+            },
+            {
+              "original": [
+                "",
+                "_retail_gd.c.2bf33eab",
+                24025,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 24025
+            },
+            {
+              "original": [
+                "",
+                "_retail_image.c.18860b6a",
+                28923,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 28923
+            },
+            {
+              "original": [
+                "",
+                "_retail_pace.c.d68e0a66",
+                27825,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27825
+            },
+            {
+              "original": [
+                "",
+                "_retail_sd.c.d06681e3",
+                35598,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 35598
+            },
+            {
+              "original": [
+                "",
+                "_sci_sd_bus.c.08904e22",
+                37115,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 37115
+            },
+            {
+              "original": [
+                "",
+                "_sd_reader.c.fcf266b1",
+                32617,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 32617
+            },
+            {
+              "original": [
+                "",
+                "_toy_pilot_resident.c.0b30033d",
+                16595,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 16595
+            }
+          ],
+          "candidate": [
+            {
+              "original": [
+                "",
+                "_minic.c.758195c3",
+                28430,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 28430
+            },
+            {
+              "original": [
+                "",
+                "_retail_display.c.2a0dc0ae",
+                31553,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 31553
+            },
+            {
+              "original": [
+                "",
+                "_retail_gd.c.03e83d1d",
+                24025,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 24025
+            },
+            {
+              "original": [
+                "",
+                "_retail_image.c.4e290900",
+                28923,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 28923
+            },
+            {
+              "original": [
+                "",
+                "_retail_pace.c.d07708bc",
+                27825,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27825
+            },
+            {
+              "original": [
+                "",
+                "_retail_sd.c.cbe75fb5",
+                35598,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 35598
+            },
+            {
+              "original": [
+                "",
+                "_sci_sd_bus.c.5f624740",
+                37115,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 37115
+            },
+            {
+              "original": [
+                "",
+                "_sd_reader.c.87bc2493",
+                32617,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 32617
+            },
+            {
+              "original": [
+                "",
+                "_toy_pilot_resident.c.70dae39c",
+                16595,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 16595
+            }
+          ]
+        }
+      },
+      "worker.elf": {
+        "status": "PASS",
+        "installed_live_component": true,
+        "reference_authentication": "exact_old_shipped_module_and_ELF_bin_embedding",
+        "strict_existing_comparator": {
+          "status": "PASS",
+          "reference_elf_sha256": "b3109d5bd9d600451ac385085318935d36a25b1c27c6452202dec03c7799a538",
+          "candidate_elf_sha256": "82e7782b147ae969a4e2eb4cdfd9663e5262b63feab96cbdd1f07af8f4c8820b",
+          "normalized_initialized_load_sha256": "3d6712d337d966bbb297628c641c71ed53c452a7dea96c3097c91a2be2820b97",
+          "complete_initialized_bytes_headers_and_symbol_ownership_identical": true,
+          "permitted_display_build_label_addresses": [
+            "0x8cfd936e"
+          ],
+          "permitted_display_build_label_bytes": 12
+        },
+        "reference_elf_sha256": "b3109d5bd9d600451ac385085318935d36a25b1c27c6452202dec03c7799a538",
+        "candidate_elf_sha256": "82e7782b147ae969a4e2eb4cdfd9663e5262b63feab96cbdd1f07af8f4c8820b",
+        "normalized_initialized_load_sha256": "3d6712d337d966bbb297628c641c71ed53c452a7dea96c3097c91a2be2820b97",
+        "complete_initialized_bytes_headers_and_allocated_BSS_geometry_identical": true,
+        "all_non_debug_CU_symbol_source_type_ownership_identical": true,
+        "permitted_runtime_changes": {
+          "display_label_addresses": [
+            "0x8cfd936e"
+          ],
+          "display_label_bytes": 12
+        },
+        "debug_CU_metadata": {
+          "only_unallocated_weak_NOTYPE_CU_checksum_names_normalized": true,
+          "reference": [],
+          "candidate": []
+        }
+      }
+    },
+    "toy_cooked": {
+      "resident-sci.elf": {
+        "status": "PASS",
+        "installed_live_component": true,
+        "reference_authentication": "exact_old_shipped_module_and_ELF_bin_embedding",
+        "strict_existing_comparator": {
+          "status": "REFUSED",
+          "error": "Component source/type/symbol ownership changed"
+        },
+        "reference_elf_sha256": "5bc4f084c2312ac510435480ce8357f368590dd631fcbe80c559a1305fb2094d",
+        "candidate_elf_sha256": "2b0d0056b7fa6260085604f20cac29f03c7052098067c866b36bb63c381029a9",
+        "normalized_initialized_load_sha256": "b74e259dd11632dbfa4ab9e56793631daf39a87ff9144040a590d47e22f41d01",
+        "complete_initialized_bytes_headers_and_allocated_BSS_geometry_identical": true,
+        "all_non_debug_CU_symbol_source_type_ownership_identical": true,
+        "permitted_runtime_changes": {
+          "display_label_addresses": [
+            "0x8c006c52"
+          ],
+          "display_label_bytes": 12
+        },
+        "debug_CU_metadata": {
+          "only_unallocated_weak_NOTYPE_CU_checksum_names_normalized": true,
+          "reference": [
+            {
+              "original": [
+                "",
+                "_minic.c.f2dcfd54",
+                28430,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 28430
+            },
+            {
+              "original": [
+                "",
+                "_retail_display.c.50de4f95",
+                31553,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 31553
+            },
+            {
+              "original": [
+                "",
+                "_retail_gd.c.2bf33eab",
+                24025,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 24025
+            },
+            {
+              "original": [
+                "",
+                "_retail_image.c.18860b6a",
+                28923,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 28923
+            },
+            {
+              "original": [
+                "",
+                "_retail_pace.c.d68e0a66",
+                27825,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27825
+            },
+            {
+              "original": [
+                "",
+                "_retail_sd.c.d06681e3",
+                35598,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 35598
+            },
+            {
+              "original": [
+                "",
+                "_sci_sd_bus.c.08904e22",
+                37115,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 37115
+            },
+            {
+              "original": [
+                "",
+                "_sd_reader.c.fcf266b1",
+                32617,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 32617
+            },
+            {
+              "original": [
+                "",
+                "_toy_pilot_resident.c.0b30033d",
+                16595,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 16595
+            }
+          ],
+          "candidate": [
+            {
+              "original": [
+                "",
+                "_minic.c.758195c3",
+                28430,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 28430
+            },
+            {
+              "original": [
+                "",
+                "_retail_display.c.2a0dc0ae",
+                31553,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 31553
+            },
+            {
+              "original": [
+                "",
+                "_retail_gd.c.03e83d1d",
+                24025,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 24025
+            },
+            {
+              "original": [
+                "",
+                "_retail_image.c.4e290900",
+                28923,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 28923
+            },
+            {
+              "original": [
+                "",
+                "_retail_pace.c.d07708bc",
+                27825,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27825
+            },
+            {
+              "original": [
+                "",
+                "_retail_sd.c.cbe75fb5",
+                35598,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 35598
+            },
+            {
+              "original": [
+                "",
+                "_sci_sd_bus.c.5f624740",
+                37115,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 37115
+            },
+            {
+              "original": [
+                "",
+                "_sd_reader.c.87bc2493",
+                32617,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 32617
+            },
+            {
+              "original": [
+                "",
+                "_toy_pilot_resident.c.70dae39c",
+                16595,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                12108,
+                39411,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 16595
+            }
+          ]
+        }
+      },
+      "worker.elf": {
+        "status": "PASS",
+        "installed_live_component": true,
+        "reference_authentication": "exact_old_shipped_module_and_ELF_bin_embedding",
+        "strict_existing_comparator": {
+          "status": "PASS",
+          "reference_elf_sha256": "b3109d5bd9d600451ac385085318935d36a25b1c27c6452202dec03c7799a538",
+          "candidate_elf_sha256": "82e7782b147ae969a4e2eb4cdfd9663e5262b63feab96cbdd1f07af8f4c8820b",
+          "normalized_initialized_load_sha256": "3d6712d337d966bbb297628c641c71ed53c452a7dea96c3097c91a2be2820b97",
+          "complete_initialized_bytes_headers_and_symbol_ownership_identical": true,
+          "permitted_display_build_label_addresses": [
+            "0x8cfd936e"
+          ],
+          "permitted_display_build_label_bytes": 12
+        },
+        "reference_elf_sha256": "b3109d5bd9d600451ac385085318935d36a25b1c27c6452202dec03c7799a538",
+        "candidate_elf_sha256": "82e7782b147ae969a4e2eb4cdfd9663e5262b63feab96cbdd1f07af8f4c8820b",
+        "normalized_initialized_load_sha256": "3d6712d337d966bbb297628c641c71ed53c452a7dea96c3097c91a2be2820b97",
+        "complete_initialized_bytes_headers_and_allocated_BSS_geometry_identical": true,
+        "all_non_debug_CU_symbol_source_type_ownership_identical": true,
+        "permitted_runtime_changes": {
+          "display_label_addresses": [
+            "0x8cfd936e"
+          ],
+          "display_label_bytes": 12
+        },
+        "debug_CU_metadata": {
+          "only_unallocated_weak_NOTYPE_CU_checksum_names_normalized": true,
+          "reference": [],
+          "candidate": []
+        }
+      }
+    },
+    "mdk2": {
+      "resident-sci.elf": {
+        "status": "PASS",
+        "installed_live_component": true,
+        "reference_authentication": "exact_old_shipped_module_and_ELF_bin_embedding",
+        "strict_existing_comparator": {
+          "status": "REFUSED",
+          "error": "Component source/type/symbol ownership changed"
+        },
+        "reference_elf_sha256": "faf4af0ddb01486cd2a64c309fef8281455d5129aa4c5dbb87227ba9da922f2f",
+        "candidate_elf_sha256": "239b8f1697ccdda3c60da7622519ce58ff71ff5b4cc95ba3dfbaa64557641d6e",
+        "normalized_initialized_load_sha256": "37a0c926323ffa135571a2661f54b5152be3f394642ce51868046bc65494eb6a",
+        "complete_initialized_bytes_headers_and_allocated_BSS_geometry_identical": true,
+        "all_non_debug_CU_symbol_source_type_ownership_identical": true,
+        "permitted_runtime_changes": {
+          "display_label_addresses": [
+            "0x8c006f32"
+          ],
+          "display_label_bytes": 12
+        },
+        "debug_CU_metadata": {
+          "only_unallocated_weak_NOTYPE_CU_checksum_names_normalized": true,
+          "reference": [
+            {
+              "original": [
+                "",
+                "_minic.c.f2dcfd54",
+                32116,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                13252,
+                44325,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 32116
+            },
+            {
+              "original": [
+                "",
+                "_retail_display.c.50de4f95",
+                36479,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                13252,
+                44325,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 36479
+            },
+            {
+              "original": [
+                "",
+                "_retail_gd.c.307cca5e",
+                27711,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                13252,
+                44325,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27711
+            },
+            {
+              "original": [
+                "",
+                "_retail_image.c.42ef97e1",
+                32609,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                13252,
+                44325,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 32609
+            },
+            {
+              "original": [
+                "",
+                "_retail_pace.c.d68e0a66",
+                31511,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                13252,
+                44325,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 31511
+            },
+            {
+              "original": [
+                "",
+                "_retail_sd.c.d06681e3",
+                40524,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                13252,
+                44325,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 40524
+            },
+            {
+              "original": [
+                "",
+                "_sci_sd_bus.c.48874779",
+                42041,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                13252,
+                44325,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 42041
+            },
+            {
+              "original": [
+                "",
+                "_sd_reader.c.fcf266b1",
+                37543,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                13252,
+                44325,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 37543
+            },
+            {
+              "original": [
+                "",
+                "_toy_pilot_resident.c.846364b0",
+                17392,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                13252,
+                44325,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 17392
+            }
+          ],
+          "candidate": [
+            {
+              "original": [
+                "",
+                "_minic.c.758195c3",
+                32116,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                13252,
+                44325,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 32116
+            },
+            {
+              "original": [
+                "",
+                "_retail_display.c.2a0dc0ae",
+                36479,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                13252,
+                44325,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 36479
+            },
+            {
+              "original": [
+                "",
+                "_retail_gd.c.444658c7",
+                27711,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                13252,
+                44325,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27711
+            },
+            {
+              "original": [
+                "",
+                "_retail_image.c.83274617",
+                32609,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                13252,
+                44325,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 32609
+            },
+            {
+              "original": [
+                "",
+                "_retail_pace.c.d07708bc",
+                31511,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                13252,
+                44325,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 31511
+            },
+            {
+              "original": [
+                "",
+                "_retail_sd.c.cbe75fb5",
+                40524,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                13252,
+                44325,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 40524
+            },
+            {
+              "original": [
+                "",
+                "_sci_sd_bus.c.2a69182a",
+                42041,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                13252,
+                44325,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 42041
+            },
+            {
+              "original": [
+                "",
+                "_sd_reader.c.87bc2493",
+                37543,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                13252,
+                44325,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 37543
+            },
+            {
+              "original": [
+                "",
+                "_toy_pilot_resident.c.746673f8",
+                17392,
+                0,
+                32,
+                2,
+                5
+              ],
+              "section": [
+                53,
+                1,
+                0,
+                0,
+                13252,
+                44325,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 17392
+            }
+          ]
+        }
+      },
+      "worker.elf": {
+        "status": "PASS",
+        "installed_live_component": true,
+        "reference_authentication": "exact_old_shipped_module_and_ELF_bin_embedding",
+        "strict_existing_comparator": {
+          "status": "PASS",
+          "reference_elf_sha256": "6c0666cbd24b7177816d38047c359429ec0b78e11c7e2be26a9bd07e100fe746",
+          "candidate_elf_sha256": "e121aef9af0dfdb751dbdc1e264bd02775d4d8f346b4834addc294616715226c",
+          "normalized_initialized_load_sha256": "5800372b11b2bbbd017e990fa324c3e7fea78d659f9c6359dc3f87ed5b34251b",
+          "complete_initialized_bytes_headers_and_symbol_ownership_identical": true,
+          "permitted_display_build_label_addresses": [],
+          "permitted_display_build_label_bytes": 0
+        },
+        "reference_elf_sha256": "6c0666cbd24b7177816d38047c359429ec0b78e11c7e2be26a9bd07e100fe746",
+        "candidate_elf_sha256": "e121aef9af0dfdb751dbdc1e264bd02775d4d8f346b4834addc294616715226c",
+        "normalized_initialized_load_sha256": "5800372b11b2bbbd017e990fa324c3e7fea78d659f9c6359dc3f87ed5b34251b",
+        "complete_initialized_bytes_headers_and_allocated_BSS_geometry_identical": true,
+        "all_non_debug_CU_symbol_source_type_ownership_identical": true,
+        "permitted_runtime_changes": {
+          "display_label_addresses": [],
+          "display_label_bytes": 0
+        },
+        "debug_CU_metadata": {
+          "only_unallocated_weak_NOTYPE_CU_checksum_names_normalized": true,
+          "reference": [],
+          "candidate": []
+        }
+      }
+    },
+    "standard": {
+      "resident-sci.elf": {
+        "status": "PASS",
+        "installed_live_component": true,
+        "reference_authentication": "exact_old_shipped_module_and_ELF_bin_embedding",
+        "strict_existing_comparator": {
+          "status": "PASS",
+          "reference_elf_sha256": "f689a1a0b237ea62263443dfe6724acf432ce8c04b1a123459b8663fbc545ba7",
+          "candidate_elf_sha256": "c10a7f8b203d7bc9c0e666f0c70ae7cc29ba6f2a3f7f9e97a3d6d21018ec4145",
+          "normalized_initialized_load_sha256": "0815e0cbeae0dab05fcec24791d51fe8539a34d39887ad079231b55f93d5352d",
+          "complete_initialized_bytes_headers_and_symbol_ownership_identical": true,
+          "permitted_display_build_label_addresses": [
+            "0x8c006d2e"
+          ],
+          "permitted_display_build_label_bytes": 12
+        },
+        "reference_elf_sha256": "f689a1a0b237ea62263443dfe6724acf432ce8c04b1a123459b8663fbc545ba7",
+        "candidate_elf_sha256": "c10a7f8b203d7bc9c0e666f0c70ae7cc29ba6f2a3f7f9e97a3d6d21018ec4145",
+        "normalized_initialized_load_sha256": "0815e0cbeae0dab05fcec24791d51fe8539a34d39887ad079231b55f93d5352d",
+        "complete_initialized_bytes_headers_and_allocated_BSS_geometry_identical": true,
+        "all_non_debug_CU_symbol_source_type_ownership_identical": true,
+        "permitted_runtime_changes": {
+          "display_label_addresses": [
+            "0x8c006d2e"
+          ],
+          "display_label_bytes": 12
+        },
+        "debug_CU_metadata": {
+          "only_unallocated_weak_NOTYPE_CU_checksum_names_normalized": true,
+          "reference": [
+            {
+              "original": [
+                "",
+                "_minic.c.d1553f41",
+                27739,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                12228,
+                38241,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27739
+            },
+            {
+              "original": [
+                "",
+                "_retail_display.c.84a8dc32",
+                30855,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                12228,
+                38241,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 30855
+            },
+            {
+              "original": [
+                "",
+                "_retail_gd.c.719830a6",
+                23348,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                12228,
+                38241,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 23348
+            },
+            {
+              "original": [
+                "",
+                "_retail_image.c.aa099c64",
+                28225,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                12228,
+                38241,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 28225
+            },
+            {
+              "original": [
+                "",
+                "_retail_pace.c.7cfbf40f",
+                27148,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                12228,
+                38241,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27148
+            },
+            {
+              "original": [
+                "",
+                "_retail_sd.c.4345f2de",
+                34908,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                12228,
+                38241,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 34908
+            },
+            {
+              "original": [
+                "",
+                "_sci_sd_bus.c.24828a90",
+                36479,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                12228,
+                38241,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 36479
+            },
+            {
+              "original": [
+                "",
+                "_sd_reader.c.f7b28d1b",
+                31927,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                12228,
+                38241,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 31927
+            },
+            {
+              "original": [
+                "",
+                "_vmu_maple_observe_resident.c.1302937f",
+                16075,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                12228,
+                38241,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 16075
+            }
+          ],
+          "candidate": [
+            {
+              "original": [
+                "",
+                "_minic.c.d1553f41",
+                27739,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                12228,
+                38241,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27739
+            },
+            {
+              "original": [
+                "",
+                "_retail_display.c.84a8dc32",
+                30855,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                12228,
+                38241,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 30855
+            },
+            {
+              "original": [
+                "",
+                "_retail_gd.c.719830a6",
+                23348,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                12228,
+                38241,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 23348
+            },
+            {
+              "original": [
+                "",
+                "_retail_image.c.aa099c64",
+                28225,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                12228,
+                38241,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 28225
+            },
+            {
+              "original": [
+                "",
+                "_retail_pace.c.7cfbf40f",
+                27148,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                12228,
+                38241,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27148
+            },
+            {
+              "original": [
+                "",
+                "_retail_sd.c.4345f2de",
+                34908,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                12228,
+                38241,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 34908
+            },
+            {
+              "original": [
+                "",
+                "_sci_sd_bus.c.24828a90",
+                36479,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                12228,
+                38241,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 36479
+            },
+            {
+              "original": [
+                "",
+                "_sd_reader.c.f7b28d1b",
+                31927,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                12228,
+                38241,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 31927
+            },
+            {
+              "original": [
+                "",
+                "_vmu_maple_observe_resident.c.1302937f",
+                16075,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                12228,
+                38241,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 16075
+            }
+          ]
+        }
+      },
+      "native-worker.elf": {
+        "status": "PASS",
+        "installed_live_component": true,
+        "reference_authentication": "exact_old_shipped_module_and_ELF_bin_embedding",
+        "strict_existing_comparator": {
+          "status": "PASS",
+          "reference_elf_sha256": "36f713137e10a037cee85b21c673888d12b83168c58c7e3ab60b9bb90ef0d77a",
+          "candidate_elf_sha256": "0503a67006ec555f4efd9056e9027b9ccd64add2ce83106f78c8d7fa9e2f1e3b",
+          "normalized_initialized_load_sha256": "fa5574bafeb6d113f08ba7365dd6b126be19179ff4a93d909c2ab2021f83aafa",
+          "complete_initialized_bytes_headers_and_symbol_ownership_identical": true,
+          "permitted_display_build_label_addresses": [
+            "0x8c10bae2"
+          ],
+          "permitted_display_build_label_bytes": 12
+        },
+        "reference_elf_sha256": "36f713137e10a037cee85b21c673888d12b83168c58c7e3ab60b9bb90ef0d77a",
+        "candidate_elf_sha256": "0503a67006ec555f4efd9056e9027b9ccd64add2ce83106f78c8d7fa9e2f1e3b",
+        "normalized_initialized_load_sha256": "fa5574bafeb6d113f08ba7365dd6b126be19179ff4a93d909c2ab2021f83aafa",
+        "complete_initialized_bytes_headers_and_allocated_BSS_geometry_identical": true,
+        "all_non_debug_CU_symbol_source_type_ownership_identical": true,
+        "permitted_runtime_changes": {
+          "display_label_addresses": [
+            "0x8c10bae2"
+          ],
+          "display_label_bytes": 12
+        },
+        "debug_CU_metadata": {
+          "only_unallocated_weak_NOTYPE_CU_checksum_names_normalized": true,
+          "reference": [],
+          "candidate": []
+        }
+      },
+      "worker.elf": {
+        "status": "PASS",
+        "installed_live_component": false,
+        "reference_authentication": "authenticated_baseline_inventory_uninstalled_build_intermediate",
+        "strict_existing_comparator": {
+          "status": "PASS",
+          "reference_elf_sha256": "2cbcd99db0dae122c43999456a764bd5bba629b5025361765dcfe9ca533a7da1",
+          "candidate_elf_sha256": "7ae278ef04ee0c873ad66860f04493121032d0381456cbe6df5b0b1a60eef8e4",
+          "normalized_initialized_load_sha256": "c9983e51c89ab4ff8d27932fbc456d6606a1726653856142451aa780425c38c1",
+          "complete_initialized_bytes_headers_and_symbol_ownership_identical": true,
+          "permitted_display_build_label_addresses": [
+            "0x8cfd13c6"
+          ],
+          "permitted_display_build_label_bytes": 12
+        },
+        "reference_elf_sha256": "2cbcd99db0dae122c43999456a764bd5bba629b5025361765dcfe9ca533a7da1",
+        "candidate_elf_sha256": "7ae278ef04ee0c873ad66860f04493121032d0381456cbe6df5b0b1a60eef8e4",
+        "normalized_initialized_load_sha256": "c9983e51c89ab4ff8d27932fbc456d6606a1726653856142451aa780425c38c1",
+        "complete_initialized_bytes_headers_and_allocated_BSS_geometry_identical": true,
+        "all_non_debug_CU_symbol_source_type_ownership_identical": true,
+        "permitted_runtime_changes": {
+          "display_label_addresses": [
+            "0x8cfd13c6"
+          ],
+          "display_label_bytes": 12
+        },
+        "debug_CU_metadata": {
+          "only_unallocated_weak_NOTYPE_CU_checksum_names_normalized": true,
+          "reference": [],
+          "candidate": []
+        }
+      }
+    },
+    "background_a2": {
+      "resident-sci.elf": {
+        "status": "PASS",
+        "installed_live_component": true,
+        "reference_authentication": "exact_old_shipped_module_and_ELF_bin_embedding",
+        "strict_existing_comparator": {
+          "status": "PASS",
+          "reference_elf_sha256": "b9681a6e1ceab59df5baf2ce5b09f06e101f07691a882e424cbfda6f1bcb4704",
+          "candidate_elf_sha256": "be79d40f7ba6d9b93d996cd55de5c1a4b337c89c953b7065c155448e5ef818a6",
+          "normalized_initialized_load_sha256": "112d6ea318b61503ecf2f18f7bbbda1c19f86673501da8cee709c04175a9a457",
+          "complete_initialized_bytes_headers_and_symbol_ownership_identical": true,
+          "permitted_display_build_label_addresses": [
+            "0x8c007946"
+          ],
+          "permitted_display_build_label_bytes": 12
+        },
+        "reference_elf_sha256": "b9681a6e1ceab59df5baf2ce5b09f06e101f07691a882e424cbfda6f1bcb4704",
+        "candidate_elf_sha256": "be79d40f7ba6d9b93d996cd55de5c1a4b337c89c953b7065c155448e5ef818a6",
+        "normalized_initialized_load_sha256": "112d6ea318b61503ecf2f18f7bbbda1c19f86673501da8cee709c04175a9a457",
+        "complete_initialized_bytes_headers_and_allocated_BSS_geometry_identical": true,
+        "all_non_debug_CU_symbol_source_type_ownership_identical": true,
+        "permitted_runtime_changes": {
+          "display_label_addresses": [
+            "0x8c007946"
+          ],
+          "display_label_bytes": 12
+        },
+        "debug_CU_metadata": {
+          "only_unallocated_weak_NOTYPE_CU_checksum_names_normalized": true,
+          "reference": [
+            {
+              "original": [
+                "",
+                "_minic.c.d1553f41",
+                27431,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27431
+            },
+            {
+              "original": [
+                "",
+                "_retail_async.c.5ddb7cb7",
+                44359,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 44359
+            },
+            {
+              "original": [
+                "",
+                "_retail_cursor.c.67499316",
+                36474,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 36474
+            },
+            {
+              "original": [
+                "",
+                "_retail_display.c.2d1a6539",
+                30547,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 30547
+            },
+            {
+              "original": [
+                "",
+                "_retail_gd.c.01302544",
+                23744,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 23744
+            },
+            {
+              "original": [
+                "",
+                "_retail_image.c.aa099c64",
+                27917,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27917
+            },
+            {
+              "original": [
+                "",
+                "_sci_sd_bus.c.7615a89c",
+                31563,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 31563
+            },
+            {
+              "original": [
+                "",
+                "_sci_stream.c.b110f707",
+                38132,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 38132
+            },
+            {
+              "original": [
+                "",
+                "_vmu_native_background_resident.c.b815ce8b",
+                15998,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 15998
+            }
+          ],
+          "candidate": [
+            {
+              "original": [
+                "",
+                "_minic.c.d1553f41",
+                27431,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27431
+            },
+            {
+              "original": [
+                "",
+                "_retail_async.c.5ddb7cb7",
+                44359,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 44359
+            },
+            {
+              "original": [
+                "",
+                "_retail_cursor.c.67499316",
+                36474,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 36474
+            },
+            {
+              "original": [
+                "",
+                "_retail_display.c.2d1a6539",
+                30547,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 30547
+            },
+            {
+              "original": [
+                "",
+                "_retail_gd.c.01302544",
+                23744,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 23744
+            },
+            {
+              "original": [
+                "",
+                "_retail_image.c.aa099c64",
+                27917,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27917
+            },
+            {
+              "original": [
+                "",
+                "_sci_sd_bus.c.7615a89c",
+                31563,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 31563
+            },
+            {
+              "original": [
+                "",
+                "_sci_stream.c.b110f707",
+                38132,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 38132
+            },
+            {
+              "original": [
+                "",
+                "_vmu_native_background_resident.c.b815ce8b",
+                15998,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 15998
+            }
+          ]
+        }
+      },
+      "resident-legacy.elf": {
+        "status": "PASS",
+        "installed_live_component": true,
+        "reference_authentication": "exact_old_shipped_module_and_ELF_bin_embedding",
+        "strict_existing_comparator": {
+          "status": "PASS",
+          "reference_elf_sha256": "ec4576e2d202049664e52fa0363cbd8d5a8786ff33fbedf7e27b9fd3b4c57af9",
+          "candidate_elf_sha256": "9b33a6ed4cd08f9b0eab4ed5a494f608bd0c981ec07a1c4326f3568ec6db219d",
+          "normalized_initialized_load_sha256": "6f2b423938106eb16e6c5820c0d9d1d64b44fd818dd390763701cab5dd99197e",
+          "complete_initialized_bytes_headers_and_symbol_ownership_identical": true,
+          "permitted_display_build_label_addresses": [
+            "0x8c007942"
+          ],
+          "permitted_display_build_label_bytes": 12
+        },
+        "reference_elf_sha256": "ec4576e2d202049664e52fa0363cbd8d5a8786ff33fbedf7e27b9fd3b4c57af9",
+        "candidate_elf_sha256": "9b33a6ed4cd08f9b0eab4ed5a494f608bd0c981ec07a1c4326f3568ec6db219d",
+        "normalized_initialized_load_sha256": "6f2b423938106eb16e6c5820c0d9d1d64b44fd818dd390763701cab5dd99197e",
+        "complete_initialized_bytes_headers_and_allocated_BSS_geometry_identical": true,
+        "all_non_debug_CU_symbol_source_type_ownership_identical": true,
+        "permitted_runtime_changes": {
+          "display_label_addresses": [
+            "0x8c007942"
+          ],
+          "display_label_bytes": 12
+        },
+        "debug_CU_metadata": {
+          "only_unallocated_weak_NOTYPE_CU_checksum_names_normalized": true,
+          "reference": [
+            {
+              "original": [
+                "",
+                "_minic.c.d1553f41",
+                27675,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27675
+            },
+            {
+              "original": [
+                "",
+                "_retail_async.c.2992a921",
+                44536,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 44536
+            },
+            {
+              "original": [
+                "",
+                "_retail_cursor.c.67499316",
+                36677,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 36677
+            },
+            {
+              "original": [
+                "",
+                "_retail_display.c.45f8b56f",
+                30791,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 30791
+            },
+            {
+              "original": [
+                "",
+                "_retail_gd.c.01302544",
+                23988,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 23988
+            },
+            {
+              "original": [
+                "",
+                "_retail_image.c.aa099c64",
+                28161,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 28161
+            },
+            {
+              "original": [
+                "",
+                "_sci_sd_bus.c.60f935e2",
+                31792,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 31792
+            },
+            {
+              "original": [
+                "",
+                "_sci_stream.c.55821644",
+                38335,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 38335
+            },
+            {
+              "original": [
+                "",
+                "_vmu_native_background_resident.c.7a12abad",
+                16290,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 16290
+            }
+          ],
+          "candidate": [
+            {
+              "original": [
+                "",
+                "_minic.c.d1553f41",
+                27675,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27675
+            },
+            {
+              "original": [
+                "",
+                "_retail_async.c.2992a921",
+                44536,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 44536
+            },
+            {
+              "original": [
+                "",
+                "_retail_cursor.c.67499316",
+                36677,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 36677
+            },
+            {
+              "original": [
+                "",
+                "_retail_display.c.45f8b56f",
+                30791,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 30791
+            },
+            {
+              "original": [
+                "",
+                "_retail_gd.c.01302544",
+                23988,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 23988
+            },
+            {
+              "original": [
+                "",
+                "_retail_image.c.aa099c64",
+                28161,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 28161
+            },
+            {
+              "original": [
+                "",
+                "_sci_sd_bus.c.60f935e2",
+                31792,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 31792
+            },
+            {
+              "original": [
+                "",
+                "_sci_stream.c.55821644",
+                38335,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 38335
+            },
+            {
+              "original": [
+                "",
+                "_vmu_native_background_resident.c.7a12abad",
+                16290,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 16290
+            }
+          ]
+        }
+      },
+      "native-worker.elf": {
+        "status": "PASS",
+        "installed_live_component": true,
+        "reference_authentication": "exact_old_shipped_module_and_ELF_bin_embedding",
+        "strict_existing_comparator": {
+          "status": "PASS",
+          "reference_elf_sha256": "80b1eb9ab6894854490d2caa49478354a58c02bed63abe691765ad92d62b960d",
+          "candidate_elf_sha256": "caac03b7a598307e708fc103f799bdc2535e11f12c7981e26eef3500a255632c",
+          "normalized_initialized_load_sha256": "93ac4c5352682bdf5398ef9f6bfa78ba6c0d65be9a98723b3a7452912bb7cf30",
+          "complete_initialized_bytes_headers_and_symbol_ownership_identical": true,
+          "permitted_display_build_label_addresses": [
+            "0x8c10bece"
+          ],
+          "permitted_display_build_label_bytes": 12
+        },
+        "reference_elf_sha256": "80b1eb9ab6894854490d2caa49478354a58c02bed63abe691765ad92d62b960d",
+        "candidate_elf_sha256": "caac03b7a598307e708fc103f799bdc2535e11f12c7981e26eef3500a255632c",
+        "normalized_initialized_load_sha256": "93ac4c5352682bdf5398ef9f6bfa78ba6c0d65be9a98723b3a7452912bb7cf30",
+        "complete_initialized_bytes_headers_and_allocated_BSS_geometry_identical": true,
+        "all_non_debug_CU_symbol_source_type_ownership_identical": true,
+        "permitted_runtime_changes": {
+          "display_label_addresses": [
+            "0x8c10bece"
+          ],
+          "display_label_bytes": 12
+        },
+        "debug_CU_metadata": {
+          "only_unallocated_weak_NOTYPE_CU_checksum_names_normalized": true,
+          "reference": [],
+          "candidate": []
+        }
+      },
+      "native-ra-aux.elf": {
+        "status": "PASS",
+        "installed_live_component": true,
+        "reference_authentication": "exact_old_shipped_module_and_ELF_bin_embedding",
+        "strict_existing_comparator": {
+          "status": "PASS",
+          "reference_elf_sha256": "9f2c3bd7f2f8b7f20aa3b003589b6b25f0999bdba24fe01178587672a0bce475",
+          "candidate_elf_sha256": "9f2c3bd7f2f8b7f20aa3b003589b6b25f0999bdba24fe01178587672a0bce475",
+          "normalized_initialized_load_sha256": "23abb23eff32b022a1586a46cac9ccfb136d1d088d084dc279cbc52483715267",
+          "complete_initialized_bytes_headers_and_symbol_ownership_identical": true,
+          "permitted_display_build_label_addresses": [],
+          "permitted_display_build_label_bytes": 0
+        },
+        "reference_elf_sha256": "9f2c3bd7f2f8b7f20aa3b003589b6b25f0999bdba24fe01178587672a0bce475",
+        "candidate_elf_sha256": "9f2c3bd7f2f8b7f20aa3b003589b6b25f0999bdba24fe01178587672a0bce475",
+        "normalized_initialized_load_sha256": "23abb23eff32b022a1586a46cac9ccfb136d1d088d084dc279cbc52483715267",
+        "complete_initialized_bytes_headers_and_allocated_BSS_geometry_identical": true,
+        "all_non_debug_CU_symbol_source_type_ownership_identical": true,
+        "permitted_runtime_changes": {
+          "display_label_addresses": [],
+          "display_label_bytes": 0
+        },
+        "debug_CU_metadata": {
+          "only_unallocated_weak_NOTYPE_CU_checksum_names_normalized": true,
+          "reference": [],
+          "candidate": []
+        }
+      },
+      "worker.elf": {
+        "status": "PASS",
+        "installed_live_component": false,
+        "reference_authentication": "authenticated_baseline_inventory_uninstalled_build_intermediate",
+        "strict_existing_comparator": {
+          "status": "PASS",
+          "reference_elf_sha256": "d6b38a0a4d7d92ed6d43e79c8dbaf10f06fc4c022008483fac60b98a625de655",
+          "candidate_elf_sha256": "e0658f44609767ca230ef8f6e5dfcd58b6e71b35edeb9d02265f38d113d49e46",
+          "normalized_initialized_load_sha256": "0c8b89c48400afd3cf55d3435d7fcf5ff0fa2ef107d8f794c22622c7908edc9e",
+          "complete_initialized_bytes_headers_and_symbol_ownership_identical": true,
+          "permitted_display_build_label_addresses": [
+            "0x8cfd1392"
+          ],
+          "permitted_display_build_label_bytes": 12
+        },
+        "reference_elf_sha256": "d6b38a0a4d7d92ed6d43e79c8dbaf10f06fc4c022008483fac60b98a625de655",
+        "candidate_elf_sha256": "e0658f44609767ca230ef8f6e5dfcd58b6e71b35edeb9d02265f38d113d49e46",
+        "normalized_initialized_load_sha256": "0c8b89c48400afd3cf55d3435d7fcf5ff0fa2ef107d8f794c22622c7908edc9e",
+        "complete_initialized_bytes_headers_and_allocated_BSS_geometry_identical": true,
+        "all_non_debug_CU_symbol_source_type_ownership_identical": true,
+        "permitted_runtime_changes": {
+          "display_label_addresses": [
+            "0x8cfd1392"
+          ],
+          "display_label_bytes": 12
+        },
+        "debug_CU_metadata": {
+          "only_unallocated_weak_NOTYPE_CU_checksum_names_normalized": true,
+          "reference": [],
+          "candidate": []
+        }
+      }
+    },
+    "background_a1": {
+      "resident-sci.elf": {
+        "status": "PASS",
+        "installed_live_component": true,
+        "reference_authentication": "exact_old_shipped_module_and_ELF_bin_embedding",
+        "strict_existing_comparator": {
+          "status": "PASS",
+          "reference_elf_sha256": "b9681a6e1ceab59df5baf2ce5b09f06e101f07691a882e424cbfda6f1bcb4704",
+          "candidate_elf_sha256": "be79d40f7ba6d9b93d996cd55de5c1a4b337c89c953b7065c155448e5ef818a6",
+          "normalized_initialized_load_sha256": "112d6ea318b61503ecf2f18f7bbbda1c19f86673501da8cee709c04175a9a457",
+          "complete_initialized_bytes_headers_and_symbol_ownership_identical": true,
+          "permitted_display_build_label_addresses": [
+            "0x8c007946"
+          ],
+          "permitted_display_build_label_bytes": 12
+        },
+        "reference_elf_sha256": "b9681a6e1ceab59df5baf2ce5b09f06e101f07691a882e424cbfda6f1bcb4704",
+        "candidate_elf_sha256": "be79d40f7ba6d9b93d996cd55de5c1a4b337c89c953b7065c155448e5ef818a6",
+        "normalized_initialized_load_sha256": "112d6ea318b61503ecf2f18f7bbbda1c19f86673501da8cee709c04175a9a457",
+        "complete_initialized_bytes_headers_and_allocated_BSS_geometry_identical": true,
+        "all_non_debug_CU_symbol_source_type_ownership_identical": true,
+        "permitted_runtime_changes": {
+          "display_label_addresses": [
+            "0x8c007946"
+          ],
+          "display_label_bytes": 12
+        },
+        "debug_CU_metadata": {
+          "only_unallocated_weak_NOTYPE_CU_checksum_names_normalized": true,
+          "reference": [
+            {
+              "original": [
+                "",
+                "_minic.c.d1553f41",
+                27431,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27431
+            },
+            {
+              "original": [
+                "",
+                "_retail_async.c.5ddb7cb7",
+                44359,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 44359
+            },
+            {
+              "original": [
+                "",
+                "_retail_cursor.c.67499316",
+                36474,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 36474
+            },
+            {
+              "original": [
+                "",
+                "_retail_display.c.2d1a6539",
+                30547,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 30547
+            },
+            {
+              "original": [
+                "",
+                "_retail_gd.c.01302544",
+                23744,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 23744
+            },
+            {
+              "original": [
+                "",
+                "_retail_image.c.aa099c64",
+                27917,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27917
+            },
+            {
+              "original": [
+                "",
+                "_sci_sd_bus.c.7615a89c",
+                31563,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 31563
+            },
+            {
+              "original": [
+                "",
+                "_sci_stream.c.b110f707",
+                38132,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 38132
+            },
+            {
+              "original": [
+                "",
+                "_vmu_native_background_resident.c.b815ce8b",
+                15998,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 15998
+            }
+          ],
+          "candidate": [
+            {
+              "original": [
+                "",
+                "_minic.c.d1553f41",
+                27431,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27431
+            },
+            {
+              "original": [
+                "",
+                "_retail_async.c.5ddb7cb7",
+                44359,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 44359
+            },
+            {
+              "original": [
+                "",
+                "_retail_cursor.c.67499316",
+                36474,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 36474
+            },
+            {
+              "original": [
+                "",
+                "_retail_display.c.2d1a6539",
+                30547,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 30547
+            },
+            {
+              "original": [
+                "",
+                "_retail_gd.c.01302544",
+                23744,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 23744
+            },
+            {
+              "original": [
+                "",
+                "_retail_image.c.aa099c64",
+                27917,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27917
+            },
+            {
+              "original": [
+                "",
+                "_sci_sd_bus.c.7615a89c",
+                31563,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 31563
+            },
+            {
+              "original": [
+                "",
+                "_sci_stream.c.b110f707",
+                38132,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 38132
+            },
+            {
+              "original": [
+                "",
+                "_vmu_native_background_resident.c.b815ce8b",
+                15998,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15204,
+                51548,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 15998
+            }
+          ]
+        }
+      },
+      "resident-legacy.elf": {
+        "status": "PASS",
+        "installed_live_component": true,
+        "reference_authentication": "exact_old_shipped_module_and_ELF_bin_embedding",
+        "strict_existing_comparator": {
+          "status": "PASS",
+          "reference_elf_sha256": "ec4576e2d202049664e52fa0363cbd8d5a8786ff33fbedf7e27b9fd3b4c57af9",
+          "candidate_elf_sha256": "9b33a6ed4cd08f9b0eab4ed5a494f608bd0c981ec07a1c4326f3568ec6db219d",
+          "normalized_initialized_load_sha256": "6f2b423938106eb16e6c5820c0d9d1d64b44fd818dd390763701cab5dd99197e",
+          "complete_initialized_bytes_headers_and_symbol_ownership_identical": true,
+          "permitted_display_build_label_addresses": [
+            "0x8c007942"
+          ],
+          "permitted_display_build_label_bytes": 12
+        },
+        "reference_elf_sha256": "ec4576e2d202049664e52fa0363cbd8d5a8786ff33fbedf7e27b9fd3b4c57af9",
+        "candidate_elf_sha256": "9b33a6ed4cd08f9b0eab4ed5a494f608bd0c981ec07a1c4326f3568ec6db219d",
+        "normalized_initialized_load_sha256": "6f2b423938106eb16e6c5820c0d9d1d64b44fd818dd390763701cab5dd99197e",
+        "complete_initialized_bytes_headers_and_allocated_BSS_geometry_identical": true,
+        "all_non_debug_CU_symbol_source_type_ownership_identical": true,
+        "permitted_runtime_changes": {
+          "display_label_addresses": [
+            "0x8c007942"
+          ],
+          "display_label_bytes": 12
+        },
+        "debug_CU_metadata": {
+          "only_unallocated_weak_NOTYPE_CU_checksum_names_normalized": true,
+          "reference": [
+            {
+              "original": [
+                "",
+                "_minic.c.d1553f41",
+                27675,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27675
+            },
+            {
+              "original": [
+                "",
+                "_retail_async.c.2992a921",
+                44536,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 44536
+            },
+            {
+              "original": [
+                "",
+                "_retail_cursor.c.67499316",
+                36677,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 36677
+            },
+            {
+              "original": [
+                "",
+                "_retail_display.c.45f8b56f",
+                30791,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 30791
+            },
+            {
+              "original": [
+                "",
+                "_retail_gd.c.01302544",
+                23988,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 23988
+            },
+            {
+              "original": [
+                "",
+                "_retail_image.c.aa099c64",
+                28161,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 28161
+            },
+            {
+              "original": [
+                "",
+                "_sci_sd_bus.c.60f935e2",
+                31792,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 31792
+            },
+            {
+              "original": [
+                "",
+                "_sci_stream.c.55821644",
+                38335,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 38335
+            },
+            {
+              "original": [
+                "",
+                "_vmu_native_background_resident.c.7a12abad",
+                16290,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 16290
+            }
+          ],
+          "candidate": [
+            {
+              "original": [
+                "",
+                "_minic.c.d1553f41",
+                27675,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 27675
+            },
+            {
+              "original": [
+                "",
+                "_retail_async.c.2992a921",
+                44536,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 44536
+            },
+            {
+              "original": [
+                "",
+                "_retail_cursor.c.67499316",
+                36677,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 36677
+            },
+            {
+              "original": [
+                "",
+                "_retail_display.c.45f8b56f",
+                30791,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 30791
+            },
+            {
+              "original": [
+                "",
+                "_retail_gd.c.01302544",
+                23988,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 23988
+            },
+            {
+              "original": [
+                "",
+                "_retail_image.c.aa099c64",
+                28161,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 28161
+            },
+            {
+              "original": [
+                "",
+                "_sci_sd_bus.c.60f935e2",
+                31792,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 31792
+            },
+            {
+              "original": [
+                "",
+                "_sci_stream.c.55821644",
+                38335,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 38335
+            },
+            {
+              "original": [
+                "",
+                "_vmu_native_background_resident.c.7a12abad",
+                16290,
+                0,
+                32,
+                2,
+                6
+              ],
+              "section": [
+                67,
+                1,
+                0,
+                0,
+                15248,
+                51073,
+                0,
+                0,
+                1,
+                0
+              ],
+              "offset": 16290
+            }
+          ]
+        }
+      },
+      "native-worker.elf": {
+        "status": "PASS",
+        "installed_live_component": true,
+        "reference_authentication": "exact_old_shipped_module_and_ELF_bin_embedding",
+        "strict_existing_comparator": {
+          "status": "PASS",
+          "reference_elf_sha256": "08707f08625fcdd3785c5471c8ed2b6264a4ae79c9060651df90aae387a56b1e",
+          "candidate_elf_sha256": "ae17bc37ad3904ac12cfcf6628564245a43ab1978c6f299a418b6c828697d4e5",
+          "normalized_initialized_load_sha256": "eeb7282bd60edac67a35994784298c750c8b8f47eea8fcb06ca99f3f9f77d2d2",
+          "complete_initialized_bytes_headers_and_symbol_ownership_identical": true,
+          "permitted_display_build_label_addresses": [
+            "0x8c10bece"
+          ],
+          "permitted_display_build_label_bytes": 12
+        },
+        "reference_elf_sha256": "08707f08625fcdd3785c5471c8ed2b6264a4ae79c9060651df90aae387a56b1e",
+        "candidate_elf_sha256": "ae17bc37ad3904ac12cfcf6628564245a43ab1978c6f299a418b6c828697d4e5",
+        "normalized_initialized_load_sha256": "eeb7282bd60edac67a35994784298c750c8b8f47eea8fcb06ca99f3f9f77d2d2",
+        "complete_initialized_bytes_headers_and_allocated_BSS_geometry_identical": true,
+        "all_non_debug_CU_symbol_source_type_ownership_identical": true,
+        "permitted_runtime_changes": {
+          "display_label_addresses": [
+            "0x8c10bece"
+          ],
+          "display_label_bytes": 12
+        },
+        "debug_CU_metadata": {
+          "only_unallocated_weak_NOTYPE_CU_checksum_names_normalized": true,
+          "reference": [],
+          "candidate": []
+        }
+      },
+      "native-ra-aux.elf": {
+        "status": "PASS",
+        "installed_live_component": true,
+        "reference_authentication": "exact_old_shipped_module_and_ELF_bin_embedding",
+        "strict_existing_comparator": {
+          "status": "PASS",
+          "reference_elf_sha256": "9f2c3bd7f2f8b7f20aa3b003589b6b25f0999bdba24fe01178587672a0bce475",
+          "candidate_elf_sha256": "9f2c3bd7f2f8b7f20aa3b003589b6b25f0999bdba24fe01178587672a0bce475",
+          "normalized_initialized_load_sha256": "23abb23eff32b022a1586a46cac9ccfb136d1d088d084dc279cbc52483715267",
+          "complete_initialized_bytes_headers_and_symbol_ownership_identical": true,
+          "permitted_display_build_label_addresses": [],
+          "permitted_display_build_label_bytes": 0
+        },
+        "reference_elf_sha256": "9f2c3bd7f2f8b7f20aa3b003589b6b25f0999bdba24fe01178587672a0bce475",
+        "candidate_elf_sha256": "9f2c3bd7f2f8b7f20aa3b003589b6b25f0999bdba24fe01178587672a0bce475",
+        "normalized_initialized_load_sha256": "23abb23eff32b022a1586a46cac9ccfb136d1d088d084dc279cbc52483715267",
+        "complete_initialized_bytes_headers_and_allocated_BSS_geometry_identical": true,
+        "all_non_debug_CU_symbol_source_type_ownership_identical": true,
+        "permitted_runtime_changes": {
+          "display_label_addresses": [],
+          "display_label_bytes": 0
+        },
+        "debug_CU_metadata": {
+          "only_unallocated_weak_NOTYPE_CU_checksum_names_normalized": true,
+          "reference": [],
+          "candidate": []
+        }
+      },
+      "worker.elf": {
+        "status": "PASS",
+        "installed_live_component": false,
+        "reference_authentication": "authenticated_baseline_inventory_uninstalled_build_intermediate",
+        "strict_existing_comparator": {
+          "status": "PASS",
+          "reference_elf_sha256": "d6b38a0a4d7d92ed6d43e79c8dbaf10f06fc4c022008483fac60b98a625de655",
+          "candidate_elf_sha256": "e0658f44609767ca230ef8f6e5dfcd58b6e71b35edeb9d02265f38d113d49e46",
+          "normalized_initialized_load_sha256": "0c8b89c48400afd3cf55d3435d7fcf5ff0fa2ef107d8f794c22622c7908edc9e",
+          "complete_initialized_bytes_headers_and_symbol_ownership_identical": true,
+          "permitted_display_build_label_addresses": [
+            "0x8cfd1392"
+          ],
+          "permitted_display_build_label_bytes": 12
+        },
+        "reference_elf_sha256": "d6b38a0a4d7d92ed6d43e79c8dbaf10f06fc4c022008483fac60b98a625de655",
+        "candidate_elf_sha256": "e0658f44609767ca230ef8f6e5dfcd58b6e71b35edeb9d02265f38d113d49e46",
+        "normalized_initialized_load_sha256": "0c8b89c48400afd3cf55d3435d7fcf5ff0fa2ef107d8f794c22622c7908edc9e",
+        "complete_initialized_bytes_headers_and_allocated_BSS_geometry_identical": true,
+        "all_non_debug_CU_symbol_source_type_ownership_identical": true,
+        "permitted_runtime_changes": {
+          "display_label_addresses": [
+            "0x8cfd1392"
+          ],
+          "display_label_bytes": 12
+        },
+        "debug_CU_metadata": {
+          "only_unallocated_weak_NOTYPE_CU_checksum_names_normalized": true,
+          "reference": [],
+          "candidate": []
+        }
+      }
+    },
+    "disc_a2": {
+      "native-worker.elf": {
+        "status": "PASS",
+        "installed_live_component": true,
+        "reference_authentication": "exact_old_shipped_module_and_ELF_bin_embedding",
+        "strict_existing_comparator": {
+          "status": "PASS",
+          "reference_elf_sha256": "393296e5ad6643d734d9afdbf88a9b82c4f7f8cd03012987ec0977104ed938c1",
+          "candidate_elf_sha256": "fb3c7ea705f98598485d1c118a9ed5bd7a91a7d116326ef287f810478d64f1fe",
+          "normalized_initialized_load_sha256": "6ffa5793a2ac6e3ec5b666010200d2e8bfe66f96cae13ad0083e7cf4694dab70",
+          "complete_initialized_bytes_headers_and_symbol_ownership_identical": true,
+          "permitted_display_build_label_addresses": [
+            "0x8c10bb62"
+          ],
+          "permitted_display_build_label_bytes": 12
+        },
+        "reference_elf_sha256": "393296e5ad6643d734d9afdbf88a9b82c4f7f8cd03012987ec0977104ed938c1",
+        "candidate_elf_sha256": "fb3c7ea705f98598485d1c118a9ed5bd7a91a7d116326ef287f810478d64f1fe",
+        "normalized_initialized_load_sha256": "6ffa5793a2ac6e3ec5b666010200d2e8bfe66f96cae13ad0083e7cf4694dab70",
+        "complete_initialized_bytes_headers_and_allocated_BSS_geometry_identical": true,
+        "all_non_debug_CU_symbol_source_type_ownership_identical": true,
+        "permitted_runtime_changes": {
+          "display_label_addresses": [
+            "0x8c10bb62"
+          ],
+          "display_label_bytes": 12
+        },
+        "debug_CU_metadata": {
+          "only_unallocated_weak_NOTYPE_CU_checksum_names_normalized": true,
+          "reference": [],
+          "candidate": []
+        }
+      },
+      "support/support.elf": {
+        "status": "PASS",
+        "installed_live_component": true,
+        "reference_authentication": "exact_old_shipped_module_and_ELF_bin_embedding",
+        "strict_existing_comparator": {
+          "status": "PASS",
+          "reference_elf_sha256": "b5ee083f0b4105376d784cda03412ef1e56c5fd62435f445a8898cb70debbb5e",
+          "candidate_elf_sha256": "b5ee083f0b4105376d784cda03412ef1e56c5fd62435f445a8898cb70debbb5e",
+          "normalized_initialized_load_sha256": "b65046eeb74707807ca5074974963c91aa57a7f9bd8bfc4cf1e517412a9bcc84",
+          "complete_initialized_bytes_headers_and_symbol_ownership_identical": true,
+          "permitted_display_build_label_addresses": [],
+          "permitted_display_build_label_bytes": 0
+        },
+        "reference_elf_sha256": "b5ee083f0b4105376d784cda03412ef1e56c5fd62435f445a8898cb70debbb5e",
+        "candidate_elf_sha256": "b5ee083f0b4105376d784cda03412ef1e56c5fd62435f445a8898cb70debbb5e",
+        "normalized_initialized_load_sha256": "b65046eeb74707807ca5074974963c91aa57a7f9bd8bfc4cf1e517412a9bcc84",
+        "complete_initialized_bytes_headers_and_allocated_BSS_geometry_identical": true,
+        "all_non_debug_CU_symbol_source_type_ownership_identical": true,
+        "permitted_runtime_changes": {
+          "display_label_addresses": [],
+          "display_label_bytes": 0
+        },
+        "debug_CU_metadata": {
+          "only_unallocated_weak_NOTYPE_CU_checksum_names_normalized": true,
+          "reference": [],
+          "candidate": []
+        }
+      }
+    },
+    "disc_a1": {
+      "native-worker.elf": {
+        "status": "PASS",
+        "installed_live_component": true,
+        "reference_authentication": "exact_old_shipped_module_and_ELF_bin_embedding",
+        "strict_existing_comparator": {
+          "status": "PASS",
+          "reference_elf_sha256": "f74f44a87f38f4672d253485ef97acc773f087e746a9e0840c3825ba3c653255",
+          "candidate_elf_sha256": "105eb934962e5911f8184af6ccc67ecfc9e1f63ea02313d16b5c225f2269f7af",
+          "normalized_initialized_load_sha256": "62f8e2248990f65281a15f2b166c742414c06c02597691c6f480295cfec435f6",
+          "complete_initialized_bytes_headers_and_symbol_ownership_identical": true,
+          "permitted_display_build_label_addresses": [
+            "0x8c10bb62"
+          ],
+          "permitted_display_build_label_bytes": 12
+        },
+        "reference_elf_sha256": "f74f44a87f38f4672d253485ef97acc773f087e746a9e0840c3825ba3c653255",
+        "candidate_elf_sha256": "105eb934962e5911f8184af6ccc67ecfc9e1f63ea02313d16b5c225f2269f7af",
+        "normalized_initialized_load_sha256": "62f8e2248990f65281a15f2b166c742414c06c02597691c6f480295cfec435f6",
+        "complete_initialized_bytes_headers_and_allocated_BSS_geometry_identical": true,
+        "all_non_debug_CU_symbol_source_type_ownership_identical": true,
+        "permitted_runtime_changes": {
+          "display_label_addresses": [
+            "0x8c10bb62"
+          ],
+          "display_label_bytes": 12
+        },
+        "debug_CU_metadata": {
+          "only_unallocated_weak_NOTYPE_CU_checksum_names_normalized": true,
+          "reference": [],
+          "candidate": []
+        }
+      },
+      "support/support.elf": {
+        "status": "PASS",
+        "installed_live_component": true,
+        "reference_authentication": "exact_old_shipped_module_and_ELF_bin_embedding",
+        "strict_existing_comparator": {
+          "status": "PASS",
+          "reference_elf_sha256": "b5ee083f0b4105376d784cda03412ef1e56c5fd62435f445a8898cb70debbb5e",
+          "candidate_elf_sha256": "b5ee083f0b4105376d784cda03412ef1e56c5fd62435f445a8898cb70debbb5e",
+          "normalized_initialized_load_sha256": "b65046eeb74707807ca5074974963c91aa57a7f9bd8bfc4cf1e517412a9bcc84",
+          "complete_initialized_bytes_headers_and_symbol_ownership_identical": true,
+          "permitted_display_build_label_addresses": [],
+          "permitted_display_build_label_bytes": 0
+        },
+        "reference_elf_sha256": "b5ee083f0b4105376d784cda03412ef1e56c5fd62435f445a8898cb70debbb5e",
+        "candidate_elf_sha256": "b5ee083f0b4105376d784cda03412ef1e56c5fd62435f445a8898cb70debbb5e",
+        "normalized_initialized_load_sha256": "b65046eeb74707807ca5074974963c91aa57a7f9bd8bfc4cf1e517412a9bcc84",
+        "complete_initialized_bytes_headers_and_allocated_BSS_geometry_identical": true,
+        "all_non_debug_CU_symbol_source_type_ownership_identical": true,
+        "permitted_runtime_changes": {
+          "display_label_addresses": [],
+          "display_label_bytes": 0
+        },
+        "debug_CU_metadata": {
+          "only_unallocated_weak_NOTYPE_CU_checksum_names_normalized": true,
+          "reference": [],
+          "candidate": []
+        }
+      }
+    }
+  },
+  "complete_component_count": 30,
+  "installed_live_component_count": 27,
+  "uninstalled_intermediate_count": 3,
+  "strict_comparator_pass_count": 23,
+  "strict_comparator_refusals": [
+    [
+      "physical",
+      "resident-sci.elf",
+      "Component source/type/symbol ownership changed"
+    ],
+    [
+      "physical",
+      "resident-scia.elf",
+      "Component source/type/symbol ownership changed"
+    ],
+    [
+      "zso",
+      "resident-sci.elf",
+      "Component source/type/symbol ownership changed"
+    ],
+    [
+      "lzo",
+      "resident-sci.elf",
+      "Component source/type/symbol ownership changed"
+    ],
+    [
+      "toy_raw",
+      "resident-sci.elf",
+      "Component source/type/symbol ownership changed"
+    ],
+    [
+      "toy_cooked",
+      "resident-sci.elf",
+      "Component source/type/symbol ownership changed"
+    ],
+    [
+      "mdk2",
+      "resident-sci.elf",
+      "Component source/type/symbol ownership changed"
+    ]
+  ],
+  "limitation": "The strict existing comparator rejects seven LTO residents solely on unallocated weak NOTYPE debug CU checksum names. No allocated symbol, code, data, address, instruction or geometry was masked.",
+  "console_execution_verified": false,
+  "evidence_dependencies_sha256": {
+    "build/native-shared-final/check_live_preservation.py": "bb632ebc4eb3a00f5427df320a37bee9a4c48db2ea882ad9cf5820c7ee8178ec",
+    "build/native-shared-final/old-native-reproduction.json": "dad94ebf71d2ca943f15bfd32651fa89de94a9c1d277bcbc94f76c92ec51e21c",
+    "build/native-shared-final-baseline/inventory.json": "1ee3b364e9fa1193d8676b1c38ec317d5a67e65624b4b6fc34f3dba53a448186",
+    "tools/check_native_compact_delivery.py": "f288a09ce5adf617c80fa2ccaf00fb4df762914ab7aec115f6549a67fddb97a6",
+    "tools/check_vmu_native_worker_gateway.py": "5980f8d1a959126f68c36a380db19dd24d586ddc07217e3f1c55e89db7f95e50",
+    "tools/runtime_package.py": "c885e08e5a167b02dcaa6884084d11ef4cad70161f423d0d8876d92330ecd0b5"
+  },
+  "old_reproduction_source_commit": "eeed38bd540e7a1085ca53aabf832e5d7a835efa",
+  "old_reproduction_source_tree": "997ea8a5b1976646fe4f2436993202c83fcce1f9",
+  "old_reproduction_source_clean": true
+}

@@ -1,0 +1,503 @@
+{
+  "schema": "kui.readonly.restart-selection-audit.v1",
+  "status": "SOURCE_TRACE_CONFIRMED; CURRENT_PHYSICAL_CARD_NOT_INSPECTED",
+  "created_utc": "2026-11-06T23:04:44.517095+00:00",
+  "scope": "Read-only Restart K-UI selection versus direct cold CD/root entry. No production/test source edits, no new binary builds, no bank mutations, and no console timing/compatibility claim.",
+  "repository_head": "c9855b222b89c61968f681a899f991d371072d8b",
+  "frozen_executable_source_commit": "f8807cb1656137cc5fad7854802d685ea168736f",
+  "all_inspected_source_files_identical_to_f880": true,
+  "physical_card": {
+    "available": false,
+    "actual_active_records_read": false,
+    "actual_selected_bank_known": false,
+    "consequence": "This report cannot say whether the user card has a selected bank or which build it would load. The selection result depends on the real records, receipt and runtime integrity."
+  },
+  "frozen_delivery": {
+    "filename": "KUI-Shared-Game-Launch-06NOV2026-2210-UTC-f8807cb.zip",
+    "bytes": 6087588,
+    "sha256": "dc607c3e89ab6bac5c718b738bca9990ffd85ec39abb308140de280c4a7503e9",
+    "runtime": {
+      "path": "build/native-shared-final/runtime.kui",
+      "bytes": 3554464,
+      "build": "f8807cb16561",
+      "payload_bytes": 3554400,
+      "payload_crc32": "0AF73915",
+      "sha256": "c4363bfd071f4c5d02b302437dc34682b0ece9cb0f4ef336f3d435db94811550"
+    }
+  },
+  "finding": "A compatible valid selected bank wins during Restart K-UI even if physical ROOT was just replaced with a newer manual ZIP. Restart orders activation records by sequence; it does not rank GUI build IDs, file timestamps or release dates. Current direct cold ROOT with the initialized EMPTY RAM handoff skips this selection entirely.",
+  "restart_path": [
+    {
+      "step": 1,
+      "behavior": "Menu Restart K-UI dispatches worker action126.",
+      "source": {
+        "path": "src/dreamcast/main.c",
+        "line": 4192,
+        "function": "worker"
+      }
+    },
+    {
+      "step": 2,
+      "behavior": "update_restart_operation shuts audio down, connects/mounts boot storage, calls kui_update_boot_reload, unmounts/disconnects and parks the worker only after a successful checked chain.",
+      "source": {
+        "path": "src/dreamcast/main.c",
+        "line": 3306,
+        "function": "update_restart_operation"
+      }
+    },
+    {
+      "step": 3,
+      "behavior": "Reload saves the current module resolver for abort, then calls read_selected with force=true. This forces a fresh complete selected GUI read; checked-RAM adoption is disabled for this dispatch.",
+      "source": {
+        "path": "src/core/update_boot.c",
+        "line": 344,
+        "function": "kui_update_boot_reload"
+      }
+    },
+    {
+      "step": 4,
+      "behavior": "read_selected reads active0 and active1, validates both, orders valid records by largest unsigned sequence, then tries the other valid record on refusal.",
+      "source": {
+        "path": "src/core/update_boot.c",
+        "line": 247,
+        "function": "read_selected"
+      }
+    },
+    {
+      "step": 5,
+      "behavior": "A successful bank read checks pinned receipt, actual GUI source build, required engine, full GUI SHA/CRC and unique EMPTY handoff; it stamps a nonempty RAM handoff and returns CHAIN. Module resolution is blocked until recipient validation.",
+      "sources": [
+        {
+          "path": "src/core/update_boot.c",
+          "line": 171,
+          "function": "load_receipt"
+        },
+        {
+          "path": "src/core/update_boot.c",
+          "line": 214,
+          "function": "load_runtime"
+        },
+        {
+          "path": "src/core/update_boot.c",
+          "line": 222,
+          "function": "stamp"
+        },
+        {
+          "path": "src/core/runtime_file.c",
+          "line": 25,
+          "function": "kui_runtime_read"
+        }
+      ]
+    },
+    {
+      "step": 6,
+      "behavior": "Main checks staging/stack and arch_execs the checked GUI. Abort or returned/refused chain restores the original resolver.",
+      "source": {
+        "path": "src/dreamcast/main.c",
+        "line": 5862,
+        "function": "main Restart K-UI handoff"
+      }
+    }
+  ],
+  "selection_rules": [
+    "Activation files must be exactly 128 bytes, decode successfully and have valid CRC32/reserved fields/nonzero sequence/valid bank IDs.",
+    "Largest valid activation sequence is tried first; equal identical records choose slot 0 first. Equal sequence with different decoded contents invalidates both and selects root fallback.",
+    "The selected field is a bank snapshot ID. It is not necessarily the actual GUI source build. The GUI source build comes from the receipt runtime.kui entry and checked envelope.",
+    "The previous field is explicit UI Restore metadata. read_selected does not recursively follow it. Automatic fallback tries the other activation record selected field, then ROOT.",
+    "An empty selected field is an explicit authoritative ROOT selection. If that ROOT cannot be read or is rejected, Restart errors rather than silently reactivating the other bank.",
+    "A bank receipt must match selected bank ID and the activation manifest SHA. Production engine3 refuses a receipt declaring an older minimum; the actual GUI must also contain the required engine marker.",
+    "Withdrawn actual GUI source builds 28cadccf0e71 and 33b04057db86 are refused. A v2 snapshot bank ID is not itself the GUI withdrawal identity.",
+    "Missing/corrupt receipt/runtime, SHA/CRC mismatch, missing capability/unique handoff, read/close failure or incompatible engine causes refusal and an older-record/ROOT attempt as applicable; cancellation stops dispatch. Identical refused bank+manifest sources are not reread for the second activation record.",
+    "force=true means reread and execute the selected GUI, including same-build selection. It does not mean prefer ROOT.",
+    "No comparison to copied ROOT build/timestamp occurs before a valid bank wins. No record is rewritten by kui_update_boot_reload."
+  ],
+  "cold_root_path": {
+    "restoration_commit": "3384928a19b5a6d82116caf31a76078742182333",
+    "equivalent_local_compile_commit": "1009ac2e4b3ffa3685b9152a34aee1a687089f35",
+    "source": {
+      "path": "src/dreamcast/main.c",
+      "line": 5078,
+      "function": "main cold-entry handoff branch"
+    },
+    "literal_code": "    uint8_t startup_handoff[KUI_UPDATE_HANDOFF_BYTES];\n    for(unsigned i=0;i<KUI_UPDATE_HANDOFF_BYTES;i++)\n        startup_handoff[i]=kui_update_ram_handoff[i];\n    kui_update_boot_require_engine(KUI_UPDATE_ENGINE_CURRENT);\n    if(kui_update_handoff_empty(startup_handoff,sizeof(startup_handoff),NULL)) {\n        kui_update_boot_reset();\n        snprintf(update_boot_view.build,sizeof(update_boot_view.build),\"%.12s\",KUI_BUILD_ID);\n    } else update_boot_start();\n",
+    "literal_sha256": "9de6211e2f05a7f05f976958e20b52c7e72503d1c3522dad07ae7c187d586920",
+    "behavior": "Initialized EMPTY RAM handoff: require engine capability in RAM, reset resolver to ROOT in RAM, show compiled build and continue the original splash/STOP/worker/chime lifecycle. It does not call update_boot_start and does not connect, mount, read active files, select a bank or write startup selection reports.",
+    "nonempty_behavior": "A valid explicit bank Restart handoff, damaged nonempty handoff, or malformed nonempty handoff still takes update_boot_start and checked selection. It cannot authorize direct root merely by being invalid.",
+    "cold_boot_implication": "A saved bank is no longer automatically activated by direct ordinary CD/root cold boot; explicit Restart K-UI still honors it.",
+    "existing_qualification_log": {
+      "path": "build/native-shared-final/root-startup-lifecycle.log",
+      "bytes": 448,
+      "sha256": "3ee632aa68fd1e93215a1862e6b3a366debfce8dbcbac356336f080012bead2a"
+    },
+    "existing_qualification_evidence": "Retained log reports actual current prefix and worker lifecycle matching frozen 2.0; real handoff helper classifies EMPTY/nonempty/corrupt contexts; frozen f722 early-paint preflight fails the zero-I/O control. Not rerun for this read-only audit."
+  },
+  "existing_fatfs_fixture_evidence": {
+    "source": {
+      "path": "tests/update_boot_image.c",
+      "bytes": 41458,
+      "sha256": "dba743ea3a3f3b6e9a0cc6a7fb4afaae0795d4e23e85389b3612aa4e08a2f27a",
+      "matches_frozen_f880_source": true
+    },
+    "fresh_execution_this_audit": false,
+    "reason": "No retained runnable update-boot host fixture was found. The existing program has no focused case selector and executing it requires a new full boot/resolver fixture run. Per scope, this audit uses source trace and existing explicit assertions rather than claiming a fresh runtime reproduction.",
+    "assertions": [
+      {
+        "source": {
+          "path": "tests/update_boot_image.c",
+          "line": 173,
+          "function": "handoff_tests"
+        },
+        "asserts": "ROOT GUI is present; selected bank A activation sequence 10 chains bank A, reads its full GUI once, reads zero root bytes, and stamps sequence10."
+      },
+      {
+        "source": {
+          "path": "tests/update_boot_image.c",
+          "line": 410,
+          "function": "reload_tests"
+        },
+        "asserts": "With no activation, Restart rereads/chains ROOT. With selected bank A sequence 200, same-build Restart fully reads/chains bank A without opening ROOT. Higher activation sequence 210 selects bank B, and abort restores bank A module pin."
+      },
+      {
+        "source": {
+          "path": "tests/update_boot_image.c",
+          "line": 445,
+          "function": "reload_tests fault loop"
+        },
+        "asserts": "Missing runtime/receipt, altered runtime, runtime read fault and receipt close fault on bank B cause bank A fallback with sequence 200 handoff."
+      },
+      {
+        "source": {
+          "path": "tests/update_boot_image.c",
+          "line": 476,
+          "function": "reload_tests explicit baseline"
+        },
+        "asserts": "Newest explicit ROOT selection plus unavailable root returns ERROR rather than bank fallback; restoring ROOT chains ROOT. If both bank targets are unavailable, fallback chains ROOT."
+      },
+      {
+        "source": {
+          "path": "tests/update_boot_image.c",
+          "line": 140,
+          "function": "reload_gui"
+        },
+        "asserts": "Production reload causes no writes and closes observed streams."
+      }
+    ],
+    "limitation": "Synthetic v1 fixtures assert the common selector/reload logic with their legacy engine floor; they are not a current engine3 SD-card reproduction, do not literally copy the f880 ZIP over a prior card, and do not establish the actual card bank contents."
+  },
+  "read_only_inspection": {
+    "preserve": "Inspect copies; keep all actual activation/bank/user data files unchanged. Do not delete, move, rename or edit selection records to establish a test baseline.",
+    "activation_paths": [
+      "KUI/system/active0.bin",
+      "KUI/system/active1.bin"
+    ],
+    "selected_bank_paths": [
+      "KUI/system/<selected-bank-id>/package.bin",
+      "KUI/system/<selected-bank-id>/runtime.kui",
+      "KUI/system/<selected-bank-id>/apps/games/<selected-reader>.kui"
+    ],
+    "physical_root_paths": [
+      "KUI/boot.kui",
+      "KUI/runtime.kui",
+      "KUI/apps/games/<selected-reader>.kui"
+    ],
+    "procedure": [
+      "Read copies of both active files. Validate exact size, magic/version/CRC and decoded fields; sort valid candidates by sequence using the conflict rule above. Retain both files, including a malformed one.",
+      "For each distinct nonempty candidate, inspect its package.bin. Validate receipt metadata/manifest SHA against activation, bank ID, installed snapshot structure and engine minimum. Read runtime.kui entry own build separately from bank ID.",
+      "To predict actual acceptance/fallback, fully verify that bank runtime against the pinned file size/SHA, envelope/header/payload CRC, GUI source build, capability, engine and EMPTY handoff. Receipt/header identity alone does not prove the runtime is loadable.",
+      "Compare physical ROOT runtime and selected module identities separately. Their presence or later timestamps do not override a valid selected bank on Restart.",
+      "The Updates view running label is compiled running GUI identity; selected/previous are saved snapshot IDs, not a check that all modules match the manual ZIP. Merely viewing metadata is not full bank runtime verification."
+    ],
+    "activation_wire_fields": {
+      "magic": "KUIACT1\\0 at 0",
+      "version": "LE32 at 8 equals 1",
+      "record_bytes": "LE32 at 12 equals 128",
+      "sequence": "LE64 at 16",
+      "selected_bank": "12-byte ASCII at 24; all zero is ROOT",
+      "previous_bank": "12-byte ASCII at 36",
+      "selected_manifest_sha256": "32 bytes at 48; all zero for ROOT",
+      "reserved": "all zero bytes 80..123",
+      "crc32": "LE32 at 124 over bytes 0..123"
+    },
+    "source_refs": [
+      {
+        "path": "include/kui/update.h",
+        "line": 15,
+        "function": "activation paths and format"
+      },
+      {
+        "path": "src/core/update.c",
+        "line": 391,
+        "function": "kui_update_activation_decode"
+      },
+      {
+        "path": "src/core/update_file.c",
+        "line": 173,
+        "function": "kui_update_activation_read"
+      },
+      {
+        "path": "src/core/update_file.c",
+        "line": 201,
+        "function": "kui_update_bank_receipt_read"
+      },
+      {
+        "path": "src/core/update.c",
+        "line": 132,
+        "function": "kui_update_bank_path"
+      },
+      {
+        "path": "src/dreamcast/main.c",
+        "line": 2653,
+        "function": "update_work UI labels"
+      }
+    ]
+  },
+  "gui_module_coherence": {
+    "current_engine3_bank": "Installed v2 snapshot receipt pins the GUI and materialized software rows; no KEEP rows are allowed. Bank replacement loads use pinned per-file size/source build/SHA, and missing/corrupt replacements do not fall back to ROOT or an embedded old reader.",
+    "manual_copy_effect": "Copying a manual ZIP changes physical ROOT files, not an already selected bank snapshot. Restart can therefore legitimately load the older bank GUI and its pinned older modules. The current ZIP cannot be inferred solely from having copied files.",
+    "legitimate_mixed_builds": "A snapshot may intentionally contain GUI and component source builds from different commits, including retained modules. Such a combination is not proved wrong by labels alone; compare exact delivered component identities.",
+    "legacy_rule": "Legacy v1 or non-FULL descriptors can explicitly inherit ROOT roles under the older resolver contract; production current engine3 bank dispatch rejects older declared engine minimums. Do not generalize inheritance into fallback for pinned current replacements.",
+    "source_refs": [
+      {
+        "path": "src/core/update_boot.c",
+        "line": 66,
+        "function": "kui_update_runtime_resolve"
+      },
+      {
+        "path": "src/core/update.c",
+        "line": 339,
+        "function": "kui_update_package_member"
+      },
+      {
+        "path": "src/core/update_file.c",
+        "line": 201,
+        "function": "kui_update_bank_receipt_read"
+      },
+      {
+        "path": "src/core/runtime_file.c",
+        "line": 39,
+        "function": "pinned stream versus embedded provider"
+      },
+      {
+        "path": "src/core/runtime_module_bundle.c",
+        "line": 65,
+        "function": "kui_runtime_module_bundle_read_view"
+      }
+    ],
+    "embedded_root_provider": "The frozen f880 GUI intentionally includes the accepted cc81e63ca4d2 four-reader Smash bundle. ROOT/inherited requests can use that checked embedded provider; pinned bank replacements cannot. This is a deliberate retained component cohort, and it does not include the newly rebuilt native dual, standalone or Standard readers.",
+    "frozen_embedded_bundle": {
+      "path": "build/accepted-smash-bundle/bundle.bin",
+      "bytes": 413045,
+      "sha256": "3d22cc80c99ebc0fb77ca25d64054e5f4245d1c66dca7c786e9070c352688f39",
+      "build": "cc81e63ca4d2",
+      "members": {
+        "apps/games/retail-smash-menu.kui": {
+          "bytes": 103092,
+          "sha256": "e6d0bef744f007a6cae87a10f9e83b7084801fedbdbc15b93b974ab3a3ee9117"
+        },
+        "apps/games/retail-smash-native-menu.kui": {
+          "bytes": 271620,
+          "sha256": "b2d633f5254e5db852382f6e1263f283d6dd00434c7841ed852ca9f15e67de2e"
+        },
+        "apps/games/retail-smash-swirl.kui": {
+          "bytes": 139096,
+          "sha256": "5b8f7f1c36983ad4d08ef63f928375201b289e4825635bc7eea1727217a3881b"
+        },
+        "apps/games/retail-smash-vc2.kui": {
+          "bytes": 139068,
+          "sha256": "a36421a22e4e3d1da10b82d996816c427f311da90bd5ed633dac7af01e5deca5"
+        }
+      },
+      "exact_blob_occurrences_in_frozen_runtime": 1,
+      "runtime_file_offset": 2086176
+    }
+  },
+  "current_zip_console_test_instructions": [
+    "Copy the exact frozen manual ZIP software to physical ROOT. Preserve existing KUI/system banks, saved settings, VMU images and game/cache data.",
+    "Use a full console power-cycle and the normal CD-to-SD launch, not the menu Restart K-UI action. That direct EMPTY-handoff ROOT entry is the path that runs the copied ZIP without consulting saved activation banks. ROOT resolution can still use the deliberately retained embedded Smash provider; use final module provenance rather than assuming every reader came from a physical root file.",
+    "Before launching a game, confirm the running GUI Build ID is f8807cb16561, matching the frozen ZIP runtime. If it differs, stop treating the result as this ZIP test.",
+    "Use the same game and launch settings for the comparison. Retain the newest CRC-valid last-launch record and launch-timing file from that attempt to identify the final chosen module after any fallback.",
+    "Test menu Restart separately if needed and note any Build ID change. A different GUI there can be explained by the saved selected bank; this is not evidence that the manual ROOT copy failed.",
+    "Do not clear/delete/update banks to obtain the direct-root baseline. No SD bank mutation is required for the coldboot path."
+  ],
+  "provenance_records": {
+    "gui_build_id": "Confirms which GUI source build is executing. It does not prove which physical/banked reader was loaded or that the game executed.",
+    "game_launch_slots": [
+      "KUI/apps/games/last-launch-a.txt",
+      "KUI/apps/games/last-launch-b.txt"
+    ],
+    "game_launch_selection": "Keep both; highest valid sequence with verified CRC32 footer is authoritative. Conflicting equal-sequence slots are not authoritative.",
+    "game_launch_fields": [
+      "build",
+      "image",
+      "reader",
+      "storage",
+      "encoding",
+      "profile",
+      "package",
+      "source module build",
+      "source module payload bytes",
+      "source module crc32",
+      "source executable bytes",
+      "source executable crc32"
+    ],
+    "native_timing_path": "KUI/apps/games/launch-timing.txt",
+    "native_timing_fields": [
+      "build",
+      "image",
+      "product",
+      "reader",
+      "virtual_vmu",
+      "source_module_path",
+      "source_module_build",
+      "metric.module_crc32",
+      "metric.module_bytes"
+    ],
+    "interpretation": "Prepared final reader/module identity before mutable launch patching and handoff. Does not establish execution success, bootstrap duration, VMU persistence or FMV speed.",
+    "startup_reports": [
+      "KUI/startup.txt",
+      "KUI/updater-startup.txt"
+    ],
+    "startup_report_caveat": "Direct cold ROOT writes neither updater startup report; old files can remain and must not be attributed to the current coldboot. A checked bank recipient may append/write reports during its explicit restart validation.",
+    "source_refs": [
+      {
+        "path": "src/apps/game_launch_report.c",
+        "line": 50,
+        "function": "format"
+      },
+      {
+        "path": "src/apps/game_launch_report.c",
+        "line": 172,
+        "function": "kui_game_launch_report_inspect"
+      },
+      {
+        "path": "include/kui/game_launch_report.h",
+        "line": 44,
+        "function": "slot selection contract"
+      },
+      {
+        "path": "src/apps/smash_launch_timing.c",
+        "line": 199,
+        "function": "kui_smash_launch_timing_format"
+      },
+      {
+        "path": "src/dreamcast/main.c",
+        "line": 4923,
+        "function": "startup_report_save_mounted"
+      },
+      {
+        "path": "src/dreamcast/main.c",
+        "line": 4944,
+        "function": "update_boot_timing_save"
+      }
+    ]
+  },
+  "source_bindings": [
+    {
+      "path": "src/dreamcast/main.c",
+      "bytes": 363680,
+      "sha256": "06554a800800001a164979bfe03d90a5eabb1c684b0ffc536c43a9f5721fdbae",
+      "matches_frozen_f880_source": true
+    },
+    {
+      "path": "src/core/update_boot.c",
+      "bytes": 21635,
+      "sha256": "7fd1ddbce9777ed636b04a7c2401b26f7c4617ac3cb7a35bc49bc9811dc36406",
+      "matches_frozen_f880_source": true
+    },
+    {
+      "path": "src/core/update.c",
+      "bytes": 25501,
+      "sha256": "a818e42394186237aac98ac438d04b711c11c32136ceea3020e614acf3bce7d7",
+      "matches_frozen_f880_source": true
+    },
+    {
+      "path": "src/core/update_file.c",
+      "bytes": 58736,
+      "sha256": "36cdac49aa5f39fa9a24f800856116b301615864e28f9d29fc749e8926c4a7b7",
+      "matches_frozen_f880_source": true
+    },
+    {
+      "path": "src/core/runtime_file.c",
+      "bytes": 4310,
+      "sha256": "98121565f331fde076615c3e9e810f74c96a1c8de0a87ef3f8017887f1331af3",
+      "matches_frozen_f880_source": true
+    },
+    {
+      "path": "src/core/runtime_image.c",
+      "bytes": 3172,
+      "sha256": "e2c25e03ada0ad5067d326817e0109da1665b7905de1e65d338056c222b3dd8a",
+      "matches_frozen_f880_source": true
+    },
+    {
+      "path": "src/core/update_handoff.c",
+      "bytes": 5136,
+      "sha256": "feccf54f48b3da43ac65721e96e5927b4717e98e96e81ee3ef026f42c0476b32",
+      "matches_frozen_f880_source": true
+    },
+    {
+      "path": "src/apps/game_launch_report.c",
+      "bytes": 14458,
+      "sha256": "ce21628a1aebc92cdaa035772fc7c0a559259492e704942ff171177c5d30c29b",
+      "matches_frozen_f880_source": true
+    },
+    {
+      "path": "src/apps/smash_launch_timing.c",
+      "bytes": 16433,
+      "sha256": "f81088f882afcbdc222e14571b4af3bdb55447c7757b365c63d3c05d7b03ba4e",
+      "matches_frozen_f880_source": true
+    },
+    {
+      "path": "include/kui/update.h",
+      "bytes": 11136,
+      "sha256": "923752bebd012ca8b15206185873eb5a856f6e05fc153098b7322aee38cd7712",
+      "matches_frozen_f880_source": true
+    },
+    {
+      "path": "include/kui/update_boot.h",
+      "bytes": 5238,
+      "sha256": "b5b3dccd2cd31ac3965dda5edc96bd443d49e6194f3917446b290377da05f77a",
+      "matches_frozen_f880_source": true
+    },
+    {
+      "path": "include/kui/update_handoff.h",
+      "bytes": 2104,
+      "sha256": "60a21f6914a1fd103799c736e4d63acea8b42f08308e897780e097eaa2f13167",
+      "matches_frozen_f880_source": true
+    },
+    {
+      "path": "include/kui/game_launch_report.h",
+      "bytes": 3252,
+      "sha256": "7bc51ec2a47686e2d351036116bcc34f22de9dc0c3f6cc5388771e50696e9639",
+      "matches_frozen_f880_source": true
+    },
+    {
+      "path": "tests/update_boot_image.c",
+      "bytes": 41458,
+      "sha256": "dba743ea3a3f3b6e9a0cc6a7fb4afaae0795d4e23e85389b3612aa4e08a2f27a",
+      "matches_frozen_f880_source": true
+    },
+    {
+      "path": "tests/test_startup_first_frame.py",
+      "bytes": 9605,
+      "sha256": "c2f5845a9e16ee2e7a58725ba1d1025602eb143f63bcbe63e6b09bde0a8c5801",
+      "matches_frozen_f880_source": true
+    },
+    {
+      "path": "src/core/runtime_module_bundle.c",
+      "bytes": 5556,
+      "sha256": "3c33067706afea8f639eeb5ddf038fc3667b14422af81489ecb857471f32abd0",
+      "matches_frozen_f880_source": true
+    }
+  ],
+  "modifications": {
+    "production_source": false,
+    "test_source": false,
+    "dreamcast_binary_build": false,
+    "host_fixture_build_or_run": false,
+    "physical_bank_or_activation_write": false,
+    "outputs_only": [
+      "build/claude-review-nov6/restart-audit.json",
+      "build/claude-review-nov6/restart-audit.md"
+    ]
+  }
+}

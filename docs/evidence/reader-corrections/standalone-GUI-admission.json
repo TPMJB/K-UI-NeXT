@@ -1,0 +1,151 @@
+{
+  "ok": true,
+  "scope": "production Games preparation/admission only; no module execution",
+  "cases": [
+    {
+      "filesystem": "fat32",
+      "modules": "authored",
+      "case": "native-dual-standalone-report",
+      "source_build": "222222222222",
+      "source_crc32": "76F62A81",
+      "source_bytes": 8240
+    },
+    {
+      "filesystem": "fat32",
+      "modules": "authored",
+      "case": "native-dual-standalone-y-report",
+      "source_build": "111111111111",
+      "source_crc32": "7B4A3A2A",
+      "source_bytes": 9360
+    },
+    {
+      "filesystem": "fat32",
+      "modules": "authored",
+      "case": "native-dual-x-report",
+      "source_build": "111111111111",
+      "source_crc32": "7B4A3A2A",
+      "source_bytes": 9360
+    },
+    {
+      "filesystem": "fat32",
+      "modules": "authored",
+      "case": "native-standard-report",
+      "source_build": "0123456789ab",
+      "source_crc32": "F343E2CE",
+      "source_bytes": 9328
+    },
+    {
+      "filesystem": "fat32",
+      "modules": "authored",
+      "case": "native-standard-cooked-report",
+      "source_build": "0123456789ab",
+      "source_crc32": "F343E2CE",
+      "source_bytes": 9328
+    },
+    {
+      "filesystem": "fat32",
+      "modules": "unchanged linked inputs",
+      "case": "native-dual-standalone-report",
+      "source_build": "a0dc9a62e79f",
+      "source_crc32": "44D3D814",
+      "source_bytes": 48524
+    },
+    {
+      "filesystem": "fat32",
+      "modules": "unchanged linked inputs",
+      "case": "native-dual-standalone-y-report",
+      "source_build": "eeed38bd540e",
+      "source_crc32": "D7C8BEDB",
+      "source_bytes": 289832
+    },
+    {
+      "filesystem": "exfat",
+      "modules": "authored",
+      "case": "native-dual-standalone-report",
+      "source_build": "222222222222",
+      "source_crc32": "76F62A81",
+      "source_bytes": 8240
+    },
+    {
+      "filesystem": "exfat",
+      "modules": "authored",
+      "case": "native-dual-standalone-y-report",
+      "source_build": "111111111111",
+      "source_crc32": "7B4A3A2A",
+      "source_bytes": 9360
+    },
+    {
+      "filesystem": "exfat",
+      "modules": "authored",
+      "case": "native-dual-x-report",
+      "source_build": "111111111111",
+      "source_crc32": "7B4A3A2A",
+      "source_bytes": 9360
+    },
+    {
+      "filesystem": "exfat",
+      "modules": "authored",
+      "case": "native-standard-report",
+      "source_build": "0123456789ab",
+      "source_crc32": "F343E2CE",
+      "source_bytes": 9328
+    },
+    {
+      "filesystem": "exfat",
+      "modules": "authored",
+      "case": "native-standard-cooked-report",
+      "source_build": "0123456789ab",
+      "source_crc32": "F343E2CE",
+      "source_bytes": 9328
+    },
+    {
+      "filesystem": "exfat",
+      "modules": "unchanged linked inputs",
+      "case": "native-dual-standalone-report",
+      "source_build": "a0dc9a62e79f",
+      "source_crc32": "44D3D814",
+      "source_bytes": 48524
+    },
+    {
+      "filesystem": "exfat",
+      "modules": "unchanged linked inputs",
+      "case": "native-dual-standalone-y-report",
+      "source_build": "eeed38bd540e",
+      "source_crc32": "D7C8BEDB",
+      "source_bytes": 289832
+    }
+  ],
+  "old_source_commit": "2aac9af84e8246efab046b12918c626ec1252087",
+  "old_source_controls": [
+    {
+      "filesystem": "fat32",
+      "refusal": "stale final module CRC",
+      "observed_discarded_crc32": "7B4A3A2A",
+      "expected_final_crc32": "76F62A81"
+    },
+    {
+      "filesystem": "exfat",
+      "refusal": "stale final module CRC",
+      "observed_discarded_crc32": "7B4A3A2A",
+      "expected_final_crc32": "76F62A81"
+    }
+  ],
+  "old_source_sha256": "4cfe533e5f836349979dfe94e87dc9de8a324c6bd2dd2f76a6f53d01132d672d",
+  "source_sha256": {
+    "src/apps/games_retail.c": "0f240533243566bc24a070ae9622424b923804a05c5c256000168d26d7b85f8b",
+    "src/apps/game_launch_report.c": "ce21628a1aebc92cdaa035772fc7c0a559259492e704942ff171177c5d30c29b",
+    "src/apps/smash_launch_timing.c": "f81088f882afcbdc222e14571b4af3bdb55447c7757b365c63d3c05d7b03ba4e",
+    "include/kui/game_launch_report.h": "7bc51ec2a47686e2d351036116bcc34f22de9dc0c3f6cc5388771e50696e9639",
+    "include/kui/smash_launch_timing.h": "4f4a842cce91bd84b04db27bd54d780da48cbe4698821c4fd03ded6a288c5fe9",
+    "tests/games_retail.c": "8705a6318a6946230c747ff604fdf7dbace0b2c3403b7059d0afa7e357e5e3b7",
+    "tests/test_game_reader_provenance.py": "4a3d1b5144d347491a06f82e71a19f14b32f486bf08c9c317b66bf39bb217258"
+  },
+  "sanitizers": [
+    "address",
+    "undefined"
+  ],
+  "real_module_sha256": {
+    "build/splash-restoration/baseline-eeed/retail-native-background-compact.kui": "212333df086ee965098a0677775b25177e06c8767f0c2f2dfe17b8392744de22",
+    "build/standalone-irq-restoration/final/retail-native-standalone.kui": "8a1eb7faad51b5e5167226cb4e521c478cfd3fa2d38901b3cb84e1e85c88576a"
+  }
+}

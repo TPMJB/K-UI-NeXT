@@ -1,15 +1,15 @@
 {
   "schema": "kui.native.cdda-build-manifest.v1",
-  "source_commit": "ab1b145b33b4b4cf252f61d7f5cfb06a55ac5f87",
+  "source_commit": "f8807cb1656137cc5fad7854802d685ea168736f",
   "source_dirty": false,
-  "header_sha256": "624a8d6a6661cae756c12bc913c7e21a1b73db1131b7eb7818bcd72ed4a84bc0",
+  "header_sha256": "4349a7f732303fc31e0e9eca88f6244d444ce2743b5e0e8401758c4d6e667eb1",
   "profiles": {
     "toy-raw": {
-      "build": "ab1b145b33b4",
-      "payload_bytes": 85156,
-      "payload_sha256": "6de1f46a6f9c8165158c583e1dba13a0f21220de4d81ac06827fbd5644b78fdd",
-      "module_sha256": "c5948934355c0f98bafbccf595ece4d78b99496db28ad01e6cf97ea6a2826b3f",
-      "crc32": "b9aa6206",
+      "build": "f8807cb16561",
+      "payload_bytes": 85312,
+      "payload_sha256": "84fa6f996ecc20c105acb9a6fc8246a61bfda1baed5620571cddac193da79402",
+      "module_sha256": "3356b8cf7e5b032f18b24977c1ea6e615934518c39b7f7f6c920c99a0e132ba2",
+      "crc32": "0f2775eb",
       "aliases": [
         "KUI/apps/games/cdda-toy-raw.kui",
         "KUI/apps/games/cdda-native-toy-raw.kui"
@@ -17,19 +17,19 @@
       "source_provenance": {
         "current": {
           "receipt": {
-            "commit": "ab1b145b33b4b4cf252f61d7f5cfb06a55ac5f87",
+            "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
             "source_dirty": false,
-            "elf_sha256": "214b032aff5f481d407c5921a478c6ab490f7ee301fe31cb41a15196f45909e8"
+            "elf_sha256": "e0a23d004cb594d86ec80a8b7c936916843be7a79e60d5e3b9ccad8e9de4d216"
           },
-          "receipt_sha256": "514bdc848c2ce02d55cdd83acb0a36b93f9c940014358d92ebd00d2504198690"
+          "receipt_sha256": "5a0f8beb4d257943a197ca06153f6b5b4f0351ce06e126e53f49303f300aafc8"
         },
         "reference": {
           "receipt": {
-            "commit": "ab1b145b33b4b4cf252f61d7f5cfb06a55ac5f87",
+            "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
             "source_dirty": false,
-            "elf_sha256": "16ce0e6ff426f38c29bec9f3c92a1b5ed6de0ea02c2c5f98162eed9240b12522"
+            "elf_sha256": "a85e33b126f34e613b3021e9fd0f292f866ec87d79986b80286a8742a4d622cb"
           },
-          "receipt_sha256": "f2245a6d1378b166c676c34f4cd4bab87b3dc1fa2fb6278d49d6b3f098a1ca0a"
+          "receipt_sha256": "125c8a0c7f861ee87f70323796ced75d33e0ba3e6e58c5e7dfd888ced816bb1b"
         }
       },
       "linked_audit": {
@@ -39,29 +39,29 @@
         "descriptor_bytes": 128,
         "package": {
           "format": 1,
-          "build": "ab1b145b33b4",
-          "payload_bytes": 85156,
-          "memory_bytes": 85156,
-          "crc32": "b9aa6206"
+          "build": "f8807cb16561",
+          "payload_bytes": 85312,
+          "memory_bytes": 85312,
+          "crc32": "0f2775eb"
         },
         "unchanged_reference_playback_sha256": {
-          "resident-sci": "730b5c9ebba365f0056635b87c4d3b743dab035625c45f566c9e0b060024833d",
-          "worker": "7fac5eabdb2a64e61e0039c2c638d7f611ac5ede653d848a920db512e1551e2a"
+          "resident-sci": "bfd04b5ef91c20a22c31755a2d5873e9cd5a79e71f1644769fea95913eded7a0",
+          "worker": "d519158d16162adabb00901612e5b76412102030237dea4ddd1ffedaa56e53d3"
         },
         "private_worker_stack_upper_bound": 4904,
         "private_worker_stack_capacity": 8192,
-        "reference_directory": "native-reference-toy-raw"
+        "reference_directory": "/workspace/scratch/bf5994e80308/kui/build/native-reference-toy-raw"
       },
       "old_exact_admission_preserved": true,
       "descriptor_admission_required": true,
       "new_console_acceptance_claimed": false
     },
     "toy-cooked": {
-      "build": "ab1b145b33b4",
-      "payload_bytes": 85188,
-      "payload_sha256": "3eb2de11160bb0cad975dc25aeb189a9ce05ceb96309e88d2f06062bbb8e8856",
-      "module_sha256": "1a9adc8efa419c070c28d2ff0816b5d20f9dc155e2c5cf00115b98e9a105bd6e",
-      "crc32": "c49fac8c",
+      "build": "f8807cb16561",
+      "payload_bytes": 85344,
+      "payload_sha256": "dd7e08d7a1f557bb356e41ae905a65904abde0a2fda72827bb754446140d1a91",
+      "module_sha256": "910e7c7895263db072b5d949325dc6cfc13fac9f39e03b17ade34a0cc883b105",
+      "crc32": "4a77a2c6",
       "aliases": [
         "KUI/apps/games/cdda-toy-cooked.kui",
         "KUI/apps/games/cdda-native-toy-cooked.kui"
@@ -69,19 +69,19 @@
       "source_provenance": {
         "current": {
           "receipt": {
-            "commit": "ab1b145b33b4b4cf252f61d7f5cfb06a55ac5f87",
+            "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
             "source_dirty": false,
-            "elf_sha256": "bc99ba8095ca8b2eca04990c10139c41d1eb3d591420e48e2504cb86d908a6af"
+            "elf_sha256": "5f957a967a75f63fd01f49df59b094c91f2c75b8c6b4aa42382b8db58aaa3480"
           },
-          "receipt_sha256": "43da23efc9bbe7c63f4d0ac72272f98e9542f7e1c57723f125cff3130504e63f"
+          "receipt_sha256": "f49955dbbf4acd334961c5298e19a6904e9c9e7e1f34498c7ffde0e000fc1621"
         },
         "reference": {
           "receipt": {
-            "commit": "ab1b145b33b4b4cf252f61d7f5cfb06a55ac5f87",
+            "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
             "source_dirty": false,
-            "elf_sha256": "58a30c15d8e8725b1f3d934c30cf90576e5f15916363237546142aeaab2230ca"
+            "elf_sha256": "02b89042d198a48828140caaf3c6a22a907ad3ac95c12a55d1ba0a9f01dea77d"
           },
-          "receipt_sha256": "0e230e3a45f8dff5621e67f6b1e967afb286f5e32024c87ba394b72f64788e15"
+          "receipt_sha256": "5a9c398dbfba23f93009b9c52236797131fe7038582e7786740c468d20306704"
         }
       },
       "linked_audit": {
@@ -91,29 +91,29 @@
         "descriptor_bytes": 128,
         "package": {
           "format": 1,
-          "build": "ab1b145b33b4",
-          "payload_bytes": 85188,
-          "memory_bytes": 85188,
-          "crc32": "c49fac8c"
+          "build": "f8807cb16561",
+          "payload_bytes": 85344,
+          "memory_bytes": 85344,
+          "crc32": "4a77a2c6"
         },
         "unchanged_reference_playback_sha256": {
-          "resident-sci": "730b5c9ebba365f0056635b87c4d3b743dab035625c45f566c9e0b060024833d",
-          "worker": "7fac5eabdb2a64e61e0039c2c638d7f611ac5ede653d848a920db512e1551e2a"
+          "resident-sci": "bfd04b5ef91c20a22c31755a2d5873e9cd5a79e71f1644769fea95913eded7a0",
+          "worker": "d519158d16162adabb00901612e5b76412102030237dea4ddd1ffedaa56e53d3"
         },
         "private_worker_stack_upper_bound": 4904,
         "private_worker_stack_capacity": 8192,
-        "reference_directory": "native-reference-toy-cooked"
+        "reference_directory": "/workspace/scratch/bf5994e80308/kui/build/native-reference-toy-cooked"
       },
       "old_exact_admission_preserved": true,
       "descriptor_admission_required": true,
       "new_console_acceptance_claimed": false
     },
     "mdk2": {
-      "build": "ab1b145b33b4",
-      "payload_bytes": 67176,
-      "payload_sha256": "d6a3d5396f9f10a4003837dee16498970ab983f282e213ba68a3f4190fa3edba",
-      "module_sha256": "f3dba85b5a646c1400e4246b34651834f47d7d1ef3b2cc90491f041ad7fcda85",
-      "crc32": "33d65d6c",
+      "build": "f8807cb16561",
+      "payload_bytes": 67332,
+      "payload_sha256": "ca72e529011c3581fa03efafa5f82f5d5537fa74b27d053c74f91dcc52e1bb07",
+      "module_sha256": "fc0ddf1191de5dc3368abc59853cbbf6047b9a530f9e9d55405e2bc880e97c56",
+      "crc32": "af320cfd",
       "aliases": [
         "KUI/apps/games/retail-cdda-mdk2.kui",
         "KUI/apps/games/cdda-native-mdk2.kui"
@@ -121,19 +121,19 @@
       "source_provenance": {
         "current": {
           "receipt": {
-            "commit": "ab1b145b33b4b4cf252f61d7f5cfb06a55ac5f87",
+            "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
             "source_dirty": false,
-            "elf_sha256": "0254d0c20f46b2437a42772b82eb94ad8f52801aa101ac1820e3ee5a8eb59819"
+            "elf_sha256": "a327fcf2667e59555c64fc46edeb6ad92a62cf1bfd082d992269aefd1d9d022d"
           },
-          "receipt_sha256": "7cf50b3a6db3cb13ef81921faf265592cf4fdd84539dda3e603a08131a891a84"
+          "receipt_sha256": "ffa3297a3f998b2552198cb323f711c8f62f7f3c1d3c27bbd71081fab1dad076"
         },
         "reference": {
           "receipt": {
-            "commit": "ab1b145b33b4b4cf252f61d7f5cfb06a55ac5f87",
+            "commit": "f8807cb1656137cc5fad7854802d685ea168736f",
             "source_dirty": false,
-            "elf_sha256": "b86b8abe651fb19c6b86fa3a891b6f3866ffd62da6a23ddbe8b0230b4538b192"
+            "elf_sha256": "1ed3ccee9e82a47a6a3afb7b90603610153e271575f02b518413273688aa2391"
           },
-          "receipt_sha256": "3851556010b38b4a2f02e9f708ab5cc54e08c7141d082a066aca4a9274fd022d"
+          "receipt_sha256": "cc80a61aabfb2bf9c1bb6434f5658b0c38d97882723463bd2dd19ac397b48dc1"
         }
       },
       "linked_audit": {
@@ -143,18 +143,18 @@
         "descriptor_bytes": 128,
         "package": {
           "format": 1,
-          "build": "ab1b145b33b4",
-          "payload_bytes": 67176,
-          "memory_bytes": 67176,
-          "crc32": "33d65d6c"
+          "build": "f8807cb16561",
+          "payload_bytes": 67332,
+          "memory_bytes": 67332,
+          "crc32": "af320cfd"
         },
         "unchanged_reference_playback_sha256": {
-          "resident-sci": "58f20abc11b1b008c4252e74cca51e0788858fec7e8ca882a93292515a9ac316",
+          "resident-sci": "dc7fc162e5714fd12444ef897782024ddea3ca5d3b24591c1b6a6b4177973e6a",
           "worker": "618ad2647ae38a06a76e2cd954dca56336e008a938a58acc09d58760049eb545"
         },
         "private_worker_stack_upper_bound": 3684,
         "private_worker_stack_capacity": 8192,
-        "reference_directory": "native-reference-mdk2"
+        "reference_directory": "/workspace/scratch/bf5994e80308/kui/build/native-reference-mdk2"
       },
       "old_exact_admission_preserved": true,
       "descriptor_admission_required": true,

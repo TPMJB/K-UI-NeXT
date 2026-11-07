@@ -13,6 +13,10 @@ static int disc_card_read(void *context,uint32_t lba,uint8_t out[512]) {
     struct disc_card_platform *p=context;
     return p->raw.read && !p->raw.read(p->raw.ctx,lba,1u,out)?0:-1;
 }
+static int disc_card_read_sectors(void *context,uint32_t lba,uint32_t count,uint8_t *out) {
+    struct disc_card_platform *p=context;
+    return p->raw.read && !p->raw.read(p->raw.ctx,lba,count,out)?0:-1;
+}
 static bool disc_card_identity(void *context,struct kui_vmu_game_card_raw *out) {
     (void)context;struct kui_vmu_sd_identity id;
     if(!kui_sd_vmu_profile_identity(&id)) return false;
@@ -22,7 +26,7 @@ static bool disc_card_identity(void *context,struct kui_vmu_game_card_raw *out) 
 static bool disc_card_raw_begin(void *context,struct kui_vmu_game_card_raw *out) {
     struct disc_card_platform *p=context;
     if(f_mount(NULL,"0:",0)!=FR_OK || !kui_sd_raw_read_ops(&p->raw) || !p->raw.read) return false;
-    out->read_sector=disc_card_read;out->context=p;return true;
+    out->read_sector=disc_card_read;out->read_sectors=disc_card_read_sectors;out->context=p;return true;
 }
 static bool disc_card_raw_end(void *context) {
     struct disc_card_platform *p=context;p->raw=(struct kui_media_ops){0};

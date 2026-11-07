@@ -182,30 +182,49 @@ static void native_passive_capture_windows(void) {
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
 #include "vmu_native_crt_bootstrap_stage.inc"
 #endif
-static void native_passive_prepare(void) {
+/* Only immutable executable bytes and private cold-stage outputs enter the
+ * optional operand-cache scope. SDK coherence and publication remain outside
+ * it, after the original cache profile and RAM visibility are restored. */
+static uint32_t __attribute__((noipa)) native_passive_prepare_image(void) {
     if(native_driver.family==KUI_VMU_NATIVE_FAMILY_EARLY_P2_V1 &&
        !kui_vmu_native_early_p2_calls_valid((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
-           exec_bytes,&native_driver,native_call.call,passive_layout.initializer_call)) native_report(2u,0x76u);
+           exec_bytes,&native_driver,native_call.call,passive_layout.initializer_call)) return 0x76u;
 #if KUI_VMU_NATIVE_READONLY_PROBE
     const struct kui_vmu_native_patch_window windows[3]={{native_driver.submit,12u},
         {native_heap.initializer,12u},{native_heap.release,20u}};
     const size_t count=native_arena?1u:sizeof(windows)/sizeof(windows[0]);
     if(!native_arena && (((native_heap.initializer|native_heap.release)&3u) || !readonly_release_replay_valid()))
-        native_report(2u,12u);
+        return 12u;
 #if KUI_VMU_NATIVE_PERSISTENT_PROBE
     if(!kui_vmu_native_exit_discover_guarded((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
        exec_bytes,KUI_RETAIL_EXEC_ADDRESS,windows,count,
-       &native_exits) || !native_sdk_coherence_cached_admit()) native_report(2u,13u);
+       &native_exits)) return 13u;
 #else
     if(!kui_vmu_native_patch_no_interiors((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
-       exec_bytes,KUI_RETAIL_EXEC_ADDRESS,windows,count)) native_report(2u,12u);
+       exec_bytes,KUI_RETAIL_EXEC_ADDRESS,windows,count)) return 12u;
 #endif
-    native_passive_capture_windows();
 #else
     if(!kui_vmu_native_patch_no_interior((const void *)(uintptr_t)KUI_RETAIL_EXEC_ADDRESS,
-       exec_bytes,KUI_RETAIL_EXEC_ADDRESS,native_driver.submit,12u)) native_report(2u,11u);
+       exec_bytes,KUI_RETAIL_EXEC_ADDRESS,native_driver.submit,12u)) return 11u;
+#endif
+    return 0u;
+}
+static void __attribute__((noipa)) native_passive_prepare_finish(void) {
+#if KUI_VMU_NATIVE_READONLY_PROBE
+#if KUI_VMU_NATIVE_PERSISTENT_PROBE
+    /* prepare_image just proved immutable roles before this live slot check. */
+    if(!native_sdk_coherence_after_image_proof()) native_report(2u,13u);
+#endif
+    native_passive_capture_windows();
 #endif
 }
+#if !KUI_NATIVE_CACHED_EXTENT || KUI_NATIVE_PHYSICAL_DISC
+static void native_passive_prepare(void) {
+    uint32_t detail=native_passive_prepare_image();
+    if(detail)native_report(2u,detail);
+    native_passive_prepare_finish();
+}
+#endif
 #if KUI_VMU_NATIVE_CACHE_PROBE
 #include "kui/vmu_native_cache_seed.h"
 #include "kui/vmu_native_resolution_cache.h"
@@ -274,7 +293,9 @@ static bool __attribute__((noipa)) native_resolution_replay(void) {
        (!native_arena && (((native_heap.initializer|native_heap.release)&3u) ||
                           !readonly_release_replay_valid())) ||
        !allocation_safe(native_call.entry_begin,native_call.entry_bytes) ||
-       !native_sdk_coherence_cached_admit()) return false;
+       /* Successful replay freshly hashed this image and proved EARLY_P2
+        * roles; do not repeat that full immutable scan with operands uncached. */
+       !native_sdk_coherence_after_image_proof()) return false;
     native_passive_capture_windows();return true;
 }
 #endif

@@ -157,6 +157,34 @@ int main(void) {
     }
     reset();measured(false);expected_path=KUI_NATIVE_LAUNCH_TIMING_PATH;
     kui_smash_launch_timing_native("/Games/Sonic/disc.gdi","0123456789ab","MK-51000",
+        "Background New (X)",true,0x12345678u,286208u);
+    kui_smash_launch_timing_source_module("0:/KUI/apps/games/retail-native-standalone.kui",
+        "72db614495a3",0x87654321u,48412u);
+    kui_smash_launch_timing_freeze(true,log_line);
+    assert(kui_smash_launch_timing_format(text,sizeof(text)));
+    assert(strstr(text,"source_module_path: 0:/KUI/apps/games/retail-native-standalone.kui\n"));
+    assert(strstr(text,"source_module_build: 72db614495a3\n"));
+    assert(strstr(text,"metric.module_crc32: 0x87654321") && strstr(text,"metric.module_bytes: 48412"));
+    assert(!strstr(text,"metric.module_crc32: 0x12345678") && !strstr(text,"metric.module_bytes: 286208"));
+    static const char *const invalid_builds[]={"","a","0123456789a","0123456789abc","ABCDEF123456"};
+    for(unsigned i=0u;i<sizeof(invalid_builds)/sizeof(invalid_builds[0]);i++) {
+        reset();measured(false);
+        kui_smash_launch_timing_native("/Games/Sonic/disc.gdi","0123456789ab","MK-51000","Standard",true,1u,4u);
+        kui_smash_launch_timing_source_module("0:/KUI/apps/games/retail-boot.kui",invalid_builds[i],2u,8u);
+        kui_smash_launch_timing_freeze(true,log_line);
+        assert(kui_smash_launch_timing_format(text,sizeof(text)) && !strstr(text,"source_module_build:"));
+        assert(strstr(text,"metric.module_crc32: 0x00000001"));
+    }
+    static const char *const invalid_paths[]={"","a","0:/KUI/../bad.kui","0:/KUI/apps/games/bad\n.kui","0:/KUI/apps/games/bad.bin"};
+    for(unsigned i=0u;i<sizeof(invalid_paths)/sizeof(invalid_paths[0]);i++) {
+        reset();measured(false);
+        kui_smash_launch_timing_native("/Games/Sonic/disc.gdi","0123456789ab","MK-51000","Standard",true,1u,4u);
+        kui_smash_launch_timing_source_module(invalid_paths[i],"0123456789ab",2u,8u);
+        kui_smash_launch_timing_freeze(true,log_line);
+        assert(kui_smash_launch_timing_format(text,sizeof(text)) && !strstr(text,"source_module_path:"));
+    }
+    reset();measured(false);expected_path=KUI_NATIVE_LAUNCH_TIMING_PATH;
+    kui_smash_launch_timing_native("/Games/Sonic/disc.gdi","0123456789ab","MK-51000",
         "Background New (X)",true,0u,0u);
     kui_smash_launch_timing_finish(false,log_line,cancel);verify_crc();
     assert(writes==1u && syncs==1u && strstr(text,"preparation failed"));

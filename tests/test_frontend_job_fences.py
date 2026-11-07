@@ -51,6 +51,7 @@ prefix=r'''
 static bool vmu_history_resume_needed,startup_finished,splash_active,busy,cancel_requested;
 static bool vmu_emulation_ok,vmu_emulation_enabled,boot_ready,probe_launch_ready,video_preview;
 static unsigned pending,vmu_emulation_generation,worker_active_action,resumed;
+static bool history_requested,history_performed;
 static struct {bool requested;} sci_video_quiet;
 static struct {bool parked;} salvage_session;
 static struct kui_shell shell;
@@ -61,7 +62,10 @@ static struct {char root[KUI_DEST_ROOT_CAP],group[33];unsigned page,view,filter,
     struct kui_games_query query;bool valid;} games_prefetch;
 static bool games_art_request_valid,games_art_done_valid;
 static struct kui_shell_games_art_key games_art_requested,games_art_done;
-static void vmu_history_previous_session(void){++resumed;}
+static void kui_vmu_launch_history_request(bool enabled){history_requested=enabled;history_performed=false;}
+static bool kui_vmu_launch_history_performed(void){return history_performed;}
+static void kui_vmu_launch_history_end(void){history_requested=false;}
+static void mounted_prepare(void){if(history_requested){history_performed=true;++resumed;}}
 bool kui_shell_games_art_same(const struct kui_shell_games_art_key *a,const struct kui_shell_games_art_key *b){
     return !memcmp(a,b,sizeof(*a));
 }
@@ -70,13 +74,14 @@ static void reset_selector(void){
     splash_active=busy=cancel_requested=boot_ready=probe_launch_ready=video_preview=false;
     sci_video_quiet.requested=salvage_session.parked=false;
     pending=worker_active_action=resumed=0;vmu_emulation_generation=1;
+    history_requested=history_performed=false;
 }
 '''
 
 suffix=r'''
 #define BLOCKED(field,value) do {reset_selector();field=value;assert(select_history(0)==0u);assert(vmu_history_resume_needed && !worker_active_action);}while(0)
 int main(void){
-    reset_selector();assert(select_history(0)==120u && worker_active_action==120u && busy && !vmu_history_resume_needed);
+    reset_selector();assert(select_history(0)==117u && worker_active_action==117u && busy && !vmu_history_resume_needed);
     busy=false;assert(select_history(0)==0u); /* one-shot; no idle rerun */
     reset_selector();assert(select_history(58)==58u && !worker_active_action && vmu_history_resume_needed && !busy);
     BLOCKED(vmu_emulation_enabled,false); /* explicit Off must cause zero job/I/O */
@@ -87,10 +92,12 @@ int main(void){
     BLOCKED(boot_ready,true);BLOCKED(probe_launch_ready,true);
     BLOCKED(video_preview,true);BLOCKED(sci_video_quiet.requested,true);BLOCKED(salvage_session.parked,true);
     reset_selector();vmu_history_resume_needed=false;assert(select_history(0)==0);
-    reset_selector();prepare_history(58);assert(resumed==1 && !vmu_history_resume_needed);
-    prepare_history(58);assert(resumed==1);
-    reset_selector();prepare_history(121);assert(resumed==1 && !vmu_history_resume_needed);
-    reset_selector();prepare_history(122);assert(resumed==1 && !vmu_history_resume_needed);
+    reset_selector();prepare_history(58);assert(history_requested && !resumed && vmu_history_resume_needed);
+    mounted_prepare();finish_history();assert(resumed==1 && !vmu_history_resume_needed && !history_requested);
+    prepare_history(58);mounted_prepare();finish_history();assert(resumed==1);
+    reset_selector();prepare_history(121);mounted_prepare();finish_history();assert(resumed==1 && !vmu_history_resume_needed);
+    reset_selector();prepare_history(122);mounted_prepare();finish_history();assert(resumed==1 && !vmu_history_resume_needed);
+    reset_selector();prepare_history(58);finish_history();assert(!resumed && vmu_history_resume_needed && !history_requested);
     reset_selector();vmu_emulation_enabled=false;prepare_history(58);assert(!resumed && vmu_history_resume_needed);
     reset_selector();vmu_emulation_generation=0;prepare_history(58);assert(!resumed);
     reset_selector();vmu_emulation_ok=false;prepare_history(58);assert(!resumed);
@@ -130,14 +137,15 @@ int main(void){
     request.sequence=0;shell.page=KUI_SHELL_GAMES;kui_shell_set_vmu_history(&shell,11,&request,&view);assert(shell.vmu_history_loading);
     shell.page=KUI_SHELL_VMU_HISTORY;kui_shell_set_vmu_history(&shell,11,&request,&view);
     assert(!shell.vmu_history_loading && shell.games_vmu_selection.pair==77);
-    puts("PASS frontend job fences: actual automatic120/launch gates, VMUOff/no prefs, immutable query, stale prefetch/edit/history results");
+    puts("PASS frontend job fences: actual automatic117/mounted launch request gates, VMUOff/no prefs, immutable query, stale prefetch/edit/history results");
     return 0;
 }
 '''
 
 fragments='\n\n'.join((
     'static unsigned select_history(unsigned action){'+selector+'return action;}',
-    'static void prepare_history(unsigned action){'+forced+'}',
+    'static void prepare_history(unsigned action){'+forced+' else kui_vmu_launch_history_request(false);}',
+    'static void finish_history(void){if(kui_vmu_launch_history_performed())vmu_history_resume_needed=false;kui_vmu_launch_history_end();}',
     'static void snapshot_query(unsigned action){'+snapshot+'}',
     function(main,'games_query_same'),function(main,'games_prefetch_current'),
     function(shell,'kui_shell_games_view'),function(shell,'kui_shell_set_games_edit'),

@@ -25,6 +25,9 @@ def audit():
     return dict(schema='kui.game-image.common-batch.v1',status='PASS',
         layout_output_cases=10,request_sizes=[1,2,15,16,17,33,257],container_labels=5,
         maximum_physical_sectors_per_buffered_read=16,
+        conversion_alignment=dict(filesystem_offset_residues=512,
+            physical_sector_bytes=[2336,2352,2448],odd_start=True,
+            single_sector_and_allocation_failure=True),
         representative_257_raw_sectors=dict(old_callbacks=257,new_callbacks=17),
         sanitizers=['address','undefined'],output=output,
         source_sha256={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest()

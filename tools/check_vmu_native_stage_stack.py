@@ -240,11 +240,36 @@ class AllocationWrapper(Machine):
         assert self.fpscr == fpscr and self.fr == fr
 
 
+def sdk_slot_name(stage):
+    marker=stage[4].get('__kui_native_cached_discovery')
+    old='_native_sdk_coherence_cached_admit'
+    new='_native_sdk_coherence_after_image_proof'
+    if marker is None:
+        require(new not in stage[4], 'Image checked-coherence target lacks the complete new discovery cohort')
+        return old if old in stage[4] else None
+    require(marker==(1,0,0,0xfff1) and '__kui_native_cached_resolution' in stage[4],
+            'Current immutable discovery/resolution markers differ')
+    require(old not in stage[4] and all(name in stage[4] and stage[4][name][2]==2 for name in
+        (new,'_native_passive_prepare_finish','_kui_native_stage_cached_discover_image',
+         '_kui_native_stage_discover_image','_kui_vmu_native_cached_resolution_replay',
+         '_kui_vmu_native_resolution_cache_replay')),
+        'Current immutable discovery/coherence cohort is incomplete or mixed')
+    _,replay,_=symbol_bytes(stage,'_native_resolution_replay',2)
+    require(struct.pack('<I',stage[4]['_kui_vmu_native_cached_resolution_replay'][0]) in replay and
+            struct.pack('<I',stage[4][new][0]) in replay,
+            'Current coherence admission is not paired with fresh cached image replay')
+    from test_native_stage_discovery_scope import wrapper_binding,private_outputs
+    address,body,_=symbol_bytes(stage,'_kui_native_stage_cached_discover_image',2)
+    wrapper_binding(body,address,stage[4]['_kui_native_stage_discover_image'][0])
+    private_outputs(stage)
+    return new
+
+
 class ArmRoute(Machine):
     """Execute the complete relay through publication of the low boot control."""
     def __init__(self, stage, resident, stack, seed, mask, *, body=None, helper_bodies=None,
                  cache_hit=True, mode=0, sdk_admitted=True, normalized=False, crt_admitted=True,
-                 owner_admitted=True):
+                 owner_admitted=True, discovery_admitted=True):
         super().__init__(stage, "_kui_retail_stage_relay", seed, mask, OLD_STACK, body=body)
         self.symbols, self.stack = stage[4], stack
         self.smash_menu = '__smash_native_menu_seed' in self.symbols
@@ -344,6 +369,22 @@ class ArmRoute(Machine):
             self.callback_table=(address,table)
         else:
             require(not helper_bodies,'Historical relay cannot override selected callback helpers')
+        self.sdk_slot_name=sdk_slot_name(stage)
+        self.discovery_current='__kui_native_cached_discovery' in self.symbols
+        self.discovery_admitted=discovery_admitted
+        self.discovery_proved=False
+        self.discovery_finish_helpers={}
+        self.discovery_finish_calls=[]
+        if self.discovery_current:
+            name='_native_passive_prepare_finish'
+            address,body,section=symbol_bytes(stage,name,2)
+            require(body and section[1]==1 and section[2]&7==6,
+                    'Current post-proof SDK finisher lacks typed executable ownership')
+            require(struct.pack('<I',self.symbols[self.sdk_slot_name][0]) in body and
+                    struct.pack('<I',self.symbols['_native_passive_capture_windows'][0]) in body and
+                    struct.pack('<I',self.symbols['_native_report'][0]) in body,
+                    'Current post-proof finisher must retain SDK admission, refusal and capture')
+            self.discovery_finish_helpers[address]=(name,body)
         self.cache_hit, self.mode = cache_hit, mode
         self.sdk_admitted,self.refused=sdk_admitted,False
         self.crt_admitted=crt_admitted
@@ -399,7 +440,8 @@ class ArmRoute(Machine):
                   ("_kui_vmu_native_heap_call_discover", "call"), ("_allocation_safe", "allocation"),
                   ("_native_passive_prepare", "prepare"), ("_native_report", "refused"),
                   ("_readonly_release_replay_valid", "release"),
-                  ("_native_sdk_coherence_cached_admit", "sdk-slot"),
+                  (self.sdk_slot_name, "sdk-slot"),
+                  ("_kui_native_stage_cached_discover_image", "discover"),
                   ("_kui_vmu_native_exit_discover_guarded", "exits"),
                   ("_native_passive_capture_windows", "capture"), ("_native_runtime_mode", "mode"),
                   ("_native_crt_bootstrap_prearm", "crt-prearm"),
@@ -423,6 +465,9 @@ class ArmRoute(Machine):
         self.nonstack_writes = []
 
     def code(self,address,size):
+        for base,(_,body) in getattr(self,'discovery_finish_helpers',{}).items():
+            if base<=address<address+size<=base+len(body):
+                return body[address-base:address-base+size]
         for base,(_,body) in getattr(self,'source_owner_helpers',{}).items():
             if base<=address<address+size<=base+len(body):
                 return body[address-base:address-base+size]
@@ -529,6 +574,14 @@ class ArmRoute(Machine):
             return False
         if self.base <= target < self.base + len(self.blob):
             return False
+        if target in self.discovery_finish_helpers:
+            require(self.discovery_current and self.discovery_proved and not self.armed and
+                    self.discovery_admitted and not self.cache_hit,
+                    'Live SDK finisher invoked without a successful immutable discovery')
+            self.discovery_finish_calls.append(self.discovery_finish_helpers[target][0])
+            return False
+        if any(base<=target<base+len(body) for base,(_,body) in self.discovery_finish_helpers.items()):
+            return False
         assert target in self.targets, "unexpected native relay callback"
         label = self.targets[target]; self.calls.append(label)
         if label=='gin-arguments':
@@ -585,6 +638,10 @@ class ArmRoute(Machine):
                 require(self.smash_menu and not self.armed and not self.calls.count('sha') and
                         self.r[4:6]==[2,0x534f5731] and self.source_owner_calls,
                         'Invalid complete-source owner did not refuse before hooks')
+            elif self.discovery_current and not self.discovery_admitted:
+                require(not self.cache_hit and not self.armed and self.calls[-2]=='discover' and
+                        self.r[4:6]==[2,10] and not self.discovery_finish_calls,
+                        'Rejected immutable discovery reached SDK checks or changed its refusal')
             elif self.calls[-2]=="crt-prearm":
                 assert not self.crt_admitted and self.sdk_admitted and self.armed
                 assert self.r[4:6]==[2,0x48],"cold CRT prearm refusal changed its exact terminal diagnostic"
@@ -597,16 +654,16 @@ class ArmRoute(Machine):
             assert self.mem[self.exec_address]==self.source_bytes
         if label == "mode":
             assert self.calls.count("restore") == 1 and not any(value in self.calls for value in
-                ("ip", "extent", "cache", "driver", "heap", "call", "allocation", "prepare", "sha", "release", "exits", "sdk-slot", "capture"))
-        if label in ("ip", "extent", "cache", "driver", "heap", "call", "allocation", "prepare", "sha", "release", "exits", "sdk-slot", "capture"):
+                ("ip", "extent", "cache", "discover", "driver", "heap", "call", "allocation", "prepare", "sha", "release", "exits", "sdk-slot", "capture"))
+        if label in ("ip", "extent", "cache", "discover", "driver", "heap", "call", "allocation", "prepare", "sha", "release", "exits", "sdk-slot", "capture"):
             assert self.calls.count("restore") == 1
         if label=="extent":
             assert self.calls.count("ip")==1 and self.r[4:7]==[0x8c010000,self.source_bytes,0x8c010000]
             assert self.mem[self.exec_address]==self.source_bytes
             self.write(self.r[7],self.program_bytes)
-        if label in ("cache","driver","heap","call"):
+        if label in ("cache","discover","driver","heap","call"):
             assert self.calls.count("extent")==1 and self.mem[self.exec_address]==self.program_bytes
-        if self.smash_menu and (label=='driver' or (label=='cache' and self.cache_hit)):
+        if self.smash_menu and (label in ('driver','discover') or (label=='cache' and self.cache_hit)):
             # Model only the independent fresh discovery/replay outputs; the
             # relay's inlined geometry and actual owner/SHA comparison execute.
             driver=self.symbols['_native_driver'][0]
@@ -626,10 +683,27 @@ class ArmRoute(Machine):
             assert self.r[4:8] == [0x8C010000, self.program_bytes, self.symbols["_native_heap"][0], self.symbols["_native_call"][0]]
         if label == "allocation":
             assert self.r[4:6] == [0x8CC00000, 0x00400000]
+        if label=='discover':
+            require(self.discovery_current and not self.cache_hit and not self.armed and
+                    self.calls.count('cache')==1 and self.calls.count('discover')==1 and
+                    self.r[4:7]==[0x8c010000,self.program_bytes,0x8c010000],
+                    'Shared discovery scope bypassed fresh image/extent or changed its exact arguments')
+            require(self.start_sp-512<=self.r[7]<self.start_sp and not self.r[7]&3,
+                    'Shared discovery refusal output is outside the original private relay stack')
+            self.write(self.r[7],0 if self.discovery_admitted else 10)
+            self.discovery_proved=self.discovery_admitted
         if label=="sdk-slot":
-            assert not self.cache_hit and not self.armed and self.calls[-2]=="exits"
-            assert all(self.calls.count(name)==1 for name in ("driver","heap","call","allocation","release","exits"))
-        if label=="capture" and "_native_sdk_coherence_cached_admit" in self.symbols:
+            if self.discovery_current:
+                require(not self.cache_hit and not self.armed and self.discovery_proved and
+                        self.calls[-2]=='discover' and len(self.discovery_finish_calls)==1,
+                        'SDK slot check did not follow the actual proved-image finisher')
+                require(not any(self.calls.count(name) for name in
+                        ('driver','heap','call','allocation','release','exits','prepare')),
+                        'Current relay mixed private discovery with old inline proof callbacks')
+            else:
+                assert not self.cache_hit and not self.armed and self.calls[-2]=="exits"
+                assert all(self.calls.count(name)==1 for name in ("driver","heap","call","allocation","release","exits"))
+        if label=="capture" and self.sdk_slot_name is not None:
             assert self.sdk_admitted and self.calls[-2]=="sdk-slot","cold windows captured before SDK-slot admission"
         if label=='preclear-prepare':
             # This relay fixture is an unrelated allocator, whose immutable
@@ -656,6 +730,7 @@ class ArmRoute(Machine):
         result = (self.smash_child_id if label=='child-owner' else
                   1 if label in ('child-frame','child-arguments') else
                   self.mode if label == "mode" else int(self.cache_hit) if label == "cache"
+                  else int(self.discovery_admitted) if label=="discover"
                   else int(self.sdk_admitted) if label=="sdk-slot"
                   else int(self.crt_admitted) if label=="crt-prearm"
                   else int(self.owner_admitted) if label=='complete-source-hash'
@@ -673,6 +748,15 @@ class ArmRoute(Machine):
                     all(self.mem[self.cell+4*i]==0 for i in range(8)),
                     'Rejected source owner mutated low installation controls')
             return
+        if self.discovery_current and not self.discovery_admitted and not self.cache_hit and self.mode!=1:
+            require(self.refused and not self.armed and not self.discovery_finish_calls and
+                    not any(name in self.calls for name in ('sdk-slot','capture','sha')) and
+                    self.mem[self.slot]==self.original,
+                    'Failed immutable discovery published a live SDK hook')
+            require(all(self.mem[self.control+4*i]==0 for i in range(16)) and
+                    all(self.mem[self.cell+4*i]==0 for i in range(8)),
+                    'Failed immutable discovery changed low installer ownership')
+            return
         if not self.crt_admitted and self.mode!=1:
             assert self.refused and self.armed and self.calls[-2:]==["crt-prearm","refused"]
             assert self.calls.count("sha")==1 and self.mem[self.slot]==self.heap_hook
@@ -688,7 +772,7 @@ class ArmRoute(Machine):
             assert not self.armed and not self.nonstack_writes
             assert self.calls.count("restore") == 1 and self.calls.count("mode") == 1
             assert not any(value in self.calls for value in
-                ("ip", "extent", "cache", "driver", "heap", "call", "allocation", "prepare", "sha", "release", "exits", "sdk-slot", "capture"))
+                ("ip", "extent", "cache", "discover", "driver", "heap", "call", "allocation", "prepare", "sha", "release", "exits", "sdk-slot", "capture"))
             assert all(self.mem[self.control + 4 * i] == 0 for i in range(16))
             assert all(self.mem[self.cell + 4 * i] == 0 for i in range(8))
             assert self.mem[self.slot] == self.original and self.mem[self.frame + 20] == (0 if self.smash_gin else 0x8C010000)
@@ -715,8 +799,12 @@ class ArmRoute(Machine):
                             'Child mutations do not bracket immutable native relay preparation')
                 else:
                     assert self.calls[-1]=="crt-prearm"
-            if not self.cache_hit and "_native_sdk_coherence_cached_admit" in self.symbols:
+            if not self.cache_hit and self.sdk_slot_name is not None:
                 assert self.calls.count("sdk-slot")==1 and self.calls.index("sdk-slot")<self.calls.index("capture")
+                if self.discovery_current:
+                    require(self.calls.count('discover')==1 and self.discovery_proved and
+                            len(self.discovery_finish_calls)==1,
+                            'Shared discovery/SDK finisher was omitted before arming')
             if self.selected_callbacks:
                 assert self.callback_helper_calls==['_native_arm_heap_hook','_native_low_bindings'], \
                     'relay did not execute both actual selected callback helpers'
@@ -847,7 +935,8 @@ def check(stage, resident, *, worker=None, self_test=False):
     if worker is not None:
         require(STACK_SYMBOL not in worker[4] and HELPER not in worker[4] and BOTTOM_HELPER not in worker[4],
                 "temporary installer stack/helper retained in gameplay worker")
-    wrappers = routes = hooks = refusals = 0
+    wrappers = routes = hooks = refusals = discovery_refusals = 0
+    selected_sdk_slot=sdk_slot_name(stage)
     background='_kui_vmu_native_background_manifest_bind' in resident[4]
     require(background==('_native_background_boot_region' in stage[4]),'Installer stage/reader profile mismatch')
     ip_stack='__kui_native_owner_stack_ip_hook' in resident[4]
@@ -873,9 +962,13 @@ def check(stage, resident, *, worker=None, self_test=False):
                 for hit in ((False, True) if "_native_resolution_replay" in stage[4] else (False,)):
                     for normalized in (False,True):
                         ArmRoute(stage, resident, stack, seed, mask, cache_hit=hit, mode=mode,normalized=normalized).run().check(); routes += 1
-                if mode!=1 and "_native_sdk_coherence_cached_admit" in stage[4]:
+                if mode!=1 and selected_sdk_slot is not None:
                     ArmRoute(stage,resident,stack,seed,mask,cache_hit=False,mode=mode,sdk_admitted=False).run().check()
                     refusals+=1
+                if mode!=1 and '__kui_native_cached_discovery' in stage[4]:
+                    ArmRoute(stage,resident,stack,seed,mask,cache_hit=False,mode=mode,
+                             discovery_admitted=False).run().check()
+                    discovery_refusals+=1
             for alias in (0, 0x80000000, 0xA0000000):
                 HeapHook(resident, stage, stack, seed, mask, alias=alias).run().check(); hooks += 1
     crt_refusals=0
@@ -1024,6 +1117,10 @@ def check(stage, resident, *, worker=None, self_test=False):
             "rayman_original_startup_sp_rejected_by_old_bound_cases":rayman_old_bound_refusals,
             "inherited_52byte_frame_above_retained_low_stack":True,
             "cold_sdk_slot_refusal_before_any_arming_cases":refusals,
+            "cold_sdk_slot_selected_target":selected_sdk_slot,
+            "shared_cached_discovery_marker":'__kui_native_cached_discovery' in stage[4],
+            "shared_discovery_refusal_before_any_SDK_or_arming_cases":discovery_refusals,
+            "actual_post_image_proof_finisher_executed":'__kui_native_cached_discovery' in stage[4],
             "cold_crt_prearm_after_low_arming_before_owner_entry":bool(crt_refusals),
             "cold_crt_prearm_result_refusal_cases":crt_refusals,
             "complete_source_owner_refusal_cases":source_owner_refusals,

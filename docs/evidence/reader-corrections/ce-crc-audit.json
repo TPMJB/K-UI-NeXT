@@ -1,0 +1,306 @@
+{
+  "schema": "kui.ce.crc-runtime-audit.v1",
+  "status": "REGRESSION_CONFIRMED_RESTORATION_BLOCKED",
+  "binary_source_commit": "eeed38bd540e7a1085ca53aabf832e5d7a835efa",
+  "binary_source_tree": "997ea8a5b1976646fe4f2436993202c83fcce1f9",
+  "source_url": "https://github.com/TacitusVox/K-UI-NeXT/tree/eeed38bd540e7a1085ca53aabf832e5d7a835efa",
+  "module_delivery_zip_sha256": "17ff15b9fc3ac08255e52549ade2b9936f70e427e99a0643bb09ed3777ae3d28",
+  "qualification_scope": "All five compiled CE owners and actual SCIA receive-loop bodies; four CE/CDDA modules were delivered, generic ce-probe was deliberately excluded.",
+  "source": {
+    "folded_implementation": "src/loader/sci_stream.c",
+    "implementation_sha256": "9bc86d5fc16bf9240bf56f2770083643c8d1c0675bdc58c3432a308ec3ea57db",
+    "original_full_table_fixture": "tests/fixtures/ce-crc16-baseline.txt",
+    "original_full_fragment_sha256": "b70333c356d5b8f835f1587d25ff6129afdc4a5d4a12ba41b418fed5b1362efc",
+    "reconstructed_pre_fold_source_sha256": "3d849d7d4ba389c025eb5a8d2a141a7888ae3b4ce202d8b995c583fe1a8d9afe",
+    "qualification_code": "tests/test_ce_crc16_factoring.py",
+    "qualification_code_sha256": "8fee4352669ee4add455bca78617c4159122912ba78638a5152ff2bf5348a5b0"
+  },
+  "metric_definitions": {
+    "executed_instructions_per_byte": "Dynamic emitted SH instruction count including executed delay slots. Pure primitive includes function return; linked loop includes receive-loop housekeeping. These scopes must not be compared as identical measurements. Counts are not processor cycles.",
+    "instruction_sites": "Number of static16-bit instruction sites in the qualified backedge range, including delay slots.",
+    "crc_index_dependent_conditional_branch_sites": "Static conditional branch sites inside the per-byte loop controlled by high bit of (crc >> 8) XOR data; excludes the bounded byte-loop backedge. Each folded update executes one such branch instruction.",
+    "per_byte_memory_stores": "All stores inside the qualified CRC backedge range. Ordinary CE has one temporary-index stack store; CDDA has none.",
+    "per_byte_stack_accesses": "Matched SP-relative loads plus stores inside that range. Does not count function prologue/epilogue or unrelated receive operations.",
+    "accumulator_spills": "Stores of the CRC accumulator or a proven alias; zero. The ordinary temporary-index spill is reported separately.",
+    "local_frame_bytes": "Linked owning function fixed local SP allocation, excluding saved-register pushes; not a replacement for the full module stack audit.",
+    "table_bytes": "128 halfword entries =256 bytes delivered; original256 entries =512 bytes."
+  },
+  "original_and_folded_pure_primitive": {
+    "host_exhaustive_state_byte_pairs": 16777216,
+    "normalized_16bit_state": true,
+    "emitted_SH_cases": 3840,
+    "original_full256_instructions_per_update": [
+      12
+    ],
+    "delivered_fold128_instructions_per_update": [
+      18,
+      20
+    ],
+    "table_reads_per_update": 1,
+    "stack_accesses": 0,
+    "table_corruption_negative_control_refused": true,
+    "native_preprocessed_source_preserved": {
+      "native": true,
+      "native-background": true
+    }
+  },
+  "delivered_or_qualified_owners": {
+    "generic": {
+      "logical_module": "KUI/apps/games/ce-probe.kui",
+      "module_sha256": "6c42d39c91428e55f6456673467d9d936f6698a4cbfb34cb282319c7c8a7cd99",
+      "entry_elf_sha256": "43e8297a02269c9a673fbd80d9f50cd0b9dc2536e71d75235fa051fa72525bb1",
+      "resident_scia_elf_sha256": "39a192a7522bddbf30160d70a29a5519cbbdfaa932d9f3bbfdfa1ebaaf0ebe60",
+      "resident_sci_elf_sha256": "c0abc5f6713d974e03e6325bf05d3b20c05f281c97808c9742cbbd56733336c6",
+      "included_in_eeed_manual_delivery": false,
+      "deployment_note": "Qualified build only; generic ce-probe excluded to preserve personalized writable pilot; ordinary CE uses inherited root ce-probe.",
+      "actual_scia_crc_loop": {
+        "owner_sha256": "4845b7a087a9cc47407f4eed20b79ad22253f6a3f15a5c0abe35eb7bbfb1628b",
+        "table_bytes": 256,
+        "table_sha256": "33aa4a378936b23fbb76a9431b16a8089a5cf90f9eafbe569ea1e0cfe785497e",
+        "begin": "0x8c00ae16",
+        "end": "0x8c00ae44",
+        "owner_symbols": [
+          "_deliver"
+        ],
+        "loop_sha256": "26fab2c537afc1e28afbb266a05b79dcd1ea0dc25a4e2c04ff86efb7c405bff7",
+        "accumulator_register": "r12",
+        "instruction_sites": 23,
+        "per_byte_memory_stores": 1,
+        "per_byte_stack_accesses": 2,
+        "accumulator_spills": 0,
+        "temporary_index_stack_slot": 28,
+        "local_frame_bytes": 52,
+        "executed_instructions_per_byte": [
+          20,
+          23
+        ],
+        "crc_index_dependent_conditional_branch_sites": 1,
+        "table_reads_per_update": 1
+      },
+      "resident_bounds": {
+        "__retail_resident_binary_end": "0x8c00c264",
+        "__retail_resident_bss_end": "0x8c00d680",
+        "__retail_hook_stack_bottom": "0x8c00d800",
+        "__retail_hook_stack": "0x8c00e000"
+      }
+    },
+    "armada": {
+      "logical_module": "KUI/apps/games/ce-cdda-armada.kui",
+      "module_sha256": "91b1d4e43b866928767cb7e602fb41bee37c495c153452eeb4756851aa4f4807",
+      "entry_elf_sha256": "f27b16323601b6c4ac610343729bcb0036c05f35205fb7f3bd3742c1dc24b52a",
+      "resident_scia_elf_sha256": "6927c253feb7d0cd23edcc4ef6455369f490901abf972f9a746386bcae4a5cda",
+      "resident_sci_elf_sha256": "c0abc5f6713d974e03e6325bf05d3b20c05f281c97808c9742cbbd56733336c6",
+      "included_in_eeed_manual_delivery": true,
+      "deployment_note": "Included in the eeed manual delivery.",
+      "actual_scia_crc_loop": {
+        "owner_sha256": "10d112a038465c6662b70a0e1a4cf6c979b95dd70cce9f9500978d9f96bec5fa",
+        "table_bytes": 256,
+        "table_sha256": "33aa4a378936b23fbb76a9431b16a8089a5cf90f9eafbe569ea1e0cfe785497e",
+        "begin": "0x8c00980e",
+        "end": "0x8c00983a",
+        "owner_symbols": [
+          "_kui_sci_stream_take"
+        ],
+        "loop_sha256": "fb9d0764bd5e7e82094c109ea2f7b7673a7067ff9e53adf4ce7d89d82eee9818",
+        "accumulator_register": "r10",
+        "instruction_sites": 22,
+        "per_byte_memory_stores": 0,
+        "per_byte_stack_accesses": 0,
+        "accumulator_spills": 0,
+        "temporary_index_stack_slot": null,
+        "local_frame_bytes": 16,
+        "executed_instructions_per_byte": [
+          19,
+          22
+        ],
+        "crc_index_dependent_conditional_branch_sites": 1,
+        "table_reads_per_update": 1
+      },
+      "resident_bounds": {
+        "__retail_resident_binary_end": "0x8c00c3c4",
+        "__retail_resident_bss_end": "0x8c00d7e0",
+        "__retail_hook_stack_bottom": "0x8c00d800",
+        "__retail_hook_stack": "0x8c00e000"
+      }
+    },
+    "bam4": {
+      "logical_module": "KUI/apps/games/ce-cdda-bam4.kui",
+      "module_sha256": "f3b689d0f03b7c580f258f1ab4ca9423f0db1184f7028caa9c1c73e62e46dec4",
+      "entry_elf_sha256": "571defd301a5a27360786b58eb2f0d65e8b354cbccb9565509eb666ffce42b3e",
+      "resident_scia_elf_sha256": "6927c253feb7d0cd23edcc4ef6455369f490901abf972f9a746386bcae4a5cda",
+      "resident_sci_elf_sha256": "c0abc5f6713d974e03e6325bf05d3b20c05f281c97808c9742cbbd56733336c6",
+      "included_in_eeed_manual_delivery": true,
+      "deployment_note": "Included in the eeed manual delivery.",
+      "actual_scia_crc_loop": {
+        "owner_sha256": "10d112a038465c6662b70a0e1a4cf6c979b95dd70cce9f9500978d9f96bec5fa",
+        "table_bytes": 256,
+        "table_sha256": "33aa4a378936b23fbb76a9431b16a8089a5cf90f9eafbe569ea1e0cfe785497e",
+        "begin": "0x8c00980e",
+        "end": "0x8c00983a",
+        "owner_symbols": [
+          "_kui_sci_stream_take"
+        ],
+        "loop_sha256": "fb9d0764bd5e7e82094c109ea2f7b7673a7067ff9e53adf4ce7d89d82eee9818",
+        "accumulator_register": "r10",
+        "instruction_sites": 22,
+        "per_byte_memory_stores": 0,
+        "per_byte_stack_accesses": 0,
+        "accumulator_spills": 0,
+        "temporary_index_stack_slot": null,
+        "local_frame_bytes": 16,
+        "executed_instructions_per_byte": [
+          19,
+          22
+        ],
+        "crc_index_dependent_conditional_branch_sites": 1,
+        "table_reads_per_update": 1
+      },
+      "resident_bounds": {
+        "__retail_resident_binary_end": "0x8c00c3c4",
+        "__retail_resident_bss_end": "0x8c00d7e0",
+        "__retail_hook_stack_bottom": "0x8c00d800",
+        "__retail_hook_stack": "0x8c00e000"
+      }
+    },
+    "worms": {
+      "logical_module": "KUI/apps/games/ce-cdda-worms.kui",
+      "module_sha256": "1a03c4a2b079dd8ba098aa50085471376d2591f7405bdcee519cc205c70eb933",
+      "entry_elf_sha256": "b6761e62f4e253b26ae9c0ecd615e70e10b1a7a5fcce6ebbdcf369b1836d0bdc",
+      "resident_scia_elf_sha256": "32d0ed6e32f8b17979716a7cb006e7a3527db54fa7bec0bef276529c0025e029",
+      "resident_sci_elf_sha256": "c0abc5f6713d974e03e6325bf05d3b20c05f281c97808c9742cbbd56733336c6",
+      "included_in_eeed_manual_delivery": true,
+      "deployment_note": "Included in the eeed manual delivery.",
+      "actual_scia_crc_loop": {
+        "owner_sha256": "10d112a038465c6662b70a0e1a4cf6c979b95dd70cce9f9500978d9f96bec5fa",
+        "table_bytes": 256,
+        "table_sha256": "33aa4a378936b23fbb76a9431b16a8089a5cf90f9eafbe569ea1e0cfe785497e",
+        "begin": "0x8c00980e",
+        "end": "0x8c00983a",
+        "owner_symbols": [
+          "_kui_sci_stream_take"
+        ],
+        "loop_sha256": "fb9d0764bd5e7e82094c109ea2f7b7673a7067ff9e53adf4ce7d89d82eee9818",
+        "accumulator_register": "r10",
+        "instruction_sites": 22,
+        "per_byte_memory_stores": 0,
+        "per_byte_stack_accesses": 0,
+        "accumulator_spills": 0,
+        "temporary_index_stack_slot": null,
+        "local_frame_bytes": 16,
+        "executed_instructions_per_byte": [
+          19,
+          22
+        ],
+        "crc_index_dependent_conditional_branch_sites": 1,
+        "table_reads_per_update": 1
+      },
+      "resident_bounds": {
+        "__retail_resident_binary_end": "0x8c00c3c4",
+        "__retail_resident_bss_end": "0x8c00d7e0",
+        "__retail_hook_stack_bottom": "0x8c00d800",
+        "__retail_hook_stack": "0x8c00e000"
+      }
+    },
+    "wwp": {
+      "logical_module": "KUI/apps/games/ce-cdda-wwp.kui",
+      "module_sha256": "39cf505fb35ae0650595de87533972ba4a83386e14cb52e26eb8d80b743ce6e4",
+      "entry_elf_sha256": "462f69e5bf294e4fdf14dacf2c12fd486e924c6b9a36dfdf35759fde67022304",
+      "resident_scia_elf_sha256": "a50d422ce5fa3bab5af09e0745d5a8543932c04507d34bc3da27e13b1e30b3e3",
+      "resident_sci_elf_sha256": "c7fb603d979fce5c0327f841b04d2578eafe03062ea7a002c2bc962d1be351ab",
+      "included_in_eeed_manual_delivery": true,
+      "deployment_note": "Included in the eeed manual delivery.",
+      "actual_scia_crc_loop": {
+        "owner_sha256": "0cfeb815be4093603ea433a10acf518af9eed284db3849f9da445585d454a1b2",
+        "table_bytes": 256,
+        "table_sha256": "33aa4a378936b23fbb76a9431b16a8089a5cf90f9eafbe569ea1e0cfe785497e",
+        "begin": "0x8c00981a",
+        "end": "0x8c009846",
+        "owner_symbols": [
+          "_kui_sci_stream_take"
+        ],
+        "loop_sha256": "fb9d0764bd5e7e82094c109ea2f7b7673a7067ff9e53adf4ce7d89d82eee9818",
+        "accumulator_register": "r10",
+        "instruction_sites": 22,
+        "per_byte_memory_stores": 0,
+        "per_byte_stack_accesses": 0,
+        "accumulator_spills": 0,
+        "temporary_index_stack_slot": null,
+        "local_frame_bytes": 16,
+        "executed_instructions_per_byte": [
+          19,
+          22
+        ],
+        "crc_index_dependent_conditional_branch_sites": 1,
+        "table_reads_per_update": 1
+      },
+      "resident_bounds": {
+        "__retail_resident_binary_end": "0x8c00c3c4",
+        "__retail_resident_bss_end": "0x8c00d7e0",
+        "__retail_hook_stack_bottom": "0x8c00d800",
+        "__retail_hook_stack": "0x8c00e000"
+      }
+    }
+  },
+  "full256_generic_linked_trial": {
+    "begin": "0x8c00ae1e",
+    "end": "0x8c00ae3a",
+    "owner_symbols": [
+      "_deliver"
+    ],
+    "instruction_sites": 14,
+    "per_byte_stack_accesses": 0,
+    "accumulator_spills": 0,
+    "loop_sha256": "0303d0d99bd240ea5aa08fe6b4a0b4f2319952aa118e2975d6ea25f3cf82e9aa",
+    "elf_sha256": "c891f006853c42f91dde35b124c480f3cd5fc2b900f5d80298d7e800d894e7cd",
+    "table_bytes": 512,
+    "table_sha256": "ea5f177f22d32b7e80c132b498ee4b92882484f891f43f1897075f28bb3da4d9",
+    "executed_instructions_per_byte": [
+      14
+    ],
+    "crc_index_dependent_conditional_branch_sites": 0,
+    "table_reads_per_update": 1
+  },
+  "unchanged_memory_contract": {
+    "entry": "0x8c008300",
+    "ce_kernel_slot": "0x8c008324",
+    "service_stack_bottom": "0x8c00d800",
+    "service_stack_top": "0x8c00e000",
+    "linker_guard_enforced": true,
+    "buffers_quotas_and_worker_geometry_unchanged": true
+  },
+  "restoration_trials": {
+    "original_full256_without_compaction": {
+      "generic_guard_margin_bytes": 160,
+      "each_of_four_CDDA_guard_overflow_bytes": 192
+    },
+    "best_narrow_trial": {
+      "changes": [
+        "Original full256 CRC table and update",
+        "Existing backward hexadecimal formatter reused for CE",
+        "Existing paired aligned pixel stores reused for CE",
+        "Existing exact158-byte packed font reused for CE",
+        "Link input sections sorted by alignment without changing fixed bounds"
+      ],
+      "generic_guard_margin_bytes": 256,
+      "each_of_four_CDDA_guard_overflow_bytes": 64,
+      "all_four_CDDA_links_refused": true,
+      "remaining_common_minimum_reduction_bytes": 64,
+      "cold_output_equivalence_qualified": false
+    },
+    "rejected_alternatives": [
+      "Shared noinline hex8 helper did not reduce final BSS end.",
+      "Cold init/fault attributes and native compiler size policy did not recover the required space.",
+      "Branchless folded alternatives passed algebra/emitted-model checks but retained17\u201319 primitive instructions per byte, so do not restore original12-instruction cost."
+    ],
+    "no_CE_production_source_or_artifacts_promoted": true,
+    "no_bounds_or_error_checks_weakened": true
+  },
+  "limits": [
+    "No hardware cycle timing, SD/DMA throughput, or FMV measurement was performed.",
+    "The extra per-byte CPU work is confirmed; this evidence does not prove it caused any particular Armada FMV symptom.",
+    "CDDA full256 link attempts correctly fail the original guarded stack assertion; failed outputs are not release artifacts.",
+    "Full-table restoration remains pending a reviewed common size reduction, exact cold-output equivalence and all-five SCI/SCIA safety and hot-loop qualification.",
+    "The full256 linked-loop observation is ordinary CE only; no linked CDDA full256 loop is claimed because those candidates failed layout.",
+    "Public source, ELF/module hashes, bounded instruction models, and map/loop observations establish this audit; the locally retained scratch trials are not installed components."
+  ]
+}

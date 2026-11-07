@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-only
+BUILD ?= build/vmu-stage-snapshot-host
+.DEFAULT_GOAL := vmu-stage-snapshot-tests
+.PHONY: vmu-stage-snapshot-tests
+vmu-stage-snapshot-tests:
+	python3 tests/test_vmu_stage_snapshot_policy.py --output $(BUILD)/snapshot-policy.json

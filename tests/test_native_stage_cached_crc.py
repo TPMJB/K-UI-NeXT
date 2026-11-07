@@ -163,7 +163,160 @@ class Scope(CacheGateway):
                                  else [MMUCR] if sr & 0x400000f0 == 0x400000f0 else [])
 
 
-def audit(path):
+def relay_binding(stage, relay, body=None, target=WRAPPER):
+    """Bind the actual typed PC-relative call and complete-image arguments.
+
+    A target-shaped word in a literal pool alone is insufficient. The bounded
+    instruction window must load that literal, set the original CRC seed,
+    executable address and current byte count, then JSR that same register.
+    Only the straight-line integer argument setup emitted by these cold
+    stages is admitted; unknown instructions or target-register writes fail.
+    """
+    begin, linked, _ = symbol_bytes(stage, relay, 2)
+    body = linked if body is None else body
+    destination = stage[4][target][0]
+    size_object = stage[4]['_exec_bytes'][0]
+    found = []
+
+    def word(offset):
+        return struct.unpack_from('<H', body, offset)[0]
+
+    def literal(offset):
+        operation = word(offset)
+        if operation >> 12 != 13:
+            return None
+        address = ((begin + offset + 4) & ~3) + 4 * (operation & 255)
+        at = address - begin
+        if not 0 <= at <= len(body) - 4:
+            return None
+        return struct.unpack_from('<I', body, at)[0]
+
+    def setup(offset, registers, protected):
+        operation = word(offset)
+        n, m = operation >> 8 & 15, operation >> 4 & 15
+        if operation == 9:
+            return True
+        if n == protected:
+            return False
+        if operation >> 12 == 13:
+            registers[n] = literal(offset)
+        elif operation >> 12 == 14:
+            value = operation & 255
+            registers[n] = value - 256 if value & 128 else value
+        elif operation & 0xf00f == 0x6003:
+            registers[n] = registers[m]
+        elif operation & 0xf00f == 0x6002:
+            registers[n] = ('load32', registers[m])
+        elif operation & 0xff0f == 0x2f02:
+            # A caller may preserve the current length in its own stack word
+            # before the JSR; the cache scope starts only inside that call.
+            pass
+        else:
+            return False
+        return True
+
+    for at in range(0, len(body) - 3, 2):
+        operation = word(at)
+        if operation >> 12 != 13 or literal(at) != destination:
+            continue
+        call_register = operation >> 8 & 15
+        registers = [None] * 16
+        # Some ordinary stages set seed/length immediately before loading
+        # the helper. Decode only the adjacent straight-line setup, never
+        # infer volatile state across a call, jump or unknown instruction.
+        for before in range(max(0, at - 24), at, 2):
+            if not setup(before, registers, None):
+                registers = [None] * 16
+        registers[call_register] = destination
+        for call in range(at + 2, min(at + 20, len(body) - 3), 2):
+            operation = word(call)
+            if operation == (0x400b | call_register << 8):
+                if not setup(call + 2, registers, call_register):
+                    break
+                if registers[4:7] == [0, 0x8c010000, ('load32', size_object)]:
+                    found.append(dict(relay=relay, load=hex(begin + at),
+                        call=hex(begin + call), source=hex(0x8c010000),
+                        size_object=hex(size_object), previous_crc=0,
+                        target=target, target_address=hex(destination)))
+                break
+            if not setup(call, registers, call_register):
+                break
+    require(len(found) == 1,
+            'Cold relay lacks one actual complete-image CRC call: ' + relay)
+    return found[0]
+
+
+def relay_controls(stage, relay, selected):
+    begin, original, _ = symbol_bytes(stage, relay, 2)
+    call = int(selected['call'], 16) - begin
+    changed = bytearray(original)
+    struct.pack_into('<H', changed, call, 9)
+    mutations = [changed]
+    # A pool pointer to an unselected helper must not masquerade as a call.
+    changed = bytearray(original)
+    address = stage[4][WRAPPER][0]
+    pointer = struct.pack('<I', address)
+    require(original.count(pointer) == 1, 'Cold CRC call needs one typed target literal')
+    struct.pack_into('<I', changed, original.index(pointer), address + 2)
+    mutations.append(changed)
+    # The current byte-count load is in the call's checked setup or delay slot.
+    changed = bytearray(original)
+    load = int(selected['load'], 16) - begin
+    changed_arguments = False
+    for at in range(load + 2, call + 4, 2):
+        operation = struct.unpack_from('<H', original, at)[0]
+        if operation & 0xf00f in (0x6002, 0x6003) and operation >> 8 & 15 == 6:
+            struct.pack_into('<H', changed, at, operation ^ 0x100)
+            changed_arguments = True
+            break
+    require(changed_arguments, 'Missing actual current executable-length load')
+    mutations.append(changed)
+    changed = bytearray(original)
+    seeds = [at for at in range(max(0, load - 24), call + 4, 2)
+             if struct.unpack_from('<H', original, at)[0] == 0xe400]
+    require(seeds, 'Missing actual zero previous-CRC argument')
+    struct.pack_into('<H', changed, seeds[-1], 0xe401)
+    mutations.append(changed)
+    for name in ('source', 'size_object'):
+        address = int(selected[name], 16)
+        needle = struct.pack('<I', address)
+        require(original.count(needle) == 1,
+                'Cold CRC argument needs one typed literal: ' + name)
+        changed = bytearray(original)
+        struct.pack_into('<I', changed, original.index(needle), address + 4)
+        mutations.append(changed)
+    for changed in mutations:
+        try:
+            relay_binding(stage, relay, changed)
+        except ValueError:
+            continue
+        raise ValueError('Cold CRC caller accepted an unsafe call/argument mutation')
+    return len(mutations)
+
+
+def uncached_control(path, relay):
+    """The retained old stage checks all bytes but cannot claim this scope."""
+    stage = read_elf(path)
+    require('__kui_native_cached_boot_crc' not in stage[4] and
+            WRAPPER not in stage[4] and LEAF not in stage[4],
+            'Old control already contains the operand-cache CRC scope')
+    selected = relay_binding(stage, relay, target='_kui_stage_crc32')
+    try:
+        audit(path, relay=relay)
+    except ValueError as error:
+        require(str(error) == 'CRC scope marker differs',
+                'Old stage failed for an unrelated reason: ' + str(error))
+    else:
+        raise ValueError('A retained uncached stage passed the new scope gate')
+    actual_crc = crc_audit(path, relay=relay, stack_limit=8)
+    require(Path(path).read_bytes() == stage[0], 'Old stage changed during qualification')
+    return dict(status='PASS', elf_sha256=hashlib.sha256(stage[0]).hexdigest(),
+                actual_uncached_complete_image_caller=selected,
+                scope_gate_refusal='CRC scope marker differs',
+                actual_SH_crc=actual_crc)
+
+
+def audit(path, relay='_kui_native_heap_base_relay'):
     require(__debug__, 'Run the linked scope model without Python optimization')
     stage = read_elf(path)
     require(stage[4].get('__kui_native_cached_boot_crc') == (1, 0, 0, 0xfff1), 'CRC scope marker differs')
@@ -188,8 +341,8 @@ def audit(path):
             all(word >> 12 != 0xb and word & 0xf0ff not in (0x400b, 0x402b)
                 for word in instructions),
             'CRC must retain only its two nonvolatile-register pushes and no outgoing calls')
-    _, relay, _ = symbol_bytes(stage, '_kui_native_heap_base_relay', 2)
-    require(struct.pack('<I', begin) in relay, 'Base relay does not bind the scope')
+    selected_caller = relay_binding(stage, relay)
+    caller_rejections = relay_controls(stage, relay, selected_caller)
     cases = 0
     configs = [dict(mask=mask) for mask in range(16)]
     configs += [dict(ccr=ccr) for ccr in (0, 1, 4, 0x20, 0x80, 0x105, 0x109, 0x909, MASK)]
@@ -242,13 +395,15 @@ def audit(path):
         require(changed != struct.pack('<4HI', 0xd001, 0x402b, 9, 9, crc),
                 'Pure leaf binding accepted a tail-call mutation')
         leaf_rejections += 1
-    actual_crc = crc_audit(path, relay=None, stack_limit=8)
+    actual_crc = crc_audit(path, relay=relay, stack_limit=8)
     require(Path(path).read_bytes() == stage[0], 'Stage changed during scope qualification')
     return dict(schema='kui.native-stage.cached-crc.v1', status='PASS',
                 elf_sha256=hashlib.sha256(stage[0]).hexdigest(), wrapper=hex(begin), wrapper_bytes=len(body),
                 actual_SH_wrapper_cases=cases, unsafe_mutation_rejections=rejected,
                 actual_SH_crc=actual_crc, source_bytes_unchanged=True,
                 pure_leaf_instruction_mutation_rejections=leaf_rejections,
+                actual_complete_image_caller=selected_caller,
+                unsafe_caller_mutation_rejections=caller_rejections,
                 bound_leaf_outgoing_calls=0, bound_leaf_stack_store_offsets=[4, 14],
                 fallback_arguments_and_result_unchanged=True, published_private_stack_lines=[5, 6],
                 private_stack_headroom=128, bound_leaf_stack_bytes=8, ccr_write_nops=[8, 8],
@@ -261,9 +416,14 @@ def audit(path):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--elf', required=True, type=Path)
+    parser.add_argument('--relay', default='_kui_native_heap_base_relay')
+    parser.add_argument('--old-elf', type=Path,
+                        help='Retained same-family uncached stage; must fail the scope gate')
     parser.add_argument('--report', type=Path)
     args = parser.parse_args()
-    result = audit(args.elf)
+    result = audit(args.elf, relay=args.relay)
+    if args.old_elf:
+        result['old_uncached_control'] = uncached_control(args.old_elf, args.relay)
     text = json.dumps(result, indent=2) + '\n'
     if args.report:
         args.report.parent.mkdir(parents=True, exist_ok=True)

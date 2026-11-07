@@ -19,8 +19,13 @@ struct kui_game_ram_patches;
 struct kui_game_launch_report {
     const char *version,*build_id,*image_path,*reader,*storage,*encoding;
     const char *cdda_profile,*package_path,*product,*title,*bootfile;
+    /* Optional verified source-module identity. package_path names that
+     * final selection; CRC/bytes describe the original checked payload,
+     * never the subsequently patched manifest/card/session image. */
+    const char *module_build;
     bool cdda;
     uint32_t ip_crc32,ip_bytes,executable_crc32,executable_bytes;
+    uint32_t module_crc32,module_bytes;
     const struct kui_game_ram_patches *patches;
 };
 
@@ -28,7 +33,9 @@ struct kui_game_launch_report {
  * and CRC32 footer covering every preceding byte. Sequence zero, malformed
  * fields, trailing bytes and corrupt checksums are rejected. Failure leaves
  * caller output/size/sequence unchanged. Text explicitly records preparation
- * before handoff; it is never evidence that the game started successfully. */
+ * before handoff; it is never evidence that the game started successfully.
+ * The optional source-module trio follows package; older v1 records without
+ * this extension remain readable. */
 bool kui_game_launch_report_encode(void *record,size_t capacity,size_t *size,
         const struct kui_game_launch_report *report,uint64_t sequence);
 bool kui_game_launch_report_inspect(const void *record,size_t size,uint64_t *sequence);

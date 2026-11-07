@@ -43,10 +43,12 @@ struct __attribute__((__may_alias__)) vmu_fs_state {
     struct vmu_fs_dir dirs[KUI_VMU_FS_MAX_DEPTH];
     struct vmu_fs_object object;
     uint16_t name[260];
-    uint8_t sector[512],fat[512],mirror[512],bitmap[512];
+    uint8_t sector[512];
+    uint32_t fat[128];
+    uint8_t mirror[512],bitmap[512];
     uint8_t entries[VMU_FS_EXFAT_SET][32];
-    uint64_t dir_cache,bitmap_cache;
-    uint32_t fat_cache;
+    uint64_t dir_cache;
+    uint32_t bitmap_cache,fat_cache;
 };
 _Static_assert(sizeof(struct vmu_fs_state)<=KUI_VMU_FS_WORK_BYTES,"FS admission workspace bound");
 static int vmu_fs_target_index(const struct vmu_fs_state *,uint32_t);
@@ -56,6 +58,13 @@ static int vmu_fs_bitmap_bit(struct vmu_fs_state *,uint32_t);
 static uint16_t vmu_fs_u16(const uint8_t *p) {return (uint16_t)(p[0]|(uint16_t)p[1]<<8);}
 static uint32_t vmu_fs_u32(const uint8_t *p) {
     return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24;
+}
+static inline uint32_t vmu_fs_fat_word(const struct vmu_fs_state *s,unsigned index) {
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+    return s->fat[index];
+#else
+    return vmu_fs_u32((const uint8_t *)s->fat+index*4u);
+#endif
 }
 static uint64_t vmu_fs_u64(const uint8_t *p) {return vmu_fs_u32(p)|(uint64_t)vmu_fs_u32(p+4u)<<32;}
 static int vmu_fs_zero(const void *bytes,size_t n) {
@@ -93,7 +102,7 @@ static int vmu_fs_fat_sector(struct vmu_fs_state *s,uint32_t index) {
     const struct kui_vmu_persist_geometry *g=&s->profile.geometry;
     if((uint64_t)index>=g->fat_sectors) return vmu_fs_fail(s,KUI_VMU_FS_CORRUPT,2u);
     if(s->fat_cache==index) return 0;
-    if(vmu_fs_read(s,g->fat_first_lba+index,s->fat)) return s->stats->result;
+    if(vmu_fs_read(s,g->fat_first_lba+index,(uint8_t *)s->fat)) return s->stats->result;
     if(g->fat_count==2u) {
         if(vmu_fs_read(s,g->fat_first_lba+g->fat_sectors+index,s->mirror)) return s->stats->result;
         if(memcmp(s->fat,s->mirror,512u)) return vmu_fs_fail(s,KUI_VMU_FS_CORRUPT,3u);
@@ -103,7 +112,7 @@ static int vmu_fs_fat_sector(struct vmu_fs_state *s,uint32_t index) {
 static int vmu_fs_fat_value(struct vmu_fs_state *s,uint32_t c,uint32_t *value) {
     if(c>=s->profile.geometry.cluster_count+2u) return vmu_fs_fail(s,KUI_VMU_FS_CORRUPT,4u);
     if(vmu_fs_fat_sector(s,c/128u)) return s->stats->result;
-    *value=vmu_fs_u32(s->fat+(c%128u)*4u);
+    *value=vmu_fs_fat_word(s,c%128u);
     if(s->profile.geometry.fs_type==KUI_VMU_PERSIST_FAT32) *value&=UINT32_C(0x0fffffff);
     return 0;
 }
@@ -491,10 +500,11 @@ static int vmu_fs_object_next(struct vmu_fs_state *s,struct vmu_fs_dir *d) {
 static int vmu_fs_bitmap_bit(struct vmu_fs_state *s,uint32_t cluster) {
     if(s->profile.geometry.fs_type!=KUI_VMU_PERSIST_EXFAT) return 0;
     uint32_t byte=(cluster-2u)/8u;
-    uint64_t lba=vmu_fs_lba(s,s->profile.geometry.bitmap_first_cluster)+byte/512u;
-    if(s->bitmap_cache!=lba) {
+    uint32_t sector=byte/512u;
+    if(s->bitmap_cache!=sector) {
+        uint64_t lba=vmu_fs_lba(s,s->profile.geometry.bitmap_first_cluster)+sector;
         if(vmu_fs_read(s,lba,s->bitmap)) return s->stats->result;
-        s->bitmap_cache=lba;
+        s->bitmap_cache=sector;
     }
     if(!(s->bitmap[byte%512u]&(1u<<((cluster-2u)%8u))))
         return vmu_fs_fail(s,KUI_VMU_FS_ALLOCATION,70u);
@@ -738,8 +748,10 @@ static int vmu_fs_live_file(struct vmu_fs_state *s,const struct vmu_fs_object *o
                 KUI_VMU_FS_LINK_LIVE_EXFAT_FILE,KUI_VMU_FS_LINK_TARGET,current,!!previous);
             return vmu_fs_fail(s,KUI_VMU_FS_CROSSLINK,110u);
         }
-        uint32_t raw;
-        if(vmu_fs_fat_value(s,current,&raw)) return s->stats->result;
+        /* The cluster was checked above, and this stream uses exFAT words. */
+        uint32_t sector=current/128u;
+        if(s->fat_cache!=sector && vmu_fs_fat_sector(s,sector)) return s->stats->result;
+        uint32_t raw=vmu_fs_fat_word(s,current%128u);
         ++s->stats->fat_entries;
         uint32_t next=raw>=UINT32_C(0xfffffff8)?0u:raw;
         if((next && !vmu_fs_cluster(s,next)) || !!next!=(i+1u<clusters)) {
@@ -813,14 +825,14 @@ static int vmu_fs_incoming(struct vmu_fs_state *s) {
             uint32_t cluster=sector*128u+i;
             if(cluster<2u || cluster>=g->cluster_count+2u) continue;
             ++s->stats->fat_entries;
-            uint32_t value=vmu_fs_u32(s->fat+i*4u);
+            uint32_t raw=vmu_fs_fat_word(s,i),value=raw;
             if(g->fs_type==KUI_VMU_PERSIST_FAT32) value&=UINT32_C(0x0fffffff);
             int target=vmu_fs_target_index(s,value);if(target<0) continue;
             int source=vmu_fs_target_index(s,cluster);
             if(source<0 || s->targets[target].previous!=cluster ||
                s->targets[source].role!=s->targets[target].role) {
                 vmu_fs_link(s,cluster,value,UINT32_MAX,KUI_VMU_FS_LINK_FAT32_TABLE,
-                    KUI_VMU_FS_LINK_TARGET,vmu_fs_u32(s->fat+i*4u),1u);
+                    KUI_VMU_FS_LINK_TARGET,raw,1u);
                 return vmu_fs_fail(s,KUI_VMU_FS_CROSSLINK,110u);
             }
         }
@@ -857,7 +869,7 @@ static int vmu_fs_input_valid(const struct kui_vmu_fs_input *in) {
 static int vmu_fs_scan(const struct kui_vmu_fs_input *in,struct kui_vmu_fs_workspace *work) {
     struct vmu_fs_state *s=(struct vmu_fs_state *)(void *)work->private_work.bytes;
     memset(work,0,sizeof(*work));s->input=in;s->stats=&work->stats;
-    s->dir_cache=s->bitmap_cache=UINT64_MAX;s->fat_cache=VMU_FS_UNKNOWN;
+    s->dir_cache=UINT64_MAX;s->bitmap_cache=s->fat_cache=VMU_FS_UNKNOWN;
     struct kui_vmu_persist_profile *p=&s->profile;
     p->card_sectors=in->card_sectors;p->partition_first=in->partition_first;p->partition_end=in->partition_end;
     p->transport=KUI_VMU_PERSIST_PROFILE_TRANSPORT;p->high_capacity=in->high_capacity;

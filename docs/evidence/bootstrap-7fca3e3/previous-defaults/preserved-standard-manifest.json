@@ -1,0 +1,37 @@
+{
+  "schema": "kui.native.standard-build-manifest.v1",
+  "source_commit": "dbadd024e2ff2b61f0052ead008b6a4a987d41f7",
+  "source_dirty": false,
+  "build": "dbadd024e2ff",
+  "profile": "paced-SCI-VMU-lite-A2",
+  "payload_bytes": 233900,
+  "memory_bytes": 233900,
+  "profile_payload_offset": 114848,
+  "normalized_payload_sha256": "daefe0b98f7a328d84f26e95bb7028f40d8538b492f61ce2f34038d2cdc9418e",
+  "module_sha256": "d8eb11d3047c26a626beed43b0d403a65cb7b748f36434dff636c9e0a75f5b6d",
+  "module_bytes": 233964,
+  "profile_bytes": 4096,
+  "provenance": {
+    "commit": "dbadd024e2ff2b61f0052ead008b6a4a987d41f7",
+    "source_dirty": false,
+    "compile_provenance_sha256": "34d959012988fcf94aba5342b3c11398795e8ef809a226f76708448b2c447add",
+    "elf_sha256": "78d9409d8c797e9cf5605c824fa327bbf92ddbbf73aef5a15ef14fc6f736d9ef"
+  },
+  "launch_mutable_spans": [
+    [
+      114848,
+      4096
+    ]
+  ],
+  "build_labels_normalized": false,
+  "unknown_installed_modules_refused": true,
+  "artifacts_sha256": {
+    "entry.elf": "78d9409d8c797e9cf5605c824fa327bbf92ddbbf73aef5a15ef14fc6f736d9ef",
+    "stage.elf": "7e41d257e58c9681a450be13c18ecb13e9e68928dbdae3e0c70d9ea2e519388e",
+    "native-worker.elf": "0288ee54c9516972f2e4a8107c30c450ec3c58900bd2377d8c38725be6b32f1f",
+    "resident-sci.elf": "c91c2fee13c6f25198669b45006c10b1d666f8ba71f9ce38e4d902d723d04b53",
+    "retail-native-vmu-lite-paced.kui": "d8eb11d3047c26a626beed43b0d403a65cb7b748f36434dff636c9e0a75f5b6d"
+  },
+  "full_linked_family_audit_required_for_delivery": true,
+  "header_sha256": "9f74bad8ba9937d41b18acab59df23d8e872f9b43648b504c893b398d8c9de00"
+}

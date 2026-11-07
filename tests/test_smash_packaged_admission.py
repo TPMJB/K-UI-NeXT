@@ -44,10 +44,10 @@ def audit(package,runtime=None):
             helper_path='KUI/apps/games/smash-'+label+'-vmu-helper.bin'
             helper=archive.read(helper_path);assert len(helper)==49152
             actual[helper_path]=helper
-            owner=profile(helper,kind);module=actual['KUI/apps/games/retail-smash-'+label+'.kui'][64:]
+            owner=profile(helper,kind,embedded=True);module=actual['KUI/apps/games/retail-smash-'+label+'.kui'][64:]
             assert module.count(owner)==1,'Exact packaged helper does not match its module owner'
             damaged=bytearray(helper);damaged[0]^=1
-            assert profile(damaged,kind) not in module,'Changed helper must not match the module'
+            assert profile(damaged,kind,embedded=True) not in module,'Changed helper must not match the module'
             helper_owners[label]=dict(helper_sha256=sha(helper),owner_sha256=sha(owner),
                 exact_packaged_pair=True,changed_helper_refused=True)
     assert len({v['build'] for v in headers.values()})==1,'Four child/menu modules must share one build'

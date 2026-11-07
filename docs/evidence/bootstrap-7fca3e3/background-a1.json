@@ -1,0 +1,47 @@
+{
+  "status": "PASS",
+  "role": "background-a1",
+  "elf_sha256": "963d34544f593b41ed97096caa710e1eef6595e9d50bdd2800575f0fe4fd066b",
+  "steps": {
+    "full_crc": {
+      "status": "PASS",
+      "report": "build/bootstrap-audit/background-a1/full_crc.json",
+      "host_audit_seconds": 1.06
+    },
+    "cached_extent": {
+      "status": "PASS",
+      "report": "build/bootstrap-audit/background-a1/cached_extent.json",
+      "host_audit_seconds": 0.437
+    },
+    "cached_replay": {
+      "status": "PASS",
+      "report": "build/bootstrap-audit/background-a1/cached_replay.json",
+      "host_audit_seconds": 0.735
+    },
+    "selected_scope_calls": {
+      "status": "PASS",
+      "report": "build/bootstrap-audit/background-a1/selected_scope_calls.json",
+      "host_audit_seconds": 0.004
+    },
+    "fresh_fat_cache": {
+      "status": "PASS",
+      "report": "build/bootstrap-audit/background-a1/fresh_fat_cache.json",
+      "host_audit_seconds": 0.127
+    },
+    "verified_fat_window": {
+      "status": "PASS",
+      "report": "build/bootstrap-audit/background-a1/verified_fat_window.json",
+      "host_audit_seconds": 0.06
+    },
+    "snapshot_epoch": {
+      "status": "PASS",
+      "report": "build/bootstrap-audit/background-a1/snapshot_epoch.json",
+      "host_audit_seconds": 0.029
+    },
+    "snapshot_stream": {
+      "status": "PASS",
+      "report": "build/bootstrap-audit/background-a1/snapshot_stream.json",
+      "host_audit_seconds": 0.097
+    }
+  }
+}
