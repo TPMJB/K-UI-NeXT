@@ -34,26 +34,26 @@ now read), compact Background stage end `0x8cebe748`. The admission sources matc
 | --- | --- | ---: | --- | --- | --- | --- | --- |
 | CRAZY TAXI 2 | MK-51136 | 1,418 | virtual VMU | — |  | — | works on its own game card (virtual VMU, own game card) |
 | ELEMENTAL GIMMICK GEAR | T41601N | 670 | virtual VMU | — |  | — | saves and loads (Background, virtual VMU in A1) |
-| EVOLUTION - THE WORLD OF SACRED DEVICE | T17706N | 2,093 | virtual VMU | — |  | — |  |
-| EVOLUTION2 | T1711N | 3,961 | virtual VMU | — |  | — |  |
-| GRANDIA2 | T17716N | 1,249 | virtual VMU | — |  | no profile: CD music Off |  |
+| EVOLUTION - THE WORLD OF SACRED DEVICE | T17706N | 2,093 | virtual VMU | — |  | — | save and load succeed; FMV slowdown reported (virtual VMU (A1 builds)) |
+| EVOLUTION2 | T1711N | 3,961 | virtual VMU | — |  | — | save and load succeed; FMV slowdown reported (virtual VMU (A1 builds)) |
+| GRANDIA2 | T17716N | 1,249 | virtual VMU | — |  | no profile: CD music Off | tested by the owner with virtual VMU; boot confirmed in v1.8.5 (virtual VMU) |
 | JET GRIND RADIO | MK-51058 | 3,003 | virtual VMU | — |  | — | virtual A2 works (virtual VMU (A2)) |
-| POWER STONE 2 USA | T1211N | 3,024 | virtual VMU | — |  | — | saves and reloads from the physical disc (SCI) (physical disc) |
+| POWER STONE 2 USA | T1211N | 3,024 | virtual VMU | — |  | — | saves and loads after a complete reboot (SD, card p0005); physical-disc virtual VMU also saves and reloads (SD virtual VMU and physical disc) |
 | PSO | MK-51100 | 3,694 | virtual VMU | — |  | — | works; intro video slow (native) |
-| RAYMAN 2 THE GREAT ESCAPE | 17707N | 913 | virtual VMU | — |  | — |  |
-| RECORD OF LODOSS WAR | T40218N | 3,392 | virtual VMU | — |  | no profile: CD music Off |  |
+| RAYMAN 2 THE GREAT ESCAPE | 17707N | 913 | virtual VMU | — |  | — | virtual VMU shown; saving and loading work; FMVs and gameplay flawless (New with virtual VMU) |
+| RECORD OF LODOSS WAR | T40218N | 3,392 | virtual VMU | — |  | no profile: CD music Off | virtual VMU shown; saving and loading work; FMVs and gameplay flawless (New with virtual VMU) |
 | RESIDENT EVIL CODE VERONICA | T1204N | 3,823 | virtual VMU | — |  | — | saves, power-cycle reload and Disc 2 verified (Background New (X), virtual VMU) |
 | SEGA SMASH PACK VOLUME 1 | MK-51146 | 207 | virtual VMU | — |  | Smash collection route | hardware-accepted (Smash collection) |
-| SILVER | T15108N | 2,886 | virtual VMU | — |  | — | works with its exact Standard VMU adapter (Standard, exact VMU adapter); known limit: executable reclamation, exit consumers and lock behavior block the shared module (roadmap section 3) |
-| SKIES OF ARCADIA DISC 1 | MK-51052 | 5,332 | virtual VMU | — |  | — |  |
-| SONIC ADVENTURE | MK-51000 | 6,592 | virtual VMU | — |  | — | historical play reports; no shared virtual VMU yet (ordinary / standalone New); known limit: executable loader and exit lifetime still block shared virtual VMU (roadmap section 3) |
-| SONIC ADVENTURE 2 | MK-51117 | 1,541 | virtual VMU | — |  | — |  |
-| SWORD OF THE BERSERK GUTS RAGE | T-36805N | 1,641 | virtual VMU | — |  | — | card in A2 not seen; the game asks for A1. Per-game A1 option added since; not retested here (virtual VMU) |
-| THE HOUSE OF THE DEAD 2 | MK-51002 | 793 | virtual VMU (fixed arena) | — |  | — | saves and reloads after power-off; one freeze at the first boss (Original mode, VMU On) and minor lag; VMU Off did not crash (Background, virtual VMU (fixed arena)); known limit: residual lag; bounded scheduling work (roadmap section 3) |
+| SILVER | T15108N | 2,886 | virtual VMU | — |  | — | works with its exact Standard VMU adapter (Standard, exact VMU adapter); known limit: executable reclamation, exit consumers and lock behavior block the shared module (integration roadmap section 3; not owner-confirmed) |
+| SKIES OF ARCADIA DISC 1 | MK-51052 | 5,332 | virtual VMU | — |  | — | launches every boot and reloads saves; see docs/native-skies-read-fix.md for the opening Cupil hang (virtual VMU) |
+| SONIC ADVENTURE | MK-51000 | 6,592 | virtual VMU | — |  | — | works with the Background reader and virtual VMU (Background reader, virtual VMU) |
+| SONIC ADVENTURE 2 | MK-51117 | 1,541 | virtual VMU | — |  | — | saves and loads; gameplay was choppy with input lag on that build (virtual VMU) |
+| SWORD OF THE BERSERK GUTS RAGE | T-36805N | 1,641 | virtual VMU | — |  | — | tested by the owner; the game loads only from A1 (virtual VMU in A1) |
+| THE HOUSE OF THE DEAD 2 | MK-51002 | 793 | virtual VMU (fixed arena) | — |  | — | saves and reloads after power-off; one freeze at the first boss (Original mode, VMU On) and minor lag; VMU Off did not crash (Background, virtual VMU (fixed arena)); known limit: residual lag; bounded scheduling work (integration roadmap section 3; not owner-confirmed) |
 | TIME STALKERS | MK-51011 | 645 | virtual VMU | — |  | — | boots, saves and reloads (Background New (X), virtual VMU in A1) |
-| TOY COMMANDER | MK-57020 | 730 | virtual VMU | — |  | native profile (Toy Commander) | boots; intro movie playback is poor (under investigation) (native CDDA) |
-| CRAZY TAXI | MK-51035 | 1,433 | refused | New, no virtual VMU | no heap initializer slot (fixed RAM; needs a RAM map) | — | works without virtual VMU (standalone New); known limit: needs a reviewed retained arena (roadmap section 3) |
-| DEAD OR ALIVE 2 | T3601N | 1,773 | refused | New, no virtual VMU | SDK heap family not resolved | — | works without virtual VMU (standalone demand reader); known limit: memory ownership not proved; earlier apparent free arenas were contradicted (roadmap section 3) |
+| TOY COMMANDER | MK-57020 | 730 | virtual VMU | — |  | native profile (Toy Commander) | sees imported saves, creates new saves and loads them after reboot; CD music works; intro movies still stall (virtual VMU; native CDDA) |
+| CRAZY TAXI | MK-51035 | 1,433 | refused | New, no virtual VMU | no heap initializer slot (fixed RAM; needs a RAM map) | — | works without virtual VMU (standalone New); known limit: needs a reviewed retained arena (integration roadmap section 3; not owner-confirmed) |
+| DEAD OR ALIVE 2 | T3601N | 1,773 | refused | New, no virtual VMU | SDK heap family not resolved | — | works without virtual VMU (standalone demand reader); known limit: memory ownership not proved; earlier apparent free arenas were contradicted (integration roadmap section 3; not owner-confirmed) |
 | FROGGER 2 | T40604N | 818 | refused | New, no virtual VMU | SDK heap family not resolved | no profile: CD music Off |  |
 | GENERATOR 2 | MK-51057 | 159 | refused | New, no virtual VMU | terminal exits not resolved | no profile: CD music Off | known limit: demo disc: its menu starts several separate game programs (native and Windows CE); the checks cover the menu only |
 | MDK2 | T12502N | 733 | refused | New, no virtual VMU | Maple driver family not resolved | native profile (MDK2) |  |
@@ -62,8 +62,8 @@ now read), compact Background stage end `0x8cebe748`. The admission sources matc
 | RUSH 2049 | T-9707N | 1,097 | refused | New, no virtual VMU | SDK heap family not resolved | no profile: CD music Off |  |
 | SPAWN IN THE DEMONS HAND | T1216N | 1,191 | refused | New, no virtual VMU | no heap initializer slot (fixed RAM; needs a RAM map) | — | boots; intro problems; audio distortion observed (native) |
 | TONY HAWKS PRO SKATER 2 | T13006N | 3,428 | refused | New, no virtual VMU | 284 KiB lease does not fit | no profile: CD music Off |  |
-| ZOMBIE REVENGE | MK-51038 | 10,057 | refused | New, no virtual VMU | Maple layout not resolved | — | works without virtual VMU (standalone New); known limit: six-input Maple layout and allocator/reservation (roadmap section 3) |
-| BLUE STINGER | T13001N | 1,929 | refused | refused | Maple driver family not resolved | — | known limit: earlier interrupt-table initializer and its ownership (roadmap section 3) |
+| ZOMBIE REVENGE | MK-51038 | 10,057 | refused | New, no virtual VMU | Maple layout not resolved | — | works without virtual VMU (standalone New); known limit: six-input Maple layout and allocator/reservation (integration roadmap section 3; not owner-confirmed) |
+| BLUE STINGER | T13001N | 1,929 | refused | refused | Maple driver family not resolved | — | known limit: earlier interrupt-table initializer and its ownership (integration roadmap section 3; not owner-confirmed) |
 | SHENMUE | MK-51059 | 2,632 | refused | refused | Maple driver family not resolved | no profile: CD music Off |  |
 | SHENMUE | MK-51059 | 4,936 | refused | refused | Maple driver family not resolved | no profile: CD music Off |  |
 | SHENMUE2 EU | MK-5118450 | 3,121 | refused | refused | Maple driver family not resolved | no profile: CD music Off |  |
@@ -84,14 +84,15 @@ Also listed: 89 files in other image formats.
 
 ## What it says
 
-- **20 games pass the Background virtual-VMU gates.** Console-confirmed among
-  them: Code: Veronica, Crazy Taxi 2, Jet Grind Radio, House of the Dead 2,
-  Time Stalkers and Elemental Gimmick Gear. Never tried with the virtual VMU on
-  console: Evolution, Evolution 2, Grandia II, Rayman 2, Record of Lodoss War,
-  Skies of Arcadia, Sonic Adventure 2, Toy Commander, Power Stone 2 (from SD)
-  and Berserk (retest with its card in A1). These are console tests, not code.
-- **The static model is optimistic for Sonic Adventure and Silver** (known
-  limits above). Those checks belong in the host model.
+- **20 games pass the Background virtual-VMU gates, and the owner has tested
+  them on console.** The console column cites each recorded result. A blank
+  cell means only that the evidence file holds no result, never that the game
+  was untested: search the docs before claiming that.
+- **Known limits from the integration roadmap's section 3 are not
+  owner-confirmed.** Its Sonic Adventure line ("executable-loader and exit
+  lifetime still block shared VMU") is wrong: the owner reports Sonic
+  Adventure working with the Background reader and virtual VMU. Treat the
+  remaining entries from that table as claims to confirm.
 - **Blockers among the 16 native startups (15 games) without a Background route:**
   - Maple driver family unresolved (5 startups, 4 games): Shenmue (two
     startups), Shenmue II, MDK2 and Blue Stinger. Shenmue's three startups are
@@ -116,8 +117,7 @@ Also listed: 89 files in other image formats.
   gate, so the launcher would currently admit it on Background. The programs:
   `Q3_USA.BIN` and `INTRO.BIN` stop at terminal exits; `LEMANS24.BIN` at the
   Maple layout and `FMV.BIN` at the heap family. All four have the SDK SCI
-  family. This is the same executable-loader lifetime that blocks Sonic
-  Adventure's shared VMU.
+  family.
 - **Shenmue disc 1 and Skies of Arcadia disc 1** read with v2.1: Shenmue
   disc 1 shares discs 2 and 3's startup, and Skies disc 1 its known one.
   Soulcalibur is an incomplete dump and is set aside.

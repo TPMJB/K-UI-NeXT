@@ -1,6 +1,6 @@
 {
   "schema": "kui.library-console-results.v1",
-  "note": "Console outcomes already recorded, keyed by IP product number. Each names its source. Owner reports are what the owner saw on hardware; they are not complete acceptance unless stated. Absence here means no recorded console result, not a failure. known_blocker records a limit the static gates do not model.",
+  "note": "Console outcomes recorded in the repository or reported by the owner, keyed by IP product number. Each names its source. Absence here means only that this file does not record a result, not that the game was never tested; check the docs before saying otherwise. known_blocker records a limit the static gates do not model; entries from the integration roadmap are not owner-confirmed.",
   "games": [
     {
       "product": "T1204N",
@@ -41,7 +41,7 @@
       "result": "saves and reloads after power-off; one freeze at the first boss (Original mode, VMU On) and minor lag; VMU Off did not crash",
       "build": "test 7c",
       "source": "owner report, 6 Nov 2026; roadmap section 3",
-      "known_blocker": "residual lag; bounded scheduling work (roadmap section 3)"
+      "known_blocker": "residual lag; bounded scheduling work (integration roadmap section 3; not owner-confirmed)"
     },
     {
       "product": "MK-51011",
@@ -62,11 +62,10 @@
     {
       "product": "MK-51000",
       "title": "Sonic Adventure",
-      "route": "ordinary / standalone New",
-      "result": "historical play reports; no shared virtual VMU yet",
+      "route": "Background reader, virtual VMU",
+      "result": "works with the Background reader and virtual VMU",
       "build": "",
-      "source": "roadmap section 3",
-      "known_blocker": "executable loader and exit lifetime still block shared virtual VMU (roadmap section 3)"
+      "source": "owner, 7 Nov 2026 (corrects the integration roadmap section 3 line)"
     },
     {
       "product": "T15108N",
@@ -75,7 +74,7 @@
       "result": "works with its exact Standard VMU adapter",
       "build": "",
       "source": "roadmap section 3",
-      "known_blocker": "executable reclamation, exit consumers and lock behavior block the shared module (roadmap section 3)"
+      "known_blocker": "executable reclamation, exit consumers and lock behavior block the shared module (integration roadmap section 3; not owner-confirmed)"
     },
     {
       "product": "MK-51035",
@@ -84,7 +83,7 @@
       "result": "works without virtual VMU",
       "build": "",
       "source": "roadmap section 3",
-      "known_blocker": "needs a reviewed retained arena (roadmap section 3)"
+      "known_blocker": "needs a reviewed retained arena (integration roadmap section 3; not owner-confirmed)"
     },
     {
       "product": "MK-51038",
@@ -93,7 +92,7 @@
       "result": "works without virtual VMU",
       "build": "",
       "source": "roadmap section 3",
-      "known_blocker": "six-input Maple layout and allocator/reservation (roadmap section 3)"
+      "known_blocker": "six-input Maple layout and allocator/reservation (integration roadmap section 3; not owner-confirmed)"
     },
     {
       "product": "T3601N",
@@ -102,7 +101,7 @@
       "result": "works without virtual VMU",
       "build": "",
       "source": "roadmap section 3",
-      "known_blocker": "memory ownership not proved; earlier apparent free arenas were contradicted (roadmap section 3)"
+      "known_blocker": "memory ownership not proved; earlier apparent free arenas were contradicted (integration roadmap section 3; not owner-confirmed)"
     },
     {
       "product": "T1216N",
@@ -115,18 +114,18 @@
     {
       "product": "T1211N",
       "title": "Power Stone 2",
-      "route": "physical disc",
-      "result": "saves and reloads from the physical disc (SCI)",
-      "build": "",
-      "source": "roadmap section 5"
+      "route": "SD virtual VMU and physical disc",
+      "result": "saves and loads after a complete reboot (SD, card p0005); physical-disc virtual VMU also saves and reloads",
+      "build": "d503f1aa423d",
+      "source": "docs/vmu-feature-comparison.md; docs/physical-disc-vmu-plan.md"
     },
     {
       "product": "T-36805N",
       "title": "Sword of the Berserk: Guts' Rage",
-      "route": "virtual VMU",
-      "result": "card in A2 not seen; the game asks for A1. Per-game A1 option added since; not retested here",
+      "route": "virtual VMU in A1",
+      "result": "tested by the owner; the game loads only from A1",
       "build": "",
-      "source": "owner report (session task 45)"
+      "source": "owner, 7 Nov 2026; docs/universal-vmu-review-2026-11-01.md"
     },
     {
       "product": "MK-51146",
@@ -147,10 +146,10 @@
     {
       "product": "MK-57020",
       "title": "Toy Commander",
-      "route": "native CDDA",
-      "result": "boots; intro movie playback is poor (under investigation)",
+      "route": "virtual VMU; native CDDA",
+      "result": "sees imported saves, creates new saves and loads them after reboot; CD music works; intro movies still stall",
       "build": "",
-      "source": "roadmap section 4"
+      "source": "docs/VMU-RESET-HANDOFF.md; docs/game-profiles.md"
     },
     {
       "product": "T13001N",
@@ -159,7 +158,7 @@
       "result": "",
       "build": "",
       "source": "roadmap section 3",
-      "known_blocker": "earlier interrupt-table initializer and its ownership (roadmap section 3)"
+      "known_blocker": "earlier interrupt-table initializer and its ownership (integration roadmap section 3; not owner-confirmed)"
     },
     {
       "product": "MK-51057",
@@ -178,6 +177,62 @@
       "build": "",
       "source": "owner, 7 Nov 2026",
       "known_blocker": "incomplete dump (its data track ends before the boot file); set aside for now"
+    },
+    {
+      "product": "T17706N",
+      "title": "Evolution: The World of Sacred Device",
+      "route": "virtual VMU (A1 builds)",
+      "result": "save and load succeed; FMV slowdown reported",
+      "build": "",
+      "source": "docs/vmu-native-a2-background-test.md"
+    },
+    {
+      "product": "T1711N",
+      "title": "Evolution 2",
+      "route": "virtual VMU (A1 builds)",
+      "result": "save and load succeed; FMV slowdown reported",
+      "build": "",
+      "source": "docs/vmu-native-a2-background-test.md"
+    },
+    {
+      "product": "17707N",
+      "title": "Rayman 2: The Great Escape",
+      "route": "New with virtual VMU",
+      "result": "virtual VMU shown; saving and loading work; FMVs and gameplay flawless",
+      "build": "f158ba5e24f9",
+      "source": "docs/native-dual-reader-test.md"
+    },
+    {
+      "product": "T40218N",
+      "title": "Record of Lodoss War",
+      "route": "New with virtual VMU",
+      "result": "virtual VMU shown; saving and loading work; FMVs and gameplay flawless",
+      "build": "f158ba5e24f9",
+      "source": "docs/native-dual-reader-test.md"
+    },
+    {
+      "product": "MK-51117",
+      "title": "Sonic Adventure 2",
+      "route": "virtual VMU",
+      "result": "saves and loads; gameplay was choppy with input lag on that build",
+      "build": "c6b7bccdd7f2",
+      "source": "docs/native-worker-checkpoint.md"
+    },
+    {
+      "product": "MK-51052",
+      "title": "Skies of Arcadia",
+      "route": "virtual VMU",
+      "result": "launches every boot and reloads saves; see docs/native-skies-read-fix.md for the opening Cupil hang",
+      "build": "",
+      "source": "docs/native-worker-checkpoint.md"
+    },
+    {
+      "product": "T17716N",
+      "title": "Grandia II",
+      "route": "virtual VMU",
+      "result": "tested by the owner with virtual VMU; boot confirmed in v1.8.5",
+      "build": "",
+      "source": "owner, 7 Nov 2026; docs/release-v1.8.5-notes.md"
     }
   ]
 }
