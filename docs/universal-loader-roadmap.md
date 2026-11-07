@@ -1,12 +1,45 @@
 # Universal loader integration roadmap
 
-Current native candidate: `f8807cb16561`, with twelve changed cold families
-and exact preservation of the accepted Smash and CE files. The raw-rip
-program-prefix hint bug and the remaining native verification/snapshot
-coverage gaps are addressed by shared operation contracts, not title profiles.
-See [coverage and remaining work](shared-launch-coverage-restoration.md).
-Hardware timing and actual Sonic background activity still need observation;
-this is not an all-game acceptance record.
+Current delivered candidate is `9e3295bcfaec`. It includes the twelve native
+cold families from `f8807cb16561` and the shared extent/ownership corrections
+in five ordinary virtual-VMU readers. The accepted Smash collection has its
+own qualified component set. The latest owner report suggests another two to
+three seconds saved, with COLD 03 revised to seven to eight seconds from
+approximately 21. See [the acceptance ledger](accepted-progress.md) and
+[current library coverage](universal-library-coverage.md).
+
+## Current owner-library sequence, November 6, 2026
+
+The updated manifests identify 42 game products after excluding the owner's
+incomplete Soul Calibur. There are 43 usable startup identities because
+Shenmue Passport is a separate startup. Raw/cooked copies and duplicate disc
+executables share evidence only when their exact bytes and runtime agree.
+The new pair of version 2 bundles and the later version 2.1 supplement supply
+Power Stone, the five WinCE runtimes, native audio drivers, Shenmue, Shenmue II,
+and secondary Quake III/Le Mans executables. These extend the available
+analysis inputs. Console playback and save tests remain separate.
+
+| Order | Deliverable | Completion check |
+| --- | --- | --- |
+| 1 | Give ordinary WinCE its own installed reader and preserve the exact compatible Armada virtual-VMU route. The current ordinary path shares a filename with that adapter. | Final GUI and ZIP select the intended reader with the inherited module present, absent or damaged. Nightmare Creatures II and Armada reach gameplay using the selected route. |
+| 2 | Close bounded native family gaps, beginning with Blue Stinger's initializer and Power Stone's Maple buffers, now using the supplied originals. | Original installer/driver execution, refusal controls and actual package admission pass. One changed family representative boots, loads a demanding area, and handles its selected physical or virtual card on console. |
+| 3 | Prove whole-game executable lifetime through secondary loads. Quake III and Test Drive Le Mans now include the main and movie executables. Investigate the distinct Shenmue, Passport and Shenmue II runtime families. | Reader and VMU hooks survive the real intro-to-game transition and later executable loads. Allocations and firmware ownership remain valid across each transfer. |
+| 4 | Broaden virtual saving and independent service modes. Keep separate accounting for neither service, VMU only, New/read-ahead only, and combined operation. | The selected modes retain the proved memory, physical cards work, and a game save survives power-off and reload. DOA2's working standalone route and the exact accepted Smash set provide regression checkpoints. |
+| 5 | Extend native CD music beyond Toy/MDK2 and improve native/WinCE streaming. Use supplied audio drivers and CE applications to identify shared runtime contracts. | Continuous music, concurrent loading, track changes and the same FMV scene improve on console, with responsive play and durable saves. Each admitted runtime family gets an explicit result. |
+| 6 | Close the 42-game coverage ledger, including multi-disc transitions and repeated launches. Then broaden the relevant physical-disc, compressed-format and transport combinations. | Every complete inventoried game has a recorded launch, actual play, loading and available save outcome on its chosen image and reader. Multi-disc games cross a real requested disc boundary with the correct card. |
+
+Each source change answers one compatibility or performance question. A small
+regression set covers the affected runtime family and its memory contract.
+The full library ledger accumulates results as games are played. Record the
+actual reader path/build and image variant alongside the GUI identity.
+Deliver manual-copy ZIPs and validate the actual final package through cold
+CD/ROOT boot.
+
+Further bootstrap work can target the cold GUI's repeated hashes and a fresh
+ownership transfer after the last GUI writer. The latter needs a recovery and
+invalidation contract across resets and card changes. Keep each timing
+comparison isolated. First finish the missing ordinary WinCE deployment and
+the newly actionable runtime coverage above.
 
 Goal: one maintained K-UI build which selects the best verified launch backend,
 virtual VMU and optional read-ahead for each runtime. Keep successful games
@@ -135,8 +168,8 @@ of these properties.
 | Runtime | Existing working route | Shared-service work |
 | --- | --- | --- |
 | DOA2 | Standalone demand reader | Prove memory ownership before adding virtual VMU or cache; earlier apparent free arenas were contradicted or incomplete |
-| Sonic Adventure | Historical ordinary/standalone New play reports | Generic nesting correction qualified on other early-family originals; Sonic Adventure original and console checks pending; executable-loader and exit lifetime still block shared VMU |
-| Silver | Exact Standard VMU adapter | Executable reclamation, exit consumers and lock behavior |
+| Sonic Adventure | Historical ordinary/standalone New play reports; exact original now passes linked plain/nesting standalone callbacks | Current combined immutable resolution passes; live service lifetime and actual console callback behavior need evidence |
+| Silver | Exact Standard VMU adapter; current original passes immutable combined resolution | Qualify live executable reclamation, exit consumers and lock behavior |
 | Crazy Taxi | Standalone New | Reviewed retained arena |
 | Zombie Revenge | Standalone New | Six-input Maple layout and allocator/reservation |
 | Blue Stinger | Shared early-family admission incomplete | Earlier interrupt-table initializer and associated ownership |
@@ -153,9 +186,11 @@ roles, losing an already proved nesting alternative. Public IRQ source
 `0d1691d` corrects this structurally. Clean standalone build `a0dc9a62e79f`
 passes linked instruction models using original EGG, The House of the Dead 2
 and Time Stalkers executables in both modes, plus actual-module GUI preparation
-on FAT32/exFAT. The GUI remains `f7229`. Console qualification and an
-original-backed Sonic Adventure check remain pending. The Background 7c route
-already handled the alternative, so EGG's Background virtual VMU is unaffected.
+on FAT32/exFAT. The later `f8807cb16561` standalone also passes the same
+linked test on the owner's exact Sonic Adventure original in both modes,
+including old-reader failure and refusal controls. Actual console callbacks
+and the selected runtime remain a separate checkpoint. The Background 7c route
+already handled the alternative.
 See `native-zr-family.md` and the exact module/evidence record in
 `shared-game-launch-performance.md`.
 
@@ -225,10 +260,12 @@ roles, effective service/reservation inventory, actual artifact hashes,
 host/linked/native/package results and the smallest outstanding console check.
 Keep generated build evidence separate from hardware acceptance.
 
-Use the current `tools/make_update.py` producer and actual C consumer for new
-KUPs. A complete composition must retain accepted components with their real
-identities and match the GUI's admission/provider decisions. A cold-stage
-subset must never be presented as a complete universal installation.
+The standing delivery is a manual-copy ZIP with both identical GUI aliases,
+the intended physical software tree, and an exact changed/retained inventory.
+Validate cold CD/ROOT boot and actual module admission. When a KUP is explicitly
+requested, use the current `tools/make_update.py` producer and actual C consumer.
+A complete composition retains accepted components with their real identities
+and matches the GUI's admission/provider decisions.
 
 User-facing test filenames include purpose, delivery date/time with an explicit
 zone, and the actual binary build identity, for example
@@ -237,13 +274,9 @@ the applicable CST/CDT suffix. A new delivery filename does not imply rebuilt
 software; preserve the original binary identity and checksum when renaming.
 
 The accepted cc81 package and first consolidated test both contain updater
-engine 3. Prefer normal KUP installation, which retains the effective selected
-software inventory. The manual updater-and-test bootstrap deliberately selects
-physical ROOT and clears the previous selection; bank directories and user data
-remain, but bank-only software is no longer effective and may need reinstalling.
-Do not describe that fallback as preserving bank activation or automatic
-rollback. A future migration should preserve the effective software selection
-while repairing the updater.
+engine 3. Menu Restart can select a saved bank by activation sequence, so manual
+ZIP comparisons use the cold ROOT entry and its actual reader receipt. The
+earlier updater-and-test bootstrap is historical delivery evidence.
 
 ## Branding and documentation follow-up
 
